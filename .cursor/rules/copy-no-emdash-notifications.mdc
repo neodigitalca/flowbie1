@@ -1,0 +1,24 @@
+---
+description: No em dashes in UI/copy; avoid filler helper text and redundant notifications
+alwaysApply: true
+---
+
+# Copy, punctuation, and notifications
+
+## Em dash
+
+- Do **not** use the em dash character (U+2014). It is easy to misuse and often reads as AI filler.
+- Prefer: a comma, a period and a new sentence, parentheses, or a hyphen when you need a short join (e.g. `DataForSEO + OpenRouter`).
+- Apply to user-visible strings, placeholders, `notify.*` messages, comments meant for product copy, and Markdown shown to users.
+
+## Helper text
+
+- Do **not** add explanatory blurbs under controls when the label or field already states the purpose (e.g. "No Integrations site required…" next to Temp seed).
+- Skip tips that only restate what the adjacent heading or button says.
+- If guidance is truly needed, keep it one short line and only where confusion is likely.
+
+## Notifications
+
+- Do **not** add redundant toasts: duplicate success after an action that already shows clear UI feedback, or "Copied" plus another generic success.
+- One clear `notify` per user action unless there is a distinct second event (e.g. failure vs success).
+- Prefer updating visible state over toasting for routine completion.

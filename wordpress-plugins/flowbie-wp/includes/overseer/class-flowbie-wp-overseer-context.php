@@ -1,0 +1,80 @@
+<?php
+/**
+ * Overseer — constants, table names, session and uuid helpers
+ *
+ * @package Flowbie_Wp
+ */
+
+defined( 'ABSPATH' ) || exit;
+
+class Flowbie_Wp_Overseer_Context {
+
+
+	const TABLE_VERSION            = '2.2';
+	const REPORTS_VERSION          = '1.1';
+	const TASKS_VERSION            = '1.0';
+
+	/** @var array<int, string> */
+	const ALLOWED_EVENT_TYPES = array(
+		'pageview',
+		'page_exit',
+		'page_heartbeat',
+		'click',
+		'form_submit',
+		'outbound_click',
+		'conversion',
+	);
+	const DB_VERSION_OPTION        = 'flowbie_wp_overseer_db_version';
+	const OPTION_KEY               = 'flowbie_wp_overseer_settings';
+	const BUILTIN_SCRIPT_ID_OPTION = 'flowbie_wp_overseer_builtin_script_id';
+	const BUILTIN_SCRIPT_NAME      = 'Flowbie Page View';
+	const BUILTIN_SCRIPT_CATEGORY  = 'Flowbie Tags';
+	const CONFIG_PLACEHOLDER       = '%%FLOWBIE_OVERSEER_CONFIG%%';
+	const JS_URL_PLACEHOLDER       = '%%FLOWBIE_OVERSEER_JS_URL%%';
+	const CONFIG_SCRIPT_ID         = 'flowbie-overseer-config';
+	const SESSION_ID_PATTERN       = '/^ovsess_[0-9]+_[a-z0-9]{6,32}$/';
+	const CRON_HOOK                = 'flowbie_wp_overseer_prune';
+	const SCRIPT_TEMPLATE_VERSION  = '4';
+	const SCRIPT_TEMPLATE_OPTION   = 'flowbie_wp_overseer_script_template_version';
+
+	public static function table_name(): string {
+		global $wpdb;
+		return $wpdb->prefix . 'flowbie_wp_overseer_visits';
+	}
+	public static function reports_table_name(): string {
+		global $wpdb;
+		return $wpdb->prefix . 'flowbie_wp_overseer_reports';
+	}
+	public static function tasks_table_name(): string {
+		global $wpdb;
+		return $wpdb->prefix . 'flowbie_wp_overseer_tasks';
+	}
+	public static function new_uuid(): string {
+		if ( function_exists( 'wp_generate_uuid4' ) ) {
+			return wp_generate_uuid4();
+		}
+		return sprintf(
+			'%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+			wp_rand( 0, 0xffff ),
+			wp_rand( 0, 0xffff ),
+			wp_rand( 0, 0xffff ),
+			wp_rand( 0, 0x0fff ) | 0x4000,
+			wp_rand( 0, 0x3fff ) | 0x8000,
+			wp_rand( 0, 0xffff ),
+			wp_rand( 0, 0xffff ),
+			wp_rand( 0, 0xffff )
+		);
+	}
+	public static function is_valid_uuid( string $uuid ): bool {
+		return (bool) preg_match(
+			'/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i',
+			$uuid
+		);
+	}
+	public static function is_valid_session_id( string $session_id ): bool {
+		return (bool) preg_match( Flowbie_Wp_Overseer_Context::SESSION_ID_PATTERN, $session_id );
+	}
+	public static function new_session_id(): string {
+		return 'ovsess_' . time() . '_' . strtolower( wp_generate_password( 8, false, false ) );
+	}
+}

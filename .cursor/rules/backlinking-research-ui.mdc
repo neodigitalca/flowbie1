@@ -1,0 +1,13 @@
+---
+description: Backlinking research tab UI - no helper blurbs, 1rem minimum type
+globs: src/components/research/backlinking/**/*.tsx
+alwaysApply: false
+---
+
+# Backlinking research UI
+
+When editing files under `src/components/research/backlinking/`:
+
+- **No helper / explanatory copy** under section titles (no muted subtitles like “Plain text for…”, “Same columns as…”, or “Pick a niche” prompts). Keep **labels only** where a heading is required.
+- **Minimum font size 1rem** for all user-visible text: use Tailwind `text-base` (or `text-[1rem]` only if matching an existing pattern). Do **not** use `text-xs`, `text-sm`, or arbitrary sizes below `1rem` for body, labels, table cells, or buttons on this page.
+- Icons may stay at `h-3 w-3` / `h-4 w-4`; focus the 1rem rule on **typography**.

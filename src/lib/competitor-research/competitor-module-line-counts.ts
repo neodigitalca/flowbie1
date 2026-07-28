@@ -1,0 +1,45 @@
+import type { CompetitorModuleLineCount } from "@/lib/competitor-research/types";
+
+/**
+ * Line counts per script - run `node scripts/update-competitor-line-counts.mjs` after edits.
+ * Used in generated report appendix (must stay aligned with repo files).
+ */
+export const COMPETITOR_MODULE_LINE_COUNTS: CompetitorModuleLineCount[] = [
+  { path: "server/semrush/semrush-organic-competitors.js", lines: 524 },
+  { path: "server/semrush/semrush-table-parse.js", lines: 223 },
+  { path: "server/semrush/semrush-competitor-enrichment.js", lines: 344 },
+  { path: "server/semrush/constants.js", lines: 40 },
+  { path: "server/semrush-routes.js", lines: 423 },
+  { path: "src/lib/competitor-research/types.ts", lines: 105 },
+  { path: "src/lib/competitor-research/competitor-domain-key.ts", lines: 17 },
+  { path: "src/lib/competitor-research/semrush-domain-overview-url.ts", lines: 9 },
+  { path: "src/lib/competitor-research/competitor-semrush-client.ts", lines: 75 },
+  { path: "src/lib/competitor-research/competitor-selection-filter.ts", lines: 55 },
+  { path: "src/lib/competitor-research/competitor-gsc-queries.ts", lines: 70 },
+  { path: "src/lib/competitor-research/competitor-keyword-sort.ts", lines: 65 },
+  { path: "src/lib/competitor-research/competitor-keyword-site-relevance.ts", lines: 105 },
+  { path: "src/lib/competitor-research/competitor-bulk-content-csv.ts", lines: 152 },
+  { path: "src/lib/competitor-research/competitor-report-keyword-extract.ts", lines: 259 },
+  { path: "src/lib/competitor-research/filter-competitors-by-gsc-relevance.ts", lines: 107 },
+  { path: "src/lib/competitor-research/filter-main-competitor-rows.ts", lines: 134 },
+  { path: "src/lib/competitor-research/competitor-tier-agent.ts", lines: 170 },
+  { path: "src/lib/competitor-research/local-dominator-grid-parse.ts", lines: 193 },
+  { path: "src/lib/competitor-research/competitor-grid-dfs-client.ts", lines: 138 },
+  { path: "src/lib/competitor-research/competitor-grid-tier-merge.ts", lines: 81 },
+  { path: "src/lib/competitor-research/competitor-report-openrouter-limits.ts", lines: 114 },
+  { path: "src/lib/competitor-research/competitor-report-openrouter-payload-round.ts", lines: 101 },
+  { path: "src/lib/competitor-research/competitor-report-wire-openrouter-keys.ts", lines: 25 },
+  { path: "src/lib/competitor-research/competitor-report-openrouter.ts", lines: 64 },
+  { path: "src/lib/competitor-research/competitor-report-json-parse.ts", lines: 95 },
+  { path: "src/lib/competitor-research/competitor-report-system-prompt.ts", lines: 221 },
+  { path: "src/lib/competitor-research/competitor-report-wire.ts", lines: 385 },
+  { path: "src/lib/competitor-research/competitor-top-rows.ts", lines: 33 },
+  { path: "src/lib/competitor-research/competitor-report-agent.ts", lines: 509 },
+  { path: "src/lib/competitor-research/competitor-report-markdown-sanitize.ts", lines: 49 },
+  { path: "src/lib/competitor-research/competitor-report-ekr-markdown.ts", lines: 190 },
+  { path: "src/lib/competitor-research/competitor-report-appendix.ts", lines: 26 },
+  { path: "src/lib/competitor-research/competitor-module-line-counts.ts", lines: 46 },
+  { path: "src/components/research/competitor/CompetitorResearchTab.tsx", lines: 1739 },
+  { path: "src/components/research/competitor/CompetitorSiteGrid.tsx", lines: 572 },
+  { path: "scripts/update-competitor-line-counts.mjs", lines: 86 },
+];

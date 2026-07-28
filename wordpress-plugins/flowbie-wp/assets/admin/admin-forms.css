@@ -1,0 +1,582 @@
+/**
+ * Flowbie WP — Forms admin (matches Redirects list-table styling).
+ */
+
+.flowbie-wp-forms .subsubsub {
+	margin-top: 12px;
+}
+
+.flowbie-wp-forms .description {
+	margin: 12px 0 16px;
+}
+
+.flowbie-wp-forms-badge {
+	display: inline-block;
+	margin-left: 6px;
+	padding: 2px 8px;
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1.4;
+	border-radius: 4px;
+	vertical-align: middle;
+}
+
+.flowbie-wp-forms-badge--elementor {
+	background: #92003b;
+	color: #fff;
+}
+
+/* List table — same readable contrast as Redirects */
+body.flowbie-wp-admin-screen .flowbie-wp-forms .wp-list-table {
+	background: #000;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .wp-list-table thead th,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .wp-list-table tfoot th {
+	background: var(--fc-table-header-bg, #161920);
+	color: var(--fc-text-muted, #d1d5db);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .wp-list-table thead .check-column,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .wp-list-table tfoot .check-column {
+	background: var(--fc-table-header-bg, #161920);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .wp-list-table tbody tr {
+	background: #000;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .wp-list-table tbody tr.alternate {
+	background: var(--fc-surface-muted, #101114);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .wp-list-table tbody td,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .wp-list-table tbody th {
+	color: var(--fc-text, #f8fafc);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .wp-list-table tbody td a.row-title,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .wp-list-table tbody td a:not(.button) {
+	color: var(--fc-link, #72aee6);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .wp-list-table tbody td a.row-title:hover,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .wp-list-table tbody td a.row-title:focus,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .wp-list-table tbody td a:not(.button):hover,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .wp-list-table tbody td a:not(.button):focus {
+	color: var(--fc-link-hover);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .wp-list-table code {
+	color: hsl(187 85% 48% / 0.92);
+	background: var(--fc-surface-muted);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .wp-list-table tbody tr:hover,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .wp-list-table tbody tr:hover td,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .wp-list-table tbody tr:hover th {
+	background: var(--fc-table-row-hover);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .tablenav.top,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .tablenav.bottom {
+	background: transparent;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .row-actions {
+	color: var(--fc-text-muted);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .row-actions a {
+	color: var(--fc-link);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .row-actions .submitdelete a,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .row-actions a.submitdelete {
+	color: #f87171;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms tr:hover .row-actions,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .row-actions.visible {
+	visibility: visible;
+}
+
+/* Form builder — match Redirects panel surfaces */
+.flowbie-wp-forms-edit .flowbie-wp-panel {
+	background: var(--fc-surface-muted);
+	border: none;
+	border-radius: var(--fc-radius);
+	padding: 20px 24px;
+	box-shadow: var(--fc-frame-shadow);
+	color: var(--fc-text);
+}
+
+.flowbie-wp-forms-edit .flowbie-wp-panel h2 {
+	margin: 0 0 12px;
+	font-size: 1.1em;
+	color: var(--fc-text);
+}
+
+.flowbie-wp-forms-edit .form-table input.regular-text,
+.flowbie-wp-forms-edit .form-table input.large-text,
+.flowbie-wp-forms-edit .form-table input[type="url"],
+.flowbie-wp-forms-edit .form-table textarea,
+.flowbie-wp-forms-edit .form-table select {
+	background: var(--fc-field-bg);
+	color: var(--fc-field-text);
+	border-color: var(--fc-field-border);
+}
+
+.flowbie-wp-forms-edit .form-table input:focus,
+.flowbie-wp-forms-edit .form-table textarea:focus,
+.flowbie-wp-forms-edit .form-table select:focus {
+	border-color: var(--fc-field-focus-border);
+	box-shadow: 0 0 0 1px var(--fc-field-focus-border);
+}
+
+.flowbie-wp-forms-edit .form-table .description {
+	color: var(--fc-text-muted);
+}
+
+/* GF-style form builder */
+.flowbie-wp-forms-builder__topbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 1rem;
+	margin: 1rem 0;
+	padding: 12px 16px;
+	background: var(--fc-surface-muted);
+	border-radius: var(--fc-radius);
+	box-shadow: var(--fc-frame-shadow);
+}
+
+.flowbie-wp-forms-builder__topbar-left {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	flex: 1;
+	min-width: 200px;
+}
+
+.flowbie-wp-forms-builder__back {
+	font-size: 1.25rem;
+	text-decoration: none;
+	color: var(--fc-text-muted);
+}
+
+.flowbie-wp-forms-builder__title-input {
+	font-size: 1.25rem;
+	font-weight: 600;
+	border: none;
+	background: transparent;
+	color: var(--fc-text);
+	min-width: 180px;
+	flex: 1;
+}
+
+.flowbie-wp-forms-builder__title-input:focus {
+	outline: none;
+	box-shadow: 0 0 0 1px var(--fc-field-focus-border);
+	border-radius: 4px;
+}
+
+.flowbie-wp-forms-builder__active {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	white-space: nowrap;
+	color: var(--fc-text-muted);
+}
+
+.flowbie-wp-forms-builder__topbar-right {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+
+.flowbie-wp-forms-builder__shortcode {
+	font-size: 11px;
+	padding: 4px 8px;
+	background: var(--fc-field-bg);
+	color: var(--fc-text-muted);
+}
+
+.flowbie-wp-forms-builder__layout {
+	display: grid;
+	grid-template-columns: 1.6fr 1fr;
+	gap: 1.25rem;
+	align-items: start;
+}
+
+@media (max-width: 1100px) {
+	.flowbie-wp-forms-builder__layout {
+		grid-template-columns: 1fr;
+	}
+}
+
+.flowbie-wp-forms-builder__canvas {
+	min-height: 420px;
+	position: relative;
+}
+
+.flowbie-wp-forms-fields-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	min-height: 80px;
+}
+
+.flowbie-wp-forms-fields-list__empty {
+	margin: 2rem 0;
+	text-align: center;
+	color: var(--fc-text-muted);
+}
+
+.flowbie-wp-forms-fields-list:not(:empty) + .flowbie-wp-forms-fields-list__empty {
+	display: none;
+}
+
+.flowbie-wp-forms-field-card {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	border: 1px solid var(--fc-border);
+	border-radius: var(--fc-radius);
+	padding: 0.65rem 0.85rem;
+	background: var(--fc-field-bg);
+	color: var(--fc-text);
+	cursor: pointer;
+	transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.flowbie-wp-forms-field-card:hover {
+	border-color: var(--fc-link);
+}
+
+.flowbie-wp-forms-field-card.is-selected {
+	border-color: var(--fc-link);
+	box-shadow: 0 0 0 1px var(--fc-link);
+}
+
+.flowbie-wp-forms-field-card--placeholder {
+	min-height: 48px;
+	border-style: dashed;
+	opacity: 0.6;
+}
+
+.flowbie-field-drag-handle {
+	cursor: grab;
+	color: var(--fc-text-muted);
+	font-size: 1.1rem;
+	user-select: none;
+	flex-shrink: 0;
+}
+
+.flowbie-wp-forms-field-card__body {
+	flex: 1;
+	min-width: 0;
+}
+
+.flowbie-wp-forms-field-card__type {
+	display: block;
+	font-size: 0.7rem;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--fc-text-muted);
+}
+
+.flowbie-wp-forms-field-card__label {
+	font-size: 0.95rem;
+}
+
+.flowbie-wp-forms-field-card__req {
+	color: #f87171;
+	margin-left: 0.25rem;
+}
+
+.flowbie-wp-forms-builder__tabs {
+	display: flex;
+	border-bottom: 1px solid var(--fc-border);
+	margin: -4px -8px 16px;
+	padding: 0 4px;
+	gap: 0;
+}
+
+.flowbie-wp-forms-builder__tab {
+	flex: 1;
+	padding: 10px 8px;
+	border: none;
+	background: transparent;
+	color: var(--fc-text-muted);
+	cursor: pointer;
+	font-size: 12px;
+	border-bottom: 2px solid transparent;
+	margin-bottom: -1px;
+}
+
+.flowbie-wp-forms-builder__tab.is-active {
+	color: var(--fc-link);
+	border-bottom-color: var(--fc-link);
+}
+
+.flowbie-wp-forms-builder__tab-panel {
+	display: none;
+}
+
+.flowbie-wp-forms-builder__tab-panel.is-active {
+	display: block;
+}
+
+.flowbie-wp-forms-builder__search {
+	width: 100%;
+	margin-bottom: 12px;
+	padding: 6px 10px;
+	background: var(--fc-field-bg);
+	border: 1px solid var(--fc-field-border);
+	color: var(--fc-field-text);
+	border-radius: var(--fc-radius);
+}
+
+.flowbie-wp-forms-builder__palette-heading {
+	font-size: 0.75rem;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--fc-text-muted);
+	margin: 12px 0 8px;
+}
+
+.flowbie-wp-forms-builder__palette {
+	list-style: none;
+	margin: 0 0 8px;
+	padding: 0;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 6px;
+}
+
+.flowbie-field-palette-item {
+	width: 100%;
+	text-align: left;
+	padding: 8px 10px;
+	border: 1px solid var(--fc-border);
+	border-radius: var(--fc-radius);
+	background: var(--fc-field-bg);
+	color: var(--fc-text);
+	cursor: pointer;
+	font-size: 12px;
+	line-height: 1.3;
+}
+
+.flowbie-field-palette-item:hover {
+	border-color: var(--fc-link);
+	color: var(--fc-link);
+}
+
+.flowbie-wp-forms-builder__settings-table th {
+	width: 110px;
+	padding: 8px 10px 8px 0;
+}
+
+.flowbie-wp-forms-builder__field-settings .form-table {
+	margin-top: 0;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms-edit .form-table th {
+	color: var(--fc-text);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms-edit .form-table td {
+	color: var(--fc-text);
+}
+
+/* Forms — dark-only surfaces (no light --fc-field-bg panels) */
+body.flowbie-wp-admin-screen .wrap.flowbie-wp-forms,
+body.flowbie-wp-admin-screen .flowbie-wp-forms.flowbie-wp-forms-edit {
+	--fc-field-bg: #181b21;
+	--fc-field-text: #f8fafc;
+	--fc-field-text-muted: #9ca3af;
+	--fc-field-border: rgba(255, 255, 255, 0.14);
+	--fc-field-focus-border: #72aee6;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-wp-forms-field-card,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-field-palette-item,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-wp-forms-builder__search,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-wp-forms-builder__topbar,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-wp-panel {
+	background-color: #141619 !important;
+	color: #f8fafc !important;
+	border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-wp-forms-field-card__type,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-wp-forms-field-card__label,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-field-palette-item__label,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-field-drag-handle {
+	color: #f8fafc !important;
+	-webkit-text-fill-color: #f8fafc !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-field-palette-item {
+	border: 1px solid rgba(255, 255, 255, 0.12) !important;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-field-palette-item:hover,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-field-palette-item:focus {
+	background-color: #1c2129 !important;
+	border-color: rgba(114, 174, 230, 0.45) !important;
+	color: #9ecaff !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-field-palette-item:hover .flowbie-field-palette-item__label,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-field-palette-item:focus .flowbie-field-palette-item__label {
+	color: #9ecaff !important;
+	-webkit-text-fill-color: #9ecaff !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-wp-forms-field-card:hover {
+	background-color: #1c2129 !important;
+	border-color: rgba(114, 174, 230, 0.35) !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-wp-forms-field-card.is-selected {
+	background-color: #1a2332 !important;
+	border-color: #72aee6 !important;
+	box-shadow: 0 0 0 1px rgba(114, 174, 230, 0.5) !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-wp-forms-field-card--placeholder {
+	background-color: #101114 !important;
+	border-style: dashed !important;
+	opacity: 0.85;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-field-remove {
+	color: #9ca3af !important;
+	background: transparent !important;
+	border: none !important;
+	box-shadow: none !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-field-remove:hover,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-field-remove:focus {
+	color: #f87171 !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-wp-forms-builder__title-input {
+	color: #f8fafc !important;
+	-webkit-text-fill-color: #f8fafc !important;
+	background: transparent !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-wp-forms-builder__active {
+	color: #d1d5db !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-wp-forms-builder__shortcode {
+	background: #0c0d10 !important;
+	color: hsl(187 85% 48% / 0.92) !important;
+	border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-wp-forms-builder__tab {
+	color: #9ca3af !important;
+	background: transparent !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-wp-forms-builder__tab.is-active {
+	color: #72aee6 !important;
+	border-bottom-color: #72aee6 !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-wp-forms-builder__palette-heading {
+	color: #9ca3af !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .flowbie-wp-forms-fields-list__empty {
+	color: #9ca3af !important;
+}
+
+/* Dark inputs in forms builder + entries */
+body.flowbie-wp-admin-screen .flowbie-wp-forms input[type="text"],
+body.flowbie-wp-admin-screen .flowbie-wp-forms input[type="search"],
+body.flowbie-wp-admin-screen .flowbie-wp-forms input[type="url"],
+body.flowbie-wp-admin-screen .flowbie-wp-forms input[type="number"],
+body.flowbie-wp-admin-screen .flowbie-wp-forms input[type="checkbox"],
+body.flowbie-wp-admin-screen .flowbie-wp-forms textarea,
+body.flowbie-wp-admin-screen .flowbie-wp-forms select {
+	background-color: rgba(12, 13, 16, 0.92) !important;
+	color: #f8fafc !important;
+	-webkit-text-fill-color: #f8fafc !important;
+	border: 1px solid rgba(255, 255, 255, 0.14) !important;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms input[type="text"]:focus,
+body.flowbie-wp-admin-screen .flowbie-wp-forms input[type="search"]:focus,
+body.flowbie-wp-admin-screen .flowbie-wp-forms input[type="url"]:focus,
+body.flowbie-wp-admin-screen .flowbie-wp-forms input[type="number"]:focus,
+body.flowbie-wp-admin-screen .flowbie-wp-forms textarea:focus,
+body.flowbie-wp-admin-screen .flowbie-wp-forms select:focus {
+	background-color: rgba(28, 30, 36, 0.98) !important;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(114, 174, 230, 0.45) !important;
+	outline: none !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms input::placeholder,
+body.flowbie-wp-admin-screen .flowbie-wp-forms textarea::placeholder {
+	color: var(--fc-on-dark-placeholder, #9ca3af) !important;
+	-webkit-text-fill-color: var(--fc-on-dark-placeholder, #9ca3af) !important;
+	opacity: 1;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms select option {
+	background: #141619 !important;
+	color: #f8fafc !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .form-table th {
+	color: #d1d5db !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .form-table td,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .form-table td label {
+	color: #f8fafc !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .button:not(.button-primary) {
+	background: #2c3338 !important;
+	color: #f8fafc !important;
+	-webkit-text-fill-color: #f8fafc !important;
+	border: none !important;
+	box-shadow: none !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .button:not(.button-primary):hover,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .button:not(.button-primary):focus {
+	background: #3c434a !important;
+	color: #ffffff !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .button-primary {
+	background: #16a34a !important;
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+	border: none !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-forms .button-link,
+body.flowbie-wp-admin-screen .flowbie-wp-forms .button-link-delete {
+	color: #72aee6 !important;
+	background: transparent !important;
+}
+
+/* jQuery UI drag ghost */
+body.flowbie-wp-admin-screen .flowbie-wp-forms .ui-sortable-helper.flowbie-wp-forms-field-card {
+	background-color: #1c2129 !important;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+}

@@ -1,0 +1,50 @@
+---
+description: Highest-priority task harness - self-check constraints before acting (no fallbacks, flat UI, minimal WP API)
+alwaysApply: true
+---
+
+# Response harness (self-check, not opener)
+
+**Priority: highest.** Overrides default assistant habits. Do **not** paste this checklist into user-facing replies. Apply it silently before planning, coding, and answering.
+
+## Before every action, ask yourself
+
+**How do I complete this task within these barriers?**
+
+Use that question to steer scope, code, UI, and API calls. If a choice violates a barrier, pick a different approach or ask the user—do not add silent workarounds.
+
+## Barriers (internal only — do not repeat verbatim to the user)
+
+### Scope and behavior
+
+- **No fallbacks** unless the user explicitly requests them.
+- **No notifications** (`notify`, toasts, success pings) unless the user explicitly requests them.
+- **No extra conditions**, feature flags, guards, or behavior the user did not ask for.
+
+### Code
+
+- **Short, efficient code**: smallest correct diff; no unused scaffolding, helpers, or abstractions.
+
+### UI
+
+- **Flat design**: no decorative borders; use spacing, surface color, and typography.
+- **Typography**: **1rem minimum** for all UI copy; use **Lato** (`font-sans` / `tailwind.config.ts` sans stack). No sub-1rem sizes (`text-[10px]`, `text-[0.75rem]`, etc.). See `typography-min-1rem` rule.
+- **Semantic grouping**: related controls and data stay together.
+- **Figma-optimized layout**: clear sections, consistent rhythm, tight frames; no ornamental chrome.
+
+### WordPress API
+
+- **Minimal calls**: prefer bulk/list endpoints over per-item loops.
+- **Sheet export**: when pulling inventory or posts, fetch aggregate data once and surface it as a sheet/CSV/export instead of repeated single-record requests unless the user asks otherwise.
+
+## User-facing replies
+
+- **No harness preamble.** Do not open with a restatement of these rules.
+- Answer directly: what you did, what you found, or what you need.
+- If `agent-contract-openrouter` applies, you may lead with **🤖** only—that is not a harness recap.
+
+## Do not skip
+
+- Applies to every turn: questions, code changes, reviews, errors, and follow-ups.
+- Self-check even when the answer is one sentence.
+- Constraints still bind even when they are not echoed in the reply.

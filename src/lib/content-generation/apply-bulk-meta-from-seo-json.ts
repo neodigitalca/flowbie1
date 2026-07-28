@@ -1,0 +1,153 @@
+/**
+ * Bulk prompt generator **fallback**: map deterministic optimizedMeta (from keyword research JSON)
+ * into ACF fields - no LLM. Used when AI meta (`generateOptimizedMetaFields`) fails; primary path
+ * is content-optimizer parity in bulk-auto-generate. Rank Math post meta is written in bulk-auto-generate.
+ */
+
+import { stripTitleSeparatorSuffix } from "@/lib/content-generation/content-sanitizer";
+import {
+  containsCaseInsensitive,
+  ensureExactKeywordInMetaDescription,
+  ensureExactKeywordInSeoTitle,
+} from "@/lib/content-generation/rank-math-exact-keyword";
+import type { OptimizedMetaFields } from "@/lib/meta-field-optimizer";
+import type { WordPressSite } from "@/components/integrations/types";
+import type { ACFFieldMapping } from "@/lib/content-generation/acf-field-mapper";
+import { buildAcfPayload } from "@/lib/content-generation/apply-meta-acf-payload";
+import { updateACFFields } from "@/lib/wordpress-acf-origin";
+import { OptimizationFileManager } from "@/lib/optimization-file-manager";
+
+/** Same canonical values as `updateWordPressPostMeta` rank_math_* in bulk upload. */
+export function buildOptimizedMetaFromKeywordResearch(
+  rankMeta: { seoTitle?: string; metaDescription?: string; focusKeyword?: string },
+  postTitle: string,
+  excerpt: string,
+  primaryKw: string,
+  postLink: string,
+  siteUrl: string
+): OptimizedMetaFields {
+  const exactKw = (primaryKw || rankMeta.focusKeyword || '').trim().slice(0, 500);
+
+  let rawTitle = rankMeta.seoTitle
+    ? stripTitleSeparatorSuffix(rankMeta.seoTitle).trim()
+    : postTitle.trim();
+  if (
+    exactKw &&
+    rankMeta.seoTitle &&
+    !containsCaseInsensitive(rawTitle, exactKw) &&
+    containsCaseInsensitive(rankMeta.seoTitle, exactKw)
+  ) {
+    rawTitle = rankMeta.seoTitle.trim();
+  }
+
+  const rawDesc = rankMeta.metaDescription ? rankMeta.metaDescription.trim() : excerpt.trim();
+
+  // Prefer full WordPress post title. Never hard-cut to 60 (that produced mid-word titles like "…for Al").
+  const fullPostTitle = postTitle.trim();
+  const titleSource = fullPostTitle || rawTitle;
+  const title =
+    exactKw && !containsCaseInsensitive(titleSource, exactKw)
+      ? ensureExactKeywordInSeoTitle(titleSource, exactKw, Math.max(titleSource.length + exactKw.length + 32, 500))
+      : titleSource;
+  const desc = ensureExactKeywordInMetaDescription(rawDesc, exactKw, 160);
+  const kw = exactKw;
+  const baseUrl = String(siteUrl || "").replace(/\/$/, "");
+  return {
+    rank_math_title: title,
+    rank_math_description: desc,
+    rank_math_focus_keyword: kw,
+    rank_math_canonical_url: postLink || baseUrl,
+    rank_math_robots: ["index", "follow"],
+    keyword_focus: kw,
+  };
+}
+
+export interface ApplyBulkSeoMetaToAcfOptions {
+  postId: number;
+  site: WordPressSite;
+  postLink: string;
+  primaryKeyword: string;
+  optimizedMeta: OptimizedMetaFields;
+  fieldMapping: ACFFieldMapping;
+  existingAcfFields: Record<string, unknown>;
+  postTypeSubtype: string;
+  postTypeEndpoint: string;
+  /** Same string written to ACF `seo_research` in the research phase (used only for merge fallback; seo_research is not re-written here). */
+  priorSeoResearchJson: string;
+  fileManager: OptimizationFileManager;
+  setProgress: (progress: { step: string; progress: number; message?: string }) => void;
+}
+
+export async function applyBulkSeoMetaToAcf(
+  options: ApplyBulkSeoMetaToAcfOptions
+): Promise<{ success: boolean }> {
+  const {
+    postId,
+    site,
+    postLink,
+    primaryKeyword,
+    optimizedMeta,
+    fieldMapping,
+    existingAcfFields,
+    postTypeSubtype,
+    postTypeEndpoint,
+    priorSeoResearchJson,
+    fileManager,
+    setProgress,
+  } = options;
+
+  setProgress({
+    step: "Applying SEO fields to ACF (from research JSON)...",
+    progress: 96,
+    message: "Writing keyword, meta description, and SEO title to ACF...",
+  });
+
+  const acfFields = buildAcfPayload(
+    fieldMapping,
+    optimizedMeta,
+    primaryKeyword,
+    existingAcfFields,
+    priorSeoResearchJson,
+    { includeSeoResearchInPayload: false }
+  );
+
+  if (Object.keys(acfFields).length === 0) {
+    console.warn("[Bulk ACF Meta] No mapped ACF fields to update (keyword/meta/title).");
+    return { success: false };
+  }
+
+  const upd = await updateACFFields(
+    site.siteUrl,
+    site.username,
+    site.appPassword,
+    postId,
+    acfFields,
+    postTypeSubtype,
+    postTypeEndpoint
+  );
+
+  if (upd.success) {
+    const name = OptimizationFileManager.generateFilename("acf-seo-optimization", primaryKeyword, "json");
+    fileManager.addFile(
+      name,
+      JSON.stringify(
+        {
+          postId,
+          postLink,
+          primaryKeyword,
+          acfFieldsWritten: acfFields,
+          optimizedMeta,
+          source: "bulk_prompt_generator_json",
+          updatedAt: new Date().toISOString(),
+        },
+        null,
+        2
+      ),
+      "application/json"
+    );
+    return { success: true };
+  }
+
+  console.warn("[Bulk ACF Meta] updateACFFields failed:", upd.error, upd.failed);
+  return { success: false };
+}

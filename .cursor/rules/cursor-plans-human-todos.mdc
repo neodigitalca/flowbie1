@@ -1,0 +1,58 @@
+---
+description: Cursor plan files: human todos, no em dashes, no fallbacks, minimal regex, agentic-first
+globs: .cursor/plans/**/*.md
+alwaysApply: false
+---
+
+# Cursor plans (`.cursor/plans/`): quality bar
+
+Use this when **creating or editing** Markdown plans under `.cursor/plans/`. Plans are execution briefs for humans and agents, not placeholders.
+
+## Todos and task lists
+
+- Include an explicit **Todos** or **Implementation tasks** section with **human-readable** items: each line should stand alone as a clear instruction (what to do, and enough context to know when it is done).
+- Prefer **verb-led** lines with scope (e.g. "Add validation in `src/...` when X is blank") over cryptic labels ("fix validation", "wire API", "cleanup").
+- **No telegraphic one-word todos** unless the surrounding bullet already defines scope; avoid duplicate rows that only differ by file name without a distinct action.
+- If order matters, use **numbered** steps or an explicit note; otherwise use `- [ ]` checklists for parallel work.
+- Where useful, add **acceptance criteria** per item or a short **Definition of done** subsection so "done" is not ambiguous.
+
+## Depth
+
+- Plans should be **in depth enough to execute without guesswork**: problem or goal, constraints, main areas of the codebase (paths or components), risks, and how to verify (tests, manual checks, or metrics).
+- Include **dependencies** between tasks when skipping a step would break the next (e.g. schema before UI, or feature flag before rollout).
+- Avoid empty boilerplate sections; if a section is not needed, omit it instead of leaving a heading with no content.
+
+## No fallbacks (in plans and in what they prescribe)
+
+- Plans must **not** prescribe **silent fallbacks**: defaulting to stale data, swallowing errors, "try X then quietly use Y," or masking failures to keep the UI happy.
+- Prefer **one explicit contract**: validate inputs, fail fast with structured errors, or a single documented recovery path that is visible in UX or logs (same idea as harness rules: no hidden behavior).
+- If a plan mentions error handling, state **what the user or operator sees** and **what gets logged or returned**, not vague "handle gracefully."
+
+## Minimal regex; agentic first
+
+- Prefer **structured data, parsers, schemas, and explicit branches** over regex when describing implementation. If the plan mentions matching or extraction, default to **minimal regex** (only where there is no better API or type-safe path).
+- **Agentic first** for the overall approach: use agents, tools, retrieval, or clear multi-step logic where the product already does; do not specify brittle regex-heavy pipelines when an agent or tool call can ground the answer.
+- Plans should not center on large regex as the main strategy for understanding or transforming content.
+
+## Punctuation and style
+
+- Do **not** use the em dash character (U+2014). Prefer a comma, a period and a new sentence, parentheses, or a hyphen for short joins (same standard as project copy rules).
+- Prefer plain, direct language over filler. Do not pad with vague "ensure quality" lines without specifics.
+
+## Examples
+
+```markdown
+## Todos
+
+- [ ] Add rate limit handling in `src/lib/foo/client.ts` when the API returns 429; surface a single user-visible error and retry once with backoff.
+- [ ] Extend `src/lib/foo/__tests__/client.test.ts` mocks to cover 429 and assert one retry.
+```
+
+```markdown
+## Todos
+
+- fix stuff
+- API
+```
+
+The second example is **not** acceptable: items are not actionable or readable.

@@ -1,0 +1,139 @@
+import { useCallback, useState } from "react";
+import type { WordPressSite } from "@/components/integrations/types";
+import { normalizeFocusKeywordPhrase } from "@/lib/seo-redirect-csv";
+import { getWordPressPostMeta } from "@/lib/wordpress-api";
+import { getSeoResearchFromAcf } from "@/lib/content-generation/ai-driven-acf-reader";
+import type { OverviewBinding } from "./use-overview-wordpress-binding";
+
+export interface DownloadedSeoFields {
+  title?: string;
+  /** First H1 from post body when inventory included pageHeading. */
+  pageHeading?: string;
+  metaDescription?: string;
+  schemaJson?: string;
+  focusKeyword?: string;
+  faq?: string;
+  dateModifier?: string;
+  /** ACF textarea `seo_research` (cached SEO research brief) */
+  seoResearch?: string;
+}
+
+export interface UseOverviewDownloadResult {
+  loading: boolean;
+  error: string | null;
+  downloadRow: (site: WordPressSite | null, url: string, binding?: OverviewBinding) => Promise<DownloadedSeoFields | null>;
+}
+
+/**
+ * Downloads SEO fields for a bound Overview row.
+ * Meta description is the WordPress post excerpt only (not plugin meta, not ACF modifiers).
+ */
+export function useOverviewDownloadFromSite(): UseOverviewDownloadResult {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const downloadRow = useCallback(
+    async (site: WordPressSite | null, url: string, binding?: OverviewBinding) => {
+      if (!site || !binding?.postId) {
+        setError("No connected site or post binding available for this URL.");
+        return null;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const result = await getWordPressPostMeta(
+          site.siteUrl,
+          site.username,
+          site.appPassword,
+          binding.postId,
+          binding.subtype,
+        );
+
+        if (!result.success || !result.meta) {
+          throw new Error(result.error || "No meta fields returned from WordPress.");
+        }
+
+        const meta = result.meta;
+        const acf = (result as any).acf || {};
+        const postTitle =
+          typeof result.title === "string"
+            ? result.title.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
+            : "";
+        const excerptRaw = typeof result.excerpt === "string" ? result.excerpt : "";
+        const excerptPlain = excerptRaw
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .substring(0, 300);
+        const metaDescription = excerptPlain || undefined;
+
+        let schemaJson = "";
+        const schemaField =
+          meta["rank_math_rich_snippet"] ||
+          meta["rank_math_schema"] ||
+          meta["schema"] ||
+          meta["_schema"] ||
+          null;
+        if (schemaField) {
+          try {
+            schemaJson =
+              typeof schemaField === "string"
+                ? schemaField
+                : JSON.stringify(schemaField, null, 2);
+          } catch {
+            schemaJson = "";
+          }
+        }
+
+        // Focus keyword: ACF keyword_focus only.
+        const acfKeyword =
+          typeof acf["keyword_focus"] === "string"
+            ? acf["keyword_focus"]
+            : "";
+        // IMPORTANT: Overview mode is ACF-only. No plugin fallback.
+        const focusKeyword =
+          normalizeFocusKeywordPhrase((acfKeyword || "").trim()) || undefined;
+
+        const acfFaq = typeof acf["faq"] === "string" ? acf["faq"] : "";
+
+        // Date modifier: prefer ACF date_modifier/seo_date_modifier
+        const acfDate =
+          typeof acf["date_modifier"] === "string"
+            ? acf["date_modifier"]
+            : typeof acf["seo_date_modifier"] === "string"
+            ? acf["seo_date_modifier"]
+            : "";
+
+        const acfSeoResearch = getSeoResearchFromAcf(acf).trim();
+
+        return {
+          title: postTitle || undefined,
+          metaDescription,
+          schemaJson: schemaJson || undefined,
+          focusKeyword: focusKeyword || undefined,
+          faq: acfFaq,
+          dateModifier: acfDate || undefined,
+          seoResearch: acfSeoResearch || undefined,
+        };
+      } catch (err: any) {
+        const msg =
+          err?.message ||
+          `Failed to download SEO fields for ${url}. Check WordPress REST access for this post and excerpt/meta fields.`;
+        setError(msg);
+        return null;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
+  return {
+    loading,
+    error,
+    downloadRow,
+  };
+}
+

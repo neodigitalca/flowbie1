@@ -1,0 +1,1474 @@
+/**
+ * WordPress Uploader Module
+ * Handles WordPress post creation and updates using entity endpoint directly
+ * NO service-area conditionals, NO normalization
+ */
+
+import { notify } from "@/lib/app-notifications";
+import { updateWordPressPost, createWordPressPost, uploadWordPressMedia, updateWordPressPostMeta } from "@/lib/wordpress-api";
+import { updateACFFields } from "@/lib/wordpress-acf-origin";
+import type { WordPressSite } from "@/components/integrations/types";
+import { extractEndpointFromEntitySitemapUrl } from "@/lib/entity-endpoint-extractor";
+import { cleanTitleForNonEntity } from "@/lib/content-optimization-helpers";
+import { sanitizeContentForUpload, validateContentForUpload, truncateTitleForSEO } from "@/lib/content-generation/content-sanitizer";
+import { loadApiKey } from "@/lib/api";
+import { getLocalFAQPhrase } from "@/lib/local-entity-phrases";
+import { markdownToHtml } from "@/lib/markdown-to-html";
+import { extraTextToUploadHtml } from "@/lib/content-generation/extra-text-heading-contract";
+import { getResearchModel } from "@/lib/optimization-settings-storage";
+import { stripBracketPlaceholders, stripLeadingP } from "@/lib/gsc-simple-keyword-recommendation";
+import { generateOptimizedTitle } from "@/lib/title-optimizer";
+import { generateSEOSlug } from "@/lib/seo-slug-generator";
+import { resolveRecommendedAuthor } from "@/lib/wordpress-api/author-resolver";
+import { parseFaqEntries, type FaqEntry } from "@/lib/faq-entries";
+
+/** ACF: overwrite only `seo_extra_text` / `extra_text`–style fields; leave all other keys unchanged. */
+function mergeAcfOnlyExtraText(
+  existingAcf: Record<string, unknown> | undefined,
+  extraTextHtml: string
+): Record<string, unknown> {
+  const acf: Record<string, unknown> = { ...(existingAcf && typeof existingAcf === "object" ? existingAcf : {}) };
+  const keys = Object.keys(acf);
+  const extraKeys = keys.filter((k) => {
+    const l = k.toLowerCase();
+    return l.includes("extra_text") && !l.includes("image");
+  });
+  if (extraKeys.length > 0) {
+    for (const k of extraKeys) {
+      acf[k] = extraTextHtml;
+    }
+  } else {
+    acf["seo_extra_text"] = extraTextHtml;
+  }
+  return acf;
+}
+
+/**
+ * When no primary keyword is available, infer one from title, meta, and PROMPT MODIFIER using Open Router.
+ * The PROMPT MODIFIER (when present) is the source of truth; keyword is derived from it.
+ */
+async function inferKeywordForKeywordFocus(
+  title: string,
+  excerpt: string | undefined,
+  url: string,
+  siteId: string,
+  metaDescription?: string,
+  promptModifier?: string
+): Promise<string> {
+  const cleanTitle = (title || "").replace(/<[^>]+>/g, "").trim();
+  const excerptText = (excerpt || "").replace(/<[^>]+>/g, "").trim().substring(0, 300);
+  const metaText = (metaDescription || excerptText || "").trim().substring(0, 300);
+  const modifierText = (promptModifier || "").trim().substring(0, 500);
+  if (!cleanTitle && !metaText && !modifierText) return "";
+
+  try {
+    const openRouterApiKey = loadApiKey();
+    if (!openRouterApiKey?.trim()) return "";
+
+    const researchModel = getResearchModel(siteId);
+    const parts: string[] = [];
+    if (modifierText) parts.push(`PROMPT MODIFIER (read first - defines what to prioritize): "${modifierText}"`);
+    parts.push(`Page Title: "${cleanTitle || "(none)"}"`, `Page URL: "${url}"`);
+    if (metaText) parts.push(`Meta description (use as context for the page topic): "${metaText}"`);
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openRouterApiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://agent-blueprint-builder.com",
+        "X-Title": "Agent Blueprint Builder",
+      },
+      body: JSON.stringify({
+        model: researchModel,
+        messages: [
+          {
+            role: "user",
+            content: `The PROMPT MODIFIER (when provided above) is the SOURCE OF TRUTH for what this company/site specializes in. Your keyword MUST be derived from and consistent with it.
+
+${parts.join("\n")}
+
+RULES:
+- If a PROMPT MODIFIER is provided above, it is the SOURCE OF TRUTH. Derive the primary keyword from it. IGNORE the page title, FAQ, or any other page content that suggests a different topic. The modifier overrides everything.
+- If no PROMPT MODIFIER is provided, use the meta description as the primary signal for the site's business, then the title. The keyword must reflect what the modifier or meta says the company does.
+- Return a 2-5 word keyword phrase that matches the source of truth (modifier first, then meta).
+
+Return ONLY the keyword phrase, nothing else. No quotes, no explanation.`,
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 30,
+      }),
+    });
+
+    if (!response.ok) return "";
+
+    const data = await response.json();
+    const aiKeyword = (data.choices?.[0]?.message?.content ?? "").trim();
+    if (!aiKeyword || aiKeyword.length < 2) return "";
+
+    const cleaned = aiKeyword.replace(/^["']|["']$/g, "").trim().substring(0, 80);
+    return cleaned.length >= 3 ? cleaned : "";
+  } catch (error) {
+    console.warn("[WordPress Uploader] Failed to infer keyword for keyword_focus:", error);
+    return "";
+  }
+}
+
+/**
+ * AI-driven function to generate FAQ questions from blog content
+ * Analyzes the content and generates 4 relevant questions focused on North America
+ */
+export async function generateQuestionsFromContent(
+  blogContent: string,
+  primaryKeyword: string,
+  apiKey: string,
+  napLocations?: Array<{ city: string; state: string }>,
+  options?: { count?: number; avoidSimilarTo?: string[] }
+): Promise<string[]> {
+  const targetCount = Math.min(4, Math.max(1, options?.count ?? 4));
+  const avoid = new Set(
+    (options?.avoidSimilarTo ?? []).map((s) => s.trim().toLowerCase()).filter(Boolean)
+  );
+  try {
+    // Extract text content (remove HTML tags for better AI analysis)
+    const textContent = blogContent
+      .replace(/<[^>]*>/g, ' ') // Remove HTML tags
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim()
+      .substring(0, 8000); // Limit to 8000 chars for API efficiency
+
+    // Build location context from NAP data
+    let locationContext = '';
+    if (napLocations && napLocations.length > 0) {
+      const locationStrings = napLocations
+        .filter(loc => loc.city && loc.state)
+        .map(loc => `${loc.city}, ${loc.state}`)
+        .slice(0, 3); // Use up to 3 locations
+      if (locationStrings.length > 0) {
+        locationContext = `\n\nIMPORTANT: Focus questions on North American locations only. Use these realistic locations from our business: ${locationStrings.join(', ')}. DO NOT reference any locations outside of North America (no Australia, UK, Europe, Asia, etc.).`;
+      }
+    }
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: getResearchModel(),
+        messages: [
+          {
+            role: "system",
+            content: `You are an SEO expert specializing in North American content. Generate exactly ${targetCount} relevant FAQ questions that readers would ask about the topic. CRITICAL: All questions must focus ONLY on North America (United States, Canada, Mexico). NEVER reference locations outside North America (no Australia, UK, Europe, Asia, etc.). Return ONLY a JSON array of ${targetCount} question strings, nothing else.`
+          },
+          {
+            role: "user",
+            content: `Analyze this blog content about "${primaryKeyword}" and generate ${targetCount} relevant FAQ questions focused on North America only:${locationContext}\n\n${textContent}\n\nReturn ONLY a JSON array of ${targetCount} strings. Questions must be distinct from these existing ones (do not repeat or trivially rephrase): ${avoid.size ? [...avoid].slice(0, 20).join(" | ") : "(none)"}\n\nCRITICAL: All questions must be relevant to North America only. No international references.`
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`AI API error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const aiResponse = data.choices?.[0]?.message?.content?.trim() || '';
+    
+    // Parse JSON array from AI response
+    let questions: string[] = [];
+    try {
+      // Try to extract JSON array from response
+      const jsonMatch = aiResponse.match(/\[.*\]/s);
+      if (jsonMatch) {
+        questions = JSON.parse(jsonMatch[0]);
+      } else {
+        // Fallback: try parsing entire response
+        questions = JSON.parse(aiResponse);
+      }
+    } catch (parseError) {
+      // Fallback: split by lines and clean
+      questions = aiResponse
+        .split('\n')
+        .map(line => line.replace(/^[-*•]\s*/, '').replace(/^["']|["']$/g, '').trim())
+        .filter(q => q.length > 10 && q.endsWith('?'))
+        .slice(0, targetCount);
+    }
+
+    const distinct = questions.filter((q) => {
+      const t = q.trim().toLowerCase();
+      if (!t) return false;
+      for (const a of avoid) {
+        if (t === a || t.includes(a) || a.includes(t)) return false;
+      }
+      return true;
+    });
+    questions = distinct;
+
+    if (questions.length < targetCount) {
+      const fallbackQuestions = [
+        `What is ${primaryKeyword}?`,
+        `How does ${primaryKeyword} work?`,
+        `Why is ${primaryKeyword} important?`,
+        `Where can I find ${primaryKeyword}?`
+      ];
+      for (const fq of fallbackQuestions) {
+        if (questions.length >= targetCount) break;
+        const tl = fq.trim().toLowerCase();
+        if (![...avoid].some((a) => tl === a || tl.includes(a))) questions.push(fq);
+      }
+      questions = [...questions, ...fallbackQuestions].slice(0, targetCount);
+    }
+
+    console.log(`[FAQ Schema] AI generated ${questions.length} questions from blog content`);
+    return questions.slice(0, targetCount);
+  } catch (error) {
+    console.warn('[FAQ Schema] Failed to generate questions from content:', error);
+    const fallbackQuestions = [
+      `What is ${primaryKeyword}?`,
+      `How does ${primaryKeyword} work?`,
+      `Why is ${primaryKeyword} important?`,
+      `Where can I find ${primaryKeyword}?`
+    ];
+    return fallbackQuestions.slice(0, targetCount);
+  }
+}
+
+/**
+ * Generates Google-compliant FAQ Schema JSON-LD from questions
+ * ALWAYS generates schema - never returns empty string
+ * Returns properly formatted JSON-LD string (ACF fields handle script tag wrapping)
+ * Format: Valid JSON string that can be embedded in script tags
+ * CRITICAL: All FAQs focus on North America only - uses NAP locations for realistic references
+ */
+export function generateFAQSchema(
+  questions: string[],
+  primaryKeyword: string,
+  entity: string | undefined,
+  siteUrl: string,
+  napLocations?: Array<{ city: string; state: string }>
+): string {
+  // Filter out any questions that reference non-North American locations
+  const northAmericaOnlyQuestions = questions.filter(q => {
+    const lowerQ = q.toLowerCase();
+    // Block common international references
+    const blockedTerms = ['australia', 'uk', 'united kingdom', 'europe', 'asia', 'london', 'sydney', 'melbourne', 'brisbane', 'perth', 'adelaide', 'canberra', 'england', 'scotland', 'wales', 'ireland', 'new zealand', 'singapore', 'hong kong', 'tokyo', 'paris', 'berlin', 'rome', 'madrid'];
+    return !blockedTerms.some(term => lowerQ.includes(term));
+  });
+
+  // Take first 4 questions (always ensure we have questions)
+  let faqQuestions = northAmericaOnlyQuestions.slice(0, 4);
+  
+  // Ensure we have at least one question
+  if (faqQuestions.length === 0) {
+    // Fallback questions focused on North America
+    faqQuestions.push(
+      `What is ${primaryKeyword}?`,
+      `How does ${primaryKeyword} work?`,
+      `Why is ${primaryKeyword} important?`,
+      `Where can I find ${primaryKeyword} in North America?`
+    );
+  }
+  
+  // Get primary location from NAP data for answer context
+  let primaryLocation = '';
+  if (napLocations && napLocations.length > 0) {
+    const defaultLoc = napLocations.find(loc => loc.city && loc.state) || napLocations[0];
+    if (defaultLoc && defaultLoc.city && defaultLoc.state) {
+      primaryLocation = `${defaultLoc.city}, ${defaultLoc.state}`;
+    }
+  }
+  
+  // Use entity if available, otherwise use NAP location
+  const locationReference = entity || primaryLocation;
+  
+  // Generate FAQ schema structure per Google's FAQPage specification
+  // https://developers.google.com/search/docs/appearance/structured-data/faqpage
+  const faqItems = faqQuestions.slice(0, 4).map((question, index) => {
+    // Clean question text - trim and ensure it's a valid string
+    const cleanQuestion = String(question || '').trim();
+    if (!cleanQuestion) {
+      // Skip empty questions
+      return null;
+    }
+    
+    // Filter out any international references from the question itself
+    const lowerQuestion = cleanQuestion.toLowerCase();
+    const hasInternationalRef = ['australia', 'uk', 'united kingdom', 'europe', 'asia'].some(term => lowerQuestion.includes(term));
+    if (hasInternationalRef) {
+      console.warn(`[FAQ Schema] Filtered out question with international reference: ${cleanQuestion}`);
+      return null;
+    }
+    
+    // Generate answer text - use varied phrases for location reference to avoid repetition
+    let locationText: string;
+    if (locationReference) {
+      // Use varied FAQ phrases, rotating through different options for each question
+      const variedPhrase = getLocalFAQPhrase(locationReference, index);
+      locationText = ` ${variedPhrase}`;
+    } else {
+      locationText = ' in North America';
+    }
+    const answerText = `For expert guidance on ${cleanQuestion.toLowerCase()}, contact our team${locationText}. We specialize in ${primaryKeyword} and provide personalized solutions tailored to your needs.`;
+    
+    return {
+      "@type": "Question",
+      "name": cleanQuestion,
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": answerText
+      }
+    };
+  }).filter((item): item is NonNullable<typeof item> => item !== null); // Remove null items
+
+  // Ensure we have at least one valid FAQ item
+  if (faqItems.length === 0) {
+    faqItems.push({
+      "@type": "Question",
+      "name": `What is ${primaryKeyword}?`,
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": `Learn more about ${primaryKeyword} and how it can help you.`
+      }
+    });
+  }
+
+  const faqSchema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": faqItems
+  };
+
+  // Generate properly formatted JSON string
+  // JSON.stringify automatically handles escaping of special characters
+  let jsonString: string;
+  try {
+    // Use JSON.stringify which properly escapes all special characters
+    jsonString = JSON.stringify(faqSchema);
+    
+    // Validate the JSON is parseable
+    JSON.parse(jsonString);
+  } catch (error) {
+    console.error('[FAQ Schema] JSON stringify/parse error:', error);
+    // Fallback: create minimal valid schema with safe text
+    const safeKeyword = primaryKeyword.replace(/[^a-zA-Z0-9\s]/g, '').trim() || 'this topic';
+    jsonString = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [{
+        "@type": "Question",
+        "name": `What is ${safeKeyword}?`,
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": `Learn more about ${safeKeyword} and how it can help you.`
+        }
+      }]
+    });
+  }
+  
+  // Wrap in script tags for Google-compliant JSON-LD embedding
+  // ACF fields can store this format, and WordPress themes will render it correctly
+  const fullSchema = `<script type="application/ld+json">${jsonString}</script>`;
+
+  console.log(`[FAQ Schema] Generated Google-compliant JSON-LD with ${faqItems.length} questions for "${primaryKeyword}"`);
+  return fullSchema;
+}
+
+/**
+ * FAQ JSON-LD script from explicit Q/A pairs: keeps provided answers; fills empty answers with the same template as generateFAQSchema.
+ */
+export function buildFAQSchemaScriptFromEntries(
+  entries: FaqEntry[],
+  primaryKeyword: string,
+  entity: string | undefined,
+  _siteUrl: string,
+  napLocations?: Array<{ city: string; state: string }>
+): string {
+  let primaryLocation = "";
+  if (napLocations && napLocations.length > 0) {
+    const defaultLoc = napLocations.find((loc) => loc.city && loc.state) || napLocations[0];
+    if (defaultLoc && defaultLoc.city && defaultLoc.state) {
+      primaryLocation = `${defaultLoc.city}, ${defaultLoc.state}`;
+    }
+  }
+  const locationReference = entity || primaryLocation;
+  const faqItems = entries.map((entry, index) => {
+    const cleanQuestion = String(entry.question || "").trim();
+    if (!cleanQuestion) return null;
+    let answerText = String(entry.answer || "").trim();
+    if (!answerText) {
+      let locationText: string;
+      if (locationReference) {
+        const variedPhrase = getLocalFAQPhrase(locationReference, index);
+        locationText = ` ${variedPhrase}`;
+      } else {
+        locationText = " in North America";
+      }
+      answerText = `For expert guidance on ${cleanQuestion.toLowerCase()}, contact our team${locationText}. We specialize in ${primaryKeyword} and provide personalized solutions tailored to your needs.`;
+    }
+    return {
+      "@type": "Question",
+      name: cleanQuestion,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: answerText,
+      },
+    };
+  }).filter((item): item is NonNullable<typeof item> => item !== null);
+
+  const faqSchema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqItems,
+  };
+  const jsonString = JSON.stringify(faqSchema);
+  return `<script type="application/ld+json">${jsonString}</script>`;
+}
+
+function reuseFullPostIfSamePost(
+  snapshot: Record<string, unknown> | undefined,
+  postId: number,
+): Record<string, unknown> | null {
+  if (!snapshot || typeof snapshot !== "object") return null;
+  const sid = Number((snapshot as { id?: unknown }).id);
+  if (!Number.isFinite(sid) || sid !== Number(postId)) return null;
+  if (snapshot.acf && typeof snapshot.acf === "object") return snapshot;
+  const { id, link, slug, ...rest } = snapshot as Record<string, unknown>;
+  if (Object.keys(rest).length > 0) {
+    return { id, link, slug, acf: rest };
+  }
+  return snapshot;
+}
+
+/** Inventory snapshot only — never hits WordPress for ACF discovery on upload. */
+function resolveFullPostForAcfUpdate(
+  snapshot: Record<string, unknown> | undefined,
+  postId: number,
+): Record<string, unknown> | null {
+  const reused = reuseFullPostIfSamePost(snapshot, postId);
+  if (reused) return reused;
+  if (snapshot?.acf && typeof snapshot.acf === "object") {
+    return {
+      id: postId,
+      link: (snapshot as { link?: unknown }).link,
+      slug: (snapshot as { slug?: unknown }).slug,
+      acf: snapshot.acf,
+    };
+  }
+  return null;
+}
+
+function uploadNeedsAcfWrite(opts: {
+  seoExtraTextFieldOnly: boolean;
+  bulkFaqMinimum4: boolean;
+  writeFocusKeywords: boolean;
+  generateFaqSchema: boolean;
+  writeMetaDescription: boolean;
+  extraTextContent?: string;
+  extraImageBase64?: string;
+}): boolean {
+  return (
+    opts.seoExtraTextFieldOnly ||
+    opts.bulkFaqMinimum4 ||
+    opts.writeFocusKeywords ||
+    opts.generateFaqSchema ||
+    opts.writeMetaDescription ||
+    Boolean(opts.extraTextContent?.trim()) ||
+    Boolean(opts.extraImageBase64)
+  );
+}
+
+export interface WordPressUploaderOptions {
+  context: {
+    site: WordPressSite;
+    url: string;
+    updateMode: 'update' | 'draft';
+    existingPost?: any;
+    resolved?: any;
+    existingTitle: string;
+    existingContent?: string;
+    wordPressPosts?: Array<{ id: number; slug: string; title: string; excerpt: string; link: string; date_gmt: string }>;
+    optimizationOptions?: { stagingSite?: boolean };
+    /** Bulk prefetch `getACFFieldsForPost` snapshot — upload skips repeat fetch when ids match. */
+    acfFullPostSnapshot?: Record<string, unknown>;
+  };
+  blueprintResult: any;
+  existingTitle: string;
+  primaryKeyword: string;
+  htmlContent: string;
+  excerpt: string;
+  featuredImageId?: number;
+  shouldOptimizeTitle: boolean;
+  writeFocusKeywords?: boolean;
+  generateFaqSchema?: boolean;
+  prefetchedFaqRaw?: string;
+  bulkFaqMinimum4?: boolean;
+  /** Legacy; REST excerpt uses meta when non-empty regardless of this flag. */
+  writeMetaDescription?: boolean;
+  writeExcerpt?: boolean;
+  setProgress: (progress: { step: string; progress: number; message?: string }) => void;
+  entity?: string; // Entity extracted from title/ACF origin field (e.g., "Edmonton, Alberta")
+  faqQuestions?: string[]; // PAA questions for FAQ schema generation
+  allowedExternalUrls?: string[]; // Pre-validated external URLs from AI Overview research (bypass sanitizer stripping)
+  apiKey?: string; // OpenRouter API key for AI-driven question generation
+  extraTextContent?: string; // Extra text content for pages (ACF field: seo_extra_text)
+  extraImageBase64?: string; // Extra image base64 for pages (ACF field: seo_extra_image)
+  /** Only merge `seo_extra_text` / `extra_text` in ACF; no FAQ, date, keyword, or other fields. */
+  seoExtraTextFieldOnly?: boolean;
+}
+
+export interface WordPressUploaderResult {
+  result: any;
+  postId: number;
+  link: string;
+  finalTitle: string;
+}
+
+async function getACFFromOpenRouter(
+  fullPost: Record<string, unknown>,
+  updates: {
+    date: string;
+    keyword?: string;
+    extraText: string;
+    faq?: string;
+    metaDescription: string;
+    extraImageId?: number;
+  },
+  apiKey: string,
+  model: string
+): Promise<Record<string, unknown>> {
+  const systemPrompt = `You are a local SEO. You are given the full WordPress post API response (including its acf object) and an updates object. Your job: merge the updates into the post's acf so that every ACF field a local SEO would fill is updated. Use the EXACT key names that already exist in the post's acf object (e.g. if the post has "seo_extra_text", use that key; if it has "extra_text", use that; if it has both, set both). Preserve every key from the post's acf; overwrite only with the corresponding update when applicable. Map updates like this: updates.date -> date_modifier / seo_date_modifier; updates.keyword -> keyword_focus (only if updates.keyword is present); updates.extraText -> extra_text / seo_extra_text; updates.faq -> faq / seo_faq (only if updates.faq is present); updates.metaDescription -> meta_description / seo_meta_description; updates.extraImageId -> extra_image / seo_extra_image. Return only the complete merged acf object as valid JSON, no markdown, no explanation.`;
+  const userContent = `Full WordPress post (read the acf object and use its exact key names):\n${JSON.stringify(fullPost)}\n\nUpdates to apply:\n${JSON.stringify(updates)}\n\nReturn only the merged acf object as JSON.`;
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://flowbie.com",
+      "X-Title": "Flowbie",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent },
+      ],
+      temperature: 0.2,
+      max_tokens: 8000,
+    }),
+  });
+  if (!res.ok) throw new Error(`OpenRouter failed: ${res.status}`);
+  const data = await res.json();
+  const raw = (data.choices?.[0]?.message?.content ?? "").trim();
+  const json = raw.replace(/^```json?\s*|\s*```$/g, "").trim();
+  return JSON.parse(json) as Record<string, unknown>;
+}
+
+export async function uploadToWordPress(
+  options: WordPressUploaderOptions
+): Promise<WordPressUploaderResult> {
+  const {
+    context,
+    blueprintResult,
+    existingTitle,
+    primaryKeyword,
+    htmlContent,
+    excerpt,
+    featuredImageId,
+    shouldOptimizeTitle,
+    writeFocusKeywords = true,
+    generateFaqSchema = true,
+    prefetchedFaqRaw = "",
+    bulkFaqMinimum4 = false,
+    setProgress,
+    entity,
+    faqQuestions,
+    allowedExternalUrls,
+    apiKey,
+    extraTextContent,
+    extraImageBase64,
+    seoExtraTextFieldOnly = false,
+    writeMetaDescription = false,
+    writeExcerpt: _writeExcerpt = false,
+  } = options;
+
+  const { site } = context;
+  
+  // CRITICAL: Excerpt must be plain text only - no HTML, no markdown, no headings/paragraphs (short meta-style)
+  const plainTextExcerpt = excerpt
+    ? excerpt
+        .replace(/<[^>]*>/g, '') // Remove ALL HTML tags
+        .replace(/^#+\s+/gm, '') // Remove markdown headings (##, ###)
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/\*([^*]+)\*/g, '$1')
+        .replace(/\n+/g, ' ') // Single line
+        .replace(/\s+/g, ' ')
+        .trim()
+    : excerpt;
+
+  // Existing excerpt when we have no new meta string (e.g. empty generator output).
+  const preservedExcerpt = (() => {
+    const raw = context.existingPost?.excerpt;
+    if (raw == null) return '';
+    if (typeof raw === 'string') return raw;
+    if (typeof raw === 'object' && 'rendered' in (raw as any) && typeof (raw as any).rendered === 'string') {
+      return (raw as any).rendered;
+    }
+    return String(raw);
+  })();
+  
+  const excerptForRest =
+    plainTextExcerpt?.trim() ? plainTextExcerpt.trim() : preservedExcerpt;
+
+  console.log('[WordPress Uploader] Excerpt being uploaded:', {
+    hasExcerpt: !!excerpt,
+    excerptLength: excerpt?.length || 0,
+    plainTextLength: plainTextExcerpt?.length || 0,
+    excerptPreview: excerptForRest?.substring(0, 100) || 'N/A',
+    hadHTML: excerpt !== plainTextExcerpt,
+    usingGeneratedMeta: !!plainTextExcerpt?.trim(),
+  });
+  
+  // DEBUG: Log faqQuestions to trace if they're being passed
+  console.log('[WordPress Uploader] FAQ Questions received:', {
+    hasFaqQuestions: !!faqQuestions,
+    faqQuestionsLength: faqQuestions?.length || 0,
+    faqQuestionsPreview: faqQuestions?.slice(0, 2) || [],
+    entity,
+    primaryKeyword
+  });
+
+  // Use validated posts from context (already AI-filtered and HTTP-200 validated once per run in continue-optimization). Do NOT re-validate here to avoid "Validating 96 links" on every post.
+  const postsForSanitizer = context.wordPressPosts ?? [];
+  // Sanitize content before upload: placeholders, invalid internal links (only from validated list), non-Wikipedia external (pre-validated DFS links whitelisted)
+    const sanitizedHtmlContent = sanitizeContentForUpload(htmlContent, site.siteUrl, postsForSanitizer, undefined, allowedExternalUrls);
+  
+  // Validate content and log warnings (but don't block upload)
+  const validation = validateContentForUpload(sanitizedHtmlContent);
+  if (validation.warnings.length > 0) {
+    console.warn('[WordPress Uploader] Content validation warnings:', validation.warnings);
+  }
+  
+  console.log('[WordPress Uploader] Content sanitization applied:', {
+    originalLength: htmlContent.length,
+    sanitizedLength: sanitizedHtmlContent.length,
+    bytesRemoved: htmlContent.length - sanitizedHtmlContent.length,
+    validationWarnings: validation.warnings.length
+  });
+
+// AGENTIC LOGIC: Use endpoint from RESOLVED post first (it tells us where the post actually exists)
+  // Convert resolved.subtype to REST endpoint: 'post' -> 'posts', 'page' -> 'pages', others stay as-is
+  const resolvedEndpoint = context.resolved?.subtype 
+    ? (context.resolved.subtype === 'post' ? 'posts' 
+      : context.resolved.subtype === 'page' ? 'pages' 
+      : context.resolved.subtype)
+    : null;
+  
+  // Extract entity endpoint from sitemap (for new posts or when resolved endpoint not available)
+  const entityEndpointFromSitemap = context.site.entitySitemapUrl
+    ? extractEndpointFromEntitySitemapUrl(context.site.entitySitemapUrl)
+    : null;
+
+  // Updates: trust the loaded post's REST base first (avoids wrong resolved.subtype vs CPT).
+  // Create path: resolved > existing > entity sitemap > default.
+  const entityEndpoint =
+    context.updateMode === 'update' && context.existingPost?.postTypeEndpoint
+      ? context.existingPost.postTypeEndpoint
+      : resolvedEndpoint ||
+        context.existingPost?.postTypeEndpoint ||
+        entityEndpointFromSitemap ||
+        'posts';
+
+  const isPage = context.resolved?.subtype === 'page' || 
+    context.resolved?.endpoint === 'pages' ||
+    context.existingPost?.postTypeEndpoint === 'pages' ||
+    entityEndpoint === 'pages';
+
+  // Always use optimized content for update – overwrite existing. Never preserve old content for pages.
+  const contentForUpdate = sanitizedHtmlContent;
+  
+  console.log('[WordPress Uploader] Entity endpoint extracted (AGENTIC):', {
+    entitySitemapUrl: context.site.entitySitemapUrl,
+    resolvedSubtype: context.resolved?.subtype,
+    resolvedEndpoint,
+    extractedEndpoint: entityEndpoint,
+    fallbackFromExistingPost: context.existingPost?.postTypeEndpoint,
+    priority:
+      context.updateMode === 'update' && context.existingPost?.postTypeEndpoint
+        ? 'existingPost(updateFirst)'
+        : resolvedEndpoint
+          ? 'resolved'
+          : context.existingPost?.postTypeEndpoint
+            ? 'existingPost'
+            : entityEndpointFromSitemap
+              ? 'sitemap'
+              : 'default',
+  });
+
+  
+  let result: any;
+  let finalTitle: string = '';
+
+  // NOTE: We NO LONGER read existingOrigin from existing post
+  // Origin is ALWAYS extracted fresh from title using AI during optimization
+  // This ensures accurate, up-to-date entity extraction every time
+
+  if (context.updateMode === 'update') {
+    // Use entityEndpoint directly - NO normalization
+    const postTypeEndpoint = entityEndpoint;
+
+    console.log('[Optimize Content] Updating existing post:', {
+      id: context.existingPost.id,
+      postTypeEndpoint: postTypeEndpoint,
+      resolvedSubtype: context.resolved?.subtype,
+      existingPostEndpoint: context.existingPost?.postTypeEndpoint
+    });
+
+    // Title optimization is disabled (content-only module).
+    // Preserve the existing WordPress title without modification.
+    const updateTitle = existingTitle;
+    finalTitle = updateTitle;
+    
+    // Preserve the original slug to prevent URL changes
+    const originalSlug = context.existingPost?.slug || context.resolved?.slug;
+
+    // Preserve original status from existing post exactly.
+    // WordPress "update" must not demote scheduled/pending/private/etc posts to plain "draft".
+    const postStatus = context.existingPost?.status || 'publish';
+
+    console.log('[WordPress Uploader] Updating post:', {
+      postId: context.existingPost.id,
+      postStatus,
+      postTypeEndpoint,
+      originalSlug,
+      hasFeaturedImage: !!featuredImageId,
+      updateTitle,
+      existingPostStatus: context.existingPost?.status
+    });
+
+    if (seoExtraTextFieldOnly) {
+      const postId = Number(context.existingPost.id);
+      if (!site.siteUrl?.trim() || !site.username?.trim() || !site.appPassword?.trim()) {
+        result = {
+          success: false,
+          error: 'Missing WordPress site URL, username, or application password',
+        };
+      } else if (!Number.isFinite(postId) || postId <= 0) {
+        result = { success: false, error: 'Invalid WordPress post ID for SEO extra text update' };
+      } else {
+        setProgress({
+          step: 'Updating SEO extra text',
+          progress: 90,
+          message: `Writing ACF extra text only (post ID ${postId})…`,
+        });
+        result = {
+          success: true,
+          postId,
+          link:
+            (typeof context.existingPost?.link === 'string' && context.existingPost.link) ||
+            context.url,
+        };
+      }
+    } else {
+      const missingFields: string[] = [];
+      if (!site.siteUrl?.trim()) missingFields.push("siteUrl");
+      if (!site.username?.trim()) missingFields.push("username");
+      if (!site.appPassword?.trim()) missingFields.push("appPassword");
+      const postIdNum = Number(context.existingPost.id);
+      if (!Number.isFinite(postIdNum) || postIdNum <= 0) missingFields.push("postId");
+      if (!String(updateTitle ?? "").trim()) missingFields.push("title");
+      if (!String(contentForUpdate ?? "").trim()) missingFields.push("content");
+      if (missingFields.length > 0) {
+        const errMsg = `WordPress update blocked: missing or empty ${missingFields.join(", ")}`;
+        result = { success: false, error: errMsg };
+      } else {
+      setProgress({ step: 'Updating post...', progress: 90, message: `Updating existing post (ID: ${context.existingPost.id}) with optimized content: "${updateTitle}"...` });
+      result = await updateWordPressPost(
+        site.siteUrl,
+        site.username,
+        site.appPassword,
+        context.existingPost.id,
+        updateTitle,
+        contentForUpdate, // Always optimized content – overwrite existing (posts and pages)
+        excerptForRest,
+        postStatus, // Preserve original status
+        context.existingPost?.post_type || 'post', // Use post type from existing post
+        featuredImageId,
+        undefined,
+        undefined,
+        originalSlug, // Preserve original slug
+        postTypeEndpoint // Use entityEndpoint directly - NO normalization
+      );
+      }
+    }
+
+    console.log('[WordPress Uploader] Post update result:', {
+      success: result.success,
+      postId: result.postId,
+      link: result.link,
+      status: result.status,
+      error: result.error,
+      title: result.title,
+      expectedStatus: postStatus
+    });
+
+    // After successful update, set ACF fields
+    if (result.success && result.postId) {
+      const needsAcfWrite = uploadNeedsAcfWrite({
+        seoExtraTextFieldOnly,
+        bulkFaqMinimum4,
+        writeFocusKeywords,
+        generateFaqSchema,
+        writeMetaDescription,
+        extraTextContent,
+        extraImageBase64,
+      });
+
+      if (!needsAcfWrite) {
+        setProgress({
+          step: "Upload complete",
+          progress: 100,
+          message: "Post content saved to WordPress.",
+        });
+      } else try {
+        const postType = context.existingPost?.post_type || context.resolved?.subtype || 'post';
+        let fullPostForAcf = resolveFullPostForAcfUpdate(context.acfFullPostSnapshot, result.postId);
+        if (!fullPostForAcf) {
+          throw new Error(
+            `Missing inventory ACF snapshot for post ${result.postId}. Reload inventory and retry.`,
+          );
+        }
+        setProgress({
+          step: "Updating ACF fields...",
+          progress: 92,
+          message: "Using inventory snapshot for ACF merge (no WordPress prefetch).",
+        });
+
+        if (seoExtraTextFieldOnly) {
+          const raw = (extraTextContent ?? "").trim();
+          if (raw) {
+            const extraTextHtml = extraTextToUploadHtml(raw);
+            const existingAcf = (fullPostForAcf as { acf?: Record<string, unknown> }).acf;
+            const mergedAcf = mergeAcfOnlyExtraText(existingAcf, extraTextHtml);
+            setProgress({
+              step: "Updating SEO extra text",
+              progress: 95,
+              message: "Writing ACF `seo_extra_text` only (no keyword, FAQ, or date fields)...",
+            });
+            const acfExtraOnly = await updateACFFields(
+              site.siteUrl,
+              site.username,
+              site.appPassword,
+              result.postId,
+              mergedAcf,
+              context.existingPost?.post_type || "post",
+              postTypeEndpoint
+            );
+            if (acfExtraOnly.success) {
+              console.log("[WordPress Uploader] ACF extra text only updated:", acfExtraOnly.updated.join(", "));
+            } else {
+              console.warn("[WordPress Uploader] ACF extra text only update failed:", acfExtraOnly.error || acfExtraOnly.failed);
+            }
+          } else {
+            console.warn("[WordPress Uploader] seoExtraTextFieldOnly: empty extraTextContent, skipping ACF write.");
+          }
+        } else {
+        const todayDate = new Date().toISOString().split('T')[0];
+        let keywordForFocus = "";
+        if (writeFocusKeywords) {
+          keywordForFocus = stripLeadingP(stripBracketPlaceholders(primaryKeyword?.trim() ?? ""));
+        }
+
+        const napLocations =
+          site.napInfo?.locations?.map((loc) => ({ city: loc.city, state: loc.state })) ||
+          site.locations?.map((loc) => ({ city: loc.city, state: loc.state })) ||
+          [];
+
+        let faqSchema = '';
+        let skipFaqWrites = false;
+        const runFaqBlock = generateFaqSchema || bulkFaqMinimum4;
+
+        if (runFaqBlock) {
+          setProgress({
+            step: 'Creating FAQ Schema...',
+            progress: 93,
+            message: bulkFaqMinimum4
+              ? 'Checking FAQ minimum (4)...'
+              : faqQuestions && faqQuestions.length > 0
+                ? `Generating FAQ schema with ${Math.min(faqQuestions.length, 4)} PAA questions...`
+                : 'Analyzing blog content to generate FAQ questions...',
+          });
+
+          try {
+            if (bulkFaqMinimum4) {
+              const existingEntries = parseFaqEntries(prefetchedFaqRaw);
+              if (existingEntries.length >= 4) {
+                faqSchema = '';
+                skipFaqWrites = true;
+                console.log('[WordPress Uploader] Bulk FAQ minimum: existing FAQ count >= 4; leaving ACF FAQ unchanged.');
+              } else {
+                const need = 4 - existingEntries.length;
+                const openRouterApiKey = apiKey || loadApiKey();
+                let newQuestions: string[] = [];
+                if (need > 0 && openRouterApiKey?.trim()) {
+                  newQuestions = await generateQuestionsFromContent(
+                    htmlContent,
+                    primaryKeyword,
+                    openRouterApiKey,
+                    napLocations,
+                    {
+                      count: need,
+                      avoidSimilarTo: existingEntries.map((e) => e.question),
+                    }
+                  );
+                }
+                if (need > 0 && newQuestions.length < need) {
+                  const pad = [
+                    `What is ${primaryKeyword}?`,
+                    `How does ${primaryKeyword} work?`,
+                    `Why is ${primaryKeyword} important?`,
+                    `Where can I find ${primaryKeyword} in North America?`,
+                  ];
+                  const avoidSet = new Set(existingEntries.map((e) => e.question.trim().toLowerCase()));
+                  for (const p of pad) {
+                    if (newQuestions.length >= need) break;
+                    const pl = p.trim().toLowerCase();
+                    if (!avoidSet.has(pl)) newQuestions.push(p);
+                  }
+                  newQuestions = newQuestions.slice(0, need);
+                }
+                const newEntries: FaqEntry[] = newQuestions.slice(0, need).map((q) => ({ question: q, answer: '' }));
+                const merged = [...existingEntries, ...newEntries].slice(0, 4);
+                faqSchema = buildFAQSchemaScriptFromEntries(merged, primaryKeyword, entity, site.siteUrl, napLocations);
+                console.log(`[WordPress Uploader] Bulk FAQ minimum: merged schema with ${merged.length} items.`);
+              }
+            } else if (generateFaqSchema) {
+              let questionsToUse = faqQuestions && faqQuestions.length > 0 ? faqQuestions : [];
+              if (questionsToUse.length === 0) {
+                const openRouterApiKey = apiKey || loadApiKey();
+                if (openRouterApiKey && openRouterApiKey.trim().length > 0) {
+                  console.log('[WordPress Uploader] No PAA questions - generating questions from blog content using AI...');
+                  questionsToUse = await generateQuestionsFromContent(htmlContent, primaryKeyword, openRouterApiKey, napLocations);
+                } else {
+                  console.warn('[WordPress Uploader] No API key available - using fallback questions');
+                  questionsToUse = [
+                    `What is ${primaryKeyword}?`,
+                    `How does ${primaryKeyword} work?`,
+                    `Why is ${primaryKeyword} important?`,
+                    `Where can I find ${primaryKeyword} in North America?`,
+                  ];
+                }
+              }
+              faqSchema = generateFAQSchema(questionsToUse, primaryKeyword, entity, site.siteUrl, napLocations);
+              console.log(`[WordPress Uploader] FAQ Schema created successfully with ${questionsToUse.length} questions`);
+            }
+          } catch (faqError) {
+            console.warn('[WordPress Uploader] Failed to generate FAQ schema:', faqError);
+            if (!bulkFaqMinimum4) {
+              const fallbackQuestions = [
+                `What is ${primaryKeyword}?`,
+                `How does ${primaryKeyword} work?`,
+                `Why is ${primaryKeyword} important?`,
+                `Where can I find ${primaryKeyword} in North America?`,
+              ];
+              faqSchema = generateFAQSchema(fallbackQuestions, primaryKeyword, entity, site.siteUrl, napLocations);
+              console.log('[WordPress Uploader] Using fallback FAQ schema');
+            }
+          }
+        }
+
+        let extraTextHtml = '';
+        let extraImageId: number | undefined;
+        if (extraTextContent?.trim()) extraTextHtml = extraTextToUploadHtml(extraTextContent.trim());
+        if (extraImageBase64) {
+            try {
+              setProgress({ step: 'Uploading extra image...', progress: 94, message: 'Uploading extra image...' });
+              const imageDataUrl = `data:image/png;base64,${extraImageBase64}`;
+              const imageFilename = `extra-image-${primaryKeyword.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${Date.now()}.png`;
+              const mediaResult = await uploadWordPressMedia(site.siteUrl, site.username, site.appPassword, imageDataUrl, imageFilename, `Extra image for ${primaryKeyword}`, primaryKeyword ? `Image for ${primaryKeyword}` : undefined);
+              if (mediaResult.success && mediaResult.mediaId) extraImageId = mediaResult.mediaId;
+            } catch {
+              // skip
+            }
+        }
+
+        const updates: {
+          date: string;
+          keyword?: string;
+          extraText: string;
+          faq?: string;
+          metaDescription: string;
+          extraImageId?: number;
+        } = {
+          date: todayDate,
+          extraText: extraTextHtml,
+          metaDescription: plainTextExcerpt?.trim() ?? '',
+          ...(extraImageId != null && { extraImageId }),
+        };
+        if (writeFocusKeywords) updates.keyword = keywordForFocus;
+        if (faqSchema && !skipFaqWrites) updates.faq = faqSchema;
+
+        setProgress({ step: 'Sending to OpenRouter...', progress: 94, message: 'Applying updates via AI...' });
+        const openRouterKey = apiKey || loadApiKey();
+        if (!openRouterKey?.trim()) throw new Error('OpenRouter API key required to update ACF.');
+        const acf = await getACFFromOpenRouter(fullPostForAcf, updates, openRouterKey, getResearchModel(site.id));
+
+        // FORCE-OVERWRITE critical fields (date_modifier, keyword_focus, faq)
+        // AI merge is unreliable for these - deterministic pattern-match guarantees they're always updated
+        const acfObj = acf as Record<string, unknown>;
+        for (const key of Object.keys(acfObj)) {
+          const lk = key.toLowerCase();
+          if (lk.includes('date_modifier') || lk.includes('date_mod') || lk === 'seo_date_modifier') {
+            acfObj[key] = todayDate;
+          }
+          if (
+            writeFocusKeywords &&
+            (lk.includes('keyword_focus') || lk.includes('focus_keyword')) &&
+            keywordForFocus.trim()
+          ) {
+            acfObj[key] = keywordForFocus.trim();
+          }
+          if (!skipFaqWrites && (lk.includes('faq') || lk === 'seo_faq') && faqSchema) {
+            acfObj[key] = faqSchema;
+          }
+        }
+        console.log('[WordPress Uploader] Force-overwritten critical ACF fields (date, keyword_focus, faq)');
+
+        setProgress({ step: 'Updating ACF fields...', progress: 95, message: 'Writing to WordPress...' });
+        const acfUpdateResult = await updateACFFields(
+          site.siteUrl,
+          site.username,
+          site.appPassword,
+          result.postId,
+          acf as Record<string, unknown>,
+          context.existingPost?.post_type || 'post',
+          postTypeEndpoint
+        );
+        if (acfUpdateResult.success) {
+          console.log('[WordPress Uploader] ACF fields updated:', acfUpdateResult.updated.join(', '));
+        } else {
+          console.warn('[WordPress Uploader] ACF update failed:', acfUpdateResult.error || acfUpdateResult.failed);
+        }
+
+        // Fallback: update critical fields via post meta so they persist even if ACF POST fails
+        const metaUpdates: Record<string, string> = {};
+        metaUpdates.date_modifier = todayDate;
+        if (writeFocusKeywords && keywordForFocus.trim()) metaUpdates.keyword_focus = keywordForFocus.trim();
+        if (!skipFaqWrites && faqSchema) metaUpdates.faq = faqSchema;
+        if (extraTextHtml?.trim()) metaUpdates.extra_text = extraTextHtml.trim();
+        if (Object.keys(metaUpdates).length > 0) {
+          try {
+            await updateWordPressPostMeta(site.siteUrl, site.username, site.appPassword, result.postId, context.existingPost?.post_type || 'post', postTypeEndpoint, metaUpdates);
+          } catch {
+            // skip
+          }
+        }
+        }
+      } catch (acfError) {
+        console.warn(`[WordPress Uploader] Error updating ACF fields:`, acfError);
+        // Don't fail the entire operation if ACF update fails
+      }
+    }
+  } else {
+    // Title optimization is disabled (content-only module).
+    // Preserve the existing WordPress title without modification.
+    const draftTitle = existingTitle;
+    finalTitle = draftTitle;
+
+    // Use entityEndpoint directly - NO normalization
+    const postTypeEndpoint = entityEndpoint;
+
+    // Extract slug from URL
+    let slug: string | undefined;
+    if (context.url) {
+      try {
+        const urlObj = new URL(context.url);
+        const pathname = urlObj.pathname.replace(/\/$/, ''); // Remove trailing slash
+        const pathSegments = pathname.split('/').filter(s => s.length > 0);
+        // Get the last path segment (the actual slug)
+        if (pathSegments.length > 0) {
+          slug = pathSegments[pathSegments.length - 1];
+          // Remove any file extensions
+          slug = slug.replace(/\.(html?|php)$/i, '');
+          console.log(`[Optimize Content] Extracted slug from URL: "${slug}" (from: ${context.url})`);
+        }
+      } catch (error) {
+        console.warn(`[Optimize Content] Failed to parse URL for slug extraction: ${context.url}`, error);
+        // If URL parsing fails, try manual extraction
+        const parts = context.url.replace(/\/$/, '').split('/');
+        const lastPart = parts[parts.length - 1]?.replace(/\.(html?|php)$/i, '');
+        if (lastPart && !lastPart.includes('http')) {
+          slug = lastPart;
+          console.log(`[Optimize Content] Manually extracted slug: "${slug}"`);
+        }
+      }
+    }
+
+    // If we couldn't extract a valid slug from URL, use the resolved slug or existing post slug
+    if (!slug && context.resolved?.slug) {
+      slug = context.resolved.slug;
+      console.log(`[Optimize Content] Using resolved slug: "${slug}"`);
+    } else if (!slug && context.existingPost?.slug) {
+      slug = context.existingPost.slug;
+      console.log(`[Optimize Content] Using existing post slug: "${slug}"`);
+    }
+
+    // For NEW posts only: use short SEO slug when no slug yet or slug is title-like (very long).
+    // Never change URL for existing posts (update path does not touch slug).
+    if (!slug || slug.length > 50) {
+      try {
+        const seoSlug = await generateSEOSlug(draftTitle, primaryKeyword, entity, apiKey || loadApiKey());
+        if (seoSlug && seoSlug.length >= 2) {
+          slug = seoSlug;
+          console.log(`[Optimize Content] Using SEO slug for new post: "${slug}"`);
+        }
+      } catch (err) {
+        console.warn('[Optimize Content] SEO slug generation failed, using existing slug or title-derived:', err);
+      }
+    }
+
+    console.log('[Optimize Content] Creating draft:', {
+      postTypeEndpoint: postTypeEndpoint,
+      resolvedSubtype: context.resolved?.subtype,
+      existingPostEndpoint: context.existingPost?.postTypeEndpoint,
+      slug: slug,
+      url: context.url
+    });
+setProgress({ step: 'Creating draft...', progress: 92, message: `Creating new draft: "${draftTitle}" in ${postTypeEndpoint} endpoint...` });
+
+    // Extract author from existing post (preserve original author), or resolve via agentic author resolver for new posts
+    const existingAuthor = context.existingPost?.author || context.existingPost?.author_id;
+    let authorId: number | undefined = typeof existingAuthor === 'object' && existingAuthor.id
+      ? existingAuthor.id
+      : typeof existingAuthor === 'number'
+        ? existingAuthor
+        : typeof existingAuthor === 'string' && !isNaN(parseInt(existingAuthor))
+          ? parseInt(existingAuthor)
+          : undefined;
+
+    if (authorId === undefined) {
+      try {
+        const resolved = await resolveRecommendedAuthor({
+          site,
+          postTypeEndpoint,
+          apiKey: loadApiKey(),
+          siteId: site.id,
+        });
+        if (resolved != null) authorId = resolved;
+      } catch (err) {
+        console.warn('[WordPress Uploader] Author resolver failed, creating without explicit author:', err);
+      }
+    }
+
+    console.log('[WordPress Uploader] Creating post in DRAFT mode:', {
+      postTypeEndpoint,
+      slug,
+      hasFeaturedImage: !!featuredImageId,
+      draftTitle
+    });
+result = await createWordPressPost(
+      site.siteUrl,
+      site.username,
+      site.appPassword,
+      draftTitle,
+      contentForUpdate, // Always optimized content – overwrite existing (posts and pages)
+      excerptForRest,
+      'draft',
+      undefined,
+      featuredImageId,
+      undefined,
+      undefined,
+      undefined, // No internal type - use endpoint directly
+      postTypeEndpoint, // Use entityEndpoint directly - NO normalization
+      slug,
+      authorId
+    );
+    
+    console.log('[WordPress Uploader] Post creation result (DRAFT mode):', {
+      success: result.success,
+      postId: result.postId,
+      link: result.link,
+      status: result.status,
+      error: result.error,
+      title: result.title
+    });
+
+    // After successful draft creation, set ACF fields
+    if (result.success && result.postId) {
+      const needsAcfWriteDraft = uploadNeedsAcfWrite({
+        seoExtraTextFieldOnly,
+        bulkFaqMinimum4,
+        writeFocusKeywords,
+        generateFaqSchema,
+        writeMetaDescription,
+        extraTextContent,
+        extraImageBase64,
+      });
+
+      if (!needsAcfWriteDraft) {
+        setProgress({
+          step: "Upload complete",
+          progress: 100,
+          message: "Draft content saved to WordPress.",
+        });
+      } else try {
+        const postType = context.resolved?.subtype || 'post';
+        let fullPostForAcfDraft = resolveFullPostForAcfUpdate(context.acfFullPostSnapshot, result.postId);
+        if (!fullPostForAcfDraft) {
+          throw new Error(
+            `Missing inventory ACF snapshot for draft ${result.postId}. Reload inventory and retry.`,
+          );
+        }
+
+        if (seoExtraTextFieldOnly) {
+          const raw = (extraTextContent ?? "").trim();
+          if (raw) {
+            const extraTextHtml = extraTextToUploadHtml(raw);
+            const existingAcf = (fullPostForAcfDraft as { acf?: Record<string, unknown> }).acf;
+            const mergedAcf = mergeAcfOnlyExtraText(existingAcf, extraTextHtml);
+            setProgress({
+              step: "Updating SEO extra text (draft)",
+              progress: 95,
+              message: "Writing ACF `seo_extra_text` only (no other fields)...",
+            });
+            const acfExtraOnly = await updateACFFields(
+              site.siteUrl,
+              site.username,
+              site.appPassword,
+              result.postId!,
+              mergedAcf,
+              postType,
+              postTypeEndpoint
+            );
+            if (acfExtraOnly.success) {
+              console.log("[WordPress Uploader] DRAFT: ACF extra text only updated:", acfExtraOnly.updated.join(", "));
+            } else {
+              console.warn("[WordPress Uploader] DRAFT: ACF extra text only failed:", acfExtraOnly.error || acfExtraOnly.failed);
+            }
+          } else {
+            console.warn("[WordPress Uploader] DRAFT seoExtraTextFieldOnly: empty extraTextContent, skipping ACF write.");
+          }
+        } else {
+        const todayDate = new Date().toISOString().split('T')[0];
+        let keywordForFocusDraft = "";
+        if (writeFocusKeywords) {
+          keywordForFocusDraft = stripLeadingP(stripBracketPlaceholders(primaryKeyword?.trim() ?? ""));
+        }
+
+        const napLocationsDraft =
+          site.napInfo?.locations?.map((loc) => ({ city: loc.city, state: loc.state })) ||
+          site.locations?.map((loc) => ({ city: loc.city, state: loc.state })) ||
+          [];
+
+        const keyDraft = apiKey || loadApiKey() || '';
+
+        let faqSchemaDraft = '';
+        let skipFaqWritesDraft = false;
+        const runFaqBlockDraft = generateFaqSchema || bulkFaqMinimum4;
+
+        if (runFaqBlockDraft) {
+          setProgress({
+            step: 'Creating FAQ Schema...',
+            progress: 93,
+            message: bulkFaqMinimum4 ? 'Checking FAQ minimum (4)...' : 'Generating FAQ schema...',
+          });
+          try {
+            if (bulkFaqMinimum4) {
+              const existingEntries = parseFaqEntries(prefetchedFaqRaw);
+              if (existingEntries.length >= 4) {
+                faqSchemaDraft = '';
+                skipFaqWritesDraft = true;
+              } else {
+                const need = 4 - existingEntries.length;
+                let newQuestions: string[] = [];
+                if (need > 0 && keyDraft.trim()) {
+                  newQuestions = await generateQuestionsFromContent(htmlContent, primaryKeyword, keyDraft, napLocationsDraft, {
+                    count: need,
+                    avoidSimilarTo: existingEntries.map((e) => e.question),
+                  });
+                }
+                if (need > 0 && newQuestions.length < need) {
+                  const pad = [
+                    `What is ${primaryKeyword}?`,
+                    `How does ${primaryKeyword} work?`,
+                    `Why is ${primaryKeyword} important?`,
+                    `Where can I find ${primaryKeyword} in North America?`,
+                  ];
+                  const avoidSet = new Set(existingEntries.map((e) => e.question.trim().toLowerCase()));
+                  for (const p of pad) {
+                    if (newQuestions.length >= need) break;
+                    const pl = p.trim().toLowerCase();
+                    if (!avoidSet.has(pl)) newQuestions.push(p);
+                  }
+                  newQuestions = newQuestions.slice(0, need);
+                }
+                const newEntries: FaqEntry[] = newQuestions.slice(0, need).map((q) => ({ question: q, answer: '' }));
+                const merged = [...existingEntries, ...newEntries].slice(0, 4);
+                faqSchemaDraft = buildFAQSchemaScriptFromEntries(merged, primaryKeyword, entity, site.siteUrl, napLocationsDraft);
+              }
+            } else if (generateFaqSchema) {
+              let questionsToUse = faqQuestions?.length ? faqQuestions : [];
+              if (questionsToUse.length === 0 && keyDraft.trim()) {
+                questionsToUse = await generateQuestionsFromContent(
+                  htmlContent,
+                  primaryKeyword,
+                  keyDraft,
+                  napLocationsDraft
+                );
+              }
+              if (questionsToUse.length === 0) {
+                questionsToUse = [
+                  `What is ${primaryKeyword}?`,
+                  `How does ${primaryKeyword} work?`,
+                  `Why is ${primaryKeyword} important?`,
+                ];
+              }
+              faqSchemaDraft = generateFAQSchema(questionsToUse, primaryKeyword, entity, site.siteUrl, napLocationsDraft);
+            }
+          } catch {
+            if (!bulkFaqMinimum4) {
+              faqSchemaDraft = generateFAQSchema(
+                [`What is ${primaryKeyword}?`, `How does ${primaryKeyword} work?`],
+                primaryKeyword,
+                entity,
+                site.siteUrl,
+                napLocationsDraft
+              );
+            }
+          }
+        }
+
+        let extraTextHtmlDraft = '';
+        let extraImageIdDraft: number | undefined;
+        if (extraTextContent?.trim()) extraTextHtmlDraft = extraTextToUploadHtml(extraTextContent.trim());
+        if (extraImageBase64) {
+          try {
+            setProgress({ step: 'Uploading extra image...', progress: 94, message: 'Uploading extra image...' });
+            const imageDataUrl = `data:image/png;base64,${extraImageBase64}`;
+            const imageFilename = `extra-image-${primaryKeyword.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${Date.now()}.png`;
+            const mediaResult = await uploadWordPressMedia(site.siteUrl, site.username, site.appPassword, imageDataUrl, imageFilename, `Extra image for ${primaryKeyword}`, primaryKeyword ? `Image for ${primaryKeyword}` : undefined);
+            if (mediaResult.success && mediaResult.mediaId) extraImageIdDraft = mediaResult.mediaId;
+          } catch {
+            // skip
+          }
+        }
+
+        const updatesDraft = {
+          date: todayDate,
+          ...(writeFocusKeywords && keywordForFocusDraft.trim() ? { keyword: keywordForFocusDraft } : {}),
+          extraText: extraTextHtmlDraft,
+          ...(faqSchemaDraft && !skipFaqWritesDraft ? { faq: faqSchemaDraft } : {}),
+          metaDescription: plainTextExcerpt?.trim() ?? '',
+          ...(extraImageIdDraft != null && { extraImageId: extraImageIdDraft }),
+        };
+
+        setProgress({ step: 'Sending to OpenRouter...', progress: 94, message: 'Applying updates via AI...' });
+        const openRouterKeyDraft = apiKey || loadApiKey();
+        if (!openRouterKeyDraft?.trim()) throw new Error('OpenRouter API key required to update ACF.');
+        const acfDraft = await getACFFromOpenRouter(fullPostForAcfDraft, updatesDraft, openRouterKeyDraft, getResearchModel(site.id));
+
+        // FORCE-OVERWRITE critical fields (date_modifier, keyword_focus, faq)
+        const acfDraftObj = acfDraft as Record<string, unknown>;
+        for (const key of Object.keys(acfDraftObj)) {
+          const lk = key.toLowerCase();
+          if (lk.includes('date_modifier') || lk.includes('date_mod') || lk === 'seo_date_modifier') {
+            acfDraftObj[key] = todayDate;
+          }
+          if (
+            writeFocusKeywords &&
+            (lk.includes('keyword_focus') || lk.includes('focus_keyword')) &&
+            keywordForFocusDraft.trim()
+          ) {
+            acfDraftObj[key] = keywordForFocusDraft.trim();
+          }
+          if ((lk.includes('faq') || lk === 'seo_faq') && faqSchemaDraft && !skipFaqWritesDraft) {
+            acfDraftObj[key] = faqSchemaDraft;
+          }
+        }
+        console.log('[WordPress Uploader] DRAFT: Force-overwritten critical ACF fields (date, keyword_focus, faq)');
+
+        setProgress({ step: 'Updating ACF fields...', progress: 95, message: 'Writing to WordPress...' });
+        const acfUpdateResult = await updateACFFields(
+          site.siteUrl,
+          site.username,
+          site.appPassword,
+          result.postId,
+          acfDraftObj,
+          postType,
+          postTypeEndpoint
+        );
+        if (acfUpdateResult.success) {
+          console.log('[WordPress Uploader] DRAFT: ACF fields updated:', acfUpdateResult.updated.join(', '));
+        } else {
+          console.warn('[WordPress Uploader] DRAFT: ACF update failed:', acfUpdateResult.error || acfUpdateResult.failed);
+        }
+
+        // Fallback: update critical fields via post meta so they persist even if ACF POST fails
+        const metaUpdatesDraft: Record<string, string> = {};
+        metaUpdatesDraft.date_modifier = todayDate;
+        if (writeFocusKeywords && keywordForFocusDraft.trim()) {
+          metaUpdatesDraft.keyword_focus = keywordForFocusDraft.trim();
+        }
+        if (faqSchemaDraft && !skipFaqWritesDraft) metaUpdatesDraft.faq = faqSchemaDraft;
+        if (extraTextHtmlDraft?.trim()) metaUpdatesDraft.extra_text = extraTextHtmlDraft.trim();
+        if (Object.keys(metaUpdatesDraft).length > 0) {
+          try {
+            await updateWordPressPostMeta(site.siteUrl, site.username, site.appPassword, result.postId, postType, postTypeEndpoint, metaUpdatesDraft);
+          } catch {
+            // skip
+          }
+        }
+        }
+      } catch (acfError) {
+        console.warn(`[WordPress Uploader] DRAFT: Error updating ACF fields:`, acfError);
+        // Don't fail the entire operation if ACF update fails
+      }
+    }
+  }
+
+  console.log('[WordPress Uploader] Final result check:', {
+    success: result.success,
+    postId: result.postId,
+    link: result.link,
+    status: result.status,
+    error: result.error,
+    hasPostId: !!result.postId,
+    hasLink: !!result.link
+  });
+  if (!result.success) {
+    const details = (result as { details?: { code?: string; message?: string } }).details;
+    if (details) {
+      console.error('[WordPress Uploader] ❌ WordPress REST response (403/error details):', details);
+    }
+    console.error('[WordPress Uploader] ❌ Post creation FAILED:', {
+      error: result.error,
+      postId: result.postId,
+      link: result.link,
+      ...(details && { wpCode: details.code, wpMessage: details.message })
+    });
+    const wpHint = details?.message ? ` WordPress said: "${details.message}" (code: ${details?.code ?? 'unknown'}).` : '';
+    throw new Error((result.error || 'Failed to save post') + wpHint);
+  }
+
+  console.log('[WordPress Uploader] ✅ Post upload SUCCESSFUL:', {
+    postId: result.postId,
+    link: result.link,
+    status: result.status,
+    title: result.title,
+    finalTitle
+  });
+
+  // Origin is now extracted fresh via AI in updateACFOriginField, not preserved from existing post
+  return {
+    result,
+    postId: result.postId!,
+    link: result.link || '',
+    finalTitle
+  };
+}
+

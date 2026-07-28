@@ -1,0 +1,239 @@
+﻿/**
+ * Flowbie WP admin — app shell, cards, forms, notices
+ * @layer flowbie-wp-admin
+ */
+
+/* Depends on: admin-tokens.css */
+
+.flowbie-wp-app__header {
+	margin: 0 0 20px;
+	padding-bottom: 0;
+}
+
+.flowbie-wp-app__title-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px 16px;
+	margin-bottom: 8px;
+}
+
+.flowbie-wp-app__header h1 {
+	margin: 0;
+	padding: 0;
+	font-size: 23px;
+	font-weight: 400;
+	line-height: 1.3;
+	color: var(--fc-text);
+}
+
+.flowbie-wp-version {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	padding: 6px 12px;
+	font-size: 1rem;
+	line-height: 1.3;
+	color: var(--fc-text);
+	background: rgba(34, 211, 238, 0.18);
+	border: none;
+	border-radius: 999px;
+	box-shadow: none;
+}
+
+.flowbie-wp-version__label {
+	font-weight: 600;
+	color: var(--fc-text-muted);
+}
+
+.flowbie-wp-version__value {
+	font-family: var(--fc-font);
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	color: var(--fc-text);
+}
+
+.flowbie-wp-app__main {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+}
+
+.flowbie-wp-intro {
+	font-size: 1rem;
+	line-height: 1.5;
+	margin: 0;
+	color: var(--fc-text-muted);
+	max-width: 72ch;
+}
+
+.flowbie-wp-grid {
+	display: grid;
+	gap: 20px;
+	grid-template-columns: 1fr;
+	margin-bottom: 20px;
+}
+
+@media screen and (min-width: 783px) {
+	.flowbie-wp-grid--two {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
+.flowbie-wp-card {
+	background: var(--fc-surface-muted);
+	border: none;
+	border-radius: var(--fc-radius);
+	box-shadow: var(--fc-frame-shadow);
+	padding: 20px 24px;
+	margin: 0;
+}
+
+.flowbie-wp-card--settings,
+.flowbie-wp-card--fetch,
+.flowbie-wp-card--optimizer {
+	margin-bottom: 20px;
+}
+
+.flowbie-wp-card--fetch {
+	padding-top: 16px;
+}
+
+
+.flowbie-wp-card__title {
+	margin: 0 0 12px;
+	padding: 0;
+	font-size: 1rem;
+	font-weight: 600;
+	line-height: 1.3;
+	color: var(--fc-text);
+}
+
+.flowbie-wp-card h2:not(.flowbie-wp-card__title) {
+	margin: 0 0 12px;
+	padding: 0;
+	font-size: 1.1em;
+	font-weight: 600;
+}
+
+.flowbie-wp-card p {
+	margin: 0 0 12px;
+}
+
+.flowbie-wp-card p:last-child {
+	margin-bottom: 0;
+}
+
+.flowbie-wp-card ul {
+	margin: 0 0 0 1.2em;
+	padding: 0;
+	list-style: disc;
+}
+
+.flowbie-wp-card li {
+	margin-bottom: 8px;
+}
+
+.flowbie-wp-card li:last-child {
+	margin-bottom: 0;
+}
+
+.flowbie-wp-card .description {
+	margin-top: 8px;
+	color: var(--fc-text-muted);
+	font-size: 1rem;
+}
+
+.flowbie-wp-connected-box {
+	margin-top: 12px;
+	padding: 14px 16px;
+	background: rgba(34, 197, 94, 0.22);
+	border: none;
+	border-radius: 6px;
+	color: #dcfce7;
+}
+
+.flowbie-wp-form label {
+	display: block;
+	font-weight: 600;
+	margin-bottom: 6px;
+	color: var(--fc-text);
+}
+
+.flowbie-wp-fieldset {
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.flowbie-wp-fieldset .flowbie-wp-field {
+	margin-bottom: 16px;
+}
+
+.flowbie-wp-form--stacked .flowbie-wp-field {
+	margin-bottom: 14px;
+}
+
+.flowbie-wp-form--stacked .flowbie-wp-field:last-of-type {
+	margin-bottom: 8px;
+}
+
+.flowbie-wp-form--inline {
+	margin-top: 8px;
+}
+
+.flowbie-wp-form--fetch-hints {
+	margin-top: 8px;
+}
+
+.flowbie-wp-form .widefat {
+	max-width: 100%;
+	width: 100%;
+	box-sizing: border-box;
+}
+
+@media screen and (min-width: 600px) {
+	.flowbie-wp-form .widefat {
+		max-width: 560px;
+	}
+}
+
+.flowbie-wp-footer {
+	margin-top: 28px;
+	padding-top: 18px;
+}
+
+.flowbie-wp-footer p {
+	margin: 0;
+}
+
+.flowbie-wp-connected {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 0;
+	font-size: 1rem;
+	color: var(--fc-text);
+}
+
+.flowbie-wp-connected .dashicons {
+	color: #00a32a;
+	width: 24px;
+	height: 24px;
+	font-size: 24px;
+	flex-shrink: 0;
+}
+
+/* Flash notices: breathing room inside main */
+.flowbie-wp-app__main > .notice {
+	margin: 0 0 16px;
+}
+
+.flowbie-wp-app__main > .notice:first-child {
+	margin-top: 0;
+}
+
+.flowbie-wp-card .notice.inline {
+	margin: 12px 0 0;

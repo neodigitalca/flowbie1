@@ -1,0 +1,243 @@
+/**
+ * Flowbie WP — Chat logs admin (Redirects-parity list table).
+ */
+
+.flowbie-wp-chat-logs .flowbie-wp-chat-logs__note {
+	margin: 12px 0 16px;
+}
+
+.flowbie-wp-chat-logs__filter-form {
+	margin: 12px 0 16px;
+}
+
+.flowbie-wp-chat-logs__filter-form .flowbie-wp-chat-logs__filter-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px 20px;
+	align-items: flex-end;
+	margin-bottom: 10px;
+}
+
+.flowbie-wp-chat-logs__filter-form label {
+	display: inline-flex;
+	flex-direction: column;
+	gap: 4px;
+	font-size: 0.875rem;
+	color: var(--fc-text-muted);
+}
+
+.flowbie-wp-chat-logs__filter-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+}
+
+.flowbie-wp-chat-logs__ai-bar {
+	background: var(--fc-surface-muted);
+	border: none;
+	border-radius: 8px;
+	padding: 20px 24px;
+	box-shadow: var(--fc-frame-shadow);
+	color: var(--fc-text);
+	margin: 0 0 20px;
+}
+
+.flowbie-wp-chat-logs__ai-bar h2 {
+	margin: 0 0 8px;
+	font-size: 1.1em;
+	color: var(--fc-text);
+}
+
+.flowbie-wp-chat-logs__ai-bar > p.description {
+	margin: 0 0 16px;
+}
+
+.flowbie-wp-chat-logs__ai-bar-fields {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px 20px;
+	align-items: flex-end;
+	margin-bottom: 12px;
+}
+
+.flowbie-wp-chat-logs__ai-bar-fields label {
+	display: inline-flex;
+	flex-direction: column;
+	gap: 4px;
+	font-size: 0.875rem;
+	color: var(--fc-text-muted);
+}
+
+.flowbie-wp-chat-logs__ai-bar-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	align-items: center;
+}
+
+.flowbie-wp-chat-logs__ai-bar .notice {
+	margin: 0 0 12px;
+}
+
+.flowbie-wp-chat-logs__panels {
+	display: grid;
+	gap: 20px;
+	grid-template-columns: 1fr;
+	max-width: none;
+	width: 100%;
+	margin-top: 16px;
+}
+
+@media screen and (min-width: 783px) {
+	.flowbie-wp-chat-logs__panels {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
+.flowbie-wp-chat-logs__panel {
+	background: var(--fc-surface-muted);
+	border: none;
+	border-radius: 8px;
+	padding: 20px 24px;
+	box-shadow: var(--fc-frame-shadow);
+	color: var(--fc-text);
+}
+
+.flowbie-wp-chat-logs__panel h2 {
+	margin: 0 0 12px;
+	font-size: 1.1em;
+	color: var(--fc-text);
+}
+
+.flowbie-wp-chat-logs__report-body {
+	background: var(--fc-surface-muted);
+	border-radius: 8px;
+	padding: 24px;
+	max-width: 900px;
+	line-height: 1.65;
+	box-shadow: var(--fc-frame-shadow);
+	color: var(--fc-text);
+}
+
+.flowbie-wp-chat-logs__report-body h1,
+.flowbie-wp-chat-logs__report-body h2,
+.flowbie-wp-chat-logs__report-body h3 {
+	color: var(--fc-text);
+	margin: 1.25em 0 0.5em;
+}
+
+.flowbie-wp-chat-logs__report-body p {
+	margin: 0 0 0.85em;
+	color: var(--fc-text-muted);
+}
+
+.flowbie-wp-chat-logs__report-body ul,
+.flowbie-wp-chat-logs__report-body ol {
+	margin: 0 0 1em 1.25em;
+	padding: 0;
+	color: var(--fc-text-muted);
+}
+
+.flowbie-wp-chat-logs__report-body strong {
+	color: var(--fc-text);
+}
+
+.flowbie-wp-chat-logs__analysis-form {
+	max-width: 640px;
+}
+
+.flowbie-wp-chat-logs .wp-list-table .column-created_at {
+	width: 14%;
+}
+
+.flowbie-wp-chat-logs .wp-list-table .column-session_id {
+	width: 18%;
+}
+
+.flowbie-wp-chat-logs .wp-list-table .column-source,
+.flowbie-wp-chat-logs .wp-list-table .column-role {
+	width: 8%;
+}
+
+.flowbie-wp-chat-logs .wp-list-table .column-content {
+	width: 44%;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .wp-list-table {
+	background: #000;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .wp-list-table thead th,
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .wp-list-table tfoot th {
+	background: var(--fc-table-header-bg);
+	color: var(--fc-text-muted);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .wp-list-table thead th a,
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .wp-list-table tfoot th a {
+	color: var(--fc-text-muted);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .wp-list-table thead th a:hover,
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .wp-list-table thead th a:focus,
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .wp-list-table tfoot th a:hover,
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .wp-list-table tfoot th a:focus {
+	color: var(--fc-link-hover);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .wp-list-table thead .check-column,
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .wp-list-table tfoot .check-column {
+	background: var(--fc-table-header-bg);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .wp-list-table tbody tr {
+	background: #000;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .wp-list-table tbody tr.alternate {
+	background: var(--fc-surface-muted);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .wp-list-table tbody tr:hover,
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .wp-list-table tbody tr:hover td,
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .wp-list-table tbody tr:hover th {
+	background: var(--fc-table-row-hover);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .search-box input[type="search"] {
+	background: var(--fc-input-bg);
+	color: var(--fc-text);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .tablenav.top,
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .tablenav.bottom {
+	background: transparent;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .row-actions {
+	color: var(--fc-text-muted);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .row-actions a {
+	color: var(--fc-link);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .row-actions .submitdelete a,
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .row-actions a.submitdelete {
+	color: #f87171;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs tr:hover .row-actions,
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .row-actions.visible {
+	visibility: visible;
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .wp-list-table tbody td a.row-title {
+	color: var(--fc-link);
+}
+
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .wp-list-table tbody td a.row-title:hover,
+body.flowbie-wp-admin-screen .flowbie-wp-chat-logs .wp-list-table tbody td a.row-title:focus {
+	color: var(--fc-link-hover);
+}

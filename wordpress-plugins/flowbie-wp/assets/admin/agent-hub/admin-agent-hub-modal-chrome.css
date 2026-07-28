@@ -1,0 +1,442 @@
+﻿/**
+ * Agent Hub — modal chrome (toolbar, responsive, layout, drag).
+ */
+
+/* Toolbar + primary actions: solid dark button, white label */
+.flowbie-agent-hub-modal .flowbie-builder-layout-toolbar .button-primary,
+.flowbie-agent-hub-modal .flowbie-builder-toolbar .button-primary {
+	background: #101114 !important;
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+	border: none !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+	min-height: 2.5rem;
+	font-size: 1rem !important;
+	font-weight: 600;
+}
+
+.flowbie-agent-hub-modal .flowbie-builder-layout-toolbar .button-primary:hover,
+.flowbie-agent-hub-modal .flowbie-builder-layout-toolbar .button-primary:focus,
+.flowbie-agent-hub-modal .flowbie-builder-toolbar .button-primary:hover,
+.flowbie-agent-hub-modal .flowbie-builder-toolbar .button-primary:focus {
+	background: #1a1d24 !important;
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-slot-editor-modal .flowbie-slot-editor-modal__footer .button,
+.flowbie-slot-editor-modal .flowbie-slot-editor-modal__footer .button {
+	background: #111111 !important;
+	color: #e5e5e5 !important;
+	-webkit-text-fill-color: #e5e5e5 !important;
+	border: none !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+	font-size: 1rem !important;
+	min-height: 2.5rem;
+	padding: 0.4rem 1rem !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-slot-editor-modal .flowbie-slot-editor-modal__footer .button-primary,
+.flowbie-slot-editor-modal .flowbie-slot-editor-modal__footer .button-primary {
+	background: #262626 !important;
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-slot-editor-modal .flowbie-slot-editor-modal__footer .button-primary:hover,
+body.flowbie-wp-admin-screen .flowbie-slot-editor-modal .flowbie-slot-editor-modal__footer .button-primary:focus,
+.flowbie-slot-editor-modal .flowbie-slot-editor-modal__footer .button-primary:hover,
+.flowbie-slot-editor-modal .flowbie-slot-editor-modal__footer .button-primary:focus {
+	background: #333333 !important;
+	color: #ffffff !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-slot-editor-modal .flowbie-slot-editor-modal__footer .button:not(.button-primary):hover,
+body.flowbie-wp-admin-screen .flowbie-slot-editor-modal .flowbie-slot-editor-modal__footer .button:not(.button-primary):focus,
+.flowbie-slot-editor-modal .flowbie-slot-editor-modal__footer .button:not(.button-primary):hover,
+.flowbie-slot-editor-modal .flowbie-slot-editor-modal__footer .button:not(.button-primary):focus {
+	background: #1a1a1a !important;
+	color: #ffffff !important;
+}
+
+.flowbie-agent-hub-modal.is-busy {
+	pointer-events: none;
+	opacity: 0.75;
+}
+
+body.flowbie-agent-hub-modal-open {
+	overflow: hidden;
+}
+
+/* Builder responsive: stack panes on narrow viewports */
+@media (max-width: 960px) {
+	.flowbie-agent-hub-modal__panel--builder {
+		width: calc(100vw - 1.5rem);
+		height: min(90vh, calc(100vh - 1.5rem));
+		max-height: min(90vh, calc(100vh - 1.5rem));
+	}
+
+	.flowbie-builder-body {
+		flex-direction: column;
+		min-height: 0;
+	}
+
+	.flowbie-builder-main {
+		flex: 1 1 auto;
+		max-height: 50vh;
+	}
+
+	.flowbie-builder-preview {
+		flex: 1 1 auto;
+		min-height: 220px;
+		max-height: 45vh;
+	}
+}
+
+@media (max-width: 640px) {
+	.flowbie-agent-hub-modal {
+		padding: 0;
+		align-items: stretch;
+	}
+
+	.flowbie-agent-hub-modal__panel--builder {
+		width: 100%;
+		height: 100vh;
+		max-height: 100vh;
+		border-radius: 0;
+	}
+
+	.flowbie-builder-tabs {
+		flex-wrap: wrap;
+		padding: 0.5rem 0.75rem 0;
+	}
+
+	.flowbie-builder-tabs__tab {
+		padding: 0.4rem 0.5rem;
+	}
+
+	.flowbie-builder-main,
+	.flowbie-builder-preview__body {
+		padding: 0.75rem;
+	}
+
+	.flowbie-builder-layout-canvas {
+		min-height: 200px;
+		padding: 0.5rem;
+		gap: 4px;
+	}
+
+	.flowbie-builder-layout-cell {
+		min-height: 72px;
+	}
+
+	.flowbie-builder-field-row {
+		grid-template-columns: 1fr;
+	}
+
+	.flowbie-agent-hub-modal__actions {
+		flex-direction: column;
+	}
+
+	.flowbie-agent-hub-modal__actions .button {
+		width: 100%;
+		text-align: center;
+	}
+}
+
+/* Lato + 1rem minimum — Agent Hub list + builder modal (modal is on body, outside wpbody scope) */
+#flowbie-agent-hub,
+.flowbie-agent-hub-modal {
+	font-family: var(--fc-font, 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+	font-size: 1rem;
+}
+
+#flowbie-agent-hub {
+	position: relative;
+}
+
+#flowbie-agent-hub.is-busy {
+	pointer-events: none;
+}
+
+#flowbie-agent-hub.is-busy::after {
+	content: attr(data-busy-label);
+	position: fixed;
+	inset: 0;
+	z-index: 100000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0, 0, 0, 0.55);
+	color: #ffffff;
+	font-size: 1.125rem;
+	font-weight: 600;
+}
+
+#flowbie-agent-hub :where(
+	p, span, a, li, td, th, label, dt, dd, small, strong, em, code, pre,
+	input, textarea, select, option, button,
+	.description, .subsubsub, .tablenav, .row-actions, .search-box,
+	.button, .page-title-action, .button-link,
+	.notice, .notice p, .wp-list-table, .widefat
+):not(.dashicons):not(.screen-reader-text),
+.flowbie-agent-hub-modal :where(
+	p, span, a, li, label, dt, dd, small, strong, em, code, pre,
+	input, textarea, select, option, button,
+	.button, .button-link, .button-link-delete,
+	h1, h2, h3, h4, h5, h6,
+	.flowbie-builder-tabs__tab, .flowbie-builder-group__title,
+	.flowbie-builder-field, .flowbie-builder-field label,
+	.flowbie-builder-field__control, .flowbie-builder-field__value,
+	.flowbie-builder-slot, .flowbie-builder-slot__type, .flowbie-builder-slot__id,
+	.flowbie-builder-preview__title, .flowbie-builder-preview__body,
+	.flowbie-builder-layout-chip, .flowbie-builder-layout-chip__type,
+	.flowbie-builder-layout-chip__id, .flowbie-builder-layout-chip__preview,
+	.flowbie-builder-layout-cell__placeholder,
+	.flowbie-builder-layout-hint, .flowbie-builder-layout-palette__label,
+	.flowbie-builder-layout-palette__empty, .flowbie-agent-hub-modal__actions
+):not(.dashicons):not(.screen-reader-text) {
+	font-family: var(--fc-font, 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif) !important;
+	font-size: 1rem !important;
+	line-height: 1.5 !important;
+}
+
+.flowbie-builder-preview__body :where(
+	p, span, a, li, h1, h2, h3, h4, h5, h6, label, button, .flowbie-seo-block__h2,
+	.flowbie-seo-block__paragraph, .flowbie-seo-block__cta-link, .flowbie-seo-block__list
+) {
+	font-family: var(--fc-font, 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif) !important;
+	font-size: 1rem !important;
+}
+
+/* Modal is appended to body — WP core leaks dark heading colors onto dark surfaces */
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal .flowbie-agent-hub-modal__panel {
+	color: #ffffff !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal :where(
+	.flowbie-agent-hub-modal__header h1,
+	.flowbie-agent-hub-modal__header h2,
+	.flowbie-agent-hub-modal__header h3,
+	#flowbie-agent-hub-modal-title,
+	.flowbie-agent-hub-modal__close,
+	.flowbie-builder-tabs__tab.is-active,
+	.flowbie-builder-preview__title
+) {
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal .flowbie-builder-tabs__tab:not(.is-active) {
+	color: #9ca3af !important;
+	-webkit-text-fill-color: #9ca3af !important;
+}
+
+/* Inline fields — grid columns prevent label/control overlap */
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal .flowbie-builder-field {
+	display: grid !important;
+	grid-template-columns: var(--flowbie-builder-label-w, 9rem) minmax(0, 1fr) !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal .flowbie-builder-field-row .flowbie-builder-field {
+	grid-template-columns: var(--flowbie-builder-label-w-compact, 5rem) minmax(0, 1fr) !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal .flowbie-builder-field label {
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+	opacity: 1 !important;
+}
+
+/* Builder modal on body — force high-contrast white on all form labels and section titles */
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal .flowbie-builder-main,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal .flowbie-agent-hub-modal__form {
+	color: #ffffff !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal .flowbie-builder-main label,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal .flowbie-builder-group__title,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal .flowbie-builder-field__value,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal .flowbie-builder-slot__drag,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal .flowbie-builder-slot__id,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal .flowbie-builder-preview__title,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal .flowbie-builder-field:has(:disabled) label,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal .flowbie-builder-field:has([disabled]) label,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-builder-main label,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-builder-group__title,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-builder-field__value,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-builder-preview__title,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page h1,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page h2,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page h3,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-builder-field:has(:disabled) label,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-builder-field:has([disabled]) label {
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+	opacity: 1 !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal .flowbie-builder-layout-hint,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal .flowbie-builder-layout-palette__label,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-modal .flowbie-builder-layout-palette__empty,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-builder-layout-hint,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-builder-layout-palette__label,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-builder-layout-palette__empty {
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+}
+
+/* Layout toolbar — rows / cols */
+.flowbie-builder-layout-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem 1.25rem;
+	margin-bottom: 0.75rem;
+}
+
+.flowbie-builder-grid-size {
+	min-width: 0;
+}
+
+/* Multi-slot cell stack */
+.flowbie-builder-layout-cell__stack {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-height: 2rem;
+	min-width: 0;
+	width: 100%;
+	overflow: hidden;
+}
+
+.flowbie-builder-layout-cell__controls {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.35rem 0.75rem;
+	align-items: center;
+	margin-bottom: 0.35rem;
+	padding-bottom: 0.35rem;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.flowbie-builder-layout-cell-settings {
+	margin-top: 0.75rem;
+	padding: 0.875rem 1rem;
+	background: rgba(255, 255, 255, 0.06);
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	border-radius: 8px;
+	font-family: Lato, sans-serif;
+	font-size: 1rem;
+	color: #ffffff;
+}
+
+.flowbie-builder-layout-cell-settings__head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0.5rem 1rem;
+	margin-bottom: 0.75rem;
+}
+
+.flowbie-builder-layout-cell-settings__title {
+	font-weight: 600;
+	color: #ffffff;
+}
+
+.flowbie-builder-layout-cell-settings__coords {
+	font-size: 0.875rem;
+	color: rgba(255, 255, 255, 0.65);
+}
+
+.flowbie-builder-layout-cell-settings__pick,
+.flowbie-builder-layout-cell-settings__empty {
+	margin: 0;
+	color: rgba(255, 255, 255, 0.75);
+}
+
+.flowbie-builder-layout-cell-settings__controls {
+	margin-bottom: 0;
+	padding-bottom: 0;
+	border-bottom: none;
+	gap: 0.75rem 1.25rem;
+}
+
+.flowbie-builder-layout-cell-settings .flowbie-builder-layout-cell__ctl {
+	font-size: 1rem;
+}
+
+.flowbie-builder-layout-cell__ctl {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	font-size: 0.75rem;
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+}
+
+.flowbie-builder-layout-cell__ctl span {
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+}
+
+.flowbie-builder-layout-cell__ctl input,
+.flowbie-builder-layout-cell__ctl select {
+	width: auto;
+	min-width: 3rem;
+	max-width: 4.5rem;
+	padding: 2px 6px;
+	font-size: 0.75rem;
+	color: #ffffff;
+	background: rgba(255, 255, 255, 0.12);
+	border: 1px solid rgba(255, 255, 255, 0.22);
+	border-radius: 4px;
+}
+
+.flowbie-builder-layout-cell__controls .button {
+	color: #ffffff;
+	border-color: rgba(255, 255, 255, 0.35);
+	background: rgba(255, 255, 255, 0.08);
+}
+
+.flowbie-builder-layout-chip__drag {
+	cursor: grab;
+	opacity: 0.95;
+	margin-right: 4px;
+	user-select: none;
+	color: #ffffff;
+}
+
+/* jQuery UI drag clone must stay readable on dark canvas */
+.flowbie-builder-layout-chip.ui-draggable-dragging,
+.ui-draggable-dragging.flowbie-builder-layout-chip {
+	background: rgba(30, 30, 35, 0.98) !important;
+	border: 1px solid rgba(255, 255, 255, 0.35) !important;
+	color: #ffffff !important;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+	z-index: 10000;
+}
+
+.flowbie-builder-layout-chip.ui-draggable-dragging .flowbie-builder-layout-chip__type,
+.flowbie-builder-layout-chip.ui-draggable-dragging .flowbie-builder-layout-chip__id,
+.flowbie-builder-layout-chip.ui-draggable-dragging .flowbie-builder-layout-chip__preview,
+.ui-draggable-dragging.flowbie-builder-layout-chip .flowbie-builder-layout-chip__type,
+.ui-draggable-dragging.flowbie-builder-layout-chip .flowbie-builder-layout-chip__id,
+.ui-draggable-dragging.flowbie-builder-layout-chip .flowbie-builder-layout-chip__preview {
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+}
+
+.flowbie-builder-layout-cell.is-covered {
+	display: none !important;
+}
+
+.flowbie-builder-layout-cell__stack .ui-sortable-placeholder {
+	background: rgba(255, 255, 255, 0.06);
+	border-radius: 6px;
+	min-height: 36px;
+	visibility: visible !important;
+}
+

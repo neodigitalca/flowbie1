@@ -1,0 +1,60 @@
+---
+description: Hello Elementor Child functions.php FAQ schema and ACF output rules
+globs: docs/wordpress/**
+alwaysApply: false
+---
+
+# WordPress child theme functions.php (FAQ schema)
+
+Use when updating **Hello Elementor Child** `functions.php` for Flowbie-managed sites. Full reference: `docs/wordpress/hello-elementor-child-faq-schema.md`.
+
+**Dashboard:** each property → **Functions Updater** tab (`FunctionsUpdaterPanel.tsx`, direct OpenRouter via research model in `update-functions-php.ts`).
+
+**Canonical example:** `server/wordpress/fixtures/hello-elementor-child-functions.example.php` (v2.1.2).
+
+**Prompt contract:** `Functions updater/instructions.md`. Offline CLI: `Functions updater/run-updater.bat`.
+
+**Merge rule:** output = all valid site-specific code from the pasted source + upgraded FAQ/REST/schema blocks from the canonical pattern. Do not blind-replace with the template alone.
+
+## Never do this
+
+```php
+// BAD: raw FAQ visible on page or in head as plain text
+$faq = get_field('faq');
+echo $faq;
+echo "\n" . $faq_snippet . "\n";
+```
+
+## Always do this
+
+1. **Output FAQ only as JSON-LD in `wp_head`**
+   - Use `hello_elementor_child_render_faq_schema()` (or equivalent).
+   - Return only `<script type="application/ld+json">...</script>`.
+   - If parsing fails, output **nothing**. Never fall back to raw text.
+
+2. **Read raw values for schema**
+   - `get_field( $name, $post_id, false )` or `hello_elementor_child_get_schema_field()`.
+   - FAQ field: **`faq` only** (no `seo_faq`).
+   - Date: `date_modifier` / `seo_date_modifier`.
+
+3. **Hide schema-only fields on the frontend**
+   - Filter `acf/format_value/name=faq`, `seo_research` to return `''` when not admin/REST/AJAX.
+   - Prevents Elementor dynamic tags from dumping raw FAQ in the body.
+
+4. **REST write must dual-persist**
+   - `update_field()` plus `update_post_meta()` for scalar ACF values in REST `update_callback`.
+
+5. **Parse all Flowbie FAQ formats**
+   - **Primary:** plain question line + answer line(s), blank line between pairs (no `Q:`/`A:`).
+   - Existing JSON-LD or script tag: pass through or re-wrap.
+   - Legacy line-based `Q:` / `A:` and inline `Q: ... A: ...`.
+
+6. **Bump theme version** after edits (`HELLO_ELEMENTOR_CHILD_VERSION`) and note WP Engine cache purge in the handoff.
+
+## When handing off changes
+
+State briefly:
+
+- What was broken (raw FAQ visible, inline parse miss, ACF admin empty after REST write).
+- What was added/changed (helpers, filters, REST dual write).
+- Version number and deploy steps (save file, purge cache, view source).

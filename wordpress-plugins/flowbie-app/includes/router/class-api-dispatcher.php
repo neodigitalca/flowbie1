@@ -1,0 +1,282 @@
+<?php
+/**
+ * Early /api/* dispatcher (Node-compatible paths, no wp-json prefix change).
+ *
+ * @package Flowbie_App
+ */
+
+defined( 'ABSPATH' ) || exit;
+
+class Flowbie_App_Api_Dispatcher {
+
+	public static function init(): void {
+		add_action( 'init', array( __CLASS__, 'register_rewrites' ) );
+		add_filter( 'query_vars', array( __CLASS__, 'query_vars' ) );
+		add_action( 'parse_request', array( __CLASS__, 'maybe_dispatch' ), 0 );
+	}
+
+	public static function register_rewrites(): void {
+		add_rewrite_rule( '^api/(.*)?', 'index.php?flowbie_api_route=$matches[1]', 'top' );
+	}
+
+	/**
+	 * @param string[] $vars Query vars.
+	 * @return string[]
+	 */
+	public static function query_vars( $vars ) {
+		$vars[] = 'flowbie_api_route';
+		return $vars;
+	}
+
+	/**
+	 * @param WP $wp WordPress environment.
+	 */
+	public static function maybe_dispatch( $wp ): void {
+		unset( $wp );
+		$route = self::resolve_route();
+		if ( $route === null ) {
+			return;
+		}
+		self::dispatch( $route );
+		exit;
+	}
+
+	/**
+	 * @return string|null Route after /api/ without leading slash.
+	 */
+	private static function resolve_route(): ?string {
+		$qv = get_query_var( 'flowbie_api_route', null );
+		if ( is_string( $qv ) && $qv !== '' ) {
+			return trim( $qv, '/' );
+		}
+		$uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : '';
+		$path = (string) parse_url( $uri, PHP_URL_PATH );
+		if ( preg_match( '#^/api/(.+)$#', $path, $m ) ) {
+			return trim( $m[1], '/' );
+		}
+		return null;
+	}
+
+	/**
+	 * @param string $route Path after api/.
+	 */
+	public static function dispatch( string $route ): void {
+		$method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( (string) $_SERVER['REQUEST_METHOD'] ) : 'GET';
+		$body   = self::read_json_body();
+
+		if ( preg_match( '#^wordpress/(bulk-update-overview-seo|get-site-inventory-bulk|get-site-post-inventory)#', $route ) ) {
+			@set_time_limit( 300 );
+		}
+
+		if ( preg_match( '#^wordpress/([a-z0-9-]+)$#i', $route, $m ) ) {
+			self::send_handler_result( Flowbie_App_Wp_Route_Handlers::handle( $m[1], $method, $body ) );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'gsc/' ) ) {
+			Flowbie_App_Gsc_Route_Handlers::dispatch_http( substr( $route, 4 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'ga/' ) ) {
+			Flowbie_App_Ga_Route_Handlers::dispatch_http( substr( $route, 3 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'gmb/' ) ) {
+			Flowbie_App_Gmb_Route_Handlers::dispatch_http( substr( $route, 4 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'overview/' ) ) {
+			Flowbie_App_Overview_Route_Handlers::dispatch_http( substr( $route, 9 ), $method, $body );
+			return;
+		}
+
+		if ( preg_match( '#^mcp/(DataForSEO_[a-zA-Z0-9_]+)$#', $route, $m ) && $method === 'POST' ) {
+			self::send_json( Flowbie_App_Dataforseo_Route_Handlers::handle_mcp_tool( $m[1], $body ) );
+			return;
+		}
+
+		if ( preg_match( '#^mcp/DataForSEO_serp_dump_download/([a-zA-Z0-9._-]+)$#', $route, $m ) && $method === 'GET' ) {
+			Flowbie_App_Dataforseo_Route_Handlers::send_serp_dump_file( $m[1] );
+			return;
+		}
+
+		if ( preg_match( '#^dataforseo/serp-dump/([a-zA-Z0-9._-]+)$#', $route, $m ) && $method === 'GET' ) {
+			Flowbie_App_Dataforseo_Route_Handlers::send_serp_dump_file( $m[1] );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'dataforseo/' ) ) {
+			Flowbie_App_Dataforseo_Route_Handlers::dispatch_http( substr( $route, 11 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'proposal/' ) ) {
+			Flowbie_App_Proposal_Route_Handlers::dispatch_http( substr( $route, 9 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'seo/' ) ) {
+			Flowbie_App_Seo_Route_Handlers::dispatch_http( substr( $route, 4 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'grid-local/' ) ) {
+			Flowbie_App_Grid_Local_Route_Handlers::dispatch_http( substr( $route, 11 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'vertical-benchmarks/' ) ) {
+			Flowbie_App_Vertical_Benchmark_Route_Handlers::dispatch_http( substr( $route, 20 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'site-scraper/' ) ) {
+			Flowbie_App_Site_Scraper_Route_Handlers::dispatch_http( substr( $route, 13 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'knowledge-model/' ) ) {
+			Flowbie_App_Knowledge_Model_Route_Handlers::dispatch_http( substr( $route, 16 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'dataforseo/' ) ) {
+			Flowbie_App_Dataforseo_Route_Handlers::dispatch_http( substr( $route, 11 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'semrush/' ) ) {
+			Flowbie_App_Semrush_Route_Handlers::dispatch_http( substr( $route, 8 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'images/' ) ) {
+			Flowbie_App_Images_Route_Handlers::dispatch_http( substr( $route, 7 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'integrations/' ) ) {
+			Flowbie_App_Integrations_Route_Handlers::dispatch_http( substr( $route, 13 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'proposal/' ) ) {
+			Flowbie_App_Proposal_Route_Handlers::dispatch_http( substr( $route, 9 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'manager-cloud-settings/' ) ) {
+			Flowbie_App_Manager_Route_Handlers::dispatch_cloud( substr( $route, 23 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'manager-wordpress-properties/' ) ) {
+			Flowbie_App_Manager_Route_Handlers::dispatch_properties( substr( $route, 28 ), $method, $body );
+			return;
+		}
+
+		if ( $route === 'bulk/validate-internal-links' && $method === 'POST' ) {
+			Flowbie_App_Bulk_Validate_Links::stream( $body );
+			return;
+		}
+
+		if ( $route === 'wikipedia/api' && $method === 'GET' ) {
+			Flowbie_App_Wikipedia_Proxy::proxy_query();
+			return;
+		}
+
+		if ( $route === 'google-maps-image/generate' && $method === 'POST' ) {
+			self::send_json( Flowbie_App_Google_Maps_Screenshot::generate( $body ) );
+			return;
+		}
+
+		if ( $route === 'bulk/abort-dataforseo' && $method === 'POST' ) {
+			self::send_json( array( 'success' => true, 'aborted' => true ) );
+			return;
+		}
+
+		if ( $route === 'diagnostics/maps-exec' && $method === 'GET' ) {
+			self::send_json( Flowbie_App_Google_Maps_Screenshot::probe_exec() );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'seo/' ) ) {
+			Flowbie_App_Seo_Route_Handlers::dispatch_http( substr( $route, 4 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'grid-local/' ) ) {
+			Flowbie_App_Grid_Local_Route_Handlers::dispatch_http( substr( $route, 11 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'vertical-benchmarks/' ) ) {
+			Flowbie_App_Vertical_Benchmark_Route_Handlers::dispatch_http( substr( $route, 20 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'site-scraper/' ) ) {
+			Flowbie_App_Site_Scraper_Route_Handlers::dispatch_http( substr( $route, 13 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'knowledge-model/' ) ) {
+			Flowbie_App_Knowledge_Model_Route_Handlers::dispatch_http( substr( $route, 16 ), $method, $body );
+			return;
+		}
+
+		self::send_json(
+			array(
+				'success' => false,
+				'error'   => 'Not found',
+				'path'    => '/api/' . $route,
+				'method'  => $method,
+			),
+			404
+		);
+	}
+
+	/**
+	 * @return array<string,mixed>
+	 */
+	private static function read_json_body(): array {
+		$raw = file_get_contents( 'php://input' );
+		if ( ! is_string( $raw ) || $raw === '' ) {
+			return array();
+		}
+		$data = json_decode( $raw, true );
+		return is_array( $data ) ? $data : array();
+	}
+
+	/**
+	 * @param array<int,mixed> $result status, data, optional content-type.
+	 */
+	public static function send_handler_result( $result ): void {
+		$status = isset( $result[0] ) ? (int) $result[0] : 200;
+		$data   = isset( $result[1] ) && is_array( $result[1] ) ? $result[1] : array();
+		$type   = isset( $result[2] ) ? (string) $result[2] : 'application/json; charset=utf-8';
+
+		if ( ! empty( $data['ndjson'] ) && is_array( $data['ndjson'] ) ) {
+			status_header( $status );
+			header( 'Content-Type: application/x-ndjson' );
+			foreach ( $data['ndjson'] as $line ) {
+				echo wp_json_encode( $line ) . "\n";
+			}
+			return;
+		}
+
+		self::send_json( $data, $status, $type );
+	}
+
+	/**
+	 * @param mixed $data Response body.
+	 */
+	public static function send_json( $data, int $status = 200, string $content_type = 'application/json; charset=utf-8' ): void {
+		status_header( $status );
+		header( 'Content-Type: ' . $content_type );
+		echo wp_json_encode( $data );
+	}
+}

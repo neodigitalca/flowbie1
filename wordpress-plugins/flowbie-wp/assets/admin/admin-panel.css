@@ -1,0 +1,344 @@
+﻿/**
+
+ * Flowbie WP admin — shared sidebar panel & HTML sitemap
+
+ * @layer flowbie-wp-admin
+
+ */
+
+
+
+/* Depends on: admin-tokens.css, admin-settings.css */
+
+
+
+/* Shared panel layout (Sitemap, Schema, Analytics) */
+
+.flowbie-wp-panel-page.flowbie-wp-settings--wide {
+
+	max-width: none;
+
+	width: 100%;
+
+}
+
+
+
+.flowbie-wp-panel-layout {
+	display: grid;
+	grid-template-columns: 220px minmax(0, 1fr);
+	gap: 24px;
+	align-items: stretch;
+	min-height: calc(100vh - 32px - 120px);
+	width: 100%;
+	max-width: none;
+}
+
+
+
+.flowbie-wp-panel-content {
+
+	padding: 20px 22px;
+
+	background: var(--fc-surface);
+
+	border: none;
+
+	border-radius: 8px;
+
+	box-shadow: var(--fc-frame-shadow);
+
+}
+
+
+
+.flowbie-wp-panel-nav {
+
+	margin: 0;
+
+	padding: 16px 0;
+
+	background: var(--fc-surface-muted);
+
+	border: none;
+
+	border-radius: 8px;
+
+	box-shadow: var(--fc-frame-shadow);
+
+}
+
+
+
+.flowbie-wp-panel-nav__heading {
+
+	margin: 0;
+
+	padding: 8px 16px 6px;
+
+	font-size: 1rem;
+
+	font-weight: 600;
+
+	letter-spacing: 0.08em;
+
+	text-transform: uppercase;
+
+	color: #f8fafc;
+
+}
+
+
+
+.flowbie-wp-panel-nav__list {
+
+	margin: 0 0 8px;
+
+	padding: 0;
+
+	list-style: none;
+
+}
+
+
+
+.flowbie-wp-panel-nav__item {
+
+	display: block;
+
+	padding: 8px 16px;
+
+	color: #f8fafc;
+
+	text-decoration: none;
+
+	font-size: 1rem;
+
+	line-height: 1.4;
+
+	border: none;
+
+}
+
+
+
+.flowbie-wp-panel-nav__item:hover {
+
+	background: rgba(255, 255, 255, 0.06);
+
+	color: #f8fafc;
+
+}
+
+
+
+.flowbie-wp-panel-nav__item--active {
+
+	background: rgba(34, 211, 238, 0.18);
+
+	color: #f8fafc;
+
+	font-weight: 600;
+
+}
+
+
+
+.flowbie-wp-panel-content__title {
+
+	margin: 0 0 6px;
+
+	font-size: 20px;
+
+	font-weight: 600;
+
+	color: var(--fc-text);
+
+}
+
+
+
+.flowbie-wp-panel-content__desc {
+
+	margin: 0 0 16px;
+
+	color: #d1d5db;
+
+	font-size: 1rem;
+
+	line-height: 1.5;
+
+}
+
+
+
+.flowbie-wp-panel-info-box {
+
+	margin: 0 0 16px;
+
+	padding: 12px 16px;
+
+	background: var(--fc-surface-elevated);
+
+	border: none;
+
+	border-radius: 6px;
+
+	font-size: 1rem;
+
+	line-height: 1.5;
+
+	color: var(--fc-text);
+
+	box-shadow: none;
+
+}
+
+
+
+.flowbie-wp-panel-info-box p,
+
+.flowbie-wp-panel-info-box strong {
+
+	color: var(--fc-text);
+
+}
+
+
+
+.flowbie-wp-panel-info-box a {
+
+	word-break: break-all;
+
+}
+
+
+
+.flowbie-wp-panel-toggle {
+
+	display: flex;
+
+	align-items: center;
+
+	gap: 10px;
+
+	cursor: pointer;
+
+}
+
+
+
+.flowbie-wp-panel-toggle__label {
+
+	font-size: 1rem;
+
+	font-weight: 500;
+
+	color: var(--fc-text);
+
+}
+
+
+
+.flowbie-wp-panel-footer {
+
+	display: flex;
+
+	flex-wrap: wrap;
+
+	align-items: center;
+
+	justify-content: space-between;
+
+	gap: 12px;
+
+	margin-top: 16px;
+
+	padding-top: 16px;
+
+	border: none;
+
+}
+
+
+
+.flowbie-wp-panel-footer__left {
+
+	display: flex;
+
+	flex-wrap: wrap;
+
+	gap: 8px;
+
+	align-items: center;
+
+}
+
+
+
+.flowbie-wp-panel-footer__right {
+
+	margin: 0 !important;
+
+}
+
+
+
+.flowbie-wp-panel-inline-form {
+
+	margin: 0;
+
+	display: inline-block;
+
+}
+
+
+
+.flowbie-wp-html-sitemap {
+
+	margin: 1em 0;
+
+}
+
+
+
+.flowbie-wp-html-sitemap__group {
+
+	margin: 0 0 1.5em;
+
+}
+
+
+
+.flowbie-wp-html-sitemap__title {
+
+	margin: 0 0 0.5em;
+
+	font-size: 1.25rem;
+
+	color: var(--fc-text);
+
+}
+
+
+
+.flowbie-wp-html-sitemap__list {
+
+	margin: 0;
+
+	padding-left: 1.25em;
+
+}
+
+
+
+@media (max-width: 782px) {
+
+	.flowbie-wp-panel-layout {
+
+		grid-template-columns: 1fr;
+
+	}
+
+}
+

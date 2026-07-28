@@ -1,0 +1,25 @@
+---
+description: UI text must be at least 1rem; no micro typography
+globs: src/**/*.{tsx,ts,css}
+alwaysApply: true
+---
+
+# Typography minimum (1rem)
+
+Flowbie uses **1rem** as the minimum font size for readable UI copy (body, labels, captions, table headers, mono helpers). Hierarchy uses **weight, color, letter-spacing, and casing** - not smaller type.
+
+## Do
+
+- Use Tailwind `text-base` (1rem), or `text-xs` / `text-sm` (both map to **1rem** in `tailwind.config.ts`).
+- Prefer `text-muted-foreground` or opacity for de-emphasis instead of shrinking text.
+
+## Do not
+
+- Do **not** use arbitrary sizes below 1rem, e.g. `text-[10px]`, `text-[11px]`, `text-[0.75rem]`, `text-[0.875rem]`.
+- Do **not** add `font-size` in inline styles below `1rem`.
+
+## Design tokens
+
+- `--font-size-min` in `src/index.css` documents the floor; `body` uses it for the root size.
+
+When touching UI, replace any sub-1rem text classes with `text-base` (or `text-xs` / `text-sm` per existing patterns).

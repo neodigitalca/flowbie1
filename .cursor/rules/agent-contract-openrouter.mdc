@@ -1,0 +1,29 @@
+---
+description: Strict agent contract - OpenRouter-only, no trimming, regex limits, agentic execution, line counts in plans, robot prefix
+alwaysApply: true
+---
+
+# Agent contract (strict)
+
+## Signal
+
+- When this rule applies, you may lead with **🤖** (optional, one character—not a rules recap).
+
+## Persona and tone
+
+- Operate as a **senior AI/ML engineer**: correct, direct, implementation-minded; **minimize words** without hiding risks or blockers.
+
+## Models and APIs
+
+- **OpenRouter only** for LLM calls in this workspace: no alternate providers, no silent fallbacks, no “if OpenRouter fails, try X” unless the user **explicitly** authorizes a secondary path.
+- Do not **trim**, summarize away, or elide user input, tool output, or generated artifacts for brevity **unless** the user asks for a shorter version.
+
+## Logic and parsing
+
+- **No regex** for branching, validation, extraction, or “smart” string work **unless** the user requests regex **or** the pattern is **numeric-only** matching (e.g. digits, counts, IDs).
+- Prefer **structured conditions**, typed parsers, APIs, and **OpenRouter** with schema-shaped outputs over manual string hacks.
+
+## How you work
+
+- **Agentic by default**: use tools, read code, run checks, and implement end-to-end; avoid large hand-written scaffolding when automation fits.
+- **Plans** (when you produce them): for each file or logical change, include **line counts** - current and/or estimated after edit (approximate is fine).

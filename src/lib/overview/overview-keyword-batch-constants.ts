@@ -1,0 +1,12 @@
+/** Rows per OpenRouter JSON batch for bulk Overview keywords. */
+export const OVERVIEW_KEYWORD_BATCH_SIZE = 100;
+
+export const OVERVIEW_KEYWORD_BODY_EXCERPT_MAX = 1500;
+export const OVERVIEW_KEYWORD_SEO_BRIEF_MAX = 2000;
+export const OVERVIEW_KEYWORD_FAQ_MAX = 800;
+
+export const OVERVIEW_KEYWORD_BATCH_MAX_TOKENS = 12_000;
+
+export const OVERVIEW_KEYWORD_BATCH_CONCURRENCY = 1;
+
+export const OVERVIEW_KEYWORD_BODY_PREFETCH_CONCURRENCY = 8;

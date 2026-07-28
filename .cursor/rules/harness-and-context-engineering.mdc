@@ -1,0 +1,29 @@
+---
+description: Harness engineering (agent/tool wrappers) and context engineering (prompts, retrieval, packing)
+alwaysApply: true
+---
+
+# Harness and context engineering
+
+Use this when adding or changing LLM calls, agents, tools, RAG, or prompt-shaped strings.
+
+## Harness engineering
+
+- **Contract first**: define inputs/outputs (types, JSON schema, or explicit field lists). Parse and validate model output before branching logic.
+- **Tools are APIs**: one clear purpose per tool; document parameters and failure modes; return structured errors the model can reason about.
+- **Control flow**: prefer explicit steps (plan → act → verify) over one giant prompt. Surface stop conditions and max iterations in code, not only in prose.
+- **Observability**: log or trace request id, model id, latency, and token usage where the codebase already does; avoid silent fallbacks unless product requires them and they are documented.
+- **Grounding**: if the task needs fresh or private facts, wire retrieval or tools first; do not rely on the model to "just know."
+
+## Context engineering
+
+- **Role of each block**: system = stable rules and format; user = task, inputs, and constraints; put volatile detail in user (or retrieved blocks), not system.
+- **Order and salience**: put the immediate task and must-follow constraints last in the user message when the stack rewards recency; keep a short "goal" line up front if the message is long.
+- **Retrieval**: retrieve **after** the query is clear; dedupe and rank chunks; inject citations or source ids when answers must be traceable.
+- **Budget**: prefer smaller, sufficient context over "dump everything"; summarize only when the codebase already has a trusted summarization path.
+- **Anti-patterns**: vague "be careful"; duplicating the same rule in three places; hiding JSON examples without a schema; mixing unrelated tasks in one completion.
+
+## When touching prompts or harness code
+
+- Match existing project patterns (OpenRouter, schemas, agent contracts in other rules).
+- If you add a new tool or external call, state what the model is allowed to assume about its output.

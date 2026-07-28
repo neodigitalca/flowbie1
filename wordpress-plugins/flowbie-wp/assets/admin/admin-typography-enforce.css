@@ -1,0 +1,58 @@
+/**
+ * Flowbie WP — Lato + 1rem minimum on all admin copy.
+ * Loaded last; does not resize dashicons or screen-reader text.
+ */
+
+body.flowbie-wp-admin-screen #wpbody-content,
+body.flowbie-wp-admin-screen .flowbie-fields-admin,
+body.flowbie-wp-admin-screen .flowbie-fields-root,
+.flowbie-fields-root,
+.flowbie-fields-admin {
+	font-family: var(--fc-font, 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+	font-size: 1rem;
+}
+
+body.flowbie-wp-admin-screen #wpbody-content :where(
+	p, span, a, li, td, th, label, dt, dd, figcaption, small, strong, em, code, pre,
+	input, textarea, select, option, button,
+	.description, .form-table, .subsubsub, .tablenav, .row-actions, .search-box,
+	.button, .page-title-action, .button-link, .button-link-delete,
+	.flowbie-wp-panel-nav, .flowbie-wp-panel-nav__heading, .flowbie-wp-panel-nav__item,
+	.flowbie-wp-panel-content__desc, .flowbie-wp-panel-info-box, .flowbie-wp-panel-toggle__label,
+	.flowbie-fields-acf-field, .flowbie-fields-acf-field label, .flowbie-fields-acf-field .description,
+	.flowbie-fields-acf-toggle__copy, .flowbie-fields-acf-toggle__copy strong, .flowbie-fields-acf-toggle__copy p,
+	.flowbie-fields-acf-checklist__text, .flowbie-fields-acf-checklist__slug,
+	.flowbie-fields-acf-pt-tab, .flowbie-fields-acf-supports-item, .flowbie-fields-acf-pt-card,
+	.flowbie-image-seo-field label, .flowbie-image-seo-badge, .flowbie-image-seo-diff-row,
+	.flowbie-wp-dashboard-tile__title, .flowbie-wp-dashboard-tile__desc, .flowbie-wp-dashboard-tile__badge,
+	.fba-page, .fba-page .fba-user, .fba-page .fba-card, .fba-page .fba-chip, .fba-page .fba-input,
+	.fba-page .fba-sidebar-btn, .fba-page .fba-sidebar-item, .fba-page .fba-pill, .fba-page .fba-action-chip,
+	.fba-page .fba-workflow-step, .fba-page .fba-card-badge, .fba-page .fba-card-title, .fba-page .fba-card-body,
+	.flowbie-wp-agent-hub, .flowbie-wp-agent-hub .wp-list-table,
+	.flowbie-agent-hub-modal, .flowbie-agent-hub-modal .flowbie-builder-main,
+	.flowbie-agent-hub-modal .flowbie-builder-preview,
+	.notice, .notice p, .wp-list-table, .widefat, .acf-label, .acf-input
+):not(.dashicons):not(.screen-reader-text) {
+	font-family: var(--fc-font, 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif) !important;
+	font-size: 1rem !important;
+}
+
+body.flowbie-wp-admin-screen #wpbody-content :where(h1, h2, h3),
+.flowbie-fields-root :where(h1, h2, h3, h4, h5, h6),
+.flowbie-fields-admin :where(h1, h2, h3, h4, h5, h6) {
+	font-family: var(--fc-font, 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif) !important;
+}
+
+.flowbie-fields-root :where(
+	p, span, a, li, label, input, textarea, select, button, .description, .acf-label label
+):not(.dashicons):not(.screen-reader-text) {
+	font-family: var(--fc-font, 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif) !important;
+	font-size: 1rem !important;
+}
+
+.flowbie-wp-app--dashboard .flowbie-wp-progress-strip__label,
+.flowbie-wp-app--dashboard .flowbie-wp-dashboard-overview__fact-label,
+.flowbie-wp-app--dashboard .flowbie-wp-dashboard__section-title {
+	font-size: 0.6875rem !important;
+	line-height: 1.2 !important;
+}

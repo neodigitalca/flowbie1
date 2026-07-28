@@ -1,0 +1,41 @@
+---
+description: Every new workspace page must use UnifiedWorkspaceChrome (3-band header)
+alwaysApply: true
+---
+
+# Universal workspace header
+
+Every new manager/workspace page must mount **`UnifiedWorkspaceChrome`** (`src/components/shared/UnifiedWorkspaceChrome.tsx`) at the top of the page context. Do not invent a one-off header layout.
+
+Wrap it in a dedicated `*WorkspaceHeader.tsx` beside the page shell. Wire page state through props/bindings; keep the shell thin.
+
+## Three bands (fixed order)
+
+| Band | Surface | Left | Right |
+|------|---------|------|-------|
+| 1 Title | `bg-zinc-900/50` | `icon` + `title` + optional `titleRowMenu` | `titleRowEnd` |
+| 2 Toolbar | `bg-black` | Options, filters, flyouts, selects | Main actions (`ml-auto`) |
+| 3 Progress | `bg-zinc-900/50` | `progressLeading` (e.g. pagination) + micro progress bar | **Details** drawer toggle |
+
+Use exported band classes (`UNIFIED_TITLE_BAND_CLASS`, `UNIFIED_TOOLBAR_CLASS`, `UNIFIED_PROGRESS_BAND_CLASS`) when building toolbar children so heights stay aligned.
+
+## Slot rules
+
+- **`titleRowMenu`**: In-page modes tied to the title (sitemap source: Pages / Posts / SAP). Omit when not applicable.
+- **`titleRowEnd`**: Categories and extra modules (Multi-site, Dashboard sections, Sitemap sub-modes). Right-aligned pills via `WorkspacePill`.
+- **`toolbar`**: Black bar. **Left** = filters and option clusters. **Right** = primary actions (sort, run, export). Separate groups with `BULK_TOOLBAR_GROUP_DIVIDER`. Style controls with `bulk-workspace-header-styles.ts` (`BULK_HEADER_*`).
+- **Progress band**: Pass `progressSnapshot`, `bulkActionProgress`, `isProcessing`, `canOpenDetails`, `detailsPanelId`, `detailsPanel`. The **Details** drawer holds micro-progress logs and batch status only, not primary page content.
+- **No bulk work yet**: `progressBand="empty"` (keeps the grey band height without a bar). Example: `DashboardWorkspaceHeader`.
+
+## Reference implementations
+
+- Content + sitemap tabs: `OverviewContentHeader` (`overview-tab/OverviewMetaWorkspaceBar.tsx`)
+- Sitemap sub-modes: `SitemapOptimizerUnifiedHeader.tsx`
+- Settings-only (empty progress): `DashboardWorkspaceHeader.tsx`
+- Bulk generator: `BulkCsvWorkspaceHeader.tsx`, `BulkPromptWorkspaceHeader.tsx`
+
+## Do not
+
+- Duplicate the three-band markup outside `UnifiedWorkspaceChrome`.
+- Put filters in `titleRowEnd` or module pills in the black toolbar without a clear reason.
+- Use sub-1rem type in header chrome (see `typography-min-1rem.mdc`).

@@ -1,0 +1,452 @@
+﻿/**
+ * Agent Hub — edit controls (fields, WYSIWYG, TinyMCE chrome).
+ */
+
+	min-height: 2.5rem;
+	padding: 0.45rem 1rem !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-block-editor-view button.flowbie-slot-editor-type.is-active {
+	background: #4a4a4a !important;
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+}
+
+/* No borders inside builder chrome */
+.flowbie-agent-hub-builder-page .flowbie-block-editor-view :where(
+	input, select, textarea, button, .flowbie-slot-editor-section, .flowbie-block-editor-view__types, .flowbie-block-editor-view__footer
+) {
+	border: none !important;
+	outline: none;
+	box-shadow: none;
+}
+
+.flowbie-agent-hub-builder-page .flowbie-builder-tabs__tab {
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+	font-size: 1rem !important;
+	font-family: var(--fc-font, 'Lato', sans-serif) !important;
+	border: none !important;
+}
+
+.flowbie-agent-hub-builder-page .flowbie-builder-tabs__tab.is-active {
+	color: #ffffff !important;
+}
+
+.flowbie-agent-hub-builder-page .flowbie-agent-hub-context-badge {
+	color: #ffffff !important;
+}
+
+.flowbie-agent-hub-builder-page.is-block-editing .flowbie-builder-tabs__tab[data-tab="layout"] {
+	text-decoration: underline;
+	text-underline-offset: 0.2rem;
+}
+
+.flowbie-agent-hub-builder-page .flowbie-builder-tabs {
+	background: #000000 !important;
+	border: none;
+}
+
+.flowbie-agent-hub-builder-page .flowbie-builder-tabs__tab.is-active {
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+	border-bottom-color: #ffffff !important;
+}
+
+.flowbie-agent-hub-builder-page .flowbie-builder-layout-chip {
+	border: none !important;
+	border-radius: 0 !important;
+	color: #ffffff !important;
+	font-size: 1rem !important;
+	font-family: var(--fc-font, 'Lato', sans-serif) !important;
+}
+
+.flowbie-agent-hub-builder-page .flowbie-builder-layout-chip__type,
+.flowbie-agent-hub-builder-page .flowbie-builder-layout-chip__id {
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+	font-size: 1rem !important;
+}
+
+.flowbie-agent-hub-builder-page .flowbie-builder-layout-cell {
+	border: none !important;
+}
+
+.flowbie-agent-hub-builder-page .flowbie-builder-preview__title {
+	color: #ffffff !important;
+	font-size: 1rem !important;
+}
+
+.flowbie-agent-hub-builder-page .flowbie-builder-preview__body {
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+
+/* Universal white text — full-page Agent Hub builder */
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page {
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page :where(
+	.flowbie-builder-tabs__tab,
+	.flowbie-builder-tabs__tab.is-active,
+	.flowbie-agent-hub-builder-page__header,
+	.flowbie-agent-hub-context-badge,
+	.flowbie-builder-layout-toolbar,
+	.flowbie-builder-layout-palette,
+	.flowbie-builder-layout-canvas,
+	.flowbie-builder-layout-hint,
+	.flowbie-builder-layout-chip,
+	.flowbie-builder-layout-chip__type,
+	.flowbie-builder-layout-chip__id,
+	.flowbie-builder-layout-chip__preview,
+	.flowbie-builder-layout-palette__label,
+	.flowbie-builder-layout-palette__empty,
+	.flowbie-builder-group__title,
+	.flowbie-builder-field__label,
+	.flowbie-builder-field__value,
+	.flowbie-slot-editor-section__title,
+	.flowbie-slot-editor-field__label,
+	.flowbie-block-editor-view__types-label,
+	.flowbie-block-editor-view__placement,
+	.flowbie-block-editor-view__header,
+	.flowbie-builder-preview,
+	.flowbie-builder-preview__body,
+	.flowbie-agent-hub-builder-page__actions,
+	label,
+	h1, h2, h3, h4, p, span
+) {
+	color: var(--flowbie-text, #ffffff) !important;
+	-webkit-text-fill-color: var(--flowbie-text, #ffffff) !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-builder-tabs__tab.is-active {
+	border-bottom-color: #ffffff !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page input::placeholder,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page textarea::placeholder {
+	color: #ffffff !important;
+	opacity: 0.65;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-builder-layout-palette__empty {
+	color: #ffffff !important;
+	opacity: 1;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-builder-layout-cell__placeholder {
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+	font-size: 1rem !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-builder-layout-palette__label {
+	font-size: 1rem !important;
+}
+
+/* Semantic control surfaces — flat fields on framed sections (no borders) */
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page :is(
+	.flowbie-slot-input,
+	.flowbie-semantic-control,
+	.flowbie-builder-slot__input,
+	.flowbie-builder-slot__ctl,
+	.flowbie-builder-field__control,
+	#flowbie-builder-grid-rows,
+	#flowbie-builder-grid-cols,
+	.flowbie-block-editor-view .flowbie-slot-input,
+	.flowbie-block-editor-view .flowbie-semantic-control,
+	.flowbie-block-editor-view .flowbie-builder-slot__ctl,
+	.flowbie-block-editor-view select:not(.wp-editor-wrap select),
+	.flowbie-block-editor-view textarea.wp-editor-area
+) {
+	display: block;
+	width: 100%;
+	max-width: 100%;
+	min-height: 2.75rem;
+	padding: 0.5rem 0.75rem !important;
+	box-sizing: border-box;
+	background: var(--flowbie-surface-control, #3a3a3a) !important;
+	color: var(--flowbie-text, #ffffff) !important;
+	-webkit-text-fill-color: var(--flowbie-text, #ffffff) !important;
+	border: none !important;
+	box-shadow: none !important;
+	outline: none;
+	font-family: var(--flowbie-font, var(--fc-font)) !important;
+	font-size: 1rem !important;
+	line-height: 1.45 !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page :is(
+	.flowbie-slot-input,
+	.flowbie-semantic-control,
+	.flowbie-builder-slot__input,
+	.flowbie-builder-slot__ctl,
+	.flowbie-builder-field__control,
+	#flowbie-builder-grid-rows,
+	#flowbie-builder-grid-cols,
+	.flowbie-block-editor-view .flowbie-slot-input,
+	.flowbie-block-editor-view .flowbie-semantic-control,
+	.flowbie-block-editor-view .flowbie-builder-slot__ctl,
+	.flowbie-block-editor-view select:not(.wp-editor-wrap select),
+	.flowbie-block-editor-view textarea.wp-editor-area
+):focus,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page :is(
+	.flowbie-slot-input,
+	.flowbie-semantic-control,
+	.flowbie-builder-slot__input,
+	.flowbie-builder-slot__ctl,
+	.flowbie-builder-field__control,
+	#flowbie-builder-grid-rows,
+	#flowbie-builder-grid-cols,
+	.flowbie-block-editor-view .flowbie-slot-input,
+	.flowbie-block-editor-view .flowbie-semantic-control,
+	.flowbie-block-editor-view .flowbie-builder-slot__ctl,
+	.flowbie-block-editor-view select:not(.wp-editor-wrap select),
+	.flowbie-block-editor-view textarea.wp-editor-area
+):focus-visible {
+	background: var(--flowbie-surface-control-focus, #484848) !important;
+	color: var(--flowbie-text, #ffffff) !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view select option {
+	background: var(--flowbie-surface-control, #3a3a3a) !important;
+	color: var(--flowbie-text, #ffffff) !important;
+}
+
+/* WYSIWYG editor chrome (toolbar = page black; body = editor grey) */
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-slot-editor-field--editor .flowbie-builder-slot__editor,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .wp-editor-wrap,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .wp-editor-container,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .mce-tinymce,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .mce-edit-area {
+	background: var(--flowbie-surface-editor, #2a2a2a) !important;
+	border: none !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .wp-editor-area {
+	background: var(--flowbie-surface-editor, #2a2a2a) !important;
+	color: var(--flowbie-text, #ffffff) !important;
+	min-height: 8rem;
+	font-family: var(--flowbie-font, var(--fc-font)) !important;
+	font-size: 1rem !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .wp-editor-tabs .wp-switch-editor,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .quicktags-toolbar .button {
+	background: var(--flowbie-surface-page, #000000) !important;
+	color: var(--flowbie-text, #ffffff) !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .wp-editor-tabs .switch-tmce.active,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .wp-editor-tabs .switch-html.active {
+	background: var(--flowbie-surface-control, #3a3a3a) !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page #flowbie-builder-grid-rows,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page #flowbie-builder-grid-cols {
+	width: 4.5rem;
+	min-width: 4.5rem;
+	max-width: 6rem;
+	display: inline-block;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-builder-grid-size .flowbie-builder-field__control {
+	width: 4.5rem;
+	min-width: 4.5rem;
+	max-width: 6rem;
+}
+
+/* Block editor — TinyMCE (column layout; kill WP float sidebar) */
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-slot-editor-field--editor {
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-slot-editor-field--editor .flowbie-builder-slot__editor {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor .wp-editor-wrap {
+	display: flex !important;
+	flex-direction: column !important;
+	flex: 1 1 auto;
+	min-height: 0;
+	height: 100%;
+	border: none !important;
+	background: var(--flowbie-surface-editor, #2a2a2a) !important;
+	box-shadow: none !important;
+	overflow: hidden;
+	float: none !important;
+	clear: both !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor .wp-editor-tools,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor .wp-editor-container {
+	float: none !important;
+	clear: both !important;
+	width: 100% !important;
+	max-width: 100% !important;
+	margin: 0 !important;
+	position: relative !important;
+	left: auto !important;
+	right: auto !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor .wp-editor-tools.flowbie-slot-editor-tools--empty {
+	display: none !important;
+	height: 0 !important;
+	min-height: 0 !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	overflow: hidden !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor .wp-editor-tools {
+	display: flex !important;
+	flex: 0 0 auto;
+	flex-wrap: nowrap;
+	align-items: stretch;
+	justify-content: flex-end;
+	width: 100%;
+	min-height: 2.5rem;
+	padding: 0 !important;
+	margin: 0 !important;
+	background: var(--flowbie-surface-page, #000000) !important;
+	border: none !important;
+	overflow: visible;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor .wp-editor-tools .wp-editor-tabs {
+	display: flex !important;
+	float: none !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	background: transparent !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor .wp-editor-container {
+	display: flex !important;
+	flex-direction: column !important;
+	flex: 1 1 auto;
+	min-height: 0;
+	border: none !important;
+	background: var(--flowbie-surface-editor, #2a2a2a) !important;
+	overflow: hidden;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor .mce-tinymce,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor .mce-top-part,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor .mce-panel {
+	display: flex !important;
+	flex-direction: column;
+	flex: 1 1 auto !important;
+	min-height: 0 !important;
+	height: auto !important;
+	background: var(--flowbie-surface-editor, #2a2a2a) !important;
+	border: none !important;
+	overflow: visible;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor .mce-container-body {
+	display: flex !important;
+	flex-direction: column;
+	flex: 1 1 auto !important;
+	min-height: 0 !important;
+	background: transparent !important;
+	overflow: visible;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor .mce-toolbar-grp,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor .mce-toolbar,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor .mce-toolbar .mce-btn-group,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor .mce-top-part::before {
+	flex: 0 0 auto;
+	background: var(--flowbie-surface-page, #000000) !important;
+	border: none !important;
+	padding: 0.15rem 0.25rem !important;
+	min-height: 2.5rem;
+	overflow: visible;
+	visibility: visible !important;
+	opacity: 1 !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .mce-ico {
+	filter: brightness(0) invert(1) !important;
+	opacity: 1 !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .mce-btn,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .mce-btn button {
+	display: inline-flex !important;
+	width: auto !important;
+	min-width: 0 !important;
+	max-width: none !important;
+	min-height: 2.25rem !important;
+	padding: 0 0.35rem !important;
+	background: transparent !important;
+	color: var(--flowbie-text, #ffffff) !important;
+	border: none !important;
+	box-shadow: none !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .mce-btn .mce-txt,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .mce-listbox .mce-txt {
+	color: var(--flowbie-text, #ffffff) !important;
+	font-size: 1rem !important;
+	-webkit-text-fill-color: var(--flowbie-text, #ffffff) !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .mce-listbox .mce-caret {
+	border-top-color: var(--flowbie-text, #ffffff) !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .mce-btn:hover,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .mce-btn:focus,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .mce-btn.mce-active,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .mce-btn.mce-active button {
+	background: var(--flowbie-surface-control, #3a3a3a) !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .quicktags-toolbar {
+	background: var(--flowbie-surface-page, #000000) !important;
+	border: none !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor .mce-edit-area {
+	display: flex !important;
+	flex: 1 1 auto !important;
+	flex-direction: column;
+	min-height: 0 !important;
+	width: 100% !important;
+	background: var(--flowbie-surface-editor, #2a2a2a) !important;
+	border: none !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor .mce-edit-area iframe,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor iframe {
+	display: block !important;
+	flex: 1 1 auto;
+	width: 100% !important;
+	height: 100% !important;
+	min-height: 0 !important;
+	background: var(--flowbie-surface-editor, #2a2a2a) !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor .mce-statusbar,
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .flowbie-builder-slot__editor .mce-path {
+	display: none !important;
+}
+
+body.flowbie-wp-admin-screen .flowbie-agent-hub-builder-page .flowbie-block-editor-view .quicktags-toolbar .button {
+	display: inline-block !important;
+	width: auto !important;
+	min-width: 0 !important;
+	max-width: none !important;
+	min-height: 2rem !important;
+	padding: 0 0.5rem !important;
+}
