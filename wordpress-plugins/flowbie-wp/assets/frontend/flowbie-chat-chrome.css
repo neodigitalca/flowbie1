@@ -407,6 +407,16 @@
 	background: linear-gradient(135deg, #3367d6, #8b5cf6);
 }
 
+.flowbie-chat-widget .fcw-composer .fcw-send.fcw-send--build,
+#flowbie-chat-widget-root.flowbie-chat-widget .fcw-composer .fcw-send.fcw-send--build {
+	background: linear-gradient(135deg, #22c55e, #16a34a) !important;
+}
+
+.flowbie-chat-widget .fcw-composer .fcw-send.fcw-send--build:hover,
+#flowbie-chat-widget-root.flowbie-chat-widget .fcw-composer .fcw-send.fcw-send--build:hover {
+	background: linear-gradient(135deg, #16a34a, #15803d) !important;
+}
+
 .flowbie-chat-widget .fcw-card__type-badge {
 	font-size: 1em;
 	color: #64748b;

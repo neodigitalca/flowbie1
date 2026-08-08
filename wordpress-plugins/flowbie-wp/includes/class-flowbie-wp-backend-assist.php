@@ -24,6 +24,7 @@ class Flowbie_Wp_Backend_Assist {
 		require_once $dir . 'class-flowbie-wp-backend-assist-cards.php';
 		require_once $dir . 'class-flowbie-wp-backend-assist-tools-wp.php';
 		require_once $dir . 'class-flowbie-wp-backend-assist-tools-seo.php';
+		require_once $dir . 'class-flowbie-wp-backend-assist-tools-analytics.php';
 		require_once $dir . 'class-flowbie-wp-backend-assist-registry.php';
 		require_once $dir . 'class-flowbie-wp-backend-assist-content.php';
 		require_once $dir . 'class-flowbie-wp-backend-assist-workflow-builder.php';
@@ -32,6 +33,7 @@ class Flowbie_Wp_Backend_Assist {
 		require_once $dir . 'class-flowbie-wp-backend-assist-pipeline-content-prep.php';
 		require_once $dir . 'class-flowbie-wp-backend-assist-pipeline-phases.php';
 		require_once $dir . 'class-flowbie-wp-backend-assist-pipeline.php';
+		require_once $dir . 'class-flowbie-wp-backend-assist-submode.php';
 		require_once $dir . 'class-flowbie-wp-backend-assist-rest.php';
 		require_once $dir . 'class-flowbie-wp-backend-assist-sessions.php';
 	}

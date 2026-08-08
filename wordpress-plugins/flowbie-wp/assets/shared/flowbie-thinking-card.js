@@ -21,10 +21,10 @@
 
   function streamLabelToStepIndex(label) {
     var l = String(label || '').toLowerCase();
-    if (l.indexOf('search') !== -1) {
+    if (l.indexOf('search') !== -1 || l.indexOf('fetch') !== -1 || l.indexOf('analytics') !== -1) {
       return 0;
     }
-    if (l.indexOf('think') !== -1) {
+    if (l.indexOf('think') !== -1 || l.indexOf('analyz') !== -1) {
       return 1;
     }
     if (l.indexOf('format') !== -1) {

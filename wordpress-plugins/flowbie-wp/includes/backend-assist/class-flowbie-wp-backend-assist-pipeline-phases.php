@@ -176,6 +176,10 @@ PROMPT;
 			$history_text .= "{$role}: {$entry['content']}\n";
 		}
 
+		$analytics_note = current_user_can( 'manage_options' )
+			? "- You can analyze visitor chat logs, site search, Overseer engagement, and GSC data using the analytics tools.\n- Summarize knowledge gaps and suggest content or KB updates when relevant.\n"
+			: "- Analytics tools (chat logs, search logs, Overseer) require site admin access.\n";
+
 		$system = <<<PROMPT
 You are "Flow Assist", the backend technical specialist for "{$site_name}".
 You help WordPress administrators with backend operations, content management, and technical questions.
@@ -191,7 +195,7 @@ RULES:
 - Be concise and technical when appropriate.
 - If the user wants to perform an action, tell them they can ask you to do it directly.
 - Mention available capabilities: create pages, create posts, list content.
-- Suggest relevant follow-up actions.
+{$analytics_note}- Suggest relevant follow-up actions.
 PROMPT;
 
 		return Flowbie_Wp_Backend_Assist_Ai::call_openrouter( Flowbie_Wp_Backend_Assist_Context::REASON_MODEL, $system, $message, 1536, 0.5 );

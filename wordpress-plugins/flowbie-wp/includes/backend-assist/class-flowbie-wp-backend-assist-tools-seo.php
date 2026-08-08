@@ -209,11 +209,11 @@ class Flowbie_Wp_Backend_Assist_Tools_Seo {
 	}
 	public static function resolve_seo_block_manifest( array $params ): ?array {
 		if (
-			is_array( self::$builder_context )
-			&& ! empty( self::$builder_context['block'] )
-			&& is_array( self::$builder_context['block'] )
+			is_array( Flowbie_Wp_Backend_Assist_Context::$builder_context )
+			&& ! empty( Flowbie_Wp_Backend_Assist_Context::$builder_context['block'] )
+			&& is_array( Flowbie_Wp_Backend_Assist_Context::$builder_context['block'] )
 		) {
-			return self::$builder_context['block'];
+			return Flowbie_Wp_Backend_Assist_Context::$builder_context['block'];
 		}
 		if ( ! empty( $params['block_manifest'] ) && is_array( $params['block_manifest'] ) ) {
 			return $params['block_manifest'];

@@ -82,5 +82,7 @@ class Flowbie_Wp_Backend_Assist_Registry {
 			array( 'Flowbie_Wp_Backend_Assist', 'tool_apply_seo_block_to_page' ),
 			'Insert a registry-linked flowbie_seo_section widget on an Elementor page (dynamic block + optional Flowbie Fields heading tag)'
 		);
+
+		Flowbie_Wp_Backend_Assist_Tools_Analytics::register_tools();
 	}
 }

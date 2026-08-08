@@ -85,7 +85,7 @@ class Flowbie_Wp_Backend_Assist_Rest {
 		}
 
 		$builder_ctx = isset( $body['builder_context'] ) && is_array( $body['builder_context'] ) ? $body['builder_context'] : null;
-		self::$builder_context = $builder_ctx;
+		Flowbie_Wp_Backend_Assist_Context::$builder_context = $builder_ctx;
 
 		if ( $mode === 'plan' ) {
 			$card = Flowbie_Wp_Backend_Assist_Pipeline::run_plan( $message, $history );
@@ -93,7 +93,7 @@ class Flowbie_Wp_Backend_Assist_Rest {
 			$card = Flowbie_Wp_Backend_Assist_Pipeline::run_pipeline( $message, $history );
 		}
 
-		self::$builder_context = null;
+		Flowbie_Wp_Backend_Assist_Context::$builder_context = null;
 
 		return new WP_REST_Response( $card, 200 );
 	}
@@ -117,11 +117,11 @@ class Flowbie_Wp_Backend_Assist_Rest {
 		}
 
 		$builder_ctx = isset( $body['builder_context'] ) && is_array( $body['builder_context'] ) ? $body['builder_context'] : null;
-		self::$builder_context = $builder_ctx;
+		Flowbie_Wp_Backend_Assist_Context::$builder_context = $builder_ctx;
 
 		$result = Flowbie_Wp_Backend_Assist_Workflow::execute_workflow_step( $workflow_id, $step_index, $message, $history );
 
-		self::$builder_context = null;
+		Flowbie_Wp_Backend_Assist_Context::$builder_context = null;
 
 		if ( isset( $result['error'] ) ) {
 			$code = isset( $result['http_status'] ) ? (int) $result['http_status'] : 400;

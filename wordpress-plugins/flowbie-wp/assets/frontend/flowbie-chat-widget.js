@@ -21,6 +21,7 @@
   var SHOW_SIDEBAR_HEADING = SIDEBAR_LAYOUT.indexOf('heading') !== -1 && cfg.sidebarHeading;
   var SHOW_CONTACT_HUMAN = cfg.chekkitEnabled !== false && !!cfg.chekkitSubmitUrl;
   var CAN_COPY_LOG = cfg.canCopyLog === true;
+  var CAN_BACKEND_MODE = cfg.canBackendMode === true;
   var SHOW_CHAT_BODY = SIDEBAR_LAYOUT.indexOf('chat') !== -1 || SIDEBAR_LAYOUT.length === 0;
   var sidebarShell = null;
   var isOpen = false;
@@ -99,8 +100,121 @@
   var SVG_AI_SPARK = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/><path d="M19 13l.75 2.25L22 16l-2.25.75L19 19l-.75-2.25L16 16l2.25-.75L19 13z"/></svg>';
   var SVG_MORE = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="12" cy="19" r="1.75"/></svg>';
   var STARTERS = Array.isArray(cfg.conversationStarters) ? cfg.conversationStarters : [];
-  var GREETING_LINE = cfg.greetingLine || 'Hello';
-  var GREETING_SUB = cfg.greetingSubline || 'How can I help you today?';
+  var BACKEND_STARTERS = Array.isArray(cfg.backendStarters) ? cfg.backendStarters : [];
+  var VISITOR_GREETING_LINE = cfg.greetingLine || 'Hello';
+  var VISITOR_GREETING_SUB = cfg.greetingSubline || 'How can I help you today?';
+  var adminMode = 'visitor';
+  var ADMIN_SUBMODES = ['ask', 'plan', 'build'];
+  var ADMIN_SUBMODE_LABELS = { ask: 'Ask', plan: 'Plan', build: 'Build' };
+  var adminSubmode = 'ask';
+  var adminSubmodeBtn = null;
+
+  function loadAdminMode() {
+    if (!CAN_BACKEND_MODE) return;
+    try {
+      var stored = sessionStorage.getItem('flowbie_chat_admin_mode');
+      if (stored === 'backend' || stored === 'visitor') {
+        adminMode = stored;
+      }
+    } catch (_) {}
+  }
+
+  function saveAdminMode(mode) {
+    adminMode = mode === 'backend' ? 'backend' : 'visitor';
+    try {
+      sessionStorage.setItem('flowbie_chat_admin_mode', adminMode);
+    } catch (_) {}
+  }
+
+  function isBackendMode() {
+    return CAN_BACKEND_MODE && adminMode === 'backend';
+  }
+
+  function getActiveStarters() {
+    return isBackendMode() ? BACKEND_STARTERS : STARTERS;
+  }
+
+  function getGreetingLine() {
+    return VISITOR_GREETING_LINE;
+  }
+
+  function getGreetingSubline() {
+    if (!isBackendMode()) {
+      return VISITOR_GREETING_SUB;
+    }
+    if (adminSubmode === 'plan') {
+      return 'Plan mode: review proposed changes before building.';
+    }
+    if (adminSubmode === 'build') {
+      return 'Build mode: can edit posts, pages, and SEO blocks.';
+    }
+    return 'Ask mode: analytics, SEO, and read-only site insights.';
+  }
+
+  function getAdminModeForApi() {
+    return isBackendMode() ? 'backend' : 'visitor';
+  }
+
+  function loadAdminSubmode() {
+    if (!CAN_BACKEND_MODE) return;
+    try {
+      var stored = sessionStorage.getItem('flowbie_chat_admin_submode');
+      if (stored === 'ask' || stored === 'plan' || stored === 'build') {
+        adminSubmode = stored;
+      }
+    } catch (_) {}
+  }
+
+  function saveAdminSubmode(mode) {
+    if (ADMIN_SUBMODES.indexOf(mode) < 0) {
+      mode = 'ask';
+    }
+    adminSubmode = mode;
+    try {
+      sessionStorage.setItem('flowbie_chat_admin_submode', adminSubmode);
+    } catch (_) {}
+  }
+
+  function getAdminSubmodeForApi() {
+    return isBackendMode() ? adminSubmode : '';
+  }
+
+  function updateAdminSubmodeUi() {
+    if (!adminSubmodeBtn) return;
+    adminSubmodeBtn.hidden = !isBackendMode();
+    ADMIN_SUBMODES.forEach(function (m) {
+      adminSubmodeBtn.classList.toggle('fcw-admin-submode--' + m, adminSubmode === m);
+    });
+    var labelEl = adminSubmodeBtn.querySelector('.fcw-admin-submode__label');
+    if (labelEl) {
+      labelEl.textContent = ADMIN_SUBMODE_LABELS[adminSubmode] || 'Ask';
+    }
+    adminSubmodeBtn.setAttribute(
+      'aria-label',
+      'God Mode: ' + (ADMIN_SUBMODE_LABELS[adminSubmode] || 'Ask') + '. Shift+Tab to change.'
+    );
+    if (sendBtn) {
+      sendBtn.classList.toggle('fcw-send--build', isBackendMode() && adminSubmode === 'build');
+    }
+  }
+
+  function setAdminSubmode(mode) {
+    saveAdminSubmode(mode);
+    updateAdminSubmodeUi();
+    refreshEmptyState();
+  }
+
+  function cycleAdminSubmode() {
+    var idx = ADMIN_SUBMODES.indexOf(adminSubmode);
+    var next = ADMIN_SUBMODES[(idx + 1) % ADMIN_SUBMODES.length];
+    setAdminSubmode(next);
+  }
+
+  loadAdminMode();
+  loadAdminSubmode();
+
+  var GREETING_LINE = getGreetingLine();
+  var GREETING_SUB = getGreetingSubline();
   var COMPOSER_PLACEHOLDER = cfg.composerPlaceholder || ('Ask about ' + (cfg.siteName || 'this site') + '\u2026');
 
   function uiOn(key) {
@@ -617,6 +731,81 @@
   menuWrap.appendChild(menuBtn);
   menuWrap.appendChild(menuPanel);
   var toolbarActions = el('div', { className: 'fai-sidebar-toolbar-actions' });
+  var modeToggleWrap = null;
+  var startersWrapEl = null;
+  var greetingEl = null;
+  var greetingSubEl = null;
+
+  function refreshEmptyState() {
+    GREETING_LINE = getGreetingLine();
+    GREETING_SUB = getGreetingSubline();
+    if (greetingEl) greetingEl.textContent = GREETING_LINE;
+    if (greetingSubEl) greetingSubEl.textContent = GREETING_SUB;
+    if (root) {
+      root.classList.toggle('fcw--super-admin-mode', isBackendMode());
+    }
+    if (!startersWrapEl || !uiOn('suggestion_chips')) return;
+    while (startersWrapEl.firstChild) {
+      startersWrapEl.removeChild(startersWrapEl.firstChild);
+    }
+    getActiveStarters().forEach(function (prompt) {
+      var chip = el('button', {
+        type: 'button',
+        className: 'fcw-starter',
+        'data-prompt': prompt
+      });
+      chip.textContent = prompt;
+      chip.addEventListener('click', function () {
+        var text = chip.getAttribute('data-prompt') || chip.textContent || '';
+        if (text.trim()) deliverMessage(text.trim(), 'starter');
+      });
+      startersWrapEl.appendChild(chip);
+    });
+    if (window.FlowbieChatPrefetch && !isBackendMode()) {
+      FlowbieChatPrefetch.prefetchSuggestions(getActiveStarters(), prefetchOptions());
+    }
+  }
+
+  function setAdminMode(mode) {
+    saveAdminMode(mode);
+    refreshEmptyState();
+    updateAdminSubmodeUi();
+    if (modeToggleWrap) {
+      var btns = modeToggleWrap.querySelectorAll('.fcw-mode-btn');
+      for (var i = 0; i < btns.length; i++) {
+        var on = btns[i].getAttribute('data-mode') === adminMode;
+        btns[i].classList.toggle('fcw-mode-btn--active', on);
+        btns[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+      }
+    }
+  }
+
+  if (CAN_BACKEND_MODE) {
+    modeToggleWrap = el('div', {
+      className: 'fcw-mode-toggle',
+      role: 'group',
+      'aria-label': 'God Mode'
+    });
+    var visitorModeBtn = el('button', {
+      type: 'button',
+      className: 'fcw-mode-btn fcw-mode-btn--active',
+      'data-mode': 'visitor',
+      'aria-pressed': 'true'
+    });
+    visitorModeBtn.textContent = 'Visitor';
+    var backendModeBtn = el('button', {
+      type: 'button',
+      className: 'fcw-mode-btn',
+      'data-mode': 'backend',
+      'aria-pressed': 'false'
+    });
+    backendModeBtn.textContent = 'God Mode';
+    modeToggleWrap.appendChild(visitorModeBtn);
+    modeToggleWrap.appendChild(backendModeBtn);
+    visitorModeBtn.addEventListener('click', function () { setAdminMode('visitor'); });
+    backendModeBtn.addEventListener('click', function () { setAdminMode('backend'); });
+  }
+
   toolbarActions.appendChild(closeBtn);
   toolbarActions.appendChild(menuWrap);
   var contactHuman = SHOW_CONTACT_HUMAN ? buildContactHumanModule() : null;
@@ -641,14 +830,17 @@
     var greetingBlock = el('div');
     var greeting = el('p', { className: 'fcw-greeting' });
     greeting.textContent = GREETING_LINE;
+    greetingEl = greeting;
     var sub = el('p', { className: 'fcw-sub' });
     sub.textContent = GREETING_SUB;
+    greetingSubEl = sub;
     greetingBlock.appendChild(greeting);
     greetingBlock.appendChild(sub);
     emptyEl.appendChild(greetingBlock);
-    if (STARTERS.length && uiOn('suggestion_chips')) {
+    if (uiOn('suggestion_chips')) {
       var startersWrap = el('div', { className: 'fcw-starters' });
-      STARTERS.forEach(function (prompt) {
+      startersWrapEl = startersWrap;
+      getActiveStarters().forEach(function (prompt) {
         var chip = el('button', {
           type: 'button',
           className: 'fcw-starter',
@@ -689,15 +881,37 @@
   });
 
   composerShell.appendChild(textarea);
+  if (CAN_BACKEND_MODE) {
+    adminSubmodeBtn = el('button', {
+      type: 'button',
+      className: 'fcw-admin-submode fcw-admin-submode--ask',
+      hidden: ''
+    });
+    adminSubmodeBtn.appendChild(el('span', { className: 'fcw-admin-submode__dot', 'aria-hidden': 'true' }));
+    var submodeLabelEl = el('span', { className: 'fcw-admin-submode__label' });
+    submodeLabelEl.textContent = 'Ask';
+    adminSubmodeBtn.appendChild(submodeLabelEl);
+    adminSubmodeBtn.addEventListener('click', function () {
+      cycleAdminSubmode();
+    });
+  }
   if (contactHuman) {
     composerActions.classList.add('fcw-composer-actions--with-human');
     composerActions.appendChild(contactHuman.toolbarBtn);
+  }
+  if (adminSubmodeBtn) {
+    composerActions.appendChild(adminSubmodeBtn);
   }
   composerActions.appendChild(sendBtn);
   composerShell.appendChild(composerActions);
   inputRow.appendChild(composerShell);
 
   var panelBody = el('div', { className: 'fai-sidebar-panel__body' });
+  if (modeToggleWrap) {
+    var adminModeBar = el('div', { className: 'fcw-admin-mode-bar' });
+    adminModeBar.appendChild(modeToggleWrap);
+    panelBody.appendChild(adminModeBar);
+  }
   if (SHOW_SIDEBAR_HEADING) {
     var headingEl = el('h2', { className: 'fai-sidebar-heading fcw-sidebar-heading' });
     headingEl.textContent = cfg.sidebarHeading;
@@ -720,6 +934,10 @@
   panel.setAttribute('role', 'complementary');
   panel.setAttribute('aria-label', ASSISTANT);
   panel.setAttribute('hidden', '');
+  if (CAN_BACKEND_MODE) {
+    setAdminMode(adminMode);
+    updateAdminSubmodeUi();
+  }
   if (savedLauncher) {
     if (!savedLauncher.innerHTML || !savedLauncher.innerHTML.trim()) {
       savedLauncher.innerHTML = SVG_CHAT_LAUNCHER;
@@ -862,7 +1080,18 @@
 
   function fcwTypeBadgeLabel(type) {
     if (type === 'lead') return 'Lead';
+    if (type === 'plan') return 'plan';
     return type || 'answer';
+  }
+
+  function appendPlanCard(card) {
+    var shell = fcwAppendWorkflowCard(card);
+    fcwSetWorkflowCardActive(shell, false);
+    if (shell.badgeEl && typeof fcwApplyCardBadge === 'function') {
+      fcwApplyCardBadge(shell.badgeEl, 'plan');
+    }
+    fcwPopulateCardExtras(shell, card);
+    return shell;
   }
 
   function fcwParseLegacyFlatContact(contact) {
@@ -1093,6 +1322,31 @@
         opts.onDone();
       }
     };
+    if (card.type === 'plan' && card.steps && card.steps.length) {
+      if (shell && shell.stepsList) {
+        fcwSetWorkflowCardActive(shell, false);
+        if (shell.badgeEl) {
+          fcwApplyCardBadge(shell.badgeEl, 'plan');
+        }
+        if (shell.titleEl) {
+          shell.titleEl.innerHTML = renderMarkdown(card.title || '');
+        }
+        if (shell.bodyEl) {
+          if (card.body) {
+            shell.bodyEl.innerHTML = renderMarkdown(card.body);
+            shell.bodyEl.style.display = '';
+          } else {
+            shell.bodyEl.style.display = 'none';
+          }
+        }
+        fcwPopulateCardExtras(shell, card);
+      } else {
+        appendPlanCard(card);
+      }
+      done();
+      prefetchFollowUpChips(card);
+      return Promise.resolve();
+    }
     if (shell && window.FlowbieThinkingCard) {
       FlowbieThinkingCard.finalizeToCard(shell, card, host);
     } else {
@@ -1114,6 +1368,11 @@
     }
   });
   textarea.addEventListener('keydown', function (e) {
+    if (e.key === 'Tab' && e.shiftKey && isBackendMode()) {
+      e.preventDefault();
+      cycleAdminSubmode();
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       inputRow.dispatchEvent(new Event('submit'));
@@ -1596,6 +1855,8 @@
       history: historyForApi(),
       sessionId: getChatSessionId(),
       source: 'frontend',
+      adminMode: getAdminModeForApi(),
+      adminSubmode: getAdminSubmodeForApi(),
       pageUrl: window.location.href || pageCtx.url || '',
       postId: pageCtx.postId || 0,
       pageTitle: typeof document !== 'undefined' ? document.title || '' : '',
@@ -1609,7 +1870,7 @@
     if (cfg.pageContext) {
       FlowbieChatPrefetch.warmPageContext(cfg.pageContext, prefetchOptions());
     }
-    if (STARTERS.length && uiOn('suggestion_chips')) {
+    if (STARTERS.length && uiOn('suggestion_chips') && !isBackendMode()) {
       FlowbieChatPrefetch.prefetchSuggestions(STARTERS, prefetchOptions());
     }
   }
@@ -1624,9 +1885,10 @@
     if (window.FlowbieChatPrefetch) {
       FlowbieChatPrefetch.refreshOptions(prefetchOptions());
     }
-    var prefetchHit = window.FlowbieChatPrefetch
-      ? FlowbieChatPrefetch.consumeForSubmit(text, historyForApi())
-      : null;
+    var prefetchHit = null;
+    if (window.FlowbieChatPrefetch && !isBackendMode()) {
+      prefetchHit = FlowbieChatPrefetch.consumeForSubmit(text, historyForApi());
+    }
     if (window.FlowbieChatDebugLog) {
       FlowbieChatDebugLog.beginAssistantTurn();
     }
@@ -1715,6 +1977,8 @@
         prefetch_key: prefetchHit && prefetchHit.prefetch_key ? prefetchHit.prefetch_key : '',
         session_id: getChatSessionId(),
         source: 'frontend',
+        admin_mode: getAdminModeForApi(),
+        admin_submode: getAdminSubmodeForApi(),
         page_url: window.location.href || (cfg.pageContext && cfg.pageContext.url) || '',
         post_id: cfg.pageContext && cfg.pageContext.postId ? cfg.pageContext.postId : 0,
         page_title: typeof document !== 'undefined' ? document.title || '' : '',
@@ -1797,6 +2061,10 @@
   }
 
   function appendCard(card) {
+    if (card.type === 'plan' && card.steps && card.steps.length) {
+      appendPlanCard(card);
+      return;
+    }
     var row = el('div', { className: 'fcw-msg fcw-msg--assistant' });
     var cardEl = el('div', { className: 'fcw-card' });
 

@@ -26,11 +26,25 @@ class Flowbie_Wp_Chat_Page_Context {
 		if ( is_singular() ) {
 			$post_id = (int) get_queried_object_id();
 			$post    = get_post( $post_id );
-			if ( $post instanceof WP_Post && $post->post_status === 'publish' ) {
+			if ( $post instanceof WP_Post && self::post_id_accessible( $post_id ) ) {
 				$permalink = get_permalink( $post_id );
 				$url       = is_string( $permalink ) ? $permalink : '';
 				$title     = get_the_title( $post_id );
 				$type_label = self::type_label_for_post( $post );
+			}
+		}
+
+		if ( $post_id < 1 && is_user_logged_in() && current_user_can( 'edit_posts' ) ) {
+			$current_url = home_url( add_query_arg( array() ) );
+			$from_p      = self::post_id_from_url( $current_url );
+			if ( $from_p > 0 && self::post_id_accessible( $from_p ) ) {
+				$post_id = $from_p;
+				$post    = get_post( $post_id );
+				if ( $post instanceof WP_Post ) {
+					$url        = $current_url;
+					$title      = get_the_title( $post_id );
+					$type_label = self::type_label_for_post( $post );
+				}
 			}
 		}
 
@@ -144,27 +158,58 @@ class Flowbie_Wp_Chat_Page_Context {
 	 * @param array<int,array<string,mixed>> $site_index
 	 */
 	public static function resolve_post_id( string $page_url, int $post_id, array $site_index ): int {
-		if ( $post_id > 0 ) {
-			$post = get_post( $post_id );
-			if ( $post instanceof WP_Post && $post->post_status === 'publish' ) {
-				return $post_id;
-			}
+		if ( $post_id > 0 && self::post_id_accessible( $post_id ) ) {
+			return $post_id;
 		}
 
 		$page_url = esc_url_raw( trim( $page_url ) );
 		if ( $page_url !== '' ) {
+			$from_p = self::post_id_from_url( $page_url );
+			if ( $from_p > 0 && self::post_id_accessible( $from_p ) ) {
+				return $from_p;
+			}
+
 			$from_url = url_to_postid( $page_url );
-			if ( $from_url > 0 ) {
+			if ( $from_url > 0 && self::post_id_accessible( $from_url ) ) {
 				return $from_url;
 			}
 
 			$match = Flowbie_Wp_Chat_Rag::find_index_item_by_url( $page_url, $site_index );
 			if ( is_array( $match ) && ! empty( $match['id'] ) ) {
-				return (int) $match['id'];
+				$match_id = (int) $match['id'];
+				if ( self::post_id_accessible( $match_id ) ) {
+					return $match_id;
+				}
 			}
 		}
 
 		return 0;
+	}
+
+	private static function post_id_from_url( string $page_url ): int {
+		$query = wp_parse_url( $page_url, PHP_URL_QUERY );
+		if ( ! is_string( $query ) || $query === '' ) {
+			return 0;
+		}
+		parse_str( $query, $args );
+		if ( empty( $args['p'] ) ) {
+			return 0;
+		}
+		return absint( $args['p'] );
+	}
+
+	private static function post_id_accessible( int $post_id ): bool {
+		if ( $post_id < 1 ) {
+			return false;
+		}
+		$post = get_post( $post_id );
+		if ( ! $post instanceof WP_Post ) {
+			return false;
+		}
+		if ( $post->post_status === 'publish' ) {
+			return true;
+		}
+		return current_user_can( 'edit_post', $post_id );
 	}
 
 	/**
@@ -182,7 +227,7 @@ class Flowbie_Wp_Chat_Page_Context {
 		}
 
 		$post = get_post( $post_id );
-		if ( ! $post instanceof WP_Post || $post->post_status !== 'publish' ) {
+		if ( ! $post instanceof WP_Post || ! self::post_id_accessible( $post_id ) ) {
 			return null;
 		}
 
@@ -269,6 +314,7 @@ class Flowbie_Wp_Chat_Page_Context {
 			'this blog',
 			'this blog post',
 			'this post',
+			'on this post',
 			'this article',
 			'this product',
 			'this product page',

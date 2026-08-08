@@ -1557,3 +1557,111 @@ html body #flowbie-chat-mobile-launcher.fcw-launcher--chekkit svg {
   }
 }
 
+.flowbie-chat-widget .fcw-admin-mode-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.65rem 1rem 0;
+}
+
+.flowbie-chat-widget .fcw-mode-toggle {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 0;
+}
+
+.flowbie-chat-widget .fcw-mode-btn {
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.25;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  cursor: pointer;
+}
+
+.flowbie-chat-widget .fcw-mode-btn:first-child {
+  border-radius: 999px 0 0 999px;
+  border-right: 0;
+}
+
+.flowbie-chat-widget .fcw-mode-btn:last-child {
+  border-radius: 0 999px 999px 0;
+}
+
+.flowbie-chat-widget .fcw-mode-btn--active {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #3730a3;
+  font-weight: 600;
+}
+
+.flowbie-chat-widget .fcw-admin-submode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+  max-width: calc(100% - 96px);
+  min-height: 40px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.25;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.flowbie-chat-widget .fcw-admin-submode[hidden] {
+  display: none !important;
+}
+
+.flowbie-chat-widget .fcw-admin-submode__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.flowbie-chat-widget .fcw-admin-submode__label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.flowbie-chat-widget .fcw-admin-submode--ask {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.flowbie-chat-widget .fcw-admin-submode--ask .fcw-admin-submode__dot {
+  background: #ca8a04;
+}
+
+.flowbie-chat-widget .fcw-admin-submode--plan {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.flowbie-chat-widget .fcw-admin-submode--plan .fcw-admin-submode__dot {
+  background: #2563eb;
+}
+
+.flowbie-chat-widget .fcw-admin-submode--build {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.flowbie-chat-widget .fcw-admin-submode--build .fcw-admin-submode__dot {
+  background: #16a34a;
+}
+
+.flowbie-chat-widget .fcw-composer-actions.fcw-composer-actions--with-human .fcw-admin-submode {
+  max-width: 7.5rem;
+}
+

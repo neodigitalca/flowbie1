@@ -71,15 +71,19 @@ CRITICAL:
 - SEO BLOCKS: list_seo_blocks, create_seo_block, delete_seo_block (requires block_id), save_seo_block (requires block manifest or block_id), modify_seo_block_slots for slot-level edits, compose_seo_block for full block generation.
 - apply_seo_block_to_page REQUIRES: post_id and block_id (or resolvable from workflow/history). OPTIONAL: sync_library (default true), include_dynamic_heading (default true), mode (append|replace).
 - For "apply block X to page Y" when both IDs are known, use apply_seo_block_to_page directly with intent "action".
+- CHAT INSIGHTS: For visitor questions, chat logs, knowledge gaps, unanswered topics, or "what are users asking", use get_chat_insights.
+- SEARCH INSIGHTS: For site search queries, popular searches, or zero-result searches, use get_search_insights.
+- OVERSEER: For engagement, pageviews, bounce rate, conversions, or behavioral analytics, use get_overseer_summary.
+- OVERSEER TASKS: For open action items or Overseer recommendations, use list_overseer_tasks.
 PROMPT;
 
 		if (
-			is_array( self::$builder_context )
-			&& ! empty( self::$builder_context['block'] )
-			&& is_array( self::$builder_context['block'] )
+			is_array( Flowbie_Wp_Backend_Assist_Context::$builder_context )
+			&& ! empty( Flowbie_Wp_Backend_Assist_Context::$builder_context['block'] )
+			&& is_array( Flowbie_Wp_Backend_Assist_Context::$builder_context['block'] )
 		) {
-			$block_json = wp_json_encode( self::$builder_context['block'], JSON_UNESCAPED_SLASHES );
-			$page_note  = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::builder_context_page_prompt( self::$builder_context['block'] );
+			$block_json = wp_json_encode( Flowbie_Wp_Backend_Assist_Context::$builder_context['block'], JSON_UNESCAPED_SLASHES );
+			$page_note  = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::builder_context_page_prompt( Flowbie_Wp_Backend_Assist_Context::$builder_context['block'] );
 			$system    .= <<<CTX
 
 BUILDER CONTEXT (Agent Hub SEO block editor):
@@ -90,6 +94,45 @@ For generate, optimize, layout, analyze, or rewrite requests about this block, p
 For surgical edits (add/remove/update a single slot such as H2, paragraph, CTA, list, image), prefer tool "modify_seo_block_slots" with action add, remove, or update.
 Set intent to "action" and include params: prompt (user request), mode ("generate_full", "optimize", or "analyze") for compose_seo_block; or action + slot/target for modify_seo_block_slots.
 CTX;
+		}
+
+		if (
+			is_array( Flowbie_Wp_Backend_Assist_Context::$builder_context )
+			&& ! empty( Flowbie_Wp_Backend_Assist_Context::$builder_context['frontend_page'] )
+			&& is_array( Flowbie_Wp_Backend_Assist_Context::$builder_context['frontend_page'] )
+		) {
+			$fp       = Flowbie_Wp_Backend_Assist_Context::$builder_context['frontend_page'];
+			$fp_id    = absint( $fp['post_id'] ?? 0 );
+			$fp_title = sanitize_text_field( (string) ( $fp['title'] ?? '' ) );
+			$fp_url   = esc_url_raw( (string) ( $fp['url'] ?? '' ) );
+			$fp_type  = sanitize_text_field( (string) ( $fp['type_label'] ?? 'page' ) );
+			if ( $fp_id > 0 ) {
+				$system .= <<<CTX
+
+FRONTEND PAGE CONTEXT (logged-in user is viewing this page in the site chat widget):
+post_id: {$fp_id}
+title: {$fp_title}
+url: {$fp_url}
+type: {$fp_type}
+
+When the user says "this post", "this page", "on this post", "add content to it", or similar, set post_id to {$fp_id} in params.
+For add_content, get_post, get_gsc_context, or apply_seo_block_to_page targeting the current page, use post_id {$fp_id} and intent "action" when the user clearly refers to this page.
+CTX;
+			}
+		}
+
+		if (
+			is_array( Flowbie_Wp_Backend_Assist_Context::$builder_context )
+			&& ! empty( Flowbie_Wp_Backend_Assist_Context::$builder_context['admin_submode'] )
+		) {
+			$submode = sanitize_key( (string) Flowbie_Wp_Backend_Assist_Context::$builder_context['admin_submode'] );
+			if ( $submode === 'ask' ) {
+				$system .= "\nGOD MODE SUBMODE: Ask (read-only). Classify write intents accurately, but the server will block execution. Prefer read-only tools for analytics and lookups.\n";
+			} elseif ( $submode === 'plan' ) {
+				$system .= "\nGOD MODE SUBMODE: Plan. Classify write intents accurately; execution is deferred and shown as a plan checklist.\n";
+			} elseif ( $submode === 'build' ) {
+				$system .= "\nGOD MODE SUBMODE: Build. Full tool execution is allowed when intent is action.\n";
+			}
 		}
 
 		$system .= "\n- Output ONLY the JSON object.\n";

@@ -346,9 +346,14 @@ class Flowbie_Wp_Chat {
 		);
 
 		if ( is_user_logged_in() ) {
+			$backend_starters = wp_json_encode( Flowbie_Wp_Chat_Super_Admin::get_backend_starters() );
 			wp_add_inline_script(
 				'flowbie-chat-widget',
-				'window.flowbieChatConfig=window.flowbieChatConfig||{};window.flowbieChatConfig.canCopyLog=true;',
+				'window.flowbieChatConfig=window.flowbieChatConfig||{};'
+				. 'window.flowbieChatConfig.canCopyLog=true;'
+				. 'window.flowbieChatConfig.canBackendMode=true;'
+				. 'window.flowbieChatConfig.isLoggedIn=true;'
+				. 'window.flowbieChatConfig.backendStarters=' . $backend_starters . ';',
 				'before'
 			);
 		}
@@ -430,6 +435,12 @@ class Flowbie_Wp_Chat {
 			'chekkitTeaserEnabled'   => $chekkit_enabled && ( ! isset( $settings['chekkit_teaser_enabled'] ) || ! empty( $settings['chekkit_teaser_enabled'] ) ),
 			'chekkitTeaserAvatarUrl' => esc_url_raw( plugin_dir_url( FLOWBIE_WP_PLUGIN_FILE ) . 'assets/frontend/chekkit-teaser-avatar.png' ),
 			'canCopyLog'             => is_user_logged_in(),
+			'isLoggedIn'             => is_user_logged_in(),
+			'canBackendMode'         => is_user_logged_in(),
+			'canAnalytics'           => current_user_can( 'manage_options' ),
+			'canEditContent'         => current_user_can( 'edit_posts' ),
+			'backendStarters'        => is_user_logged_in() ? Flowbie_Wp_Chat_Super_Admin::get_backend_starters() : array(),
+			'backendAssistUrl'       => esc_url_raw( rest_url( self::REST_NAMESPACE . '/backend-assist' ) ),
 		);
 		if ( $chekkit_enabled ) {
 			$config['contactInfo'] = Flowbie_Wp_Chat_Lead::get_widget_contact_facts( $settings );
@@ -590,6 +601,13 @@ class Flowbie_Wp_Chat {
 		$body     = json_decode( $raw_body, true );
 		$message  = isset( $body['message'] ) ? sanitize_textarea_field( wp_unslash( $body['message'] ) ) : '';
 		$history  = isset( $body['history'] ) && is_array( $body['history'] ) ? $body['history'] : array();
+
+		if ( Flowbie_Wp_Chat_Super_Admin::is_backend_mode_request( is_array( $body ) ? $body : null ) ) {
+			$history = Flowbie_Wp_Chat_History::normalize( $history );
+			Flowbie_Wp_Chat_Super_Admin::stream_pipeline( $message, $history, is_array( $body ) ? $body : null );
+			return;
+		}
+
 		$log_meta = Flowbie_Wp_Chat_Logs::parse_meta_from_body( is_array( $body ) ? $body : null );
 
 		self::begin_stream_response();
@@ -1513,6 +1531,22 @@ class Flowbie_Wp_Chat {
 				$enriched_items
 			),
 		);
+	}
+
+	/**
+	 * Open an unbuffered NDJSON stream response.
+	 */
+	public static function stream_begin(): void {
+		self::begin_stream_response();
+	}
+
+	/**
+	 * Flush a single NDJSON line to the output stream.
+	 *
+	 * @param array $data JSON-serialisable payload.
+	 */
+	public static function stream_emit( array $data ): void {
+		self::stream_line( $data );
 	}
 
 	/**

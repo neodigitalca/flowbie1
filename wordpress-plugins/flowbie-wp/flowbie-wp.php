@@ -16,7 +16,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FLOWBIE_WP_VERSION', '0.9.56' );
+define( 'FLOWBIE_WP_VERSION', '0.9.63' );
 define( 'FLOWBIE_WP_PLUGIN_FILE', __FILE__ );
 define( 'FLOWBIE_WP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 
@@ -131,7 +131,9 @@ require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-agents.php'
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-logs-csv.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-logs.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-logs-analysis.php';
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-insights.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-logs-gap-csv.php';
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-super-admin.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-search-logs-csv.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-search-logs.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-overseer.php';

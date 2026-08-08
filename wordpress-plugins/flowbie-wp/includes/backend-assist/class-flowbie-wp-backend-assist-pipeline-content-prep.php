@@ -9,7 +9,21 @@ defined( 'ABSPATH' ) || exit;
 
 class Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep {
 
+	/** @var array<int, string> */
+	private static $read_only_tools = array(
+		'get_chat_insights',
+		'get_search_insights',
+		'get_overseer_summary',
+		'list_overseer_tasks',
+		'get_gsc_context',
+		'list_posts',
+		'get_post',
+		'list_seo_blocks',
+	);
+
 	public static function prepare_tool_params( string $message, array $history, string $tool, array $params, ?array $workflow = null ): array {
+		$params = self::apply_frontend_page_context( $message, $params );
+
 		if ( $tool === 'modify_seo_block_slots' ) {
 			if ( empty( $params['action'] ) ) {
 				$params['action'] = 'add';
@@ -38,14 +52,14 @@ class Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep {
 			}
 			if (
 				empty( $params['current_block'] )
-				&& is_array( self::$builder_context )
-				&& ! empty( self::$builder_context['block'] )
-				&& is_array( self::$builder_context['block'] )
+				&& is_array( Flowbie_Wp_Backend_Assist_Context::$builder_context )
+				&& ! empty( Flowbie_Wp_Backend_Assist_Context::$builder_context['block'] )
+				&& is_array( Flowbie_Wp_Backend_Assist_Context::$builder_context['block'] )
 			) {
-				$params['current_block'] = self::$builder_context['block'];
+				$params['current_block'] = Flowbie_Wp_Backend_Assist_Context::$builder_context['block'];
 			}
-			if ( empty( $params['page_context'] ) && is_array( self::$builder_context ) && ! empty( self::$builder_context['page_context'] ) ) {
-				$params['page_context'] = sanitize_textarea_field( (string) self::$builder_context['page_context'] );
+			if ( empty( $params['page_context'] ) && is_array( Flowbie_Wp_Backend_Assist_Context::$builder_context ) && ! empty( Flowbie_Wp_Backend_Assist_Context::$builder_context['page_context'] ) ) {
+				$params['page_context'] = sanitize_textarea_field( (string) Flowbie_Wp_Backend_Assist_Context::$builder_context['page_context'] );
 			}
 			if ( empty( $params['page_context'] ) ) {
 				$block = isset( $params['current_block'] ) && is_array( $params['current_block'] ) ? $params['current_block'] : array();
@@ -60,6 +74,13 @@ class Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep {
 			}
 			return array(
 				'tool'   => 'compose_seo_block',
+				'params' => $params,
+			);
+		}
+
+		if ( in_array( $tool, self::$read_only_tools, true ) ) {
+			return array(
+				'tool'   => $tool,
 				'params' => $params,
 			);
 		}
@@ -206,5 +227,35 @@ PROMPT;
 			return '';
 		}
 		return "\nLINKED PAGE CONTEXT:\n{$formatted}\n";
+	}
+
+	/**
+	 * @param array<string, mixed> $params
+	 * @return array<string, mixed>
+	 */
+	private static function apply_frontend_page_context( string $message, array $params ): array {
+		if ( ! empty( $params['post_id'] ) || ! empty( $params['title'] ) ) {
+			return $params;
+		}
+		if ( ! Flowbie_Wp_Chat_Page_Context::message_targets_current_page( $message ) ) {
+			return $params;
+		}
+
+		$ctx = Flowbie_Wp_Backend_Assist_Context::$builder_context;
+		if ( ! is_array( $ctx ) || empty( $ctx['frontend_page'] ) || ! is_array( $ctx['frontend_page'] ) ) {
+			return $params;
+		}
+
+		$post_id = absint( $ctx['frontend_page']['post_id'] ?? 0 );
+		if ( $post_id < 1 || ! current_user_can( 'edit_post', $post_id ) ) {
+			return $params;
+		}
+
+		$params['post_id'] = $post_id;
+		if ( empty( $params['title'] ) && ! empty( $ctx['frontend_page']['title'] ) ) {
+			$params['title'] = sanitize_text_field( (string) $ctx['frontend_page']['title'] );
+		}
+
+		return $params;
 	}
 }
