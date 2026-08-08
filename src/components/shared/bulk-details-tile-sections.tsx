@@ -200,6 +200,7 @@ export function BulkDetailsTileSections({
   onDownloadAll,
   stripeBaseIndex,
   serpBriefDownload,
+  statusMessage,
 }: {
   harnessSections: BulkHarnessSectionUi[];
   files: BulkDetailsDownloadable[];
@@ -207,6 +208,7 @@ export function BulkDetailsTileSections({
   onDownloadAll: (files: BulkDetailsDownloadable[]) => void;
   stripeBaseIndex: number;
   serpBriefDownload?: BulkDetailsDownloadable | null;
+  statusMessage?: string | null;
 }) {
   const [filesOpen, setFilesOpen] = useState(false);
   const pipelineSections = (
@@ -221,8 +223,9 @@ export function BulkDetailsTileSections({
   );
   const allDownloadables = buildAllDownloadables(pipelineSections, files, serpBriefDownload);
   const itemCount = pipelineSections.length + files.length;
+  const trimmedStatus = statusMessage?.trim();
 
-  if (itemCount === 0) {
+  if (itemCount === 0 && !trimmedStatus) {
     return null;
   }
 
@@ -233,7 +236,18 @@ export function BulkDetailsTileSections({
           <CollapsibleTrigger asChild>
             <button type="button" className={cn(META_TRIGGER_FLAT, "w-full font-semibold")}>
               <FileDown className="h-4 w-4 shrink-0" aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-left">Generated files</span>
+              <span className="shrink-0 text-left">Generated files</span>
+              {trimmedStatus ? (
+                <span
+                  className="min-w-0 flex-1 truncate text-left font-normal text-white"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {trimmedStatus}
+                </span>
+              ) : (
+                <span className="min-w-0 flex-1" aria-hidden />
+              )}
               <div className={cn(META_FIELD_END_RAIL, "pointer-events-auto shrink-0")}>
                 <span
                   className={cn(

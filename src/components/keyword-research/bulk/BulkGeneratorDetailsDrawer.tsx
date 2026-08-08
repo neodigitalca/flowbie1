@@ -190,22 +190,14 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
                         dateLabelOverride={dateLabelOverride}
                         onToggle={toggleRow}
                       />
-                      {activeStatus ? (
-                        <div
-                          className="border-0 px-2.5 py-1.5 text-base text-white sm:px-3"
-                          role="status"
-                          aria-live="polite"
-                        >
-                          {activeStatus}
-                        </div>
-                      ) : null}
-                      {isExpanded ? (
+                      {isExpanded || activeStatus ? (
                         <BulkDetailsTileSections
                           harnessSections={rowHarnessSectionsList}
                           files={rowFilesToDownloadables(rowFiles)}
                           onDownloadFile={handleDownloadFile}
                           onDownloadAll={handleDownloadAll}
                           stripeBaseIndex={stripeIndex + 1}
+                          statusMessage={activeStatus || undefined}
                         />
                       ) : null}
                     </div>

@@ -163,22 +163,14 @@ export function EntityDetailsDrawer({
                         dateLabelOverride={dateLabelOverride}
                         onToggle={toggleRow}
                       />
-                      {activeStatus ? (
-                        <div
-                          className="border-0 px-2.5 py-1.5 text-base text-white sm:px-3"
-                          role="status"
-                          aria-live="polite"
-                        >
-                          {activeStatus}
-                        </div>
-                      ) : null}
-                      {isExpanded ? (
+                      {isExpanded || activeStatus ? (
                         <BulkDetailsTileSections
                           harnessSections={rowHarnessSectionsList}
                           files={[]}
                           onDownloadFile={() => {}}
                           onDownloadAll={() => {}}
                           stripeBaseIndex={stripeIndex + 1}
+                          statusMessage={activeStatus || undefined}
                         />
                       ) : null}
                     </div>
