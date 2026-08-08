@@ -201,6 +201,7 @@ export function BulkDetailsTileSections({
   stripeBaseIndex,
   serpBriefDownload,
   statusMessage,
+  progressLabel,
 }: {
   harnessSections: BulkHarnessSectionUi[];
   files: BulkDetailsDownloadable[];
@@ -209,6 +210,8 @@ export function BulkDetailsTileSections({
   stripeBaseIndex: number;
   serpBriefDownload?: BulkDetailsDownloadable | null;
   statusMessage?: string | null;
+  /** Active-row batch counter (e.g. 20/115), inline before file count. */
+  progressLabel?: string | null;
 }) {
   const [filesOpen, setFilesOpen] = useState(false);
   const pipelineSections = (
@@ -224,8 +227,9 @@ export function BulkDetailsTileSections({
   const allDownloadables = buildAllDownloadables(pipelineSections, files, serpBriefDownload);
   const itemCount = pipelineSections.length + files.length;
   const trimmedStatus = statusMessage?.trim();
+  const trimmedProgress = progressLabel?.trim();
 
-  if (itemCount === 0 && !trimmedStatus) {
+  if (itemCount === 0 && !trimmedStatus && !trimmedProgress) {
     return null;
   }
 
@@ -248,6 +252,14 @@ export function BulkDetailsTileSections({
               ) : (
                 <span className="min-w-0 flex-1" aria-hidden />
               )}
+              {trimmedProgress ? (
+                <span
+                  className="shrink-0 tabular-nums text-muted-foreground"
+                  aria-label={`Progress ${trimmedProgress}`}
+                >
+                  {trimmedProgress}
+                </span>
+              ) : null}
               <div className={cn(META_FIELD_END_RAIL, "pointer-events-auto shrink-0")}>
                 <span
                   className={cn(

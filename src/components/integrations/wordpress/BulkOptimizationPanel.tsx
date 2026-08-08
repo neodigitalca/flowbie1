@@ -762,22 +762,9 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
 
     return (
       <BulkDetailsDrawerStack
-        liveMessage={detailsLiveMessage}
-        showLiveMessage={isHarnessParallelRun}
         prepSections={prepSections}
         prepOpen={detailsPrepOpen}
         onPrepOpenChange={setDetailsPrepOpen}
-        pagination={
-          showBulkPagination ? (
-            <OverviewGridPagination
-              pageIndex={uiPageIndex}
-              totalCount={totalCount}
-              pageSize={bulkPageSize}
-              onPageChange={setUiPageIndex}
-              className="rounded-none bg-zinc-900"
-            />
-          ) : null
-        }
       >
         {(stripeBase) =>
           !(isBulkWpUploadRun && !prepSections) &&
@@ -820,15 +807,20 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
               setRowExpanded(url, !isExpanded);
             };
             const panelId = `bulk-details-row-${index}`;
+            const activeStatus = isActive && detailsLiveMessage ? detailsLiveMessage : "";
+            const activeProgressLabel =
+              isActive && totalCount > 0 ? `${index + 1}/${totalCount}` : "";
+            const showGeneratedFiles =
+              isExpanded || Boolean(activeStatus) || Boolean(activeProgressLabel);
 
-            if (isExpanded) {
+            if (isExpanded || isActive) {
               return (
                 <div key={url} className={CONTENT_OPTIMIZER_MULTI_SITE_ROW_WRAPPER_CLASS}>
                   <div className={contentOptimizerRowStripeClass(stripeIndex, { isActiveOptimize: isActive })}>
                     <MetaOptimizerPageRowCompact
                       row={row}
                       wpTitlesByUrl={wpTitlesByUrl}
-                      isExpanded
+                      isExpanded={isExpanded}
                       embedded
                       stripeIndex={stripeIndex}
                       isActiveOptimize={isActive}
@@ -846,14 +838,18 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                           : undefined
                       }
                     />
-                    <BulkDetailsTileSections
-                      harnessSections={rowHarnessSectionsList}
-                      files={displayFiles}
-                      onDownloadFile={downloadFile}
-                      onDownloadAll={downloadAllForUrl}
-                      stripeBaseIndex={stripeIndex + 1}
-                      serpBriefDownload={serpBriefDownload}
-                    />
+                    {showGeneratedFiles ? (
+                      <BulkDetailsTileSections
+                        harnessSections={rowHarnessSectionsList}
+                        files={displayFiles}
+                        onDownloadFile={downloadFile}
+                        onDownloadAll={downloadAllForUrl}
+                        stripeBaseIndex={stripeIndex + 1}
+                        serpBriefDownload={serpBriefDownload}
+                        statusMessage={activeStatus || undefined}
+                        progressLabel={activeProgressLabel || undefined}
+                      />
+                    ) : null}
                   </div>
                 </div>
               );

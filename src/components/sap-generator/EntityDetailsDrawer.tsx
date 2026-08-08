@@ -142,6 +142,8 @@ export function EntityDetailsDrawer({
               const panelId = `entity-details-row-${index}`;
               const toggleRow = () => setRowExpanded(index, !isExpanded);
               const activeStatus = isActive && livePhase ? livePhase : "";
+              const activeProgressLabel =
+                isActive && rows.length > 0 ? `${index + 1}/${rows.length}` : "";
               const useRowShell = isExpanded || isActive;
 
               if (useRowShell) {
@@ -163,7 +165,7 @@ export function EntityDetailsDrawer({
                         dateLabelOverride={dateLabelOverride}
                         onToggle={toggleRow}
                       />
-                      {isExpanded || activeStatus ? (
+                      {isExpanded || activeStatus || activeProgressLabel ? (
                         <BulkDetailsTileSections
                           harnessSections={rowHarnessSectionsList}
                           files={[]}
@@ -171,6 +173,7 @@ export function EntityDetailsDrawer({
                           onDownloadAll={() => {}}
                           stripeBaseIndex={stripeIndex + 1}
                           statusMessage={activeStatus || undefined}
+                          progressLabel={activeProgressLabel || undefined}
                         />
                       ) : null}
                     </div>

@@ -82,7 +82,7 @@ export function applyFaqHarnessPayload(
   payload: BulkHarnessSectionPayload,
 ): void {
   const { siteId, batchKey, setBulkOptimizationState, setOptimizationProgress } = setters;
-  const message = `FAQ ${payload.sectionIndex + 1}/${payload.totalSections}: ${payload.title}${payload.phase === "start" ? "…" : ""}`;
+  const message = `FAQ ${payload.sectionIndex + 1}/${payload.totalSections}${payload.phase === "start" ? "…" : ""}`;
   let latestProgress = 5;
 
   setBulkOptimizationState((prev) => {
