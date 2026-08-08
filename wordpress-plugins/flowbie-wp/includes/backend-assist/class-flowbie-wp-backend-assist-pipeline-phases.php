@@ -164,7 +164,41 @@ PROMPT;
 			$system .= "\n- Suggest 2-3 logical next actions only when the user's original request may still be incomplete.";
 		}
 
-		return Flowbie_Wp_Backend_Assist_Ai::call_openrouter( Flowbie_Wp_Backend_Assist_Context::REASON_MODEL, $system, $message, 1024, 0.4 );
+		$inventory_block = self::builder_inventory_prompt_block();
+		if ( $inventory_block !== '' ) {
+			$system .= "\n\n" . $inventory_block;
+			if ( $tool === 'get_chat_insights' ) {
+				$system .= "\n- Cross-check chat gaps against SITE INVENTORY. Do not recommend topics already covered by an existing URL or title.";
+			}
+		}
+
+		if ( $tool === 'analyze_content_gaps' ) {
+			$system .= <<<'GAP'
+
+CONTENT GAP ANALYSIS RULES (mandatory):
+- existing_blogs in RESULT is the authoritative list of blog posts already on this site.
+- Do NOT suggest any blog idea whose topic is already covered by a title, URL slug, or focus_keyword in existing_blogs.
+- Use chat_insights only to find visitor questions that existing_blogs do not answer.
+- If a chat topic matches an existing post (e.g. Hunter Douglas vs Alta), skip it and cite the existing URL instead of suggesting a new post.
+- Every idea must be net-new relative to existing_blogs. Prefer gaps where chat shows demand but no matching blog exists.
+- Lead with what the site already covers, then list only genuine gaps.
+GAP;
+		}
+
+		if ( $tool === 'grade_post_library_seo' ) {
+			$system .= <<<'GRADE'
+
+POST LIBRARY SEO GRADING RULES (mandatory):
+- RESULT contains the full graded library (total posts). Grade the entire library. Never ask the user to pick a subset.
+- Lead with aggregate summary counts from summary (A/B/C/D, missing_keyword, missing_meta).
+- Highlight up to 10 posts needing work (grade D or C) with exact url from posts[].
+- Highlight up to 5 strong posts (grade A) with exact url from posts[].
+- Use site_top_queries only for optional recommendations, not to change per-post grades.
+- Do not claim analysis is incomplete when total matches the library size.
+GRADE;
+		}
+
+		return Flowbie_Wp_Backend_Assist_Ai::call_openrouter( Flowbie_Wp_Backend_Assist_Context::REASON_MODEL, $system, $message, 1536, 0.4 );
 	}
 	public static function phase_reason_question( string $message, array $history ) {
 		$site_name = get_bloginfo( 'name' );
@@ -195,8 +229,14 @@ RULES:
 - Be concise and technical when appropriate.
 - If the user wants to perform an action, tell them they can ask you to do it directly.
 - Mention available capabilities: create pages, create posts, list content.
+- God Mode uses Ask / Plan / Build submodes in the composer. You cannot switch modes yourself; the user uses the mode pill or the Switch to Build chip on blocked cards.
 {$analytics_note}- Suggest relevant follow-up actions.
 PROMPT;
+
+		$inventory_block = self::builder_inventory_prompt_block();
+		if ( $inventory_block !== '' ) {
+			$system .= "\n\n" . $inventory_block;
+		}
 
 		return Flowbie_Wp_Backend_Assist_Ai::call_openrouter( Flowbie_Wp_Backend_Assist_Context::REASON_MODEL, $system, $message, 1536, 0.5 );
 	}
@@ -219,6 +259,7 @@ Convert this assistant answer into ONLY valid JSON:
 
 Rules:
 - "links" should contain every URL from the answer.
+- Use exact https URLs from the answer or tool RESULT. Never use "#" or placeholder links.
 {$suggested_rules}
 - Output ONLY the JSON object.
 PROMPT;
@@ -237,5 +278,26 @@ PROMPT;
 		$parsed['confidence'] = isset( $parsed['confidence'] ) ? $parsed['confidence'] : 'medium';
 
 		return $parsed;
+	}
+
+	/**
+	 * @return string
+	 */
+	private static function builder_inventory_prompt_block(): string {
+		if ( ! is_array( Flowbie_Wp_Backend_Assist_Context::$builder_context ) ) {
+			return '';
+		}
+
+		$blocks = array();
+		if ( ! empty( Flowbie_Wp_Backend_Assist_Context::$builder_context['site_blog_inventory_summary'] ) ) {
+			$blog = (string) Flowbie_Wp_Backend_Assist_Context::$builder_context['site_blog_inventory_summary'];
+			$blocks[] = "EXISTING BLOG POSTS (cached site inventory):\n{$blog}";
+		}
+		if ( ! empty( Flowbie_Wp_Backend_Assist_Context::$builder_context['site_inventory_summary'] ) ) {
+			$inventory = (string) Flowbie_Wp_Backend_Assist_Context::$builder_context['site_inventory_summary'];
+			$blocks[]  = "SITE INVENTORY (all post types):\n{$inventory}";
+		}
+
+		return implode( "\n\n", $blocks );
 	}
 }

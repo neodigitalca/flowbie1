@@ -141,6 +141,7 @@ class Flowbie_Wp_Backend_Assist_Pipeline {
 				'steps'             => $steps,
 				'workflow_complete' => false,
 				'links'             => array(),
+				'submode_switch'    => 'build',
 				'suggested_actions' => array(
 					__( 'Switch to Build mode', 'flowbie-wp' ),
 				),
@@ -168,6 +169,7 @@ class Flowbie_Wp_Backend_Assist_Pipeline {
 			),
 			'workflow_complete' => false,
 			'links'             => array(),
+			'submode_switch'    => 'build',
 			'suggested_actions' => array(
 				__( 'Switch to Build mode', 'flowbie-wp' ),
 			),

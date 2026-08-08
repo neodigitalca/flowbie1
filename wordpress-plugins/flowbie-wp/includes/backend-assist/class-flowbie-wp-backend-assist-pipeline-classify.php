@@ -48,7 +48,7 @@ INTENT RULES:
 REQUIRED PARAMS:
 - create_page REQUIRES: "title". OPTIONAL: "status" (default draft), "focus_keyword"
 - create_post REQUIRES: "title". OPTIONAL: "status" (default draft), "focus_keyword", "categories"
-- list_posts: no required params. OPTIONAL: "post_type", "count", "status"
+- list_posts: no required params. OPTIONAL: "post_type", "count", "status". Sample only (default 10, max 50). NOT for full library audits.
 - get_post REQUIRES at least one of: "post_id" or "title"
 - add_content: needs a target (post_id or title) + content description. OPTIONAL: "mode" ("append" or "replace", default "append")
 
@@ -75,6 +75,12 @@ CRITICAL:
 - SEARCH INSIGHTS: For site search queries, popular searches, or zero-result searches, use get_search_insights.
 - OVERSEER: For engagement, pageviews, bounce rate, conversions, or behavioral analytics, use get_overseer_summary.
 - OVERSEER TASKS: For open action items or Overseer recommendations, use list_overseer_tasks.
+- SITE INVENTORY: For "what pages/posts do we have", URL coverage checks, or listing site content, use get_site_inventory. Do not use list_posts for full inventory scans.
+- POST LIBRARY SEO: For "grade our posts", "audit post library", "how are our blogs for SEO", use grade_post_library_seo with post_type post. NOT list_posts.
+- CONTENT GAPS / BLOG IDEAS: For blog post ideas, knowledge gaps for new customers, "based on our blogs/URLs", or content gap analysis, use analyze_content_gaps (NOT get_chat_insights alone). It loads the full cached blog inventory first, then chat logs.
+- BLOG IDEATION (read-only): "blog post ideas", "10 blog ideas", "brainstorm titles", or "what should we write about" without create/publish language → analyze_content_gaps with intent "action". Do NOT use create_post for ideation-only requests.
+- MODE SWITCH: "Switch to Build mode", "Switch to Plan mode", or "Switch to Ask mode" are UI commands, NOT tools. Set intent "question" and tool "".
+- CHAT-ONLY QUESTIONS: Use get_chat_insights only when the user asks what visitors are asking with no content ideation request.
 PROMPT;
 
 		if (
@@ -133,6 +139,30 @@ CTX;
 			} elseif ( $submode === 'build' ) {
 				$system .= "\nGOD MODE SUBMODE: Build. Full tool execution is allowed when intent is action.\n";
 			}
+		}
+
+		if (
+			is_array( Flowbie_Wp_Backend_Assist_Context::$builder_context )
+			&& ! empty( Flowbie_Wp_Backend_Assist_Context::$builder_context['site_blog_inventory_summary'] )
+		) {
+			$blog_inv = (string) Flowbie_Wp_Backend_Assist_Context::$builder_context['site_blog_inventory_summary'];
+			$system  .= <<<CTX
+
+EXISTING BLOG POSTS (cached — do not suggest duplicate topics):
+{$blog_inv}
+CTX;
+		}
+
+		if (
+			is_array( Flowbie_Wp_Backend_Assist_Context::$builder_context )
+			&& ! empty( Flowbie_Wp_Backend_Assist_Context::$builder_context['site_inventory_summary'] )
+		) {
+			$inventory = (string) Flowbie_Wp_Backend_Assist_Context::$builder_context['site_inventory_summary'];
+			$system   .= <<<CTX
+
+SITE INVENTORY (cached full sitemap — all post types):
+{$inventory}
+CTX;
 		}
 
 		$system .= "\n- Output ONLY the JSON object.\n";

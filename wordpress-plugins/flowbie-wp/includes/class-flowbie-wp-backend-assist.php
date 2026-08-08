@@ -11,9 +11,22 @@ defined( 'ABSPATH' ) || exit;
 
 class Flowbie_Wp_Backend_Assist {
 
+	private static bool $dependencies_loaded = false;
+
 	public static function init(): void {
-		self::load_dependencies();
+		self::ensure_dependencies();
 		add_action( 'rest_api_init', array( __CLASS__, 'register_routes' ) );
+	}
+
+	/**
+	 * Load Backend Assist classes and register tools once per request.
+	 */
+	public static function ensure_dependencies(): void {
+		if ( self::$dependencies_loaded ) {
+			return;
+		}
+		self::$dependencies_loaded = true;
+		self::load_dependencies();
 		Flowbie_Wp_Backend_Assist_Registry::register_default_tools();
 	}
 

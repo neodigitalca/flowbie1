@@ -125,43 +125,45 @@ class Flowbie_Wp_Backend_Assist_Tools_Wp {
 		$count     = isset( $params['count'] ) ? min( absint( $params['count'] ), 50 ) : 10;
 		$status    = isset( $params['status'] ) ? sanitize_text_field( $params['status'] ) : 'any';
 
-		$args = array(
-			'numberposts' => $count,
-			'orderby'     => 'date',
-			'order'       => 'DESC',
+		Flowbie_Wp_Site_Inventory::warm( true );
+		$filters = array(
+			'include_drafts' => true,
+			'limit'          => $count,
 		);
-
 		if ( $post_type !== 'any' ) {
-			$args['post_type'] = $post_type;
-		} else {
-			$args['post_type'] = array( 'post', 'page' );
+			$filters['post_type'] = sanitize_key( $post_type );
 		}
-
 		if ( $status !== 'any' ) {
-			$args['post_status'] = $status;
-		} else {
-			$args['post_status'] = array( 'publish', 'draft', 'pending', 'private' );
+			$filters['status'] = sanitize_key( $status );
 		}
 
-		$posts  = get_posts( $args );
+		$items  = Flowbie_Wp_Site_Inventory::get_items( $filters );
 		$result = array();
+		$meta   = Flowbie_Wp_Site_Inventory::get_meta();
+		$by_type = isset( $meta['by_type'] ) && is_array( $meta['by_type'] ) ? $meta['by_type'] : array();
+		$total_available = (int) ( $meta['count'] ?? 0 );
+		if ( $post_type !== 'any' && isset( $by_type[ sanitize_key( $post_type ) ] ) ) {
+			$total_available = (int) $by_type[ sanitize_key( $post_type ) ];
+		}
 
-		foreach ( $posts as $post ) {
+		foreach ( $items as $item ) {
+			$post_id = (int) ( $item['id'] ?? 0 );
 			$result[] = array(
-				'id'       => $post->ID,
-				'title'    => $post->post_title,
-				'type'     => $post->post_type,
-				'status'   => $post->post_status,
-				'date'     => $post->post_date,
-				'edit_url' => get_edit_post_link( $post->ID, 'raw' ),
-				'view_url' => get_permalink( $post->ID ),
+				'id'       => $post_id,
+				'title'    => (string) ( $item['title'] ?? '' ),
+				'type'     => (string) ( $item['type'] ?? '' ),
+				'status'   => (string) ( $item['status'] ?? 'publish' ),
+				'date'     => (string) ( $item['date_gmt'] ?? '' ),
+				'edit_url' => $post_id > 0 ? get_edit_post_link( $post_id, 'raw' ) : '',
+				'view_url' => (string) ( $item['url'] ?? '' ),
 			);
 		}
 
 		return array(
-			'success' => true,
-			'count'   => count( $result ),
-			'posts'   => $result,
+			'success'         => true,
+			'count'           => count( $result ),
+			'total_available' => $total_available,
+			'posts'           => $result,
 		);
 	}
 	public static function tool_get_post( array $params ): array {

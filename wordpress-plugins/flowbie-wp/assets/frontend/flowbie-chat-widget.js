@@ -22,6 +22,9 @@
   var SHOW_CONTACT_HUMAN = cfg.chekkitEnabled !== false && !!cfg.chekkitSubmitUrl;
   var CAN_COPY_LOG = cfg.canCopyLog === true;
   var CAN_BACKEND_MODE = cfg.canBackendMode === true;
+  var SITE_INVENTORY_URL = cfg.siteInventoryUrl || '';
+  var SITE_INVENTORY_CSV_URL = cfg.siteInventoryCsvUrl || '';
+  var siteInventoryCount = 0;
   var SHOW_CHAT_BODY = SIDEBAR_LAYOUT.indexOf('chat') !== -1 || SIDEBAR_LAYOUT.length === 0;
   var sidebarShell = null;
   var isOpen = false;
@@ -108,6 +111,42 @@
   var ADMIN_SUBMODE_LABELS = { ask: 'Ask', plan: 'Plan', build: 'Build' };
   var adminSubmode = 'ask';
   var adminSubmodeBtn = null;
+  var pendingBuildRerun = null;
+
+  function normalizeSubmodeSwitchTopic(text) {
+    var t = String(text || '').trim().toLowerCase();
+    if (t === 'switch to build mode' || t === 'switch to build') return 'build';
+    if (t === 'switch to plan mode' || t === 'switch to plan') return 'plan';
+    if (t === 'switch to ask mode' || t === 'switch to ask') return 'ask';
+    return '';
+  }
+
+  function lastUserMessageFromHistory() {
+    for (var i = history.length - 1; i >= 0; i--) {
+      if (history[i].role === 'user' && history[i].content) {
+        return String(history[i].content).trim();
+      }
+    }
+    return '';
+  }
+
+  function rememberBuildRerunFromCard(card) {
+    if (!card || !card.submode_switch || card.submode_switch !== 'build') return;
+    var last = lastUserMessageFromHistory();
+    if (last && !normalizeSubmodeSwitchTopic(last)) {
+      pendingBuildRerun = last;
+    }
+  }
+
+  function handleSubmodeSwitch(mode) {
+    if (ADMIN_SUBMODES.indexOf(mode) < 0) return;
+    setAdminSubmode(mode);
+    if (mode === 'build' && pendingBuildRerun && isBackendMode() && !isLoading) {
+      var msg = pendingBuildRerun;
+      pendingBuildRerun = null;
+      sendMessage(msg, 'submode_rerun', { skipUserBubble: true });
+    }
+  }
 
   function loadAdminMode() {
     if (!CAN_BACKEND_MODE) return;
@@ -581,9 +620,22 @@
     var hasPageCta = !!(card.cta && card.cta.url);
     var humanCta = card.contactHumanCta;
     var hasHumanCta = !!(humanCta && humanCta.action === 'contact_human' && contactHuman);
-    if (!hasPageCta && !hasHumanCta) return;
+    var hasSubmodeSwitch = !!(card.submode_switch && ADMIN_SUBMODES.indexOf(card.submode_switch) >= 0);
+    if (!hasPageCta && !hasHumanCta && !hasSubmodeSwitch) return;
 
     var ctaWrap = el('div', { className: 'fcw-card__cta-wrap' });
+    if (hasSubmodeSwitch) {
+      var switchLabel = 'Switch to ' + (ADMIN_SUBMODE_LABELS[card.submode_switch] || 'Build') + ' mode';
+      var switchBtn = el('button', {
+        className: 'fcw-cta-btn fcw-cta-btn--submode',
+        type: 'button'
+      });
+      switchBtn.textContent = switchLabel;
+      switchBtn.addEventListener('click', function () {
+        handleSubmodeSwitch(card.submode_switch);
+      });
+      ctaWrap.appendChild(switchBtn);
+    }
     if (hasHumanCta) {
       var humanLabel = (humanCta.label && String(humanCta.label).trim()) ? String(humanCta.label).trim() : 'Send Us A Text';
       var humanBtn = el('a', {
@@ -725,7 +777,18 @@
   }
   var menuClear = el('button', { type: 'button', className: 'fai-sidebar-menu-item', role: 'menuitem' });
   menuClear.textContent = 'Clear chat';
+  var menuInventoryDownload = null;
+  if (SITE_INVENTORY_CSV_URL) {
+    menuInventoryDownload = el('a', {
+      className: 'fai-sidebar-menu-item fcw-inventory-download',
+      role: 'menuitem',
+      href: SITE_INVENTORY_CSV_URL + (SITE_INVENTORY_CSV_URL.indexOf('?') >= 0 ? '&' : '?') + '_wpnonce=' + encodeURIComponent(cfg.nonce || ''),
+      download: ''
+    });
+    menuInventoryDownload.textContent = 'Download site cache CSV';
+  }
   if (menuCopy) menuPanel.appendChild(menuCopy);
+  if (menuInventoryDownload) menuPanel.appendChild(menuInventoryDownload);
   menuPanel.appendChild(menuClear);
   var menuWrap = el('div', { className: 'fai-sidebar-toolbar-menu' });
   menuWrap.appendChild(menuBtn);
@@ -744,6 +807,7 @@
     if (root) {
       root.classList.toggle('fcw--super-admin-mode', isBackendMode());
     }
+    updateInventoryMenuUi();
     if (!startersWrapEl || !uiOn('suggestion_chips')) return;
     while (startersWrapEl.firstChild) {
       startersWrapEl.removeChild(startersWrapEl.firstChild);
@@ -770,6 +834,9 @@
     saveAdminMode(mode);
     refreshEmptyState();
     updateAdminSubmodeUi();
+    if (mode === 'backend') {
+      warmSiteInventory();
+    }
     if (modeToggleWrap) {
       var btns = modeToggleWrap.querySelectorAll('.fcw-mode-btn');
       for (var i = 0; i < btns.length; i++) {
@@ -804,6 +871,42 @@
     modeToggleWrap.appendChild(backendModeBtn);
     visitorModeBtn.addEventListener('click', function () { setAdminMode('visitor'); });
     backendModeBtn.addEventListener('click', function () { setAdminMode('backend'); });
+  }
+
+  function inventoryMenuLabel(count) {
+    var total = typeof count === 'number' && count > 0 ? count : siteInventoryCount;
+    if (total > 0) {
+      return 'Download site cache CSV · ' + total.toLocaleString() + ' URLs';
+    }
+    return 'Download site cache CSV';
+  }
+
+  function updateInventoryMenuUi() {
+    if (!menuInventoryDownload) return;
+    var show = isBackendMode();
+    menuInventoryDownload.hidden = !show;
+    menuInventoryDownload.style.display = show ? '' : 'none';
+    menuInventoryDownload.textContent = inventoryMenuLabel(siteInventoryCount);
+  }
+
+  function warmSiteInventory() {
+    if (!SITE_INVENTORY_URL || !cfg.nonce) return;
+    fetch(SITE_INVENTORY_URL + (SITE_INVENTORY_URL.indexOf('?') >= 0 ? '&' : '?') + 'include_drafts=1', {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: { 'X-WP-Nonce': cfg.nonce }
+    }).then(function (res) {
+      if (!res.ok) return null;
+      return res.json();
+    }).then(function (data) {
+      if (!data || typeof data.count !== 'number') return;
+      siteInventoryCount = data.count;
+      updateInventoryMenuUi();
+    }).catch(function () {});
+  }
+
+  if (CAN_BACKEND_MODE && isBackendMode()) {
+    warmSiteInventory();
   }
 
   toolbarActions.appendChild(closeBtn);
@@ -1239,6 +1342,11 @@
       var chip = el('button', { className: 'fcw-topic-chip', type: 'button' });
       chip.textContent = topic;
       chip.addEventListener('click', function () {
+        var switchMode = normalizeSubmodeSwitchTopic(topic);
+        if (switchMode) {
+          handleSubmodeSwitch(switchMode);
+          return;
+        }
         deliverMessage(topic, 'topic_chip');
       });
       topicsWrap.appendChild(chip);
@@ -1314,6 +1422,7 @@
     if (window.FlowbieDisplayText && typeof window.FlowbieDisplayText.decodeCard === 'function') {
       card = window.FlowbieDisplayText.decodeCard(card || {});
     }
+    rememberBuildRerunFromCard(card);
     var shell = opts.shell;
     var host = fcwThinkingHost();
     var done = function () {
@@ -1815,6 +1924,11 @@
 
   function deliverMessage(text, origin) {
     if (!text || isLoading) return;
+    var switchMode = normalizeSubmodeSwitchTopic(text);
+    if (switchMode) {
+      handleSubmodeSwitch(switchMode);
+      return;
+    }
     var inputOrigin = origin || 'typed';
     hideEmpty();
     textarea.value = '';
@@ -1875,7 +1989,8 @@
     }
   }
 
-  function sendMessage(text, inputOrigin) {
+  function sendMessage(text, inputOrigin, options) {
+    options = options || {};
     inputOrigin = inputOrigin || 'typed';
     isLoading = true;
     sendBtn.disabled = true;
@@ -2065,6 +2180,7 @@
       appendPlanCard(card);
       return;
     }
+    rememberBuildRerunFromCard(card);
     var row = el('div', { className: 'fcw-msg fcw-msg--assistant' });
     var cardEl = el('div', { className: 'fcw-card' });
 

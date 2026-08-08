@@ -161,6 +161,53 @@ class Flowbie_Wp_Chat {
 				'permission_callback' => '__return_true',
 			)
 		);
+
+		register_rest_route(
+			self::REST_NAMESPACE,
+			'/chat/site-inventory',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( __CLASS__, 'rest_site_inventory' ),
+				'permission_callback' => array( __CLASS__, 'can_access_site_inventory' ),
+			)
+		);
+	}
+
+	/**
+	 * @return bool
+	 */
+	public static function can_access_site_inventory(): bool {
+		return is_user_logged_in() && current_user_can( 'edit_posts' );
+	}
+
+	/**
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public static function rest_site_inventory( WP_REST_Request $request ): WP_REST_Response {
+		$include_drafts = rest_sanitize_boolean( $request->get_param( 'include_drafts' ) );
+		$format         = sanitize_key( (string) $request->get_param( 'format' ) );
+
+		if ( $format === 'csv' ) {
+			$csv      = Flowbie_Wp_Site_Inventory::build_csv( $include_drafts );
+			$response = new WP_REST_Response( $csv, 200 );
+			$response->header( 'Content-Type', 'text/csv; charset=utf-8' );
+			$response->header( 'Content-Disposition', 'attachment; filename=' . Flowbie_Wp_Site_Inventory::download_filename() );
+			return $response;
+		}
+
+		Flowbie_Wp_Site_Inventory::warm( $include_drafts );
+		$meta = Flowbie_Wp_Site_Inventory::get_meta();
+
+		return new WP_REST_Response(
+			array(
+				'ok'        => true,
+				'count'     => (int) ( $meta['count'] ?? 0 ),
+				'by_type'   => isset( $meta['by_type'] ) && is_array( $meta['by_type'] ) ? $meta['by_type'] : array(),
+				'cached_at' => (int) ( $meta['cached_at'] ?? 0 ),
+			),
+			200
+		);
 	}
 
 	/**
@@ -442,6 +489,10 @@ class Flowbie_Wp_Chat {
 			'backendStarters'        => is_user_logged_in() ? Flowbie_Wp_Chat_Super_Admin::get_backend_starters() : array(),
 			'backendAssistUrl'       => esc_url_raw( rest_url( self::REST_NAMESPACE . '/backend-assist' ) ),
 		);
+		if ( is_user_logged_in() && current_user_can( 'edit_posts' ) ) {
+			$config['siteInventoryUrl']    = esc_url_raw( rest_url( self::REST_NAMESPACE . '/chat/site-inventory' ) );
+			$config['siteInventoryCsvUrl'] = esc_url_raw( rest_url( self::REST_NAMESPACE . '/chat/site-inventory?format=csv&include_drafts=1' ) );
+		}
 		if ( $chekkit_enabled ) {
 			$config['contactInfo'] = Flowbie_Wp_Chat_Lead::get_widget_contact_facts( $settings );
 		}

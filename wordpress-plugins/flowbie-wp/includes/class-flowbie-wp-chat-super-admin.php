@@ -48,22 +48,24 @@ class Flowbie_Wp_Chat_Super_Admin {
 			wp_die();
 		}
 
-		$site_name = get_bloginfo( 'name' );
-		$submode   = self::parse_submode_from_body( $body );
-		$ack       = sprintf(
-			/* translators: %s: site name */
-			__( 'Reviewing backend data for %s…', 'flowbie-wp' ),
-			$site_name
-		);
-		Flowbie_Wp_Chat::stream_emit( array( 'status' => 'ack', 'text' => $ack ) );
-		Flowbie_Wp_Chat::stream_emit( array(
-			'status' => 'searching',
-			'label'  => Flowbie_Wp_Backend_Assist_Submode::stream_search_label( $submode ),
-		) );
-
-		Flowbie_Wp_Backend_Assist_Context::$builder_context = self::builder_context_from_body( $body, $submode );
-
 		try {
+			Flowbie_Wp_Backend_Assist::ensure_dependencies();
+
+			$site_name = get_bloginfo( 'name' );
+			$submode   = self::parse_submode_from_body( $body );
+			$ack       = sprintf(
+				/* translators: %s: site name */
+				__( 'Reviewing backend data for %s…', 'flowbie-wp' ),
+				$site_name
+			);
+			Flowbie_Wp_Chat::stream_emit( array( 'status' => 'ack', 'text' => $ack ) );
+			Flowbie_Wp_Chat::stream_emit( array(
+				'status' => 'searching',
+				'label'  => Flowbie_Wp_Backend_Assist_Submode::stream_search_label( $submode ),
+			) );
+
+			Flowbie_Wp_Backend_Assist_Context::$builder_context = self::builder_context_from_body( $body, $submode );
+
 			Flowbie_Wp_OpenRouter::maybe_extend_time_limit();
 			$normalized = Flowbie_Wp_Backend_Assist_Cards::normalize_history( $history );
 			Flowbie_Wp_Chat::stream_emit( array( 'status' => 'thinking', 'label' => __( 'Thinking…', 'flowbie-wp' ) ) );
@@ -160,6 +162,9 @@ class Flowbie_Wp_Chat_Super_Admin {
 		if ( isset( $card['workflow_complete'] ) ) {
 			$mapped['workflow_complete'] = (bool) $card['workflow_complete'];
 		}
+		if ( ! empty( $card['submode_switch'] ) ) {
+			$mapped['submode_switch'] = Flowbie_Wp_Backend_Assist_Submode::normalize_submode( (string) $card['submode_switch'] );
+		}
 
 		return $mapped;
 	}
@@ -187,6 +192,18 @@ class Flowbie_Wp_Chat_Super_Admin {
 		$ctx = array(
 			'admin_submode' => Flowbie_Wp_Backend_Assist_Submode::normalize_submode( $submode ),
 		);
+
+		Flowbie_Wp_Site_Inventory::warm( true );
+		$inventory_summary = Flowbie_Wp_Site_Inventory::build_prompt_summary( 150 );
+		$blog_summary      = Flowbie_Wp_Site_Inventory::build_type_inventory_summary( 'post' );
+		$inventory_meta    = Flowbie_Wp_Site_Inventory::get_meta();
+		if ( $inventory_summary !== '' ) {
+			$ctx['site_inventory_summary'] = $inventory_summary;
+		}
+		if ( $blog_summary !== '' ) {
+			$ctx['site_blog_inventory_summary'] = $blog_summary;
+		}
+		$ctx['site_inventory_count'] = (int) ( $inventory_meta['count'] ?? 0 );
 
 		$settings   = Flowbie_Wp_Chat::get_settings();
 		$page_url   = isset( $body['page_url'] ) ? esc_url_raw( wp_unslash( (string) $body['page_url'] ) ) : '';

@@ -238,6 +238,29 @@
   background-color: rgba(15, 23, 42, 0.06) !important;
 }
 
+.flowbie-chat-widget .fai-sidebar-menu-panel a.fai-sidebar-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 1rem;
+  font-weight: 400;
+  text-align: left;
+  color: var(--fcw-text, #0f172a);
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.flowbie-chat-widget .fai-sidebar-menu-panel a.fai-sidebar-menu-item:hover,
+.flowbie-chat-widget .fai-sidebar-menu-panel a.fai-sidebar-menu-item:focus {
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--fcw-text, #0f172a);
+}
+
+.flowbie-chat-widget .fai-sidebar-menu-panel a.fcw-inventory-download[hidden] {
+  display: none !important;
+}
+
 .flowbie-chat-widget.fcw-hide-assistant-name .fcw-header__title { display: none !important; }
 .fcw-header__close {
   background: none;
