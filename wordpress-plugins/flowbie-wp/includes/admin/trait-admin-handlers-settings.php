@@ -9,46 +9,6 @@ defined( 'ABSPATH' ) || exit;
 
 trait Flowbie_Wp_Admin_Trait_Handlers_Settings {
 
-	public static function handle_pair(): void {
-		if ( ! current_user_can( self::required_capability() ) ) {
-			wp_die( esc_html__( 'You do not have permission to pair this site.', 'flowbie-wp' ) );
-		}
-		check_admin_referer( self::ACTION_PAIR, 'flowbie_wp_pair_nonce' );
-
-		$site_id = isset( $_POST['flowbie_site_id'] ) ? wp_unslash( $_POST['flowbie_site_id'] ) : '';
-		$result  = Flowbie_Wp_Api::pair_with_site_id( (string) $site_id );
-		if ( is_wp_error( $result ) ) {
-			self::set_flash(
-				array(
-					'kind'    => 'pair',
-					'success' => false,
-					'message' => $result->get_error_message(),
-				)
-			);
-			self::redirect_to_settings( 'property' );
-		}
-
-		$client_name = '';
-		if ( is_array( $result ) && isset( $result['client'] ) && is_array( $result['client'] ) && ! empty( $result['client']['name'] ) ) {
-			$client_name = (string) $result['client']['name'];
-		}
-
-		self::set_flash(
-			array(
-				'kind'    => 'pair',
-				'success' => true,
-				'message' => $client_name !== ''
-					? sprintf(
-						/* translators: %s: client property name */
-						__( 'Connected to Flowbie property “%s”.', 'flowbie-wp' ),
-						$client_name
-					)
-					: __( 'Connected to Flowbie.', 'flowbie-wp' ),
-			)
-		);
-		self::redirect_to_app();
-	}
-
 	public static function handle_save_openrouter(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( 'You do not have permission to save AI credentials.', 'flowbie-wp' ) );
@@ -76,26 +36,6 @@ trait Flowbie_Wp_Admin_Trait_Handlers_Settings {
 				'message' => $key !== ''
 					? __( 'OpenRouter key saved for editor AI wands.', 'flowbie-wp' )
 					: __( 'OpenRouter key cleared.', 'flowbie-wp' ),
-			)
-		);
-		self::redirect_to_settings( 'openrouter' );
-	}
-
-	public static function handle_refresh_openrouter(): void {
-		if ( ! current_user_can( self::required_capability() ) ) {
-			wp_die( esc_html__( 'You do not have permission to refresh AI credentials.', 'flowbie-wp' ) );
-		}
-		check_admin_referer( self::ACTION_REFRESH_OPENROUTER, 'flowbie_wp_refresh_openrouter_nonce' );
-
-		Flowbie_Wp_OpenRouter::clear_credentials_cache();
-		$key = Flowbie_Wp_OpenRouter::get_api_key();
-		self::set_flash(
-			array(
-				'kind'    => 'openrouter',
-				'success' => $key !== '',
-				'message' => $key !== ''
-					? __( 'OpenRouter credentials refreshed from Flowbie.', 'flowbie-wp' )
-					: __( 'No OpenRouter key found yet. Save one below, or in Flowbie Integrations → API Keys.', 'flowbie-wp' ),
 			)
 		);
 		self::redirect_to_settings( 'openrouter' );
@@ -183,13 +123,35 @@ trait Flowbie_Wp_Admin_Trait_Handlers_Settings {
 		check_admin_referer( 'flowbie_wp_save_chat', 'flowbie_wp_chat_nonce' );
 
 		$enabled         = ! empty( $_POST['flowbie_chat_enabled'] );
+		$logged_in_only  = ! empty( $_POST['flowbie_chat_logged_in_only'] );
 		$welcome_raw     = isset( $_POST['flowbie_chat_welcome_message'] ) ? wp_unslash( $_POST['flowbie_chat_welcome_message'] ) : '';
 		$welcome_message = sanitize_text_field( trim( (string) $welcome_raw ) );
 
+		$chekkit_enabled        = ! empty( $_POST['flowbie_chat_chekkit_enabled'] );
+		$chekkit_teaser_enabled = ! empty( $_POST['flowbie_chat_chekkit_teaser_enabled'] );
+		$chekkit_cta_raw = isset( $_POST['flowbie_chat_chekkit_cta_label'] ) ? wp_unslash( $_POST['flowbie_chat_chekkit_cta_label'] ) : '';
+		$chekkit_cta_label = sanitize_text_field( trim( (string) $chekkit_cta_raw ) );
+		$chekkit_event_raw = isset( $_POST['flowbie_chat_chekkit_event_type'] ) ? wp_unslash( $_POST['flowbie_chat_chekkit_event_type'] ) : '';
+		$chekkit_event_type = sanitize_key( trim( (string) $chekkit_event_raw ) );
+		if ( $chekkit_event_type === '' ) {
+			$chekkit_event_type = 'contact_request';
+		}
+		$chekkit_webhook_raw = isset( $_POST['flowbie_chat_chekkit_webhook_url'] ) ? wp_unslash( $_POST['flowbie_chat_chekkit_webhook_url'] ) : '';
+		$chekkit_webhook_url = esc_url_raw( trim( (string) $chekkit_webhook_raw ) );
+		if ( $chekkit_webhook_url === '' ) {
+			$chekkit_webhook_url = Flowbie_Wp_Chekkit::DEFAULT_WEBHOOK_URL;
+		}
+
 		Flowbie_Wp_Chat::save_settings(
 			array(
-				'enabled'         => $enabled,
-				'welcome_message' => $welcome_message !== '' ? $welcome_message : __( 'Hi! Ask me anything about this website.', 'flowbie-wp' ),
+				'enabled'              => $enabled,
+				'logged_in_only'       => $logged_in_only,
+				'welcome_message'      => $welcome_message !== '' ? $welcome_message : __( 'Hi! Ask me anything about this website.', 'flowbie-wp' ),
+				'chekkit_enabled'        => $chekkit_enabled,
+				'chekkit_teaser_enabled' => $chekkit_teaser_enabled,
+				'chekkit_cta_label'      => $chekkit_cta_label !== '' ? $chekkit_cta_label : __( 'Send Us A Text', 'flowbie-wp' ),
+				'chekkit_event_type'   => $chekkit_event_type,
+				'chekkit_webhook_url'  => $chekkit_webhook_url,
 			)
 		);
 
@@ -198,7 +160,7 @@ trait Flowbie_Wp_Admin_Trait_Handlers_Settings {
 				'kind'    => 'chat',
 				'success' => true,
 				'message' => $enabled
-					? __( 'Chat widget enabled. The floating chat bubble is now visible on the frontend.', 'flowbie-wp' )
+					? __( 'Chat widget enabled. Chat is available in the AI Search sidebar on the frontend.', 'flowbie-wp' )
 					: __( 'Chat widget disabled.', 'flowbie-wp' ),
 			)
 		);
@@ -214,21 +176,21 @@ trait Flowbie_Wp_Admin_Trait_Handlers_Settings {
 		$raw = isset( $_POST['flowbie_design'] ) ? (array) wp_unslash( $_POST['flowbie_design'] ) : array();
 		Flowbie_Wp_Ai_Widget_Design::save_from_admin_post( $raw, 'chat' );
 
-		$position_raw = isset( $_POST['flowbie_chat_position'] ) ? wp_unslash( $_POST['flowbie_chat_position'] ) : 'bottom-right';
-		$position     = in_array( $position_raw, array( 'bottom-right', 'bottom-left' ), true ) ? $position_raw : 'bottom-right';
-
 		$tokens = isset( $raw['tokens'] ) && is_array( $raw['tokens'] ) ? $raw['tokens'] : array();
 		$accent = isset( $tokens['accent'] ) ? sanitize_hex_color( (string) $tokens['accent'] ) : '';
 
+		$sidebar_raw = isset( $raw['sidebar'] ) && is_array( $raw['sidebar'] ) ? $raw['sidebar'] : array();
+		$sidebar     = Flowbie_Wp_Ai_Widget_Design::sanitize_sidebar_config( $sidebar_raw, 'chat' );
+
 		Flowbie_Wp_Chat::save_settings(
-			array(
-				'position'          => $position,
-				'color'             => $accent !== '' && $accent !== null ? $accent : Flowbie_Wp_Chat::get_settings()['color'],
-				'voice_enabled'     => ! empty( $_POST['flowbie_chat_voice_enabled'] ),
-				'voice_ptt'         => ! empty( $_POST['flowbie_chat_voice_ptt'] ),
-				'voice_ack'         => ! empty( $_POST['flowbie_chat_voice_ack'] ),
-				'voice_narrate'     => ! empty( $_POST['flowbie_chat_voice_narrate'] ),
-				'mic_replaces_send' => ! empty( $_POST['flowbie_chat_mic_replaces_send'] ),
+			array_merge(
+				$sidebar,
+				array(
+					'color'             => $accent !== '' && $accent !== null ? $accent : Flowbie_Wp_Chat::get_settings()['color'],
+					'voice_enabled'     => ! empty( $_POST['flowbie_chat_voice_enabled'] ),
+					'voice_ptt'         => ! empty( $_POST['flowbie_chat_voice_ptt'] ),
+					'mic_replaces_send' => ! empty( $_POST['flowbie_chat_mic_replaces_send'] ),
+				)
 			)
 		);
 
@@ -280,15 +242,24 @@ trait Flowbie_Wp_Admin_Trait_Handlers_Settings {
 		}
 
 		$full_content = ! empty( $_POST['flowbie_chat_full_content'] );
+		$lead_conversion_enabled = ! empty( $_POST['flowbie_chat_lead_conversion_enabled'] );
+
+		$lead_forms = array(
+			'booking' => isset( $_POST['flowbie_chat_lead_form_booking'] ) ? absint( wp_unslash( $_POST['flowbie_chat_lead_form_booking'] ) ) : 0,
+			'contact' => isset( $_POST['flowbie_chat_lead_form_contact'] ) ? absint( wp_unslash( $_POST['flowbie_chat_lead_form_contact'] ) ) : 0,
+			'pricing' => isset( $_POST['flowbie_chat_lead_form_pricing'] ) ? absint( wp_unslash( $_POST['flowbie_chat_lead_form_pricing'] ) ) : 0,
+		);
 
 		Flowbie_Wp_Chat::save_settings(
 			array(
-				'assistant_name'      => $assistant_name,
-				'system_prompt'       => $system_prompt,
-				'greeting_style'      => $greeting_style,
-				'indexed_post_types'  => $indexed_types,
-				'excluded_categories' => $excluded_cats,
-				'full_content'        => $full_content,
+				'assistant_name'            => $assistant_name,
+				'system_prompt'             => $system_prompt,
+				'greeting_style'            => $greeting_style,
+				'indexed_post_types'        => $indexed_types,
+				'excluded_categories'       => $excluded_cats,
+				'full_content'              => $full_content,
+				'lead_conversion_enabled'   => $lead_conversion_enabled,
+				'lead_forms'                => $lead_forms,
 			)
 		);
 

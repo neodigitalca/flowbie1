@@ -1,5 +1,6 @@
 import { deduplicateInternalLinksInHtml, removeInvalidInternalLinks } from "@/lib/content-generation/content-sanitizer";
-import { ensureLinksEvery200WordsForHtml } from "@/lib/content-generation/ensure-links-per-section";
+import { resolveInternalLinkPlaceholdersInHtml } from "@/lib/content-generation/internal-link-placeholders";
+import { integrateOrphanInternalLinksInHtml } from "@/lib/content-generation/integrate-orphan-internal-links";
 
 export type WordPressPostLinkRow = {
   id: number;
@@ -34,20 +35,22 @@ export async function finalizeBulkSeoExtraTextHtml(options: {
   const { wordPressPosts, siteUrl, siteId, apiKey, currentPageUrl, onProgress } = options;
 
   if (wordPressPosts.length > 0) {
-    onProgress("Ensuring links in extra text...", 88, "");
+    onProgress("Resolving internal links...", 88, "Matching link placeholders to sitemap...");
     try {
-      extra = await ensureLinksEvery200WordsForHtml({
-        htmlContent: extra,
-        wordPressPosts,
-        currentPageUrl,
-        siteUrl,
-        apiKey,
+      extra = resolveInternalLinkPlaceholdersInHtml(extra, {
         siteId,
-        setProgress: (p) =>
-          onProgress(p.step || "Ensuring links in extra text...", p.progress ?? 88, ""),
+        siteUrl,
+        currentPageUrl,
+        wordPressPosts,
+      });
+      extra = deduplicateInternalLinksInHtml(extra);
+      extra = integrateOrphanInternalLinksInHtml(extra, {
+        siteUrl,
+        currentPageUrl,
+        wordPressPosts,
       });
     } catch (err) {
-      console.warn("[Bulk SEO extra text] Ensure links in extra text failed:", err);
+      console.warn("[Bulk SEO extra text] Resolve link placeholders failed:", err);
     }
   }
 

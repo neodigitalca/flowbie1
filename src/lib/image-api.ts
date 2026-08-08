@@ -1,4 +1,5 @@
 import { DEFAULT_IMAGE_MODEL } from "@/lib/image-model-defaults";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 export type AspectRatio = '1:1' | '16:9' | '9:16' | '4:3' | '3:4' | '21:9' | '9:19';
 
@@ -65,12 +66,7 @@ export const generateImage = async ({
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': window.location.origin,
-        'X-Title': 'Agent Blueprint Builder',
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: model,
         modalities: ['text', 'image'],

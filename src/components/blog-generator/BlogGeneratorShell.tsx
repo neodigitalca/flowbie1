@@ -3,7 +3,9 @@ import { BulkBlogGenerationTab } from "@/components/keyword-research/BulkBlogGen
 import { FlowGeneratorSection } from "@/components/generator/FlowGeneratorSection";
 import { ImageGeneratorSection } from "@/components/generator/ImageGeneratorSection";
 import type { GeneratorFreeFlowBindings } from "@/components/generator/generator-free-flow-bindings";
+import { CompetitorGeneratorShell } from "@/components/competitor-generator/CompetitorGeneratorShell";
 import { SapGeneratorShell } from "@/components/sap-generator/SapGeneratorShell";
+import { ContentOptimizerTabContent } from "@/components/content-optimizer/ContentOptimizerTabContent";
 import {
   type BlogGeneratorSectionId,
   readStoredBlogGeneratorSection,
@@ -59,6 +61,21 @@ export const BlogGeneratorShell: React.FC<BlogGeneratorShellProps> = ({
     [dataForSEOApiKey, openRouterApiKey, selectedModel, temperature, maxTokens, topP, flowPurpose, section, setSection],
   );
 
+  if (section === "opt") {
+    return (
+      <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
+        <ContentOptimizerTabContent
+          apiKey={openRouterApiKey}
+          selectedModel={selectedModel ?? ""}
+          temperature={temperature ?? 0.7}
+          maxTokens={maxTokens ?? 4096}
+          topP={topP ?? 1}
+          generatorChrome={{ activeSection: section, onSectionChange: setSection }}
+        />
+      </div>
+    );
+  }
+
   if (section === "flow" && freeFlowBindings) {
     return (
       <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
@@ -79,6 +96,24 @@ export const BlogGeneratorShell: React.FC<BlogGeneratorShellProps> = ({
           activeSection={section}
           onSectionChange={setSection}
           bindings={freeFlowBindings}
+        />
+      </div>
+    );
+  }
+
+  if (section === "competitor") {
+    return (
+      <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
+        <CompetitorGeneratorShell
+          apiKey={openRouterApiKey}
+          dataForSEOApiKey={dataForSEOApiKey ?? ""}
+          selectedModel={selectedModel ?? ""}
+          temperature={temperature ?? 0.7}
+          maxTokens={maxTokens ?? 4096}
+          topP={topP ?? 1}
+          flowPurpose={flowPurpose}
+          activeSection={section}
+          onSectionChange={setSection}
         />
       </div>
     );

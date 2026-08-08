@@ -11,6 +11,7 @@ import type { WordPressSite } from "@/components/integrations/types";
 import { extractEndpointFromEntitySitemapUrl } from "@/lib/entity-endpoint-extractor";
 import { cleanTitleForNonEntity } from "@/lib/content-optimization-helpers";
 import { sanitizeContentForUpload, validateContentForUpload, truncateTitleForSEO } from "@/lib/content-generation/content-sanitizer";
+import { wrapHarnessH2AnchorsForWordPressBlocks } from "@/lib/content-generation/wordpress-harness-heading-anchors";
 import { loadApiKey } from "@/lib/api";
 import { getLocalFAQPhrase } from "@/lib/local-entity-phrases";
 import { markdownToHtml } from "@/lib/markdown-to-html";
@@ -21,6 +22,7 @@ import { generateOptimizedTitle } from "@/lib/title-optimizer";
 import { generateSEOSlug } from "@/lib/seo-slug-generator";
 import { resolveRecommendedAuthor } from "@/lib/wordpress-api/author-resolver";
 import { parseFaqEntries, type FaqEntry } from "@/lib/faq-entries";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 /** ACF: overwrite only `seo_extra_text` / `extra_text`–style fields; leave all other keys unchanged. */
 function mergeAcfOnlyExtraText(
@@ -73,12 +75,7 @@ async function inferKeywordForKeywordFocus(
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${openRouterApiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(openRouterApiKey),
       body: JSON.stringify({
         model: researchModel,
         messages: [
@@ -152,10 +149,7 @@ export async function generateQuestionsFromContent(
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: getResearchModel(),
         messages: [
@@ -546,12 +540,7 @@ async function getACFFromOpenRouter(
   const userContent = `Full WordPress post (read the acf object and use its exact key names):\n${JSON.stringify(fullPost)}\n\nUpdates to apply:\n${JSON.stringify(updates)}\n\nReturn only the merged acf object as JSON.`;
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://flowbie.com",
-      "X-Title": "Flowbie",
-    },
+    headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
       model,
       messages: [
@@ -646,7 +635,9 @@ export async function uploadToWordPress(
   // Use validated posts from context (already AI-filtered and HTTP-200 validated once per run in continue-optimization). Do NOT re-validate here to avoid "Validating 96 links" on every post.
   const postsForSanitizer = context.wordPressPosts ?? [];
   // Sanitize content before upload: placeholders, invalid internal links (only from validated list), non-Wikipedia external (pre-validated DFS links whitelisted)
-    const sanitizedHtmlContent = sanitizeContentForUpload(htmlContent, site.siteUrl, postsForSanitizer, undefined, allowedExternalUrls);
+    const sanitizedHtmlContent = wrapHarnessH2AnchorsForWordPressBlocks(
+      sanitizeContentForUpload(htmlContent, site.siteUrl, postsForSanitizer, undefined, allowedExternalUrls),
+    );
   
   // Validate content and log warnings (but don't block upload)
   const validation = validateContentForUpload(sanitizedHtmlContent);

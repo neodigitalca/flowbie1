@@ -65,6 +65,7 @@ class Flowbie_Wp_Fields {
 		require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/fields/integrations/class-flowbie-wp-fields-acf-bridge.php';
 		require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/fields/integrations/class-flowbie-wp-fields-elementor-acf-shim.php';
 		require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/fields/integrations/class-flowbie-wp-fields-elementor-cache-fix.php';
+		require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/fields/class-flowbie-wp-elementor-site-recovery.php';
 		require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/fields/integrations/class-flowbie-wp-fields-elementor.php';
 		require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/fields/class-flowbie-wp-fields-post-meta-registry.php';
 		require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/faq/class-flowbie-wp-faq.php';

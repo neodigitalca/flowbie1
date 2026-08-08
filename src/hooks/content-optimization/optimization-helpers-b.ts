@@ -4,9 +4,6 @@ import { loadApiKey } from "@/lib/api";
 import { OptimizationFileManager } from "@/lib/optimization-file-manager";
 import { type WordPressSite } from "@/components/integrations/types";
 import { selectBestKeywordForEntityPage } from "@/lib/content-optimization-helpers";
-import { getResearchModel } from "@/lib/optimization-settings-storage";
-import { isNoQueriesError } from "./optimization-helpers-a";
-import type { HarnessSectionListItem } from "@/lib/bulk/harness-sections-reducer";
 
 function escapeCsvField(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -80,11 +77,10 @@ export function saveSelectedKeyword(
   fileManager.addFile(selectedKeywordFileName, JSON.stringify(selectedKeyword, null, 2), "application/json");
 }
 
-export function saveSeoResearchArtifact(
-  fileManager: OptimizationFileManager,
+export function buildSeoResearchArtifactDownloadable(
   primaryKeyword: string,
-  rawSeoResearch: string
-): void {
+  rawSeoResearch: string,
+): { name: string; content: string; mimeType: string } {
   const fileName = OptimizationFileManager.generateFilename("acf-seo-research", primaryKeyword, "json");
   const trimmed = String(rawSeoResearch ?? "").trim();
   let parsed: unknown;
@@ -101,116 +97,52 @@ export function saveSeoResearchArtifact(
     scrapedAt: new Date().toISOString(),
     ...(parsed !== undefined ? { data: parsed } : { raw: trimmed }),
   };
-  fileManager.addFile(fileName, JSON.stringify(payload, null, 2), "application/json");
+  return {
+    name: fileName,
+    content: JSON.stringify(payload, null, 2),
+    mimeType: "application/json;charset=utf-8",
+  };
+}
+
+export function saveSeoResearchArtifact(
+  fileManager: OptimizationFileManager,
+  primaryKeyword: string,
+  rawSeoResearch: string
+): void {
+  const file = buildSeoResearchArtifactDownloadable(primaryKeyword, rawSeoResearch);
+  fileManager.addFile(file.name, file.content, file.mimeType);
 }
 
 export function handleOptimizationError(
-  error: any,
+  error: unknown,
   siteId: string,
   setIsOptimizing: (prev: any) => any,
   setProgress: (prev: any) => any,
-  setIsAnalyzing?: (prev: any) => any
 ): void {
   const errorMessage = error instanceof Error ? error.message : "Unknown error occurred during optimization";
-  const isNoQueries = isNoQueriesError(error);
-
-  if (isNoQueries) {
-    setIsOptimizing((prev: any) => ({ ...prev, [siteId]: false }));
-    if (setIsAnalyzing) {
-      setIsAnalyzing((prev: any) => ({ ...prev, [siteId]: false }));
-    }
-    return;
-  }
 
   try {
     setIsOptimizing((prev: any) => ({ ...prev, [siteId]: false }));
-    setProgress((prev: any) => ({
-      ...prev,
-      [siteId]: { step: "Error", progress: 0, message: errorMessage },
-    }));
-    if (setIsAnalyzing) {
-      setIsAnalyzing((prev: any) => ({ ...prev, [siteId]: false }));
-    }
+    setProgress((prev: any) => {
+      const prevEntry = prev[siteId] || {};
+      return {
+        ...prev,
+        [siteId]: {
+          ...prevEntry,
+          error: errorMessage,
+          message: errorMessage,
+        },
+      };
+    });
   } catch (stateError) {
     console.error("[Optimization] Error updating error state:", stateError);
   }
 
-  if (!isNoQueries && !getMuteOptimizationToasts()) {
+  if (!getMuteOptimizationToasts()) {
     notifyHeaderError("Optimization failed", errorMessage, { duration: 5000 });
   }
 }
 
-export function getStepProgress(step: string): number {
-  const stepLower = step.toLowerCase();
-  if (stepLower.includes("fetch") || stepLower.includes("resolving")) return 10;
-  if (stepLower.includes("gsc") || stepLower.includes("performance") || stepLower.includes("analyzing")) return 25;
-  if (stepLower.includes("keyword") || stepLower.includes("research")) return 40;
-  if (stepLower.includes("ai") || stepLower.includes("analysis")) return 55;
-  if (stepLower.includes("blueprint") || stepLower.includes("checklist")) return 70;
-  if (stepLower.includes("content") || stepLower.includes("generating")) return 85;
-  if (stepLower.includes("upload") || stepLower.includes("updating")) return 95;
-  if (stepLower.includes("complete")) return 100;
-  return 0;
-}
-
-export function updateBulkProgress(
-  setBulkState: (prev: any) => any,
-  batchKey: string,
-  url: string,
-  step: string,
-  progress: number,
-  message?: string,
-  linkCheckResults?: Array<{ url: string; status: number; ok: boolean }>,
-  harness?: {
-    harnessSections?: HarnessSectionListItem[];
-    harnessPlannedSectionCount?: number | null;
-  },
-  urlIndex?: number,
-): void {
-  setBulkState((prev: any) => {
-    const current = prev[batchKey];
-    if (!current) return prev;
-    const preservedLinks =
-      linkCheckResults != null ? linkCheckResults : (current.currentStepProgress?.linkCheckResults ?? undefined);
-    const preservedHarnessSections =
-      harness?.harnessSections !== undefined
-        ? harness.harnessSections
-        : current.currentStepProgress?.harnessSections;
-    const preservedHarnessPlanned =
-      harness?.harnessPlannedSectionCount !== undefined
-        ? harness.harnessPlannedSectionCount
-        : current.currentStepProgress?.harnessPlannedSectionCount;
-    const next: any = {
-      ...current,
-      currentStep: step,
-      currentProgress: progress,
-      currentStepProgress: {
-        step,
-        progress,
-        message,
-        ...(preservedLinks != null && { linkCheckResults: preservedLinks }),
-        ...(preservedHarnessSections !== undefined && { harnessSections: preservedHarnessSections }),
-        ...(preservedHarnessPlanned !== undefined && { harnessPlannedSectionCount: preservedHarnessPlanned }),
-      },
-    };
-    if (url) {
-      next.currentUrl = url;
-    }
-    if (urlIndex != null && urlIndex >= 0) {
-      next.currentIndex = urlIndex;
-    }
-    if (linkCheckResults != null && url) {
-      next.urlLinkCheckResults = { ...(current.urlLinkCheckResults || {}), [url]: linkCheckResults };
-    }
-    if (harness?.harnessSections?.length && url) {
-      next.urlHarnessSections = {
-        ...(current.urlHarnessSections || {}),
-        [url]: harness.harnessSections,
-      };
-    }
-    return { ...prev, [batchKey]: next };
-  });
-}
 
 export function subtypeToEndpoint(subtype?: string): string | undefined {
   const map: Record<string, string> = {

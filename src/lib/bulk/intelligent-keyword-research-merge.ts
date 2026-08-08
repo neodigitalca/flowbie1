@@ -6,6 +6,7 @@ import type { KeywordData } from '@/lib/keyword-types';
 import type { SemrushBulkEnrichmentResult, SemrushKeywordOverviewPayload } from '@/lib/wordpress-api/semrush';
 import { loadApiKey } from '@/lib/api';
 import { getResearchModel } from '@/lib/optimization-settings-storage';
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 const OR = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -152,12 +153,7 @@ Keep rationale under 400 characters.`;
 
   const res = await fetch(OR, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-      'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : '',
-      'X-Title': 'Flowbie',
-    },
+    headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
       model,
       temperature: 0.2,

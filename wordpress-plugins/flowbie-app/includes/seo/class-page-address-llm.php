@@ -104,12 +104,7 @@ class Flowbie_App_Page_Address_Llm {
 			self::OPENROUTER_URL,
 			array(
 				'timeout' => 60,
-				'headers' => array(
-					'Content-Type'  => 'application/json',
-					'Authorization' => 'Bearer ' . trim( $opts['apiKey'] ),
-					'HTTP-Referer'  => defined( 'FLOWBIE_APP_FRONTEND_URL' ) ? (string) FLOWBIE_APP_FRONTEND_URL : 'https://flowbie.ca',
-					'X-Title'       => 'Flowbie location page address',
-				),
+				'headers' => Flowbie_App_Openrouter_Attribution::request_headers( trim( $opts['apiKey'] ) ),
 				'body'    => wp_json_encode(
 					array(
 						'model'       => $model,

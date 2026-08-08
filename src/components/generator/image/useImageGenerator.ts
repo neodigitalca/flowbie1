@@ -24,6 +24,10 @@ import { runFeaturedImage } from "@/lib/image-generator/run-featured-image";
 import { downloadImage, copyImageToClipboard } from "@/components/OutputManager/image-utils";
 import type { ImageChecklistItem } from "@/lib/image-checklist-builder";
 import type { ImageSourceMode } from "@/lib/image-generator/image-generator-options";
+import {
+  prepareManualReference,
+  type ManualImageReference,
+} from "@/lib/image-generator/manual-reference-upload";
 import type {
   ImageGeneratorInputProps,
   UseImageGeneratorResult,
@@ -70,6 +74,8 @@ export function useImageGenerator({
   const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveDialogName, setSaveDialogName] = useState("");
+  const [manualReferences, setManualReferences] = useState<ManualImageReference[]>([]);
+  const [isPreparingReferences, setIsPreparingReferences] = useState(false);
 
   const availableSections = useMemo(() => {
     if (!finalOutput) return [];
@@ -92,6 +98,7 @@ export function useImageGenerator({
       colorForeground,
       colorBackground,
       imageModel,
+      manualReferences,
     }),
     [
       userPrompt,
@@ -108,6 +115,7 @@ export function useImageGenerator({
       colorForeground,
       colorBackground,
       imageModel,
+      manualReferences,
     ],
   );
 
@@ -312,6 +320,27 @@ export function useImageGenerator({
     }
   }, [generatedImageBase64, generatedImageUrl]);
 
+  const addManualReferences = useCallback(async (files: FileList | File[]) => {
+    const list = Array.from(files).filter((file) => file.type.startsWith("image/"));
+    if (!list.length) return;
+
+    setIsPreparingReferences(true);
+    setError(null);
+    try {
+      const prepared = await Promise.all(list.map((file) => prepareManualReference(file)));
+      setManualReferences((prev) => [...prev, ...prepared]);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to prepare reference image";
+      setError(errorMessage);
+    } finally {
+      setIsPreparingReferences(false);
+    }
+  }, []);
+
+  const removeManualReference = useCallback((id: string) => {
+    setManualReferences((prev) => prev.filter((ref) => ref.id !== id));
+  }, []);
+
   return {
     userPrompt,
     imageSourceMode,
@@ -337,6 +366,8 @@ export function useImageGenerator({
     hasGeneratedChecklist,
     error,
     referenceResearch,
+    manualReferences,
+    isPreparingReferences,
     savedPrompts,
     saveDialogOpen,
     saveDialogName,
@@ -369,5 +400,7 @@ export function useImageGenerator({
     handleDownload,
     handleCopy,
     handlePreviewError,
+    addManualReferences,
+    removeManualReference,
   };
 }

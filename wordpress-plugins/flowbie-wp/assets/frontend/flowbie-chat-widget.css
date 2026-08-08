@@ -16,28 +16,47 @@
 }
 
 .flowbie-chat-widget .fcw-thinking-step {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  font-size: 1rem;
+  display: block;
+  font-size: 1em;
   line-height: 1.5;
   color: var(--fcw-text-secondary);
 }
 
-.flowbie-chat-widget .fcw-card--thinking-active {
-  border-color: var(--fcw-thinking-border, #06b6d4);
-  animation: fcwThinkingBreathe 2.8s ease-in-out infinite;
+.flowbie-chat-widget .fcw-thinking-step-label {
+  display: block;
+  text-align: left;
 }
 
-@keyframes fcwThinkingBreathe {
+.flowbie-chat-widget .fcw-thinking-step--running .fcw-thinking-step-label {
+  color: var(--fcw-accent, #3b82f6);
+  font-weight: 600;
+  animation: fcwPhaseBreathe 2s ease-in-out infinite;
+}
+
+.flowbie-chat-widget .fcw-thinking-step--done .fcw-thinking-step-label {
+  color: var(--fcw-text-muted);
+}
+
+.flowbie-chat-widget .fcw-thinking-step--pending .fcw-thinking-step-label {
+  color: var(--fcw-text-secondary);
+  opacity: 0.65;
+}
+
+.flowbie-chat-widget .fcw-thinking-step--error .fcw-thinking-step-label {
+  color: #ef4444;
+}
+
+.flowbie-chat-widget .fcw-card--thinking-active {
+  border-color: var(--fcw-border);
+}
+
+@keyframes fcwPhaseBreathe {
   0%,
   100% {
-    border-color: var(--fcw-thinking-border, #06b6d4);
-    box-shadow: 0 0 0 transparent;
+    text-shadow: 0 0 0 rgba(59, 130, 246, 0);
   }
   50% {
-    border-color: var(--fcw-thinking-border, #06b6d4);
-    box-shadow: 0 0 12px color-mix(in srgb, var(--fcw-thinking-border, #06b6d4) 20%, transparent);
+    text-shadow: 0 0 16px rgba(59, 130, 246, 0.55);
   }
 }
 
@@ -85,88 +104,23 @@
   --fcw-radius: 8px;
   --fcw-radius-sm: 6px;
   --fcw-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
-  --fcw-bubble-size: 56px;
   --fcw-panel-width: 380px;
-  --fcw-panel-max-height: 560px;
-  --fcw-offset-x: 20px;
-  --fcw-offset-y: 20px;
   --fcw-z-index: 999999;
   --fcw-font-size: 16px;
 
   position: fixed;
   z-index: var(--fcw-z-index);
-  font-size: max(1rem, var(--fcw-font-size));
+  font-family: "Lato", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
   line-height: 1.5;
   color: var(--fcw-text);
 }
 
-.flowbie-chat--bottom-right {
-  bottom: var(--fcw-offset-y);
-  right: var(--fcw-offset-x);
-}
-.flowbie-chat--bottom-left {
-  bottom: var(--fcw-offset-y);
-  left: var(--fcw-offset-x);
-}
-
-/* ── Floating bubble ────────────────────────────────────────── */
-.fcw-bubble {
-  width: var(--fcw-bubble-size);
-  height: var(--fcw-bubble-size);
-  border-radius: 50%;
-  border: none;
-  background: var(--fcw-launcher-bg);
-  color: var(--fcw-accent-text);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--fcw-shadow);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-}
-.fcw-bubble:hover {
-  transform: scale(1.08);
-  background: var(--fcw-button-hover);
-}
-.flowbie-chat-widget.fcw-hide-launcher .fcw-bubble {
-  display: none !important;
-}
-.fcw-bubble--hidden {
-  opacity: 0;
-  pointer-events: none;
-  transform: scale(0.8);
-}
-
 /* ── Panel ──────────────────────────────────────────────────── */
 .fcw-panel {
-  position: absolute;
-  width: var(--fcw-panel-width);
-  max-width: calc(100vw - 32px);
-  height: var(--fcw-panel-max-height);
-  max-height: calc(100vh - 100px);
-  border-radius: var(--fcw-radius);
-  background: var(--fcw-bg);
-  border: 1px solid var(--fcw-border);
-  box-shadow: var(--fcw-shadow);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-.flowbie-chat--bottom-right .fcw-panel {
-  bottom: calc(var(--fcw-bubble-size) + 12px);
-  right: 0;
-}
-.flowbie-chat--bottom-left .fcw-panel {
-  bottom: calc(var(--fcw-bubble-size) + 12px);
-  left: 0;
-}
-
-.fcw-panel--hidden {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(12px) scale(0.97);
 }
 
 /* ── Header ─────────────────────────────────────────────────── */
@@ -182,12 +136,108 @@
 .flowbie-chat-widget.fcw-hide-header .fcw-header { display: none !important; }
 .fcw-header__title {
   font-weight: 600;
-  font-size: 1rem;
+  font-size: 1em;
   color: var(--fcw-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* ── Toolbar icon buttons ───────────────────────────────────── */
+.flowbie-chat-widget .fai-sidebar-panel__toolbar button {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.flowbie-chat-widget .fai-sidebar-panel__toolbar button.fcw-contact-human__cta {
+  width: auto;
+  height: auto;
+  min-height: 32px;
+  padding: 6px 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffffff !important;
+  background: #0f0f0f !important;
+  background-color: #0f0f0f !important;
+  border-radius: 6px;
+}
+
+.flowbie-chat-widget .fai-sidebar-panel__toolbar button.fcw-contact-human__cta:hover,
+.flowbie-chat-widget .fai-sidebar-panel__toolbar button.fcw-contact-human__cta:focus,
+.flowbie-chat-widget .fai-sidebar-panel__toolbar button.fcw-contact-human__cta:active,
+.flowbie-chat-widget .fai-sidebar-panel__toolbar button.fcw-contact-human__cta--open {
+  color: #ffffff !important;
+  background: #000000 !important;
+  background-color: #000000 !important;
+}
+
+.flowbie-chat-widget .fai-sidebar-panel__toolbar button:hover,
+.flowbie-chat-widget .fai-sidebar-panel__toolbar button:focus,
+.flowbie-chat-widget .fai-sidebar-panel__toolbar button:active {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.fcw-toolbar-hidden {
+  display: none !important;
+}
+
+.fai-sidebar-toolbar-menu {
+  position: relative;
+}
+
+.flowbie-chat-widget .fai-sidebar-panel__toolbar button.fai-sidebar-menu-trigger {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: #1e293b;
+  border-radius: 6px;
+}
+
+.flowbie-chat-widget .fai-sidebar-panel__toolbar button.fai-sidebar-menu-trigger:hover,
+.flowbie-chat-widget .fai-sidebar-panel__toolbar button.fai-sidebar-menu-trigger:focus,
+.flowbie-chat-widget .fai-sidebar-panel__toolbar button.fai-sidebar-menu-trigger[aria-expanded='true'] {
+  color: #0f172a;
+  background: rgba(15, 23, 42, 0.08) !important;
+  background-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+.fai-sidebar-menu-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 148px;
+  padding: 4px;
+  background: var(--fcw-bg, #ffffff);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  z-index: 30;
+}
+
+.flowbie-chat-widget .fai-sidebar-menu-panel button.fai-sidebar-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 1rem;
+  font-weight: 400;
+  text-align: left;
+  color: var(--fcw-text, #0f172a);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.flowbie-chat-widget .fai-sidebar-menu-panel button.fai-sidebar-menu-item:hover,
+.flowbie-chat-widget .fai-sidebar-menu-panel button.fai-sidebar-menu-item:focus {
+  background: rgba(15, 23, 42, 0.06) !important;
+  background-color: rgba(15, 23, 42, 0.06) !important;
+}
+
 .flowbie-chat-widget.fcw-hide-assistant-name .fcw-header__title { display: none !important; }
 .fcw-header__close {
   background: none;
@@ -206,6 +256,23 @@
   background: var(--fcw-bg-elevated);
 }
 .flowbie-chat-widget.fcw-hide-close-button .fcw-header__close { display: none !important; }
+.fcw-header__clear {
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: #1e293b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--fcw-radius-sm);
+  padding: 6px;
+  transition: color 0.15s;
+}
+.fcw-header__clear:hover {
+  color: #0f172a;
+  background: none;
+}
 
 /* ── Messages area ──────────────────────────────────────────── */
 .fcw-messages {
@@ -231,12 +298,14 @@
 
 .fcw-msg {
   display: flex;
+  min-width: 0;
 }
 .fcw-msg--user {
   justify-content: flex-end;
 }
 .fcw-msg--assistant {
   justify-content: flex-start;
+  width: 100%;
 }
 
 /* User bubble */
@@ -246,16 +315,61 @@
   border-radius: 14px 14px 4px 14px;
   background: var(--fcw-user-bubble-bg);
   color: var(--fcw-user-bubble-text);
-  font-size: 1rem;
+  font-size: 1em;
   line-height: 1.5;
   word-break: break-word;
   animation: fcw-fadeIn 0.25s ease;
+}
+
+/* Secretary ack (brief reply before the answer card) */
+.fcw-ack-bubble {
+  max-width: 100%;
+  padding: 0 2px 10px;
+  color: var(--fcw-text, #1e293b);
+  font-size: 1em;
+  line-height: 1.5;
+  word-break: break-word;
+  animation: fcw-fadeIn 0.2s ease;
+}
+
+.fcw-msg--ack {
+  margin-bottom: 2px;
+}
+
+.fcw-msg--ack + .fcw-msg--assistant {
+  margin-top: 0;
+}
+
+/* Typing indicator between user message and secretary ack */
+.fcw-typing-bubble {
+  max-width: 100%;
+  padding: 0 2px 10px;
+  color: var(--fcw-text-muted, #64748b);
+  font-size: 1em;
+  line-height: 1.5;
+  animation: fcw-fadeIn 0.2s ease;
+}
+
+.fcw-typing-dots {
+  display: inline-block;
+  min-width: 1.75em;
+  letter-spacing: 0.08em;
+}
+
+.fcw-msg--typing {
+  margin-bottom: 2px;
+}
+
+.fcw-msg--typing + .fcw-msg--ack,
+.fcw-msg--typing + .fcw-msg--assistant {
+  margin-top: 0;
 }
 
 /* ── Semantic Card (Glassmorphism) ──────────────────────────── */
 .fcw-card {
   max-width: 100%;
   width: 100%;
+  min-width: 0;
   border-radius: 12px;
   padding: 16px 18px;
   background: var(--fcw-card-bg);
@@ -272,57 +386,145 @@
   gap: 4px;
   padding: 2px 8px;
   border-radius: 6px;
-  font-size: 10px;
+  font-size: 1em;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.5);
+  background: var(--fcw-bg-elevated);
+  color: var(--fcw-text-muted);
 }
 
 /* Title row */
 .fcw-card__title-row {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
   margin-bottom: 8px;
 }
 
 .fcw-card__title {
   font-weight: 600;
-  font-size: 1rem;
-  color: var(--fcw-assistant-bubble-text);
+  font-size: 1em;
+  color: #0f172a;
   line-height: 1.3;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  overflow: visible;
+  max-width: 100%;
 }
 .fcw-card__title strong {
   font-weight: 700;
-  color: var(--fcw-text);
+  color: #0f172a;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.fcw-card__title a {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 /* Body */
 .fcw-card__body {
-  font-size: 1rem;
+  font-size: 1em;
   line-height: 1.6;
-  color: var(--fcw-text-secondary);
+  color: #1e293b;
   word-break: break-word;
   margin-top: 4px;
 }
 .fcw-card__body a {
-  color: var(--fcw-link);
+  color: #2563eb;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 .fcw-card__body a:hover {
-  color: var(--fcw-accent);
+  color: #1d4ed8;
 }
 .fcw-card__body strong {
   font-weight: 600;
-  color: var(--fcw-text);
+  color: #0f172a;
+}
+
+.fcw-card__body .fcw-md-list {
+  margin: 10px 0;
+  padding-left: 1.25rem;
+  list-style: disc;
+}
+
+.fcw-card__body ol.fcw-md-list {
+  list-style: decimal;
+}
+
+.fcw-card__body .fcw-md-list li {
+  margin: 8px 0;
+  line-height: 1.6;
+  color: #1e293b;
+}
+
+.fcw-card__body .fcw-md-list li::marker {
+  color: #64748b;
+}
+
+.fcw-card__body .fcw-md-p {
+  margin: 0 0 0.75rem;
+}
+
+.fcw-card__body .fcw-md-p:last-child {
+  margin-bottom: 0;
+}
+
+.fcw-card__body .fcw-md-heading {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0.75rem 0 0.5rem;
+  line-height: 1.4;
+}
+
+.fcw-card__body .fcw-md-heading:first-child {
+  margin-top: 0;
+}
+
+.fcw-card__body .fcw-md-table-wrap {
+  overflow-x: auto;
+  margin: 0.75rem 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.fcw-card__body .fcw-md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.fcw-card__body .fcw-md-table th,
+.fcw-card__body .fcw-md-table td {
+  padding: 0.5rem 0.625rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.fcw-card__body .fcw-md-table th {
+  font-weight: 600;
+  color: #0f172a;
+  background: #f1f5f9;
+}
+
+.fcw-card__body .fcw-md-table tbody tr:nth-child(even) td {
+  background: #f8fafc;
+}
+
+.fcw-card__body .fcw-md-table td {
+  color: #1e293b;
 }
 
 /* Confidence label */
 .fcw-card__confidence {
-  font-size: 11px;
+  font-size: 1em;
   color: var(--fcw-text-muted);
   margin-top: 6px;
   font-style: italic;
@@ -342,19 +544,19 @@
   gap: 5px;
   padding: 6px 12px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--fcw-bg-elevated);
   border: 1px solid var(--fcw-border);
-  color: var(--fcw-text);
-  font-size: 12px;
+  color: var(--fcw-link);
+  font-size: 1em;
   font-weight: 500;
   text-decoration: none;
   transition: all 0.15s;
   line-height: 1.3;
 }
 .fcw-link-pill:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: var(--fcw-card-bg);
+  border-color: var(--fcw-border-hover);
+  color: var(--fcw-link);
   text-decoration: none;
 }
 .fcw-link-pill__icon {
@@ -366,18 +568,21 @@
 /* ── CTA button ─────────────────────────────────────────────── */
 .fcw-card__cta-wrap {
   margin-top: 14px;
+  text-align: left;
 }
 
 .fcw-cta-btn {
-  display: inline-block;
-  padding: 9px 20px;
-  border-radius: var(--fcw-radius-sm);
+  display: block;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 14px;
   background: var(--fcw-button-bg);
   color: var(--fcw-button-text);
-  font-size: 1rem;
+  font-size: 1em;
   font-weight: 600;
   text-decoration: none;
-  text-align: center;
+  text-align: left;
+  line-height: 1.45;
   transition: background 0.15s, transform 0.1s;
 }
 .fcw-cta-btn:hover {
@@ -386,38 +591,56 @@
   color: var(--fcw-button-text);
   text-decoration: none;
 }
+.fcw-cta-btn + .fcw-cta-btn {
+  margin-top: 8px;
+}
 .flowbie-chat-widget.fcw-hide-cta-buttons .fcw-card__cta-wrap { display: none !important; }
 .flowbie-chat-widget.fcw-hide-source-pills .fcw-card__links { display: none !important; }
 .flowbie-chat-widget.fcw-hide-suggestion-chips .fcw-card__topics { display: none !important; }
 .flowbie-chat-widget.fcw-hide-confidence .fcw-card__confidence { display: none !important; }
+.flowbie-chat-widget.fcw-hide-type-badge .fcw-card__type-badge { display: none !important; }
 .flowbie-chat-widget.fcw-hide-thinking-card .fcw-card--thinking,
 .flowbie-chat-widget.fcw-hide-thinking-card .fcw-thinking-steps { display: none !important; }
 
 /* ── Related topic chips ────────────────────────────────────── */
 .fcw-card__topics {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid var(--fcw-border);
+  min-width: 0;
 }
 
 .fcw-topic-chip {
-  padding: 5px 12px;
-  border-radius: var(--fcw-radius-sm);
-  border: 1px solid var(--fcw-border);
-  background: transparent;
-  color: var(--fcw-text-secondary);
-  font-size: 1rem;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: auto;
+  text-align: left;
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 1em;
   font-weight: 500;
+  font-family: inherit;
+  line-height: 1.45;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 .fcw-topic-chip:hover {
-  background: var(--fcw-bg-elevated);
-  border-color: var(--fcw-border-hover);
-  color: var(--fcw-text);
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0f172a;
 }
 
 /* ── Input area ─────────────────────────────────────────────── */
@@ -437,7 +660,7 @@
   border: 1px solid var(--fcw-border);
   border-radius: var(--fcw-radius-sm);
   padding: 10px 14px;
-  font-size: 1rem;
+  font-size: 1em;
   line-height: 1.4;
   color: var(--fcw-text);
   background: var(--fcw-input-bg);
@@ -506,7 +729,7 @@
 
 /* ── Status indicator ───────────────────────────────────────── */
 .fcw-status {
-  font-size: 12px;
+  font-size: 0.85em;
   color: rgba(255, 255, 255, 0.4);
   font-style: italic;
   padding: 10px 18px;
@@ -530,17 +753,807 @@
 }
 
 /* ── Responsive ─────────────────────────────────────────────── */
-@media (max-width: 480px) {
-  .fcw-panel {
-    width: calc(100vw - 24px);
-    height: calc(100vh - 80px);
-    border-radius: 12px;
+
+/* Design tokens from Site Branding / admin override prefers-color-scheme. */
+
+/* ── Sidebar mode ─────────────────────────────────────────────── */
+.flowbie-chat-widget.flowbie-chat--sidebar {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: auto;
+  height: auto;
+}
+
+.flowbie-chat-widget.flowbie-chat--sidebar .fai-sidebar-panel.fcw-panel--sidebar {
+  position: fixed;
+  top: 0 !important;
+  bottom: 0 !important;
+  margin: 0 !important;
+  width: var(--fai-sidebar-width, 400px) !important;
+  max-width: min(var(--fai-sidebar-width, 400px), 100vw) !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  border-radius: 0;
+  background: var(--fcw-bg);
+  border: 1px solid var(--fcw-border);
+  box-shadow: var(--fcw-shadow);
+  z-index: var(--fai-sidebar-z-index, var(--fcw-z-index, 999999));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.flowbie-chat-widget.flowbie-chat--sidebar.fai-sidebar-root--open .fai-sidebar-panel.fcw-panel--sidebar {
+  display: flex !important;
+  flex-direction: column !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.flowbie-chat-widget.flowbie-chat--sidebar.fai-sidebar-root--right .fai-sidebar-panel.fcw-panel--sidebar {
+  right: 0 !important;
+  left: auto !important;
+  transform: translateX(0);
+}
+
+.flowbie-chat-widget.flowbie-chat--sidebar.fai-sidebar-root--left .fai-sidebar-panel.fcw-panel--sidebar {
+  left: 0 !important;
+  right: auto !important;
+  transform: translateX(0);
+}
+
+@media (min-width: 768px) {
+  .flowbie-chat-widget.flowbie-chat--sidebar.fai-sidebar-root--transition-slide.fai-sidebar-root--right:not(.fai-sidebar-root--open) .fai-sidebar-panel.fcw-panel--sidebar {
+    transform: translateX(100%);
   }
-  .flowbie-chat--bottom-right .fcw-panel,
-  .flowbie-chat--bottom-left .fcw-panel {
-    right: auto;
-    left: 12px;
+
+  .flowbie-chat-widget.flowbie-chat--sidebar.fai-sidebar-root--transition-slide.fai-sidebar-root--left:not(.fai-sidebar-root--open) .fai-sidebar-panel.fcw-panel--sidebar {
+    transform: translateX(-100%);
   }
 }
 
-/* Design tokens from Site Branding / admin override prefers-color-scheme. */
+.flowbie-chat-widget.flowbie-chat--sidebar .fai-sidebar-panel.fcw-panel--sidebar[hidden] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transform: none !important;
+}
+
+.flowbie-chat-widget.flowbie-chat--sidebar.fai-sidebar-root--open.fai-sidebar-root--right .fai-sidebar-panel.fcw-panel--sidebar {
+  transform: translateX(0) !important;
+}
+
+.flowbie-chat-widget.flowbie-chat--sidebar.fai-sidebar-root--open.fai-sidebar-root--left .fai-sidebar-panel.fcw-panel--sidebar {
+  transform: translateX(0) !important;
+}
+
+.flowbie-chat-widget.flowbie-chat--sidebar .fcw-sidebar-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.flowbie-chat-widget.flowbie-chat--sidebar .fcw-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 4px;
+}
+
+.flowbie-chat-widget.flowbie-chat--sidebar .fai-sidebar-panel__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 16px 16px;
+}
+
+.flowbie-chat-widget.flowbie-chat--sidebar .fcw-input-row.fcw-composer {
+  flex-shrink: 0;
+  margin-top: auto;
+}
+
+.flowbie-chat-widget.flowbie-chat--sidebar .fcw-sidebar-heading {
+  margin: 0 0 12px;
+  font-size: 1em;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--fcw-text);
+}
+
+/* Chat-only frontend launcher (corner bubble — not the edge tab launcher) */
+.flowbie-chat-widget.flowbie-chat--standalone-launcher .fai-sidebar-launcher.fcw-launcher {
+  position: fixed;
+  top: auto;
+  bottom: var(--fcw-offset-y, 20px);
+  transform: none;
+  width: var(--fcw-bubble-size, 56px);
+  height: var(--fcw-bubble-size, 56px);
+  min-width: var(--fcw-bubble-size, 56px);
+  min-height: var(--fcw-bubble-size, 56px);
+  max-width: var(--fcw-bubble-size, 56px);
+  max-height: var(--fcw-bubble-size, 56px);
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  border-radius: 50%;
+  border: none !important;
+  outline: none !important;
+  background: var(--fcw-launcher-bg, var(--fai-sidebar-launcher-bg, #3b82f6));
+  color: var(--fcw-accent-text, var(--fai-sidebar-launcher-text, #ffffff));
+  box-shadow: var(--fcw-shadow, 0 4px 24px rgba(0, 0, 0, 0.12));
+  pointer-events: auto;
+  z-index: calc(var(--fai-sidebar-z-index, var(--fcw-z-index, 999999)) + 1);
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  line-height: 0;
+}
+
+.flowbie-chat-widget.flowbie-chat--standalone-launcher.fai-sidebar-root--open .fcw-launcher,
+.flowbie-chat-widget.fai-sidebar-root--open .fai-sidebar-launcher.fcw-launcher {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.flowbie-chat-widget.flowbie-chat--standalone-launcher .fai-sidebar-launcher.fcw-launcher:focus,
+.flowbie-chat-widget.flowbie-chat--standalone-launcher .fai-sidebar-launcher.fcw-launcher:focus-visible {
+  outline: none !important;
+  border: none !important;
+  box-shadow: var(--fcw-shadow, 0 4px 24px rgba(0, 0, 0, 0.12));
+}
+
+.flowbie-chat-widget.flowbie-chat--standalone-launcher.fai-sidebar-root--right .fai-sidebar-launcher.fcw-launcher {
+  right: var(--fcw-offset-x, 20px);
+  left: auto;
+}
+
+.flowbie-chat-widget.flowbie-chat--standalone-launcher.fai-sidebar-root--left .fai-sidebar-launcher.fcw-launcher {
+  left: var(--fcw-offset-x, 20px);
+  right: auto;
+}
+
+@media (max-width: 767px) {
+  .flowbie-chat-widget.flowbie-chat--sidebar.flowbie-chat--standalone-launcher {
+    position: fixed !important;
+    top: auto !important;
+    bottom: 0 !important;
+    left: auto !important;
+    right: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .flowbie-chat-widget.flowbie-chat--sidebar.fai-sidebar-root--transition-slide:not(.fai-sidebar-root--open) .fai-sidebar-panel.fcw-panel--sidebar {
+    transform: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  .flowbie-chat-widget.flowbie-chat--sidebar.fai-sidebar-root--open .fai-sidebar-panel.fcw-panel--sidebar {
+    visibility: visible !important;
+  }
+
+  .flowbie-chat-widget.flowbie-chat--standalone-launcher.fai-sidebar-root--right .fai-sidebar-launcher.fcw-launcher {
+    right: 16px !important;
+    left: auto !important;
+    bottom: 16px !important;
+    top: auto !important;
+    position: fixed !important;
+    transform: none !important;
+  }
+
+  .flowbie-chat-widget.flowbie-chat--standalone-launcher.fai-sidebar-root--left .fai-sidebar-launcher.fcw-launcher {
+    left: 16px !important;
+    right: auto !important;
+    bottom: 16px !important;
+    top: auto !important;
+    position: fixed !important;
+    transform: none !important;
+  }
+}
+
+.fcw-card__conversion {
+  margin-top: 12px;
+  padding: 12px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fcw-card__conversion-headline {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--fcw-text);
+}
+
+.fcw-card__conversion-contact {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fcw-card__conversion-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fcw-card__conversion-phone-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.fcw-card__conversion-phone-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--fcw-text);
+}
+
+.fcw-card__conversion-location {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fcw-card__conversion-location-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--fcw-text);
+}
+
+.fcw-card__conversion-hours-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fcw-card__conversion-hours-list li {
+  font-size: 1rem;
+  line-height: 1.45;
+  color: var(--fcw-text);
+}
+
+.fcw-card__conversion-item {
+  font-size: 1rem;
+  color: var(--fcw-text);
+  line-height: 1.4;
+}
+
+.fcw-card__conversion-phone,
+.fcw-card__conversion-email {
+  color: var(--fcw-accent, var(--fcw-link));
+  text-decoration: underline;
+}
+
+.fcw-card__conversion-form .flowbie-form {
+  margin-top: 4px;
+}
+
+.fcw-card__conversion-form .flowbie-form__field {
+  margin-bottom: 8px;
+}
+
+.fcw-card__conversion-form .flowbie-form__button {
+  width: 100%;
+}
+
+.fcw-contact-human__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.fcw-contact-human__overlay[hidden] {
+  display: none !important;
+}
+
+.fcw-contact-human__card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 480px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 32px 28px 28px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+  box-sizing: border-box;
+  pointer-events: auto;
+}
+
+.fcw-contact-human__overlay button.fcw-contact-human__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 4px;
+  font-family: inherit;
+  font-size: 1.5rem;
+  font-weight: 400;
+  line-height: 1;
+  color: #0f0f0f !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.fcw-contact-human__overlay button.fcw-contact-human__close:hover,
+.fcw-contact-human__overlay button.fcw-contact-human__close:focus,
+.fcw-contact-human__overlay button.fcw-contact-human__close:active,
+.fcw-contact-human__overlay button.fcw-contact-human__close:focus-visible {
+  color: #0f0f0f !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+
+.fcw-contact-human__form-heading {
+  margin: 0 0 8px;
+  padding: 0 36px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #0f172a;
+  text-align: center;
+}
+
+.fcw-contact-human__form-intro {
+  margin: 0 0 20px;
+  padding: 0 36px;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #475569;
+  text-align: center;
+}
+
+.fcw-contact-human__disclaimer {
+  margin: 0 0 16px;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.fcw-contact-human__disclaimer a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.fcw-contact-human__disclaimer a:hover,
+.fcw-contact-human__disclaimer a:focus {
+  color: #0f172a;
+}
+
+.fcw-contact-human__cta {
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: #0f0f0f;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.fcw-contact-human__cta--open {
+  color: #ffffff;
+  background: #000000;
+}
+
+.fcw-contact-human__toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.flowbie-chat-widget.flowbie-chat--sidebar .fai-sidebar-panel__toolbar {
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.flowbie-chat-widget .fai-sidebar-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fcw-contact-human__form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 4px;
+}
+
+.fcw-contact-human__field {
+  position: relative;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  box-sizing: border-box;
+  box-shadow: inset 0 0 0 1px #cbd5e1;
+}
+
+.fcw-contact-human__field:focus-within {
+  box-shadow: inset 0 0 0 1px #0f172a;
+}
+
+.fcw-contact-human__field--message {
+  min-height: 104px;
+}
+
+.fcw-contact-human__overlay .fcw-contact-human__input,
+.fcw-contact-human__overlay .fcw-contact-human__textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  margin: 0;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.25;
+  color: #0f172a;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  box-sizing: border-box;
+  border-radius: 6px;
+  outline: none !important;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.fcw-contact-human__overlay .fcw-contact-human__input:-webkit-autofill,
+.fcw-contact-human__overlay .fcw-contact-human__input:-webkit-autofill:focus,
+.fcw-contact-human__overlay .fcw-contact-human__textarea:-webkit-autofill,
+.fcw-contact-human__overlay .fcw-contact-human__textarea:-webkit-autofill:focus {
+  -webkit-text-fill-color: #0f172a;
+  box-shadow: 0 0 0 1000px #ffffff inset !important;
+  transition: background-color 99999s ease-out;
+}
+
+.fcw-contact-human__label {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1rem;
+  font-weight: 600;
+  color: #64748b;
+  line-height: 1.2;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.fcw-contact-human__field--message .fcw-contact-human__label {
+  top: 14px;
+  transform: none;
+}
+
+.fcw-contact-human__input:focus + .fcw-contact-human__label,
+.fcw-contact-human__textarea:focus + .fcw-contact-human__label,
+.fcw-contact-human__input:not(:placeholder-shown) + .fcw-contact-human__label,
+.fcw-contact-human__textarea:not(:placeholder-shown) + .fcw-contact-human__label {
+  opacity: 0;
+}
+
+.fcw-contact-human__input::placeholder,
+.fcw-contact-human__textarea::placeholder {
+  color: transparent;
+  opacity: 1;
+}
+
+.fcw-contact-human__input:focus::placeholder,
+.fcw-contact-human__textarea:focus::placeholder {
+  color: #94a3b8;
+}
+
+.fcw-contact-human__input:focus,
+.fcw-contact-human__textarea:focus {
+  outline: none;
+}
+
+.fcw-contact-human__error {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -18px;
+  font-size: 1rem;
+  color: #b91c1c;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.fcw-contact-human__textarea {
+  resize: vertical;
+  min-height: 102px;
+}
+
+.fcw-contact-human__notice-slot {
+  min-height: 52px;
+  margin-top: 16px;
+  box-sizing: border-box;
+}
+
+.fcw-contact-human__overlay button.fcw-contact-human__submit {
+  width: 100%;
+  margin-top: 4px;
+  padding: 12px 16px;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffffff !important;
+  background: #0f0f0f !important;
+  background-color: #0f0f0f !important;
+  border: none !important;
+  border-radius: 8px;
+  box-shadow: none !important;
+  outline: none !important;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.fcw-contact-human__overlay button.fcw-contact-human__submit:hover,
+.fcw-contact-human__overlay button.fcw-contact-human__submit:focus,
+.fcw-contact-human__overlay button.fcw-contact-human__submit:active,
+.fcw-contact-human__overlay button.fcw-contact-human__submit:focus-visible {
+  color: #ffffff !important;
+  background: #000000 !important;
+  background-color: #000000 !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.fcw-contact-human__overlay button.fcw-contact-human__submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.fcw-contact-human__status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 1rem;
+  line-height: 1.4;
+  text-align: center;
+  border-radius: 6px;
+  box-sizing: border-box;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.fcw-contact-human__status--visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.fcw-contact-human__status--success {
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.fcw-contact-human__status--error {
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.fcw-contact-human__hp {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .fcw-contact-human__overlay {
+    padding: 16px;
+  }
+
+  .fcw-contact-human__card {
+    max-height: calc(100vh - 32px);
+    padding: 24px 20px 20px;
+  }
+}
+
+.flowbie-chat-widget.flowbie-chat--standalone-launcher .fai-sidebar-launcher.fcw-launcher svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+  flex-shrink: 0;
+}
+
+.fcw-chekkit-teaser {
+  position: fixed;
+  z-index: 999899;
+  width: max-content;
+  min-width: 240px;
+  max-width: min(320px, calc(100vw - 88px));
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  font-family: Lato, ui-sans-serif, system-ui, sans-serif;
+}
+
+.fcw-chekkit-teaser--visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+html body .fcw-chekkit-teaser__card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 12px 16px;
+  border: none !important;
+  border-radius: 16px;
+  background: #ffffff !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.14) !important;
+  color: #111111 !important;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+html body .fcw-chekkit-teaser__card:hover {
+  background: #ffffff !important;
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.16) !important;
+  color: #111111 !important;
+}
+
+html body .fcw-chekkit-teaser__avatar {
+  display: block;
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #e8ddd4;
+}
+
+html body .fcw-chekkit-teaser__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+html body .fcw-chekkit-teaser__line {
+  display: block;
+  font-size: 1rem;
+  line-height: 1.35;
+  font-weight: 400;
+  color: #111111 !important;
+  white-space: normal;
+}
+
+html body button.fcw-chekkit-teaser__dismiss {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 2;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: none !important;
+  border-radius: 50%;
+  background: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
+  color: #666666 !important;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+html body button.fcw-chekkit-teaser__dismiss:hover {
+  background: #f3f4f6 !important;
+  color: #374151 !important;
+}
+
+html body .fcw-chekkit-teaser__card::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid #ffffff;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.06));
+}
+
+.fcw-chekkit-teaser--right .fcw-chekkit-teaser__card::after {
+  right: 20px;
+  left: auto;
+}
+
+.fcw-chekkit-teaser--left .fcw-chekkit-teaser__card::after {
+  left: 20px;
+  right: auto;
+}
+
+html body .fcw-launcher--chekkit,
+html body #flowbie-chat-mobile-launcher.fcw-launcher--chekkit {
+  background: #d8005f !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+
+html body .fcw-launcher--chekkit svg,
+html body #flowbie-chat-mobile-launcher.fcw-launcher--chekkit svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+@media (max-width: 767px) {
+  .fcw-chekkit-teaser {
+    min-width: 220px;
+    max-width: min(300px, calc(100vw - 88px));
+  }
+}
+

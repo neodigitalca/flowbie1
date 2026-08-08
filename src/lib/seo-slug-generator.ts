@@ -5,6 +5,7 @@
  */
 
 import { loadApiKey } from "@/lib/api";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 const SLUG_MAX_LENGTH = 80;
 
@@ -135,13 +136,7 @@ ${locationBlock}
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer":
-          typeof window !== "undefined" ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Flowbie SEO Slug",
-      },
+      headers: openRouterWebAppHeaders(key),
       body: JSON.stringify({
         model: SEO_SLUG_MODEL,
         messages: [

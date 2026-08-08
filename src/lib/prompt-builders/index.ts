@@ -16,6 +16,12 @@ export {
 
 export { buildOverviewLinkRulesBlock } from "./overview-link-rules";
 
+export {
+  applyCanonicalKeywordPunctuation,
+  buildKeywordPunctuationPromptBlock,
+  resolveWritingKeyword,
+} from "./keyword-canonical-punctuation";
+
 // Pipeline: planner, draft, reviewer
 export { buildPlannerPrompt, buildDraftPrompt, buildReviewerPrompt } from "./pipeline";
 

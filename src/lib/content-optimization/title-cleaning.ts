@@ -1,5 +1,6 @@
 import { loadApiKey } from "@/lib/api";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 /**
  * Cleans location mentions and placeholders from title when entity is N/A (no entity).
@@ -22,12 +23,7 @@ export async function cleanTitleForNonEntityAsync(
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(key),
       body: JSON.stringify({
         model: getResearchModel(),
         messages: [

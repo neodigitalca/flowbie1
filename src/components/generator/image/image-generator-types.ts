@@ -9,6 +9,7 @@ import type {
   ImageSourceMode,
   ImageStyle,
 } from "@/lib/image-generator/image-generator-options";
+import type { ManualImageReference } from "@/lib/image-generator/manual-reference-upload";
 
 export type FeaturedImageGeneratorState = {
   generatedImageUrl: string | null;
@@ -72,6 +73,8 @@ export type ImageGeneratorViewState = {
   hasGeneratedChecklist: boolean;
   error: string | null;
   referenceResearch: ImageReferenceProvenance | null;
+  manualReferences: ManualImageReference[];
+  isPreparingReferences: boolean;
   savedPrompts: SavedPrompt[];
   saveDialogOpen: boolean;
   saveDialogName: string;
@@ -107,6 +110,8 @@ export type ImageGeneratorActions = {
   handleDownload: () => Promise<void>;
   handleCopy: () => Promise<void>;
   handlePreviewError: () => void;
+  addManualReferences: (files: FileList | File[]) => Promise<void>;
+  removeManualReference: (id: string) => void;
 };
 
 export type UseImageGeneratorResult = ImageGeneratorViewState & ImageGeneratorActions;

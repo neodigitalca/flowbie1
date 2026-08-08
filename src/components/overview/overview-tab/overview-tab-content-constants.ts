@@ -18,6 +18,10 @@ export const CONTENT_OPTIMIZER_WORKSPACE_SHELL_CLASS = cn(
   CONTENT_OPTIMIZER_SQUARE_CONTROLS_CLASS,
 );
 
+/** Shared dim overlay when Details drawer is open (Opt + Generator bulk). */
+export const WORKSPACE_DETAILS_DIM_OVERLAY_CLASS =
+  "pointer-events-none absolute inset-0 z-10 bg-zinc-950/78 backdrop-blur-md backdrop-brightness-[0.45] backdrop-saturate-50 transition-[opacity,backdrop-filter] duration-300";
+
 /** Shared scroll body inset under workspace chrome. */
 export const CONTENT_OPTIMIZER_BODY_INSET_CLASS = "px-1 pb-4 pt-0";
 
@@ -43,6 +47,10 @@ export const CONTENT_OPTIMIZER_MULTI_SITE_ROW_WRAPPER_CLASS =
 /** Multi-site compact row interior (horizontal list). */
 export const CONTENT_OPTIMIZER_MULTI_SITE_ROW_SHELL_CLASS =
   "rounded-none border-0 px-2.5 py-1.5 sm:px-3 sm:py-2 transition-colors";
+
+/** Active bulk row copy — sky glow visible when drawer rows are collapsed. */
+export const CONTENT_OPTIMIZER_ACTIVE_ROW_TEXT_CLASS =
+  "text-sky-400 drop-shadow-[0_0_10px_rgba(56,189,248,0.55)]";
 
 /** Active bulk-optimization row — glow only, no border. */
 export const CONTENT_OPTIMIZER_ACTIVE_ROW_HIGHLIGHT_CLASS =

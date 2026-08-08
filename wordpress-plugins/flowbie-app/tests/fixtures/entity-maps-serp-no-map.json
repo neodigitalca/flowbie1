@@ -1,0 +1,18 @@
+{
+  "tasks": [
+    {
+      "id": "test-task-id",
+      "status_code": 20000,
+      "result": [
+        {
+          "items": [
+            {
+              "type": "organic",
+              "rank_absolute": 1
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

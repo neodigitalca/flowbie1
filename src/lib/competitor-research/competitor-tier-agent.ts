@@ -7,6 +7,7 @@ import type {
   TieredCompetitorsResult,
 } from "@/lib/competitor-research/types";
 import { sortKeywordsByTrafficThenVolume } from "@/lib/competitor-research/competitor-keyword-sort";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 const OR = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -139,12 +140,7 @@ Rules:
 
   const res = await fetch(OR, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "",
-      "X-Title": "Flowbie",
-    },
+    headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
       model: getResearchModel(options?.siteId),
       messages: [

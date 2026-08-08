@@ -12,6 +12,10 @@ import {
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { OptimizationFileManager } from "@/lib/optimization-file-manager";
 import { patchOptimizationProgress } from "./optimization-helpers";
+import {
+  hasSubstantiveSeoResearchBrief,
+  mergeOptimizeResearchInputs,
+} from "@/lib/content-optimization/seo-research-brief-for-optimize";
 
 export async function performKeywordResearchFlow(
   primaryKeyword: string,
@@ -23,7 +27,8 @@ export async function performKeywordResearchFlow(
   testMode: boolean,
   setOptimizationProgress: (prev: any) => any,
   /** When true, skip DataForSEO keyword/PAA APIs entirely (use primaryKeyword only). */
-  skipKeywordApi: boolean = false
+  skipKeywordApi: boolean = false,
+  seoResearchBrief?: string | null,
 ): Promise<{
   keywordData: KeywordData;
   aiAnalysis: KeywordAIAnalysis;
@@ -49,6 +54,46 @@ export async function performKeywordResearchFlow(
     Array.isArray(gscQueries) ? gscQueries : [],
     clusterKeywords
   );
+
+  const useSeoBriefPath = hasSubstantiveSeoResearchBrief(seoResearchBrief);
+  if (useSeoBriefPath) {
+    const merged = mergeOptimizeResearchInputs({
+      primaryKeyword,
+      selectedKeyword,
+      gscResult,
+      seoResearchBrief,
+    });
+    const briefRelated = merged.relatedGSCKeywords;
+    const combinedRelated = clusterKeywords?.length
+      ? [...new Set([...briefRelated, ...clusterKeywords, ...relatedGSCKeywords])]
+      : [...new Set([...briefRelated, ...relatedGSCKeywords])];
+
+    if (!getMuteOptimizationToasts()) {
+      notify.info(notifySkippingExternalKeywordApiUsingPrim(primaryKeyword));
+    }
+
+    const researchModel = getResearchModel(site.id);
+    const aiAnalysis = await performAIAnalysis(
+      merged.keywordData,
+      site,
+      null,
+      (progress) => patchOptimizationProgress(setOptimizationProgress, siteId, progress),
+      combinedRelated,
+      researchModel,
+    );
+
+    if (merged.paaItems.length > 0) {
+      aiAnalysis.peopleAlsoAsk = merged.paaItems;
+    }
+
+    return {
+      keywordData: merged.keywordData,
+      aiAnalysis,
+      paaResult: { items: merged.paaItems },
+      paaRawResponse: null,
+      relatedKeywords: combinedRelated,
+    };
+  }
 
   // If skipKeywordApi is true, do NOT call external keyword/PAA APIs.
   if (skipKeywordApi) {

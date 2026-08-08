@@ -3,6 +3,7 @@ import {
   ensureMasterInstructionsInMemory,
 } from "@/lib/master-instructions-storage";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 const OR = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -125,13 +126,7 @@ export async function validateWikipediaPlacePage(
   try {
     const res = await fetch(OR, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer":
-          typeof window !== "undefined" ? window.location.origin : "https://flowbie.app",
-        "X-Title": "Flowbie Wikipedia Place Page Validator",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model,
         messages: [

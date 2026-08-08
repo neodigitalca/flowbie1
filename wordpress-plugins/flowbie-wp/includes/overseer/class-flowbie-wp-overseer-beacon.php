@@ -137,7 +137,7 @@ class Flowbie_Wp_Overseer_Beacon {
 				'code'          => self::builtin_script_template(),
 				'priority'      => 5,
 				'category'      => Flowbie_Wp_Overseer_Context::BUILTIN_SCRIPT_CATEGORY,
-				'status'        => 'active',
+				'status'        => Flowbie_Wp_Overseer_Settings::is_tracking_active() ? 'active' : 'inactive',
 				'display_rules' => Flowbie_Wp_Script_Manager_Rules::defaults(),
 			)
 		);
@@ -179,7 +179,7 @@ class Flowbie_Wp_Overseer_Beacon {
 				'code'          => self::builtin_script_template(),
 				'priority'      => 5,
 				'category'      => Flowbie_Wp_Overseer_Context::BUILTIN_SCRIPT_CATEGORY,
-				'status'        => isset( $row->status ) ? (string) $row->status : 'active',
+				'status'        => Flowbie_Wp_Overseer_Settings::is_tracking_active() ? 'active' : 'inactive',
 				'display_rules' => Flowbie_Wp_Script_Manager_Rules::decode( isset( $row->display_rules ) ? (string) $row->display_rules : '' ),
 			)
 		);

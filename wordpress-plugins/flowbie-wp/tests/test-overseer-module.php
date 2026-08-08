@@ -350,8 +350,8 @@ assert_true(
 
 $settings = Flowbie_Wp_Overseer::get_settings();
 assert_true(
-	! empty( $settings['tracking_enabled'] ) && 90 === (int) $settings['retention_days'],
-	'default settings include tracking and retention'
+	empty( $settings['tracking_enabled'] ) && 90 === (int) $settings['retention_days'],
+	'default settings keep tracking off until enabled in admin'
 );
 assert_true(
 	! empty( $settings['track_interactions'] ),

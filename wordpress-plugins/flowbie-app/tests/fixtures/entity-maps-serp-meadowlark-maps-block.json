@@ -1,0 +1,33 @@
+{
+  "tasks": [
+    {
+      "id": "meadowlark-maps-task",
+      "status_code": 20000,
+      "result": [
+        {
+          "items": [
+            {
+              "type": "map",
+              "rectangle": {
+                "x": 72,
+                "y": 168,
+                "width": 1776,
+                "height": 480
+              }
+            },
+            {
+              "type": "knowledge_graph",
+              "subtitle": "Neighbourhood in Edmonton, Alberta",
+              "rectangle": {
+                "x": 0,
+                "y": 178,
+                "width": 1905,
+                "height": 2765
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

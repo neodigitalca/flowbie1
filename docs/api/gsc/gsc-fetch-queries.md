@@ -1,0 +1,50 @@
+---
+title: "Fetch Queries"
+slug: gsc/fetch-queries
+section: Google Search Console
+method: POST
+path: /api/gsc/fetch-queries
+auth: open
+order: 400
+---
+
+POST `/api/gsc/fetch-queries`.
+
+Runs the fetch queries action in the Google Search Console API from a JSON request body.
+
+## Request
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| _(optional)_ | object | no | JSON body shape depends on the action. |
+
+## Response
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `success` / `ok` | boolean | Operation status when present |
+| `error` | string | Error message on failure |
+
+## Errors
+
+| Status | error | Cause |
+| --- | --- | --- |
+| 4xx/5xx | varies | See HTTP status and `error` field in body. |
+
+## Example
+
+```bash
+curl -X POST "https://flowbie.ca/api/gsc/fetch-queries" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+```javascript
+const res = await fetch(`/api/gsc/fetch-queries`, {
+  method: "POST",
+  credentials: "include",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({}),
+});
+const data = await res.json();
+```

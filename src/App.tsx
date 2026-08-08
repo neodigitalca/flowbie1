@@ -4,11 +4,16 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import Register from "./pages/Register";
 import Index from "./pages/Index";
+import { DocsHashRedirect } from "@/components/api-docs/DocsHashRedirect";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import HuddlePopupPage from "./pages/HuddlePopupPage";
 import { WordPressSitesProvider } from "@/hooks/use-wordpress-sites";
 import { ActiveWordPressSiteProvider } from "@/contexts/active-wordpress-site-context";
+import { HashAuthRedirect } from "@/components/HashAuthRedirect";
+import { TeamProvider } from "@/contexts/TeamContext";
 import { WordPressOptimizationProvider } from "@/contexts/wordpress-optimization-context";
 
 const queryClient = new QueryClient({
@@ -47,6 +52,8 @@ const App = () => {
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <BrowserRouter basename={import.meta.env.BASE_URL}>
                 <AuthProvider>
+                  <TeamProvider>
+                  <HashAuthRedirect />
                   <ErrorBoundary>
                     <Routes>
                       <Route
@@ -58,12 +65,38 @@ const App = () => {
                         }
                       />
                       <Route
+                        path="/register"
+                        element={
+                          <div className="flex h-dvh max-h-dvh min-h-0 flex-1 flex-col overflow-hidden">
+                            <Register />
+                          </div>
+                        }
+                      />
+                      <Route
+                        path="/huddle"
+                        element={
+                          <ProtectedRoute>
+                            <div className="flex h-dvh max-h-dvh min-h-0 flex-1 flex-col overflow-hidden">
+                              <HuddlePopupPage />
+                            </div>
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
                         path="/"
                         element={
                           <ProtectedRoute>
                             <div className="flex h-dvh max-h-dvh min-h-0 flex-1 flex-col overflow-hidden">
                               <Index />
                             </div>
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/docs/*"
+                        element={
+                          <ProtectedRoute>
+                            <DocsHashRedirect />
                           </ProtectedRoute>
                         }
                       />
@@ -78,6 +111,7 @@ const App = () => {
                       />
                     </Routes>
                   </ErrorBoundary>
+                  </TeamProvider>
                 </AuthProvider>
               </BrowserRouter>
             </div>

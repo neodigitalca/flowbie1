@@ -8,9 +8,11 @@ import {
   CONTENT_OPTIMIZER_PAGE_ROW_GRID_CLASS,
   CONTENT_OPTIMIZER_PAGE_ROW_TITLE_CELL,
   CONTENT_OPTIMIZER_PAGE_ROW_URL_CELL,
+  CONTENT_OPTIMIZER_ACTIVE_ROW_TEXT_CLASS,
   contentOptimizerRowStripeClass,
 } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import { metaDisplayTitle, overviewRowDateLabel } from "@/lib/overview/overview-tab-display";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 export interface MetaOptimizerPageRowCompactProps {
@@ -23,7 +25,13 @@ export interface MetaOptimizerPageRowCompactProps {
   embedded?: boolean;
   stripeIndex?: number;
   isActiveOptimize?: boolean;
+  /** Details drawer: formatted publish label when ISO date is unavailable. */
+  dateLabelOverride?: string;
   onToggle: () => void;
+  /** Details drawer: edit date and sync ACF on commit. */
+  editableDate?: boolean;
+  onDateModifierChange?: (dateIso: string) => void;
+  onDateModifierCommit?: () => void;
 }
 
 export function MetaOptimizerPageRowCompact({
@@ -36,13 +44,31 @@ export function MetaOptimizerPageRowCompact({
   stripeIndex = 0,
   isActiveOptimize = false,
   onToggle,
+  dateLabelOverride,
+  editableDate = false,
+  onDateModifierChange,
+  onDateModifierCommit,
 }: MetaOptimizerPageRowCompactProps) {
-  const hasUrl = Boolean(row.url?.trim());
-  const isEmptyShell = placeholder || !hasUrl;
-  const titleLabel = hasUrl ? metaDisplayTitle(row, wpTitlesByUrl) || "" : "";
-  const keywordLabel = hasUrl ? (row.focusKeyword ?? "").trim() : "";
-  const dateRaw = hasUrl ? overviewRowDateLabel(row) : "";
-  const dateLabel = dateRaw === " - " ? "" : dateRaw;
+  const urlTrim = row.url?.trim() ?? "";
+  const isSyntheticUrl = urlTrim.startsWith("#");
+  const hasLiveUrl = Boolean(urlTrim) && !isSyntheticUrl;
+  const isDisplayRow = Boolean(urlTrim);
+  const isEmptyShell = placeholder || !isDisplayRow;
+  const titleLabel = isSyntheticUrl
+    ? (row.title?.trim() || "")
+    : hasLiveUrl
+      ? metaDisplayTitle(row, wpTitlesByUrl) || ""
+      : "";
+  const keywordLabel = isDisplayRow ? (row.focusKeyword ?? "").trim() : "";
+  const wikiSummary = row.blogWikiLinkSummary?.trim() ?? "";
+  const middleLabel =
+    row.status === "ai-wikipedia-link"
+      ? wikiSummary || "Wikipedia link…"
+      : wikiSummary || keywordLabel;
+  const dateRaw = isDisplayRow ? overviewRowDateLabel(row) : "";
+  const dateFromRow = dateRaw === " - " ? "" : dateRaw;
+  const dateLabel = dateLabelOverride?.trim() || dateFromRow;
+  const activeTextClass = isActiveOptimize ? CONTENT_OPTIMIZER_ACTIVE_ROW_TEXT_CLASS : undefined;
 
   const handleRowClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (isEmptyShell) return;
@@ -50,12 +76,16 @@ export function MetaOptimizerPageRowCompact({
     onToggle();
   };
 
+  const showTitleGrid = !isExpanded || embedded;
+
   return (
     <div
       className={cn(
         !embedded && contentOptimizerRowStripeClass(stripeIndex, { isActiveOptimize }),
         !embedded && !isActiveOptimize && "hover:bg-zinc-900",
-        isExpanded ? CONTENT_OPTIMIZER_PAGE_ROW_EXPANDED_GRID_CLASS : CONTENT_OPTIMIZER_PAGE_ROW_GRID_CLASS,
+        showTitleGrid
+          ? CONTENT_OPTIMIZER_PAGE_ROW_GRID_CLASS
+          : CONTENT_OPTIMIZER_PAGE_ROW_EXPANDED_GRID_CLASS,
         !isEmptyShell && "cursor-pointer",
       )}
       role="button"
@@ -71,35 +101,71 @@ export function MetaOptimizerPageRowCompact({
         }
       }}
     >
-      {!isExpanded ? (
+      {showTitleGrid ? (
         <>
           <div className={CONTENT_OPTIMIZER_PAGE_ROW_URL_CELL}>
-            {hasUrl ? (
+            {hasLiveUrl ? (
               <a
                 href={row.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 title={row.url}
-                className="whitespace-normal break-words text-base font-bold leading-snug text-zinc-100 hover:text-cyan-300 hover:underline"
+                className={cn(
+                  "whitespace-normal break-words text-base font-bold leading-snug hover:underline",
+                  activeTextClass ?? "text-zinc-100 hover:text-cyan-300",
+                )}
                 onClick={(e) => e.stopPropagation()}
               >
                 {titleLabel}
               </a>
             ) : (
-              <span className="whitespace-normal break-words text-base font-bold leading-snug text-zinc-100">
+              <span
+                className={cn(
+                  "whitespace-normal break-words text-base font-bold leading-snug",
+                  activeTextClass ?? "text-zinc-100",
+                )}
+              >
                 {titleLabel}
               </span>
             )}
           </div>
 
-          <div className={CONTENT_OPTIMIZER_PAGE_ROW_TITLE_CELL}>
-            <span className="whitespace-normal break-words text-sm leading-snug sm:text-base">
-              {keywordLabel}
+          <div
+            className={cn(
+              CONTENT_OPTIMIZER_PAGE_ROW_TITLE_CELL,
+              isActiveOptimize &&
+                "[&_span]:!text-sky-400 [&_span]:drop-shadow-[0_0_10px_rgba(56,189,248,0.55)]",
+            )}
+          >
+            <span className={cn("whitespace-normal break-words text-sm leading-snug sm:text-base", activeTextClass)}>
+              {middleLabel}
             </span>
           </div>
 
-          <div className={CONTENT_OPTIMIZER_PAGE_ROW_DATE_CELL}>
-            <span className="whitespace-nowrap">{dateLabel}</span>
+          <div
+            className={cn(
+              CONTENT_OPTIMIZER_PAGE_ROW_DATE_CELL,
+              isActiveOptimize &&
+                "!text-sky-400 drop-shadow-[0_0_10px_rgba(56,189,248,0.55)] [&_span]:!text-sky-400",
+            )}
+          >
+            {editableDate && onDateModifierChange ? (
+              <Input
+                type="date"
+                value={row.dateModifier || ""}
+                onChange={(e) => onDateModifierChange(e.target.value)}
+                onBlur={() => onDateModifierCommit?.()}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+                className={cn(
+                  "h-8 min-w-0 w-full border-0 bg-transparent px-0 py-0 text-base shadow-none focus-visible:ring-0",
+                  activeTextClass,
+                )}
+                aria-label="Date modifier"
+              />
+            ) : (
+              <span className={cn("whitespace-nowrap", activeTextClass)}>{dateLabel}</span>
+            )}
           </div>
         </>
       ) : null}

@@ -87,7 +87,7 @@ function assert_true( bool $cond, string $msg ): void {
 }
 
 $defaults = Flowbie_Wp_Speed_Settings::default_config();
-assert_true( ! empty( $defaults['enabled'] ), 'default_config enabled' );
+assert_true( empty( $defaults['enabled'] ), 'default_config disabled' );
 assert_true( ! empty( $defaults['optimize_css'] ), 'default_config optimize_css' );
 assert_true( ! empty( $defaults['optimize_js'] ), 'default_config optimize_js' );
 assert_true( empty( $defaults['aggregate_css'] ), 'default_config no aggregate_css' );

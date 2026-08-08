@@ -1,0 +1,2468 @@
+{
+  "version": 1,
+  "generatedAt": "2026-07-29T16:32:24.643Z",
+  "routeCount": 284,
+  "sections": [
+    {
+      "id": "getting-started",
+      "label": "Getting started",
+      "items": [
+        {
+          "slug": "getting-started",
+          "title": "Introduction",
+          "order": 0
+        },
+        {
+          "slug": "getting-started/authentication",
+          "title": "Authentication",
+          "order": 10
+        },
+        {
+          "slug": "getting-started/errors",
+          "title": "Errors",
+          "order": 20
+        },
+        {
+          "slug": "getting-started/streaming",
+          "title": "Streaming responses",
+          "order": 30
+        },
+        {
+          "slug": "getting-started/client-library",
+          "title": "Building a client library",
+          "order": 40
+        }
+      ]
+    },
+    {
+      "id": "auth",
+      "label": "Authentication",
+      "items": [
+        {
+          "slug": "auth/overview",
+          "title": "Overview",
+          "order": 5
+        },
+        {
+          "slug": "auth/bootstrap",
+          "title": "Bootstrap",
+          "method": "POST",
+          "path": "/api/auth/bootstrap",
+          "auth": "public",
+          "order": 10
+        },
+        {
+          "slug": "auth/login",
+          "title": "Login",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "auth": "public",
+          "order": 20
+        },
+        {
+          "slug": "auth/logout",
+          "title": "Logout",
+          "method": "POST",
+          "path": "/api/auth/logout",
+          "auth": "session",
+          "order": 30
+        },
+        {
+          "slug": "auth/me",
+          "title": "Me",
+          "method": "GET",
+          "path": "/api/auth/me",
+          "auth": "session",
+          "order": 40
+        },
+        {
+          "slug": "auth/register",
+          "title": "Register",
+          "method": "POST",
+          "path": "/api/auth/register",
+          "auth": "public",
+          "order": 50
+        },
+        {
+          "slug": "auth/setup-admin",
+          "title": "Setup Admin",
+          "method": "POST",
+          "path": "/api/auth/setup-admin",
+          "auth": "public",
+          "order": 60
+        }
+      ]
+    },
+    {
+      "id": "bulk",
+      "label": "Bulk",
+      "items": [
+        {
+          "slug": "bulk/abort-dataforseo",
+          "title": "Abort Dataforseo",
+          "method": "POST",
+          "path": "/api/bulk/abort-dataforseo",
+          "auth": "open",
+          "order": 10
+        },
+        {
+          "slug": "bulk/validate-internal-links",
+          "title": "Validate Internal Links",
+          "method": "POST",
+          "path": "/api/bulk/validate-internal-links",
+          "auth": "open",
+          "order": 20
+        }
+      ]
+    },
+    {
+      "id": "dataforseo",
+      "label": "DataForSEO",
+      "items": [
+        {
+          "slug": "dataforseo/competitor-research",
+          "title": "Competitor Research",
+          "method": "POST",
+          "path": "/api/dataforseo/competitor-research",
+          "auth": "open",
+          "order": 10
+        },
+        {
+          "slug": "dataforseo/competitor-research/manual-domain",
+          "title": "Manual Domain",
+          "method": "POST",
+          "path": "/api/dataforseo/competitor-research/manual-domain",
+          "auth": "open",
+          "order": 20
+        },
+        {
+          "slug": "dataforseo/google-images",
+          "title": "Google Images",
+          "method": "POST",
+          "path": "/api/dataforseo/google-images",
+          "auth": "open",
+          "order": 30
+        },
+        {
+          "slug": "dataforseo/seed-ranked-keywords",
+          "title": "Seed Ranked Keywords",
+          "method": "POST",
+          "path": "/api/dataforseo/seed-ranked-keywords",
+          "auth": "open",
+          "order": 40
+        },
+        {
+          "slug": "dataforseo/serp-dump/filename",
+          "title": "GET dataforseo/serp-dump/{filename}",
+          "method": "GET",
+          "path": "/api/dataforseo/serp-dump/{filename}",
+          "auth": "open",
+          "order": 50
+        }
+      ]
+    },
+    {
+      "id": "entity-maps-image",
+      "label": "Entity Maps",
+      "items": [
+        {
+          "slug": "entity-maps-image/generate",
+          "title": "Generate",
+          "method": "POST",
+          "path": "/api/entity-maps-image/generate",
+          "auth": "open",
+          "order": 10
+        }
+      ]
+    },
+    {
+      "id": "ga",
+      "label": "Google Analytics",
+      "items": [
+        {
+          "slug": "ga/credentials-status",
+          "title": "Credentials Status",
+          "method": "GET",
+          "path": "/api/ga/credentials-status",
+          "auth": "open",
+          "order": 10
+        },
+        {
+          "slug": "ga/report-data",
+          "title": "Report Data",
+          "method": "POST",
+          "path": "/api/ga/report-data",
+          "auth": "open",
+          "order": 20
+        },
+        {
+          "slug": "ga/test",
+          "title": "Test",
+          "method": "POST",
+          "path": "/api/ga/test",
+          "auth": "open",
+          "order": 30
+        },
+        {
+          "slug": "ga/test-and-save",
+          "title": "Test And Save",
+          "method": "POST",
+          "path": "/api/ga/test-and-save",
+          "auth": "open",
+          "order": 40
+        }
+      ]
+    },
+    {
+      "id": "gmb",
+      "label": "Google Business Profile",
+      "items": [
+        {
+          "slug": "gmb/authorize",
+          "title": "Authorize",
+          "method": "GET",
+          "path": "/api/gmb/authorize",
+          "auth": "open",
+          "order": 10
+        },
+        {
+          "slug": "gmb/callback",
+          "title": "Callback",
+          "method": "GET",
+          "path": "/api/gmb/callback",
+          "auth": "open",
+          "order": 20
+        },
+        {
+          "slug": "gmb/config-status",
+          "title": "Config Status",
+          "method": "GET",
+          "path": "/api/gmb/config-status",
+          "auth": "open",
+          "order": 30
+        },
+        {
+          "slug": "gmb/generate-social-copy",
+          "title": "Generate Social Copy",
+          "method": "POST",
+          "path": "/api/gmb/generate-social-copy",
+          "auth": "open",
+          "order": 40
+        },
+        {
+          "slug": "gmb/performance",
+          "title": "Performance",
+          "method": "POST",
+          "path": "/api/gmb/performance",
+          "auth": "open",
+          "order": 50
+        },
+        {
+          "slug": "gmb/pick-blog-post",
+          "title": "Pick Blog Post",
+          "method": "POST",
+          "path": "/api/gmb/pick-blog-post",
+          "auth": "open",
+          "order": 60
+        },
+        {
+          "slug": "gmb/posts-inventory",
+          "title": "Posts Inventory",
+          "method": "POST",
+          "path": "/api/gmb/posts-inventory",
+          "auth": "open",
+          "order": 70
+        },
+        {
+          "slug": "gmb/process-schedule-queue",
+          "title": "Process Schedule Queue",
+          "method": "POST",
+          "path": "/api/gmb/process-schedule-queue",
+          "auth": "open",
+          "order": 80
+        },
+        {
+          "slug": "gmb/publish-from-harness",
+          "title": "Publish From Harness",
+          "method": "POST",
+          "path": "/api/gmb/publish-from-harness",
+          "auth": "open",
+          "order": 90
+        },
+        {
+          "slug": "gmb/save-config",
+          "title": "Save Config",
+          "method": "POST",
+          "path": "/api/gmb/save-config",
+          "auth": "open",
+          "order": 100
+        },
+        {
+          "slug": "gmb/status",
+          "title": "Status",
+          "method": "GET",
+          "path": "/api/gmb/status",
+          "auth": "open",
+          "order": 110
+        },
+        {
+          "slug": "gmb/test",
+          "title": "Test",
+          "method": "POST",
+          "path": "/api/gmb/test",
+          "auth": "open",
+          "order": 120
+        },
+        {
+          "slug": "gmb/test-and-save",
+          "title": "Test And Save",
+          "method": "POST",
+          "path": "/api/gmb/test-and-save",
+          "auth": "open",
+          "order": 130
+        }
+      ]
+    },
+    {
+      "id": "grid-local",
+      "label": "Grid Local",
+      "items": [
+        {
+          "slug": "grid-local/maps-serp-batch",
+          "title": "Maps Serp Batch",
+          "method": "POST",
+          "path": "/api/grid-local/maps-serp-batch",
+          "auth": "open",
+          "order": 10
+        }
+      ]
+    },
+    {
+      "id": "gsc",
+      "label": "Google Search Console",
+      "items": [
+        {
+          "slug": "gsc/check-url-indexing",
+          "title": "Check Url Indexing",
+          "method": "POST",
+          "path": "/api/gsc/check-url-indexing",
+          "auth": "open",
+          "order": 10
+        },
+        {
+          "slug": "gsc/export-overview-quick-wins",
+          "title": "Export Overview Quick Wins",
+          "method": "POST",
+          "path": "/api/gsc/export-overview-quick-wins",
+          "auth": "open",
+          "order": 20
+        },
+        {
+          "slug": "gsc/fetch-entity-pages-performance",
+          "title": "Fetch Entity Pages Performance",
+          "method": "POST",
+          "path": "/api/gsc/fetch-entity-pages-performance",
+          "auth": "open",
+          "order": 30
+        },
+        {
+          "slug": "gsc/fetch-historical-stats",
+          "title": "Fetch Historical Stats",
+          "method": "POST",
+          "path": "/api/gsc/fetch-historical-stats",
+          "auth": "open",
+          "order": 40
+        },
+        {
+          "slug": "gsc/fetch-page-performance",
+          "title": "Fetch Page Performance",
+          "method": "POST",
+          "path": "/api/gsc/fetch-page-performance",
+          "auth": "open",
+          "order": 50
+        },
+        {
+          "slug": "gsc/fetch-pages-performance",
+          "title": "Fetch Pages Performance",
+          "method": "POST",
+          "path": "/api/gsc/fetch-pages-performance",
+          "auth": "open",
+          "order": 60
+        },
+        {
+          "slug": "gsc/fetch-performance-stats",
+          "title": "Fetch Performance Stats",
+          "method": "POST",
+          "path": "/api/gsc/fetch-performance-stats",
+          "auth": "open",
+          "order": 70
+        },
+        {
+          "slug": "gsc/fetch-queries",
+          "title": "Fetch Queries",
+          "method": "POST",
+          "path": "/api/gsc/fetch-queries",
+          "auth": "open",
+          "order": 80
+        },
+        {
+          "slug": "gsc/fetch-reporting-bundle",
+          "title": "Fetch Reporting Bundle",
+          "method": "POST",
+          "path": "/api/gsc/fetch-reporting-bundle",
+          "auth": "open",
+          "order": 90
+        },
+        {
+          "slug": "gsc/fetch-site-pages-performance",
+          "title": "Fetch Site Pages Performance",
+          "method": "POST",
+          "path": "/api/gsc/fetch-site-pages-performance",
+          "auth": "open",
+          "order": 100
+        },
+        {
+          "slug": "gsc/index-sitemap-urls",
+          "title": "Index Sitemap Urls",
+          "method": "POST",
+          "path": "/api/gsc/index-sitemap-urls",
+          "auth": "open",
+          "order": 110
+        },
+        {
+          "slug": "gsc/quick-wins-context",
+          "title": "Quick Wins Context",
+          "method": "POST",
+          "path": "/api/gsc/quick-wins-context",
+          "auth": "open",
+          "order": 120
+        },
+        {
+          "slug": "gsc/quick-wins-csv/filename",
+          "title": "GET gsc/quick-wins-csv/{filename}",
+          "method": "GET",
+          "path": "/api/gsc/quick-wins-csv/{filename}",
+          "auth": "open",
+          "order": 130
+        },
+        {
+          "slug": "gsc/report-date-range",
+          "title": "Report Date Range",
+          "method": "POST",
+          "path": "/api/gsc/report-date-range",
+          "auth": "open",
+          "order": 140
+        },
+        {
+          "slug": "gsc/request-url-indexing",
+          "title": "Request Url Indexing",
+          "method": "POST",
+          "path": "/api/gsc/request-url-indexing",
+          "auth": "open",
+          "order": 150
+        },
+        {
+          "slug": "gsc/service-account-email",
+          "title": "Service Account Email",
+          "method": "GET",
+          "path": "/api/gsc/service-account-email",
+          "auth": "open",
+          "order": 160
+        },
+        {
+          "slug": "gsc/test-connection",
+          "title": "Test Connection",
+          "method": "GET",
+          "path": "/api/gsc/test-connection",
+          "auth": "open",
+          "order": 170
+        },
+        {
+          "slug": "gsc/top-pages",
+          "title": "Top Pages",
+          "method": "POST",
+          "path": "/api/gsc/top-pages",
+          "auth": "open",
+          "order": 180
+        },
+        {
+          "slug": "gsc/url-inventory",
+          "title": "Url Inventory",
+          "method": "POST",
+          "path": "/api/gsc/url-inventory",
+          "auth": "open",
+          "order": 190
+        }
+      ]
+    },
+    {
+      "id": "images",
+      "label": "Images",
+      "items": [
+        {
+          "slug": "images/fetch-data-url",
+          "title": "Fetch Data Url",
+          "method": "POST",
+          "path": "/api/images/fetch-data-url",
+          "auth": "open",
+          "order": 10
+        },
+        {
+          "slug": "images/prepare-local-image",
+          "title": "Prepare Local Image",
+          "method": "POST",
+          "path": "/api/images/prepare-local-image",
+          "auth": "open",
+          "order": 20
+        }
+      ]
+    },
+    {
+      "id": "integrations",
+      "label": "Integrations",
+      "items": [
+        {
+          "slug": "integrations/overview",
+          "title": "Overview",
+          "order": 5
+        },
+        {
+          "slug": "integrations/sync-active-wp-site",
+          "title": "Sync Active Wp Site",
+          "method": "POST",
+          "path": "/api/integrations/sync-active-wp-site",
+          "auth": "open",
+          "order": 10
+        },
+        {
+          "slug": "integrations/sync-email-worker-keys",
+          "title": "Sync Email Worker Keys",
+          "method": "POST",
+          "path": "/api/integrations/sync-email-worker-keys",
+          "auth": "open",
+          "order": 20
+        },
+        {
+          "slug": "integrations/sync-wordpress-sites",
+          "title": "Sync Wordpress Sites",
+          "method": "POST",
+          "path": "/api/integrations/sync-wordpress-sites",
+          "auth": "open",
+          "order": 30
+        }
+      ]
+    },
+    {
+      "id": "knowledge-model",
+      "label": "Knowledge Model",
+      "items": [
+        {
+          "slug": "knowledge-model/auto-graph",
+          "title": "Auto Graph",
+          "method": "POST",
+          "path": "/api/knowledge-model/auto-graph",
+          "auth": "open",
+          "order": 10
+        },
+        {
+          "slug": "knowledge-model/expand-node",
+          "title": "Expand Node",
+          "method": "POST",
+          "path": "/api/knowledge-model/expand-node",
+          "auth": "open",
+          "order": 20
+        },
+        {
+          "slug": "knowledge-model/generate-graph",
+          "title": "Generate Graph",
+          "method": "POST",
+          "path": "/api/knowledge-model/generate-graph",
+          "auth": "open",
+          "order": 30
+        },
+        {
+          "slug": "knowledge-model/graph/([a-zA-Z0-9-]+)",
+          "title": "([a ZA Z0 9 ]+)",
+          "method": "GET",
+          "path": "/api/knowledge-model/graph/([a-zA-Z0-9-]+)",
+          "auth": "open",
+          "order": 40
+        },
+        {
+          "slug": "knowledge-model/progress/([a-zA-Z0-9-]+)",
+          "title": "([a ZA Z0 9 ]+)",
+          "method": "GET",
+          "path": "/api/knowledge-model/progress/([a-zA-Z0-9-]+)",
+          "auth": "open",
+          "order": 50
+        }
+      ]
+    },
+    {
+      "id": "manager-cloud-settings",
+      "label": "Manager Cloud Settings",
+      "items": [
+        {
+          "slug": "manager-cloud-settings/load",
+          "title": "Load",
+          "method": "GET",
+          "path": "/api/manager-cloud-settings/load",
+          "auth": "open",
+          "order": 10
+        },
+        {
+          "slug": "manager-cloud-settings/save",
+          "title": "Save",
+          "method": "POST",
+          "path": "/api/manager-cloud-settings/save",
+          "auth": "open",
+          "order": 20
+        },
+        {
+          "slug": "manager-cloud-settings/status",
+          "title": "Status",
+          "method": "GET",
+          "path": "/api/manager-cloud-settings/status",
+          "auth": "open",
+          "order": 30
+        }
+      ]
+    },
+    {
+      "id": "manager-wordpress-properties",
+      "label": "Manager WordPress Properties",
+      "items": [
+        {
+          "slug": "manager-wordpress-properties/load",
+          "title": "Load",
+          "method": "GET",
+          "path": "/api/manager-wordpress-properties/load",
+          "auth": "open",
+          "order": 10
+        },
+        {
+          "slug": "manager-wordpress-properties/save",
+          "title": "Save",
+          "method": "POST",
+          "path": "/api/manager-wordpress-properties/save",
+          "auth": "open",
+          "order": 20
+        },
+        {
+          "slug": "manager-wordpress-properties/status",
+          "title": "Status",
+          "method": "GET",
+          "path": "/api/manager-wordpress-properties/status",
+          "auth": "open",
+          "order": 30
+        },
+        {
+          "slug": "manager-wordpress-properties/sync-openrouter",
+          "title": "Sync Openrouter",
+          "method": "POST",
+          "path": "/api/manager-wordpress-properties/sync-openrouter",
+          "auth": "open",
+          "order": 40
+        }
+      ]
+    },
+    {
+      "id": "mcp",
+      "label": "DataForSEO MCP",
+      "items": [
+        {
+          "slug": "mcp/DataForSEO_business_data_business_listings_search",
+          "title": "DataForSEO_business_data_business_listings_search",
+          "method": "POST",
+          "path": "/api/mcp/DataForSEO_business_data_business_listings_search",
+          "auth": "open",
+          "order": 10
+        },
+        {
+          "slug": "mcp/DataForSEO_business_data_google_my_business_info_live",
+          "title": "DataForSEO_business_data_google_my_business_info_live",
+          "method": "POST",
+          "path": "/api/mcp/DataForSEO_business_data_google_my_business_info_live",
+          "auth": "open",
+          "order": 20
+        },
+        {
+          "slug": "mcp/DataForSEO_dataforseo_labs_google_competitors_domain",
+          "title": "DataForSEO_dataforseo_labs_google_competitors_domain",
+          "method": "POST",
+          "path": "/api/mcp/DataForSEO_dataforseo_labs_google_competitors_domain",
+          "auth": "open",
+          "order": 30
+        },
+        {
+          "slug": "mcp/DataForSEO_dataforseo_labs_google_keyword_ideas",
+          "title": "DataForSEO_dataforseo_labs_google_keyword_ideas",
+          "method": "POST",
+          "path": "/api/mcp/DataForSEO_dataforseo_labs_google_keyword_ideas",
+          "auth": "open",
+          "order": 40
+        },
+        {
+          "slug": "mcp/DataForSEO_dataforseo_labs_google_keyword_overview",
+          "title": "DataForSEO_dataforseo_labs_google_keyword_overview",
+          "method": "POST",
+          "path": "/api/mcp/DataForSEO_dataforseo_labs_google_keyword_overview",
+          "auth": "open",
+          "order": 50
+        },
+        {
+          "slug": "mcp/DataForSEO_dataforseo_labs_google_page_intersection",
+          "title": "DataForSEO_dataforseo_labs_google_page_intersection",
+          "method": "POST",
+          "path": "/api/mcp/DataForSEO_dataforseo_labs_google_page_intersection",
+          "auth": "open",
+          "order": 60
+        },
+        {
+          "slug": "mcp/DataForSEO_dataforseo_labs_google_related_keywords",
+          "title": "DataForSEO_dataforseo_labs_google_related_keywords",
+          "method": "POST",
+          "path": "/api/mcp/DataForSEO_dataforseo_labs_google_related_keywords",
+          "auth": "open",
+          "order": 70
+        },
+        {
+          "slug": "mcp/DataForSEO_kw_data_dfs_trends_explore",
+          "title": "DataForSEO_kw_data_dfs_trends_explore",
+          "method": "POST",
+          "path": "/api/mcp/DataForSEO_kw_data_dfs_trends_explore",
+          "auth": "open",
+          "order": 80
+        },
+        {
+          "slug": "mcp/DataForSEO_on_page_content_parsing",
+          "title": "DataForSEO_on_page_content_parsing",
+          "method": "POST",
+          "path": "/api/mcp/DataForSEO_on_page_content_parsing",
+          "auth": "open",
+          "order": 90
+        },
+        {
+          "slug": "mcp/DataForSEO_on_page_lighthouse",
+          "title": "DataForSEO_on_page_lighthouse",
+          "method": "POST",
+          "path": "/api/mcp/DataForSEO_on_page_lighthouse",
+          "auth": "open",
+          "order": 100
+        },
+        {
+          "slug": "mcp/DataForSEO_serp_dump_download/filename",
+          "title": "GET mcp/DataForSEO_serp_dump_download/{filename}",
+          "method": "GET",
+          "path": "/api/mcp/DataForSEO_serp_dump_download/{filename}",
+          "auth": "open",
+          "order": 110
+        },
+        {
+          "slug": "mcp/DataForSEO_serp_google_ai_mode",
+          "title": "DataForSEO_serp_google_ai_mode",
+          "method": "POST",
+          "path": "/api/mcp/DataForSEO_serp_google_ai_mode",
+          "auth": "open",
+          "order": 120
+        },
+        {
+          "slug": "mcp/DataForSEO_serp_google_ai_overview",
+          "title": "DataForSEO_serp_google_ai_overview",
+          "method": "POST",
+          "path": "/api/mcp/DataForSEO_serp_google_ai_overview",
+          "auth": "open",
+          "order": 130
+        },
+        {
+          "slug": "mcp/DataForSEO_serp_google_maps_live_advanced",
+          "title": "DataForSEO_serp_google_maps_live_advanced",
+          "method": "POST",
+          "path": "/api/mcp/DataForSEO_serp_google_maps_live_advanced",
+          "auth": "open",
+          "order": 140
+        },
+        {
+          "slug": "mcp/DataForSEO_serp_organic_live_advanced",
+          "title": "DataForSEO_serp_organic_live_advanced",
+          "method": "POST",
+          "path": "/api/mcp/DataForSEO_serp_organic_live_advanced",
+          "auth": "open",
+          "order": 150
+        }
+      ]
+    },
+    {
+      "id": "overview",
+      "label": "Overview",
+      "items": [
+        {
+          "slug": "overview/blog-links-log",
+          "title": "Blog Links Log",
+          "method": "POST",
+          "path": "/api/overview/blog-links-log",
+          "auth": "open",
+          "order": 10
+        },
+        {
+          "slug": "overview/fetch-page-meta",
+          "title": "Fetch Page Meta",
+          "method": "POST",
+          "path": "/api/overview/fetch-page-meta",
+          "auth": "open",
+          "order": 20
+        },
+        {
+          "slug": "overview/optimize-meta-ai",
+          "title": "Optimize Meta Ai",
+          "method": "POST",
+          "path": "/api/overview/optimize-meta-ai",
+          "auth": "open",
+          "order": 30
+        },
+        {
+          "slug": "overview/seo-brief",
+          "title": "Seo Brief",
+          "method": "POST",
+          "path": "/api/overview/seo-brief",
+          "auth": "open",
+          "order": 40
+        },
+        {
+          "slug": "overview/seo-brief/filename",
+          "title": "GET overview/seo-brief/{filename}",
+          "method": "GET",
+          "path": "/api/overview/seo-brief/{filename}",
+          "auth": "open",
+          "order": 50
+        }
+      ]
+    },
+    {
+      "id": "proposal",
+      "label": "Proposal",
+      "items": [
+        {
+          "slug": "proposal/site-audit",
+          "title": "Site Audit",
+          "method": "POST",
+          "path": "/api/proposal/site-audit",
+          "auth": "open",
+          "order": 10
+        }
+      ]
+    },
+    {
+      "id": "semrush",
+      "label": "Semrush",
+      "items": [
+        {
+          "slug": "semrush/audit-ai-context",
+          "title": "Audit Ai Context",
+          "method": "POST",
+          "path": "/api/semrush/audit-ai-context",
+          "auth": "open",
+          "order": 10
+        },
+        {
+          "slug": "semrush/audit-json/filename",
+          "title": "GET semrush/audit-json/{filename}",
+          "method": "GET",
+          "path": "/api/semrush/audit-json/{filename}",
+          "auth": "open",
+          "order": 20
+        },
+        {
+          "slug": "semrush/bulk-enrichment",
+          "title": "Bulk Enrichment",
+          "method": "POST",
+          "path": "/api/semrush/bulk-enrichment",
+          "auth": "open",
+          "order": 30
+        },
+        {
+          "slug": "semrush/competitor-research",
+          "title": "Competitor Research",
+          "method": "POST",
+          "path": "/api/semrush/competitor-research",
+          "auth": "open",
+          "order": 40
+        },
+        {
+          "slug": "semrush/competitor-research/manual-domain",
+          "title": "Manual Domain",
+          "method": "POST",
+          "path": "/api/semrush/competitor-research/manual-domain",
+          "auth": "open",
+          "order": 50
+        },
+        {
+          "slug": "semrush/match-project-for-site",
+          "title": "Match Project For Site",
+          "method": "POST",
+          "path": "/api/semrush/match-project-for-site",
+          "auth": "open",
+          "order": 60
+        },
+        {
+          "slug": "semrush/overview-json/filename",
+          "title": "GET semrush/overview-json/{filename}",
+          "method": "GET",
+          "path": "/api/semrush/overview-json/{filename}",
+          "auth": "open",
+          "order": 70
+        },
+        {
+          "slug": "semrush/site-audit-url",
+          "title": "Site Audit Url",
+          "method": "POST",
+          "path": "/api/semrush/site-audit-url",
+          "auth": "open",
+          "order": 80
+        }
+      ]
+    },
+    {
+      "id": "seo",
+      "label": "SEO",
+      "items": [
+        {
+          "slug": "seo/discover-locations",
+          "title": "Discover Locations",
+          "method": "POST",
+          "path": "/api/seo/discover-locations",
+          "auth": "open",
+          "order": 10
+        },
+        {
+          "slug": "seo/enrich-location-page-addresses",
+          "title": "Enrich Location Page Addresses",
+          "method": "POST",
+          "path": "/api/seo/enrich-location-page-addresses",
+          "auth": "open",
+          "order": 20
+        },
+        {
+          "slug": "seo/local-business-address",
+          "title": "Local Business Address",
+          "method": "POST",
+          "path": "/api/seo/local-business-address",
+          "auth": "open",
+          "order": 30
+        },
+        {
+          "slug": "seo/postal-centroid",
+          "title": "Postal Centroid",
+          "method": "POST",
+          "path": "/api/seo/postal-centroid",
+          "auth": "open",
+          "order": 40
+        }
+      ]
+    },
+    {
+      "id": "site-scraper",
+      "label": "Site Scraper",
+      "items": [
+        {
+          "slug": "site-scraper/cancel",
+          "title": "Cancel",
+          "method": "POST",
+          "path": "/api/site-scraper/cancel",
+          "auth": "open",
+          "order": 10
+        },
+        {
+          "slug": "site-scraper/scrape",
+          "title": "Scrape",
+          "method": "POST",
+          "path": "/api/site-scraper/scrape",
+          "auth": "open",
+          "order": 20
+        }
+      ]
+    },
+    {
+      "id": "teams",
+      "label": "Teams",
+      "items": [
+        {
+          "slug": "teams/overview",
+          "title": "Overview",
+          "order": 5
+        },
+        {
+          "slug": "teams",
+          "title": "Teams",
+          "method": "GET",
+          "path": "/api/teams",
+          "auth": "session",
+          "order": 10
+        },
+        {
+          "slug": "teams",
+          "title": "Teams",
+          "method": "POST",
+          "path": "/api/teams",
+          "auth": "session",
+          "order": 20
+        },
+        {
+          "slug": "teams/teamId",
+          "title": "DELETE teams/{teamId}",
+          "method": "DELETE",
+          "path": "/api/teams/{teamId}",
+          "auth": "session-team",
+          "order": 30
+        },
+        {
+          "slug": "teams/teamId",
+          "title": "GET teams/{teamId}",
+          "method": "GET",
+          "path": "/api/teams/{teamId}",
+          "auth": "session-team",
+          "order": 40
+        },
+        {
+          "slug": "teams/teamId",
+          "title": "PATCH teams/{teamId}",
+          "method": "PATCH",
+          "path": "/api/teams/{teamId}",
+          "auth": "session-team",
+          "order": 50
+        },
+        {
+          "slug": "teams/teamId/chat/calls/(id)",
+          "title": "GET teams/{teamId}/chat/calls/({id})",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/chat/calls/({id})",
+          "auth": "team-rbac-communication",
+          "order": 60
+        },
+        {
+          "slug": "teams/teamId/chat/calls/(id)/accept",
+          "title": "Accept",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/calls/({id})/accept",
+          "auth": "team-rbac-communication",
+          "order": 70
+        },
+        {
+          "slug": "teams/teamId/chat/calls/(id)/decline",
+          "title": "Decline",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/calls/({id})/decline",
+          "auth": "team-rbac-communication",
+          "order": 80
+        },
+        {
+          "slug": "teams/teamId/chat/calls/(id)/end",
+          "title": "End",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/calls/({id})/end",
+          "auth": "team-rbac-communication",
+          "order": 90
+        },
+        {
+          "slug": "teams/teamId/chat/calls/(id)/flo-transcribe",
+          "title": "Flo Transcribe",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/calls/({id})/flo-transcribe",
+          "auth": "team-rbac-communication",
+          "order": 100
+        },
+        {
+          "slug": "teams/teamId/chat/calls/(id)/join",
+          "title": "Join",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/calls/({id})/join",
+          "auth": "team-rbac-communication",
+          "order": 110
+        },
+        {
+          "slug": "teams/teamId/chat/calls/(id)/leave",
+          "title": "Leave",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/calls/({id})/leave",
+          "auth": "team-rbac-communication",
+          "order": 120
+        },
+        {
+          "slug": "teams/teamId/chat/calls/(id)/signal",
+          "title": "Signal",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/calls/({id})/signal",
+          "auth": "team-rbac-communication",
+          "order": 130
+        },
+        {
+          "slug": "teams/teamId/chat/calls/(id)/signals",
+          "title": "Signals",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/chat/calls/({id})/signals",
+          "auth": "team-rbac-communication",
+          "order": 140
+        },
+        {
+          "slug": "teams/teamId/chat/calls/(id)/transcript",
+          "title": "Transcript",
+          "method": "DELETE",
+          "path": "/api/teams/{teamId}/chat/calls/({id})/transcript",
+          "auth": "team-rbac-communication",
+          "order": 150
+        },
+        {
+          "slug": "teams/teamId/chat/calls/(id)/transcript",
+          "title": "Transcript",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/chat/calls/({id})/transcript",
+          "auth": "team-rbac-communication",
+          "order": 160
+        },
+        {
+          "slug": "teams/teamId/chat/calls/(id)/transcript",
+          "title": "Transcript",
+          "method": "PATCH",
+          "path": "/api/teams/{teamId}/chat/calls/({id})/transcript",
+          "auth": "team-rbac-communication",
+          "order": 170
+        },
+        {
+          "slug": "teams/teamId/chat/calls/(id)/transcript",
+          "title": "Transcript",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/calls/({id})/transcript",
+          "auth": "team-rbac-communication",
+          "order": 180
+        },
+        {
+          "slug": "teams/teamId/chat/calls/active",
+          "title": "Active",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/chat/calls/active",
+          "auth": "team-rbac-communication",
+          "order": 190
+        },
+        {
+          "slug": "teams/teamId/chat/calls/incoming",
+          "title": "Incoming",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/chat/calls/incoming",
+          "auth": "team-rbac-communication",
+          "order": 200
+        },
+        {
+          "slug": "teams/teamId/chat/calls/start",
+          "title": "Start",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/calls/start",
+          "auth": "team-rbac-communication",
+          "order": 210
+        },
+        {
+          "slug": "teams/teamId/chat/channels",
+          "title": "Channels",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/chat/channels",
+          "auth": "team-rbac-communication",
+          "order": 220
+        },
+        {
+          "slug": "teams/teamId/chat/channels",
+          "title": "Channels",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/channels",
+          "auth": "team-rbac-communication",
+          "order": 230
+        },
+        {
+          "slug": "teams/teamId/chat/channels/(id)",
+          "title": "PATCH teams/{teamId}/chat/channels/({id})",
+          "method": "PATCH",
+          "path": "/api/teams/{teamId}/chat/channels/({id})",
+          "auth": "team-rbac-communication",
+          "order": 240
+        },
+        {
+          "slug": "teams/teamId/chat/channels/(id)/activity-log",
+          "title": "Activity Log",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/chat/channels/({id})/activity-log",
+          "auth": "team-rbac-communication",
+          "order": 250
+        },
+        {
+          "slug": "teams/teamId/chat/channels/(id)/files",
+          "title": "Files",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/channels/({id})/files",
+          "auth": "team-rbac-communication",
+          "order": 260
+        },
+        {
+          "slug": "teams/teamId/chat/channels/(id)/files/(id)",
+          "title": "DELETE teams/{teamId}/chat/channels/({id})/files/({id})",
+          "method": "DELETE",
+          "path": "/api/teams/{teamId}/chat/channels/({id})/files/({id})",
+          "auth": "team-rbac-communication",
+          "order": 270
+        },
+        {
+          "slug": "teams/teamId/chat/channels/(id)/files/(id)",
+          "title": "GET teams/{teamId}/chat/channels/({id})/files/({id})",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/chat/channels/({id})/files/({id})",
+          "auth": "team-rbac-communication",
+          "order": 280
+        },
+        {
+          "slug": "teams/teamId/chat/channels/(id)/members",
+          "title": "Members",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/channels/({id})/members",
+          "auth": "team-rbac-communication",
+          "order": 290
+        },
+        {
+          "slug": "teams/teamId/chat/channels/(id)/messages",
+          "title": "Messages",
+          "method": "DELETE",
+          "path": "/api/teams/{teamId}/chat/channels/({id})/messages",
+          "auth": "team-rbac-communication",
+          "order": 300
+        },
+        {
+          "slug": "teams/teamId/chat/channels/(id)/messages",
+          "title": "Messages",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/chat/channels/({id})/messages",
+          "auth": "team-rbac-communication",
+          "order": 310
+        },
+        {
+          "slug": "teams/teamId/chat/channels/(id)/messages",
+          "title": "Messages",
+          "method": "PATCH",
+          "path": "/api/teams/{teamId}/chat/channels/({id})/messages",
+          "auth": "team-rbac-communication",
+          "order": 320
+        },
+        {
+          "slug": "teams/teamId/chat/channels/(id)/messages",
+          "title": "Messages",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/channels/({id})/messages",
+          "auth": "team-rbac-communication",
+          "order": 330
+        },
+        {
+          "slug": "teams/teamId/chat/channels/(id)/messages/(id)/thread",
+          "title": "Thread",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/chat/channels/({id})/messages/({id})/thread",
+          "auth": "team-rbac-communication",
+          "order": 340
+        },
+        {
+          "slug": "teams/teamId/chat/channels/(id)/messages/search",
+          "title": "Search",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/chat/channels/({id})/messages/search",
+          "auth": "team-rbac-communication",
+          "order": 350
+        },
+        {
+          "slug": "teams/teamId/chat/channels/(id)/read",
+          "title": "Read",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/channels/({id})/read",
+          "auth": "team-rbac-communication",
+          "order": 360
+        },
+        {
+          "slug": "teams/teamId/chat/channels/(id)/threads/(id)/read",
+          "title": "Read",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/channels/({id})/threads/({id})/read",
+          "auth": "team-rbac-communication",
+          "order": 370
+        },
+        {
+          "slug": "teams/teamId/chat/channels/(id)/typing",
+          "title": "Typing",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/channels/({id})/typing",
+          "auth": "team-rbac-communication",
+          "order": 380
+        },
+        {
+          "slug": "teams/teamId/chat/dms",
+          "title": "Dms",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/dms",
+          "auth": "team-rbac-communication",
+          "order": 390
+        },
+        {
+          "slug": "teams/teamId/chat/mentions",
+          "title": "Mentions",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/chat/mentions",
+          "auth": "team-rbac-communication",
+          "order": 400
+        },
+        {
+          "slug": "teams/teamId/chat/mentions/read",
+          "title": "Read",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/mentions/read",
+          "auth": "team-rbac-communication",
+          "order": 410
+        },
+        {
+          "slug": "teams/teamId/chat/mentions/unread-count",
+          "title": "Unread Count",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/chat/mentions/unread-count",
+          "auth": "team-rbac-communication",
+          "order": 420
+        },
+        {
+          "slug": "teams/teamId/chat/messages/(id)",
+          "title": "DELETE teams/{teamId}/chat/messages/({id})",
+          "method": "DELETE",
+          "path": "/api/teams/{teamId}/chat/messages/({id})",
+          "auth": "team-rbac-communication",
+          "order": 430
+        },
+        {
+          "slug": "teams/teamId/chat/messages/(id)",
+          "title": "GET teams/{teamId}/chat/messages/({id})",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/chat/messages/({id})",
+          "auth": "team-rbac-communication",
+          "order": 440
+        },
+        {
+          "slug": "teams/teamId/chat/messages/(id)",
+          "title": "PATCH teams/{teamId}/chat/messages/({id})",
+          "method": "PATCH",
+          "path": "/api/teams/{teamId}/chat/messages/({id})",
+          "auth": "team-rbac-communication",
+          "order": 450
+        },
+        {
+          "slug": "teams/teamId/chat/messages/(id)",
+          "title": "POST teams/{teamId}/chat/messages/({id})",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/messages/({id})",
+          "auth": "team-rbac-communication",
+          "order": 460
+        },
+        {
+          "slug": "teams/teamId/chat/preferences",
+          "title": "Preferences",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/chat/preferences",
+          "auth": "team-rbac-communication",
+          "order": 470
+        },
+        {
+          "slug": "teams/teamId/chat/preferences",
+          "title": "Preferences",
+          "method": "PATCH",
+          "path": "/api/teams/{teamId}/chat/preferences",
+          "auth": "team-rbac-communication",
+          "order": 480
+        },
+        {
+          "slug": "teams/teamId/chat/preferences/avatar",
+          "title": "Avatar",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/preferences/avatar",
+          "auth": "team-rbac-communication",
+          "order": 490
+        },
+        {
+          "slug": "teams/teamId/chat/preview-link",
+          "title": "Preview Link",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/chat/preview-link",
+          "auth": "team-rbac-communication",
+          "order": 500
+        },
+        {
+          "slug": "teams/teamId/chat/shared-search",
+          "title": "Shared Search",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/chat/shared-search",
+          "auth": "team-rbac-communication",
+          "order": 510
+        },
+        {
+          "slug": "teams/teamId/invites",
+          "title": "Invites",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/invites",
+          "auth": "session-team",
+          "order": 520
+        },
+        {
+          "slug": "teams/teamId/invites",
+          "title": "Invites",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/invites",
+          "auth": "session-team",
+          "order": 530
+        },
+        {
+          "slug": "teams/teamId/invites/(id)/copy-link",
+          "title": "Copy Link",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/invites/({id})/copy-link",
+          "auth": "session-team",
+          "order": 540
+        },
+        {
+          "slug": "teams/teamId/invites/(id)/resend",
+          "title": "Resend",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/invites/({id})/resend",
+          "auth": "session-team",
+          "order": 550
+        },
+        {
+          "slug": "teams/teamId/invites/(id)/revoke",
+          "title": "Revoke",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/invites/({id})/revoke",
+          "auth": "session-team",
+          "order": 560
+        },
+        {
+          "slug": "teams/teamId/job-titles",
+          "title": "Job Titles",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/job-titles",
+          "auth": "session-team",
+          "order": 570
+        },
+        {
+          "slug": "teams/teamId/mail-test",
+          "title": "Mail Test",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/mail-test",
+          "auth": "session-team",
+          "order": 580
+        },
+        {
+          "slug": "teams/teamId/members",
+          "title": "Members",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/members",
+          "auth": "session-team",
+          "order": 590
+        },
+        {
+          "slug": "teams/teamId/members",
+          "title": "Members",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/members",
+          "auth": "session-team",
+          "order": 600
+        },
+        {
+          "slug": "teams/teamId/members/(id)",
+          "title": "DELETE teams/{teamId}/members/({id})",
+          "method": "DELETE",
+          "path": "/api/teams/{teamId}/members/({id})",
+          "auth": "session-team",
+          "order": 610
+        },
+        {
+          "slug": "teams/teamId/members/(id)",
+          "title": "GET teams/{teamId}/members/({id})",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/members/({id})",
+          "auth": "session-team",
+          "order": 620
+        },
+        {
+          "slug": "teams/teamId/members/(id)",
+          "title": "PATCH teams/{teamId}/members/({id})",
+          "method": "PATCH",
+          "path": "/api/teams/{teamId}/members/({id})",
+          "auth": "session-team",
+          "order": 630
+        },
+        {
+          "slug": "teams/teamId/members/(id)",
+          "title": "POST teams/{teamId}/members/({id})",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/members/({id})",
+          "auth": "session-team",
+          "order": 640
+        },
+        {
+          "slug": "teams/teamId/switch",
+          "title": "Switch",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/switch",
+          "auth": "session-team",
+          "order": 650
+        },
+        {
+          "slug": "teams/teamId/tasks/my",
+          "title": "My",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/tasks/my",
+          "auth": "session-team",
+          "order": 660
+        },
+        {
+          "slug": "teams/teamId/tasks/projects",
+          "title": "Projects",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/tasks/projects",
+          "auth": "session-team",
+          "order": 670
+        },
+        {
+          "slug": "teams/teamId/tasks/projects",
+          "title": "Projects",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/tasks/projects",
+          "auth": "session-team",
+          "order": 680
+        },
+        {
+          "slug": "teams/teamId/tasks/projects/(id)",
+          "title": "DELETE teams/{teamId}/tasks/projects/({id})",
+          "method": "DELETE",
+          "path": "/api/teams/{teamId}/tasks/projects/({id})",
+          "auth": "session-team",
+          "order": 690
+        },
+        {
+          "slug": "teams/teamId/tasks/projects/(id)",
+          "title": "GET teams/{teamId}/tasks/projects/({id})",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/tasks/projects/({id})",
+          "auth": "session-team",
+          "order": 700
+        },
+        {
+          "slug": "teams/teamId/tasks/projects/(id)",
+          "title": "PATCH teams/{teamId}/tasks/projects/({id})",
+          "method": "PATCH",
+          "path": "/api/teams/{teamId}/tasks/projects/({id})",
+          "auth": "session-team",
+          "order": 710
+        },
+        {
+          "slug": "teams/teamId/tasks/projects/(id)",
+          "title": "POST teams/{teamId}/tasks/projects/({id})",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/tasks/projects/({id})",
+          "auth": "session-team",
+          "order": 720
+        },
+        {
+          "slug": "teams/teamId/tasks/projects/(id)/files",
+          "title": "Files",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/tasks/projects/({id})/files",
+          "auth": "session-team",
+          "order": 730
+        },
+        {
+          "slug": "teams/teamId/tasks/projects/(id)/sections",
+          "title": "Sections",
+          "method": "DELETE",
+          "path": "/api/teams/{teamId}/tasks/projects/({id})/sections",
+          "auth": "session-team",
+          "order": 740
+        },
+        {
+          "slug": "teams/teamId/tasks/projects/(id)/sections",
+          "title": "Sections",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/tasks/projects/({id})/sections",
+          "auth": "session-team",
+          "order": 750
+        },
+        {
+          "slug": "teams/teamId/tasks/projects/(id)/sections",
+          "title": "Sections",
+          "method": "PATCH",
+          "path": "/api/teams/{teamId}/tasks/projects/({id})/sections",
+          "auth": "session-team",
+          "order": 760
+        },
+        {
+          "slug": "teams/teamId/tasks/projects/(id)/sections",
+          "title": "Sections",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/tasks/projects/({id})/sections",
+          "auth": "session-team",
+          "order": 770
+        },
+        {
+          "slug": "teams/teamId/tasks/projects/(id)/sections/(id)",
+          "title": "DELETE teams/{teamId}/tasks/projects/({id})/sections/({id})",
+          "method": "DELETE",
+          "path": "/api/teams/{teamId}/tasks/projects/({id})/sections/({id})",
+          "auth": "session-team",
+          "order": 780
+        },
+        {
+          "slug": "teams/teamId/tasks/projects/(id)/sections/(id)",
+          "title": "GET teams/{teamId}/tasks/projects/({id})/sections/({id})",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/tasks/projects/({id})/sections/({id})",
+          "auth": "session-team",
+          "order": 790
+        },
+        {
+          "slug": "teams/teamId/tasks/projects/(id)/sections/(id)",
+          "title": "PATCH teams/{teamId}/tasks/projects/({id})/sections/({id})",
+          "method": "PATCH",
+          "path": "/api/teams/{teamId}/tasks/projects/({id})/sections/({id})",
+          "auth": "session-team",
+          "order": 800
+        },
+        {
+          "slug": "teams/teamId/tasks/projects/(id)/sections/(id)",
+          "title": "POST teams/{teamId}/tasks/projects/({id})/sections/({id})",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/tasks/projects/({id})/sections/({id})",
+          "auth": "session-team",
+          "order": 810
+        },
+        {
+          "slug": "teams/teamId/tasks/projects/(id)/tasks",
+          "title": "Tasks",
+          "method": "DELETE",
+          "path": "/api/teams/{teamId}/tasks/projects/({id})/tasks",
+          "auth": "session-team",
+          "order": 820
+        },
+        {
+          "slug": "teams/teamId/tasks/projects/(id)/tasks",
+          "title": "Tasks",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/tasks/projects/({id})/tasks",
+          "auth": "session-team",
+          "order": 830
+        },
+        {
+          "slug": "teams/teamId/tasks/projects/(id)/tasks",
+          "title": "Tasks",
+          "method": "PATCH",
+          "path": "/api/teams/{teamId}/tasks/projects/({id})/tasks",
+          "auth": "session-team",
+          "order": 840
+        },
+        {
+          "slug": "teams/teamId/tasks/projects/(id)/tasks",
+          "title": "Tasks",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/tasks/projects/({id})/tasks",
+          "auth": "session-team",
+          "order": 850
+        },
+        {
+          "slug": "teams/teamId/tasks/search",
+          "title": "Search",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/tasks/search",
+          "auth": "session-team",
+          "order": 860
+        },
+        {
+          "slug": "teams/teamId/tasks/tags",
+          "title": "Tags",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/tasks/tags",
+          "auth": "session-team",
+          "order": 870
+        },
+        {
+          "slug": "teams/teamId/tasks/tags",
+          "title": "Tags",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/tasks/tags",
+          "auth": "session-team",
+          "order": 880
+        },
+        {
+          "slug": "teams/teamId/tasks/tasks/(id)",
+          "title": "DELETE teams/{teamId}/tasks/tasks/({id})",
+          "method": "DELETE",
+          "path": "/api/teams/{teamId}/tasks/tasks/({id})",
+          "auth": "session-team",
+          "order": 890
+        },
+        {
+          "slug": "teams/teamId/tasks/tasks/(id)",
+          "title": "GET teams/{teamId}/tasks/tasks/({id})",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/tasks/tasks/({id})",
+          "auth": "session-team",
+          "order": 900
+        },
+        {
+          "slug": "teams/teamId/tasks/tasks/(id)",
+          "title": "PATCH teams/{teamId}/tasks/tasks/({id})",
+          "method": "PATCH",
+          "path": "/api/teams/{teamId}/tasks/tasks/({id})",
+          "auth": "session-team",
+          "order": 910
+        },
+        {
+          "slug": "teams/teamId/tasks/tasks/(id)",
+          "title": "POST teams/{teamId}/tasks/tasks/({id})",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/tasks/tasks/({id})",
+          "auth": "session-team",
+          "order": 920
+        },
+        {
+          "slug": "teams/teamId/tasks/tasks/(id)/files",
+          "title": "Files",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/tasks/tasks/({id})/files",
+          "auth": "session-team",
+          "order": 930
+        },
+        {
+          "slug": "teams/teamId/tasks/tasks/(id)/files/(id)",
+          "title": "GET teams/{teamId}/tasks/tasks/({id})/files/({id})",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/tasks/tasks/({id})/files/({id})",
+          "auth": "session-team",
+          "order": 940
+        },
+        {
+          "slug": "teams/teamId/tasks/tasks/(id)/notes",
+          "title": "Notes",
+          "method": "DELETE",
+          "path": "/api/teams/{teamId}/tasks/tasks/({id})/notes",
+          "auth": "session-team",
+          "order": 950
+        },
+        {
+          "slug": "teams/teamId/tasks/tasks/(id)/notes",
+          "title": "Notes",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/tasks/tasks/({id})/notes",
+          "auth": "session-team",
+          "order": 960
+        },
+        {
+          "slug": "teams/teamId/tasks/tasks/(id)/notes",
+          "title": "Notes",
+          "method": "PATCH",
+          "path": "/api/teams/{teamId}/tasks/tasks/({id})/notes",
+          "auth": "session-team",
+          "order": 970
+        },
+        {
+          "slug": "teams/teamId/tasks/tasks/(id)/notes",
+          "title": "Notes",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/tasks/tasks/({id})/notes",
+          "auth": "session-team",
+          "order": 980
+        },
+        {
+          "slug": "teams/teamId/tasks/tasks/(id)/subtasks",
+          "title": "Subtasks",
+          "method": "DELETE",
+          "path": "/api/teams/{teamId}/tasks/tasks/({id})/subtasks",
+          "auth": "session-team",
+          "order": 990
+        },
+        {
+          "slug": "teams/teamId/tasks/tasks/(id)/subtasks",
+          "title": "Subtasks",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/tasks/tasks/({id})/subtasks",
+          "auth": "session-team",
+          "order": 1000
+        },
+        {
+          "slug": "teams/teamId/tasks/tasks/(id)/subtasks",
+          "title": "Subtasks",
+          "method": "PATCH",
+          "path": "/api/teams/{teamId}/tasks/tasks/({id})/subtasks",
+          "auth": "session-team",
+          "order": 1010
+        },
+        {
+          "slug": "teams/teamId/tasks/tasks/(id)/subtasks",
+          "title": "Subtasks",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/tasks/tasks/({id})/subtasks",
+          "auth": "session-team",
+          "order": 1020
+        },
+        {
+          "slug": "teams/teamId/tasks/templates",
+          "title": "Templates",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/tasks/templates",
+          "auth": "session-team",
+          "order": 1030
+        },
+        {
+          "slug": "teams/teamId/tasks/templates",
+          "title": "Templates",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/tasks/templates",
+          "auth": "session-team",
+          "order": 1040
+        },
+        {
+          "slug": "teams/teamId/workspace",
+          "title": "Workspace",
+          "method": "GET",
+          "path": "/api/teams/{teamId}/workspace",
+          "auth": "session-team",
+          "order": 1050
+        },
+        {
+          "slug": "teams/teamId/workspace",
+          "title": "Workspace",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/workspace",
+          "auth": "session-team",
+          "order": 1060
+        },
+        {
+          "slug": "teams/invites/accept",
+          "title": "Accept",
+          "method": "GET",
+          "path": "/api/teams/invites/accept",
+          "auth": "public",
+          "order": 1070
+        }
+      ]
+    },
+    {
+      "id": "vertical-benchmarks",
+      "label": "Vertical Benchmarks",
+      "items": [
+        {
+          "slug": "vertical-benchmarks/classify-clients",
+          "title": "Classify Clients",
+          "method": "POST",
+          "path": "/api/vertical-benchmarks/classify-clients",
+          "auth": "open",
+          "order": 10
+        },
+        {
+          "slug": "vertical-benchmarks/export-gsc-csv",
+          "title": "Export Gsc Csv",
+          "method": "POST",
+          "path": "/api/vertical-benchmarks/export-gsc-csv",
+          "auth": "open",
+          "order": 20
+        },
+        {
+          "slug": "vertical-benchmarks/taxonomy",
+          "title": "Taxonomy",
+          "method": "GET",
+          "path": "/api/vertical-benchmarks/taxonomy",
+          "auth": "open",
+          "order": 30
+        }
+      ]
+    },
+    {
+      "id": "wikipedia",
+      "label": "Wikipedia",
+      "items": [
+        {
+          "slug": "wikipedia/api",
+          "title": "Api",
+          "method": "GET",
+          "path": "/api/wikipedia/api",
+          "auth": "open",
+          "order": 10
+        }
+      ]
+    },
+    {
+      "id": "wordpress",
+      "label": "WordPress",
+      "items": [
+        {
+          "slug": "wordpress/overview",
+          "title": "Overview",
+          "order": 5
+        },
+        {
+          "slug": "wordpress/bulk-update-overview-seo",
+          "title": "Bulk Update Overview Seo",
+          "method": "GET",
+          "path": "/api/wordpress/bulk-update-overview-seo",
+          "auth": "open",
+          "order": 10
+        },
+        {
+          "slug": "wordpress/bulk-update-overview-seo",
+          "title": "Bulk Update Overview Seo",
+          "method": "POST",
+          "path": "/api/wordpress/bulk-update-overview-seo",
+          "auth": "open",
+          "order": 20
+        },
+        {
+          "slug": "wordpress/change-post-url",
+          "title": "Change Post Url",
+          "method": "GET",
+          "path": "/api/wordpress/change-post-url",
+          "auth": "open",
+          "order": 30
+        },
+        {
+          "slug": "wordpress/change-post-url",
+          "title": "Change Post Url",
+          "method": "POST",
+          "path": "/api/wordpress/change-post-url",
+          "auth": "open",
+          "order": 40
+        },
+        {
+          "slug": "wordpress/check-future-posts",
+          "title": "Check Future Posts",
+          "method": "GET",
+          "path": "/api/wordpress/check-future-posts",
+          "auth": "open",
+          "order": 50
+        },
+        {
+          "slug": "wordpress/check-future-posts",
+          "title": "Check Future Posts",
+          "method": "POST",
+          "path": "/api/wordpress/check-future-posts",
+          "auth": "open",
+          "order": 60
+        },
+        {
+          "slug": "wordpress/create-post",
+          "title": "Create Post",
+          "method": "GET",
+          "path": "/api/wordpress/create-post",
+          "auth": "open",
+          "order": 70
+        },
+        {
+          "slug": "wordpress/create-post",
+          "title": "Create Post",
+          "method": "POST",
+          "path": "/api/wordpress/create-post",
+          "auth": "open",
+          "order": 80
+        },
+        {
+          "slug": "wordpress/delete-post",
+          "title": "Delete Post",
+          "method": "GET",
+          "path": "/api/wordpress/delete-post",
+          "auth": "open",
+          "order": 90
+        },
+        {
+          "slug": "wordpress/delete-post",
+          "title": "Delete Post",
+          "method": "POST",
+          "path": "/api/wordpress/delete-post",
+          "auth": "open",
+          "order": 100
+        },
+        {
+          "slug": "wordpress/detect-sitemaps",
+          "title": "Detect Sitemaps",
+          "method": "GET",
+          "path": "/api/wordpress/detect-sitemaps",
+          "auth": "open",
+          "order": 110
+        },
+        {
+          "slug": "wordpress/detect-sitemaps",
+          "title": "Detect Sitemaps",
+          "method": "POST",
+          "path": "/api/wordpress/detect-sitemaps",
+          "auth": "open",
+          "order": 120
+        },
+        {
+          "slug": "wordpress/discover-acf-field-groups",
+          "title": "Discover Acf Field Groups",
+          "method": "GET",
+          "path": "/api/wordpress/discover-acf-field-groups",
+          "auth": "open",
+          "order": 130
+        },
+        {
+          "slug": "wordpress/discover-acf-field-groups",
+          "title": "Discover Acf Field Groups",
+          "method": "POST",
+          "path": "/api/wordpress/discover-acf-field-groups",
+          "auth": "open",
+          "order": 140
+        },
+        {
+          "slug": "wordpress/flowbie-wp-tool",
+          "title": "Flowbie Wp Tool",
+          "method": "GET",
+          "path": "/api/wordpress/flowbie-wp-tool",
+          "auth": "open",
+          "order": 150
+        },
+        {
+          "slug": "wordpress/flowbie-wp-tool",
+          "title": "Flowbie Wp Tool",
+          "method": "POST",
+          "path": "/api/wordpress/flowbie-wp-tool",
+          "auth": "open",
+          "order": 160
+        },
+        {
+          "slug": "wordpress/flowbie-wp-tools-list",
+          "title": "Flowbie Wp Tools List",
+          "method": "GET",
+          "path": "/api/wordpress/flowbie-wp-tools-list",
+          "auth": "open",
+          "order": 170
+        },
+        {
+          "slug": "wordpress/flowbie-wp-tools-list",
+          "title": "Flowbie Wp Tools List",
+          "method": "POST",
+          "path": "/api/wordpress/flowbie-wp-tools-list",
+          "auth": "open",
+          "order": 180
+        },
+        {
+          "slug": "wordpress/get-acf-fields",
+          "title": "Get Acf Fields",
+          "method": "GET",
+          "path": "/api/wordpress/get-acf-fields",
+          "auth": "open",
+          "order": 190
+        },
+        {
+          "slug": "wordpress/get-acf-fields",
+          "title": "Get Acf Fields",
+          "method": "POST",
+          "path": "/api/wordpress/get-acf-fields",
+          "auth": "open",
+          "order": 200
+        },
+        {
+          "slug": "wordpress/get-acf-fields-batch",
+          "title": "Get Acf Fields Batch",
+          "method": "GET",
+          "path": "/api/wordpress/get-acf-fields-batch",
+          "auth": "open",
+          "order": 210
+        },
+        {
+          "slug": "wordpress/get-acf-fields-batch",
+          "title": "Get Acf Fields Batch",
+          "method": "POST",
+          "path": "/api/wordpress/get-acf-fields-batch",
+          "auth": "open",
+          "order": 220
+        },
+        {
+          "slug": "wordpress/get-acf-fields-by-url",
+          "title": "Get Acf Fields By Url",
+          "method": "GET",
+          "path": "/api/wordpress/get-acf-fields-by-url",
+          "auth": "open",
+          "order": 230
+        },
+        {
+          "slug": "wordpress/get-acf-fields-by-url",
+          "title": "Get Acf Fields By Url",
+          "method": "POST",
+          "path": "/api/wordpress/get-acf-fields-by-url",
+          "auth": "open",
+          "order": 240
+        },
+        {
+          "slug": "wordpress/get-acf-fields-by-url-batch",
+          "title": "Get Acf Fields By Url Batch",
+          "method": "GET",
+          "path": "/api/wordpress/get-acf-fields-by-url-batch",
+          "auth": "open",
+          "order": 250
+        },
+        {
+          "slug": "wordpress/get-acf-fields-by-url-batch",
+          "title": "Get Acf Fields By Url Batch",
+          "method": "POST",
+          "path": "/api/wordpress/get-acf-fields-by-url-batch",
+          "auth": "open",
+          "order": 260
+        },
+        {
+          "slug": "wordpress/get-author-usage",
+          "title": "Get Author Usage",
+          "method": "GET",
+          "path": "/api/wordpress/get-author-usage",
+          "auth": "open",
+          "order": 270
+        },
+        {
+          "slug": "wordpress/get-author-usage",
+          "title": "Get Author Usage",
+          "method": "POST",
+          "path": "/api/wordpress/get-author-usage",
+          "auth": "open",
+          "order": 280
+        },
+        {
+          "slug": "wordpress/get-optimization-activity-counts",
+          "title": "Get Optimization Activity Counts",
+          "method": "GET",
+          "path": "/api/wordpress/get-optimization-activity-counts",
+          "auth": "open",
+          "order": 290
+        },
+        {
+          "slug": "wordpress/get-optimization-activity-counts",
+          "title": "Get Optimization Activity Counts",
+          "method": "POST",
+          "path": "/api/wordpress/get-optimization-activity-counts",
+          "auth": "open",
+          "order": 300
+        },
+        {
+          "slug": "wordpress/get-post-content",
+          "title": "Get Post Content",
+          "method": "GET",
+          "path": "/api/wordpress/get-post-content",
+          "auth": "open",
+          "order": 310
+        },
+        {
+          "slug": "wordpress/get-post-content",
+          "title": "Get Post Content",
+          "method": "POST",
+          "path": "/api/wordpress/get-post-content",
+          "auth": "open",
+          "order": 320
+        },
+        {
+          "slug": "wordpress/get-post-meta",
+          "title": "Get Post Meta",
+          "method": "GET",
+          "path": "/api/wordpress/get-post-meta",
+          "auth": "open",
+          "order": 330
+        },
+        {
+          "slug": "wordpress/get-post-meta",
+          "title": "Get Post Meta",
+          "method": "POST",
+          "path": "/api/wordpress/get-post-meta",
+          "auth": "open",
+          "order": 340
+        },
+        {
+          "slug": "wordpress/get-post-types",
+          "title": "Get Post Types",
+          "method": "GET",
+          "path": "/api/wordpress/get-post-types",
+          "auth": "open",
+          "order": 350
+        },
+        {
+          "slug": "wordpress/get-post-types",
+          "title": "Get Post Types",
+          "method": "POST",
+          "path": "/api/wordpress/get-post-types",
+          "auth": "open",
+          "order": 360
+        },
+        {
+          "slug": "wordpress/get-posts-list",
+          "title": "Get Posts List",
+          "method": "GET",
+          "path": "/api/wordpress/get-posts-list",
+          "auth": "open",
+          "order": 370
+        },
+        {
+          "slug": "wordpress/get-posts-list",
+          "title": "Get Posts List",
+          "method": "POST",
+          "path": "/api/wordpress/get-posts-list",
+          "auth": "open",
+          "order": 380
+        },
+        {
+          "slug": "wordpress/get-published-posts",
+          "title": "Get Published Posts",
+          "method": "GET",
+          "path": "/api/wordpress/get-published-posts",
+          "auth": "open",
+          "order": 390
+        },
+        {
+          "slug": "wordpress/get-published-posts",
+          "title": "Get Published Posts",
+          "method": "POST",
+          "path": "/api/wordpress/get-published-posts",
+          "auth": "open",
+          "order": 400
+        },
+        {
+          "slug": "wordpress/get-quarter-editorial-counts",
+          "title": "Get Quarter Editorial Counts",
+          "method": "GET",
+          "path": "/api/wordpress/get-quarter-editorial-counts",
+          "auth": "open",
+          "order": 410
+        },
+        {
+          "slug": "wordpress/get-quarter-editorial-counts",
+          "title": "Get Quarter Editorial Counts",
+          "method": "POST",
+          "path": "/api/wordpress/get-quarter-editorial-counts",
+          "auth": "open",
+          "order": 420
+        },
+        {
+          "slug": "wordpress/get-scheduled-posts",
+          "title": "Get Scheduled Posts",
+          "method": "GET",
+          "path": "/api/wordpress/get-scheduled-posts",
+          "auth": "open",
+          "order": 430
+        },
+        {
+          "slug": "wordpress/get-scheduled-posts",
+          "title": "Get Scheduled Posts",
+          "method": "POST",
+          "path": "/api/wordpress/get-scheduled-posts",
+          "auth": "open",
+          "order": 440
+        },
+        {
+          "slug": "wordpress/get-site-inventory-bulk",
+          "title": "Get Site Inventory Bulk",
+          "method": "GET",
+          "path": "/api/wordpress/get-site-inventory-bulk",
+          "auth": "open",
+          "order": 450
+        },
+        {
+          "slug": "wordpress/get-site-inventory-bulk",
+          "title": "Get Site Inventory Bulk",
+          "method": "POST",
+          "path": "/api/wordpress/get-site-inventory-bulk",
+          "auth": "open",
+          "order": 460
+        },
+        {
+          "slug": "wordpress/get-site-post-inventory",
+          "title": "Get Site Post Inventory",
+          "method": "GET",
+          "path": "/api/wordpress/get-site-post-inventory",
+          "auth": "open",
+          "order": 470
+        },
+        {
+          "slug": "wordpress/get-site-post-inventory",
+          "title": "Get Site Post Inventory",
+          "method": "POST",
+          "path": "/api/wordpress/get-site-post-inventory",
+          "auth": "open",
+          "order": 480
+        },
+        {
+          "slug": "wordpress/list-media",
+          "title": "List Media",
+          "method": "GET",
+          "path": "/api/wordpress/list-media",
+          "auth": "open",
+          "order": 490
+        },
+        {
+          "slug": "wordpress/list-media",
+          "title": "List Media",
+          "method": "POST",
+          "path": "/api/wordpress/list-media",
+          "auth": "open",
+          "order": 500
+        },
+        {
+          "slug": "wordpress/parse-sitemap",
+          "title": "Parse Sitemap",
+          "method": "GET",
+          "path": "/api/wordpress/parse-sitemap",
+          "auth": "open",
+          "order": 510
+        },
+        {
+          "slug": "wordpress/parse-sitemap",
+          "title": "Parse Sitemap",
+          "method": "POST",
+          "path": "/api/wordpress/parse-sitemap",
+          "auth": "open",
+          "order": 520
+        },
+        {
+          "slug": "wordpress/resolve-featured-media",
+          "title": "Resolve Featured Media",
+          "method": "GET",
+          "path": "/api/wordpress/resolve-featured-media",
+          "auth": "open",
+          "order": 530
+        },
+        {
+          "slug": "wordpress/resolve-featured-media",
+          "title": "Resolve Featured Media",
+          "method": "POST",
+          "path": "/api/wordpress/resolve-featured-media",
+          "auth": "open",
+          "order": 540
+        },
+        {
+          "slug": "wordpress/resolve-urls",
+          "title": "Resolve Urls",
+          "method": "GET",
+          "path": "/api/wordpress/resolve-urls",
+          "auth": "open",
+          "order": 550
+        },
+        {
+          "slug": "wordpress/resolve-urls",
+          "title": "Resolve Urls",
+          "method": "POST",
+          "path": "/api/wordpress/resolve-urls",
+          "auth": "open",
+          "order": 560
+        },
+        {
+          "slug": "wordpress/test-connection",
+          "title": "Test Connection",
+          "method": "GET",
+          "path": "/api/wordpress/test-connection",
+          "auth": "open",
+          "order": 570
+        },
+        {
+          "slug": "wordpress/test-connection",
+          "title": "Test Connection",
+          "method": "POST",
+          "path": "/api/wordpress/test-connection",
+          "auth": "open",
+          "order": 580
+        },
+        {
+          "slug": "wordpress/update-acf-field",
+          "title": "Update Acf Field",
+          "method": "GET",
+          "path": "/api/wordpress/update-acf-field",
+          "auth": "open",
+          "order": 590
+        },
+        {
+          "slug": "wordpress/update-acf-field",
+          "title": "Update Acf Field",
+          "method": "POST",
+          "path": "/api/wordpress/update-acf-field",
+          "auth": "open",
+          "order": 600
+        },
+        {
+          "slug": "wordpress/update-acf-fields",
+          "title": "Update Acf Fields",
+          "method": "GET",
+          "path": "/api/wordpress/update-acf-fields",
+          "auth": "open",
+          "order": 610
+        },
+        {
+          "slug": "wordpress/update-acf-fields",
+          "title": "Update Acf Fields",
+          "method": "POST",
+          "path": "/api/wordpress/update-acf-fields",
+          "auth": "open",
+          "order": 620
+        },
+        {
+          "slug": "wordpress/update-overview-seo-item",
+          "title": "Update Overview Seo Item",
+          "method": "GET",
+          "path": "/api/wordpress/update-overview-seo-item",
+          "auth": "open",
+          "order": 630
+        },
+        {
+          "slug": "wordpress/update-overview-seo-item",
+          "title": "Update Overview Seo Item",
+          "method": "POST",
+          "path": "/api/wordpress/update-overview-seo-item",
+          "auth": "open",
+          "order": 640
+        },
+        {
+          "slug": "wordpress/update-post",
+          "title": "Update Post",
+          "method": "GET",
+          "path": "/api/wordpress/update-post",
+          "auth": "open",
+          "order": 650
+        },
+        {
+          "slug": "wordpress/update-post",
+          "title": "Update Post",
+          "method": "POST",
+          "path": "/api/wordpress/update-post",
+          "auth": "open",
+          "order": 660
+        },
+        {
+          "slug": "wordpress/update-post-meta",
+          "title": "Update Post Meta",
+          "method": "GET",
+          "path": "/api/wordpress/update-post-meta",
+          "auth": "open",
+          "order": 670
+        },
+        {
+          "slug": "wordpress/update-post-meta",
+          "title": "Update Post Meta",
+          "method": "POST",
+          "path": "/api/wordpress/update-post-meta",
+          "auth": "open",
+          "order": 680
+        },
+        {
+          "slug": "wordpress/upload-media",
+          "title": "Upload Media",
+          "method": "GET",
+          "path": "/api/wordpress/upload-media",
+          "auth": "open",
+          "order": 690
+        },
+        {
+          "slug": "wordpress/upload-media",
+          "title": "Upload Media",
+          "method": "POST",
+          "path": "/api/wordpress/upload-media",
+          "auth": "open",
+          "order": 700
+        }
+      ]
+    }
+  ]
+}

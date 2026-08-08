@@ -37,6 +37,9 @@ class Flowbie_App_Api_Dispatcher {
 		if ( $route === null ) {
 			return;
 		}
+		while ( ob_get_level() > 0 ) {
+			ob_end_clean();
+		}
 		self::dispatch( $route );
 		exit;
 	}
@@ -45,10 +48,18 @@ class Flowbie_App_Api_Dispatcher {
 	 * @return string|null Route after /api/ without leading slash.
 	 */
 	private static function resolve_route(): ?string {
+		$route = self::resolve_route_from_request();
+		if ( $route !== null ) {
+			return $route;
+		}
 		$qv = get_query_var( 'flowbie_api_route', null );
 		if ( is_string( $qv ) && $qv !== '' ) {
 			return trim( $qv, '/' );
 		}
+		return null;
+	}
+
+	private static function resolve_route_from_request(): ?string {
 		$uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : '';
 		$path = (string) parse_url( $uri, PHP_URL_PATH );
 		if ( preg_match( '#^/api/(.+)$#', $path, $m ) ) {
@@ -168,6 +179,17 @@ class Flowbie_App_Api_Dispatcher {
 			return;
 		}
 
+		if ( 0 === strpos( $route, 'auth/' ) ) {
+			Flowbie_App_Auth_Route_Handlers::dispatch( substr( $route, 5 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'teams/' ) || $route === 'teams' ) {
+			$teams_route = $route === 'teams' ? '' : substr( $route, 6 );
+			Flowbie_App_Teams_Route_Handlers::dispatch( $teams_route, $method, $body );
+			return;
+		}
+
 		if ( 0 === strpos( $route, 'manager-cloud-settings/' ) ) {
 			Flowbie_App_Manager_Route_Handlers::dispatch_cloud( substr( $route, 23 ), $method, $body );
 			return;
@@ -188,18 +210,13 @@ class Flowbie_App_Api_Dispatcher {
 			return;
 		}
 
-		if ( $route === 'google-maps-image/generate' && $method === 'POST' ) {
-			self::send_json( Flowbie_App_Google_Maps_Screenshot::generate( $body ) );
+		if ( $route === 'entity-maps-image/generate' && $method === 'POST' ) {
+			self::send_json( Flowbie_App_Entity_Maps_Image::generate( $body ) );
 			return;
 		}
 
 		if ( $route === 'bulk/abort-dataforseo' && $method === 'POST' ) {
 			self::send_json( array( 'success' => true, 'aborted' => true ) );
-			return;
-		}
-
-		if ( $route === 'diagnostics/maps-exec' && $method === 'GET' ) {
-			self::send_json( Flowbie_App_Google_Maps_Screenshot::probe_exec() );
 			return;
 		}
 
@@ -275,6 +292,9 @@ class Flowbie_App_Api_Dispatcher {
 	 * @param mixed $data Response body.
 	 */
 	public static function send_json( $data, int $status = 200, string $content_type = 'application/json; charset=utf-8' ): void {
+		while ( ob_get_level() > 0 ) {
+			ob_end_clean();
+		}
 		status_header( $status );
 		header( 'Content-Type: ' . $content_type );
 		echo wp_json_encode( $data );

@@ -173,6 +173,42 @@ class Flowbie_Wp_Rest {
 	}
 
 	/**
+	 * Rendered post body as HTML (same path as flowbie/v1/post-content).
+	 */
+	public static function get_rendered_content_html( int $post_id ): string {
+		$post_obj = get_post( $post_id );
+		if ( ! $post_obj instanceof \WP_Post ) {
+			return '';
+		}
+
+		global $post;
+		$prev_post = $post;
+		$post      = $post_obj;
+		setup_postdata( $post );
+		$content_html = apply_filters( 'the_content', $post->post_content );
+		wp_reset_postdata();
+		$post = $prev_post;
+
+		if ( ! is_string( $content_html ) || trim( $content_html ) === '' ) {
+			return '';
+		}
+
+		return trim( $content_html );
+	}
+
+	/**
+	 * Rendered post body as plain text (same path as flowbie/v1/post-content).
+	 */
+	public static function get_rendered_content_plain( int $post_id ): string {
+		$content_html = self::get_rendered_content_html( $post_id );
+		if ( $content_html === '' ) {
+			return '';
+		}
+
+		return trim( preg_replace( '/\s+/', ' ', wp_strip_all_tags( $content_html ) ) );
+	}
+
+	/**
 	 * Return post fields for Flowbie Node (same shape consumers expect after wp/v2 mapping).
 	 *
 	 * @param \WP_REST_Request $request Request.

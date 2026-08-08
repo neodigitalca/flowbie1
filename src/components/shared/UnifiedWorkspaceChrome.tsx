@@ -52,6 +52,8 @@ type UnifiedWorkspaceChromeFullProgressProps = UnifiedWorkspaceChromeBaseProps &
   detailsDrawerClassName?: string;
   /** When this value changes and Details can open, open the drawer (e.g. Overview harness start). */
   detailsOpenSignal?: number | string | null;
+  /** Fires when the Details drawer opens or closes. */
+  onDetailsOpenChange?: (open: boolean) => void;
 };
 
 type UnifiedWorkspaceChromeEmptyProgressProps = UnifiedWorkspaceChromeBaseProps & {
@@ -99,6 +101,13 @@ export function UnifiedWorkspaceChrome(props: UnifiedWorkspaceChromeProps) {
     }
   }, [detailsOpenSignal, canOpenDetails]);
 
+  const onDetailsOpenChange =
+    !isEmptyProgressBand && "onDetailsOpenChange" in props ? props.onDetailsOpenChange : undefined;
+
+  useEffect(() => {
+    onDetailsOpenChange?.(detailsOpen);
+  }, [detailsOpen, onDetailsOpenChange]);
+
   return (
     <div className="w-full max-w-full shrink-0 font-sans text-base font-normal">
       <div
@@ -132,7 +141,7 @@ export function UnifiedWorkspaceChrome(props: UnifiedWorkspaceChromeProps) {
               ) : null}
             </div>
             {titleRowEnd ? (
-              <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+              <div className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-hidden">
                 {titleRowEnd}
               </div>
             ) : null}
@@ -186,8 +195,8 @@ export function UnifiedWorkspaceChrome(props: UnifiedWorkspaceChromeProps) {
                 <div
                   id={props.detailsPanelId}
                   className={cn(
-                    DETAILS_DRAWER_PANEL,
                     DETAILS_DRAWER_SHELL,
+                    DETAILS_DRAWER_PANEL,
                     props.detailsDrawerClassName,
                   )}
                 >

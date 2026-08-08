@@ -13,23 +13,15 @@ class Flowbie_Wp_OpenRouter {
 
 	const TRANSCRIBE_API_URL = 'https://openrouter.ai/api/v1/audio/transcriptions';
 
-	const SPEECH_API_URL = 'https://openrouter.ai/api/v1/audio/speech';
-
 	const DEFAULT_MODEL = 'google/gemini-2.5-flash-lite';
 
 	const TRANSCRIBE_MODEL = 'google/chirp-3';
 
-	const VOICE_ACK_MODEL = 'google/gemini-2.5-flash-lite';
+	const APP_TITLE = 'Flowbie WP';
 
-	const TTS_MODEL = 'google/gemini-3.1-flash-tts-preview';
-
-	const TTS_MODEL_FALLBACK = 'openai/gpt-4o-mini-tts-2025-12-15';
-
-	const TTS_VOICE = 'Kore';
+	const DEFAULT_HTTP_REFERER = 'https://flowbie.ca/flowbie-wp';
 
 	const MAX_AUDIO_BASE64_BYTES = 5242880;
-
-	const CREDENTIALS_TRANSIENT_TTL = 3600;
 
 	/**
 	 * @return string
@@ -46,7 +38,27 @@ class Flowbie_Wp_OpenRouter {
 		if ( $agency !== '' ) {
 			return $agency;
 		}
-		return self::get_supabase_api_key();
+		$file_key = self::get_flowbie_data_openrouter_key();
+		if ( $file_key !== '' ) {
+			return $file_key;
+		}
+		return '';
+	}
+
+	/**
+	 * OpenRouter key synced from flowbie.ca (email-worker-keys.json).
+	 *
+	 * @return string
+	 */
+	private static function get_flowbie_data_openrouter_key(): string {
+		if ( ! class_exists( 'Flowbie_App_Data_Paths' ) || ! class_exists( 'Flowbie_App_Json_File_Store' ) ) {
+			return '';
+		}
+		$keys = Flowbie_App_Json_File_Store::read( Flowbie_App_Data_Paths::root() . '/email-worker-keys.json' );
+		if ( is_array( $keys ) && ! empty( $keys['openRouterApiKey'] ) ) {
+			return trim( (string) $keys['openRouterApiKey'] );
+		}
+		return '';
 	}
 
 	/**
@@ -77,11 +89,6 @@ class Flowbie_Wp_OpenRouter {
 			return trim( (string) $env );
 		}
 
-		$credentials = self::get_supabase_credentials();
-		if ( is_array( $credentials ) && ! empty( $credentials['model'] ) ) {
-			return trim( (string) $credentials['model'] );
-		}
-
 		return self::DEFAULT_MODEL;
 	}
 
@@ -92,7 +99,40 @@ class Flowbie_Wp_OpenRouter {
 		if ( defined( 'FLOWBIE_WP_OPENROUTER_HTTP_REFERER' ) && FLOWBIE_WP_OPENROUTER_HTTP_REFERER !== '' ) {
 			return trim( (string) FLOWBIE_WP_OPENROUTER_HTTP_REFERER );
 		}
-		return 'https://flowbie.ca';
+		return self::DEFAULT_HTTP_REFERER;
+	}
+
+	/**
+	 * @return string
+	 */
+	public static function get_app_title(): string {
+		return self::APP_TITLE;
+	}
+
+	/**
+	 * OpenRouter app attribution headers (HTTP-Referer + X-Title).
+	 *
+	 * @return array<string, string>
+	 */
+	public static function attribution_headers(): array {
+		return array(
+			'HTTP-Referer' => self::get_http_referer(),
+			'X-Title'      => self::get_app_title(),
+		);
+	}
+
+	/**
+	 * @param string $api_key
+	 * @return array<string, string>
+	 */
+	public static function request_headers( string $api_key ): array {
+		return array_merge(
+			array(
+				'Content-Type'  => 'application/json',
+				'Authorization' => 'Bearer ' . $api_key,
+			),
+			self::attribution_headers()
+		);
 	}
 
 	/**
@@ -120,67 +160,16 @@ class Flowbie_Wp_OpenRouter {
 		if ( defined( 'FLOWBIE_WP_OPENROUTER_API_KEY' ) && FLOWBIE_WP_OPENROUTER_API_KEY !== '' ) {
 			return 'wp-config';
 		}
-		if ( getenv( 'FLOWBIE_WP_OPENROUTER_API_KEY' ) ) {
+		if ( getenv( 'FLOWBIE_WP_OPENROUTER_API_KEY' ) || getenv( 'OPEN_ROUTER_API_KEY' ) || getenv( 'OPENROUTER_API_KEY' ) ) {
 			return 'environment';
 		}
 		if ( Flowbie_Wp_Api::get_agency_openrouter_api_key() !== '' ) {
 			return 'site';
 		}
-		if ( self::get_supabase_api_key() !== '' ) {
-			return 'flowbie';
-		}
 		return '';
 	}
 
 	public static function clear_credentials_cache(): void {
-		if ( ! Flowbie_Wp_Api::is_paired() ) {
-			return;
-		}
-		delete_transient( self::credentials_transient_key( Flowbie_Wp_Api::get_paired_site_id() ) );
-	}
-
-	/**
-	 * @return string
-	 */
-	private static function get_supabase_api_key(): string {
-		$credentials = self::get_supabase_credentials();
-		if ( ! is_array( $credentials ) || empty( $credentials['apiKey'] ) ) {
-			return '';
-		}
-		return trim( (string) $credentials['apiKey'] );
-	}
-
-	/**
-	 * @return array{apiKey:string,model:string}|null
-	 */
-	private static function get_supabase_credentials(): ?array {
-		if ( ! Flowbie_Wp_Api::is_paired() ) {
-			return null;
-		}
-
-		$site_id   = Flowbie_Wp_Api::get_paired_site_id();
-		$cache_key = self::credentials_transient_key( $site_id );
-		$cached    = get_transient( $cache_key );
-		if ( is_array( $cached ) ) {
-			return $cached;
-		}
-
-		$result = Flowbie_Wp_Supabase::fetch_openrouter_credentials( $site_id );
-		if ( is_wp_error( $result ) ) {
-			return null;
-		}
-
-		$credentials = array(
-			'apiKey' => isset( $result['apiKey'] ) ? trim( (string) $result['apiKey'] ) : '',
-			'model'  => isset( $result['model'] ) ? trim( (string) $result['model'] ) : '',
-		);
-		set_transient( $cache_key, $credentials, self::CREDENTIALS_TRANSIENT_TTL );
-
-		return $credentials;
-	}
-
-	private static function credentials_transient_key( string $site_id ): string {
-		return 'flowbie_wp_or_' . md5( $site_id . '|' . FLOWBIE_WP_VERSION );
 	}
 
 	/**
@@ -195,7 +184,7 @@ class Flowbie_Wp_OpenRouter {
 		if ( $key === '' ) {
 			return new WP_Error(
 				'flowbie_openrouter_key',
-				__( 'OpenRouter API key is not configured. Save your OpenRouter key in Flowbie Integrations (API Keys), then reconnect this site.', 'flowbie-wp' )
+				__( 'OpenRouter API key is not configured. Add your key in Flowbie WP Settings or the plugin .env file.', 'flowbie-wp' )
 			);
 		}
 
@@ -205,12 +194,7 @@ class Flowbie_Wp_OpenRouter {
 			self::API_URL,
 			array(
 				'timeout' => self::get_timeout(),
-				'headers' => array(
-					'Content-Type'  => 'application/json',
-					'Authorization' => 'Bearer ' . $key,
-					'HTTP-Referer'  => self::get_http_referer(),
-					'X-Title'       => 'Flowbie WP AI',
-				),
+				'headers' => self::request_headers( $key ),
 				'body'    => wp_json_encode(
 					array(
 						'model'       => self::get_model(),
@@ -301,12 +285,7 @@ class Flowbie_Wp_OpenRouter {
 			self::API_URL,
 			array(
 				'timeout' => self::get_timeout(),
-				'headers' => array(
-					'Content-Type'  => 'application/json',
-					'Authorization' => 'Bearer ' . $key,
-					'HTTP-Referer'  => self::get_http_referer(),
-					'X-Title'       => 'Flowbie WP Chat Logs',
-				),
+				'headers' => self::request_headers( $key ),
 				'body'    => wp_json_encode(
 					array(
 						'model'       => $model,
@@ -382,12 +361,7 @@ class Flowbie_Wp_OpenRouter {
 			self::API_URL,
 			array(
 				'timeout' => self::get_timeout(),
-				'headers' => array(
-					'Content-Type'  => 'application/json',
-					'Authorization' => 'Bearer ' . $key,
-					'HTTP-Referer'  => self::get_http_referer(),
-					'X-Title'       => 'Flowbie WP Body Harness',
-				),
+				'headers' => self::request_headers( $key ),
 				'body'    => wp_json_encode(
 					array(
 						'model'       => self::get_model(),
@@ -444,7 +418,7 @@ class Flowbie_Wp_OpenRouter {
 	/**
 	 * @return array<string, string>|WP_Error
 	 */
-	private static function get_audio_request_headers( string $title = 'Flowbie Voice' ) {
+	private static function get_audio_request_headers() {
 		$key = self::get_api_key();
 		if ( $key === '' ) {
 			return new WP_Error(
@@ -453,12 +427,7 @@ class Flowbie_Wp_OpenRouter {
 			);
 		}
 
-		return array(
-			'Content-Type'  => 'application/json',
-			'Authorization' => 'Bearer ' . $key,
-			'HTTP-Referer'  => self::get_http_referer(),
-			'X-Title'       => $title,
-		);
+		return self::request_headers( $key );
 	}
 
 	/**
@@ -467,7 +436,7 @@ class Flowbie_Wp_OpenRouter {
 	 * @return string|WP_Error
 	 */
 	public static function transcribe_audio( string $base64, string $format = 'webm' ) {
-		$headers = self::get_audio_request_headers( 'Flowbie Voice STT' );
+		$headers = self::get_audio_request_headers();
 		if ( is_wp_error( $headers ) ) {
 			return $headers;
 		}
@@ -516,238 +485,6 @@ class Flowbie_Wp_OpenRouter {
 		}
 		if ( $text === '' ) {
 			return new WP_Error( 'flowbie_openrouter_transcribe_empty', __( 'No speech detected.', 'flowbie-wp' ) );
-		}
-
-		return $text;
-	}
-
-	/**
-	 * @param string $text
-	 * @param string $voice
-	 * @param string $format mp3|pcm
-	 * @return string|WP_Error Raw audio bytes.
-	 */
-	public static function synthesize_speech( string $text, string $voice = '', string $format = 'mp3' ) {
-		$voice = $voice !== '' ? $voice : self::TTS_VOICE;
-		$format = $format === 'pcm' ? 'pcm' : 'mp3';
-
-		$models = array( self::TTS_MODEL );
-		if ( self::TTS_MODEL_FALLBACK !== '' && self::TTS_MODEL_FALLBACK !== self::TTS_MODEL ) {
-			$models[] = self::TTS_MODEL_FALLBACK;
-		}
-
-		$last_error = null;
-		foreach ( $models as $model ) {
-			$result = self::synthesize_speech_with_model( $text, $model, $voice, $format );
-			if ( ! is_wp_error( $result ) ) {
-				return $result;
-			}
-			$last_error = $result;
-		}
-
-		return $last_error instanceof WP_Error
-			? $last_error
-			: new WP_Error( 'flowbie_openrouter_tts', __( 'TTS failed.', 'flowbie-wp' ) );
-	}
-
-	/**
-	 * @return string|WP_Error Raw audio bytes.
-	 */
-	private static function synthesize_speech_with_model( string $text, string $model, string $voice, string $format ) {
-		$headers = self::get_audio_request_headers( 'Flowbie Voice TTS' );
-		if ( is_wp_error( $headers ) ) {
-			return $headers;
-		}
-
-		self::maybe_extend_time_limit();
-
-		$body = array(
-			'model'           => $model,
-			'input'           => $text,
-			'voice'           => $voice,
-			'response_format' => $format,
-		);
-
-		// OpenAI TTS on OpenRouter uses "nova" etc.; Gemini uses Kore/Zephyr.
-		if ( strpos( $model, 'openai/' ) === 0 ) {
-			$body['voice'] = 'nova';
-		}
-
-		$response = wp_remote_post(
-			self::SPEECH_API_URL,
-			array(
-				'timeout' => self::get_timeout(),
-				'headers' => $headers,
-				'body'    => wp_json_encode( $body ),
-			)
-		);
-
-		if ( is_wp_error( $response ) ) {
-			return $response;
-		}
-
-		$code = (int) wp_remote_retrieve_response_code( $response );
-		$raw  = wp_remote_retrieve_body( $response );
-
-		if ( $code < 200 || $code >= 300 ) {
-			$data = json_decode( $raw, true );
-			$msg  = self::extract_api_error_message( $data, $raw, $code );
-			return new WP_Error( 'flowbie_openrouter_tts', $msg );
-		}
-
-		if ( $raw === '' ) {
-			return new WP_Error( 'flowbie_openrouter_tts_empty', __( 'TTS returned empty audio.', 'flowbie-wp' ) );
-		}
-
-		if ( isset( $raw[0] ) && $raw[0] === '{' ) {
-			$data = json_decode( $raw, true );
-			if ( is_array( $data ) ) {
-				$msg = self::extract_api_error_message( $data, $raw, $code );
-				return new WP_Error( 'flowbie_openrouter_tts', $msg );
-			}
-		}
-
-		return $raw;
-	}
-
-	/**
-	 * @param string $user_message
-	 * @return string|WP_Error
-	 */
-	public static function voice_ack_text( string $user_message ) {
-		$key = self::get_api_key();
-		if ( $key === '' ) {
-			return new WP_Error(
-				'flowbie_openrouter_key',
-				__( 'OpenRouter API key is not configured.', 'flowbie-wp' )
-			);
-		}
-
-		$system = 'You are Flow Assist. Reply with exactly one short spoken sentence (under 20 words) confirming you will help. Start with "Sure" or "Of course". Include a brief restatement of the user\'s task. No markdown, no questions.';
-
-		self::maybe_extend_time_limit();
-
-		$response = wp_remote_post(
-			self::API_URL,
-			array(
-				'timeout' => min( 60, self::get_timeout() ),
-				'headers' => array(
-					'Content-Type'  => 'application/json',
-					'Authorization' => 'Bearer ' . $key,
-					'HTTP-Referer'  => self::get_http_referer(),
-					'X-Title'       => 'Flowbie Voice Ack',
-				),
-				'body'    => wp_json_encode(
-					array(
-						'model'       => self::VOICE_ACK_MODEL,
-						'messages'    => array(
-							array( 'role' => 'system', 'content' => $system ),
-							array( 'role' => 'user', 'content' => $user_message ),
-						),
-						'temperature' => 0.4,
-						'max_tokens'  => 80,
-					)
-				),
-			)
-		);
-
-		if ( is_wp_error( $response ) ) {
-			return $response;
-		}
-
-		$code = (int) wp_remote_retrieve_response_code( $response );
-		$raw  = wp_remote_retrieve_body( $response );
-		$data = json_decode( $raw, true );
-
-		if ( $code < 200 || $code >= 300 ) {
-			$msg = self::extract_api_error_message( $data, $raw, $code );
-			return new WP_Error( 'flowbie_openrouter_ack', $msg );
-		}
-
-		$text = '';
-		if ( is_array( $data ) && isset( $data['choices'][0]['message']['content'] ) ) {
-			$text = trim( (string) $data['choices'][0]['message']['content'] );
-		}
-		if ( $text === '' ) {
-			$text = __( 'Sure, I can help you with that.', 'flowbie-wp' );
-		}
-
-		return $text;
-	}
-
-	/**
-	 * Short spoken summary of an assistant card for TTS playback.
-	 *
-	 * @param string               $user_message Original user question.
-	 * @param array<string, mixed> $card         Card with type, title, body.
-	 * @return string|WP_Error
-	 */
-	public static function voice_narrate_script( string $user_message, array $card ) {
-		$key = self::get_api_key();
-		if ( $key === '' ) {
-			return new WP_Error(
-				'flowbie_openrouter_key',
-				__( 'OpenRouter API key is not configured.', 'flowbie-wp' )
-			);
-		}
-
-		$title = isset( $card['title'] ) ? wp_strip_all_tags( (string) $card['title'] ) : '';
-		$body  = isset( $card['body'] ) ? wp_strip_all_tags( (string) $card['body'] ) : '';
-		$type  = isset( $card['type'] ) ? sanitize_text_field( (string) $card['type'] ) : 'answer';
-
-		if ( strlen( $body ) > 1200 ) {
-			$body = substr( $body, 0, 1197 ) . '...';
-		}
-
-		$system = 'You are Flow Assist. Write exactly one short spoken paragraph (under 45 words) that summarizes the assistant response the user is about to see on screen. Use first person ("I"). Sound natural and conversational. Do not read bullet lists verbatim, do not say "ANSWER" or card labels, and use no markdown.';
-
-		$user = "User asked: {$user_message}\n\nResponse type: {$type}\nTitle: {$title}\nContent:\n{$body}";
-
-		self::maybe_extend_time_limit();
-
-		$response = wp_remote_post(
-			self::API_URL,
-			array(
-				'timeout' => min( 60, self::get_timeout() ),
-				'headers' => array(
-					'Content-Type'  => 'application/json',
-					'Authorization' => 'Bearer ' . $key,
-					'HTTP-Referer'  => self::get_http_referer(),
-					'X-Title'       => 'Flowbie Voice Narrate',
-				),
-				'body'    => wp_json_encode(
-					array(
-						'model'       => self::VOICE_ACK_MODEL,
-						'messages'    => array(
-							array( 'role' => 'system', 'content' => $system ),
-							array( 'role' => 'user', 'content' => $user ),
-						),
-						'temperature' => 0.45,
-						'max_tokens'  => 120,
-					)
-				),
-			)
-		);
-
-		if ( is_wp_error( $response ) ) {
-			return $response;
-		}
-
-		$code = (int) wp_remote_retrieve_response_code( $response );
-		$raw  = wp_remote_retrieve_body( $response );
-		$data = json_decode( $raw, true );
-
-		if ( $code < 200 || $code >= 300 ) {
-			$msg = self::extract_api_error_message( $data, $raw, $code );
-			return new WP_Error( 'flowbie_openrouter_narrate', $msg );
-		}
-
-		$text = '';
-		if ( is_array( $data ) && isset( $data['choices'][0]['message']['content'] ) ) {
-			$text = trim( (string) $data['choices'][0]['message']['content'] );
-		}
-		if ( $text === '' ) {
-			$text = $title !== '' ? $title : __( 'Here is my response.', 'flowbie-wp' );
 		}
 
 		return $text;

@@ -116,10 +116,10 @@ trait Flowbie_Wp_Ai_Widget_Design_Css {
 	 */
 	public static function default_chat_visibility(): array {
 		return array(
-			'launcher' => true, 'header' => true, 'avatar' => true, 'assistant_name' => true,
+			'header' => true, 'avatar' => true, 'assistant_name' => true,
 			'close_button' => true, 'welcome_message' => true, 'thinking_card' => true,
-			'source_pills' => true, 'cta_buttons' => true, 'suggestion_chips' => true,
-			'confidence' => true, 'powered_by' => true, 'send_button' => true,
+			'source_pills' => false, 'cta_buttons' => true, 'suggestion_chips' => true,
+			'confidence' => false, 'type_badge' => false, 'powered_by' => true, 'send_button' => true,
 			'mic_button' => true, 'voice_toast' => true,
 		);
 	}
@@ -141,14 +141,237 @@ trait Flowbie_Wp_Ai_Widget_Design_Css {
 	public static function defaults(): array {
 		$palette = self::fallback_palette();
 		return array(
-			'style_scope'  => 'both',
-			'color_source' => 'site_branding',
-			'shared'       => $palette,
-			'chat'         => $palette,
-			'search'       => $palette,
-			'chat_ui'      => self::default_chat_visibility(),
-			'search_ui'    => self::default_search_visibility(),
+			'style_scope'     => 'both',
+			'color_source'    => 'site_branding',
+			'shared'          => $palette,
+			'chat'            => $palette,
+			'search'          => $palette,
+			'chat_ui'         => self::default_chat_visibility(),
+			'search_ui'       => self::default_search_visibility(),
+			'search_sidebar'  => self::default_search_sidebar_config(),
+			'chat_sidebar'    => self::default_chat_sidebar_config(),
+			'search_insights' => self::default_search_insights_config(),
 		);
+	}
+
+	/**
+	 * @return array<string,mixed>
+	 */
+	public static function default_search_sidebar_config(): array {
+		return array(
+			'display_mode'       => 'inline',
+			'sidebar_side'       => 'right',
+			'sidebar_transition' => 'slide',
+			'sidebar_width'      => 400,
+			'sidebar_heading'    => '',
+			'sidebar_layout'     => array( 'heading', 'search', 'results', 'popular_terms' ),
+			'launcher_icon'      => 'search',
+			'icon_open_as'       => 'sidebar_right',
+			'modal_max_width'    => 560,
+			'launcher_label'     => '',
+			'panel_layout'       => 'compact',
+			'sidebar_subtitle'   => '',
+			'panel_offset_top'   => 64,
+			'panel_offset_top_unit' => 'px',
+			'panel_content_align' => 'left',
+			'backdrop_opacity'    => 35,
+		);
+	}
+
+	/**
+	 * @return array<string,mixed>
+	 */
+	public static function default_search_insights_config(): array {
+		return array(
+			'logging_enabled'             => true,
+			'show_popular_terms'          => true,
+			'show_popular_pages_overseer' => false,
+			'show_popular_pages_search'   => false,
+			'insights_days'               => 30,
+			'popular_terms_limit'         => 5,
+		);
+	}
+
+	/**
+	 * @param array<string,mixed> $raw
+	 * @return array<string,mixed>
+	 */
+	public static function sanitize_search_insights_config( array $raw ): array {
+		$defaults = self::default_search_insights_config();
+		return array(
+			'logging_enabled'             => ! array_key_exists( 'logging_enabled', $raw ) || ! empty( $raw['logging_enabled'] ),
+			'show_popular_terms'          => ! array_key_exists( 'show_popular_terms', $raw ) || ! empty( $raw['show_popular_terms'] ),
+			'show_popular_pages_overseer' => ! empty( $raw['show_popular_pages_overseer'] ),
+			'show_popular_pages_search'   => ! empty( $raw['show_popular_pages_search'] ),
+			'insights_days'               => isset( $raw['insights_days'] ) ? max( 1, min( 365, (int) $raw['insights_days'] ) ) : (int) $defaults['insights_days'],
+			'popular_terms_limit'         => isset( $raw['popular_terms_limit'] ) ? max( 1, min( 20, (int) $raw['popular_terms_limit'] ) ) : (int) $defaults['popular_terms_limit'],
+		);
+	}
+
+	/**
+	 * @return array<string,mixed>
+	 */
+	public static function default_chat_sidebar_config(): array {
+		return array(
+			'sidebar_side'       => 'right',
+			'sidebar_transition' => 'slide',
+			'sidebar_width'      => 400,
+			'sidebar_heading'    => '',
+			'sidebar_layout'     => array( 'contact_human', 'chat' ),
+		);
+	}
+
+	/**
+	 * @param array<string,mixed> $raw
+	 * @param string              $widget 'search' | 'chat'
+	 * @return array<string,mixed>
+	 */
+	public static function sanitize_sidebar_config( array $raw, string $widget ): array {
+		$defaults = $widget === 'search'
+			? self::default_search_sidebar_config()
+			: self::default_chat_sidebar_config();
+
+		$out = $defaults;
+
+		if ( $widget === 'search' ) {
+			$mode = isset( $raw['display_mode'] ) ? (string) $raw['display_mode'] : $defaults['display_mode'];
+			$out['display_mode'] = in_array( $mode, array( 'sidebar', 'icon_only' ), true ) ? $mode : 'inline';
+		}
+
+		$side = isset( $raw['sidebar_side'] ) ? (string) $raw['sidebar_side'] : $defaults['sidebar_side'];
+		$out['sidebar_side'] = ( $side === 'left' ) ? 'left' : 'right';
+
+		$transition = isset( $raw['sidebar_transition'] ) ? (string) $raw['sidebar_transition'] : $defaults['sidebar_transition'];
+		$out['sidebar_transition'] = in_array( $transition, array( 'slide', 'fade', 'none' ), true )
+			? $transition
+			: 'slide';
+
+		$out['sidebar_width'] = isset( $raw['sidebar_width'] )
+			? max( 280, min( 560, (int) $raw['sidebar_width'] ) )
+			: (int) $defaults['sidebar_width'];
+
+		$out['sidebar_heading'] = isset( $raw['sidebar_heading'] )
+			? sanitize_text_field( (string) $raw['sidebar_heading'] )
+			: (string) $defaults['sidebar_heading'];
+
+		$layout_keys = $widget === 'search'
+			? array( 'heading', 'search', 'popular_terms', 'popular_topics', 'results' )
+			: array( 'heading', 'contact_human', 'chat' );
+		$layout = array();
+		if ( isset( $raw['sidebar_layout'] ) && is_array( $raw['sidebar_layout'] ) ) {
+			foreach ( $raw['sidebar_layout'] as $section ) {
+				$key = sanitize_key( (string) $section );
+				if ( in_array( $key, $layout_keys, true ) ) {
+					$layout[] = $key;
+				}
+			}
+		} elseif ( isset( $raw['sidebar_layout'] ) && is_string( $raw['sidebar_layout'] ) ) {
+			foreach ( explode( ',', $raw['sidebar_layout'] ) as $section ) {
+				$key = sanitize_key( trim( $section ) );
+				if ( $key !== '' && in_array( $key, $layout_keys, true ) ) {
+					$layout[] = $key;
+				}
+			}
+		}
+		if ( empty( $layout ) ) {
+			$layout = $widget === 'search'
+				? array( 'search', 'results' )
+				: array( 'chat' );
+		}
+		$out['sidebar_layout'] = array_values( array_unique( $layout ) );
+
+		if ( $widget === 'search' ) {
+			$out['launcher_icon'] = class_exists( 'Flowbie_Wp_Search_Icons' )
+				? Flowbie_Wp_Search_Icons::sanitize_id( (string) ( $raw['launcher_icon'] ?? $defaults['launcher_icon'] ) )
+				: 'search';
+
+			$open_as = isset( $raw['icon_open_as'] ) ? (string) $raw['icon_open_as'] : (string) $defaults['icon_open_as'];
+			$allowed = array( 'sidebar_left', 'sidebar_right', 'modal_center', 'expand_inline' );
+			$out['icon_open_as'] = in_array( $open_as, $allowed, true ) ? $open_as : 'sidebar_right';
+
+			if ( $out['display_mode'] === 'icon_only' ) {
+				if ( $out['icon_open_as'] === 'sidebar_left' ) {
+					$out['sidebar_side'] = 'left';
+				} elseif ( $out['icon_open_as'] === 'sidebar_right' ) {
+					$out['sidebar_side'] = 'right';
+				}
+			}
+
+			$out['modal_max_width'] = isset( $raw['modal_max_width'] )
+				? max( 320, min( 720, (int) $raw['modal_max_width'] ) )
+				: (int) $defaults['modal_max_width'];
+
+			$out['launcher_label'] = isset( $raw['launcher_label'] )
+				? sanitize_text_field( (string) $raw['launcher_label'] )
+				: (string) $defaults['launcher_label'];
+
+			$panel_layout = isset( $raw['panel_layout'] ) ? (string) $raw['panel_layout'] : (string) $defaults['panel_layout'];
+			$out['panel_layout'] = in_array( $panel_layout, array( 'compact', 'discovery' ), true ) ? $panel_layout : 'compact';
+
+			$out['sidebar_subtitle'] = isset( $raw['sidebar_subtitle'] )
+				? sanitize_text_field( (string) $raw['sidebar_subtitle'] )
+				: (string) $defaults['sidebar_subtitle'];
+
+			$offset_unit = isset( $raw['panel_offset_top_unit'] ) ? (string) $raw['panel_offset_top_unit'] : (string) $defaults['panel_offset_top_unit'];
+			$out['panel_offset_top_unit'] = in_array( $offset_unit, array( 'px', 'vh', '%' ), true ) ? $offset_unit : 'px';
+
+			$offset_raw = isset( $raw['panel_offset_top'] ) ? (int) $raw['panel_offset_top'] : (int) $defaults['panel_offset_top'];
+			if ( $out['panel_offset_top_unit'] === 'px' ) {
+				$out['panel_offset_top'] = max( 0, min( 400, $offset_raw ) );
+			} else {
+				$out['panel_offset_top'] = max( 0, min( 80, $offset_raw ) );
+			}
+
+			$align = isset( $raw['panel_content_align'] ) ? (string) $raw['panel_content_align'] : (string) $defaults['panel_content_align'];
+			$out['panel_content_align'] = ( $align === 'center' ) ? 'center' : 'left';
+
+			$out['backdrop_opacity'] = isset( $raw['backdrop_opacity'] )
+				? max( 0, min( 100, (int) $raw['backdrop_opacity'] ) )
+				: (int) $defaults['backdrop_opacity'];
+
+			if ( $out['panel_layout'] === 'discovery' && ( ! isset( $raw['sidebar_width'] ) || (int) $raw['sidebar_width'] <= 400 ) ) {
+				$out['sidebar_width'] = max( 520, (int) $out['sidebar_width'] );
+			}
+		}
+
+		return $out;
+	}
+
+	/**
+	 * @param array<string,mixed> $config
+	 */
+	public static function format_panel_offset_top( array $config ): string {
+		$unit  = isset( $config['panel_offset_top_unit'] ) ? (string) $config['panel_offset_top_unit'] : 'px';
+		$unit  = in_array( $unit, array( 'px', 'vh', '%' ), true ) ? $unit : 'px';
+		$value = isset( $config['panel_offset_top'] ) ? (int) $config['panel_offset_top'] : 64;
+		if ( $unit === 'px' ) {
+			$value = max( 0, min( 400, $value ) );
+		} else {
+			$value = max( 0, min( 80, $value ) );
+		}
+		return $value . $unit;
+	}
+
+	/**
+	 * @param array<string,mixed> $config
+	 * @param array<string,mixed> $tokens
+	 */
+	public static function build_sidebar_css_vars( array $config, array $tokens = array() ): string {
+		$width   = max( 280, (int) ( $config['sidebar_width'] ?? 400 ) );
+		$z_index = max( 1, (int) ( $tokens['z_index'] ?? 999999 ) );
+		$parts   = array(
+			'--fai-sidebar-width:' . $width . 'px',
+			'--fai-sidebar-z-index:' . $z_index,
+			'--fbs-panel-offset-top:' . esc_attr( self::format_panel_offset_top( $config ) ),
+			'--fbs-backdrop-opacity:' . max( 0, min( 100, (int) ( $config['backdrop_opacity'] ?? 35 ) ) ) . '%',
+			'--fai-sidebar-bg:' . esc_attr( (string) ( $tokens['bg'] ?? '#ffffff' ) ),
+			'--fai-sidebar-text:' . esc_attr( (string) ( $tokens['text'] ?? '#1e293b' ) ),
+			'--fai-sidebar-text-muted:' . esc_attr( (string) ( $tokens['text_muted'] ?? '#64748b' ) ),
+			'--fai-sidebar-hover:' . esc_attr( (string) ( $tokens['result_hover'] ?? '#f1f5f9' ) ),
+			'--fai-sidebar-launcher-bg:' . esc_attr( (string) ( $tokens['launcher_bg'] ?? $tokens['accent'] ?? '#3b82f6' ) ),
+			'--fai-sidebar-launcher-text:' . esc_attr( (string) ( $tokens['accent_text'] ?? '#ffffff' ) ),
+		);
+		return implode( ';', $parts ) . ';';
 	}
 
 	/**
@@ -240,6 +463,69 @@ trait Flowbie_Wp_Ai_Widget_Design_Css {
 			'--fbs-font-family:' . esc_attr( (string) ( $t['font_family'] ?? 'Lato' ) ),
 		);
 		return implode( ';', $parts ) . ';';
+	}
+
+	/**
+	 * CSS custom property names synced from Elementor wrap to portaled preview panel.
+	 *
+	 * @return array<int,string>
+	 */
+	public static function get_search_portal_css_var_names(): array {
+		return array(
+			'--fbs-primary',
+			'--fbs-bg',
+			'--fbs-radius',
+			'--fbs-font-size',
+			'--fbs-text',
+			'--fbs-text-muted',
+			'--fbs-text-secondary',
+			'--fbs-border',
+			'--fbs-border-hover',
+			'--fbs-hover',
+			'--fbs-dropdown-bg',
+			'--fbs-dropdown-radius',
+			'--fbs-max-width',
+			'--fbs-shadow',
+			'--fbs-input-bg',
+			'--fbs-placeholder',
+			'--fbs-button-bg',
+			'--fbs-button-text',
+			'--fbs-button-hover',
+			'--fbs-focus-ring',
+			'--fbs-link',
+			'--fbs-score',
+			'--fbs-banner-bg',
+			'--fbs-banner-text',
+			'--fbs-powered',
+			'--fbs-powered-icon',
+			'--fbs-icon',
+			'--fbs-button-border',
+			'--fbs-form-border',
+			'--fbs-input-text',
+			'--fbs-font-family',
+			'--fbs-launcher-bg',
+			'--fbs-launcher-color',
+			'--fbs-launcher-hover-bg',
+			'--fbs-launcher-size',
+			'--fbs-launcher-radius',
+			'--fbs-launcher-border',
+			'--fbs-modal-max-width',
+			'--fbs-backdrop-color',
+			'--fbs-insight-chip-bg',
+			'--fbs-insight-chip-hover',
+			'--fbs-panel-bg',
+			'--fbs-panel-text',
+			'--fbs-panel-text-muted',
+			'--fbs-panel-offset-top',
+			'--fai-sidebar-width',
+			'--fai-sidebar-z-index',
+			'--fai-sidebar-bg',
+			'--fai-sidebar-text',
+			'--fai-sidebar-text-muted',
+			'--fai-sidebar-hover',
+			'--fai-sidebar-launcher-bg',
+			'--fai-sidebar-launcher-text',
+		);
 	}
 
 	/**

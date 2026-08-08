@@ -6,6 +6,7 @@
 
 import { stripPlaceholderDomainLinks } from "../placeholder-link-domains";
 import { isMediaAssetUrl } from "@/lib/content-optimization/images-extract";
+import { contentAlreadyHasBlockHtml } from "@/lib/content-generation/content-format";
 
 // Placeholder patterns to strip - these break live pages if they slip through
 const PLACEHOLDER_PATTERNS = [
@@ -89,7 +90,7 @@ export function sanitizePlaceholders(content: string): string {
   let sanitized = content;
   let removedCount = 0;
 
-  const genericBracketPlaceholder = /\[[^\]]+\](?!\s*\()/g;
+  const genericBracketPlaceholder = /(?<!\[)\[(?!\[(?:LINK|SCROLL|EXTERNAL):)[^\]]+\](?!\s*\()/g;
   const genericMatches = sanitized.match(genericBracketPlaceholder);
   if (genericMatches) removedCount += genericMatches.length;
   sanitized = sanitized.replace(genericBracketPlaceholder, ' ');
@@ -152,9 +153,9 @@ export function removeFeatureLabelArtifacts(content: string): string {
     return '';
   });
 
-  // Inline removal: [TYPE]: description (description stops at <, ], or newline)
+  // Inline removal: [TYPE]: description (no nested '[' — stops before markdown links on same line)
   const inlinePattern = new RegExp(
-    `\\s*\\[(${FEATURE_LABEL_TYPES})\\]\\s*:\\s*[^<\\]\\n]*`,
+    `\\s*\\[(${FEATURE_LABEL_TYPES})\\]\\s*:\\s*[^<\\[\\n]*`,
     'gi'
   );
   const beforeInline = sanitized.length;
@@ -730,14 +731,20 @@ export function forceConvertMarkdownLinks(content: string): string {
   let prev = '';
   let iterations = 0;
   const maxIterations = 50;
-  // Match [text](url) - URL is https?:// then any chars except ); anchor can contain ]
-  const markdownLinkRegex = /\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g;
+  // Match [text](url) - optional whitespace before ( for model output
+  const markdownLinkRegex = /\[([^\]]*)\]\s*\((https?:\/\/[^)]+)\)/g;
+  const markdownHashLinkRegex = /\[([^\]]*)\]\s*\((#[^)]+)\)/g;
   while (out !== prev && iterations < maxIterations) {
     prev = out;
     out = out.replace(markdownLinkRegex, (_, text: string, url: string) => {
       const u = url.trim().replace(/"/g, '&quot;').replace(/&/g, '&amp;');
       const t = (text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       return `<a href="${u}">${t}</a>`;
+    });
+    out = out.replace(markdownHashLinkRegex, (_, text: string, hash: string) => {
+      const h = hash.trim().replace(/"/g, '&quot;');
+      const t = (text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return `<a href="${h}">${t}</a>`;
     });
     iterations++;
   }
@@ -754,6 +761,10 @@ export function forceConvertMarkdownLinks(content: string): string {
  */
 export function convertAllMarkdownToHtml(content: string): string {
   if (!content || !content.trim()) return content;
+
+  if (contentAlreadyHasBlockHtml(content)) {
+    return forceConvertMarkdownLinks(content);
+  }
 
   const stats: MarkdownConversionStats = {
     images: 0,
@@ -796,7 +807,7 @@ export function convertAllMarkdownToHtml(content: string): string {
   });
 
   // 3. Markdown links [text](url) again (in case any appeared inside code blocks or after other edits)
-  out = out.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (_, text, url) => {
+  out = out.replace(/\[([^\]]+)\]\s*\((https?:\/\/[^)]+)\)/g, (_, text, url) => {
     stats.links++;
     const safeUrl = (url || '').trim().replace(/"/g, '&quot;').replace(/&/g, '&amp;');
     const safeText = (text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -1337,10 +1348,18 @@ export function deduplicateInternalLinksInHtml(content: string): string {
 export function ensureNoLinkEndsInPeriod(html: string): string {
   if (!html) return html;
   let out = html;
+  const isHashHref = (attrs: string) => /href\s*=\s*["']#/i.test(attrs);
   // Move period from inside anchor to outside: <a ...>text.</a> -> <a ...>text</a>.
-  out = out.replace(/<a([^>]*)>([^<]*?)\.<\/a>/gi, (_, attrs, text) => `<a${attrs}>${text}</a>.`);
+  out = out.replace(/<a([^>]*)>([^<]*?)\.<\/a>/gi, (match, attrs: string, text: string) => {
+    if (isHashHref(attrs)) return match;
+    return `<a${attrs}>${text}</a>.`;
+  });
   // If link is immediately followed by period (no word after), add wording so link doesn't end in period. Do NOT use "here".
-  out = out.replace(/<\/a>\s*\./gi, "</a> for more.");
+  // Skip same-page # scroll citations (Overview harness).
+  out = out.replace(/<a([^>]*)>([^<]*?)<\/a>\s*\./gi, (match, attrs: string, text: string) => {
+    if (isHashHref(attrs)) return match;
+    return `<a${attrs}>${text}</a> for more.`;
+  });
   return out;
 }
 
@@ -1717,9 +1736,6 @@ export function sanitizeContentForUpload(
   
   // Step 1.46: Fix malformed link formats (like [URL: ...] to proper markdown)
   sanitized = fixMalformedLinks(sanitized);
-  
-  // Step 1.47: Convert ALL remaining markdown to HTML - no exceptions
-  sanitized = convertAllMarkdownToHtml(sanitized);
   
   // Step 1.48: Fix orphaned <li> elements (bare <li> without <ul>/<ol> wrapper, stray closers)
   sanitized = fixOrphanedListItems(sanitized);

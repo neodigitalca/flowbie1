@@ -4,6 +4,7 @@
  */
 import { loadApiKey } from "@/lib/api";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 const OR = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -28,12 +29,7 @@ async function aiKeys(lines: string[], siteId?: string, apiKeyOverride?: string)
   try {
     const res = await fetch(OR, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "",
-        "X-Title": "Flowbie",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: getResearchModel(siteId),
         messages: [

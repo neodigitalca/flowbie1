@@ -65,12 +65,7 @@ class Flowbie_App_Proposal_Faq_Inventory {
 			self::OPENROUTER_URL,
 			array(
 				'timeout' => 120,
-				'headers' => array(
-					'Content-Type'  => 'application/json',
-					'Authorization' => 'Bearer ' . $api_key,
-					'HTTP-Referer'  => 'https://flowbie.ca',
-					'X-Title'       => 'Flowbie proposal FAQ inventory',
-				),
+				'headers' => Flowbie_App_Openrouter_Attribution::request_headers( $api_key ),
 				'body'    => wp_json_encode(
 					array(
 						'model'           => self::DEFAULT_MODEL,

@@ -114,8 +114,8 @@ export function GoogleAnalyticsSettingsContent() {
             {isUploading ? "Uploading…" : "Upload service account file"}
           </Button>
         )}
-        <p className="text-xs text-muted-foreground">
-          Upload the JSON key file from Google Cloud (Credentials → Service account → Keys → Add key → JSON). Locally it’s saved and used immediately; on production use Render → Environment.
+        <p className="text-base text-muted-foreground">
+          Upload the JSON key file from Google Cloud (Credentials → Service account → Keys → Add key → JSON). On flowbie.ca it is stored on the WordPress server via the flowbie-app plugin.
         </p>
       </div>
 
@@ -126,7 +126,7 @@ export function GoogleAnalyticsSettingsContent() {
             className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-foreground hover:bg-muted/50 rounded-t-md transition-colors"
           >
             <ChevronRight className={`h-4 w-4 shrink-0 transition-transform ${instructionsOpen ? "rotate-90" : ""}`} />
-            Setup instructions (Google Cloud, GA4, local & Render)
+            Setup instructions (Google Cloud, GA4, flowbie.ca)
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent>
@@ -156,27 +156,15 @@ export function GoogleAnalyticsSettingsContent() {
               <span className="text-foreground"> - In GA4: Admin → Property settings. Copy the numeric <strong className="text-white">Property ID</strong>. When adding or editing a WordPress site, paste it in the <strong className="text-white">GA4 Property ID</strong> field for that site.</span>
             </div>
             <div>
-              <span className="font-semibold text-white">5. Local credentials</span>
-              <span className="text-foreground"> - In Settings, click <strong className="text-white">Upload service account file</strong> and choose your JSON key (saved and used immediately). Or put the JSON at </span>
-              <code className="bg-muted px-1 rounded text-foreground">server/credentials/ga-service-account.json</code>
-              <span className="text-foreground"> or set </span>
-              <code className="bg-muted px-1 rounded text-foreground">GA_SERVICE_ACCOUNT_JSON</code>
-              <span className="text-foreground"> in </span>
-              <code className="bg-muted px-1 rounded text-foreground">.env</code>
-              <span className="text-foreground">.</span>
+              <span className="font-semibold text-white">5. flowbie.ca (production)</span>
+              <span className="text-foreground"> - Upload the JSON here in Settings, or set </span>
+              <code className="bg-muted px-1 rounded text-foreground">FLOWBIE_APP_GA_SERVICE_ACCOUNT_JSON</code>
+              <span className="text-foreground"> in wp-config or </span>
+              <code className="bg-muted px-1 rounded text-foreground">flowbie-app-secrets.php</code>
+              <span className="text-foreground"> on the WordPress host.</span>
             </div>
             <div>
-              <span className="font-semibold text-white">6. Render (production)</span>
-              <span className="text-foreground"> - In </span>
-              <a href="https://dashboard.render.com/" target="_blank" rel="noopener noreferrer" className="text-primary font-medium underline hover:opacity-90">Render dashboard</a>
-              <span className="text-foreground"> → your flowbie-api service → Environment. Add </span>
-              <code className="bg-muted px-1 rounded text-foreground">GA_SERVICE_ACCOUNT_JSON</code>
-              <span className="text-foreground"> or </span>
-              <code className="bg-muted px-1 rounded text-foreground">GA_SERVICE_ACCOUNT_JSON_B64</code>
-              <span className="text-foreground">. Save to redeploy.</span>
-            </div>
-            <div>
-              <span className="font-semibold text-white">7. Test</span>
+              <span className="font-semibold text-white">6. Test</span>
               <span className="text-foreground"> - On each WordPress site tile, click <strong className="text-white">Test GA</strong>. It uses that site’s GA4 Property ID (set in Edit site).</span>
             </div>
           </div>

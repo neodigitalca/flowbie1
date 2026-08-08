@@ -1,6 +1,7 @@
 import { parseSitemap, getPublishedPosts } from '../wordpress-api';
 import type { WordPressSite } from '@/components/integrations/types';
 import { extractEndpointFromEntitySitemapUrl } from '../entity-endpoint-extractor';
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 /**
  * Uses AI to analyze entity sitemap titles and extract service nickname
@@ -147,12 +148,7 @@ What is the service nickname that appears in the majority of these titles? Retur
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: getResearchModel(),
         messages: [

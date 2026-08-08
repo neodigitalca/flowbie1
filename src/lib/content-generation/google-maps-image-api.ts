@@ -1,3 +1,4 @@
+import { loadApiKey } from "@/lib/api";
 import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
 
 export type GoogleMapsImagePayload = {
@@ -43,20 +44,26 @@ export async function fetchGoogleMapsImageForEntity(
   if (inflight) return inflight;
 
   const run = (async (): Promise<GoogleMapsImagePayload | null> => {
-    const response = await fetch(`${BACKEND_API_BASE}/api/google-maps-image/generate`, {
+    const openRouterApiKey = loadApiKey().trim();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (openRouterApiKey) {
+      headers["X-OpenRouter-Api-Key"] = openRouterApiKey;
+    }
+
+    const response = await fetch(`${BACKEND_API_BASE}/api/entity-maps-image/generate`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ entity: trimmed }),
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: "Failed to generate Google Maps image" }));
-      throw new Error(errorData.error || `HTTP ${response.status}: Failed to generate Google Maps image`);
+      const errorData = await response.json().catch(() => ({ error: "Failed to generate entity map image" }));
+      throw new Error(errorData.error || `HTTP ${response.status}: Failed to generate entity map image`);
     }
 
     const result = await response.json();
     if (!result.success || !result.imageBase64) {
-      throw new Error(result.error || "No image data returned from Google Maps API");
+      throw new Error(result.error || "No image data returned from entity map image API");
     }
 
     let imageBase64 = String(result.imageBase64);

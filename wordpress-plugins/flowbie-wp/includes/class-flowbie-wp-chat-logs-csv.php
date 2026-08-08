@@ -9,7 +9,7 @@ defined( 'ABSPATH' ) || exit;
 
 class Flowbie_Wp_Chat_Logs_Csv {
 
-	const HEADER = 'message_uid,session_id,source,role,content,card_type,confidence,page_url,created_at';
+	const HEADER = 'message_uid,session_id,source,role,content,card_type,confidence,page_url,accepted_url,accepted_label,accepted_type,accepted_at,input_origin,created_at';
 
 	/**
 	 * @return array{rows: array<int, array<string, mixed>>, error?: string}
@@ -81,9 +81,20 @@ class Flowbie_Wp_Chat_Logs_Csv {
 				'card_type'   => self::pick_column( $row, array( 'card_type' ) ),
 				'confidence'  => self::pick_column( $row, array( 'confidence' ) ),
 				'page_url'    => self::pick_column( $row, array( 'page_url' ) ),
+				'accepted_url'   => self::pick_column( $row, array( 'accepted_url' ) ),
+				'accepted_label' => self::pick_column( $row, array( 'accepted_label' ) ),
+				'accepted_type'  => self::pick_column( $row, array( 'accepted_type' ) ),
 			);
+			$input_origin = self::pick_column( $row, array( 'input_origin' ) );
+			if ( $input_origin !== '' && Flowbie_Wp_Chat_Logs::is_valid_input_origin( $input_origin ) ) {
+				$parsed['input_origin'] = $input_origin;
+			}
 			if ( $created_at !== '' && preg_match( '/^\d{4}-\d{2}-\d{2}/', $created_at ) ) {
 				$parsed['created_at'] = $created_at;
+			}
+			$accepted_at = self::pick_column( $row, array( 'accepted_at' ) );
+			if ( $accepted_at !== '' && preg_match( '/^\d{4}-\d{2}-\d{2}/', $accepted_at ) ) {
+				$parsed['accepted_at'] = $accepted_at;
 			}
 
 			$out[] = $parsed;
@@ -117,6 +128,11 @@ class Flowbie_Wp_Chat_Logs_Csv {
 					self::csv_quote( isset( $r['card_type'] ) ? (string) $r['card_type'] : '' ),
 					self::csv_quote( isset( $r['confidence'] ) ? (string) $r['confidence'] : '' ),
 					self::csv_quote( isset( $r['page_url'] ) ? (string) $r['page_url'] : '' ),
+					self::csv_quote( isset( $r['accepted_url'] ) ? (string) $r['accepted_url'] : '' ),
+					self::csv_quote( isset( $r['accepted_label'] ) ? (string) $r['accepted_label'] : '' ),
+					self::csv_quote( isset( $r['accepted_type'] ) ? (string) $r['accepted_type'] : '' ),
+					self::csv_quote( isset( $r['accepted_at'] ) ? (string) $r['accepted_at'] : '' ),
+					self::csv_quote( isset( $r['input_origin'] ) ? (string) $r['input_origin'] : '' ),
 					self::csv_quote( isset( $r['created_at'] ) ? (string) $r['created_at'] : '' ),
 				)
 			);

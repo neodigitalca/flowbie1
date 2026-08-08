@@ -1,5 +1,5 @@
 /**
- * Flowbie Voice — push-to-talk, transcribe, parallel ack playback.
+ * Flowbie Voice — push-to-talk input and transcription only (no spoken replies).
  */
 (function (global) {
   'use strict';
@@ -12,15 +12,8 @@
     recording: false,
     processing: false,
     mimeType: 'audio/webm',
-    format: 'webm',
-    ackPlayer: null,
-    audioUnlocked: false,
-    lastObjectUrl: null
+    format: 'webm'
   };
-
-  // Minimal silent WAV to unlock autoplay during the user's press/click gesture.
-  var SILENT_WAV =
-    'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
 
   var MIC_SVG =
     '<svg class="flowbie-voice__svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
@@ -84,253 +77,6 @@
       });
     });
   }
-
-  function getAckPlayer() {
-    if (!state.ackPlayer) {
-      state.ackPlayer = new Audio();
-      state.ackPlayer.preload = 'auto';
-    }
-    return state.ackPlayer;
-  }
-
-  function unlockAudioPlayback() {
-    if (state.audioUnlocked) {
-      return Promise.resolve();
-    }
-    var player = getAckPlayer();
-    player.muted = true;
-    player.src = SILENT_WAV;
-    return player
-      .play()
-      .then(function () {
-        player.pause();
-        player.currentTime = 0;
-        player.muted = false;
-        player.removeAttribute('src');
-        state.audioUnlocked = true;
-      })
-      .catch(function () {
-        state.audioUnlocked = true;
-      });
-  }
-
-  function safeUnlockAudio() {
-    try {
-      return unlockAudioPlayback();
-    } catch (e) {
-      return Promise.resolve();
-    }
-  }
-
-  global.flowbieVoiceUnlock = unlockAudioPlayback;
-  global.flowbieVoiceSafeUnlock = function () {
-    if (typeof global.flowbieVoiceUnlock === 'function') {
-      return global.flowbieVoiceUnlock();
-    }
-    return Promise.resolve();
-  };
-  global.flowbieVoiceSafeAckPlayback = function () {};
-  global.flowbieVoiceSafePlayAck = global.flowbieVoiceSafeAckPlayback;
-
-  function base64ToBlob(b64, mime) {
-    var binary = atob(b64);
-    var len = binary.length;
-    var bytes = new Uint8Array(len);
-    for (var i = 0; i < len; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return new Blob([bytes], { type: mime || 'audio/mpeg' });
-  }
-
-  function playBase64Audio(b64, mime) {
-    if (!b64) {
-      return Promise.reject(new Error('No audio'));
-    }
-    return safeUnlockAudio().then(function () {
-      var blob = base64ToBlob(b64, mime || 'audio/mpeg');
-      if (state.lastObjectUrl) {
-        URL.revokeObjectURL(state.lastObjectUrl);
-      }
-      state.lastObjectUrl = URL.createObjectURL(blob);
-      var player = getAckPlayer();
-      player.src = state.lastObjectUrl;
-      return player.play();
-    });
-  }
-
-  var speakQueue = Promise.resolve();
-
-  function enqueueSpeak(task) {
-    speakQueue = speakQueue
-      .then(function () {
-        return task();
-      })
-      .catch(function () {});
-    return speakQueue;
-  }
-
-  function waitForAudioEnd(player, timeoutMs) {
-    return new Promise(function (resolve) {
-      var done = false;
-      function finish() {
-        if (done) {
-          return;
-        }
-        done = true;
-        player.removeEventListener('ended', finish);
-        player.removeEventListener('error', finish);
-        clearTimeout(timer);
-        resolve();
-      }
-      var timer = setTimeout(finish, timeoutMs || 20000);
-      player.addEventListener('ended', finish);
-      player.addEventListener('error', finish);
-      if (player.paused && player.currentTime > 0 && player.ended) {
-        finish();
-      }
-    });
-  }
-
-  function speakAckFallback(text) {
-    if (!text || !global.speechSynthesis) {
-      return Promise.resolve();
-    }
-    return new Promise(function (resolve) {
-      global.speechSynthesis.cancel();
-      var utter = new SpeechSynthesisUtterance(text);
-      utter.rate = 1.02;
-      utter.pitch = 1.05;
-      var voices = global.speechSynthesis.getVoices();
-      for (var i = 0; i < voices.length; i++) {
-        if (/female|zira|samantha|google.*english.*female|karen|victoria/i.test(voices[i].name)) {
-          utter.voice = voices[i];
-          break;
-        }
-      }
-      utter.onend = function () {
-        resolve();
-      };
-      utter.onerror = function () {
-        resolve();
-      };
-      global.speechSynthesis.speak(utter);
-      setTimeout(resolve, 12000);
-    });
-  }
-
-  function playAudioFromResponse(data, options) {
-    options = options || {};
-    var waitForEnd = options.waitForEnd !== false;
-    var text = (data && (data.script || data.ack_text || data.text)) || '';
-    if (data && data.audio_base64) {
-      var chain = playBase64Audio(data.audio_base64, data.mime || 'audio/mpeg');
-      if (waitForEnd) {
-        chain = chain.then(function () {
-          return waitForAudioEnd(getAckPlayer());
-        });
-      }
-      return chain.catch(function () {
-        if (text) {
-          return speakAckFallback(text);
-        }
-      });
-    }
-    if (text) {
-      return speakAckFallback(text);
-    }
-    return Promise.resolve();
-  }
-
-  function narrateCard(card, userMessage) {
-    if (!cfg.narrateUrl || !card) {
-      return Promise.resolve();
-    }
-    var payload = {
-      message: userMessage || '',
-      card: {
-        type: card.type || 'answer',
-        title: card.title || '',
-        body: card.body || ''
-      },
-      voice_nonce: cfg.voiceNonce || ''
-    };
-    return enqueueSpeak(function () {
-      return postJson(cfg.narrateUrl, payload).then(function (res) {
-        if (!res.ok || !res.data) {
-          return Promise.resolve();
-        }
-        return playAudioFromResponse(res.data, { waitForEnd: false });
-      });
-    });
-  }
-
-  function presentCard(card, userMessage, callbacks) {
-    callbacks = callbacks || {};
-    if (typeof callbacks.append === 'function') {
-      callbacks.append();
-    }
-    if (typeof callbacks.finish === 'function') {
-      callbacks.finish();
-    }
-    return narrateCard(card, userMessage);
-  }
-
-  function presentCardNarrateFirst(card, userMessage, callbacks) {
-    callbacks = callbacks || {};
-    return narrateCard(card, userMessage).then(function () {
-      if (typeof callbacks.append === 'function') {
-        callbacks.append();
-      }
-      if (typeof callbacks.finish === 'function') {
-        callbacks.finish();
-      }
-    });
-  }
-
-  function playbackAck(message) {
-    if (!cfg.ackUrl || !message) {
-      return Promise.resolve();
-    }
-    return enqueueSpeak(function () {
-      return postJson(cfg.ackUrl, { message: message, voice_nonce: cfg.voiceNonce || '' }).then(
-        function (res) {
-          if (!res.ok || !res.data) {
-            return Promise.resolve();
-          }
-          return playAudioFromResponse(res.data);
-        }
-      );
-    });
-  }
-
-  function speakText(text) {
-    var line = String(text || '').trim();
-    if (!line) {
-      return Promise.resolve();
-    }
-    if (!cfg.speakUrl) {
-      return enqueueSpeak(function () {
-        return speakAckFallback(line);
-      });
-    }
-    return enqueueSpeak(function () {
-      return postJson(cfg.speakUrl, { text: line, voice_nonce: cfg.voiceNonce || '' }).then(
-        function (res) {
-          if (!res.ok || !res.data) {
-            return speakAckFallback(line);
-          }
-          return playAudioFromResponse(res.data);
-        }
-      );
-    });
-  }
-
-  function playbackAckParallel(message) {
-    playbackAck(message);
-  }
-
-  var playAck = playbackAck;
-  var playAckParallel = playbackAckParallel;
 
   function stopTracks() {
     if (state.stream) {
@@ -460,7 +206,6 @@
     }
 
     btn.addEventListener('pointerdown', function (e) {
-      safeUnlockAudio();
       if (inputEl && inputEl.value.trim()) {
         return;
       }
@@ -550,23 +295,8 @@
           cfg[k] = overrides[k];
         });
       }
-      if (global.speechSynthesis) {
-        global.speechSynthesis.getVoices();
-        global.speechSynthesis.onvoiceschanged = function () {
-          global.speechSynthesis.getVoices();
-        };
-      }
     },
     bindPtt: bindPtt,
-    playbackAck: playbackAck,
-    playbackAckParallel: playbackAckParallel,
-    playAck: playAck,
-    playAckParallel: playAckParallel,
-    narrateCard: narrateCard,
-    presentCard: presentCard,
-    presentCardNarrateFirst: presentCardNarrateFirst,
-    speakText: speakText,
-    unlockAudioPlayback: unlockAudioPlayback,
     updateSendMicVisibility: updateSendMicVisibility,
     micSvg: MIC_SVG,
     isProcessing: function () {
@@ -575,47 +305,4 @@
   };
 
   global.FlowbieVoice = Object.assign(global.FlowbieVoice || {}, api);
-  global.flowbieVoiceUnlock = unlockAudioPlayback;
-
-  global.flowbieVoiceSafeUnlock = function () {
-    if (typeof global.flowbieVoiceUnlock === 'function') {
-      return global.flowbieVoiceUnlock();
-    }
-    return Promise.resolve();
-  };
-
-  global.flowbieVoiceSafeAckPlayback = function (message) {
-    if (typeof playbackAckParallel === 'function' && message) {
-      playbackAckParallel(message);
-    }
-  };
-  global.flowbieVoiceSafePlayAck = global.flowbieVoiceSafeAckPlayback;
-
-  global.flowbieVoiceAckPlayback = function (message) {
-    if (typeof playbackAck === 'function' && message) {
-      return playbackAck(message);
-    }
-    return Promise.resolve();
-  };
-  global.flowbieVoicePlayAckAwait = global.flowbieVoiceAckPlayback;
-
-  global.flowbieVoiceSpeak = function (text) {
-    if (typeof speakText === 'function' && text) {
-      return speakText(text);
-    }
-    return Promise.resolve();
-  };
-
-  global.flowbieVoicePresentCard = function (card, userMessage, callbacks) {
-    if (typeof presentCard === 'function') {
-      return presentCard(card, userMessage, callbacks);
-    }
-    if (callbacks && typeof callbacks.append === 'function') {
-      callbacks.append();
-    }
-    if (callbacks && typeof callbacks.finish === 'function') {
-      callbacks.finish();
-    }
-    return Promise.resolve();
-  };
 })(typeof window !== 'undefined' ? window : this);

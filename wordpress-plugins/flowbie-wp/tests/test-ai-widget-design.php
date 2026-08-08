@@ -98,6 +98,7 @@ if ( ! function_exists( 'add_action' ) ) {
 }
 
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/super-migrate/class-flowbie-wp-migrate-elementor-global-css.php';
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/search/class-flowbie-wp-search-icons.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-ai-widget-design.php';
 
 function flowbie_assert( $cond, $msg ) {
@@ -118,7 +119,7 @@ Flowbie_Wp_Ai_Widget_Design::clear_resolve_cache();
 $defaults = Flowbie_Wp_Ai_Widget_Design::get_settings();
 flowbie_assert( $defaults['color_source'] === 'site_branding', 'default color_source is site_branding' );
 flowbie_assert( $defaults['style_scope'] === 'both', 'default style_scope is both' );
-flowbie_assert( ! empty( $defaults['chat_ui']['launcher'] ), 'chat visibility defaults true' );
+flowbie_assert( ! empty( $defaults['chat_ui']['header'] ), 'chat visibility defaults true' );
 flowbie_assert( ! empty( $defaults['search_ui']['powered_by'] ), 'search visibility defaults true' );
 
 // ── Color sanitize ───────────────────────────────────────────
@@ -189,13 +190,193 @@ Flowbie_Wp_Ai_Widget_Design::save_from_admin_post(
 		'style_scope'  => 'both',
 		'color_source' => 'custom',
 		'tokens'       => array( 'accent' => '#123456' ),
-		'ui'           => array( 'launcher' => '1', 'powered_by' => '1' ),
+		'ui'           => array( 'header' => '1', 'powered_by' => '1' ),
 	),
 	'chat'
 );
 $after = Flowbie_Wp_Ai_Widget_Design::get_settings();
-flowbie_assert( ! empty( $after['chat_ui']['launcher'] ), 'posted launcher visible' );
+flowbie_assert( ! empty( $after['chat_ui']['header'] ), 'posted header visible' );
 flowbie_assert( empty( $after['chat_ui']['mic_button'] ), 'unposted mic hidden' );
+
+// ── Sidebar config sanitize ───────────────────────────────────
+$search_sidebar = Flowbie_Wp_Ai_Widget_Design::sanitize_sidebar_config(
+	array(
+		'display_mode'       => 'sidebar',
+		'sidebar_side'       => 'left',
+		'sidebar_transition' => 'fade',
+		'sidebar_width'      => 420,
+		'sidebar_heading'    => 'Search KWB',
+		'sidebar_layout'     => array( 'heading', 'search', 'results' ),
+	),
+	'search'
+);
+flowbie_assert( $search_sidebar['display_mode'] === 'sidebar', 'search sidebar display mode' );
+flowbie_assert( $search_sidebar['sidebar_side'] === 'left', 'search sidebar side' );
+flowbie_assert( $search_sidebar['sidebar_transition'] === 'fade', 'search sidebar transition' );
+flowbie_assert( (int) $search_sidebar['sidebar_width'] === 420, 'search sidebar width' );
+flowbie_assert( $search_sidebar['sidebar_heading'] === 'Search KWB', 'search sidebar heading' );
+
+$discovery_sidebar = Flowbie_Wp_Ai_Widget_Design::sanitize_sidebar_config(
+	array(
+		'panel_layout'           => 'discovery',
+		'sidebar_subtitle'       => 'Looking for financial advice?',
+	'panel_offset_top'       => 20,
+	'panel_offset_top_unit'  => 'vh',
+		'sidebar_layout'         => array( 'heading', 'search', 'popular_terms', 'popular_pages_overseer', 'popular_topics', 'results' ),
+	),
+	'search'
+);
+flowbie_assert( $discovery_sidebar['panel_layout'] === 'discovery', 'panel_layout discovery' );
+flowbie_assert( $discovery_sidebar['sidebar_subtitle'] === 'Looking for financial advice?', 'sidebar_subtitle sanitize' );
+flowbie_assert( (int) $discovery_sidebar['panel_offset_top'] === 20, 'panel_offset_top default' );
+flowbie_assert( $discovery_sidebar['panel_offset_top_unit'] === 'vh', 'panel_offset_top_unit default' );
+flowbie_assert( in_array( 'popular_topics', $discovery_sidebar['sidebar_layout'], true ), 'sidebar layout accepts popular_topics' );
+
+$offset_px = Flowbie_Wp_Ai_Widget_Design::sanitize_sidebar_config(
+	array( 'panel_offset_top' => 999, 'panel_offset_top_unit' => 'px' ),
+	'search'
+);
+flowbie_assert( (int) $offset_px['panel_offset_top'] === 400, 'panel_offset_top px clamp' );
+
+$default_offset = Flowbie_Wp_Ai_Widget_Design::sanitize_sidebar_config(
+	array( 'display_mode' => 'sidebar' ),
+	'search'
+);
+flowbie_assert( (int) $default_offset['panel_offset_top'] === 64, 'panel_offset_top default 64' );
+flowbie_assert( $default_offset['panel_offset_top_unit'] === 'px', 'panel_offset_top_unit default px' );
+flowbie_assert( $default_offset['panel_content_align'] === 'left', 'panel_content_align default left' );
+
+$align_center = Flowbie_Wp_Ai_Widget_Design::sanitize_sidebar_config(
+	array( 'panel_content_align' => 'center' ),
+	'search'
+);
+flowbie_assert( $align_center['panel_content_align'] === 'center', 'panel_content_align center' );
+
+$align_invalid = Flowbie_Wp_Ai_Widget_Design::sanitize_sidebar_config(
+	array( 'panel_content_align' => 'right' ),
+	'search'
+);
+flowbie_assert( $align_invalid['panel_content_align'] === 'left', 'panel_content_align invalid to left' );
+
+$backdrop_sidebar = Flowbie_Wp_Ai_Widget_Design::sanitize_sidebar_config(
+	array( 'backdrop_opacity' => 150 ),
+	'search'
+);
+flowbie_assert( (int) $backdrop_sidebar['backdrop_opacity'] === 100, 'backdrop_opacity clamp' );
+flowbie_assert( strpos( Flowbie_Wp_Ai_Widget_Design::build_sidebar_css_vars( $backdrop_sidebar ), '--fbs-backdrop-opacity:100%' ) !== false, 'sidebar css vars include backdrop opacity' );
+
+$sidebar_css = Flowbie_Wp_Ai_Widget_Design::build_sidebar_css_vars( $discovery_sidebar );
+flowbie_assert( strpos( $sidebar_css, '--fbs-panel-offset-top:20vh' ) !== false, 'sidebar css vars include panel offset' );
+
+$icon_sidebar = Flowbie_Wp_Ai_Widget_Design::sanitize_sidebar_config(
+	array(
+		'display_mode'    => 'icon_only',
+		'launcher_icon'   => 'sparkles',
+		'icon_open_as'    => 'modal_center',
+		'modal_max_width' => 600,
+		'launcher_label'  => 'Find answers',
+	),
+	'search'
+);
+flowbie_assert( $icon_sidebar['display_mode'] === 'icon_only', 'icon_only display mode' );
+flowbie_assert( $icon_sidebar['launcher_icon'] === 'sparkles', 'launcher icon slug' );
+flowbie_assert( $icon_sidebar['icon_open_as'] === 'modal_center', 'icon open as modal' );
+flowbie_assert( (int) $icon_sidebar['modal_max_width'] === 600, 'modal max width' );
+flowbie_assert( $icon_sidebar['launcher_label'] === 'Find answers', 'launcher label' );
+
+$icon_left = Flowbie_Wp_Ai_Widget_Design::sanitize_sidebar_config(
+	array( 'display_mode' => 'icon_only', 'icon_open_as' => 'sidebar_left' ),
+	'search'
+);
+flowbie_assert( $icon_left['sidebar_side'] === 'left', 'icon sidebar left sets side' );
+
+foreach ( Flowbie_Wp_Search_Icons::ids() as $icon_id ) {
+	$svg = Flowbie_Wp_Search_Icons::render( $icon_id );
+	flowbie_assert( strpos( $svg, '<svg' ) !== false, 'icon renders svg: ' . $icon_id );
+}
+flowbie_assert( Flowbie_Wp_Search_Icons::sanitize_id( 'invalid' ) === 'search', 'invalid icon falls back to search' );
+
+$insights_layout = Flowbie_Wp_Ai_Widget_Design::sanitize_sidebar_config(
+	array(
+		'sidebar_layout' => array( 'heading', 'search', 'popular_terms', 'popular_pages_overseer', 'popular_pages_search', 'results' ),
+	),
+	'search'
+);
+flowbie_assert( in_array( 'popular_terms', $insights_layout['sidebar_layout'], true ), 'sidebar layout accepts popular_terms' );
+flowbie_assert( ! in_array( 'popular_pages_overseer', $insights_layout['sidebar_layout'], true ), 'sidebar layout strips popular_pages_overseer' );
+flowbie_assert( ! in_array( 'popular_pages_search', $insights_layout['sidebar_layout'], true ), 'sidebar layout strips popular_pages_search' );
+
+$insights = Flowbie_Wp_Ai_Widget_Design::sanitize_search_insights_config(
+	array(
+		'show_popular_terms'          => '1',
+		'show_popular_pages_overseer' => '0',
+		'insights_days'               => 14,
+		'popular_terms_limit'         => 8,
+	)
+);
+flowbie_assert( ! empty( $insights['show_popular_terms'] ), 'insights popular terms on' );
+flowbie_assert( empty( $insights['show_popular_pages_overseer'] ), 'insights overseer pages off' );
+flowbie_assert( (int) $insights['insights_days'] === 14, 'insights days clamped' );
+flowbie_assert( (int) $insights['popular_terms_limit'] === 8, 'insights terms limit' );
+
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-search-logs.php';
+
+$resolved_insights = Flowbie_Wp_Ai_Widget_Design::resolve_search_insights(
+	array( 'show_popular_terms' => 'no', 'insights_days' => 7 )
+);
+flowbie_assert( empty( $resolved_insights['show_popular_terms'] ), 'instance overrides popular terms off' );
+flowbie_assert( (int) $resolved_insights['insights_days'] === 7, 'instance overrides insights days' );
+
+flowbie_assert(
+	Flowbie_Wp_Search_Logs::normalize_query( '  Hello   World  ') === 'hello world',
+	'search log normalize query'
+);
+flowbie_assert(
+	! Flowbie_Wp_Search_Logs::insert( array( 'session_id' => 'bad', 'query' => 'test' ) )['ok'],
+	'search log rejects invalid session'
+);
+
+$empty_layout = Flowbie_Wp_Ai_Widget_Design::sanitize_sidebar_config(
+	array( 'sidebar_layout' => array() ),
+	'chat'
+);
+flowbie_assert( $empty_layout['sidebar_layout'] === array( 'chat' ), 'empty chat layout falls back to chat' );
+
+$contact_human_layout = Flowbie_Wp_Ai_Widget_Design::sanitize_sidebar_config(
+	array( 'sidebar_layout' => array( 'contact_human', 'chat' ) ),
+	'chat'
+);
+flowbie_assert( in_array( 'contact_human', $contact_human_layout['sidebar_layout'], true ), 'sidebar layout accepts contact_human' );
+
+$sidebar_vars = Flowbie_Wp_Ai_Widget_Design::build_sidebar_css_vars(
+	array( 'sidebar_width' => 400 ),
+	Flowbie_Wp_Ai_Widget_Design::fallback_palette()
+);
+flowbie_assert( strpos( $sidebar_vars, '--fai-sidebar-width:400px' ) !== false, 'sidebar css vars width' );
+
+Flowbie_Wp_Ai_Widget_Design::save_from_admin_post(
+	array(
+		'style_scope' => 'both',
+		'sidebar'     => array(
+			'sidebar_side'       => 'right',
+			'sidebar_transition' => 'slide',
+			'sidebar_width'      => 380,
+			'sidebar_heading'    => 'Ask Flowbie',
+			'sidebar_layout'     => array( 'chat' ),
+		),
+	),
+	'chat'
+);
+$with_sidebar = Flowbie_Wp_Ai_Widget_Design::get_settings();
+flowbie_assert( $with_sidebar['chat_sidebar']['sidebar_heading'] === 'Ask Flowbie', 'admin post saves chat sidebar' );
+flowbie_assert( (int) $with_sidebar['chat_sidebar']['sidebar_width'] === 380, 'admin post saves chat sidebar width' );
+
+$chat_sidebar_bubble = Flowbie_Wp_Ai_Widget_Design::sanitize_sidebar_config(
+	array( 'display_mode' => 'bubble', 'sidebar_side' => 'left' ),
+	'chat'
+);
+flowbie_assert( ! isset( $chat_sidebar_bubble['display_mode'] ), 'chat sidebar drops display_mode' );
+flowbie_assert( $chat_sidebar_bubble['sidebar_side'] === 'left', 'chat sidebar keeps side' );
 
 // ── CSS var builders ─────────────────────────────────────────
 $chat_vars = Flowbie_Wp_Ai_Widget_Design::build_chat_css_vars( Flowbie_Wp_Ai_Widget_Design::fallback_palette() );

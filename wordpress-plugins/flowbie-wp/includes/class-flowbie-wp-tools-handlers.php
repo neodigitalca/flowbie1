@@ -86,6 +86,43 @@ class Flowbie_Wp_Tools_Handlers {
 	 * @param array<string, mixed> $params Params.
 	 * @return array<string, mixed>
 	 */
+	public static function wp_chat_settings_get( array $params ): array {
+		$settings = Flowbie_Wp_Chat::get_settings();
+		return array(
+			'ok'             => true,
+			'enabled'        => ! empty( $settings['enabled'] ),
+			'logged_in_only' => ! empty( $settings['logged_in_only'] ),
+		);
+	}
+
+	/**
+	 * @param array<string, mixed> $params Params.
+	 * @return array<string, mixed>|WP_Error
+	 */
+	public static function wp_chat_settings_update( array $params ) {
+		$patch = array();
+		if ( array_key_exists( 'enabled', $params ) ) {
+			$patch['enabled'] = ! empty( $params['enabled'] );
+		}
+		if ( array_key_exists( 'logged_in_only', $params ) ) {
+			$patch['logged_in_only'] = ! empty( $params['logged_in_only'] );
+		}
+		if ( empty( $patch ) ) {
+			return new WP_Error( 'flowbie_chat_settings', __( 'No settings to update.', 'flowbie-wp' ), array( 'status' => 400 ) );
+		}
+		Flowbie_Wp_Chat::save_settings( $patch );
+		$settings = Flowbie_Wp_Chat::get_settings();
+		return array(
+			'ok'             => true,
+			'enabled'        => ! empty( $settings['enabled'] ),
+			'logged_in_only' => ! empty( $settings['logged_in_only'] ),
+		);
+	}
+
+	/**
+	 * @param array<string, mixed> $params Params.
+	 * @return array<string, mixed>
+	 */
 	public static function wp_list_posts( array $params ): array {
 		$result = Flowbie_Wp_Backend_Assist::tool_list_posts( $params );
 		return array_merge( array( 'ok' => ! empty( $result['success'] ) ), $result );

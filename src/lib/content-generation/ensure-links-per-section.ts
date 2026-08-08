@@ -1,16 +1,12 @@
 /**
- * Agentic links per section: ensure at least one internal link per H2 and H3 section via AI.
+ * Agentic links per section: ensure at least one internal link per H2 and H3 section.
  * Used after content generation so no post is uploaded with zero links when linkable posts exist.
  * Also provides word-based guarantee: at least one link every ~200 words.
- * Minimum links = max(10, ceil(words/200), number of H2+H3 headings) - so more links when content has more sections.
+ * Minimum links = max(10, ceil(words/200), number of H2+H3 headings).
  *
- * HTML flow is AI-driven: operates on HTML directly, no manual HTML→Markdown→HTML conversion.
- * Preserves lists, tables, and all structure.
+ * HTML flow: deterministic insert only — adds <a href> tags without OpenRouter rewrites.
  */
 
-import pLimit from "p-limit";
-import { getResearchModel } from "@/lib/optimization-settings-storage";
-import { streamChatCompletion } from "@/lib/api";
 import { extractInternalLinksFromContent } from "@/lib/wordpress-api/validate-internal-links";
 
 const LINK_PATTERN = /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g;
@@ -152,6 +148,67 @@ export function countInternalLinksInHtmlContent(
   return countInternalLinksInHtml(html, siteHost, validUrls);
 }
 
+/** Short anchor text from a WordPress post title (2–4 words). */
+export function shortAnchorFromPostTitle(title: string): string {
+  const words = title
+    .replace(/<[^>]+>/g, "")
+    .replace(/[^\w\s'-]/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length === 0) return "related page";
+  return words.slice(0, 4).join(" ");
+}
+
+const HTML_INTERNAL_LINK_RE = /<a\s[^>]*href=["']https?:\/\//i;
+const MD_INTERNAL_LINK_RE = /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/;
+
+/**
+ * Inserts one internal link into the first <p> that has no http(s) link.
+ * Does not rewrite or add paragraphs — appends the anchor tag at the end of that paragraph.
+ */
+export function insertOneInternalLinkIntoHtml(
+  sectionHtml: string,
+  link: { title: string; link: string },
+): string {
+  if (!sectionHtml.trim() || !link.link?.trim()) return sectionHtml;
+
+  const anchor = shortAnchorFromPostTitle(link.title);
+  const anchorTag = `<a href="${link.link.trim()}">${anchor}</a>`;
+  let inserted = false;
+
+  const out = sectionHtml.replace(/<p(\s[^>]*)?>([\s\S]*?)<\/p>/gi, (full, attrs, inner) => {
+    if (inserted) return full;
+    if (HTML_INTERNAL_LINK_RE.test(inner)) return full;
+    inserted = true;
+    const trimmed = inner.trimEnd();
+    const spacer = trimmed.length > 0 && !/\s$/.test(trimmed) ? " " : "";
+    return `<p${attrs || ""}>${trimmed}${spacer}${anchorTag}</p>`;
+  });
+
+  return inserted ? out : sectionHtml;
+}
+
+/**
+ * Inserts one markdown internal link at the end of the first paragraph without a link.
+ */
+export function insertOneInternalLinkIntoMarkdown(
+  sectionMarkdown: string,
+  link: { title: string; link: string },
+): string {
+  if (!sectionMarkdown.trim() || !link.link?.trim()) return sectionMarkdown;
+
+  const anchor = shortAnchorFromPostTitle(link.title);
+  const mdLink = `[${anchor}](${link.link.trim()})`;
+  const parts = sectionMarkdown.split(/\n\n+/);
+  for (let i = 0; i < parts.length; i++) {
+    if (MD_INTERNAL_LINK_RE.test(parts[i]!)) continue;
+    parts[i] = `${parts[i]!.trimEnd()} ${mdLink}`;
+    return parts.join("\n\n");
+  }
+  return sectionMarkdown;
+}
+
 /**
  * Split HTML into chunks of ~wordsPerChunk at block boundaries (p, h2, ul, ol, table).
  * Preserves all HTML structure within each chunk.
@@ -247,23 +304,18 @@ export async function ensureLinksEvery200Words(
   const chunks = splitIntoWordChunks(markdown, WORDS_PER_LINK_TARGET);
   if (chunks.length === 0) return markdown;
 
-  const model = getResearchModel(siteId);
   const linksPayload = allowedForLinking.map((p) => ({ title: p.title, link: p.link }));
 
-  const limit = pLimit(3);
-  const revisedChunks = await Promise.all(
-    chunks.map((chunk, i) =>
-      limit(async () => {
-        const count = countInternalLinksInSection(chunk, siteHost, validUrls);
-        if (count >= 1) return chunk;
-        setProgress?.({
-          step: "Ensuring links every 200 words",
-          message: `Adding internal link to chunk ${i + 1}/${chunks.length}...`,
-        });
-        return addOneLinkToSectionViaAI(chunk, linksPayload, apiKey, model);
-      })
-    )
-  );
+  const revisedChunks = chunks.map((chunk, i) => {
+    const count = countInternalLinksInSection(chunk, siteHost, validUrls);
+    if (count >= 1) return chunk;
+    setProgress?.({
+      step: "Ensuring links every 200 words",
+      message: `Adding internal link to chunk ${i + 1}/${chunks.length}...`,
+    });
+    const pick = linksPayload[i % linksPayload.length]!;
+    return insertOneInternalLinkIntoMarkdown(chunk, pick);
+  });
 
   return revisedChunks.join("\n\n");
 }
@@ -280,13 +332,12 @@ export interface EnsureLinksEvery200WordsForHtmlOptions {
 
 /**
  * HTML-in/HTML-out: ensures at least one internal link per ~200 words in HTML content.
- * AI-driven: operates on HTML only. Splits at block boundaries, sends chunks to AI, gets HTML back.
- * Preserves lists, tables, and all structure.
+ * Deterministic: inserts <a> tags only; never rewrites body copy via OpenRouter.
  */
 export async function ensureLinksEvery200WordsForHtml(
   options: EnsureLinksEvery200WordsForHtmlOptions
 ): Promise<string> {
-  const { htmlContent, wordPressPosts, currentPageUrl, siteUrl, apiKey, siteId, setProgress } = options;
+  const { htmlContent, wordPressPosts, currentPageUrl, siteUrl, setProgress } = options;
   if (!htmlContent?.trim() || !wordPressPosts?.length) return htmlContent;
 
   const siteHost = getSiteHost(siteUrl);
@@ -302,23 +353,18 @@ export async function ensureLinksEvery200WordsForHtml(
   const chunks = splitHtmlIntoWordChunks(htmlContent, WORDS_PER_LINK_TARGET);
   if (chunks.length === 0) return htmlContent;
 
-  const model = getResearchModel(siteId);
   const linksPayload = allowedForLinking.map((p) => ({ title: p.title, link: p.link }));
 
-  const limit = pLimit(3);
-  const revisedChunks = await Promise.all(
-    chunks.map((chunk, i) =>
-      limit(async () => {
-        const count = countInternalLinksInHtml(chunk, siteHost, validUrls);
-        if (count >= 1) return chunk;
-        setProgress?.({
-          step: "Ensuring links every 200 words",
-          message: `Adding internal link to section ${i + 1}/${chunks.length}...`,
-        });
-        return addOneLinkToSectionViaAI_HTML(chunk, linksPayload, apiKey, model);
-      })
-    )
-  );
+  const revisedChunks = chunks.map((chunk, i) => {
+    const count = countInternalLinksInHtml(chunk, siteHost, validUrls);
+    if (count >= 1) return chunk;
+    setProgress?.({
+      step: "Ensuring links every 200 words",
+      message: `Adding internal link to section ${i + 1}/${chunks.length}...`,
+    });
+    const pick = linksPayload[i % linksPayload.length]!;
+    return insertOneInternalLinkIntoHtml(chunk, pick);
+  });
 
   return revisedChunks.join("");
 }
@@ -385,14 +431,10 @@ export async function ensureMinimumLinksInHtml(
     minTotalLinks,
     Math.ceil(wordCount / WORDS_PER_LINK_TARGET),
     headingCount,
-    allowedForLinking.length
   );
 
   let currentHtml = htmlContent;
   let usedUrls = new Set(extractInternalLinksFromContent(currentHtml, siteUrl));
-
-  const model = getResearchModel(siteId);
-  const limit = pLimit(2);
 
   const normPostLink = (link: string): string => {
     try {
@@ -404,7 +446,7 @@ export async function ensureMinimumLinksInHtml(
     }
   };
 
-  // First pass: ensure every H2/H3 section has at least one link. Pre-assign ONE unique link per section so the AI cannot reuse the same URL.
+  // First pass: ensure every H2/H3 section has at least one link.
   const headingSections = splitHtmlByHeadingSections(currentHtml);
   const sectionsNeedingLink: number[] = [];
   for (let i = 0; i < headingSections.length; i++) {
@@ -413,29 +455,25 @@ export async function ensureMinimumLinksInHtml(
     const count = countInternalLinksInHtml(section, siteHost, validUrls);
     if (isHeadingBlock && count < 1) sectionsNeedingLink.push(i);
   }
-  // Assign one unique link per section (link 0 → first section needing link, etc.). AI gets only that link so it cannot reuse.
   const linkPool = allowedForLinking.map((p) => ({ title: p.title, link: p.link }));
   const assignCount = Math.min(sectionsNeedingLink.length, linkPool.length);
-    for (let j = 0; j < assignCount; j++) {
-    const sectionIndex = sectionsNeedingLink[j];
-    const section = headingSections[sectionIndex];
-    const singleLinkPayload = [linkPool[j]];
+  for (let j = 0; j < assignCount; j++) {
+    const sectionIndex = sectionsNeedingLink[j]!;
+    const section = headingSections[sectionIndex]!;
     setProgress?.({
       step: "Ensuring minimum links",
       message: `Adding link ${j + 1}/${target}...`,
     });
-    const revised = await limit(() =>
-      addOneLinkToSectionViaAI_HTML(section, singleLinkPayload, apiKey, model)
-    );
+    const revised = insertOneInternalLinkIntoHtml(section, linkPool[j]!);
     headingSections[sectionIndex] = revised;
     currentHtml = headingSections.join("");
     usedUrls = new Set(extractInternalLinksFromContent(currentHtml, siteUrl));
-      }
+  }
 
   if (usedUrls.size >= target) return currentHtml;
 
-  // Second pass: top up to target (word-based chunks) when we need more than one-per-heading
-  const maxTopUpAttempts = Math.max(target - usedUrls.size, 1) + 5; // cap to avoid infinite loop if AI never adds a detectable link
+  // Second pass: top up to target (word-based chunks)
+  const maxTopUpAttempts = Math.max(target - usedUrls.size, 1) + 5;
   let topUpAttempts = 0;
   while (usedUrls.size < target && topUpAttempts < maxTopUpAttempts) {
     topUpAttempts += 1;
@@ -454,118 +492,26 @@ export async function ensureMinimumLinksInHtml(
       count: countInternalLinksInHtml(chunk, siteHost, validUrls),
     }));
     chunkCounts.sort((a, b) => a.count - b.count);
-    const { i: idx, chunk } = chunkCounts[0];
+    const { i: idx, chunk } = chunkCounts[0]!;
 
     setProgress?.({
       step: "Ensuring minimum links",
       message: `Adding link ${usedUrls.size + 1}/${target}...`,
     });
 
-    const revisedChunk = await limit(() =>
-      addOneLinkToSectionViaAI_HTML(chunk, unusedPayload, apiKey, model)
-    );
+    const revisedChunk = insertOneInternalLinkIntoHtml(chunk, unusedPayload[0]!);
     const newChunks = [...chunks];
     newChunks[idx] = revisedChunk;
     currentHtml = newChunks.join("");
     usedUrls = new Set(extractInternalLinksFromContent(currentHtml, siteUrl));
-    // Avoid infinite loop if AI didn't add a link that we can detect (e.g. wrong URL format)
     if (usedUrls.size <= sizeBefore) break;
   }
 
   return currentHtml;
 }
 
-async function addOneLinkToSectionViaAI(
-  sectionMarkdown: string,
-  allowedLinks: Array<{ title: string; link: string }>,
-  apiKey: string,
-  model: string
-): Promise<string> {
-  const linksList = allowedLinks.map((p) => `- URL: ${p.link}\n  Page title (reference only): ${p.title}`).join("\n\n");
-  const systemPrompt = `You add exactly one internal link from the allowed list into the given section. Use markdown [anchor](url) with an exact URL from the list. Copy the URL character-for-character - do NOT use example.com or any other domain. Return ONLY the revised section markdown, no explanation or prefix. Preserve all existing content and formatting; only insert one natural sentence or phrase that includes the link.
-
-CRITICAL - HEADING LOCK (SEO extra text): Do not add, remove, or edit <h2> or <h3> tags. Keep exactly one <h2> and one <h3> in the section.
-
-CRITICAL - AEO-OPTIMIZED ANCHOR: Do NOT use the page title as the anchor text. Write the link in context: craft a short, natural phrase (2-6 words) that fits the sentence and the section topic, is relevant to what the linked page is about, and reads naturally for both users and search engines (AEO-friendly).
-
-CRITICAL - EMBED LINK IN MEANINGFUL CONTEXT: Every link must have meaningful sentence content on BOTH sides so readers and LLMs get clear context. NEVER use "here" after the link (no "...guide here" or "learn more here"). Embed the link in the middle of a substantive sentence. Good: "Our guide to dental insurance [explains](url) deductibles and annual maximums in plain language." Bad: "You can review our guide to insurance [here](url)."
-
-CRITICAL - NO LINK ENDS IN A PERIOD: No link may be the last thing before a period. Add at least one word after the link before the period - and that word must NOT be "here". Use substantive wording.`;
-  const userPrompt = `Section to revise:\n\n${sectionMarkdown}\n\nAllowed link(s) (use exact URL; write contextual, AEO-optimized anchor text, not the page title):\n${linksList}`;
-
-  let out = "";
-  await streamChatCompletion({
-    apiKey,
-    model,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    temperature: 0.3,
-    maxTokens: 2048,
-    topP: 0.9,
-    onContentChunk: (chunk) => {
-      out += chunk;
-    },
-  });
-
-  let trimmed = out.trim();
-  const codeBlock = trimmed.match(/^```(?:markdown)?\s*\n?([\s\S]*?)\n?```$/);
-  if (codeBlock) trimmed = codeBlock[1].trim();
-  return trimmed || sectionMarkdown;
-}
-
 /**
- * AI adds exactly one internal link to an HTML chunk. Returns HTML with structure preserved.
- * AI receives HTML and must return HTML - no conversion.
- */
-async function addOneLinkToSectionViaAI_HTML(
-  sectionHtml: string,
-  allowedLinks: Array<{ title: string; link: string }>,
-  apiKey: string,
-  model: string
-): Promise<string> {
-  const linksList = allowedLinks.map((p) => `- URL: ${p.link}\n  Page title (reference only): ${p.title}`).join("\n\n");
-  const oneLinkOnly = allowedLinks.length === 1
-    ? " You must use ONLY the single link provided below for this section; do not use any other URL."
-    : " Use exactly one link from the list below; each link may only appear once in the entire document.";
-  const systemPrompt = `You add exactly one internal link from the allowed list into the given HTML section. Use an <a href="URL">anchor text</a> tag. Copy the URL character-for-character from the list - NEVER use example.com or any other domain.${oneLinkOnly} Return ONLY the revised HTML, no explanation or prefix.
-
-CRITICAL - AEO-OPTIMIZED ANCHOR: Do NOT use the page title as the anchor text. Write the link in context: craft a short, natural phrase (2-6 words) that fits the sentence and the section topic, is relevant to what the linked page is about, and reads naturally for both users and search engines (AEO-friendly). Examples: "our guide to crowns", "restorative crown options", "how to choose a dentist". NEVER use "here" in or after the link (e.g. never "...guide here" or "learn more here"). The anchor must feel like part of the sentence, not a pasted title.
-
-CRITICAL - PRESERVE STRUCTURE: Keep all existing HTML exactly as-is: lists (<ul>, <ol>, <li>), tables (<table>, <tr>, <td>), headings, paragraphs. Only insert one natural phrase or sentence that includes the link. Do NOT convert lists to paragraphs or change any structure.
-
-CRITICAL - HEADINGS: <h2> and <h3> must contain ONLY the heading phrase (3-10 words). NEVER put paragraph text or multiple sentences inside a heading tag. Paragraphs belong in <p> tags. Do NOT wrap body text inside <h2> or <h3>.
-
-CRITICAL - EMBED LINK IN MEANINGFUL CONTEXT: Every link must have meaningful sentence content on BOTH sides so readers and LLMs get clear context for what the link is about. Do NOT use "link → here" or end with "here". Embed the link in the middle of a substantive sentence. Good: "Understanding your coverage helps; our guide to dental insurance explains deductibles and annual maximums in plain language." Bad: "You can review our guide to navigating your dental insurance plan here." or "...dental crown here." The link must sit inside a full phrase with real content before and after the anchor.
-
-CRITICAL - NO LINK ENDS IN A PERIOD: No link may be the last thing before a period. Do not end a sentence with only the link. Do not put a period inside the anchor. Add at least one word after the closing </a> before the period - and that word must NOT be "here". Use substantive wording (e.g. "...our guide to insurance</a> explains your options.").`;
-  const userPrompt = `HTML section to revise:\n\n${sectionHtml}\n\nAllowed link(s) (use exact URL; write contextual, AEO-optimized anchor text, not the page title):\n${linksList}`;
-
-  let out = "";
-  await streamChatCompletion({
-    apiKey,
-    model,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    temperature: 0.3,
-    maxTokens: 2048,
-    topP: 0.9,
-    onContentChunk: (chunk) => {
-      out += chunk;
-    },
-  });
-
-  let trimmed = out.trim();
-  const codeBlock = trimmed.match(/^```(?:html)?\s*\n?([\s\S]*?)\n?```$/);
-  if (codeBlock) trimmed = codeBlock[1].trim();
-  return trimmed || sectionHtml;
-}
-
-/**
- * Ensures every H2 section has at least one internal link. Sections with 0 links get one added via AI.
+ * Ensures every H2 section has at least one internal link. Sections with 0 links get one added deterministically.
  * Returns updated markdown. Does not mutate input.
  */
 export async function ensureAtLeastOneLinkPerSection(
@@ -576,8 +522,6 @@ export async function ensureAtLeastOneLinkPerSection(
     wordPressPosts,
     currentPageUrl,
     siteUrl,
-    apiKey,
-    siteId,
     setProgress,
   } = options;
 
@@ -596,7 +540,6 @@ export async function ensureAtLeastOneLinkPerSection(
   const parts = markdown.split(/^##\s+/m);
   if (parts.length <= 1) return markdown;
 
-  const model = getResearchModel(siteId);
   const linksPayload = allowedForLinking.map((p) => ({ title: p.title, link: p.link }));
 
   for (let i = 0; i < parts.length; i++) {
@@ -610,8 +553,8 @@ export async function ensureAtLeastOneLinkPerSection(
       message: `Adding internal link to section ${i + 1}/${parts.length}...`,
     });
 
-    const revised = await addOneLinkToSectionViaAI(raw, linksPayload, apiKey, model);
-    parts[i] = revised;
+    const pick = linksPayload[i % linksPayload.length]!;
+    parts[i] = insertOneInternalLinkIntoMarkdown(raw, pick);
   }
 
   const intro = parts[0];

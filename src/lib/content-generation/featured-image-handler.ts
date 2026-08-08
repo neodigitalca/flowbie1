@@ -9,7 +9,7 @@ import { getMuteOptimizationToasts } from "@/hooks/content-optimization/optimiza
 import { streamChatCompletion } from "@/lib/api";
 import { uploadWordPressMedia } from "@/lib/wordpress-api";
 import { generateImage } from "@/lib/image-api";
-import { buildImagePrompt } from "@/lib/image-prompt-builder";
+import { buildFocusedArticlePurpose } from "@/lib/content-generation/article-length-policy";
 import {
   buildGroundedImagePromptSuffix,
   collectReferenceDataUrls,
@@ -145,7 +145,7 @@ export async function handleFeaturedImage(
       
       // Generate image checklist
       const flowTitle = blueprintResult.title || existingTitle || primaryKeyword;
-      const flowPurpose = blueprintResult.purpose || `Comprehensive guide about ${primaryKeyword}`;
+      const flowPurpose = blueprintResult.purpose || buildFocusedArticlePurpose(primaryKeyword);
       
       let imageChecklistContent = '';
       const checklistResult = await streamChatCompletion({
@@ -186,7 +186,7 @@ export async function handleFeaturedImage(
         checklistFileName,
         JSON.stringify({
           title: blueprintResult.title || existingTitle || primaryKeyword,
-          purpose: blueprintResult.purpose || `Comprehensive guide about ${primaryKeyword}`,
+          purpose: blueprintResult.purpose || buildFocusedArticlePurpose(primaryKeyword),
           primaryKeyword,
           imageChecklist: imageChecklist.map(item => ({
             title: item.title,
@@ -210,7 +210,7 @@ export async function handleFeaturedImage(
       const basePrompt = buildImagePrompt(
         {
           flowTitle: blueprintResult.title || existingTitle || primaryKeyword,
-          flowPurpose: blueprintResult.purpose || `Comprehensive guide about ${primaryKeyword}`,
+          flowPurpose: blueprintResult.purpose || buildFocusedArticlePurpose(primaryKeyword),
           finalOutput: contentForImage,
         },
         {
@@ -238,7 +238,7 @@ export async function handleFeaturedImage(
         model: getResearchModel(),
         context: {
           title: blueprintResult.title || existingTitle || primaryKeyword,
-          purpose: blueprintResult.purpose || `Comprehensive guide about ${primaryKeyword}`,
+          purpose: blueprintResult.purpose || buildFocusedArticlePurpose(primaryKeyword),
           body: contentForImage,
         },
       });

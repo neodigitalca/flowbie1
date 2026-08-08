@@ -9,6 +9,7 @@ export type RowStatus =
   | "ai-faq"
   | "ai-headers"
   | "ai-links"
+  | "ai-wikipedia-link"
   | "ai-overview"
   | "ai-in-content-image"
   | "content-cleanup"
@@ -61,6 +62,11 @@ export interface OverviewRow {
   blogLinkList?: Array<{ href: string; anchor: string }>;
   blogLinksPlanJson?: string;
   blogLinksRanAtIso?: string;
+  /** Staged Wikipedia targets (separate from internal Links). */
+  blogWikiLinkList?: Array<{ href: string; anchor: string }>;
+  blogWikiLinksRanAtIso?: string;
+  /** One-line Wikipedia harness result for grid row display. */
+  blogWikiLinkSummary?: string;
   /** In-content image staged after AISEO Images run. */
   blogInContentImageUrl?: string;
   blogInContentImageAlt?: string;

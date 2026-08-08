@@ -5,9 +5,7 @@ import { handleOptimizeContent as handleOptimizeContentModule } from "./content-
 import { continueOptimizationWithKeyword as continueOptimizationWithKeywordModule, type ContinueOptimizationFn } from "./content-optimization/continue-optimization";
 import {
   handleOptimizeMultipleContent as handleOptimizeMultipleContentModule,
-  approveBulkKeywordApproval as approveBulkKeywordApprovalModule,
 } from "./content-optimization/bulk-optimization";
-import { cancelBulkKeywordWait } from "./content-optimization/bulk-optimization-approval";
 import { clearOptimization as clearOptimizationHelper } from "./content-optimization/optimization-helpers";
 import type { OptimizationFileManager } from "@/lib/optimization-file-manager";
 import type { GscPerformancePreviewByUrl } from "./content-optimization/gsc-preview-types";
@@ -201,7 +199,6 @@ export function useContentOptimization() {
 
   const resetBulkBatch = useCallback(
     (batchKey: string) => {
-      cancelBulkKeywordWait(batchKey);
       setBulkOptimizationState((prev) => {
         const next = { ...prev };
         delete next[batchKey];
@@ -235,7 +232,6 @@ export function useContentOptimization() {
     setGscPerformancePreview,
     handleOptimizeContent,
     handleOptimizeMultipleContent,
-    approveBulkKeywordApproval: approveBulkKeywordApprovalModule,
     continueOptimizationWithKeyword,
     setOptimizationFileManagers,
     clearOptimization,

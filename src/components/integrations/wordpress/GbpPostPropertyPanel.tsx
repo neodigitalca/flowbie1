@@ -25,6 +25,9 @@ import {
   SEO_WORKSPACE_INNER_CLASS,
 } from "@/components/seo/seo-workspace-layout";
 import { useGbpPostRoster } from "@/hooks/gbp-post/use-gbp-post-roster";
+import { useGmbConnectionStatus } from "@/hooks/gbp-post/use-gmb-connection-status";
+import { mergeServerGbpLocationIdsIntoLocalSites } from "@/components/integrations/storage";
+import { useWordPressSites } from "@/hooks/use-wordpress-sites";
 import { clampNumberOfGbpPosts } from "@/lib/gbp-post/gbp-schedule-plan";
 import { runGbpSitePostBatch } from "@/lib/gbp-post/gbp-post-one-site";
 import { runGbpMultiSiteBatch } from "@/lib/gbp-post/gbp-post-multi-site-batch";
@@ -60,9 +63,26 @@ function validateSitePrereqs(target: WordPressSite): string | null {
 
 export const GbpPostPropertyPanel: React.FC<GbpPostPropertyPanelProps> = ({
   site,
-  allSites,
+  allSites: _allSites,
 }) => {
-  const roster = useGbpPostRoster(allSites);
+  const { sites: integrationSites, reloadSitesFromStorage } = useWordPressSites();
+  const roster = useGbpPostRoster(integrationSites);
+  const { connected: gmbConnected } = useGmbConnectionStatus();
+
+  const syncGbpFromServer = useCallback(() => {
+    void mergeServerGbpLocationIdsIntoLocalSites().then((merged) => {
+      if (merged) reloadSitesFromStorage();
+    });
+  }, [reloadSitesFromStorage]);
+
+  useEffect(() => {
+    syncGbpFromServer();
+  }, [syncGbpFromServer]);
+
+  useEffect(() => {
+    if (roster.rosterSites.length > 0) return;
+    syncGbpFromServer();
+  }, [roster.rosterSites.length, syncGbpFromServer]);
   const [scheduler, setScheduler] = useState<GbpSchedulerSectionState>(defaultGbpSchedulerState);
   const [isPosting, setIsPosting] = useState(false);
   const [multiPropertyRun, setMultiPropertyRun] = useState(false);
@@ -412,6 +432,7 @@ export const GbpPostPropertyPanel: React.FC<GbpPostPropertyPanelProps> = ({
         postingSiteIds={postingSiteIds}
         isPosting={isPosting}
         disabled={disabled}
+        gmbConnected={gmbConnected}
         onTopicChange={roster.setTopicForSite}
         onToggleSite={roster.toggleSiteSelected}
         onToggleExpandedSiteId={toggleExpandedSiteId}

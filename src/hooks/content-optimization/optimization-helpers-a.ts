@@ -1,5 +1,5 @@
 import { loadApiKey } from "@/lib/api";
-import { OptimizationFileManager } from "@/lib/optimization-file-manager";
+import { OptimizationFileManager, type OptimizationFile } from "@/lib/optimization-file-manager";
 import { type WordPressSite } from "@/components/integrations/types";
 import type { LinkCheckResult } from "@/lib/wordpress-api/validate-internal-links";
 import {
@@ -9,71 +9,134 @@ import {
 } from "@/lib/content-optimization-helpers";
 import type { GeographicSiteContext } from "@/lib/content-optimization/entity";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import {
+  mergeRunProgress,
+  reportRunProgress,
+  computeBatchProgressFromSiteEntry,
+  type BulkProgressMeta,
+  type ContentOptimizerStepId,
+  type RunProgressPatch,
+} from "@/lib/content-optimization/content-optimizer-run-progress";
+import { clearSiteCache } from "@/lib/wordpress-site-cache";
+import { clearValidationCache } from "@/lib/cached-link-validation";
+import { clearRelevanceCache } from "@/lib/content-generation/ai-link-relevance-filter";
 
 // ============================================================================
 // State Management Helpers
 // ============================================================================
 
-const MICRO_LOG_CAP = 100;
+export type OptimizationProgressPatch = RunProgressPatch &
+  Partial<{
+    generatedFiles: OptimizationFile[];
+    bulkMeta?: BulkProgressMeta;
+  }> &
+  Record<string, unknown>;
 
-export type OptimizationProgressPatch = Partial<{
-  step: string;
-  progress: number;
-  message?: string;
-  linkCheckResults?: LinkCheckResult[] | null;
-}> &
-  Record<string, any>;
+function syncSiteProgressToBatchKey(
+  prev: Record<string, any>,
+  siteId: string,
+  siteEntry: Record<string, any>,
+): Record<string, any> {
+  const batchKey = `${siteId}-batch`;
+  const batchEntry = prev[batchKey];
+  if (!batchEntry?.bulkMeta) return prev;
+  const batchProgress = computeBatchProgressFromSiteEntry(siteEntry, batchEntry.bulkMeta as BulkProgressMeta);
+  return mergeRunProgress(prev, batchKey, {
+    stepId: siteEntry.stepId as ContentOptimizerStepId,
+    subProgress: siteEntry.subProgress ?? 0,
+    message: siteEntry.message,
+    batchProgress,
+    harnessSections: siteEntry.harnessSections,
+    harnessPlannedSectionCount: siteEntry.harnessPlannedSectionCount,
+    linkCheckResults: siteEntry.linkCheckResults,
+  });
+}
+
+function resolveProgressPatch(
+  prevEntry: Record<string, unknown>,
+  incoming: OptimizationProgressPatch,
+): { stepId?: ContentOptimizerStepId; subProgress?: number } {
+  const stepId = (incoming.stepId ?? prevEntry.stepId) as ContentOptimizerStepId | undefined;
+  let subProgress = incoming.subProgress ?? (prevEntry.subProgress as number | undefined);
+  if (subProgress == null && stepId != null && typeof incoming.progress === "number") {
+    subProgress = Math.min(1, Math.max(0, incoming.progress / 100));
+  }
+  return { stepId, subProgress };
+}
+
+function attachGeneratedFiles(
+  prevEntry: Record<string, unknown>,
+  nextEntry: Record<string, unknown>,
+  incoming: OptimizationProgressPatch,
+): void {
+  if (incoming.generatedFiles == null && prevEntry.generatedFiles != null) {
+    nextEntry.generatedFiles = prevEntry.generatedFiles;
+  } else if (Array.isArray(incoming.generatedFiles)) {
+    const map = new Map<string, OptimizationFile>();
+    for (const f of (prevEntry.generatedFiles as OptimizationFile[] | undefined) ?? []) {
+      if (f?.name) map.set(f.name, f);
+    }
+    for (const f of incoming.generatedFiles) {
+      if (f?.name) map.set(f.name, f);
+    }
+    nextEntry.generatedFiles = [...map.values()];
+  }
+}
 
 /**
- * Merges a progress update for one key, appending to microLog when `step` changes.
- * Preserves linkCheckResults when the patch omits them (same rule as upload flow).
+ * Merges a progress update for one key (stepId + subProgress → monotonic progress).
+ * Legacy callers may pass `{ step, progress, message }` only; inherits stepId/subProgress from prev when present.
  */
 export function mergeOptimizationProgress(
   prev: Record<string, any>,
   key: string,
   incoming: OptimizationProgressPatch,
-  options?: { resetMicroLog?: boolean }
 ): Record<string, any> {
   const prevEntry = prev[key] || {};
+  const { stepId, subProgress } = resolveProgressPatch(prevEntry, incoming);
 
-  let microLog: { step: string; message?: string }[];
-
-  if (options?.resetMicroLog) {
-    microLog =
-      incoming.step != null ? [{ step: incoming.step, message: incoming.message }] : [];
-  } else {
-    microLog = [...(prevEntry.microLog || [])];
-    if (incoming.step != null && incoming.step !== prevEntry.step) {
-      microLog.push({ step: incoming.step, message: incoming.message });
-      while (microLog.length > MICRO_LOG_CAP) microLog.shift();
-    }
+  if (stepId != null && subProgress != null) {
+    const merged = mergeRunProgress(prev, key, {
+      ...incoming,
+      stepId,
+      subProgress,
+    });
+    const nextEntry = merged[key]!;
+    attachGeneratedFiles(prevEntry, nextEntry, incoming);
+    return merged;
   }
 
-  const next: Record<string, any> = {
-    ...prevEntry,
-    ...incoming,
-    microLog,
+  // Legacy overview / prep harness: raw step + progress without stepId contract
+  const siteNext: Record<string, unknown> = { ...prevEntry, ...incoming };
+  if (typeof incoming.progress === "number") {
+    const prevProgress = typeof prevEntry.progress === "number" ? prevEntry.progress : 0;
+    siteNext.progress = Math.max(prevProgress, incoming.progress);
+  }
+  return { ...prev, [key]: siteNext };
+}
+
+/** Attach latest fileManager snapshot so download buttons update during a run (metadata only). */
+export function progressWithGeneratedFiles(
+  patch: OptimizationProgressPatch,
+  fileManager: OptimizationFileManager,
+): OptimizationProgressPatch {
+  return {
+    ...patch,
+    filesRevision: Date.now(),
+    generatedFileNames: fileManager.getFiles().map((f) => f.name),
   };
-
-  if (incoming.linkCheckResults == null && prevEntry.linkCheckResults != null) {
-    next.linkCheckResults = prevEntry.linkCheckResults;
-  }
-
-  if (incoming.harnessSections == null && prevEntry.harnessSections != null) {
-    next.harnessSections = prevEntry.harnessSections;
-    next.harnessPlannedSectionCount = prevEntry.harnessPlannedSectionCount;
-  }
-
-  return { ...prev, [key]: next };
 }
 
 /** Apply a progress patch via setState (for nested callbacks from blueprint / keyword research). */
 export function patchOptimizationProgress(
   setProgress: (prev: any) => any,
   key: string,
-  incoming: Record<string, any>
+  incoming: Partial<OptimizationProgressPatch> & Record<string, unknown>,
 ) {
-  setProgress((prev: any) => mergeOptimizationProgress(prev, key, incoming));
+  setProgress((prev: any) =>
+    mergeOptimizationProgress(prev, key, incoming as OptimizationProgressPatch),
+  );
 }
 
 /** Extra text / content harness lives on site.id; bulk UI also reads `${siteId}-batch`. */
@@ -82,25 +145,75 @@ export function mergeHarnessProgressSiteAndBatch(
   siteId: string,
   incoming: OptimizationProgressPatch,
 ): Record<string, any> {
-  let next = mergeOptimizationProgress(prev, siteId, incoming);
+  const prevEntry = prev[siteId] || {};
   const batchKey = `${siteId}-batch`;
+  const { stepId, subProgress } = resolveProgressPatch(prevEntry, incoming);
+
+  if (stepId != null && subProgress != null) {
+    let next = mergeOptimizationProgress(prev, siteId, {
+      ...incoming,
+      stepId,
+      subProgress,
+    });
+    next = syncSiteProgressToBatchKey(next, siteId, next[siteId] ?? { ...incoming, stepId, subProgress });
+    return next;
+  }
+
+  // Legacy overview / prep harness: raw step + progress without stepId contract
+  const siteNext = { ...prevEntry, ...incoming };
+  let next: Record<string, any> = { ...prev, [siteId]: siteNext };
   if (prev[batchKey] != null) {
-    next = mergeOptimizationProgress(next, batchKey, incoming);
+    const batchPrev = prev[batchKey] || {};
+    next = {
+      ...next,
+      [batchKey]: {
+        ...batchPrev,
+        ...incoming,
+        harnessSections: incoming.harnessSections ?? batchPrev.harnessSections,
+        harnessPlannedSectionCount:
+          incoming.harnessPlannedSectionCount ?? batchPrev.harnessPlannedSectionCount,
+        linkCheckResults: incoming.linkCheckResults ?? batchPrev.linkCheckResults,
+      },
+    };
   }
   return next;
+}
+
+export function bindRunProgressReporter(
+  setProgress: (prev: any) => any,
+  key: string,
+): (
+  stepId: ContentOptimizerStepId,
+  subProgress: number,
+  message?: string,
+  extra?: Omit<OptimizationProgressPatch, "stepId" | "subProgress" | "message">,
+) => void {
+  return (stepId, subProgress, message?, extra?) => {
+    updateOptimizationProgress(setProgress, key, stepId, subProgress, message, extra);
+  };
 }
 
 export function updateOptimizationProgress(
   setProgress: (prev: any) => any,
   key: string,
-  step: string,
-  progress: number,
+  stepId: ContentOptimizerStepId,
+  subProgress: number,
   message?: string,
-  options?: { resetMicroLog?: boolean }
+  extra?: Omit<OptimizationProgressPatch, "stepId" | "subProgress" | "message">,
 ) {
-  setProgress((prev: any) =>
-    mergeOptimizationProgress(prev, key, { step, progress, message }, options)
-  );
+  setProgress((prev: Record<string, any>) => {
+    let next = mergeOptimizationProgress(prev, key, {
+      stepId,
+      subProgress,
+      message,
+      ...extra,
+    });
+    const siteId = key.endsWith("-batch") ? key.replace(/-batch$/, "") : key;
+    if (!key.endsWith("-batch") && next[siteId]) {
+      next = syncSiteProgressToBatchKey(next, siteId, next[siteId]);
+    }
+    return next;
+  });
 }
 
 export function setOptimizingState(
@@ -167,17 +280,10 @@ export function clearOptimization(
     return updated;
   });
 
-  try {
-    const { clearSiteCache } = require("@/lib/wordpress-site-cache");
-    const { clearValidationCache } = require("@/lib/cached-link-validation");
-    const { clearRelevanceCache } = require("@/lib/content-generation/ai-link-relevance-filter");
-    clearSiteCache(siteId);
-    clearValidationCache(siteId);
-    clearRelevanceCache(siteId);
-    console.log(`[Optimize Content] Cleared site cache for ${siteId} (manual clear)`);
-  } catch (cacheError) {
-    console.warn("[Optimize Content] Error clearing cache:", cacheError);
-  }
+  clearSiteCache(siteId);
+  clearValidationCache(siteId);
+  clearRelevanceCache(siteId);
+  console.log(`[Optimize Content] Cleared site cache for ${siteId} (manual clear)`);
 }
 
 // ============================================================================
@@ -330,13 +436,7 @@ export async function extractKeywordFromTitleOnly(
       const researchModel = getResearchModel(siteId);
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${openRouterApiKey}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer":
-            typeof window !== "undefined" ? window.location.origin : "https://agent-blueprint-builder.com",
-          "X-Title": "Agent Blueprint Builder",
-        },
+        headers: openRouterWebAppHeaders(openRouterApiKey),
         body: JSON.stringify({
           model: researchModel,
           messages: [
@@ -504,13 +604,7 @@ export async function inferPrimaryKeywordFromTitleAndMeta(
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${openRouterApiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer":
-          typeof window !== "undefined" ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(openRouterApiKey),
       body: JSON.stringify({
         model: researchModel,
         messages: [

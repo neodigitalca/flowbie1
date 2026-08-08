@@ -88,6 +88,8 @@ export type BlogIdeaRowCompactProps = {
   slotMode?: boolean;
   /** Live WordPress post/preview URL after upload (from wordpress-post file). */
   previewUrl?: string;
+  /** Drawer expanded row: skip outer stripe shell (parent provides it). */
+  embedded?: boolean;
 };
 
 function sapUrlPathFromRow(row: CSVRow): string {
@@ -530,6 +532,7 @@ export function BlogIdeaRowCompact({
   showDirections = true,
   slotMode = false,
   previewUrl,
+  embedded = false,
 }: BlogIdeaRowCompactProps) {
   const gridClass = slotMode
     ? BLOG_IDEA_ROW_SLOT_GRID_CLASS
@@ -568,7 +571,7 @@ export function BlogIdeaRowCompact({
       ref={drag?.setNodeRef}
       style={drag?.style}
       className={cn(
-        contentOptimizerRowStripeClass(stripeIndex, { isActiveOptimize: activeOptimize }),
+        !embedded && contentOptimizerRowStripeClass(stripeIndex, { isActiveOptimize: activeOptimize }),
         drag?.isDragging && "opacity-90",
       )}
     >
@@ -678,6 +681,10 @@ export function BlogIdeaRowCompact({
   );
 
   if (isExpanded) {
+    return rowShell(gridHeader);
+  }
+
+  if (embedded) {
     return rowShell(gridHeader);
   }
 

@@ -41,6 +41,7 @@ Hard rules:
 - Include every url from allowedUrls exactly once. No omissions.
 - focusKeyword: short-tail, intent-only primary SEO / ACF focus keyword.
 - 2-5 words (up to 5). Use "vs" not hyphens for comparisons. Spaces only between words.
+- Use standard editorial hyphens when editorially standard (X-ray, e-commerce, COVID-19).
 - When pathHint is present for a row, the keyword MUST stay on that page-path topic.
 - seoResearchBrief and bodyExcerpt refine wording only; they must not override pathHint.
 - No brand names or site names. No quotes around keywords in JSON.

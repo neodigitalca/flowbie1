@@ -105,6 +105,21 @@ describe("stripTrailingFaqSection", () => {
     const out = stripTrailingFaqSection(html);
     expect(out).toBe(`<h2>Body</h2><p>x</p>`);
   });
+
+  it("removes Answering Your Questions body section", () => {
+    const html = [
+      `<h2 id="selecting">Selecting the Right System</h2><p>Body</p>`,
+      `<h2 id="questions">Answering Your Questions on Window Coverings</h2>`,
+      `<p>Customers often have questions.</p>`,
+      `<table><thead><tr><th>Question</th><th>Answer</th></tr></thead><tbody><tr><td>Q?</td><td>A.</td></tr></tbody></table>`,
+      `<h2 id="find">Find the Right Operating System</h2><p>Close</p>`,
+    ].join("");
+    const out = stripTrailingFaqSection(html);
+    expect(out).toContain("Selecting the Right System");
+    expect(out).toContain("Find the Right Operating System");
+    expect(out).not.toContain("Answering Your Questions");
+    expect(out).not.toMatch(/<th>Question<\/th>/);
+  });
 });
 
 describe("appendFaqSectionToPostHtml", () => {
@@ -114,7 +129,8 @@ describe("appendFaqSectionToPostHtml", () => {
     const first = appendFaqSectionToPostHtml({
       sourceHtml: body,
       entries,
-      introParagraph: "Common questions about X.",
+      introParagraph:
+        "These are common questions about X and how the topic applies to your situation.",
     });
     expect(first).not.toBeNull();
     expect(first!.html).toContain("Intro");
@@ -125,7 +141,8 @@ describe("appendFaqSectionToPostHtml", () => {
     const second = appendFaqSectionToPostHtml({
       sourceHtml: first!.html,
       entries: [{ question: "What is Y?", answer: "Y." }],
-      introParagraph: "Common questions about Y.",
+      introParagraph:
+        "These are common questions about Y and how the topic applies to your situation.",
     });
     expect(second).not.toBeNull();
     expect(second!.html).toContain("What is Y?");
@@ -146,14 +163,14 @@ describe("appendFaqSectionToPostHtml", () => {
     ).toBeNull();
   });
 
-  it("returns null when intro is empty", () => {
-    expect(
+  it("throws when intro is empty", () => {
+    expect(() =>
       appendFaqSectionToPostHtml({
         sourceHtml: `<h2>Body</h2>`,
         entries: [{ question: "Q?", answer: "A." }],
         introParagraph: "  ",
       }),
-    ).toBeNull();
+    ).toThrow("FAQ intro failed quality validation");
   });
 });
 

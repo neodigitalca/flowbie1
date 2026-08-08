@@ -4,6 +4,7 @@
  */
 
 import { streamChatCompletion } from "@/lib/api";
+import { appendUniversalContentRulesToSystemPrompt } from "@/lib/content-word-blocklist";
 import { generateImage } from "@/lib/image-api";
 import { buildImagePrompt } from "@/lib/image-prompt-builder";
 import {
@@ -190,9 +191,10 @@ export async function generateExtraTextForPage(
         apiKey,
         model: researchModel,
         messages: [
-          { role: "system", content: systemPrompt },
+          { role: "system", content: appendUniversalContentRulesToSystemPrompt(systemPrompt) },
           { role: "user", content: userContent },
         ],
+        contentHarness: true,
         temperature,
         maxTokens: 1200,
         topP: 0.9,

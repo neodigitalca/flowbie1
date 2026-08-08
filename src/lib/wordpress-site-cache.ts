@@ -591,9 +591,11 @@ export function setSiteCacheForTest(
   return cache;
 }
 
+import { scorePostForLinkQuery } from "@/lib/content-generation/link-query-scoring";
+
 /**
  * Searches the cache for posts matching a query
- * Case-insensitive search in title, URL, and excerpt.
+ * Case-insensitive search in title, URL, slug, and excerpt.
  * Uses titleIndex to score only candidate posts (posts with at least one query word in title), falling back to full scan if no candidates.
  */
 export function searchSiteCache(
@@ -631,21 +633,7 @@ export function searchSiteCache(
   const matches: Array<{ post: CachedPost; score: number }> = [];
 
   for (const post of toScore) {
-    let score = 0;
-
-    if (post.title.toLowerCase().includes(queryLower)) {
-      score += 10;
-      if (post.title.toLowerCase() === queryLower) {
-        score += 20;
-      }
-    }
-    if (post.link.toLowerCase().includes(queryLower)) {
-      score += 5;
-    }
-    if (post.excerpt.toLowerCase().includes(queryLower)) {
-      score += 2;
-    }
-
+    const score = scorePostForLinkQuery(post, query);
     if (score > 0) {
       matches.push({ post, score });
     }

@@ -3,7 +3,6 @@ import { createBulkSerpWarmupController } from "../bulk-optimization-serp-warmup
 import { hasSubstantiveSeoResearch } from "../bulk-optimization-missing-seo-research";
 
 const fetchBrief = vi.fn();
-const writeKw = vi.fn();
 
 vi.mock("../bulk-optimization-missing-seo-research", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../bulk-optimization-missing-seo-research")>();
@@ -13,16 +12,10 @@ vi.mock("../bulk-optimization-missing-seo-research", async (importOriginal) => {
   };
 });
 
-vi.mock("../write-missing-focus-keyword-ai", () => ({
-  writeMissingFocusKeywordWithAi: (...args: unknown[]) => writeKw(...args),
-}));
-
 describe("createBulkSerpWarmupController", () => {
   beforeEach(() => {
     fetchBrief.mockReset();
-    writeKw.mockReset();
     fetchBrief.mockResolvedValue('{"version":1,"focusKeyword":"kw b"}');
-    writeKw.mockResolvedValue("hunter douglas blinds edmonton");
   });
 
   it("fills missing seo_research via DataForSEO when keyword exists", async () => {
@@ -56,14 +49,13 @@ describe("createBulkSerpWarmupController", () => {
 
     const ready1 = await controller.ensureReady(1);
     expect(ready1).toBe(true);
-    expect(writeKw).not.toHaveBeenCalled();
     expect(fetchBrief).toHaveBeenCalledWith(
       expect.objectContaining({ keyword: "kw b", pageUrl: "https://example.com/b/" }),
     );
     expect(hasSubstantiveSeoResearch(acf.get(1))).toBe(true);
   });
 
-  it("writes keyword_focus via OpenRouter AI when missing, then fills research", async () => {
+  it("throws when keyword_focus is missing (no AI backfill)", async () => {
     const urls = ["https://example.com/service-area/hunter-douglas-blinds-edmonton/"];
     const acf = new Map<number, Record<string, unknown>>([[0, {}]]);
     const pending = new Map<number, { pending: Record<string, unknown>; primaryKeyword: string }>([
@@ -91,18 +83,8 @@ describe("createBulkSerpWarmupController", () => {
       setBulkOptimizationState: (updater) => updater({ "site-batch": {} }),
     });
 
-    const ok = await controller.ensureReady(0);
-    expect(ok).toBe(true);
-    expect(writeKw).toHaveBeenCalledWith(
-      expect.objectContaining({
-        url: urls[0],
-        title: "Hunter Douglas Blinds Edmonton",
-        siteId: "site-1",
-      }),
-    );
-    expect(String(acf.get(0)?.keyword_focus ?? "")).toBe("hunter douglas blinds edmonton");
-    expect(fetchBrief).toHaveBeenCalled();
-    expect(hasSubstantiveSeoResearch(acf.get(0))).toBe(true);
+    await expect(controller.ensureReady(0)).rejects.toThrow(/keyword_focus is required/i);
+    expect(fetchBrief).not.toHaveBeenCalled();
   });
 
   it("skips DataForSEO when cache already has substantive seo_research", async () => {
@@ -127,6 +109,5 @@ describe("createBulkSerpWarmupController", () => {
     const ok = await controller.ensureReady(0);
     expect(ok).toBe(true);
     expect(fetchBrief).not.toHaveBeenCalled();
-    expect(writeKw).not.toHaveBeenCalled();
   });
 });

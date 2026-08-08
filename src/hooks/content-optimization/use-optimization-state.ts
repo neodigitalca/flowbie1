@@ -1,27 +1,39 @@
 import { useState } from "react";
-import { OptimizationFileManager } from "@/lib/optimization-file-manager";
+import { OptimizationFileManager, type OptimizationFile } from "@/lib/optimization-file-manager";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { AIDrivenACFContext } from "@/lib/content-generation/ai-driven-acf-reader";
 import type { LinkCheckResult } from "@/lib/wordpress-api/validate-internal-links";
 import type { SemrushClusterScatterPlan } from "@/lib/semrush-cluster-scatter";
 import type { HarnessSectionListItem } from "@/lib/bulk/harness-sections-reducer";
 import type { MetaPipelineStepUi } from "@/components/overview/overview-tab-constants";
+import type { ContentOptimizerStepId } from "@/lib/content-optimization/content-optimizer-run-progress";
 
 /** One line in the live micro-step list during content optimization. */
 export interface OptimizationMicroLogEntry {
-  step: string;
+  stepId: ContentOptimizerStepId;
   message?: string;
 }
 
 export interface OptimizationProgressState {
+  stepId: ContentOptimizerStepId;
+  subProgress: number;
+  /** Human label derived from stepId. */
   step: string;
+  /** Monotonic 0–100 computed from stepId + subProgress. */
   progress: number;
   message?: string;
+  error?: string;
   linkCheckResults?: LinkCheckResult[];
   microLog?: OptimizationMicroLogEntry[];
   /** Parallel blueprint-section harness (same model as bulk SAP/post harness). */
   harnessSections?: HarnessSectionListItem[];
   harnessPlannedSectionCount?: number | null;
+  filesRevision?: number;
+  generatedFileNames?: string[];
+  /** @deprecated Prefer fileManager + filesRevision; kept for legacy progress payloads */
+  generatedFiles?: OptimizationFile[];
+  /** Overview Details header label after pendingOptimization is cleared. */
+  pageUrl?: string;
 }
 
 export interface PendingOptimization {
@@ -118,7 +130,7 @@ export interface BulkOptimizationState {
   /** URLs that have completed the research phase and are ready for optimization. */
   researchedUrls?: string[];
   /** Overview AI All Meta harness bulk (no WordPress upload). */
-  runKind?: "content" | "extraText" | "aiAllMeta" | "aiFaq" | "aiHeaders" | "aiLinks" | "aiOverview" | "aiInContentImage" | "contentCleanup" | "research" | "wpUpload";
+  runKind?: "content" | "extraText" | "aiAllMeta" | "aiFaq" | "aiHeaders" | "aiLinks" | "aiWikipediaLink" | "aiOverview" | "aiInContentImage" | "contentCleanup" | "research" | "wpUpload";
   /** Timestamp when this harness batch started (auto-open Details drawer). */
   harnessStartedAt?: number;
   /** Content Optimizer: page size when bulk run is paginated (>100 URLs). */

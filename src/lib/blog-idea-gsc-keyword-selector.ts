@@ -1,6 +1,7 @@
 import { isBlockedContentTopicPhrase } from "./content-topic-blocklist";
 import { isNonEnglishKeyword, filterAndRankQueriesWithAI } from "./gsc-query-processor";
 import { getResearchModel } from "./optimization-settings-storage";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 export interface GSCQuery {
   query: string;
@@ -141,12 +142,7 @@ Select exactly ${numberOfBlogs} primary keywords and 3-5 related keywords for ea
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model,
         messages: [

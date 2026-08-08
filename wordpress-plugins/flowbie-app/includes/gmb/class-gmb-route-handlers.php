@@ -21,6 +21,10 @@ class Flowbie_App_Gmb_Route_Handlers {
 		$method  = strtoupper( $method );
 
 		if ( $subpath === 'config-status' && $method === 'GET' ) {
+			if ( ! headers_sent() ) {
+				header( 'Cache-Control: no-store, no-cache, must-revalidate, max-age=0' );
+				header( 'Pragma: no-cache' );
+			}
 			Flowbie_App_Api_Dispatcher::send_json( Flowbie_App_Gmb_Oauth::config_status() );
 			return;
 		}

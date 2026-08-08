@@ -76,16 +76,17 @@ trait Flowbie_Wp_Admin_Trait_Render_Chat_Logs {
 			<div class="flowbie-wp-chat-logs__ai-bar">
 				<h2><?php esc_html_e( 'AI review', 'flowbie-wp' ); ?></h2>
 				<p class="description">
-					<?php esc_html_e( 'Analyze logged conversations and get recommendations for training, prompts, and site content changes.', 'flowbie-wp' ); ?>
+					<?php esc_html_e( 'Analyze logged conversations for training and content recommendations, or download bulk generator CSVs for post and page knowledge gaps in the selected period.', 'flowbie-wp' ); ?>
 				</p>
 				<?php if ( ! $key_ok ) : ?>
 					<div class="notice notice-warning inline">
 						<p><?php esc_html_e( 'Add an OpenRouter API key in Flowbie WP Settings (agency key or wp-config). Analysis uses your site key only — not Supabase or Flowbie cloud.', 'flowbie-wp' ); ?></p>
 					</div>
 				<?php endif; ?>
-				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-					<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_RUN_CHAT_LOG_ANALYSIS ); ?>" />
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="flowbie-wp-chat-logs__ai-bar-form">
 					<?php wp_nonce_field( self::ACTION_RUN_CHAT_LOG_ANALYSIS, 'flowbie_wp_chat_log_analysis_nonce' ); ?>
+					<?php wp_nonce_field( self::ACTION_GENERATE_CHAT_LOG_POSTS_GAP_CSV, 'flowbie_wp_chat_log_posts_gap_csv_nonce' ); ?>
+					<?php wp_nonce_field( self::ACTION_GENERATE_CHAT_LOG_PAGES_GAP_CSV, 'flowbie_wp_chat_log_pages_gap_csv_nonce' ); ?>
 					<div class="flowbie-wp-chat-logs__ai-bar-fields">
 						<label>
 							<?php esc_html_e( 'From', 'flowbie-wp' ); ?>
@@ -105,7 +106,15 @@ trait Flowbie_Wp_Admin_Trait_Render_Chat_Logs {
 						</label>
 					</div>
 					<div class="flowbie-wp-chat-logs__ai-bar-actions">
-						<button type="submit" class="button button-primary" <?php disabled( ! $key_ok ); ?>>
+						<button type="submit" class="button flowbie-wp-chat-logs__gap-btn" name="action" value="<?php echo esc_attr( self::ACTION_GENERATE_CHAT_LOG_POSTS_GAP_CSV ); ?>" aria-label="<?php esc_attr_e( 'Posts knowledge gap', 'flowbie-wp' ); ?>" <?php disabled( ! $key_ok ); ?>>
+							<span class="flowbie-wp-chat-logs__gap-icon" aria-hidden="true">P</span>
+							<span aria-hidden="true"><?php esc_html_e( 'osts knowledge gap', 'flowbie-wp' ); ?></span>
+						</button>
+						<button type="submit" class="button flowbie-wp-chat-logs__gap-btn" name="action" value="<?php echo esc_attr( self::ACTION_GENERATE_CHAT_LOG_PAGES_GAP_CSV ); ?>" aria-label="<?php esc_attr_e( 'Pages knowledge gap', 'flowbie-wp' ); ?>" <?php disabled( ! $key_ok ); ?>>
+							<span class="flowbie-wp-chat-logs__gap-icon" aria-hidden="true">P</span>
+							<span aria-hidden="true"><?php esc_html_e( 'ages knowledge gap', 'flowbie-wp' ); ?></span>
+						</button>
+						<button type="submit" class="button" name="action" value="<?php echo esc_attr( self::ACTION_RUN_CHAT_LOG_ANALYSIS ); ?>" <?php disabled( ! $key_ok ); ?>>
 							<?php esc_html_e( 'Generate AI report', 'flowbie-wp' ); ?>
 						</button>
 						<a href="<?php echo esc_url( admin_url( 'admin.php?page=flowbie-wp-chat-logs&action=reports' ) ); ?>"><?php esc_html_e( 'View past reports', 'flowbie-wp' ); ?></a>

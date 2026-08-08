@@ -24,14 +24,7 @@ class Flowbie_Wp_Ai_Gate {
 	 * @return array<string,mixed>|null
 	 */
 	public static function get_client(): ?array {
-		if ( ! Flowbie_Wp_Api::is_paired() ) {
-			return null;
-		}
-		$rs = Flowbie_Wp_Api::fetch_plugin_dashboard_state();
-		if ( ! is_array( $rs ) || empty( $rs['ok'] ) || ! is_array( $rs['dashboard']['client'] ?? null ) ) {
-			return null;
-		}
-		return $rs['dashboard']['client'];
+		return null;
 	}
 
 	/**
@@ -64,24 +57,8 @@ class Flowbie_Wp_Ai_Gate {
 	public static function collect_reasons( int $post_id = 0 ): array {
 		$reasons = array();
 
-		if ( ! Flowbie_Wp_Api::is_paired() ) {
-			$reasons[] = __( 'Connect this site under Flowbie WP → Settings (paste your Site ID).', 'flowbie-wp' );
-		}
-
-		$client = self::get_client();
-		if ( Flowbie_Wp_Api::is_paired() && ! is_array( $client ) ) {
-			$reasons[] = __( 'Could not load your Flowbie property. Check Settings and try Connect again.', 'flowbie-wp' );
-		}
-
-		if ( is_array( $client ) ) {
-			$pkg = isset( $client['optimizationPackage'] ) ? trim( (string) $client['optimizationPackage'] ) : '';
-			if ( null === Flowbie_Wp_Site_Progress::package_cap_for_tier( $pkg ) ) {
-				$reasons[] = __( 'Set an optimization package (basic, pro, or plus) on this property in Flowbie Integrations.', 'flowbie-wp' );
-			}
-		}
-
 		if ( Flowbie_Wp_OpenRouter::get_api_key() === '' ) {
-			$reasons[] = __( 'Add an OpenRouter API key under Flowbie WP → Settings, or save it in Flowbie Integrations → API Keys (syncs to cloud).', 'flowbie-wp' );
+			$reasons[] = __( 'Add an OpenRouter API key under Flowbie WP → Settings, or in the plugin .env file.', 'flowbie-wp' );
 		}
 
 		if ( $post_id > 0 ) {

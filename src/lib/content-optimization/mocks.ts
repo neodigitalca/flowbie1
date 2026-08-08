@@ -1,4 +1,5 @@
 import type { KeywordData, KeywordAIAnalysis } from "@/lib/keyword-types";
+import { buildFocusedArticlePurpose } from "@/lib/content-generation/article-length-policy";
 
 export function createMockKeywordData(keyword: string): KeywordData {
   return {
@@ -37,7 +38,7 @@ export function createMockAIAnalysis(keyword: string): KeywordAIAnalysis {
 export function createMockBlueprint(keyword: string, existingTitle: string): any {
   return {
     title: existingTitle || `Complete Guide to ${keyword}`,
-    purpose: `Comprehensive guide about ${keyword}`,
+    purpose: buildFocusedArticlePurpose(keyword),
     entity: "N/A",
     agents: [
       { id: "intro", step: 1, title: `Introduction to ${keyword}`, content: `This section introduces ${keyword} and explains its importance.` },

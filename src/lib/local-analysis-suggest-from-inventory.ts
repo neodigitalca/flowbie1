@@ -58,6 +58,7 @@ import {
   finalizeEntityHintForKeywordTarget,
 } from "@/lib/local-analysis-entity-hint-dedupe";
 import { dropCityUmbrellaTitlesWhenFinerExist } from "@/lib/wikipedia/entity-hint-subcity";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 import {
   extractArticleTitlesFromGranularPoolMarkdown,
   orderWikipediaTitlesByGridPlaces,
@@ -593,12 +594,7 @@ Rules: (1) Sum sapPagesSeed = totalSapPages. (2) Each sapPagesSeed between sapMi
   const callModel = async (messages: { role: string; content: string }[]): Promise<string> => {
     const res = await fetch(OR, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "",
-        "X-Title": "Flowbie",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: getResearchModel(options?.siteId),
         messages,

@@ -34,6 +34,7 @@ type Props = {
   postingSiteIds: ReadonlySet<string>;
   isPosting?: boolean;
   disabled?: boolean;
+  gmbConnected?: boolean;
   onTopicChange: (siteId: string, topic: string) => void;
   onToggleSite: (siteId: string, checked: boolean) => void;
   onToggleExpandedSiteId: (siteId: string) => void;
@@ -49,6 +50,7 @@ export function GbpPostClientRoster({
   postingSiteIds,
   isPosting = false,
   disabled = false,
+  gmbConnected = false,
   onTopicChange,
   onToggleSite,
   onToggleExpandedSiteId,
@@ -149,6 +151,23 @@ export function GbpPostClientRoster({
         className,
       )}
     >
+      {sites.length === 0 ? (
+        <div className="px-4 py-6 text-base text-muted-foreground">
+          {gmbConnected ? (
+            <p>
+              Google is connected. Add a{" "}
+              <strong className="text-foreground">Google Business Profile Location ID</strong> on each
+              property under Dashboard → Properties → Edit site, then return here to post.
+            </p>
+          ) : (
+            <p>
+              Connect Google Business using the button above, then add a{" "}
+              <strong className="text-foreground">GBP Location ID</strong> on each property under
+              Dashboard → Properties.
+            </p>
+          )}
+        </div>
+      ) : null}
       <div
         className={cn(
           CONTENT_OPTIMIZER_MULTI_SITE_ROW_STACK_CLASS,

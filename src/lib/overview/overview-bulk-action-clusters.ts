@@ -114,6 +114,8 @@ export function buildOverviewBulkActionClusters(
   const headersHarnessRunning = batchBulkState?.runKind === "aiHeaders" && optimizingBatch;
   const contentCleanupRunning = batchBulkState?.runKind === "contentCleanup" && optimizingBatch;
   const linksHarnessRunning = batchBulkState?.runKind === "aiLinks" && optimizingBatch;
+  const wikipediaLinkHarnessRunning =
+    batchBulkState?.runKind === "aiWikipediaLink" && optimizingBatch;
   const overviewHarnessRunning = batchBulkState?.runKind === "aiOverview" && optimizingBatch;
   const inContentImageHarnessRunning =
     batchBulkState?.runKind === "aiInContentImage" && optimizingBatch;
@@ -241,6 +243,14 @@ export function buildOverviewBulkActionClusters(
         icon: Wand2,
         disabled: noRows(c) || linksHarnessRunning || ctx.bulkWorkspaceBusy,
         onSelect: () => void c.handleAiLinksAll(),
+      },
+      {
+        kind: "action",
+        id: "ai-wikipedia-link",
+        label: "Wikipedia link",
+        icon: Wand2,
+        disabled: noRows(c) || wikipediaLinkHarnessRunning || ctx.bulkWorkspaceBusy,
+        onSelect: () => void c.handleAiWikipediaLinkAll(),
       },
       {
         kind: "action",

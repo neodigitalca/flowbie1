@@ -7,16 +7,12 @@ import {
   runOverviewWpUploadBatch,
 } from "@/lib/overview/overview-wp-upload-batch";
 import { overviewBulkScopeUrlKeysFromRows } from "@/lib/overview/overview-bulk-row-scope";
+import type { OverviewBulkSeoApiItem } from "@/lib/overview/overview-bulk-seo-payload";
 
-const updateOverviewSeoItem = vi.fn();
-const updateWordPressPost = vi.fn();
+const bulkUpdateOverviewSeo = vi.fn();
 
 vi.mock("@/lib/wordpress-api/meta", () => ({
-  updateOverviewSeoItem: (...args: unknown[]) => updateOverviewSeoItem(...args),
-}));
-
-vi.mock("@/lib/wordpress-api/crud", () => ({
-  updateWordPressPost: (...args: unknown[]) => updateWordPressPost(...args),
+  bulkUpdateOverviewSeo: (...args: unknown[]) => bulkUpdateOverviewSeo(...args),
 }));
 
 function testSite(): WordPressSite {
@@ -30,13 +26,26 @@ function testSite(): WordPressSite {
   } as WordPressSite;
 }
 
+function mockBulkOk(items: OverviewBulkSeoApiItem[]) {
+  return {
+    success: true,
+    results: items.map((item, index) => ({
+      postId: item.postId,
+      index,
+      ok: true,
+      method: "direct_put",
+    })),
+    okCount: items.length,
+    total: items.length,
+  };
+}
+
 describe("runOverviewWpUploadBatch", () => {
   beforeEach(() => {
-    updateOverviewSeoItem.mockReset();
-    updateWordPressPost.mockReset();
+    bulkUpdateOverviewSeo.mockReset();
   });
 
-  it("uploads each meta row via updateOverviewSeoItem (no batch/v1)", async () => {
+  it("uploads rows in bulk-update-overview-seo batches of 25", async () => {
     const rowCount = 30;
     const rows: OverviewRow[] = [];
     const bindings: Record<string, OverviewBinding> = {};
@@ -58,19 +67,9 @@ describe("runOverviewWpUploadBatch", () => {
     const eligible = buildWpUploadEligibleRows(rows, bindings, overviewBulkScopeUrlKeysFromRows(rows));
     expect(eligible).toHaveLength(rowCount);
 
-    let inFlight = 0;
-    let maxInFlight = 0;
-    updateOverviewSeoItem.mockImplementation(async (_site, _user, _pass, item) => {
-      inFlight += 1;
-      maxInFlight = Math.max(maxInFlight, inFlight);
-      await new Promise((r) => setTimeout(r, 5));
-      inFlight -= 1;
-      return {
-        postId: (item as { postId: number }).postId,
-        ok: true,
-        method: "direct_put",
-      };
-    });
+    bulkUpdateOverviewSeo.mockImplementation(
+      async (_siteUrl, _user, _pass, items: OverviewBulkSeoApiItem[]) => mockBulkOk(items),
+    );
 
     const setBulkOptimizationState = vi.fn((updater: (prev: Record<string, unknown>) => unknown) => {
       if (typeof updater === "function") {
@@ -97,14 +96,14 @@ describe("runOverviewWpUploadBatch", () => {
       },
     });
 
-    expect(updateWordPressPost).not.toHaveBeenCalled();
-    expect(updateOverviewSeoItem).toHaveBeenCalledTimes(rowCount);
-    expect(maxInFlight).toBe(25);
+    expect(bulkUpdateOverviewSeo).toHaveBeenCalledTimes(2);
+    expect(bulkUpdateOverviewSeo.mock.calls[0]![3]).toHaveLength(25);
+    expect(bulkUpdateOverviewSeo.mock.calls[1]![3]).toHaveLength(5);
     expect(stats.stats.okCount).toBe(rowCount);
     expect(stats.stats.failCount).toBe(0);
   });
 
-  it("uploads body rows via updateWordPressPost then ACF item write", async () => {
+  it("includes post body in bulk-update payload for content rows", async () => {
     const url = "https://example.com/post-with-overview/";
     const rows: OverviewRow[] = [
       {
@@ -125,8 +124,9 @@ describe("runOverviewWpUploadBatch", () => {
     expect(eligible).toHaveLength(1);
     expect(eligible[0]?.bundle.item.postContent?.length).toBeGreaterThan(0);
 
-    updateWordPressPost.mockResolvedValue({ success: true, postId: 42 });
-    updateOverviewSeoItem.mockResolvedValue({ postId: 42, ok: true, method: "acf_post" });
+    bulkUpdateOverviewSeo.mockImplementation(
+      async (_siteUrl, _user, _pass, items: OverviewBulkSeoApiItem[]) => mockBulkOk(items),
+    );
 
     const site = testSite();
     const batchKey = `${site.id}-batch`;
@@ -142,7 +142,9 @@ describe("runOverviewWpUploadBatch", () => {
       },
     });
 
-    expect(updateWordPressPost).toHaveBeenCalledTimes(1);
+    expect(bulkUpdateOverviewSeo).toHaveBeenCalledTimes(1);
+    const items = bulkUpdateOverviewSeo.mock.calls[0]![3] as OverviewBulkSeoApiItem[];
+    expect(items[0]?.postContent).toContain("<h2>Overview</h2>");
     expect(stats.stats.okCount).toBe(1);
     expect(stats.stats.failCount).toBe(0);
   });

@@ -2,6 +2,7 @@ import { loadApiKey } from "@/lib/api";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { extractGeographicEntityWithAI } from "@/lib/content-optimization-helpers";
 import { BACKEND_CONNECTION_ERROR } from "@/lib/wordpress-api/connection";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 /**
  * Analyzes a WordPress post title to extract the origin entity (location) using AI
@@ -74,12 +75,7 @@ IMPORTANT:
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${openRouterApiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(openRouterApiKey),
       body: JSON.stringify({
         model: getResearchModel(),
         messages: [
@@ -175,12 +171,7 @@ RULES:
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${openRouterApiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(openRouterApiKey),
       body: JSON.stringify({
         model: getResearchModel(),
         messages: [

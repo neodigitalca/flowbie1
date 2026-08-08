@@ -19,6 +19,10 @@ import type {
 } from "@/lib/overview/overview-blog-links-agent";
 import { logBlogLinksActivity } from "@/lib/overview/overview-blog-links-activity-log";
 import {
+  insertWikipediaLinkAtEarliestEntityReference,
+  isWikipediaHref,
+} from "@/lib/overview/overview-blog-wikipedia-link-insert";
+import {
   applySingleLinkAdd,
   applySingleLinkReplace,
   type BlogLinksAddResult,
@@ -456,6 +460,30 @@ async function applyOneLinkAddSlot(
   const userHref = hint?.href?.trim() ?? "";
   const userAnchor = hint?.anchor?.trim() ?? "";
 
+  if (userHref && isWikipediaHref(userHref)) {
+    const entityLabel = userAnchor || row.focusKeyword || row.title || "entity";
+    const applied = insertWikipediaLinkAtEarliestEntityReference(html, entityLabel, userHref);
+    return {
+      html: applied.html,
+      result: {
+        anchor: applied.anchor,
+        url: applied.url,
+        paragraphIndex: -1,
+        ok: applied.ok,
+      },
+      addBlocks: paragraphBlocksForLinkAdds(applied.html),
+      action: applied.ok
+        ? {
+            action: "add" as const,
+            paragraphIndex: -1,
+            anchorText: applied.anchor,
+            proposedUrl: applied.url,
+            rationale: "wikipedia entity link",
+          }
+        : undefined,
+    };
+  }
+
   const tryUserAdd = (anchorText: string, targetUrl: string) => {
     for (const block of listHtmlParagraphBlocksForAddLinks(html)) {
       if (usedBlockIndices.has(block.index)) continue;
@@ -699,7 +727,8 @@ async function runOneBlogLinksRow(
     formatLinksAnalyzeAndApplyMarkdown(row, replacements, additions, intentKeywords),
   );
 
-  if (replacementsOk === 0 && additionsOk === 0) {
+  const manualOk = manualAdditions.some((m) => m.ok);
+  if (replacementsOk === 0 && additionsOk === 0 && !manualOk) {
     return null;
   }
 

@@ -9,9 +9,9 @@ import { BulkGeneratorRunActions } from "@/components/keyword-research/bulk/Bulk
 import { BULK_HEADER_FIELD } from "@/components/keyword-research/bulk/bulk-workspace-header-styles";
 import type { MetaBulkMicroSnapshot } from "@/components/overview/OverviewBulkMicroProgress";
 import {
-  PressReleaseDetailsPanel,
-  type PressReleaseDetailsPanelProps,
-} from "@/components/press-release/PressReleaseDetailsPanel";
+  PressReleaseDetailsDrawer,
+} from "@/components/press-release/PressReleaseDetailsDrawer";
+import type { PressReleaseDetailsPanelProps } from "@/components/press-release/PressReleaseDetailsPanel";
 import { cn } from "@/lib/utils";
 
 export type PressReleaseWorkspaceHeaderProps = {
@@ -29,6 +29,7 @@ export type PressReleaseWorkspaceHeaderProps = {
   onRun: () => void;
   onClear: () => void;
   detailsProps: PressReleaseDetailsPanelProps;
+  onDetailsOpenChange?: (open: boolean) => void;
   /** Keyword, title, and Details live in row 1 of the body grid. */
   entryInFirstRow?: boolean;
 };
@@ -48,6 +49,7 @@ export function PressReleaseWorkspaceHeader({
   onRun,
   onClear,
   detailsProps,
+  onDetailsOpenChange,
   entryInFirstRow = false,
 }: PressReleaseWorkspaceHeaderProps) {
   const toolbar = entryInFirstRow ? null : (
@@ -98,8 +100,9 @@ export function PressReleaseWorkspaceHeader({
       canOpenDetails={canOpenDetails}
       isProcessing={isProcessing}
       detailsPanelId="press-release-details-panel"
+      onDetailsOpenChange={onDetailsOpenChange}
       toolbar={toolbar}
-      detailsPanel={<PressReleaseDetailsPanel {...detailsProps} />}
+      detailsPanel={<PressReleaseDetailsDrawer {...detailsProps} />}
     />
   );
 }

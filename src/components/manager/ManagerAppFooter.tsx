@@ -13,10 +13,9 @@ const FOOTER_APP_LINKS: { value: string; label: string }[] = [
   { value: "communication", label: "Communication" },
   { value: "chat", label: "Chat" },
   { value: "dashboard", label: "Dashboard" },
-  { value: "content-optimizer", label: "Content Optimizer" },
-  { value: "gsc-reporting", label: "Report" },
   { value: "generator", label: "Generator" },
   { value: "research", label: "Research" },
+  { value: "api", label: "API" },
 ];
 
 export interface ManagerAppFooterProps {

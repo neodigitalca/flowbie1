@@ -6,6 +6,7 @@
  */
 
 import { getResearchModel } from "@/lib/optimization-settings-storage";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 export type PostWithLink = {
   id: number;
@@ -71,13 +72,7 @@ export async function filterPostsByTopicalRelevance(
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer":
-          typeof window !== "undefined" ? window.location.origin : "https://flowbie.com",
-        "X-Title": "Flowbie",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model,
         messages: [

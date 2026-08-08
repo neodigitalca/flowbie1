@@ -1,7 +1,10 @@
 import React from "react";
-import { Wand2 } from "lucide-react";
+import { TrendingUp, Wand2 } from "lucide-react";
 import { ContentOptimizerSectionPills } from "@/components/content-optimizer/ContentOptimizerSectionPills";
 import type { ContentOptimizerSectionId } from "@/components/content-optimizer/content-optimizer-sections";
+import type { ContentOptimizerGeneratorChrome } from "@/components/content-optimizer/content-optimizer-generator-chrome";
+import { BlogGeneratorWorkspaceChrome } from "@/components/blog-generator/BlogGeneratorWorkspaceChrome";
+import { GENERATOR_WORKSPACE_TITLE } from "@/components/blog-generator/blog-generator-sections";
 import { UnifiedWorkspaceChrome } from "@/components/shared/UnifiedWorkspaceChrome";
 import { WorkspacePill } from "@/components/shared/WorkspacePill";
 import {
@@ -16,6 +19,11 @@ import { OverviewContentSortControls } from "@/components/overview/overview-tab/
 import { CONTENT_PAGINATION_SLOT_CLASS } from "@/components/overview/overview-tab/OverviewContentChromeReserve";
 import { OVERVIEW_GRID_VISIBLE_ROW_COUNT } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import { OverviewGridPagination } from "@/components/overview/OverviewGridPagination";
+import {
+  BulkPostProgressLeading,
+  resolveBulkPostTicker,
+  type MetaBulkMicroSnapshot,
+} from "@/components/overview/OverviewBulkMicroProgress";
 import { BULK_TOOLBAR_GROUP_DIVIDER } from "@/components/keyword-research/bulk/bulk-workspace-header-styles";
 import type { OverviewTabController } from "@/hooks/overview/use-overview-tab-controller";
 import type { useWordPressOptimization } from "@/contexts/wordpress-optimization-context";
@@ -23,6 +31,7 @@ import type { MetaBulkActionKey, BulkProgressSlice } from "@/components/overview
 import {
   OverviewContentDetailsPanel,
   overviewContentDetailsCanOpen,
+  type OverviewSinglePageDetailsContext,
 } from "@/components/overview/overview-tab/OverviewContentDetailsPanel";
 import { notify } from "@/lib/app-notifications";
 import { NOTIFY_BATCH_CLEARED_FROM_VIEW } from "@/lib/notify-messages";
@@ -30,7 +39,6 @@ import {
   deriveOverviewBulkRunGsc,
   getOverviewBulkPageTitle,
 } from "@/components/overview/overview-tab/overview-bulk-run-helpers";
-import type { MetaBulkMicroSnapshot } from "@/components/overview/OverviewBulkMicroProgress";
 
 type Opt = ReturnType<typeof useWordPressOptimization>;
 
@@ -77,6 +85,7 @@ export interface OverviewContentHeaderProps {
   bulkWorkspaceBusy: boolean;
   bulkMicroSnapshot: MetaBulkMicroSnapshot | null;
   isBatchContentRunning: boolean;
+  isSinglePageOptimizing: boolean;
   batchBulkState: Opt["bulkOptimizationState"][string] | undefined;
   bulkBatchKey: string;
   batchProgress: Opt["optimizationProgress"][string] | undefined;
@@ -88,6 +97,8 @@ export interface OverviewContentHeaderProps {
   optimizerSection: ContentOptimizerSectionId;
   onOptimizerSectionChange: (id: ContentOptimizerSectionId) => void;
   paginationLayoutTotal: number;
+  onDetailsOpenChange?: (open: boolean) => void;
+  generatorChrome?: ContentOptimizerGeneratorChrome;
 }
 
 export function OverviewContentHeader({
@@ -96,6 +107,7 @@ export function OverviewContentHeader({
   bulkWorkspaceBusy,
   bulkMicroSnapshot,
   isBatchContentRunning,
+  isSinglePageOptimizing,
   batchBulkState,
   bulkBatchKey,
   batchProgress,
@@ -105,26 +117,40 @@ export function OverviewContentHeader({
   optimizerSection,
   onOptimizerSectionChange,
   paginationLayoutTotal,
+  onDetailsOpenChange,
+  generatorChrome,
 }: OverviewContentHeaderProps) {
   const hasDetectedSitemaps = Boolean(c.site?.sitemaps?.mainSitemapUrl);
   const site = c.site;
-  const workspaceBusy = metaOptBulkStripBusy || isBatchContentRunning;
+  const workspaceBusy = metaOptBulkStripBusy || isBatchContentRunning || isSinglePageOptimizing;
 
   const clusters = buildOverviewBulkActionClusters(c, {
     hasDetectedSitemaps,
     bulkWorkspaceBusy,
   });
 
+  const singlePageCtx: OverviewSinglePageDetailsContext | undefined = site
+    ? {
+        siteId: site.id,
+        isOptimizingContent: opt.isOptimizingContent,
+        optimizationProgress: opt.optimizationProgress,
+        optimizationFileManagers: opt.optimizationFileManagers,
+      }
+    : undefined;
+
   const canOpenBatchDetails = overviewContentDetailsCanOpen(
     site,
     c.bulkActionProgress,
     batchBulkState,
+    singlePageCtx,
   );
 
   const detailsOpenSignal =
     batchBulkState?.runKind === "aiOverview" && batchBulkState.harnessStartedAt
       ? `${bulkBatchKey}-${batchBulkState.harnessStartedAt}`
-      : null;
+      : site && isSinglePageOptimizing
+        ? `single-opt-${site.id}`
+        : null;
 
   const gscDerived = site
     ? deriveOverviewBulkRunGsc(site, batchBulkState, bulkBatchKey, batchProgress, opt)
@@ -145,93 +171,131 @@ export function OverviewContentHeader({
     }
   };
 
+  const bulkPostTicker =
+    isBatchContentRunning && batchBulkState ? resolveBulkPostTicker(batchBulkState) : null;
+
   const sitemapMenu = <OverviewContentSitemapMenu ctrl={c} />;
+
+  const optimizerSectionPills = (
+    <ContentOptimizerSectionPills
+      activeSection={optimizerSection}
+      onSectionChange={onOptimizerSectionChange}
+      disabled={bulkWorkspaceBusy}
+    />
+  );
+
+  const toolbarContent = (
+    <>
+      {generatorChrome ? (
+        <>
+          {optimizerSectionPills}
+          <div className={BULK_TOOLBAR_GROUP_DIVIDER} aria-hidden />
+        </>
+      ) : null}
+      {clusters.map((cluster) => (
+        <OverviewBulkClusterFlyout
+          key={cluster.id}
+          cluster={cluster}
+          workspaceBusy={cluster.id === "wordpress" ? false : bulkWorkspaceBusy}
+        />
+      ))}
+      <OverviewSemrushCsvUpload
+        fileName={c.semrushCsvFileName}
+        urlCount={c.semrushFilterUrlKeys?.size ?? 0}
+        disabled={bulkWorkspaceBusy}
+        onUpload={c.setSemrushCsvUpload}
+        onClear={c.clearSemrushCsvUpload}
+      />
+      <OverviewErrorsFilterMenu
+        rows={c.rows}
+        activeFilters={c.activeErrorFilters}
+        onToggle={c.toggleErrorFilter}
+        onClear={c.clearErrorFilters}
+        disabled={bulkWorkspaceBusy}
+      />
+      {c.rows.length > 0 ? (
+        <>
+          <div className={BULK_TOOLBAR_GROUP_DIVIDER} aria-hidden />
+          <div className="ml-auto flex shrink-0 flex-nowrap items-center">
+            <OverviewContentSortControls
+              sortColumn={c.sortColumn}
+              sortDir={c.sortDir}
+              setSortColumn={c.setSortColumn}
+              setSortDir={c.setSortDir}
+              disabled={bulkWorkspaceBusy}
+            />
+          </div>
+        </>
+      ) : null}
+    </>
+  );
+
+  const progressLeading =
+    bulkPostTicker && batchBulkState ? (
+      <BulkPostProgressLeading batchState={batchBulkState} className={CONTENT_PAGINATION_SLOT_CLASS} />
+    ) : (
+      <OverviewGridPagination
+        pageIndex={c.gridPageIndex}
+        totalCount={c.displayRows.length}
+        layoutTotalCount={c.gridPaginationLayoutTotal}
+        pageSize={OVERVIEW_GRID_VISIBLE_ROW_COUNT}
+        onPageChange={c.setGridPageIndex}
+        className={CONTENT_PAGINATION_SLOT_CLASS}
+      />
+    );
+
+  const detailsPanel = site ? (
+    <OverviewContentDetailsPanel
+      ctrl={c}
+      batchBulkState={batchBulkState}
+      bulkBatchKey={bulkBatchKey}
+      batchProgress={batchProgress}
+      opt={opt}
+      pageTitle={pageTitle}
+      gscPreviewByUrl={gscDerived?.gscMapOverview ?? {}}
+      gscActiveUrl={gscDerived?.bulkActiveUrl ?? null}
+      gscFetching={gscDerived?.gscPreviewLoading ?? false}
+      onUploadToWordPress={onUploadToWordPress}
+      onBatchClose={handleBatchClose}
+    />
+  ) : null;
+
+  const sharedProgressProps = {
+    progressLeading,
+    workspaceBusy,
+    progressSnapshot: bulkMicroSnapshot,
+    bulkActionProgress: c.bulkActionProgress,
+    canOpenDetails: canOpenBatchDetails,
+    detailsOpenSignal,
+    onDetailsOpenChange,
+    isProcessing: isBatchContentRunning || isSinglePageOptimizing,
+    detailsPanelId: "overview-batch-details-panel" as const,
+    detailsPanel,
+    toolbar: toolbarContent,
+  };
+
+  if (generatorChrome) {
+    return (
+      <BlogGeneratorWorkspaceChrome
+        icon={TrendingUp}
+        title={GENERATOR_WORKSPACE_TITLE}
+        activeSection={generatorChrome.activeSection}
+        onSectionChange={generatorChrome.onSectionChange}
+        sectionSwitchDisabled={generatorChrome.sectionSwitchDisabled}
+        showOpt={generatorChrome.showOpt}
+        titleRowMenu={sitemapMenu}
+        {...sharedProgressProps}
+      />
+    );
+  }
 
   return (
     <UnifiedWorkspaceChrome
       icon={Wand2}
       title="Content"
       titleRowMenu={sitemapMenu}
-      titleRowEnd={
-        <ContentOptimizerSectionPills
-          activeSection={optimizerSection}
-          onSectionChange={onOptimizerSectionChange}
-          disabled={bulkWorkspaceBusy}
-        />
-      }
-      toolbar={
-        <>
-          {clusters.map((cluster) => (
-            <OverviewBulkClusterFlyout
-              key={cluster.id}
-              cluster={cluster}
-              workspaceBusy={cluster.id === "wordpress" ? false : bulkWorkspaceBusy}
-            />
-          ))}
-          <OverviewSemrushCsvUpload
-            fileName={c.semrushCsvFileName}
-            urlCount={c.semrushFilterUrlKeys?.size ?? 0}
-            disabled={bulkWorkspaceBusy}
-            onUpload={c.setSemrushCsvUpload}
-            onClear={c.clearSemrushCsvUpload}
-          />
-          <OverviewErrorsFilterMenu
-            rows={c.rows}
-            activeFilters={c.activeErrorFilters}
-            onToggle={c.toggleErrorFilter}
-            onClear={c.clearErrorFilters}
-            disabled={bulkWorkspaceBusy}
-          />
-          {c.rows.length > 0 ? (
-            <>
-              <div className={BULK_TOOLBAR_GROUP_DIVIDER} aria-hidden />
-              <div className="ml-auto flex shrink-0 flex-nowrap items-center">
-                <OverviewContentSortControls
-                  sortColumn={c.sortColumn}
-                  sortDir={c.sortDir}
-                  setSortColumn={c.setSortColumn}
-                  setSortDir={c.setSortDir}
-                  disabled={bulkWorkspaceBusy}
-                />
-              </div>
-            </>
-          ) : null}
-        </>
-      }
-      progressLeading={
-        <OverviewGridPagination
-          pageIndex={c.gridPageIndex}
-          totalCount={c.displayRows.length}
-          layoutTotalCount={c.gridPaginationLayoutTotal}
-          pageSize={OVERVIEW_GRID_VISIBLE_ROW_COUNT}
-          onPageChange={c.setGridPageIndex}
-          className={CONTENT_PAGINATION_SLOT_CLASS}
-        />
-      }
-      workspaceBusy={workspaceBusy}
-      progressSnapshot={bulkMicroSnapshot}
-      bulkActionProgress={c.bulkActionProgress}
-      canOpenDetails={canOpenBatchDetails}
-      detailsOpenSignal={detailsOpenSignal}
-      isProcessing={isBatchContentRunning}
-      detailsPanelId="overview-batch-details-panel"
-      detailsPanel={
-        site ? (
-          <OverviewContentDetailsPanel
-            ctrl={c}
-            batchBulkState={batchBulkState}
-            bulkBatchKey={bulkBatchKey}
-            batchProgress={batchProgress}
-            opt={opt}
-            pageTitle={pageTitle}
-            gscPreviewByUrl={gscDerived?.gscMapOverview ?? {}}
-            gscActiveUrl={gscDerived?.bulkActiveUrl ?? null}
-            gscFetching={gscDerived?.gscPreviewLoading ?? false}
-            onUploadToWordPress={onUploadToWordPress}
-            onBatchClose={handleBatchClose}
-          />
-        ) : null
-      }
+      titleRowEnd={optimizerSectionPills}
+      {...sharedProgressProps}
     />
   );
 }

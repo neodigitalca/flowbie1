@@ -1,7 +1,8 @@
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { BookOpen, ChevronDown, Download, Power, RefreshCw, RotateCcw } from "lucide-react";
+import { BookOpen, Download, Pencil, Plus, Power, RefreshCw, RotateCcw } from "lucide-react";
 import { useWordPressSites } from "@/hooks/use-wordpress-sites";
 import { useActiveWordPressSite } from "@/contexts/active-wordpress-site-context";
+import { useTeam } from "@/contexts/TeamContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,18 +10,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ManagerNotificationLogSegment } from "@/components/manager/ManagerNotificationLogSegment";
+import { TeamSwitcherPill } from "@/components/manager/TeamSwitcherPill";
+import { ManagerDisplayChipFace } from "@/components/manager/ManagerDisplayChipFace";
+import { SiteDisplayNameDialog } from "@/components/manager/SiteDisplayNameDialog";
 import {
   MANAGER_DISPLAY_CONSOLE_ROW,
   MANAGER_DISPLAY_DROPDOWN_PANEL,
-  MANAGER_DISPLAY_NAME_BAND,
-  MANAGER_DISPLAY_NAME_BAND_WARMING,
-  MANAGER_DISPLAY_NAME_CHEVRON_SLOT,
   MANAGER_DISPLAY_NAME_LABEL,
   MANAGER_DISPLAY_SITE_WARMING,
   MANAGER_DISPLAY_SQUARE_BASE,
-  MANAGER_DISPLAY_SQUARE_POWER,
-  MANAGER_DISPLAY_SQUARE_POWER_WARMING,
   MANAGER_HEADER_BADGE_SIZE,
   managerDisplayKbSquareClass,
   managerDisplayResetSquareClass,
@@ -43,33 +41,32 @@ import { htmlToMarkdown } from "@/lib/wordpress-converter";
 const POWER_PX = 36;
 const SQUARE_PX = 36;
 
-function SiteConsoleFace({ site, isWarming }: { site: WordPressSite; isWarming: boolean }) {
-  const label = wordpressSiteDisplayName(site);
-  return (
-    <span className="flex h-9 w-full min-w-0 shrink-0 items-stretch overflow-visible">
-      <span
-        className={cn(
-          MANAGER_DISPLAY_SQUARE_BASE,
-          isWarming ? MANAGER_DISPLAY_SQUARE_POWER_WARMING : MANAGER_DISPLAY_SQUARE_POWER,
-        )}
-        aria-hidden
-      >
-        <Power className="h-4 w-4 shrink-0 text-black" />
-      </span>
-      <span
-        className={cn(
-          MANAGER_DISPLAY_NAME_BAND,
-          "min-w-0 flex-1",
-          isWarming && MANAGER_DISPLAY_NAME_BAND_WARMING,
-        )}
-      >
-        <span className={MANAGER_DISPLAY_NAME_LABEL}>{label}</span>
-        <span className={MANAGER_DISPLAY_NAME_CHEVRON_SLOT} aria-hidden>
-          <ChevronDown className="h-4 w-4 shrink-0" />
-        </span>
-      </span>
-    </span>
-  );
+function chipLabelWidthPx(root: HTMLElement, labelMeasure: string): number {
+  let maxLabel = 0;
+  for (const el of Array.from(root.children)) {
+    const row = el as HTMLElement;
+    if (row.dataset.measure === labelMeasure) {
+      maxLabel = Math.max(maxLabel, row.offsetWidth);
+    }
+  }
+  return maxLabel > 0 ? POWER_PX + maxLabel + 28 : 0;
+}
+
+function menuRowWidthPx(root: HTMLElement, rowMeasure: string): number {
+  let maxRow = 0;
+  for (const el of Array.from(root.children)) {
+    const row = el as HTMLElement;
+    if (row.dataset.measure === rowMeasure) {
+      maxRow = Math.max(maxRow, row.offsetWidth);
+    }
+  }
+  return maxRow;
+}
+
+function chipMenuWidthPx(root: HTMLElement, labelMeasure: string, rowMeasure: string): number {
+  const fromLabel = chipLabelWidthPx(root, labelMeasure);
+  const fromRow = menuRowWidthPx(root, rowMeasure);
+  return Math.max(fromLabel, fromRow);
 }
 
 function csvCell(value: unknown): string {
@@ -175,21 +172,25 @@ export function ManagerTopBarDisplayConsole({
   onResetWorkspace?: () => void;
   showReset: boolean;
 }) {
-  const { sites, handleConnectSite } = useWordPressSites();
+  const { sites, handleConnectSite, handlePatchSite } = useWordPressSites();
   const { activeWordPressSiteId, setActiveWordPressSiteId } = useActiveWordPressSite();
+  const { teams } = useTeam();
   const measureRef = useRef<HTMLDivElement>(null);
+  const [siteMenuOpen, setSiteMenuOpen] = useState(false);
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [renameSite, setRenameSite] = useState<WordPressSite | null>(null);
   const [siteMenuWidthPx, setSiteMenuWidthPx] = useState(0);
+  const [teamMenuWidthPx, setTeamMenuWidthPx] = useState(0);
+  const [teamDropdownWidthPx, setTeamDropdownWidthPx] = useState(0);
 
   const displayLabels = useMemo(() => sites.map((s) => wordpressSiteDisplayName(s)), [sites]);
+  const teamLabels = useMemo(() => teams.map((t) => t.name), [teams]);
   const activeSite = sites.find((s) => s.id === activeWordPressSiteId);
   const { loading: isSiteWarmLoading, fetchedAt, isStale, refreshing } = useSitePrefetchState(
     activeSite?.id,
   );
-  const otherSites = useMemo(
-    () => (activeSite ? sites.filter((s) => s.id !== activeSite.id) : sites),
-    [sites, activeSite],
-  );
   const activeSitePrefetch = activeSite ? getEntitySiteWarmCacheIfReady(activeSite.id) : null;
+  const utilityRowCount = 1 + (activeSitePrefetch ? 1 : 0);
 
   useLayoutEffect(() => {
     if (!activeSite) return;
@@ -199,36 +200,31 @@ export function ManagerTopBarDisplayConsole({
   useLayoutEffect(() => {
     const root = measureRef.current;
     if (!root) return;
-    let maxLabel = 0;
-    let maxRow = 0;
-    for (const el of Array.from(root.children)) {
-      const row = el as HTMLElement;
-      if (row.dataset.measure === "row") {
-        maxRow = Math.max(maxRow, row.offsetWidth);
-      } else {
-        maxLabel = Math.max(maxLabel, row.offsetWidth);
-      }
-    }
-    const fromLabel = maxLabel > 0 ? POWER_PX + maxLabel + 28 : 0;
-    const fromRow = maxRow > 0 ? maxRow : 0;
-    setSiteMenuWidthPx(Math.max(fromLabel, fromRow));
-  }, [displayLabels]);
+    setSiteMenuWidthPx(chipMenuWidthPx(root, "site-label", "site-row"));
+    setTeamMenuWidthPx(chipLabelWidthPx(root, "team-label"));
+    setTeamDropdownWidthPx(menuRowWidthPx(root, "team-menu-row"));
+  }, [displayLabels, teamLabels]);
 
   const utilitySquareCount = 2 + (showReset && onResetWorkspace ? 1 : 0);
-  const consoleWidthPx =
-    siteMenuWidthPx > 0 ? siteMenuWidthPx + SQUARE_PX * utilitySquareCount : undefined;
+  const siteChipWidthPx =
+    sites.length === 0 || !activeSite ? SQUARE_PX : siteMenuWidthPx > 0 ? siteMenuWidthPx : SQUARE_PX;
+  const teamChipWidthPx = teams.length > 0 && teamMenuWidthPx > 0 ? teamMenuWidthPx : 0;
+  const consoleWidthPx = teamChipWidthPx + siteChipWidthPx + SQUARE_PX * utilitySquareCount;
 
   const siteMenuWidthStyle: CSSProperties | undefined =
     siteMenuWidthPx > 0 ? { width: siteMenuWidthPx, minWidth: siteMenuWidthPx } : undefined;
-  const consoleWidthStyle: CSSProperties | undefined =
-    consoleWidthPx !== undefined ? { width: consoleWidthPx, minWidth: consoleWidthPx } : undefined;
+  const teamMenuWidthStyle: CSSProperties | undefined =
+    teamMenuWidthPx > 0 ? { width: teamMenuWidthPx, minWidth: teamMenuWidthPx } : undefined;
+  const teamDropdownWidthStyle: CSSProperties | undefined =
+    teamDropdownWidthPx > 0 ? { width: teamDropdownWidthPx, minWidth: teamDropdownWidthPx } : undefined;
+  const consoleWidthStyle: CSSProperties = { width: consoleWidthPx, minWidth: consoleWidthPx };
 
   const dropdownAnimateClass =
     "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-1 duration-200";
 
-  const dropdownItemClass = (index: number) =>
+  const dropdownItemClass = (index: number, selected = false) =>
     variant === "embedded"
-      ? cn(MANAGER_NAV_DROPDOWN_ITEM_BASE, managerNavDropdownRowClass(index, false))
+      ? cn(MANAGER_NAV_DROPDOWN_ITEM_BASE, managerNavDropdownRowClass(index, selected))
       : "cursor-pointer rounded-none px-3 py-2.5 text-base font-normal outline-none focus:bg-zinc-800/90 data-[highlighted]:bg-zinc-800/90";
 
   const triggerHoverClass =
@@ -244,17 +240,27 @@ export function ManagerTopBarDisplayConsole({
         aria-hidden
       >
         {sites.map((site) => (
-          <span key={`label-${site.id}`} className={MANAGER_DISPLAY_NAME_LABEL}>
+          <span key={`site-label-${site.id}`} data-measure="site-label" className={MANAGER_DISPLAY_NAME_LABEL}>
             {wordpressSiteDisplayName(site)}
           </span>
         ))}
+        {teams.map((team) => (
+          <span key={`team-label-${team.id}`} data-measure="team-label" className={MANAGER_DISPLAY_NAME_LABEL}>
+            {team.name}
+          </span>
+        ))}
+        <div data-measure="team-menu-row" className="inline-flex items-center gap-2.5 px-3">
+          <Plus className="h-4 w-4 shrink-0" aria-hidden />
+          <span className="whitespace-nowrap text-base font-normal leading-tight">New agency</span>
+        </div>
         {sites.map((site) => (
           <div
-            key={`row-${site.id}`}
-            data-measure="row"
+            key={`site-row-${site.id}`}
+            data-measure="site-row"
             className="inline-flex items-center gap-2.5 px-3"
           >
             <Power className="h-4 w-4 shrink-0" aria-hidden />
+            <Pencil className="h-4 w-4 shrink-0" aria-hidden />
             <span className="whitespace-nowrap text-base font-normal leading-tight">
               {wordpressSiteDisplayName(site)}
             </span>
@@ -262,6 +268,13 @@ export function ManagerTopBarDisplayConsole({
         ))}
       </div>
       <div className={MANAGER_DISPLAY_CONSOLE_ROW} style={consoleWidthStyle}>
+        <TeamSwitcherPill
+          menuWidthStyle={teamMenuWidthStyle}
+          dropdownMenuWidthStyle={teamDropdownWidthStyle}
+          dropdownItemClass={dropdownItemClass}
+          triggerHoverClass={triggerHoverClass}
+          dropdownAnimateClass={dropdownAnimateClass}
+        />
         {sites.length === 0 || !activeSite ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -279,7 +292,7 @@ export function ManagerTopBarDisplayConsole({
             <TooltipContent>None connected</TooltipContent>
           </Tooltip>
         ) : (
-          <DropdownMenu>
+          <DropdownMenu open={siteMenuOpen} onOpenChange={setSiteMenuOpen}>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
@@ -293,7 +306,11 @@ export function ManagerTopBarDisplayConsole({
                 aria-label={`Connected site: ${wordpressSiteDisplayName(activeSite)}${isSiteWarmLoading ? " (loading site data)" : ""}`}
                 aria-haspopup="menu"
               >
-                <SiteConsoleFace site={activeSite} isWarming={isSiteWarmLoading} />
+                <ManagerDisplayChipFace
+                  icon={Power}
+                  label={wordpressSiteDisplayName(activeSite)}
+                  isWarming={isSiteWarmLoading}
+                />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
@@ -343,19 +360,47 @@ export function ManagerTopBarDisplayConsole({
                   </div>
                 </DropdownMenuItem>
               ) : null}
-              {otherSites.map((site, index) => {
+              {sites.map((site, index) => {
+                const selected = site.id === activeSite.id;
                 const label = wordpressSiteDisplayName(site);
+                const iconClass = selected ? "text-black" : "text-muted-foreground";
                 return (
                   <DropdownMenuItem
                     key={site.id}
-                    className={cn(dropdownItemClass(index + (activeSitePrefetch ? 2 : 1)), "shrink-0")}
-                    onSelect={() => {
+                    className={cn(dropdownItemClass(utilityRowCount + index, selected), "shrink-0")}
+                    onSelect={(event) => {
+                      if (selected) {
+                        event.preventDefault();
+                        return;
+                      }
                       handleConnectSite(site);
                       setActiveWordPressSiteId(site.id);
                     }}
                   >
                     <div className="flex w-full shrink-0 items-center gap-2.5">
-                      <Power className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                      <Power className={cn("h-4 w-4 shrink-0", iconClass)} aria-hidden />
+                      <button
+                        type="button"
+                        aria-label={`Rename ${label}`}
+                        className={cn(
+                          "flex h-4 w-4 shrink-0 items-center justify-center",
+                          iconClass,
+                          "hover:opacity-80",
+                        )}
+                        onPointerDown={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                        }}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setRenameSite(site);
+                          setSiteMenuOpen(false);
+                          setRenameDialogOpen(true);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4 shrink-0" aria-hidden />
+                      </button>
                       <span className="whitespace-nowrap text-base font-normal leading-tight">{label}</span>
                     </div>
                   </DropdownMenuItem>
@@ -364,10 +409,6 @@ export function ManagerTopBarDisplayConsole({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        <ManagerNotificationLogSegment
-          variant={variant}
-          dropdownAnimateClass={dropdownAnimateClass}
-        />
         <button
           type="button"
           className={managerDisplayKbSquareClass(managerTab === "knowledge")}
@@ -389,6 +430,20 @@ export function ManagerTopBarDisplayConsole({
           </button>
         ) : null}
       </div>
+      <SiteDisplayNameDialog
+        open={renameDialogOpen}
+        site={renameSite}
+        onOpenChange={(open) => {
+          setRenameDialogOpen(open);
+          if (!open) setRenameSite(null);
+        }}
+        onSave={(siteId, name) => {
+          const site = sites.find((s) => s.id === siteId);
+          if (site && name !== wordpressSiteDisplayName(site)) {
+            handlePatchSite(siteId, { name });
+          }
+        }}
+      />
     </>
   );
 }

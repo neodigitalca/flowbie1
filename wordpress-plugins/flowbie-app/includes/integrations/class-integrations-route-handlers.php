@@ -45,15 +45,19 @@ class Flowbie_App_Integrations_Route_Handlers {
 		}
 
 		if ( $subpath === 'sync-email-worker-keys' && $method === 'POST' ) {
-			$keys_path = Flowbie_App_Data_Paths::root() . '/email-worker-keys.json';
+			$openrouter = isset( $body['openRouterApiKey'] ) ? trim( (string) $body['openRouterApiKey'] ) : '';
+			$keys_path  = Flowbie_App_Data_Paths::root() . '/email-worker-keys.json';
 			Flowbie_App_Json_File_Store::write(
 				$keys_path,
 				array(
 					'agentmailApiKey'  => isset( $body['agentmailApiKey'] ) ? (string) $body['agentmailApiKey'] : '',
-					'openRouterApiKey' => isset( $body['openRouterApiKey'] ) ? (string) $body['openRouterApiKey'] : '',
+					'openRouterApiKey' => $openrouter,
 					'updatedAt'        => gmdate( 'c' ),
 				)
 			);
+			if ( $openrouter !== '' && class_exists( 'Flowbie_Wp_Api' ) ) {
+				Flowbie_Wp_Api::save_agency_openrouter_api_key( $openrouter );
+			}
 			Flowbie_App_Api_Dispatcher::send_json( array( 'ok' => true ) );
 			return;
 		}

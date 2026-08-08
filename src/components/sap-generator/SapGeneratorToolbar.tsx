@@ -21,6 +21,10 @@ import {
   widestEntityTypeShortLabel,
   type EntityGeographicLevel,
 } from "@/lib/entity-geographic-level";
+import {
+  normalizeSapPageBudgetInputChange,
+  stepSapPageBudgetInput,
+} from "@/lib/sap-page-budget-input";
 import { cn } from "@/lib/utils";
 
 const LOCAL_EXPORT_BTN_CLASS =
@@ -45,6 +49,14 @@ export type SapGeneratorToolbarProps = {
   onEntityTypeFocusChange: (focus: string[]) => void;
   hasSapRowsForCsv: boolean;
   onDownloadTargetsCsv: () => void;
+  /** When set, arrow keys use this instead of the default min-1 step fallback. */
+  sapPageBudgetArrowStep?: (current: string, direction: "up" | "down") => string | null;
+  /** Override budget field normalization (e.g. competitor count with no min fallback). */
+  sapPageBudgetNormalizeChange?: (raw: string) => string;
+  /** Text input avoids browser number-field coercion for competitor count. */
+  sapPageBudgetTextInput?: boolean;
+  sapPageBudgetAriaLabel?: string;
+  sapPageBudgetTitle?: string;
 };
 
 export function SapGeneratorToolbar({
@@ -66,6 +78,11 @@ export function SapGeneratorToolbar({
   onEntityTypeFocusChange,
   hasSapRowsForCsv,
   onDownloadTargetsCsv,
+  sapPageBudgetArrowStep,
+  sapPageBudgetNormalizeChange = normalizeSapPageBudgetInputChange,
+  sapPageBudgetTextInput = false,
+  sapPageBudgetAriaLabel = "SAP page budget",
+  sapPageBudgetTitle = "Total SAP pages for this run",
 }: SapGeneratorToolbarProps) {
   const focusSelectValue =
     entityTypeFocus.find((t) => entityTypesForLevel(entityGeographicLevel).includes(t)) ?? "__none__";
@@ -105,20 +122,32 @@ export function SapGeneratorToolbar({
           Grid
         </Button>
         <Input
-          type="text"
-          inputMode="numeric"
+          type={sapPageBudgetTextInput ? "text" : "number"}
+          inputMode={sapPageBudgetTextInput ? "numeric" : undefined}
+          min={sapPageBudgetTextInput ? undefined : 1}
+          step={sapPageBudgetTextInput ? undefined : 1}
           autoComplete="off"
           value={sapPageBudgetInput}
           onChange={(e) => {
-            onSapPageBudgetInputChange(e.target.value.replace(/[^\d]/g, ""));
+            onSapPageBudgetInputChange(sapPageBudgetNormalizeChange(e.target.value));
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+            const direction = e.key === "ArrowUp" ? "up" : "down";
+            const next = sapPageBudgetArrowStep
+              ? sapPageBudgetArrowStep(sapPageBudgetInput, direction)
+              : stepSapPageBudgetInput(sapPageBudgetInput, direction === "up" ? 1 : -1);
+            if (next === null) return;
+            e.preventDefault();
+            onSapPageBudgetInputChange(next);
           }}
           className={cn(
             BULK_HEADER_FIELD,
-            "w-[3.25rem] shrink-0 text-center font-mono text-base",
+            "w-[3.25rem] shrink-0 text-center font-mono text-base [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-auto [&::-webkit-outer-spin-button]:appearance-auto",
           )}
           disabled={runLoading}
-          aria-label="SAP page budget"
-          title="Total SAP pages for this run"
+          aria-label={sapPageBudgetAriaLabel}
+          title={sapPageBudgetTitle}
         />
         <Input
           type="text"

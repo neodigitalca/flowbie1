@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { ChevronDown } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,8 +24,10 @@ import {
   isManagerNavItemActive,
   isManagerNavItemSelected,
   type ManagerNavItem,
+  type ManagerNavSection,
 } from "@/components/manager/manager-nav-sections";
 import type { ManagerSettingsClusterId } from "@/components/manager/manager-settings-cluster";
+import { dashboardClusterToArea, managerTabToArea, useTeamPermission } from "@/hooks/use-team-permission";
 
 export interface ManagerMegaMenuNavProps {
   managerTab: string;
@@ -68,9 +71,16 @@ export function ManagerMegaMenuNav({
     "duration-200",
   );
 
+  const { canRead } = useTeamPermission();
+  const navigate = useNavigate();
+
   const applyNavItemSelection = useCallback(
     (item: ManagerNavItem) => {
       if (item.children?.length) return;
+      if (item.docsPath) {
+        navigate(item.docsPath);
+        return;
+      }
       if (item.dashboardCluster) {
         onDashboardClusterChange(item.dashboardCluster);
         onManagerTabChange("dashboard");
@@ -78,7 +88,7 @@ export function ManagerMegaMenuNav({
         onManagerTabChange(item.value);
       }
     },
-    [onDashboardClusterChange, onManagerTabChange],
+    [navigate, onDashboardClusterChange, onManagerTabChange],
   );
 
   const dropdownItemClass = (index: number, selected: boolean) =>
@@ -168,7 +178,41 @@ export function ManagerMegaMenuNav({
   const embeddedTriggerContentClass = (active: boolean) =>
     active ? "text-white" : "text-foreground group-hover:text-white";
 
-  const navSections = useMemo(() => getManagerNavSections(), []);
+  const navItemAllowed = useCallback(
+    (item: ManagerNavItem): boolean => {
+      if (item.docsPath) return true;
+      if (item.dashboardCluster) {
+        const area = dashboardClusterToArea(item.dashboardCluster);
+        return !area || canRead(area);
+      }
+      const area = managerTabToArea(item.value);
+      return !area || canRead(area);
+    },
+    [canRead],
+  );
+
+  const filterSection = useCallback(
+    (section: ManagerNavSection): ManagerNavSection | null => {
+      const items = section.items
+        .map((item) => {
+          if (item.children?.length) {
+            const children = item.children.filter(navItemAllowed);
+            if (children.length === 0) return null;
+            return { ...item, children };
+          }
+          return navItemAllowed(item) ? item : null;
+        })
+        .filter(Boolean) as ManagerNavItem[];
+      if (items.length === 0) return null;
+      return { ...section, items };
+    },
+    [navItemAllowed],
+  );
+
+  const navSections = useMemo(
+    () => getManagerNavSections().map(filterSection).filter(Boolean) as ManagerNavSection[],
+    [filterSection],
+  );
 
   return (
     <nav

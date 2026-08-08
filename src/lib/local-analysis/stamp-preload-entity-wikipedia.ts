@@ -1,35 +1,12 @@
 import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
-import { checkWikipediaPageExists, searchWikipediaPages } from "@/lib/wikipedia/mediawiki-search";
+import { resolveEntityWikipediaMediaWiki } from "@/lib/wikipedia/resolve-entity-wikipedia-mediawiki";
 
 type WikiHit = { url: string; title: string };
 
-async function resolveEntityWikipediaMediaWiki(entity: string): Promise<WikiHit | null> {
-  const e = entity.trim();
-  if (!e) return null;
-
-  const exact = await checkWikipediaPageExists(e);
-  if (exact.exists && exact.url && exact.title) {
-    return { url: exact.url, title: exact.title };
-  }
-
-  const parts = e.split(",").map((p) => p.trim()).filter(Boolean);
-  if (parts.length >= 2) {
-    const placeCity = `${parts[0]}, ${parts[1]}`;
-    const placeHit = await checkWikipediaPageExists(placeCity);
-    if (placeHit.exists && placeHit.url && placeHit.title) {
-      return { url: placeHit.url, title: placeHit.title };
-    }
-  }
-
-  const searchQ = parts.length >= 2 ? `${parts[0]} ${parts[1]}` : e;
-  const titles = await searchWikipediaPages(searchQ, 10);
-  for (const title of titles) {
-    const hit = await checkWikipediaPageExists(title);
-    if (hit.exists && hit.url && hit.title) {
-      return { url: hit.url, title: hit.title };
-    }
-  }
-  return null;
+async function resolveEntityWikipediaMediaWikiLegacy(entity: string): Promise<WikiHit | null> {
+  const hit = await resolveEntityWikipediaMediaWiki(entity);
+  if (!hit) return null;
+  return { url: hit.url, title: hit.title };
 }
 
 /**
@@ -53,7 +30,7 @@ export async function stampPreloadRowsWithUniqueEntityWikipedia(rows: CSVRow[]):
 
   await Promise.all(
     missing.map(async (entity) => {
-      const hit = await resolveEntityWikipediaMediaWiki(entity);
+      const hit = await resolveEntityWikipediaMediaWikiLegacy(entity);
       if (hit) byKey.set(entity.toLowerCase(), hit);
     }),
   );

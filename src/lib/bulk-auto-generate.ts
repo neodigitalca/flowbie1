@@ -1,4 +1,4 @@
-import { fetchWikipediaContent, generateWikipediaCSV } from './wikipedia-api';
+import { buildFocusedArticlePurpose } from "@/lib/content-generation/article-length-policy";
 import { parseImportedSectionsJson, parseImportedLinksJson, parseKeywordQuestionsJson, parseModifierLinksJson } from './bulk/bulk-csv-parser';
 import {
   injectImportedLinksIntoBlueprintAgents,
@@ -16,6 +16,13 @@ import {
   type ModifierExternalLink,
 } from './bulk/modifier-external-links';
 import {
+  enforceForbiddenWordsOnBlueprint,
+  formatBlueprintFileContent,
+  formatChecklistFileContent,
+  GLOBAL_FORBIDDEN_WORDS_PROMPT_BLOCK,
+  prepareChecklistForPipeline,
+} from '@/lib/content-word-blocklist';
+import {
   formatPrefilledBulkRowContractFromCsvRow,
   hasCsvFilledMeta,
   hasCsvFilledTitle,
@@ -30,7 +37,7 @@ import { getResearchModel } from './optimization-settings-storage';
 import { buildImagePrompt } from './image-prompt-builder';
 import type { ImageChecklistItem } from './image-checklist-builder';
 import { generateSEOImageFilename } from './image-filename-generator';
-import type { KeywordData, KeywordAIAnalysis } from './keyword-types';
+import type { KeywordData, KeywordAIAnalysis, KeywordAnalysisComplete, KeywordAnalysisOptions } from './keyword-types';
 import { BulkFileManager, type BulkGeneratedFile } from './bulk-file-manager';
 import type { WordPressSite } from '@/components/integrations/types';
 import {
@@ -75,12 +82,8 @@ import { updateACFFields } from './wordpress-acf-origin';
 import { getACFFieldsForPost } from '@/lib/wordpress-api/acf-discovery';
 import { discoverACFFieldMapping, fallbackFieldMapping } from '@/lib/content-generation/acf-field-mapper';
 import { mergeSeoResearchWithMeta, buildAcfPayload } from '@/lib/content-generation/apply-meta-acf-payload';
-import { generateOptimizedMetaFields } from '@/lib/meta-field-optimizer';
-import {
-  applyBulkSeoMetaToAcf,
-  buildOptimizedMetaFromKeywordResearch,
-} from '@/lib/content-generation/apply-bulk-meta-from-seo-json';
-import { OptimizationFileManager } from '@/lib/optimization-file-manager';
+import type { OptimizedMetaFields } from '@/lib/meta-field-optimizer';
+import { buildOptimizedMetaFromKeywordResearch } from '@/lib/content-generation/apply-bulk-meta-from-seo-json';
 import {
   buildFAQSchemaScriptFromEntries,
 } from './content-generation/wordpress-uploader';
@@ -89,7 +92,7 @@ import {
   napLocationsFromSite,
 } from '@/lib/content-generation/bulk-faq-in-context';
 import { parseFaqEntries, type FaqEntry } from '@/lib/faq-entries';
-import { appendVisibleFaqTableWithIntro, FLO_FAQ_CLASS } from '@/lib/overview/overview-blog-faq-append';
+import { appendVisibleFaqTableWithIntro, FLO_FAQ_CLASS, stripTrailingFaqSection } from '@/lib/overview/overview-blog-faq-append';
 import {
   buildPreBlogSeoResearchSkeleton,
   mergeBlueprintIntoPreBlogSkeleton,
@@ -100,9 +103,14 @@ import {
 } from '@/lib/content-generation/bulk-acf-seo-bundle';
 import { generateMetaDescription } from '@/lib/content-generation/content-generator';
 import { resolveBulkWordPressPostTitle } from '@/lib/bulk/bulk-post-title-agent';
-import { sanitizeContentForUpload, convertAllMarkdownToHtml, forceConvertMarkdownLinks } from './content-generation/content-sanitizer';
-import { ensureLinksEvery200WordsForHtml } from './content-generation/ensure-links-per-section';
-import { ensureSemrushExternalLinksInHtml } from './content-generation/ensure-semrush-external-links';
+import {
+  sanitizeContentForUpload,
+} from './content-generation/content-sanitizer';
+import { prepareHarnessContentForUpload } from './content-generation/harness-upload-prep';
+import {
+  buildRowExplicitExternalAllowlist,
+  externalUrlsFromPairs,
+} from './content-generation/external-link-placeholders';
 import { generateSEOSlug } from './seo-slug-generator';
 import { loadApiKey } from './api';
 import {
@@ -117,12 +125,12 @@ import { resolveRecommendedAuthor } from './wordpress-api/author-resolver';
 // Import from new feature-based modules
 import type { CSVRow } from './bulk/bulk-csv-parser';
 import { resolveBulkPrimaryKeyword } from './bulk/bulk-primary-keyword';
+import { buildBlogImportKeywordResearchStub } from './bulk/blog-import-parse';
 import { parseCSV, parseBlogIdeasChecklist } from './bulk/bulk-csv-parser';
 import { 
   autoSelectKeywords, 
   autoSelectH2Sections, 
-  autoSelectPeopleAlsoAsk, 
-  autoSelectResearchLinks 
+  autoSelectPeopleAlsoAsk,
 } from './bulk/bulk-blueprint-generator';
 import { 
   generateMarkdownContent, 
@@ -421,8 +429,11 @@ export async function generateRowOutputs(
   row: CSVRow,
   options: BulkProcessingOptions,
   fileManager: BulkFileManager,
-  analyzeKeywordFn: (keyword: string, location: { location: string; language: string }) => Promise<void>
-): Promise<BulkGeneratedFile[]> {
+  analyzeKeywordFn: (
+    keyword: string,
+    analysisOptions: KeywordAnalysisOptions,
+  ) => Promise<KeywordAnalysisComplete | null>,
+): Promise<{ files: BulkGeneratedFile[]; research: KeywordAnalysisComplete | null }> {
   const timestamp = Date.now();
   const generatedFiles: BulkGeneratedFile[] = [];
 
@@ -505,22 +516,58 @@ export async function generateRowOutputs(
 
     if (skipKeywordResearch) {
       options.onProgress?.(rowIndex, 0, 'OpenRouter generation...');
-    } else {
-      options.onProgress?.(rowIndex, 0, 'Running keyword research...');
-
-      // Step 2: Run keyword research
-      await analyzeKeywordFn(row.keyword, {
-        location: 'United States',
-        language: 'en',
-      });
+      return { files: generatedFiles, research: null };
     }
 
-    // Wait for keyword research to complete (this is handled by the hook)
-    // Note: This is a simplified version. In practice, we'll need to integrate
-    // with the keyword research hook to get the actual results.
-    // This will be handled in the useBulkAutoGenerate hook.
+    const csvKeyword = row.keyword?.trim();
+    if (!csvKeyword) {
+      throw new Error('CSV row missing keyword');
+    }
 
-    return generatedFiles;
+    const buildCsvKeywordResearch = (): KeywordAnalysisComplete => {
+      const stub = buildBlogImportKeywordResearchStub(row);
+      return {
+        result: {
+          primaryKeyword: stub.primaryKeyword,
+          keywordData: stub.keywordData,
+          semanticKeywords: [],
+          searchIntent: stub.keywordData.intent || 'informational',
+        },
+        aiAnalysis: stub.aiAnalysis,
+        keywordsVolumeData: [],
+        paaRawResponse: null,
+      };
+    };
+
+    options.onProgress?.(rowIndex, 0, 'Running keyword research...');
+    let research: KeywordAnalysisComplete | null = null;
+    try {
+      research = await analyzeKeywordFn(csvKeyword, {
+        location: 'United States',
+        language: 'en',
+        strict: false,
+      });
+    } catch (err) {
+      console.warn('[Bulk Generator] DataForSEO keyword research failed, using CSV keyword:', err);
+    }
+
+    if (!research?.result?.keywordData || !research.aiAnalysis) {
+      research = buildCsvKeywordResearch();
+    } else {
+      research = {
+        ...research,
+        result: {
+          ...research.result,
+          primaryKeyword: csvKeyword,
+          keywordData: {
+            ...research.result.keywordData,
+            keyword: csvKeyword,
+          },
+        },
+      };
+    }
+
+    return { files: generatedFiles, research };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     options.onError?.(rowIndex, error instanceof Error ? error : new Error(errorMessage));
@@ -651,6 +698,43 @@ function populateACFFieldsFromDFS(
   return acfFields;
 }
 
+function parseOptimizedMetaFromSeoResearchJson(json: string): OptimizedMetaFields | null {
+  try {
+    const parsed = JSON.parse(json) as {
+      optimizedMeta?: Record<string, unknown>;
+      seo_title?: string;
+      meta_description?: string;
+      focus_keyword?: string;
+    };
+    const om = parsed.optimizedMeta;
+    if (om && typeof om === 'object') {
+      return {
+        rank_math_title: String(om.rank_math_title ?? parsed.seo_title ?? ''),
+        rank_math_description: String(om.rank_math_description ?? parsed.meta_description ?? ''),
+        rank_math_focus_keyword: String(om.rank_math_focus_keyword ?? parsed.focus_keyword ?? ''),
+        rank_math_canonical_url: String(om.rank_math_canonical_url ?? ''),
+        rank_math_robots: Array.isArray(om.rank_math_robots)
+          ? (om.rank_math_robots as string[])
+          : ['index', 'follow'],
+        keyword_focus: String(om.rank_math_focus_keyword ?? parsed.focus_keyword ?? ''),
+      };
+    }
+    if (parsed.seo_title || parsed.meta_description) {
+      return {
+        rank_math_title: String(parsed.seo_title ?? ''),
+        rank_math_description: String(parsed.meta_description ?? ''),
+        rank_math_focus_keyword: String(parsed.focus_keyword ?? ''),
+        rank_math_canonical_url: '',
+        rank_math_robots: ['index', 'follow'],
+        keyword_focus: String(parsed.focus_keyword ?? ''),
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function generateBlueprintAndContent(
   rowIndex: number,
   row: CSVRow,
@@ -670,7 +754,7 @@ export async function generateBlueprintAndContent(
   const generatedFiles: BulkGeneratedFile[] = [];
   let semrushKeywordsContext: string | undefined;
   let semrushScatterContext: string | undefined;
-  let semrushExternalUrlsForSanitize: string[] = [];
+  let rowExternalUrlsForSanitize: string[] = [];
   let semrushSnapshotForAcf: SemrushBulkEnrichmentResult | undefined;
   let semrushCitationForAcf: string | null = null;
   let intelligentMergeForAcf: IntelligentKeywordResearchMergeResult | null = null;
@@ -752,7 +836,6 @@ try {
               portfolioBlockedHosts,
             });
 
-      semrushExternalUrlsForSanitize = semrush.externalSemrushUrls ?? [];
       const ragJson = buildSemrushKeywordsRagJson(semrush);
       if (ragJson.trim()) {
         semrushKeywordsContext = ragJson;
@@ -867,9 +950,6 @@ try {
     if (modifierUrls.length > 0) {
       options.onProgress?.(rowIndex, 0, 'Research external links...');
       modifierExternalLinks = await researchModifierExternalLinks(modifierUrls);
-      semrushExternalUrlsForSanitize = [
-        ...new Set([...semrushExternalUrlsForSanitize, ...modifierExternalLinks.map((link) => link.url)]),
-      ];
       const modifierLinksFileName = BulkFileManager.generateFileName(enrichedRow, 'modifier_external_links', timestamp);
       const modifierLinksFile: BulkGeneratedFile = {
         id: BulkFileManager.createFileId(rowIndex, 'modifier-external-links', timestamp),
@@ -893,10 +973,15 @@ try {
       generatedFiles.push(modifierLinksFile);
     }
 
+    const rowExplicitExternalPairs = buildRowExplicitExternalAllowlist({
+      modifierExternalLinks,
+      importedDraftLinks,
+    });
+    rowExternalUrlsForSanitize = externalUrlsFromPairs(rowExplicitExternalPairs);
+
     const selectedResearchLinks = [
       ...new Set([
         ...(entityWikiUrl ? [entityWikiUrl] : []),
-        ...autoSelectResearchLinks(aiAnalysis),
         ...importedDraftLinks.map((link) => link.url),
         ...modifierExternalLinks.map((link) => link.url),
       ]),
@@ -905,6 +990,7 @@ try {
     const prefilledRowContract = formatPrefilledBulkRowContractFromCsvRow(enrichedRow);
 
     // Generate checklist
+    options.onProgress?.(rowIndex, 0, 'Reading blacklist...');
     options.onProgress?.(rowIndex, 0, 'Generating checklist...');
     let checklist = await generateChecklistFromSelections(
       selectedKeywords,
@@ -924,7 +1010,7 @@ try {
         selectedResearchLinks,
         connectedSite,
         wordPressPosts,
-        runExternalResearch: true,
+        runExternalResearch: rowExplicitExternalPairs.length > 0,
         locationName: "United States",
         languageCode: "en",
         verbatimQuestionH2Outline: useVerbatimQuestionH2,
@@ -933,6 +1019,7 @@ try {
         importedToneProfile: importedToneProfile ?? undefined,
         importedDraftLinks: importedDraftLinks.length ? importedDraftLinks : undefined,
         modifierExternalLinks: modifierExternalLinks.length ? modifierExternalLinks : undefined,
+        userExternalLinks: rowExplicitExternalPairs.length ? rowExplicitExternalPairs : undefined,
         wikipediaUrl: entityWikiUrl,
         wikipediaTitle: entityWikiTitle,
         prefilledRowContract: prefilledRowContract || undefined,
@@ -947,8 +1034,9 @@ try {
         wikipediaTitle: entityWikiTitle,
       });
     }
+    const pipelineChecklist = prepareChecklistForPipeline(checklist);
 
-    if (checklist.length === 0) {
+    if (pipelineChecklist.length === 0) {
       throw new Error('Failed to generate checklist');
     }
 
@@ -960,9 +1048,11 @@ try {
       fileName: checklistFileName,
       content: JSON.stringify(
         {
+          forbiddenWordsPolicy: GLOBAL_FORBIDDEN_WORDS_PROMPT_BLOCK,
           generatedAt: new Date().toISOString(),
           title: enrichedRow.title,
-          lines: checklist,
+          lines: prepareChecklistForPipeline(checklist),
+          downloadText: formatChecklistFileContent(checklist),
         },
         null,
         2
@@ -972,11 +1062,12 @@ try {
       timestamp,
       rowData: row,
     };
+    checklist = pipelineChecklist;
     fileManager.addFile(checklistFile);
     generatedFiles.push(checklistFile);
     options.onProgress?.(rowIndex, 0, 'Blog checklist JSON ready - download above');
 
-    const flowPurposeStr = options.flowPurpose || `Comprehensive guide about ${keywordData.keyword}`;
+    const flowPurposeStr = options.flowPurpose || buildFocusedArticlePurpose(keywordData.keyword);
     const outlineTextForImage = `Blog checklist outline:\n${checklist.join('\n')}`;
 
     const entityForImage =
@@ -1038,6 +1129,7 @@ try {
         entity: entityForLocalTemplate,
         importedDraftLinks: importedDraftLinks.length ? importedDraftLinks : undefined,
         modifierExternalLinks: modifierExternalLinks.length ? modifierExternalLinks : undefined,
+        userExternalLinks: rowExplicitExternalPairs.length ? rowExplicitExternalPairs : undefined,
         wikipediaUrl: entityWikiUrl,
         wikipediaTitle: entityWikiTitle,
       }),
@@ -1072,7 +1164,7 @@ try {
       blueprintAgentsWithImports,
       modifierExternalLinks,
     );
-    const blueprintResult = {
+    const blueprintResult = enforceForbiddenWordsOnBlueprint({
       ...blueprintResultRaw,
       agents:
         entityForLocalTemplate && entityWikiUrl
@@ -1082,7 +1174,7 @@ try {
               wikipediaTitle: entityWikiTitle,
             })
           : blueprintAgentsWithModifierLinks,
-    };
+    });
     mergeBlueprintIntoPreBlogSkeleton(preBlogSeoSkeleton, blueprintResult.title, blueprintResult.purpose);
 
     if (blueprintResult.agents.length === 0) {
@@ -1115,23 +1207,19 @@ try {
       id: blueprintFileId,
       rowIndex,
       fileName: blueprintFileName,
-      content: JSON.stringify(
-        {
-          title: blueprintResult.title || enrichedRow.title,
-          purpose: blueprintResult.purpose,
-          agents: blueprintResult.agents,
-          keyword: keywordData.keyword,
-          entity: enrichedRow.entity,
-          acfFields: {
-            date_modifier: enrichedRow.date_modifier,
-            prompt_modifier: enrichedRow.prompt_modifier,
-            service_area_fields: enrichedRow.service_area_fields,
-            origin: enrichedRow.origin,
-          },
+      content: formatBlueprintFileContent({
+        title: blueprintResult.title || enrichedRow.title,
+        purpose: blueprintResult.purpose,
+        agents: blueprintResult.agents,
+        keyword: keywordData.keyword,
+        entity: enrichedRow.entity,
+        acfFields: {
+          date_modifier: enrichedRow.date_modifier,
+          prompt_modifier: enrichedRow.prompt_modifier,
+          service_area_fields: enrichedRow.service_area_fields,
+          origin: enrichedRow.origin,
         },
-        null,
-        2
-      ),
+      }),
       mimeType: 'application/json',
       status: 'completed',
       timestamp,
@@ -1174,11 +1262,11 @@ try {
     let markdownContent: string;
     let precomputedAcfSeoBundle: PrecomputedAcfSeoBundle | null = null;
 
-    const runMarkdownPipeline = async (): Promise<string> => {
-      const useLegacyMonolithic =
-        typeof import.meta !== 'undefined' &&
-        import.meta.env?.VITE_BULK_LEGACY_BULK_MARKDOWN === 'true';
+    const useLegacyMonolithic =
+      typeof import.meta !== 'undefined' &&
+      import.meta.env?.VITE_BULK_LEGACY_BULK_MARKDOWN === 'true';
 
+    const runMarkdownPipeline = async (): Promise<string> => {
       let md: string;
       if (useLegacyMonolithic) {
         options.onProgress?.(rowIndex, 0, 'Generating blog content...');
@@ -1194,7 +1282,7 @@ try {
           options.siteSummary,
           semrushKeywordsContext,
           semrushScatterContext,
-          semrushExternalUrlsForSanitize
+          rowExternalUrlsForSanitize
         );
       } else {
         options.onProgress?.(rowIndex, 0, 'Generating blog content (harness: one section at a time)...');
@@ -1211,7 +1299,7 @@ try {
           options.siteSummary,
           semrushKeywordsContext,
           semrushScatterContext,
-          semrushExternalUrlsForSanitize
+          rowExternalUrlsForSanitize
         );
       }
 
@@ -1278,14 +1366,155 @@ try {
     };
 
     // Peer-first featured image reuse (peer sites only, never the target site).
-    // SAP entity rows match by place entity on peer entity sitemaps; blog rows
-    // match by keyword (word order ignored) on peer blog posts.
     let peerFeaturedImage: PeerFeaturedImageForRow | null = null;
     const peerTargetSite = options.wordPressPosting?.sites?.[0]?.site;
     const peerRowLabel = (enrichedRow.title || keywordData.keyword || '').trim();
     const peerMatchKey = useGoogleMaps
       ? entityForImage!
       : (keywordData.keyword || enrichedRow.keyword || '').trim();
+    const canPeerSearch =
+      row.featuredImage !== 'n' &&
+      (useAiImagePath || useGoogleMaps) &&
+      Boolean(options.peerSites?.length && peerTargetSite);
+
+    const recordPeerFeaturedImageFile = (peer: PeerFeaturedImageForRow) => {
+      const imageFileId = BulkFileManager.createFileId(rowIndex, 'image', timestamp);
+      const imageFile: BulkGeneratedFile = {
+        id: imageFileId,
+        rowIndex,
+        fileName: peer.fileName,
+        content: peer.dataUrl,
+        mimeType: peer.mimeType,
+        status: 'completed',
+        timestamp,
+        rowData: row,
+      };
+      fileManager.addFile(imageFile);
+      generatedFiles.push(imageFile);
+      options.onProgress?.(
+        rowIndex,
+        0,
+        `Featured image reused from ${peer.sourceSiteName} (${peer.sourcePageUrl})`,
+      );
+      if (options.peerFeaturedReport) {
+        recordPeerFeaturedImageOutcome(options.peerFeaturedReport, {
+          action: 'found',
+          rowIndex,
+          rowLabel: peerRowLabel,
+          matchKey: peerMatchKey,
+          mode: useGoogleMaps ? 'entity' : 'blog',
+          sourceSiteName: peer.sourceSiteName,
+          sourcePageUrl: peer.sourcePageUrl,
+          sourceImageUrl: peer.sourceImageUrl,
+          matchedKeyword: peer.matchedKeyword,
+          score: peer.score,
+        });
+      }
+    };
+
+    const persistAiFeaturedImageResult = async (
+      imageResult: NonNullable<Awaited<ReturnType<typeof generateFeaturedImage>>>,
+    ) => {
+      let imageBase64 = imageResult.imageBase64;
+      const mimeType = 'image/png';
+      if (imageBase64.includes(',')) {
+        imageBase64 = imageBase64.split(',')[1];
+      }
+
+      const imageFileName = await generateSEOImageFilename(
+        flowTitleForBlueprint,
+        options.openRouterApiKey,
+        options.selectedModel || getResearchModel(),
+        'featured',
+      );
+
+      const fileNameWithoutExt = imageFileName.replace(/\.(png|jpg|jpeg)$/i, '');
+      const extension = mimeType === 'image/jpeg' ? 'jpg' : 'png';
+      const finalImageFileName = `${fileNameWithoutExt}.${extension}`;
+
+      const imageFileId = BulkFileManager.createFileId(rowIndex, 'image', timestamp);
+      const imageFile: BulkGeneratedFile = {
+        id: imageFileId,
+        rowIndex,
+        fileName: finalImageFileName,
+        content: `data:${mimeType};base64,${imageBase64}`,
+        mimeType,
+        status: 'completed',
+        timestamp,
+        rowData: row,
+      };
+
+      fileManager.addFile(imageFile);
+      generatedFiles.push(imageFile);
+
+      const featuredImageChecklistFileName = BulkFileManager.generateFileName(
+        enrichedRow,
+        'featured-image-checklist',
+        timestamp,
+      );
+      const featuredImageChecklistFileId = BulkFileManager.createFileId(
+        rowIndex,
+        'featured-image-checklist',
+        timestamp,
+      );
+
+      const featuredImageChecklistFile: BulkGeneratedFile = {
+        id: featuredImageChecklistFileId,
+        rowIndex,
+        fileName: featuredImageChecklistFileName,
+        content: JSON.stringify(
+          {
+            title: flowTitleForBlueprint,
+            purpose: flowPurposeResolved,
+            keyword: keywordData.keyword,
+            entity: enrichedRow.entity,
+            imageChecklist: precomputedImageChecklist.map((item) => ({
+              title: item.title,
+              description: item.description,
+            })),
+            imagePrompt:
+              buildImagePrompt(
+                {
+                  flowTitle: flowTitleForBlueprint,
+                  flowPurpose: flowPurposeResolved,
+                  finalOutput: outlineTextForImage,
+                },
+                {
+                  includeText: false,
+                  includePeople: false,
+                  includeAnimals: false,
+                  includeCars: false,
+                  isInfographic: false,
+                  aspectRatio: '16:9',
+                  style: 'professional',
+                  colorScheme: 'vibrant',
+                },
+              ) +
+              '\n\nImage Generation Checklist:\n' +
+              precomputedImageChecklist
+                .map((item, idx) => `${idx + 1}. ${item.title}\n   ${item.description}`)
+                .join('\n'),
+            metadata: {
+              aspectRatio: '16:9',
+              style: 'professional',
+              colorScheme: 'vibrant',
+              generatedAt: new Date().toISOString(),
+            },
+          },
+          null,
+          2,
+        ),
+        mimeType: 'application/json',
+        status: 'completed',
+        timestamp,
+        rowData: enrichedRow,
+      };
+
+      fileManager.addFile(featuredImageChecklistFile);
+      generatedFiles.push(featuredImageChecklistFile);
+      options.onProgress?.(rowIndex, 0, 'Featured image checklist JSON generated');
+    };
+
     if (row.featuredImage === 'n') {
       if (options.peerFeaturedReport) {
         recordPeerFeaturedImageOutcome(options.peerFeaturedReport, {
@@ -1294,277 +1523,156 @@ try {
           rowLabel: peerRowLabel,
         });
       }
-    } else if ((useAiImagePath || useGoogleMaps) && options.peerSites?.length && peerTargetSite) {
-      try {
-        peerFeaturedImage = await findPeerFeaturedImageForRow({
-          peerSites: options.peerSites,
-          targetSite: peerTargetSite,
+    }
+
+    options.onProgress?.(
+      rowIndex,
+      0,
+      row.featuredImage !== 'n' && (useAiImagePath || useGoogleMaps)
+        ? 'Blog content + featured image (parallel)...'
+        : 'Generating blog content...',
+    );
+
+    const markdownPromise = runMarkdownPipeline();
+    const peerPromise = canPeerSearch
+      ? findPeerFeaturedImageForRow({
+          peerSites: options.peerSites!,
+          targetSite: peerTargetSite!,
           mode: useGoogleMaps ? 'entity' : 'blog',
           matchKey: peerMatchKey,
           apiKey: options.openRouterApiKey,
           model: options.selectedModel,
           onPeerCsvReady: options.onPeerFeaturedCsv,
           onProgress: (msg) => options.onProgress?.(rowIndex, 0, msg),
-        });
+        })
+      : Promise.resolve(null as PeerFeaturedImageForRow | null);
+
+    const imagePipelinePromise = (async (): Promise<void> => {
+      if (row.featuredImage === 'n') return;
+
+      let peer: PeerFeaturedImageForRow | null = null;
+      try {
+        peer = await peerPromise;
       } catch (error) {
-        // A committed peer hit whose download/prepare failed: hard error, no Maps/AI fallback.
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         options.onError?.(rowIndex, new Error(`Peer featured image failed: ${errorMessage}`));
         throw new Error(`Peer featured image failed: ${errorMessage}`);
       }
-      if (peerFeaturedImage) {
-        const imageFileId = BulkFileManager.createFileId(rowIndex, 'image', timestamp);
-        const imageFile: BulkGeneratedFile = {
-          id: imageFileId,
-          rowIndex,
-          fileName: peerFeaturedImage.fileName,
-          content: peerFeaturedImage.dataUrl,
-          mimeType: peerFeaturedImage.mimeType,
-          status: 'completed',
-          timestamp,
-          rowData: row,
-        };
-        fileManager.addFile(imageFile);
-        generatedFiles.push(imageFile);
-        options.onProgress?.(
-          rowIndex,
-          0,
-          `Featured image reused from ${peerFeaturedImage.sourceSiteName} (${peerFeaturedImage.sourcePageUrl})`,
-        );
-        if (options.peerFeaturedReport) {
-          recordPeerFeaturedImageOutcome(options.peerFeaturedReport, {
-            action: 'found',
-            rowIndex,
-            rowLabel: peerRowLabel,
-            matchKey: peerMatchKey,
-            mode: useGoogleMaps ? 'entity' : 'blog',
-            sourceSiteName: peerFeaturedImage.sourceSiteName,
-            sourcePageUrl: peerFeaturedImage.sourcePageUrl,
-            sourceImageUrl: peerFeaturedImage.sourceImageUrl,
-            matchedKeyword: peerFeaturedImage.matchedKeyword,
-            score: peerFeaturedImage.score,
-          });
-        }
-      }
-    }
-    if (row.featuredImage !== 'n' && !peerFeaturedImage && options.peerFeaturedReport) {
-      recordPeerFeaturedImageOutcome(options.peerFeaturedReport, {
-        action: 'generated',
-        rowIndex,
-        rowLabel: peerRowLabel,
-        matchKey: peerMatchKey,
-        mode: useGoogleMaps ? 'entity' : 'blog',
-        generator: useGoogleMaps ? 'google-maps' : 'ai',
-      });
-    }
 
-    if (useAiImagePath && !peerFeaturedImage) {
-      options.onProgress?.(rowIndex, 0, 'Blog content first, then featured image + FAQ (parallel)...');
-      try {
-        markdownContent = await runMarkdownPipeline();
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error('Error generating markdown content:', error);
-        options.onError?.(rowIndex, new Error(`Markdown generation failed: ${errorMessage}`));
-        throw new Error(`Failed to generate markdown content: ${errorMessage}`);
+      if (peer) {
+        peerFeaturedImage = peer;
+        recordPeerFeaturedImageFile(peer);
+        return;
       }
 
-      const imagePromise = generateFeaturedImage(
-        flowTitleForBlueprint,
-        flowPurposeResolved,
-        outlineTextForImage,
-        precomputedImageChecklist,
-        {
-          apiKey: options.openRouterApiKey,
-          model: options.selectedModel || getResearchModel(),
-        }
-      ).catch((error: unknown) => {
-        console.error('Error generating featured image:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        options.onError?.(rowIndex, new Error(`Image generation failed: ${errorMessage}`));
-        return null;
-      });
+      if (options.peerFeaturedReport) {
+        recordPeerFeaturedImageOutcome(options.peerFeaturedReport, {
+          action: 'generated',
+          rowIndex,
+          rowLabel: peerRowLabel,
+          matchKey: peerMatchKey,
+          mode: useGoogleMaps ? 'entity' : 'blog',
+          generator: useGoogleMaps ? 'google-maps' : 'ai',
+        });
+      }
 
-      try {
-        const [imageResult, faqBundle] = await Promise.all([imagePromise, scheduleFaqBundlePromise()]);
-        precomputedAcfSeoBundle = faqBundle;
-
+      if (useAiImagePath) {
+        const imageResult = await generateFeaturedImage(
+          flowTitleForBlueprint,
+          flowPurposeResolved,
+          outlineTextForImage,
+          precomputedImageChecklist,
+          {
+            apiKey: options.openRouterApiKey,
+            model: options.selectedModel || getResearchModel(),
+          },
+        ).catch((error: unknown) => {
+          console.error('Error generating featured image:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          options.onError?.(rowIndex, new Error(`Image generation failed: ${errorMessage}`));
+          return null;
+        });
         if (imageResult) {
           try {
-            let imageBase64 = imageResult.imageBase64;
-            let mimeType = 'image/png';
-            if (imageBase64.includes(',')) {
-              imageBase64 = imageBase64.split(',')[1];
-            }
-
-            const imageFileName = await generateSEOImageFilename(
-              flowTitleForBlueprint,
-              options.openRouterApiKey,
-              options.selectedModel || getResearchModel(),
-              'featured'
-            );
-
-            const fileNameWithoutExt = imageFileName.replace(/\.(png|jpg|jpeg)$/i, '');
-            const extension = mimeType === 'image/jpeg' ? 'jpg' : 'png';
-            const finalImageFileName = `${fileNameWithoutExt}.${extension}`;
-
-            const imageFileId = BulkFileManager.createFileId(rowIndex, 'image', timestamp);
-            const imageFile: BulkGeneratedFile = {
-              id: imageFileId,
-              rowIndex,
-              fileName: finalImageFileName,
-              content: `data:${mimeType};base64,${imageBase64}`,
-              mimeType,
-              status: 'completed',
-              timestamp,
-              rowData: row,
-            };
-
-            fileManager.addFile(imageFile);
-            generatedFiles.push(imageFile);
-
-            const featuredImageChecklistFileName = BulkFileManager.generateFileName(
-              enrichedRow,
-              'featured-image-checklist',
-              timestamp
-            );
-            const featuredImageChecklistFileId = BulkFileManager.createFileId(
-              rowIndex,
-              'featured-image-checklist',
-              timestamp
-            );
-
-            const featuredImageChecklistFile: BulkGeneratedFile = {
-              id: featuredImageChecklistFileId,
-              rowIndex,
-              fileName: featuredImageChecklistFileName,
-              content: JSON.stringify(
-                {
-                  title: flowTitleForBlueprint,
-                  purpose: flowPurposeResolved,
-                  keyword: keywordData.keyword,
-                  entity: enrichedRow.entity,
-                  imageChecklist: precomputedImageChecklist.map((item) => ({
-                    title: item.title,
-                    description: item.description,
-                  })),
-                  imagePrompt:
-                    buildImagePrompt(
-                      {
-                        flowTitle: flowTitleForBlueprint,
-                        flowPurpose: flowPurposeResolved,
-                        finalOutput: outlineTextForImage,
-                      },
-                      {
-                        includeText: false,
-                        includePeople: false,
-                        includeAnimals: false,
-                        includeCars: false,
-                        isInfographic: false,
-                        aspectRatio: '16:9',
-                        style: 'professional',
-                        colorScheme: 'vibrant',
-                      }
-                    ) +
-                    '\n\nImage Generation Checklist:\n' +
-                    precomputedImageChecklist
-                      .map((item, idx) => `${idx + 1}. ${item.title}\n   ${item.description}`)
-                      .join('\n'),
-                  metadata: {
-                    aspectRatio: '16:9',
-                    style: 'professional',
-                    colorScheme: 'vibrant',
-                    generatedAt: new Date().toISOString(),
-                  },
-                },
-                null,
-                2
-              ),
-              mimeType: 'application/json',
-              status: 'completed',
-              timestamp,
-              rowData: enrichedRow,
-            };
-
-            fileManager.addFile(featuredImageChecklistFile);
-            generatedFiles.push(featuredImageChecklistFile);
-            options.onProgress?.(rowIndex, 0, 'Featured image checklist JSON generated');
+            await persistAiFeaturedImageResult(imageResult);
           } catch (error) {
             console.error('Error persisting featured image files:', error);
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             options.onError?.(rowIndex, new Error(`Featured image file write failed: ${errorMessage}`));
           }
         }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      }
+    })();
+
+    try {
+      const [md] = await Promise.all([markdownPromise, imagePipelinePromise]);
+      markdownContent = md;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error generating markdown content:', error);
+      options.onError?.(rowIndex, new Error(`Markdown generation failed: ${errorMessage}`));
+      throw new Error(`Failed to generate markdown content: ${errorMessage}`);
+    }
+
+    if (
+      row.featuredImage !== 'n' &&
+      markdownContent &&
+      useGoogleMaps &&
+      entityForImage &&
+      !peerFeaturedImage
+    ) {
+      const mapsImagePromise = (async () => {
+        const entityKey = entityAdGroupKey(entityForImage);
+        const sharedPageCount = options.sapMapsEntityRowCounts?.get(entityKey);
+        const alreadyCached = peekGoogleMapsImageCache(entityForImage) != null;
+        options.onProgress?.(
+          rowIndex,
+          0,
+          sapMapsReuseProgressLabel(entityForImage, sharedPageCount, alreadyCached),
+        );
+
+        const mapsPayload = await fetchGoogleMapsImageForEntity(entityForImage);
+        if (!mapsPayload?.imageBase64) {
+          throw new Error('No image data returned from Google Maps API');
+        }
+
+        const imageBase64 = mapsPayload.imageBase64;
+        const mimeType = mapsPayload.mimeType || 'image/jpeg';
+        const extension = mimeType === 'image/jpeg' ? 'jpg' : 'png';
+        const finalImageFileName = sapMapsImageFileName(entityForImage, extension);
+
+        const imageFileId = BulkFileManager.createFileId(rowIndex, 'image', timestamp);
+        const imageFile: BulkGeneratedFile = {
+          id: imageFileId,
+          rowIndex,
+          fileName: finalImageFileName,
+          content: `data:${mimeType};base64,${imageBase64}`,
+          mimeType,
+          status: 'completed',
+          timestamp,
+          rowData: row,
+        };
+
+        fileManager.addFile(imageFile);
+        generatedFiles.push(imageFile);
+        options.onProgress?.(
+          rowIndex,
+          0,
+          alreadyCached
+            ? `Featured image ready (Google Maps reused; ${sharedPageCount ?? 1} SAP pages share this location)`
+            : 'Featured image generated (Google Maps - no checklist needed)',
+        );
+      })().catch((error: unknown) => {
         console.error('Error generating featured image:', error);
-        options.onError?.(rowIndex, new Error(`Featured image pipeline failed: ${errorMessage}`));
-      }
-    } else {
-      try {
-        markdownContent = await runMarkdownPipeline();
-      } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error('Error generating markdown content:', error);
-        options.onError?.(rowIndex, new Error(`Markdown generation failed: ${errorMessage}`));
-        throw new Error(`Failed to generate markdown content: ${errorMessage}`);
-      }
+        options.onError?.(rowIndex, new Error(`Google Maps featured image failed: ${errorMessage}`));
+        throw error instanceof Error ? error : new Error(errorMessage);
+      });
 
-      if (row.featuredImage !== 'n' && markdownContent && useGoogleMaps && entityForImage && !peerFeaturedImage) {
-        const mapsImagePromise = (async () => {
-          try {
-            const entityKey = entityAdGroupKey(entityForImage);
-            const sharedPageCount = options.sapMapsEntityRowCounts?.get(entityKey);
-            const alreadyCached = peekGoogleMapsImageCache(entityForImage) != null;
-            options.onProgress?.(
-              rowIndex,
-              0,
-              sapMapsReuseProgressLabel(entityForImage, sharedPageCount, alreadyCached),
-            );
-
-            const mapsPayload = await fetchGoogleMapsImageForEntity(entityForImage);
-            if (!mapsPayload?.imageBase64) {
-              throw new Error('No image data returned from Google Maps API');
-            }
-
-            const imageBase64 = mapsPayload.imageBase64;
-            const mimeType = mapsPayload.mimeType || 'image/jpeg';
-            const extension = mimeType === 'image/jpeg' ? 'jpg' : 'png';
-            const finalImageFileName = sapMapsImageFileName(entityForImage, extension);
-
-            const imageFileId = BulkFileManager.createFileId(rowIndex, 'image', timestamp);
-            const imageFile: BulkGeneratedFile = {
-              id: imageFileId,
-              rowIndex,
-              fileName: finalImageFileName,
-              content: `data:${mimeType};base64,${imageBase64}`,
-              mimeType,
-              status: 'completed',
-              timestamp,
-              rowData: row,
-            };
-
-            fileManager.addFile(imageFile);
-            generatedFiles.push(imageFile);
-            options.onProgress?.(
-              rowIndex,
-              0,
-              alreadyCached
-                ? `Featured image ready (Google Maps reused; ${sharedPageCount ?? 1} SAP pages share this location)`
-                : 'Featured image generated (Google Maps - no checklist needed)',
-            );
-          } catch (error) {
-            console.error('Error generating featured image:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            options.onError?.(rowIndex, new Error(`Image generation failed: ${errorMessage}`));
-          }
-        })();
-
-        const [, faqBundle] = await Promise.all([mapsImagePromise, scheduleFaqBundlePromise()]);
-        precomputedAcfSeoBundle = faqBundle;
-      } else {
-        precomputedAcfSeoBundle = await scheduleFaqBundlePromise();
-      }
+      const [, faqBundle] = await Promise.all([mapsImagePromise, scheduleFaqBundlePromise()]);
+      precomputedAcfSeoBundle = faqBundle;
+    } else {
+      precomputedAcfSeoBundle = await scheduleFaqBundlePromise();
     }
 
     // WordPress upload (if enabled)
@@ -1646,33 +1754,17 @@ try {
         options.wordPressPosting.hybridAnchorUtc
       );
 
-      // Convert markdown to HTML (shared across all sites)
-      let htmlContent = await markdownToHtml(markdownContent);
-      // Ensure links from connected site (like bulk optimizer) - add internal links every ~200 words
-      if (wordPressPosts && wordPressPosts.length > 0 && sitesToPost.length > 0) {
-        const firstSite = sitesToPost[0].site;
-        try {
-          options.onProgress?.(rowIndex, 0, 'Adding internal links from connected site...');
-          htmlContent = await ensureLinksEvery200WordsForHtml({
-            htmlContent,
-            wordPressPosts,
-            currentPageUrl: undefined, // New post, no self-link
-            siteUrl: firstSite.siteUrl,
-            apiKey: options.openRouterApiKey || loadApiKey(),
-            siteId: firstSite.id,
-            setProgress: (opts) => options.onProgress?.(rowIndex, 0, opts.message || 'Adding links...'),
-          });
-        } catch (err) {
-          console.warn('[Bulk Upload] Ensure links failed, continuing with existing:', err);
-        }
-      }
-      // Safety net: convert ALL remaining markdown to HTML before upload - no exceptions
-      htmlContent = convertAllMarkdownToHtml(htmlContent);
-      // Final pass: force any remaining [text](url) to HTML (entity/Wikipedia links must never slip through)
-      htmlContent = forceConvertMarkdownLinks(htmlContent);
-      if (semrushExternalUrlsForSanitize.length) {
-        htmlContent = ensureSemrushExternalLinksInHtml(htmlContent, semrushExternalUrlsForSanitize);
-      }
+      const firstSite = sitesToPost[0]?.site;
+      options.onProgress?.(rowIndex, 0, 'Preparing harness content for upload...');
+      let htmlContent = await prepareHarnessContentForUpload({
+        markdownContent,
+        blueprintAgents: blueprintResult.agents,
+        wordPressPosts,
+        siteId: firstSite?.id,
+        siteUrl: firstSite?.siteUrl,
+        currentPageUrl: undefined,
+        externalUrlPairs: rowExplicitExternalPairs,
+      });
       const rankMeta = resolveRankMathFromKeywordResearch(keywordData);
       // Prefer CSV meta when filled; then generator meta; then research / body
       const csvMeta = enrichedRow.meta_description?.trim() || "";
@@ -1687,6 +1779,11 @@ try {
       // Upload featured image once per location entity (Maps) or once per row (AI) — skipped for post bank
       let featuredImageId: number | undefined;
       const imageFile = generatedFiles.find(f => f.fileName.endsWith('.png') || f.fileName.endsWith('.jpg') || f.fileName.endsWith('.jpeg'));
+      if (useGoogleMaps && entityForImage && effectiveDestination !== 'bank' && !imageFile) {
+        throw new Error(
+          `Google Maps featured image missing for entity "${entityForImage}". Check OpenRouter API key in Settings and retry this row.`
+        );
+      }
       if (effectiveDestination !== 'bank' && imageFile && imageFile.content) {
         try {
           const mapsEntity =
@@ -1896,7 +1993,7 @@ try {
             site.siteUrl,
             wordPressPosts,
             isEntityUpload && entityWikiForSanitize ? entityWikiForSanitize.url : undefined,
-            semrushExternalUrlsForSanitize,
+            rowExternalUrlsForSanitize,
             isEntityUpload && entityWikiForSanitize ? entityWikiForSanitize.label : undefined,
           );
 
@@ -1909,7 +2006,7 @@ try {
             undefined,
             preValidatedUrls ?? undefined
           );
-          let contentForUpload = validatedHtml;
+          let contentForUpload = stripTrailingFaqSection(validatedHtml);
 
           // Content Opt parity: stitch backend FAQ Q/A into flo-faq table before first publish.
           {
@@ -1923,20 +2020,16 @@ try {
               contentForUpload.trim() &&
               !contentForUpload.toLowerCase().includes(`class="${FLO_FAQ_CLASS}"`)
             ) {
-              try {
-                options.onProgress?.(rowIndex, 0, 'Appending FAQ table to post body...');
-                const appended = await appendVisibleFaqTableWithIntro({
-                  sourceHtml: contentForUpload,
-                  entries: earlyEntries,
-                  apiKey: openRouterApiKeyEarly,
-                  focusKeyword: bulkPrimaryKw || keywordData.keyword,
-                  pageTitle: postTitle,
-                });
-                if (appended?.html) {
-                  contentForUpload = appended.html;
-                }
-              } catch (faqBodyErr) {
-                console.warn('[Bulk Upload] Pre-create FAQ table append failed:', faqBodyErr);
+              options.onProgress?.(rowIndex, 0, 'Appending FAQ table to post body...');
+              const appended = await appendVisibleFaqTableWithIntro({
+                sourceHtml: contentForUpload,
+                entries: earlyEntries,
+                apiKey: openRouterApiKeyEarly,
+                focusKeyword: bulkPrimaryKw || keywordData.keyword,
+                pageTitle: postTitle,
+              });
+              if (appended?.html) {
+                contentForUpload = appended.html;
               }
             }
           }
@@ -2042,24 +2135,6 @@ try {
               postLink,
               site.siteUrl
             );
-
-            try {
-              await updateWordPressPostMeta(
-                site.siteUrl,
-                site.username,
-                site.appPassword,
-                postResult.postId,
-                postTypeForAcf,
-                entityEndpoint,
-                {
-                  rank_math_title: optimizedMetaBootstrap.rank_math_title,
-                  rank_math_description: optimizedMetaBootstrap.rank_math_description,
-                  rank_math_focus_keyword: optimizedMetaBootstrap.rank_math_focus_keyword,
-                }
-              );
-            } catch (rmErr) {
-              console.warn('[Bulk Upload] Rank Math post meta sync failed (non-fatal):', rmErr);
-            }
 
             /** Hoisted so research JSON + bulk ACF SEO apply share the same merged string. */
             let seoResearchJson = '';
@@ -2233,36 +2308,32 @@ try {
                 openRouterApiKey?.trim() &&
                 contentForUpload.trim()
               ) {
-                try {
-                  options.onProgress?.(rowIndex, 0, 'Appending FAQ table to post body...');
-                  const appended = await appendVisibleFaqTableWithIntro({
-                    sourceHtml: contentForUpload,
-                    entries: visibleFaqEntries,
-                    apiKey: openRouterApiKey,
-                    focusKeyword: bulkPrimaryKw || keywordData.keyword,
-                    pageTitle: postTitle,
-                  });
-                  if (appended?.html) {
-                    contentForUpload = appended.html;
-                    await updateWordPressPost(
-                      site.siteUrl,
-                      site.username,
-                      site.appPassword,
-                      postResult.postId,
-                      postTitle,
-                      contentForUpload,
-                      excerpt,
-                      undefined,
-                      postTypeForAcf,
-                      siteFeaturedImageId,
-                      undefined,
-                      undefined,
-                      slug,
-                      entityEndpoint
-                    );
-                  }
-                } catch (faqBodyErr) {
-                  console.warn('[Bulk Upload] Visible FAQ table append failed:', faqBodyErr);
+                options.onProgress?.(rowIndex, 0, 'Appending FAQ table to post body...');
+                const appended = await appendVisibleFaqTableWithIntro({
+                  sourceHtml: contentForUpload,
+                  entries: visibleFaqEntries,
+                  apiKey: openRouterApiKey,
+                  focusKeyword: bulkPrimaryKw || keywordData.keyword,
+                  pageTitle: postTitle,
+                });
+                if (appended?.html) {
+                  contentForUpload = appended.html;
+                  await updateWordPressPost(
+                    site.siteUrl,
+                    site.username,
+                    site.appPassword,
+                    postResult.postId,
+                    postTitle,
+                    contentForUpload,
+                    excerpt,
+                    undefined,
+                    postTypeForAcf,
+                    siteFeaturedImageId,
+                    undefined,
+                    undefined,
+                    slug,
+                    entityEndpoint
+                  );
                 }
               }
 
@@ -2284,228 +2355,94 @@ try {
                 acfMetaFields[fieldNames.origin] = entity;
               }
 
-              const runAcfPhase = async (
-                phaseLabel: string,
-                fields: Record<string, string>
-              ): Promise<void> => {
-                const keys = Object.keys(fields);
-                if (keys.length === 0) return;
-                options.onProgress?.(
-                  rowIndex,
-                  0,
-                  `ACF ${phaseLabel} for post ${postResult.postId}: ${keys.join(', ')}`
-                );
-                const acfUpdateResult = await updateACFFields(
-                  site.siteUrl,
-                  site.username,
-                  site.appPassword,
-                  postResult.postId,
-                  fields,
-                  postTypeForAcf,
-                  entityEndpoint
-                );
-                if (acfUpdateResult.success) {
-                  acfUpdatedList = [...(acfUpdatedList ?? []), ...acfUpdateResult.updated];
-                  console.log(
-                    `[Bulk Upload] ACF ${phaseLabel} OK [${acfUpdateResult.updated.join(', ')}] post ${postResult.postId}`
-                  );
-                  options.onProgress?.(rowIndex, 0, `ACF ${phaseLabel} saved: ${acfUpdateResult.updated.join(', ')}`);
-                } else {
-                  const errMsg =
-                    acfUpdateResult.error ||
-                    (acfUpdateResult.failed?.length
-                      ? acfUpdateResult.failed.map((f) => `${f.field}: ${f.error}`).join('; ')
-                      : 'Unknown error');
-                  console.warn(`[Bulk Upload] ACF ${phaseLabel} failed for post ${postResult.postId}:`, acfUpdateResult);
-                  options.onProgress?.(rowIndex, 0, `ACF ${phaseLabel} failed: ${errMsg}`);
-                }
-              };
+              const optimizedMetaForSync =
+                parseOptimizedMetaFromSeoResearchJson(seoResearchJson) ?? optimizedMetaBootstrap;
 
-              options.onProgress?.(rowIndex, 0, `Staged ACF updates for post ${postResult.postId}...`);
+              const acfWritePayload: Record<string, string> = { ...acfMetaFields };
               if (bulkPrimaryKw) {
-                await runAcfPhase('keyword', { [fieldNames.keywordFocus]: bulkPrimaryKw });
+                acfWritePayload[fieldNames.keywordFocus] = bulkPrimaryKw;
               }
-              await runAcfPhase('research', { [fieldNames.seoResearch]: seoResearchJson });
+              if (seoResearchJson) {
+                acfWritePayload[fieldNames.seoResearch] = seoResearchJson;
+              }
               if (faqForAcf) {
-                await runAcfPhase('faq', { [fieldNames.faq]: faqForAcf });
+                acfWritePayload[fieldNames.faq] = faqForAcf;
               }
-              await runAcfPhase('dates_origin', acfMetaFields);
+              const mappedMetaFields = buildAcfPayload(
+                fieldMapping,
+                optimizedMetaForSync,
+                bulkPrimaryKw,
+                existingAcfFields as Record<string, unknown>,
+                seoResearchJson,
+                { includeSeoResearchInPayload: false },
+              );
+              for (const [key, value] of Object.entries(mappedMetaFields)) {
+                if (value?.trim() && acfWritePayload[key] === undefined) {
+                  acfWritePayload[key] = value;
+                }
+              }
 
               let seoResearchJsonForDownload = seoResearchJson;
 
-              if (postLink && seoResearchJson) {
-                let aiMetaSucceeded = false;
-                try {
-                  options.onProgress?.(
-                    rowIndex,
-                    0,
-                    `Optimizing meta for post ${postResult.postId}...`
-                  );
-                  const optimizedMetaFinal = await generateOptimizedMetaFields(
-                    markdownContent,
-                    postTitle,
-                    excerpt,
-                    bulkPrimaryKw,
-                    {},
-                    site.siteUrl,
-                    postLink,
-                    false,
-                    site.id,
-                    undefined,
-                    seoResearchJson
-                  );
-                  await updateWordPressPostMeta(
-                    site.siteUrl,
-                    site.username,
-                    site.appPassword,
-                    postResult.postId,
-                    postTypeForAcf,
-                    entityEndpoint,
-                    {
-                      rank_math_title: optimizedMetaFinal.rank_math_title,
-                      rank_math_description: optimizedMetaFinal.rank_math_description,
-                      rank_math_focus_keyword: optimizedMetaFinal.rank_math_focus_keyword,
-                    }
-                  );
-                  const acfAiFields = buildAcfPayload(
-                    fieldMapping,
-                    optimizedMetaFinal,
-                    bulkPrimaryKw,
-                    { ...existingAcfFields, [fieldNames.seoResearch]: seoResearchJson },
-                    seoResearchJson,
-                    { includeSeoResearchInPayload: true }
-                  );
-                  if (Object.keys(acfAiFields).length > 0) {
-                    await runAcfPhase('ai_meta', acfAiFields);
-                  }
-                  const mergedResearch = acfAiFields[fieldNames.seoResearch];
-                  if (typeof mergedResearch === 'string' && mergedResearch.trim()) {
-                    seoResearchJsonForDownload = mergedResearch;
-                  } else {
-                    seoResearchJsonForDownload = mergeSeoResearchWithMeta(
-                      seoResearchJson,
-                      optimizedMetaFinal,
-                      bulkPrimaryKw
-                    );
-                  }
-                  aiMetaSucceeded = true;
+              options.onProgress?.(
+                rowIndex,
+                0,
+                `SEO meta + ACF (single batch) for post ${postResult.postId}...`,
+              );
 
-                  const plainExcerpt = String(optimizedMetaFinal.rank_math_description || '')
-                    .replace(/<[^>]+>/g, ' ')
-                    .replace(/\s+/g, ' ')
-                    .trim()
-                    .slice(0, 500);
-                  if (plainExcerpt) {
-                    try {
-                      await updateWordPressPost(
-                        site.siteUrl,
-                        site.username,
-                        site.appPassword,
-                        postResult.postId,
-                        postTitle,
-                        contentForUpload,
-                        plainExcerpt,
-                        undefined,
-                        postTypeForAcf,
-                        siteFeaturedImageId,
-                        undefined,
-                        undefined,
-                        slug,
-                        entityEndpoint
-                      );
-                    } catch (exErr) {
-                      console.warn('[Bulk Upload] Excerpt sync after AI meta failed (non-fatal):', exErr);
-                    }
-                  }
+              const rankMathPromise = updateWordPressPostMeta(
+                site.siteUrl,
+                site.username,
+                site.appPassword,
+                postResult.postId,
+                postTypeForAcf,
+                entityEndpoint,
+                {
+                  rank_math_title: optimizedMetaForSync.rank_math_title,
+                  rank_math_description: optimizedMetaForSync.rank_math_description,
+                  rank_math_focus_keyword: optimizedMetaForSync.rank_math_focus_keyword,
+                },
+              ).catch((rmErr) => {
+                console.warn('[Bulk Upload] SEO post meta sync failed (non-fatal):', rmErr);
+              });
 
-                  const metaFm = new OptimizationFileManager();
-                  const name = OptimizationFileManager.generateFilename(
-                    'acf-seo-optimization',
-                    bulkPrimaryKw || keywordData.keyword || 'post',
-                    'json'
-                  );
-                  metaFm.addFile(
-                    name,
-                    JSON.stringify(
-                      {
-                        postId: postResult.postId,
-                        postLink,
-                        primaryKeyword: bulkPrimaryKw || keywordData.keyword || '',
-                        acfFieldsWritten: acfAiFields,
-                        optimizedMeta: optimizedMetaFinal,
-                        source: 'bulk_prompt_generator_ai_meta',
-                        updatedAt: new Date().toISOString(),
-                      },
-                      null,
-                      2
-                    ),
-                    'application/json'
-                  );
-                  for (const f of metaFm.getFiles()) {
-                    const mergeId = BulkFileManager.createFileId(rowIndex, `acf-seo-${siteIndex}`, timestamp);
-                    const mergedFile: BulkGeneratedFile = {
-                      id: mergeId,
-                      rowIndex,
-                      fileName: f.name,
-                      content: f.content,
-                      mimeType: f.mimeType || 'application/json',
-                      status: 'completed',
-                      timestamp,
-                      rowData: row,
-                    };
-                    fileManager.addFile(mergedFile);
-                    generatedFiles.push(mergedFile);
-                  }
-                } catch (aiMetaErr) {
-                  console.warn('[Bulk Upload] AI meta optimization failed, using research JSON meta:', aiMetaErr);
-                }
-
-                if (!aiMetaSucceeded) {
-                  try {
-                    options.onProgress?.(
-                      rowIndex,
-                      0,
-                      `SEO → ACF (research JSON fallback) for post ${postResult.postId}...`
-                    );
-                    const metaFm = new OptimizationFileManager();
-                    const bulkMetaRes = await applyBulkSeoMetaToAcf({
-                      postId: postResult.postId,
-                      site,
-                      postLink,
-                      primaryKeyword: bulkPrimaryKw || keywordData.keyword || '',
-                      optimizedMeta: optimizedMetaBootstrap,
-                      fieldMapping,
-                      existingAcfFields,
-                      postTypeSubtype: postTypeForAcf,
-                      postTypeEndpoint: entityEndpoint,
-                      priorSeoResearchJson: seoResearchJson,
-                      fileManager: metaFm,
-                      setProgress: (p) => {
-                        options.onProgress?.(rowIndex, 0, p.message || p.step || 'SEO ACF');
-                      },
-                    });
-                    if (bulkMetaRes.success) {
-                      for (const f of metaFm.getFiles()) {
-                        const mergeId = BulkFileManager.createFileId(rowIndex, `acf-seo-${siteIndex}`, timestamp);
-                        const mergedFile: BulkGeneratedFile = {
-                          id: mergeId,
+              const acfPromise =
+                Object.keys(acfWritePayload).length > 0
+                  ? updateACFFields(
+                      site.siteUrl,
+                      site.username,
+                      site.appPassword,
+                      postResult.postId,
+                      acfWritePayload,
+                      postTypeForAcf,
+                      entityEndpoint,
+                    ).then((acfUpdateResult) => {
+                      if (acfUpdateResult.success) {
+                        acfUpdatedList = acfUpdateResult.updated;
+                        console.log(
+                          `[Bulk Upload] ACF batch OK [${acfUpdateResult.updated.join(', ')}] post ${postResult.postId}`,
+                        );
+                        options.onProgress?.(
                           rowIndex,
-                          fileName: f.name,
-                          content: f.content,
-                          mimeType: f.mimeType || 'application/json',
-                          status: 'completed',
-                          timestamp,
-                          rowData: row,
-                        };
-                        fileManager.addFile(mergedFile);
-                        generatedFiles.push(mergedFile);
+                          0,
+                          `ACF saved: ${acfUpdateResult.updated.join(', ')}`,
+                        );
+                      } else {
+                        const errMsg =
+                          acfUpdateResult.error ||
+                          (acfUpdateResult.failed?.length
+                            ? acfUpdateResult.failed.map((f) => `${f.field}: ${f.error}`).join('; ')
+                            : 'Unknown error');
+                        console.warn(
+                          `[Bulk Upload] ACF batch failed for post ${postResult.postId}:`,
+                          acfUpdateResult,
+                        );
+                        options.onProgress?.(rowIndex, 0, `ACF batch failed: ${errMsg}`);
                       }
-                    }
-                  } catch (seoAcfErr) {
-                    console.warn('[Bulk Upload] applyBulkSeoMetaToAcf failed:', seoAcfErr);
-                  }
-                }
-              }
+                    })
+                  : Promise.resolve();
+
+              await Promise.all([rankMathPromise, acfPromise]);
 
               if (siteIndex === 0) {
                 const researchSlug = (enrichedRow.title || blueprintResult.title || 'post')

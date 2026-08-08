@@ -1,5 +1,6 @@
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import type { WordPressSite } from "@/components/integrations/types";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 function parseJsonObject(raw: string): Record<string, unknown> | null {
   let text = raw.trim();
@@ -39,10 +40,7 @@ export async function resolveGbpTopicKeyword(
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
       model: getResearchModel(site.id),
       messages: [

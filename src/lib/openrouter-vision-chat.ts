@@ -1,3 +1,4 @@
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 /**
  * One-shot OpenRouter multimodal chat (vision) with JSON-shaped replies.
  */
@@ -23,12 +24,7 @@ export async function openRouterVisionChatCompletion(params: {
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://flowbie.app",
-      "X-Title": "Flowbie Local Image",
-    },
+    headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
       model: params.model,
       messages: params.messages,

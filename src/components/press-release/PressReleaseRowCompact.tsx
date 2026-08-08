@@ -123,7 +123,7 @@ export function PressReleaseRowCompact(props: PressReleaseRowCompactProps) {
       </div>
 
       {detailsOpen && canOpenDetails ? (
-        <div id={detailsPanelId} className={cn(DETAILS_DRAWER_PANEL, DETAILS_DRAWER_SHELL)}>
+        <div id={detailsPanelId} className={cn(DETAILS_DRAWER_SHELL, DETAILS_DRAWER_PANEL)}>
           <PressReleaseDetailsPanel {...detailsProps} />
         </div>
       ) : null}

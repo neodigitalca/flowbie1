@@ -16,6 +16,7 @@ import { formatStrategyMarkdownAsBullets } from "@/lib/strategy-markdown-bullets
 import { extractJsonObjectFromModelText } from "@/lib/gsc-manual-ai-aggregate";
 import { fetchWikipediaClustersForSapEntityHints } from "@/lib/wikipedia-api";
 import { dedupeRepeatedCommaPlaceSegments } from "@/lib/comma-place-label";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 import {
   appendMasterInstructionsToSystemPrompt,
   buildSapMasterRulesKeywordMixRecap,
@@ -1148,12 +1149,7 @@ ${gridSummaryMarkdown}`
     const t = opts?.temperature ?? temperature;
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Flowbie Local Analysis",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: SAP_GENERATION_MODEL,
         messages,

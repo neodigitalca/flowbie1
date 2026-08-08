@@ -3,12 +3,24 @@ import {
   buildHarnessArticleBudgetBlock,
   buildHarnessArticleCapLine,
 } from "@/lib/content-generation/article-length-policy";
+import { INTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK } from "../content-generation/internal-link-placeholders";
 import { appendMasterInstructionsToSystemPrompt, ensureMasterInstructionsInMemory } from "../master-instructions-storage";
 import { searchSiteCache, getSiteCache } from "../wordpress-site-cache";
 import { getLocalEntityPhraseExamples, getLocalGeneralPhrase } from "../local-entity-phrases";
 import type { AIDrivenACFContext } from "../content-generation/ai-driven-acf-reader";
 import { TABLE_FORMAT, CRITICAL_LINK_RULE, NO_FAKE_TESTIMONIALS_RULE } from "./core";
-import { buildOverviewLinkRulesBlock } from "./overview-link-rules";
+import {
+  buildOverviewLinkRulesBlock,
+} from "./overview-link-rules";
+import {
+  appendUniversalContentRulesToSystemPrompt,
+  buildBlacklistRagBlock,
+  FORBIDDEN_WORDS_USER_PROMPT_REMINDER,
+} from "../content-word-blocklist";
+import {
+  buildKeywordPunctuationPromptBlock,
+  resolveWritingKeyword,
+} from "./keyword-canonical-punctuation";
 
 // --- Shared rule blocks (DRY) ---
 
@@ -43,7 +55,7 @@ const LINK_RULES = (
       ? ` **Other managed clients (NEVER link)** - do not link to these domains or any URL on them (other sites in this workspace): ${uniquePortfolio.slice(0, 45).join(", ")}${uniquePortfolio.length > 45 ? " …" : ""}.`
       : "";
   return `
-Links: HTML ONLY. Format: <a href="exact-url">anchor text</a>. Internal - use only URLs from the linkable URLs list (${siteUrl}); 2–5 word anchors; FRONT-LOAD: place links at start or middle of sentences. ${externalRule} NEVER link to competitors or local businesses in the same industry.${portfolioRule} **Blacklist (never link)**: forums, chat/messaging apps, Reddit, Discord, Quora, Stack Overflow, Pinterest, or other thread/UGC platforms - unless that exact URL appears in the Semrush approved list (lists are pre-filtered). (3) Never "External Resources" sections. (4) NEVER use markdown [text](url) - always <a href="url">text</a>. (5) NEVER use "here" in or after a link - no "guide here", "learn more here", or "plan here". Embed each link in meaningful sentence content on BOTH sides so readers and LLMs get clear context (e.g. "Our guide to dental insurance explains deductibles" not "review our guide here").${currentPageUrl ? ` (6) INVALID - REJECT: Any link that matches the page being optimized (${currentPageUrl}). Same path = self-link = forbidden. Do not use it.` : ""}`;
+Links: HTML ONLY. Same-site internal links may use <a href="exact-url">anchor</a> from the linkable URLs list (${siteUrl}). Third-party/Semrush citations: NEVER write <a href="https://..."> — use [[EXTERNAL:exact-url|exact-anchor]] copied from the assigned blueprint Semrush pair. Internal placeholders: [[LINK:query|anchor]]. Overview scroll: [[SCROLL:#id|phrase]]. ${externalRule} NEVER link to competitors or local businesses in the same industry.${portfolioRule} **Blacklist (never link)**: forums, chat/messaging apps, Reddit, Discord, Quora, Stack Overflow, Pinterest, or other thread/UGC platforms - unless that exact URL appears in the Semrush approved list (lists are pre-filtered). (3) Never "External Resources" sections. (4) NEVER use markdown [text](url) for external URLs. (5) NEVER use "here" in or after a link. (7) FORBIDDEN: parenthetical footnotes (anchor phrase) or bare (https://...). (8) FORBIDDEN: any third-party URL in prose except inside [[EXTERNAL:url|anchor]].${currentPageUrl ? ` (6) INVALID - REJECT: Any link that matches the page being optimized (${currentPageUrl}). Same path = self-link = forbidden. Do not use it.` : ""}`;
 };
 
 function buildSemrushApprovedExternalBlock(
@@ -92,7 +104,7 @@ ${NO_FAKE_TESTIMONIALS_RULE}
 // Content Optimizer / Optimization flow: HTML output for WordPress upload
 const HTML_FORMAT_RULES = `
 *** OUTPUT: HTML ONLY. NEVER MARKDOWN. ***
-All content MUST be valid HTML. Paragraphs: <p>...</p>. Links: <a href="url">text</a>. Lists: <ul><li>...</li></ul> or <ol><li>...</li></ol>. Tables: <table><thead><tr><th>H1</th><th>H2</th></tr></thead><tbody><tr><td>...</td><td>...</td></tr></tbody></table>.
+All content MUST be valid HTML. Paragraphs: <p>...</p>. Links: <a href="url">text</a>. Images: <figure class="wp-block-image size-full"><img src="url" alt="description" loading="lazy" /></figure> — NEVER use <a href="image-url"> for wp-content/uploads images; display them inline with <img>. Lists: <ul><li>...</li></ul> or <ol><li>...</li></ol>. Tables: <table><thead><tr><th>H1</th><th>H2</th></tr></thead><tbody><tr><td>...</td><td>...</td></tr></tbody></table>.
 **PARAGRAPH LENGTH**: Keep each <p> **moderately short** - typically **2–4 sentences**. Do **not** create **long** single paragraphs (wall of text); split into additional <p> tags when needed. Do **not** over-split into **only** one-sentence paragraphs unless emphasis truly needs it. Avoid any one paragraph carrying a whole section’s worth of text (addresses tools that flag “paragraph is long”).
 Pros/Cons, advantages vs disadvantages, or strengths vs weaknesses MUST be rendered as a two-column HTML <table> with <th>Pros</th> and <th>Cons</th> headers - NEVER as <ul>/<ol> lists.
 CRITICAL: FAQ table = SAME HTML format as every other table. <table><thead><tr><th>Question</th><th>Answer</th></tr></thead><tbody>...</tbody></table>. NEVER | Question | Answer | or |-|-|.
@@ -122,10 +134,24 @@ const HTML_FORMAT_RULES_FULL_ARTICLE = `${HTML_FORMAT_RULES}${HTML_SEMANTIC_FOOT
 const HARNESS_HTML_NO_FOOTER_ELEMENT_RULES = `
 *** NO <footer> ELEMENT (HARNESS – NON-NEGOTIABLE) ***
 You are writing **one section** of a blog post, not a page shell. **Never** output <footer>, </footer>, or role="contentinfo".
-Allowed block/inline structure: <h2>, <h3>, <h4>, <p>, <a>, <ul>, <ol>, <li>, <table> only.
+Allowed block/inline structure: <h2>, <h3>, <h4>, <p>, <a>, <ul>, <ol>, <li>, <table>, <figure>, <img> only.
 Wrap-ups, conclusions, and CTAs belong in normal <p> (or lists/tables) under this section’s <h2>—never in <footer>.`;
 
-const HTML_FORMAT_RULES_HARNESS_SECTION = `${HTML_FORMAT_RULES}${HARNESS_HTML_NO_FOOTER_ELEMENT_RULES}`;
+const HARNESS_ANCHOR_TAG_FORMAT_RULE = `
+*** ANCHOR TAG FORMAT (HARNESS – NON-NEGOTIABLE) ***
+Every link MUST include visible anchor text inside <a>...</a> — never empty, never "here", never the raw URL.
+External links: [[EXTERNAL:exact-url|exact-anchor]] only (code emits <a href="url">anchor</a>).
+Scroll links: [[SCROLL:#id|phrase]] or <a href="#id">phrase</a> with a natural phrase.
+Format: <a href="url-or-#id">anchor text</a>
+FORBIDDEN on <a>: target=, rel=, class=, id=, style=, or any attribute besides href.
+Never output partial tags, orphaned attributes (e.g. target="_blank" rel="noopener">), or markdown [text](url).`;
+
+const HTML_FORMAT_RULES_HARNESS_SECTION = `${HTML_FORMAT_RULES}${HARNESS_HTML_NO_FOOTER_ELEMENT_RULES}${HARNESS_ANCHOR_TAG_FORMAT_RULE}`;
+
+const HARNESS_MODE_SYSTEM_BLOCK = `**HARNESS MODE (NON-NEGOTIABLE)**: You write exactly ONE section per request.
+- Output contains exactly ONE ## heading for this section (Overview: ## Overview plus mandatory key-points bullet list only).
+- Forbidden: any other top-level ## from the plan, whole-article intros, conclusions, Overview scroll-link bullets in body sections, or repeating sibling sections.
+- Full article cap: ${ARTICLE_MAX_WORDS} words total across all sections; write only this section's allocated budget.`;
 
 export type BuildSystemPromptGenerationMode = "full_article" | "harness_section";
 
@@ -139,11 +165,15 @@ function buildTargetSiteBlock(
   siteSummary?: string,
   semrushExternalUrls?: string[],
   portfolioBlockedHosts?: string[],
+  harnessSectionMode?: boolean,
 ): string {
+  const linkRules = harnessSectionMode
+    ? "Per-section link rules are in the user prompt for this harness step only — do not apply full-article link lists here."
+    : LINK_RULES(normalizedSiteUrl, currentPageUrl, semrushExternalUrls, portfolioBlockedHosts);
   return `
 === TARGET SITE ===
 Site: ${connectedSite.name} (${normalizedSiteUrl})${currentPageUrl ? ` | PAGE BEING OPTIMIZED: ${currentPageUrl} - Any link matching this URL is INVALID. Reject it. Never self-link.` : ""}${siteSummary ? ` | Site summary: ${siteSummary}` : ""}
-${LINK_RULES(normalizedSiteUrl, currentPageUrl, semrushExternalUrls, portfolioBlockedHosts)}
+${linkRules}
 === END TARGET SITE ===`;
 }
 
@@ -237,6 +267,8 @@ export async function buildSystemPrompt(
       : postsToUse;
 
   const harnessUsesMarkdown = contentKind === "press_release";
+  const isPressRelease = contentKind === "press_release";
+  const isHarnessSection = generationMode === "harness_section" && !isPressRelease;
   const semrushExternalBlock = buildSemrushApprovedExternalBlock(
     semrushExternalUrls,
     harnessUsesMarkdown ? "markdown" : "html",
@@ -251,20 +283,25 @@ export async function buildSystemPrompt(
         siteSummary,
         semrushExternalUrls,
         portfolioBlockedHosts,
+        isHarnessSection,
       )
     : "";
 
   const wordPressPostsContext =
     postsToUse.length > 0 && connectedSite
-      ? buildWordPressPostsBlock(
-          postsToUse,
-          availablePostsForLinking,
-          connectedSite.name,
-          normalizedCurrentPageUrl,
-          currentPageUrl,
-          primaryKeyword
-        )
-      : "";
+      ? generationMode === "harness_section"
+        ? INTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK
+        : buildWordPressPostsBlock(
+            postsToUse,
+            availablePostsForLinking,
+            connectedSite.name,
+            normalizedCurrentPageUrl,
+            currentPageUrl,
+            primaryKeyword,
+          )
+      : generationMode === "harness_section" && connectedSite
+        ? INTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK
+        : "";
 
   const hasEntity = entity?.trim() && entity.trim() !== "N/A";
   const entityContext = hasEntity ? buildEntityBlock(entity!.trim()) : buildRegularBlogBlock();
@@ -274,16 +311,27 @@ export async function buildSystemPrompt(
     : "";
 
   const pk = primaryKeyword?.trim() ?? "";
-  const exactPrimaryEcho = pk
-    ? ` Primary keyword string for exact-match checks: "${pk}".`
-    : "";
-  const isPressRelease = contentKind === "press_release";
-  const exactPrimaryPerH2Block =
-    !isPressRelease && pk
-      ? connectedSite
-        ? `\n**EXACT PRIMARY PER H2 (MANDATORY)**: Under **every** <h2>, the section body must contain the **exact** primary keyword phrase **at least once** (same words and order as "${pk}"; normal sentence capitalization allowed). Count paragraphs, list items, and table cells under that <h2> - include the exact phrase in that section's content. Every H2 including introduction and conclusion - no skipped sections.`
-        : `\n**EXACT PRIMARY PER H2 (MANDATORY)**: In **every** ## section body, include the **exact** primary keyword phrase **at least once** (same words and order as "${pk}"; sentence casing OK).`
+  const writingKw = pk ? resolveWritingKeyword(pk) : "";
+  const keywordPunctuationBlock = pk ? buildKeywordPunctuationPromptBlock(pk, writingKw) : "";
+  const exactPrimaryEcho = writingKw
+    ? ` Writing keyword for copy: "${writingKw}".`
+    : pk
+      ? ` Primary keyword string for exact-match checks: "${pk}".`
       : "";
+  const exactPrimaryPerH2BlockFull =
+    !isPressRelease && writingKw
+      ? connectedSite
+        ? `\n**EXACT PRIMARY PER H2 (MANDATORY)**: Under **every** <h2>, the section body must contain the **writing keyword** phrase **at least once** (same words and order as "${writingKw}"; normal sentence capitalization allowed; standard canonical hyphens required when KEYWORD PUNCTUATION block applies). Count paragraphs, list items, and table cells under that <h2> - include the phrase in that section's content. Every H2 including introduction and conclusion - no skipped sections.`
+        : `\n**EXACT PRIMARY PER H2 (MANDATORY)**: In **every** ## section body, include the **writing keyword** phrase **at least once** (same words and order as "${writingKw}"; sentence casing OK; canonical hyphens when specified).`
+      : "";
+  const exactPrimaryPerH2BlockHarness =
+    isHarnessSection && writingKw
+      ? `\n**EXACT PRIMARY IN THIS SECTION (MANDATORY)**: In this section's body under its ## heading, include the **writing keyword** phrase **at least once** (same words and order as "${writingKw}"; sentence casing OK; canonical hyphens when KEYWORD PUNCTUATION block applies). Do not preview or repeat keyword coverage for sibling sections.`
+      : "";
+  const exactPrimaryPerH2Block = isHarnessSection ? exactPrimaryPerH2BlockHarness : exactPrimaryPerH2BlockFull;
+  const firstParagraphRuleFull = connectedSite
+    ? `\n**FIRST PARAGRAPH RULE (MANDATORY)**: The very first <p> of the article MUST directly address the primary keyword in its opening sentence. If the primary keyword is a question, state the question and give a clear, direct answer immediately - do NOT open with generic background, context, or tangential information. Never just allude to the keyword; name it and address it head-on. Example: if the keyword is "can a night guard straighten teeth", do NOT open with "Night guards serve a crucial role in safeguarding your oral health" - instead open with "Many people wonder whether a night guard can straighten teeth. The short answer is no - night guards are not designed to realign teeth."`
+    : "";
   const generalFocusRule = isPressRelease
     ? `\n**PRESS RELEASE MODE**: Neutral AP/wire style. Output **Markdown only** (## headings, paragraphs, [anchor](url), blockquotes).${
         pk
@@ -296,30 +344,36 @@ Do not invent grand openings, expansions, product launches, or "today announced"
 No fabricated testimonials, customer quotes, or named spokespeople unless user-supplied text appears in KNOWLEDGE BASE or ACF blocks.
 Syndication-ready copy; follow each harness section scope exactly.
 Each ## subhead is topical wire copy (service, expertise, or reader need)—not a label for section type and not a fake news headline.`
-    : connectedSite
+    : isHarnessSection
       ? `\nContent focus: Optimize for the page topic and primary keyword. Primary keyword is the main subject of the page, not the company name or a place.${exactPrimaryEcho}
-**FIRST PARAGRAPH RULE (MANDATORY)**: The very first <p> of the article MUST directly address the primary keyword in its opening sentence. If the primary keyword is a question, state the question and give a clear, direct answer immediately - do NOT open with generic background, context, or tangential information. Never just allude to the keyword; name it and address it head-on. Example: if the keyword is "can a night guard straighten teeth", do NOT open with "Night guards serve a crucial role in safeguarding your oral health" - instead open with "Many people wonder whether a night guard can straighten teeth. The short answer is no - night guards are not designed to realign teeth."${exactPrimaryPerH2Block}`
+${HARNESS_MODE_SYSTEM_BLOCK}${exactPrimaryPerH2Block}`
+      : connectedSite
+      ? `\nContent focus: Optimize for the page topic and primary keyword. Primary keyword is the main subject of the page, not the company name or a place.${exactPrimaryEcho}
+${firstParagraphRuleFull}${exactPrimaryPerH2Block}`
       : pk
         ? `\nContent focus: Optimize for the page topic and primary keyword.${exactPrimaryEcho}${exactPrimaryPerH2Block}`
         : "";
   const linkRuleBlock =
-    connectedSite && contentKind !== "press_release" ? `\n${CRITICAL_LINK_RULE}` : "";
+    connectedSite && contentKind !== "press_release" && generationMode === "full_article"
+      ? `\n${CRITICAL_LINK_RULE}`
+      : "";
   const semrushOverridesWikipediaOnly =
-    Array.isArray(semrushExternalUrls) && semrushExternalUrls.some((u) => String(u ?? "").trim())
+    Array.isArray(semrushExternalUrls) && semrushExternalUrls.some((u) => String(u ?? "").trim()) &&
+    generationMode === "full_article"
       ? `\n**SEMRUSH URLs - OVERRIDE**: When the "APPROVED EXTERNAL URLs (SEMRUSH)" block appears above, those exact third-party URLs are allowed and required per that block. The line in CRITICAL_LINK_RULE that limits externals to Wikipedia-only does **not** apply to URLs listed in that Semrush block (entity Wikipedia remains optional in addition).`
       : "";
-  // Press release harness = Markdown. Manager Panel (no connectedSite) = Markdown. Content Optimizer = HTML.
+  // Bulk harness = Markdown (press release and connected WordPress). Content Optimizer full article = HTML.
   const formatRules =
-    contentKind === "press_release" || !connectedSite
+    contentKind === "press_release" || !connectedSite || generationMode === "harness_section"
       ? MARKDOWN_FORMAT_RULES
-      : generationMode === "harness_section"
-        ? HTML_FORMAT_RULES_HARNESS_SECTION
-        : HTML_FORMAT_RULES_FULL_ARTICLE;
+      : HTML_FORMAT_RULES_FULL_ARTICLE;
   const core = `You are an expert SEO content AI. Use the API key for content tasks. Output must be optimized, on-topic, and structurally correct.
-${formatRules}${generalFocusRule}
+${formatRules}${generalFocusRule}${keywordPunctuationBlock}
 ${knowledgeBlock}${entityContext}${targetSiteContext}${semrushExternalBlock}${wordPressPostsContext}${linkRuleBlock}${semrushOverridesWikipediaOnly}`;
   await ensureMasterInstructionsInMemory(siteId);
-  return appendMasterInstructionsToSystemPrompt(core, siteId);
+  return appendUniversalContentRulesToSystemPrompt(
+    appendMasterInstructionsToSystemPrompt(core, siteId),
+  );
 }
 
 const GSC_CONTENT_INTEGRATION_BLOCK = `=== SEARCH CONSOLE QUERIES (real Google searches for this page) ===
@@ -456,10 +510,14 @@ No entity. General post; no locations or placeholders. ${ENTITY_FORBIDDEN}`;
 };
 
 const HARNESS_SECTION_SCOPE_RULE_HTML = `**HARNESS – SINGLE SECTION ONLY**:
-- Output exactly ONE section: the block under "Section to write". Start with that section's required heading (<h2> or FAQ <h2> as specified). Do NOT add any other top-level H2 from the outline in this response.
+- Output exactly ONE section: the block under "Section to write". Start with that section's required heading (<h2> or FAQ <h2> as specified). Do NOT add any other top-level H2 from the plan in this response.
+- Your response must contain **exactly 1** <h2> tag (Overview: <h2>Overview</h2> plus mandatory key-points <ul> only). A second <h2> makes the response invalid.
+- Flat structure: never nest <h2> inside <h2>.
 - Do not write a full article, article intro for the whole piece, or closing for the whole piece—only this section.
-- The full outline is for alignment; other H2s will be written in separate steps. Do not include their headings or duplicate their topics as full sections.
-- Cover only this section's topic. Do not restate the whole article thesis or preview sibling H2s from the outline.
+- Other H2s in the plan are written in separate harness steps. Do not include their headings, duplicate their topics, or append Overview scroll-link <ul> lists in body sections.
+- Cover only this section's topic. Do not restate the whole article thesis or preview sibling H2s from the plan.
+- Every paragraph ends with a complete sentence. Never output a standalone word (e.g. "Our") or partial link text.
+- STOP: after your last </p>, </table>, </ol>, or </ul> (Overview), output nothing else.
 - **Never** use <footer> or </footer> in this section. No exceptions.`;
 
 export const TITLE_WELL_KNOWN_ACRONYMS_RULE = `**Well-known acronyms (mandatory)**:
@@ -478,7 +536,7 @@ export const TITLE_CASE_RULE = `**Title Case (mandatory - blog headline style)**
 
 /** Natural front-load and single-mention keyword discipline for all title agents. */
 export const TITLE_KEYWORD_WEAVING_RULE = `**Keyword weaving (mandatory)**:
-- PRIMARY KEYWORD appears **exactly once** with the same words and word order. Casing in the title MUST be full Title Case (do not paste lowercase keyword casing).
+- WRITING KEYWORD (canonical punctuation when KEYWORD PUNCTUATION block applies) appears **exactly once** with the same words and word order. Casing in the title MUST be full Title Case (do not paste lowercase keyword casing).
 - **Grammar first**: the full title must read as one coherent, polished phrase written by a human editor. The keyword must perform a natural grammatical role inside that phrase.
 - **Front-load naturally**: open with the keyword woven into the first readable phrase (first ~5 words). Choose the title angle and sentence structure first, then integrate the keyword with natural connecting words.
 - Never paste the keyword as a standalone block and bolt a generic phrase, audience label, benefit fragment, or subtitle onto it. Rewrite the whole title until every word flows as one thought.
@@ -509,7 +567,7 @@ export const BULK_WORDPRESS_POST_TITLE_RULE = `**WORDPRESS POST TITLE (mandatory
 ${TITLE_CASE_RULE}
 ${TITLE_KEYWORD_WEAVING_RULE}
 ${TITLE_ANTI_CLICKBAIT_RULE}
-- **Focus keyword**: same words and order as PRIMARY KEYWORD, always in Title Case in the title even if the keyword input is lowercase. Do not insert extra punctuation inside the phrase (if keyword is "veneers vs crowns", do not write "veneers vs. crowns" in the title).
+- **Focus keyword**: same words and order as WRITING KEYWORD, always in Title Case in the title even if the keyword input is lowercase. Use standard canonical hyphens when the KEYWORD PUNCTUATION block specifies them (X-ray, e-commerce). Do not add decorative punctuation (if keyword is "veneers vs crowns", do not write "veneers vs. crowns" in the title).
 - **Length**: Prefer a complete natural headline. **Never truncate, never cut mid-word, never strip trailing words.** Upload/return the full title.
 - **No** site name, brand prefix, or pipe suffix (no "Brand | …"). Topic-focused title only.
 ${TITLE_WELL_KNOWN_ACRONYMS_RULE}`;
@@ -517,6 +575,8 @@ ${TITLE_WELL_KNOWN_ACRONYMS_RULE}`;
 const HARNESS_SECTION_LENGTH_RULE_HTML = `**HARNESS LENGTH (mandatory)**:
 - Body prose in this section: at most **2** <p> tags (use **3** only when this section block explicitly requires a list/table-heavy block).
 - Each <p>: at most **3** sentences. Moderately short paragraphs only.
+- Every paragraph MUST end with a complete sentence (. ! ?). If you cannot fit another sentence, finish the current sentence and STOP — never stop mid-sentence or mid-word.
+- NEVER output Semrush API, MCP, subscription, or tool error messages in article HTML.
 - Forbidden: full-article intros ("this guide will explore…"), repeating other outline H2 topics, or restating content that belongs in other sections.`;
 
 const HARNESS_SECTION_LENGTH_RULE_MARKDOWN = `**HARNESS LENGTH (mandatory)**:
@@ -525,9 +585,47 @@ const HARNESS_SECTION_LENGTH_RULE_MARKDOWN = `**HARNESS LENGTH (mandatory)**:
 - Forbidden: wire-style repetition of other blocks, full-release previews, or restating the whole thesis.`;
 
 const HARNESS_SECTION_SCOPE_RULE_MARKDOWN = `**HARNESS – SINGLE SECTION ONLY**:
-- Output exactly ONE section: the block under "Section to write". Start with that section's required ## heading as specified. Do NOT add any other top-level ## sections from the outline in this response.
+- Output exactly ONE section: the block under "Section to write". Start with that section's required ## heading as specified. Do NOT add any other top-level ## sections from the plan in this response.
 - Do not write a full article, article intro for the whole piece, or closing for the whole piece—only this section.
-- The full outline is for alignment; other sections will be written in separate steps. Do not include their headings or duplicate their topics as full sections.`;
+- Other sections in the plan are written in separate steps. Do not include their headings or duplicate their topics as full sections.`;
+
+function formatHarnessH2PlanBlock(
+  allSectionTitles: string[],
+  currentSectionIndex: number,
+  assignedTitle: string,
+): string {
+  const planLines = allSectionTitles.map((title, i) => {
+    if (i === currentSectionIndex) {
+      return `${i + 1}. ${title}  ← YOU WRITE THIS ONE ONLY`;
+    }
+    return `${i + 1}. ${title}  [NOT YOUR SECTION — separate harness step]`;
+  });
+  const forbiddenSiblings = allSectionTitles
+    .filter((_, i) => i !== currentSectionIndex)
+    .map((t) => `- ${t}`);
+  const forbiddenBlock =
+    forbiddenSiblings.length > 0
+      ? forbiddenSiblings.join("\n")
+      : "- (no sibling sections besides yours)";
+  const forbiddenSiblingH2List =
+    forbiddenSiblings.length > 0
+      ? forbiddenSiblings.map((t) => `- ${t}`).join("\n")
+      : "";
+  return [
+    "=== ARTICLE H2 PLAN (titles only — write ONLY your assigned section) ===",
+    ...planLines,
+    "=== END PLAN ===",
+    "",
+    "FORBIDDEN IN YOUR OUTPUT:",
+    `- Any ## heading except "${assignedTitle}"`,
+    "- Any Overview scroll-link bullet list (Overview step only)",
+    "- Any content belonging to these sibling sections:",
+    forbiddenBlock,
+    forbiddenSiblingH2List
+      ? `\nThese must NOT appear as ## heading text in your output:\n${forbiddenSiblingH2List}`
+      : "",
+  ].join("\n");
+}
 
 /**
  * User prompt for one harness step (one blueprint agent / one H2-equivalent).
@@ -557,8 +655,18 @@ export const buildBulkHarnessSectionUserPrompt = (
   inPageAnchorBlock?: string,
   /** Overview only: exact entity Wikipedia URL when CSV/row provides one (entity pages). */
   entityWikipediaUrl?: string,
+  /** Harness section display title — exact <h2> text (non-Overview body sections). */
+  harnessSectionDisplayTitle?: string,
+  /** Stored ACF focus keyword (falls back to acfContext.keywordFocus). */
+  primaryKeyword?: string,
+  /** Blog harness: ordered H2 titles for plan-only context (replaces full outline block). */
+  allSectionTitles?: string[],
 ): string => {
   const normalizedSiteUrl = connectedSite?.siteUrl ? connectedSite.siteUrl.replace(/\/+$/, "") : "";
+  const storedKeyword = (primaryKeyword ?? acfContext?.keywordFocus ?? "").trim();
+  const keywordPunctuationBlock = storedKeyword
+    ? buildKeywordPunctuationPromptBlock(storedKeyword)
+    : "";
   const hasSemrushExternals = Array.isArray(semrushExternalUrls) && semrushExternalUrls.some((u) => u?.trim());
   const isPressReleaseHarness = contentKind === "press_release";
   const isOverviewSection = Boolean(inPageAnchorBlock?.trim());
@@ -576,23 +684,22 @@ export const buildBulkHarnessSectionUserPrompt = (
   const linkBlock = isOverviewSection
     ? overviewLinkBlock
     : connectedSite
-    ? isPressReleaseHarness
-      ? `\nLinks: Markdown [anchor text](url) only. Internal = ${normalizedSiteUrl} only when natural. ${
+      ? `\nLinks: Internal = ${normalizedSiteUrl} only when natural via [[LINK:query|anchor]]. ${
           hasSemrushExternals
-            ? "External = only the APPROVED EXTERNAL URL in the system prompt; at most one [anchor](exact-url) in this section if it fits, and only one such link in the full release."
-            : "No external links unless listed in the system prompt."
+            ? isPressReleaseHarness
+              ? "External = only the APPROVED EXTERNAL URL in the system prompt; at most one [anchor](exact-url) in this section if it fits, and only one such link in the full release."
+              : "User-specified externals only: [[EXTERNAL:exact-url|exact-anchor]] copied from the APPROVED EXTERNAL URLs block — never [anchor](url). No other third-party sites."
+            : "No third-party external links. Forbidden: [[EXTERNAL:...]], raw https:// in prose, and third-party <a href=\"https://...\">. Internal links and entity Wikipedia only when listed."
         } NEVER link to competitors. No "External Resources" sections.\n`
-      : `\nLinks: HTML format <a href="url">text</a> only. Internal = ${normalizedSiteUrl} only. ${
-          hasSemrushExternals
-            ? `External = entity Wikipedia when applicable, OR only URLs under APPROVED EXTERNAL URLs (SEMRUSH) in the system prompt - exact hrefs only. No other external sites.`
-            : `External = ONLY entity Wikipedia page (when entity exists). No other external sites.`
-        } NEVER link to competitors or businesses in the same industry. No "External Resources" sections. ${LINK_RULES(normalizedSiteUrl, currentPageUrl, semrushExternalUrls, portfolioBlockedHosts)}\n`
-    : "";
+      : "";
 
   const entityName = entity?.trim() ?? "";
   const hasEntity = entityName && entityName !== "N/A";
   const entityBlock = hasEntity
-    ? (() => {
+    ? isOverviewSection
+      ? `
+Entity: ${entityName}. Use varied phrases: ${getLocalEntityPhraseExamples(entityName, "general", 6).map((ex) => `"${ex}"`).join(", ")}. Expertise: ${getLocalEntityPhraseExamples(entityName, "expertise", 4).map((ex) => `"${ex}"`).join(", ")}. One local "fun fact". Reduce keyword repetition; use "our team", "specialists". Overview lead paragraphs only: optional entity Wikipedia link per Overview LINKS block — no site links or # scroll links in lead prose. ${ENTITY_FORBIDDEN}`
+      : (() => {
         const general = getLocalEntityPhraseExamples(entityName, "general", 6);
         const expertise = getLocalEntityPhraseExamples(entityName, "expertise", 4);
         return `
@@ -640,33 +747,49 @@ No entity. General post; no locations or placeholders. ${ENTITY_FORBIDDEN}`;
   const siblingBlock = isPressReleaseHarness
     ? "Other blocks of this release are written separately. Output only this block with your own invented ## subhead; do not preview or duplicate other blocks."
     : otherSectionTitles.length > 0
-      ? `Other H2s in this article outline (titles only; do not duplicate these as additional top-level H2s or repeat them as full sections):\n${otherSectionTitles.map((t) => `- ${t}`).join("\n")}`
+      ? `Other H2s in this article plan (titles only; do not duplicate these as additional top-level H2s or repeat them as full sections):\n${otherSectionTitles.map((t) => `- ${t}`).join("\n")}`
       : "No sibling headings besides yours—still write only this section.";
+
+  const assignedTitle =
+    harnessSectionDisplayTitle?.trim() ||
+    (isOverviewSection ? "Overview" : allSectionTitles?.[currentSectionIndex]?.trim()) ||
+    "";
+  const h2PlanBlock =
+    !isPressReleaseHarness && allSectionTitles && allSectionTitles.length > 0 && assignedTitle
+      ? formatHarnessH2PlanBlock(allSectionTitles, currentSectionIndex, assignedTitle)
+      : "";
 
   const prTopicBlock =
     isPressReleaseHarness && pressReleaseTopic?.trim()
       ? `\n**RELEASE TOPIC (light touch)**: ${pressReleaseTopic.trim()} — inform the angle; do not repeat the exact phrase in every ## or paragraph.`
       : "";
 
-  const scopeRule = isPressReleaseHarness
-    ? HARNESS_SECTION_SCOPE_RULE_MARKDOWN
-    : HARNESS_SECTION_SCOPE_RULE_HTML;
-  const formatLine = isPressReleaseHarness
-    ? "Write in MARKDOWN ONLY for this section: ##, ###, paragraphs, [text](url), - lists, blockquotes (>). NEVER HTML."
-    : "Write in HTML ONLY for this section: <h2>, <h3>, <p>, <a>, <ul><li>, <ol><li>, <table>. NEVER <footer>. NEVER markdown.";
+  const scopeRule = HARNESS_SECTION_SCOPE_RULE_MARKDOWN;
+  const formatLine =
+    "Write in MARKDOWN ONLY for this section: ##, ###, paragraphs, [text](url), - lists, blockquotes (>). NEVER HTML.";
 
-  const lengthRule = isPressReleaseHarness
-    ? HARNESS_SECTION_LENGTH_RULE_MARKDOWN
-    : HARNESS_SECTION_LENGTH_RULE_HTML;
+  const lengthRule = HARNESS_SECTION_LENGTH_RULE_MARKDOWN;
 
   const articleBudgetBlock = isPressReleaseHarness
     ? ""
     : buildHarnessArticleBudgetBlock(currentSectionIndex, totalSections);
 
+  const planOrOutlineBlock = h2PlanBlock
+    ? h2PlanBlock
+    : [
+        "=== FULL ARTICLE OUTLINE (for context; write ONLY the current section) ===",
+        outlineBlock,
+        "=== END OUTLINE ===",
+        siblingBlock,
+      ].join("\n");
+
   return [
+    buildBlacklistRagBlock(),
     scopeRule,
+    FORBIDDEN_WORDS_USER_PROMPT_REMINDER,
     lengthRule,
     articleBudgetBlock,
+    keywordPunctuationBlock,
     formatLine,
     prTopicBlock,
     `Article title: ${flowTitle || "Untitled Article"}`,
@@ -675,41 +798,39 @@ No entity. General post; no locations or placeholders. ${ENTITY_FORBIDDEN}`;
     isPressReleaseHarness
       ? "Before body text, output exactly one ## line you invent: a topical subhead for the keyword and business. Do not use outline or template wording as the ## text. Do not repeat the wire dateline or a calendar date unless this is section 1."
       : "",
-    acfBlock,
-    gscBlock,
-    semrushKeywordsBlock,
-    semrushScatterBlock,
-    "=== FULL ARTICLE OUTLINE (for context; write ONLY the current section) ===",
-    outlineBlock,
-    "=== END OUTLINE ===",
-    siblingBlock,
+    planOrOutlineBlock,
     "=== SECTION TO WRITE (follow heading and structure exactly) ===",
     singleSectionPrompt,
     "=== END SECTION ===",
+    harnessSectionDisplayTitle?.trim() && !isPressReleaseHarness && !isOverviewSection
+      ? `NON-NEGOTIABLE ## TITLE: The first ## line MUST be exactly: "${harnessSectionDisplayTitle.trim()}" — no paraphrase, reorder, or substitute wording.`
+      : "",
     inPageAnchorBlock?.trim() ? inPageAnchorBlock.trim() : "",
     "--- Output ---",
     isOverviewSection
       ? overviewHasEntityWiki
-        ? `CRITICAL: Overview uses # ids from IN-PAGE SECTION ANCHORS for citations (subtle 2–4 word anchors — never the full H2 title). ALSO required: link "${entityNameForWiki}" to the exact Wikipedia URL ${wikiUrlForOverview}. Do NOT add site page URLs or any other http(s) links in this section.`
-        : "CRITICAL: Overview links are click-to-scroll ONLY. Use ONLY # ids from IN-PAGE SECTION ANCHORS. Anchor text = subtle 2–4 words woven into the sentence — never the full H2 title. Do NOT add site page URLs in this section."
+        ? `Output ## Overview, 1-2 lead paragraphs (NO em dashes; obey WORD BLACKLIST above), then a - bullet list with one item per IN-PAGE anchor. Each bullet: **Label**: one sentence with exactly ONE [2-4 words](#exact-id). FORBIDDEN: second link in the same bullet, duplicate #id links, or "including [link]" phrasing. Optional entity Wikipedia in first paragraph: [${entityNameForWiki}](${wikiUrlForOverview}). Never "see below". Stop after the bullet list.`
+        : 'Output ## Overview, 1-2 lead paragraphs (NO em dashes; obey WORD BLACKLIST above), then a - bullet list with one item per IN-PAGE anchor. Each bullet: one sentence with exactly ONE [2-4 words](#exact-id). FORBIDDEN: second link in the same bullet, duplicate #id links, or "including [link]" phrasing. Never "see below". Stop after the bullet list.'
       : connectedSite && !hasWordPressPosts
       ? "CRITICAL: Do NOT add internal links—no linkable URLs from API—for this section unless the system prompt lists URLs."
-      : "Use internal links from the linkable URLs list where natural (follow system prompt counts); this is one section—distribute reasonably within THIS section only.",
-    isPressReleaseHarness
-      ? "Follow the section block for lists or blockquotes. No HTML tables."
-      : "If this section includes a table, FAQ, list, or steps, follow the section block. ALL tables = HTML <table> only. Never wrap any part of this section in <footer>.",
+      : "Use 1–2 [[LINK:sitemap search phrase|anchor text]] placeholders per section woven into complete sentences (follow INTERNAL LINK PLACEHOLDERS in system prompt). Never use raw https:// internal URLs in body sections.",
+    "Follow the section block for lists or blockquotes. Use Markdown pipe tables only. NEVER HTML.",
     hasSemrushExternals
       ? isPressReleaseHarness
         ? "Approved external URL: include in this section only if it fits naturally and the full release does not already require the link elsewhere; use [anchor](exact-url)."
-        : "Semrush externals: when relevant to THIS section only, use APPROVED EXTERNAL URLs from the system prompt (exact hrefs)."
+        : "User-specified externals only: when this section needs one, insert [[EXTERNAL:exact-url|exact-anchor]] copied from the APPROVED EXTERNAL URLs block — never [anchor](url)."
       : isPressReleaseHarness
         ? "No external links unless listed in the system prompt."
-        : "Wikipedia only for entity when applicable; no other externals.",
+        : "No third-party external links. Forbidden: [[EXTERNAL:...]], raw https://, and third-party <a href>. Wikipedia only when entity URL is listed.",
     isPressReleaseHarness ? "" : entityBlock,
     linkBlock,
+    acfBlock,
+    gscBlock,
+    semrushKeywordsBlock,
+    semrushScatterBlock,
     isPressReleaseHarness
       ? "Do not include an H1 or 'Article Title:' line. Output must begin with your invented ## subhead, then the body."
-      : "Do not include an H1 or 'Article Title:' line. Start with this section's required opening heading.",
+      : "Do not include an H1 or 'Article Title:' line. Start with this section's required ## heading.",
     "Never append copyright lines, ©, Copyright + year, All rights reserved, or invented brand/site names.",
   ].join("\n");
 };

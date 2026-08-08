@@ -16,6 +16,8 @@ trait Flowbie_Wp_Admin_Trait_Handlers_Chat_Logs {
 	const ACTION_DELETE_CHAT_LOG        = 'flowbie_wp_delete_chat_log';
 	const ACTION_BULK_CHAT_LOGS         = 'flowbie_wp_bulk_chat_logs';
 	const ACTION_DELETE_CHAT_LOG_REPORT = 'flowbie_wp_delete_chat_log_report';
+	const ACTION_GENERATE_CHAT_LOG_POSTS_GAP_CSV = 'flowbie_wp_generate_chat_log_posts_gap_csv';
+	const ACTION_GENERATE_CHAT_LOG_PAGES_GAP_CSV = 'flowbie_wp_generate_chat_log_pages_gap_csv';
 
 	public static function handle_delete_chat_log(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {
@@ -254,6 +256,61 @@ trait Flowbie_Wp_Admin_Trait_Handlers_Chat_Logs {
 		}
 
 		self::redirect_to_chat_logs( 'view-report', (int) $result['report_id'] );
+	}
+
+	public static function handle_generate_chat_log_posts_gap_csv(): void {
+		self::handle_generate_chat_log_gap_csv( 'post', self::ACTION_GENERATE_CHAT_LOG_POSTS_GAP_CSV, 'flowbie_wp_chat_log_posts_gap_csv_nonce' );
+	}
+
+	public static function handle_generate_chat_log_pages_gap_csv(): void {
+		self::handle_generate_chat_log_gap_csv( 'page', self::ACTION_GENERATE_CHAT_LOG_PAGES_GAP_CSV, 'flowbie_wp_chat_log_pages_gap_csv_nonce' );
+	}
+
+	private static function handle_generate_chat_log_gap_csv( string $content_type, string $action, string $nonce_field ): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to manage chat logs.', 'flowbie-wp' ) );
+		}
+		check_admin_referer( $action, $nonce_field );
+
+		$date_from = isset( $_POST['analysis_date_from'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['analysis_date_from'] ) ) : '';
+		$date_to   = isset( $_POST['analysis_date_to'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['analysis_date_to'] ) ) : '';
+		$source    = isset( $_POST['analysis_source'] ) ? sanitize_key( wp_unslash( (string) $_POST['analysis_source'] ) ) : 'all';
+
+		$result = Flowbie_Wp_Chat_Logs_Gap_Csv::run(
+			array(
+				'date_from'      => $date_from,
+				'date_to'        => $date_to,
+				'source_filter'  => $source,
+				'content_type'   => $content_type,
+			)
+		);
+
+		if ( empty( $result['ok'] ) ) {
+			self::set_flash(
+				array(
+					'kind'    => 'chat_logs',
+					'success' => false,
+					'message' => isset( $result['error'] ) ? (string) $result['error'] : __( 'Knowledge gap CSV generation failed.', 'flowbie-wp' ),
+				)
+			);
+			self::redirect_to_chat_logs( 'list', 0, self::chat_logs_list_redirect_query() );
+		}
+
+		self::stream_chat_log_gap_csv( $result );
+	}
+
+	/**
+	 * @param array{ok: bool, csv?: string, filename?: string, error?: string} $result
+	 */
+	private static function stream_chat_log_gap_csv( array $result ): void {
+		$csv      = isset( $result['csv'] ) ? (string) $result['csv'] : '';
+		$filename = isset( $result['filename'] ) ? (string) $result['filename'] : 'chat-gap.csv';
+
+		nocache_headers();
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename=' . sanitize_file_name( $filename ) );
+		echo $csv;
+		exit;
 	}
 
 	public static function handle_delete_chat_log_report(): void {

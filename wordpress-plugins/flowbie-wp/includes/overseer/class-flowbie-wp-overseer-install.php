@@ -110,7 +110,7 @@ class Flowbie_Wp_Overseer_Install {
 			add_option(
 				Flowbie_Wp_Overseer_Context::OPTION_KEY,
 				array(
-					'tracking_enabled'    => true,
+					'tracking_enabled'    => false,
 					'retention_days'      => 90,
 					'anonymize_ip'        => false,
 					'exclude_admins'      => true,

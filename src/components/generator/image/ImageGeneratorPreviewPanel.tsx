@@ -33,7 +33,7 @@ export function ImageGeneratorPreviewPanel({
       {referenceResearch ? (
         <div className="space-y-3 bg-zinc-900/50 p-4">
           <Label className="text-base font-semibold text-foreground">
-            Google Images references
+            References
           </Label>
           <p className="text-base text-muted-foreground">
             Mode: {referenceResearch.mode}
@@ -43,8 +43,8 @@ export function ImageGeneratorPreviewPanel({
           </p>
           {referenceResearch.references.length ? (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {referenceResearch.references.map((ref) => (
-                <div key={`${ref.query}-${ref.imageUrl}`} className="space-y-2 bg-black p-3">
+              {referenceResearch.references.map((ref, index) => (
+                <div key={`${ref.query}-${ref.imageUrl || ref.previewDataUrl || index}`} className="space-y-2 bg-black p-3">
                   {(ref.previewDataUrl || ref.imageUrl) ? (
                     <img
                       src={ref.previewDataUrl || ref.imageUrl}
@@ -69,7 +69,9 @@ export function ImageGeneratorPreviewPanel({
                       DO NOT USE: {ref.ignoreFromImage.join("; ")}
                     </p>
                   ) : null}
-                  {ref.sourceUrl ? (
+                  {ref.sourceUrl && ref.query === "manual upload" ? (
+                    <p className="text-base text-muted-foreground">{ref.sourceUrl}</p>
+                  ) : ref.sourceUrl ? (
                     <a
                       href={ref.sourceUrl}
                       target="_blank"

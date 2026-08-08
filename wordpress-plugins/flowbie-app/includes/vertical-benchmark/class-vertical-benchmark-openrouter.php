@@ -31,12 +31,7 @@ class Flowbie_App_Vertical_Benchmark_Openrouter {
 			self::OPENROUTER_URL,
 			array(
 				'timeout' => 120,
-				'headers' => array(
-					'Content-Type'  => 'application/json',
-					'Authorization' => 'Bearer ' . $api_key,
-					'HTTP-Referer'  => defined( 'FLOWBIE_APP_FRONTEND_URL' ) ? (string) FLOWBIE_APP_FRONTEND_URL : 'https://flowbie.ca',
-					'X-Title'       => 'Flowbie Vertical Benchmark',
-				),
+				'headers' => Flowbie_App_Openrouter_Attribution::request_headers( $api_key ),
 				'body'    => wp_json_encode(
 					array(
 						'model'           => $model,

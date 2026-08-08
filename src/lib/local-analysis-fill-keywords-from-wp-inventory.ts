@@ -10,6 +10,7 @@ import {
   ensureMasterInstructionsInMemory,
 } from "@/lib/master-instructions-storage";
 import type { SitePostInventoryRow } from "@/lib/wordpress-api/types";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 const OR = "https://openrouter.ai/api/v1/chat/completions";
 const MAX_POSTS_IN_PROMPT = 120;
@@ -134,12 +135,7 @@ async function postOpenRouter(args: {
 }): Promise<string> {
   const res = await fetch(OR, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${args.apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "",
-      "X-Title": "Flowbie",
-    },
+    headers: openRouterWebAppHeaders(args.apiKey),
     body: JSON.stringify({
       model: args.model,
       messages: args.messages,

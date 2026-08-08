@@ -8,7 +8,7 @@ export function buildForcedMediaChecklistLines(media: ExtractedMediaItem[]): str
     if (m.kind === "video") {
       return `[LINK]: [${label}](${url}) — existing video/media from the current post; use this exact href (do not invent a replacement)`;
     }
-    return `[IMAGE]: ![${label}](${url}) — existing image from the current post; preserve this exact URL (do not invent or generate a new image)`;
+    return `[IMAGE]: ![${label}](${url}) — existing image from the current post; preserve this exact URL as an inline <img> embed (do not invent or generate a new image; never use <a href> to the image file)`;
   });
 }
 
@@ -22,7 +22,7 @@ export function buildForcedMediaUserPrompt(media: ExtractedMediaItem[]): string 
   return [
     "MANDATORY EXISTING MEDIA FROM THE CURRENT POST (exact URLs — include in the checklist and blueprint; never drop or invent replacements):",
     ...lines,
-    "For each image, include an [IMAGE]: ![label](exact-url) feature with that exact URL.",
+    "For each image, include an [IMAGE]: ![label](exact-url) feature with that exact URL. The content harness MUST embed each image as <figure class=\"wp-block-image size-full\"><img src=\"exact-url\" alt=\"label\" loading=\"lazy\" /></figure> in the matching section. NEVER output images as <a href> text links to the PNG/JPEG file.",
     "For each video, include a [LINK]: [label](exact-url) feature with that exact URL.",
     "Do not generate new images. Do not change the hrefs.",
   ].join("\n");

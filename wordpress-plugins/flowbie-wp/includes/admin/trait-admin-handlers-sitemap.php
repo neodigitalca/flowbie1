@@ -88,6 +88,9 @@ trait Flowbie_Wp_Admin_Trait_Handlers_Sitemap {
 		check_admin_referer( self::ACTION_FLUSH_SITEMAP, 'flowbie_wp_sitemap_flush_nonce' );
 
 		Flowbie_Wp_Sitemap_Cache::flush_all();
+		if ( class_exists( 'Flowbie_Wp_Chat_Rag', false ) ) {
+			Flowbie_Wp_Chat_Rag::invalidate_cache();
+		}
 
 		$tab = isset( $_POST['flowbie_sitemap_tab'] ) ? sanitize_key( wp_unslash( (string) $_POST['flowbie_sitemap_tab'] ) ) : 'general';
 

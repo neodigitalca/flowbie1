@@ -6,6 +6,7 @@ import type {
   KeywordData,
   KeywordResearchResult,
   KeywordAnalysisOptions,
+  KeywordAnalysisComplete,
   KeywordAIAnalysis,
   PeopleAlsoAsk,
 } from "@/lib/keyword-types";
@@ -23,6 +24,22 @@ import { formatKeyword } from "@/lib/keyword-formatter";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import type { ConnectedSiteSummary } from "@/components/integrations/types";
 import { getPublicSiteUrl } from "@/lib/wordpress-site-public-url";
+
+function emptyKeywordAiAnalysis(primaryKeyword: string): KeywordAIAnalysis {
+  const primary = primaryKeyword.trim();
+  return {
+    keywordSuggestions: {
+      primary,
+      variations: [],
+      longTail: [],
+      semantic: [],
+    },
+    h2Suggestions: [],
+    contentGaps: [],
+    peopleAlsoAsk: [],
+    researchLinks: [],
+  };
+}
 
 interface UseKeywordResearchProps {
   apiKey?: string; // DataForSEO API key
@@ -67,13 +84,20 @@ export function useKeywordResearch({
     async (
       primaryKeyword: string,
       options: KeywordAnalysisOptions = {}
-    ) => {
+    ): Promise<KeywordAnalysisComplete | null> => {
+      const strict = options.strict === true;
       if (!primaryKeyword.trim()) {
+        if (strict) {
+          throw new Error("Keyword is required for research");
+        }
         notify.error(NOTIFY_PLEASE_ENTER_A_KEYWORD_TO_ANALYZE);
-        return;
+        return null;
       }
-setIsAnalyzing(true);
+      setIsAnalyzing(true);
       setError(null);
+      let analysisComplete: KeywordAnalysisComplete | null = null;
+      let volumeKeywords: KeywordData[] = [];
+      let capturedPaaRawResponse: unknown = null;
 
       try {
         // Get RAW JSON from backend - EXACTLY as it appears in PowerShell
@@ -196,6 +220,7 @@ setIsAnalyzing(true);
           if (serpResponse.ok) {
             serpData = await serpResponse.json();
             localPaaRawResponse = serpData; // Store for PAA tab
+            capturedPaaRawResponse = serpData;
             setPaaRawResponse(serpData); // Set immediately
             console.log('[Keyword Research] SERP DATA RECEIVED:', serpData);
             
@@ -281,12 +306,14 @@ setIsAnalyzing(true);
             console.error('[Keyword Research] SERP error response:', serpErrorText);
             serpData = { error: serpErrorText, status: serpResponse.status };
             localPaaRawResponse = serpData;
+            capturedPaaRawResponse = serpData;
             setPaaRawResponse(serpData);
           }
         } catch (serpError) {
           console.error('[Keyword Research] SERP fetch error:', serpError);
           serpData = { error: serpError instanceof Error ? serpError.message : String(serpError) };
           localPaaRawResponse = serpData;
+          capturedPaaRawResponse = serpData;
           setPaaRawResponse(serpData);
         }
         
@@ -570,6 +597,7 @@ setAiAnalysis(finalAnalysis);
               [...aiGeneratedKeywordsWithData, ...semanticKeywords].forEach(kw => {
                 volumeMap.set(kw.keyword.toLowerCase(), kw);
               });
+              volumeKeywords = Array.from(volumeMap.values());
               setKeywordsVolumeData(volumeMap);
               
             } catch (error) {
@@ -593,6 +621,11 @@ setAiAnalysis(finalAnalysis);
               };
 setCurrentResult(keywordResult);
               onKeywordsUpdate?.(keywordResult);
+              analysisComplete = {
+                result: keywordResult,
+                aiAnalysis: finalAnalysis,
+                keywordsVolumeData: volumeKeywords,
+              };
             } catch (resultError) {
               console.error('[Keyword Research] Error setting keyword result:', resultError);
               // Still try to set basic result even if full result fails
@@ -612,8 +645,10 @@ setCurrentResult(keywordResult);
             }
           } catch (aiError) {
             console.error("Error in AI keyword analysis:", aiError);
-            // Don't fail the whole operation if AI analysis fails
             const errorMessage = aiError instanceof Error ? aiError.message : 'Unknown error';
+            if (strict) {
+              throw aiError instanceof Error ? aiError : new Error(errorMessage);
+            }
             notify.error(notifyKeywordDataReceivedButAiAnalysisFa(errorMessage));
             
             // Still set basic result if we have keyword data
@@ -628,8 +663,15 @@ setCurrentResult(keywordResult);
                   peopleAlsoAsk: [],
                   entity: entity || undefined,
                 };
+                const fallbackAnalysis = emptyKeywordAiAnalysis(formattedPrimaryKeyword);
                 setCurrentResult(basicResult);
+                setAiAnalysis(fallbackAnalysis);
                 onKeywordsUpdate?.(basicResult);
+                analysisComplete = {
+                  result: basicResult,
+                  aiAnalysis: fallbackAnalysis,
+                  keywordsVolumeData: volumeKeywords,
+                };
               } catch (resultError) {
                 console.error('[Keyword Research] Error setting basic result after AI failure:', resultError);
               }
@@ -638,8 +680,6 @@ setCurrentResult(keywordResult);
 setIsAnalyzingWithAI(false);
           }
         } else if (extractedKeywordData) {
-// Set result without AI analysis
-          // Format primary keyword with proper capitalization
           const formattedPrimaryKeyword = formatKeyword(primaryKeyword);
           const keywordResult: KeywordResearchResult = {
             primaryKeyword: formattedPrimaryKeyword,
@@ -648,10 +688,19 @@ setIsAnalyzingWithAI(false);
             searchIntent: extractedKeywordData.intent || 'informational',
             entity: entity || undefined,
           };
-setCurrentResult(keywordResult);
+          const analysisWithoutAi = emptyKeywordAiAnalysis(formattedPrimaryKeyword);
+          setCurrentResult(keywordResult);
+          setAiAnalysis(analysisWithoutAi);
           onKeywordsUpdate?.(keywordResult);
+          analysisComplete = {
+            result: keywordResult,
+            aiAnalysis: analysisWithoutAi,
+            keywordsVolumeData: volumeKeywords,
+          };
         } else {
-// Create minimal result even when extraction fails - allow processing to continue
+          if (strict) {
+            throw new Error("Could not extract keyword data from DataForSEO response");
+          }
           const formattedPrimaryKeyword = formatKeyword(primaryKeyword);
           const minimalResult: KeywordResearchResult = {
             primaryKeyword: formattedPrimaryKeyword,
@@ -685,11 +734,19 @@ setCurrentResult(minimalResult);
             peopleAlsoAsk: [],
             researchLinks: [],
           });
+          analysisComplete = {
+            result: minimalResult,
+            aiAnalysis: emptyKeywordAiAnalysis(formattedPrimaryKeyword),
+            keywordsVolumeData: volumeKeywords,
+          };
         }
       } catch (err) {
         console.error("Error fetching raw data:", err);
         const errorMessage =
           err instanceof Error ? err.message : "Failed to fetch data";
+        if (strict) {
+          throw err instanceof Error ? err : new Error(errorMessage);
+        }
         setError(errorMessage);
         notify.error(notifyErrorX(errorMessage));
         // Still try to show error as JSON
@@ -708,6 +765,10 @@ setIsAnalyzing(false);
           console.error('[Keyword Research Hook] Error stopping server after analysis:', stopError);
         }
       }
+
+      return analysisComplete
+        ? { ...analysisComplete, paaRawResponse: capturedPaaRawResponse ?? undefined }
+        : null;
     },
     [onKeywordsUpdate, openRouterApiKey, selectedModel, temperature, maxTokens, topP]
   );

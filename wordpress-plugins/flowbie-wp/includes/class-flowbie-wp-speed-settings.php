@@ -67,8 +67,7 @@ class Flowbie_Wp_Speed_Settings {
 		$config['preconnect_fonts']     = true;
 		$config['async_google_fonts']   = true;
 		$config['remove_query_strings'] = false;
-		// Per-page Elementor safety is handled in Speed_Gate::config_for_html (per-file minify only).
-		$config['bypass_elementor']     = false;
+		$config['bypass_elementor']     = defined( 'ELEMENTOR_VERSION' );
 		return $config;
 	}
 
@@ -81,13 +80,13 @@ class Flowbie_Wp_Speed_Settings {
 	}
 
 	/**
-	 * Fresh-install / merge baseline (Speed on with safe per-file minify).
+	 * Fresh-install / merge baseline (Speed off until enabled in admin).
 	 *
 	 * @return array<string, mixed>
 	 */
 	public static function default_config(): array {
 		return array(
-			'enabled'              => true,
+			'enabled'              => false,
 			'optimize_css'         => true,
 			'optimize_js'          => true,
 			'minify_html'          => ! defined( 'ELEMENTOR_VERSION' ),
@@ -98,7 +97,7 @@ class Flowbie_Wp_Speed_Settings {
 			'preconnect_fonts'     => true,
 			'async_google_fonts'   => true,
 			'skip_logged_in'       => true,
-			'bypass_elementor'     => false,
+			'bypass_elementor'     => defined( 'ELEMENTOR_VERSION' ),
 			'cache_ttl'            => WEEK_IN_SECONDS,
 			'remove_query_strings' => false,
 			'js_exclude'           => '',
@@ -123,36 +122,17 @@ class Flowbie_Wp_Speed_Settings {
 		if ( get_option( self::OPTION_KEY, null ) !== null ) {
 			return;
 		}
-		if ( self::conflicting_plugins() !== array() ) {
-			return;
-		}
-		self::save_config( self::default_enabled_config() );
+		self::save_config( self::sanitize_config( self::merge_with_defaults( array() ) ) );
 	}
 
 	/**
-	 * One-time: enable Speed on existing sites that still have it off.
+	 * Legacy hook: no longer auto-enables Speed on existing sites.
 	 */
 	public static function maybe_enable_speed_by_default(): void {
 		if ( get_option( self::DEFAULT_ON_MIGRATION_KEY, '' ) === '1' ) {
 			return;
 		}
-
-		if ( self::conflicting_plugins() !== array() ) {
-			return;
-		}
-
-		$config = self::get_config();
-		if ( ! empty( $config['enabled'] ) ) {
-			update_option( self::DEFAULT_ON_MIGRATION_KEY, '1', false );
-			return;
-		}
-
-		self::save_config( self::default_enabled_config() );
 		update_option( self::DEFAULT_ON_MIGRATION_KEY, '1', false );
-
-		if ( class_exists( 'Flowbie_Wp_Speed_Warm', false ) ) {
-			Flowbie_Wp_Speed_Warm::warm_disk_cache();
-		}
 	}
 
 	/**

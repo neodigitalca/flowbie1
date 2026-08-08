@@ -22,7 +22,8 @@ import {
   getWordPressPostContent,
   type IndexingProgress,
 } from "@/lib/wordpress-api";
-import { getStoredSites, saveSites } from "@/components/integrations/storage";
+import { normalizeGbpLocationIdInput } from "@/lib/gbp-post/normalize-gbp-location-id";
+import { getStoredSites, mergeServerGbpLocationIdsIntoLocalSites, saveSites } from "@/components/integrations/storage";
 import { type WordPressSite } from "@/components/integrations/types";
 import { isOptimizationPackageTier } from "@/lib/wordpress-optimization-package";
 import { scrapeChildSitemap } from "@/lib/wordpress-sitemap-scraper";
@@ -66,6 +67,16 @@ function useWordPressSitesState() {
     () => sortWordPressSitesByDisplayName(sites),
     [sites],
   );
+
+  useEffect(() => {
+    void mergeServerGbpLocationIdsIntoLocalSites().then((merged) => {
+      if (merged) setSites(getStoredSites());
+    });
+  }, []);
+
+  const reloadSitesFromStorage = useCallback(() => {
+    setSites(getStoredSites());
+  }, []);
 
   const handleAddSite = useCallback(() => {
     return {
@@ -483,7 +494,10 @@ function useWordPressSitesState() {
       enabled: editingSite?.enabled !== undefined ? editingSite.enabled : true,
       sitemaps: editingSite?.sitemaps,
       ga4PropertyId: formGa4PropertyId?.trim() || undefined,
-      gbpLocationId: formGbpLocationId?.trim() || undefined,
+      gbpLocationId: (() => {
+        const normalized = normalizeGbpLocationIdInput(formGbpLocationId);
+        return normalized || undefined;
+      })(),
       semrushSiteAuditProjectId: formSemrushSiteAuditProjectId?.trim() || undefined,
       editorialCountsPeriodStartYmd: formEditorialCountsPeriodStartYmd?.trim() || undefined,
       optimizationPackage,
@@ -493,12 +507,13 @@ function useWordPressSitesState() {
 
     invalidateEntitySiteWarmCacheIfCredentialsChanged(siteData);
 
-    const updated = editingSite
-      ? sites.map(s => s.id === editingSite.id ? siteData : s)
-      : [...sites, siteData];
-
-    setSites(updated);
-    saveSites(updated);
+    setSites((prev) => {
+      const updated = editingSite
+        ? prev.map((s) => (s.id === editingSite.id ? siteData : s))
+        : [...prev, siteData];
+      saveSites(updated);
+      return updated;
+    });
     notify.success(editingSite ? "Site updated" : "Site added");
 
     if (!editingSite && siteUrl && username && appPassword) {
@@ -507,7 +522,7 @@ function useWordPressSitesState() {
       warmEntitySiteCache(siteData);
     }
     return siteData;
-  }, [sites, runAutoSetupForNewSite]);
+  }, [runAutoSetupForNewSite]);
 
   const handleSaveSitesBulk = useCallback((
     clients: Array<{ name: string; siteUrl: string; username: string; appPassword: string }>
@@ -1031,6 +1046,7 @@ function useWordPressSitesState() {
     handleSetEntitySitemap,
     handleToggleChildSitemapDisabled,
     handlePatchSite,
+    reloadSitesFromStorage,
     handleAppendManualChildSitemap,
     getScrapingKey,
   };

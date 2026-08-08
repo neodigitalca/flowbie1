@@ -1,0 +1,79 @@
+/**
+ * Unified Chat + Search sidebar tabs (shared shell).
+ */
+
+.fai-sidebar-root--unified .fai-sidebar-panel__toolbar {
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.fai-sidebar-tabs {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex: 1;
+	min-width: 0;
+}
+
+.fai-sidebar-tab {
+	appearance: none;
+	background: transparent;
+	border: none;
+	border-radius: 6px;
+	color: var(--fai-sidebar-text-muted, #64748b);
+	cursor: pointer;
+	font-family: inherit;
+	font-size: 1em;
+	font-weight: 600;
+	line-height: 1.25;
+	padding: 8px 12px;
+	transition: color 0.15s ease, background 0.15s ease;
+}
+
+.fai-sidebar-tab:hover {
+	background: var(--fai-sidebar-hover, #f1f5f9);
+	color: var(--fai-sidebar-text, #1e293b);
+}
+
+.fai-sidebar-tab--active {
+	background: color-mix(in srgb, var(--fai-sidebar-launcher-bg, #3b82f6) 14%, transparent);
+	color: var(--fai-sidebar-text, #1e293b);
+}
+
+.fai-sidebar-panel__body--tabs {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.fai-sidebar-tab-pane {
+	display: none;
+	flex: 1;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.fai-sidebar-tab-pane--active {
+	display: flex;
+}
+
+.fai-sidebar-root--unified .fcw-sidebar-main {
+	flex: 1;
+	min-height: 0;
+}
+
+.fai-sidebar-root--unified.flowbie-chat--sidebar .flowbie-search-wrap--panel-inner {
+	flex: 1;
+	min-height: 0;
+}
+
+.fai-sidebar-root--unified .fcw-panel.fcw-panel--sidebar {
+	display: flex;
+}
+
+.fai-sidebar-root--unified:not(.fai-sidebar-root--open) .fcw-panel.fcw-panel--sidebar {
+	display: none;
+}

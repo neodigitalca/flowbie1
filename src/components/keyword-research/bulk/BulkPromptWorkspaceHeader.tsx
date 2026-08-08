@@ -16,9 +16,9 @@ import {
 } from "@/components/blog-generator/blog-generator-sections";
 import { BulkGeneratorRunActions } from "@/components/keyword-research/bulk/BulkGeneratorRunActions";
 import {
-  BulkGeneratorDetailsPanel,
-  type BulkGeneratorDetailsPanelProps,
-} from "@/components/keyword-research/bulk/BulkGeneratorDetailsPanel";
+  BulkGeneratorDetailsDrawer,
+} from "@/components/keyword-research/bulk/BulkGeneratorDetailsDrawer";
+import type { BulkGeneratorDetailsPanelProps } from "@/components/keyword-research/bulk/BulkGeneratorDetailsPanel";
 import {
   BULK_HEADER_FIELD,
   BULK_HEADER_RUN_BTN,
@@ -66,6 +66,7 @@ export type BulkPromptWorkspaceHeaderProps = {
   scheduleMenu?: ReactNode;
   sitemapMenu?: ReactNode;
   detailsProps: BulkGeneratorDetailsPanelProps;
+  onDetailsOpenChange?: (open: boolean) => void;
 };
 
 export function BulkPromptWorkspaceHeader({
@@ -97,6 +98,7 @@ export function BulkPromptWorkspaceHeader({
   scheduleMenu,
   sitemapMenu,
   detailsProps,
+  onDetailsOpenChange,
 }: BulkPromptWorkspaceHeaderProps) {
   const featuredImageMode: FeaturedImageMode = featuredImagePerBlog ? featuredImageType : "off";
 
@@ -129,6 +131,7 @@ export function BulkPromptWorkspaceHeader({
       canOpenDetails={canOpenDetails}
       isProcessing={isProcessing}
       detailsPanelId="bulk-prompt-details-panel"
+      onDetailsOpenChange={onDetailsOpenChange}
       toolbar={
         <div className="flex w-full min-w-0 items-center gap-2">
           <Input
@@ -253,7 +256,7 @@ export function BulkPromptWorkspaceHeader({
           </div>
         </div>
       }
-      detailsPanel={<BulkGeneratorDetailsPanel {...detailsProps} />}
+      detailsPanel={<BulkGeneratorDetailsDrawer {...detailsProps} />}
     />
   );
 }

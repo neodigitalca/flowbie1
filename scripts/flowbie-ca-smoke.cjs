@@ -22,9 +22,15 @@ const CHECKS = [
   },
   {
     name: "GMB config status",
-    url: `${BASE}/api/gmb/config-status`,
+    url: `${BASE}/api/gmb/config-status?_=${Date.now()}`,
     expectStatus: 200,
-    expectJson: (d) => typeof d === "object" && d !== null,
+    expectJson: (d) =>
+      typeof d === "object" &&
+      d !== null &&
+      typeof /** @type {{ redirectUri?: string, frontendUrl?: string }} */ (d).redirectUri === "string" &&
+      /** @type {{ redirectUri?: string }} */ (d).redirectUri.includes("flowbie.ca") &&
+      typeof /** @type {{ frontendUrl?: string }} */ (d).frontendUrl === "string" &&
+      /** @type {{ frontendUrl?: string }} */ (d).frontendUrl.includes("flowbie.ca"),
   },
   {
     name: "GA credentials status",
@@ -46,10 +52,14 @@ const CHECKS = [
     expectJson: (d) => typeof d === "object" && d !== null,
   },
   {
-    name: "Maps exec probe",
-    url: `${BASE}/api/diagnostics/maps-exec`,
+    name: "Entity maps image validation",
+    url: `${BASE}/api/entity-maps-image/generate`,
+    method: "POST",
     expectStatus: 200,
-    expectJson: (d) => typeof d === "object" && d !== null && "execAllowed" in /** @type {object} */ (d),
+    expectJson: (d) =>
+      typeof d === "object" &&
+      d !== null &&
+      /** @type {{ success?: boolean }} */ (d).success === false,
   },
 ];
 

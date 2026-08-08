@@ -232,6 +232,7 @@ ${targetSiteContext}${selectedContext}${volumeFilter}${locationContext}${entityC
 --- CRITICAL KEYWORD SPELLING RULES ---
 - All keywords you output (primary, variations, longTail, semantic, H2 headings, content gaps) MUST be correctly spelled.
 - If the primary keyword provided above is misspelled or contains typos, CORRECT IT. Return the proper spelling.
+- Standard editorial hyphenation counts as correct spelling (X-ray not xray, e-commerce not ecommerce). Do not strip hyphens from valid compounds.
 - NEVER introduce typos: no stray characters, accidental prefixes/suffixes, character duplication, or garbled text.
 - Output only clean, properly spelled keywords and phrases.
 

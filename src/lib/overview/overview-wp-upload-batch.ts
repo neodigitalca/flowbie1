@@ -4,14 +4,13 @@ import type { WordPressSite } from "@/components/integrations/types";
 import {
   buildOverviewUploadPayloadBundle,
   overviewBindingForRow,
-  uploadOverviewSeoApiItemAvoidingBatchV1,
   type BuildOverviewBulkSeoItemOptions,
-  type OverviewBulkSeoApiItem,
   type OverviewUploadPayloadBundle,
   type SemrushUploadScope,
 } from "@/lib/overview/overview-bulk-seo-payload";
 import type { OverviewBinding } from "@/hooks/overview/use-overview-wordpress-binding";
 import {
+  bulkUpdateOverviewSeo,
   type BulkOverviewSeoResultRow,
   type BulkOverviewSeoResponse,
 } from "@/lib/wordpress-api/meta";
@@ -31,14 +30,6 @@ import {
   initOverviewBulkHarnessPagination,
   setOverviewBulkHarnessPageState,
 } from "@/lib/overview/overview-bulk-page-state";
-
-/** Pause between parallel upload batches of OVERVIEW_WP_API_BATCH_SIZE. */
-const OVERVIEW_WP_UPLOAD_INTER_PAGE_DELAY_MS =
-  typeof process !== "undefined" && process.env.VITEST ? 0 : 750;
-
-function delayMs(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 export type WpUploadEligibleRow = {
   index: number;
@@ -164,14 +155,6 @@ function rowResultFromBulk(
   };
 }
 
-/** Never use /wp-json/batch/v1 — Cloudflare blocks it on many hosts. */
-async function uploadItemAvoidingBatchV1(
-  site: WordPressSite,
-  item: OverviewBulkSeoApiItem,
-): Promise<BulkOverviewSeoResultRow> {
-  return uploadOverviewSeoApiItemAvoidingBatchV1(site, item);
-}
-
 async function uploadPreparedChunk(
   site: WordPressSite,
   chunkPrepared: Array<{ entry: WpUploadEligibleRow; url: string }>,
@@ -193,31 +176,45 @@ async function uploadPreparedChunk(
     }
   });
 
-  const settled = await Promise.all(
-    chunkPrepared.map(async ({ entry }, localIdx) => {
-      try {
-        const row = await uploadItemAvoidingBatchV1(site, entry.bundle.item);
-        return { ...row, index: localIdx } as BulkOverviewSeoResultRow;
-      } catch (err) {
-        const error = err instanceof Error ? err.message : "WordPress upload failed.";
-        return {
-          postId: entry.bundle.item.postId,
-          index: localIdx,
-          ok: false,
-          error,
-          method: "direct_put",
-        } as BulkOverviewSeoResultRow;
-      }
-    }),
-  );
+  const items = chunkPrepared.map(({ entry }) => entry.bundle.item);
+  let bulkRes: BulkOverviewSeoResponse;
+  try {
+    bulkRes = await bulkUpdateOverviewSeo(
+      site.siteUrl,
+      site.username!,
+      site.appPassword!,
+      items,
+      {
+        onProgress: (event) => {
+          applyWpUploadBatchProgress(harnessSetters, {
+            done: wpBatch,
+            total: wpBatchCount,
+            wpBatch,
+            wpBatchCount,
+            batchResults: event.batchResults,
+            localIndexToUrl,
+          });
+        },
+      },
+    );
+  } catch (err) {
+    const error = err instanceof Error ? err.message : "WordPress upload failed.";
+    bulkRes = {
+      success: false,
+      results: chunkPrepared.map(({ entry }, localIdx) => ({
+        postId: entry.bundle.item.postId,
+        index: localIdx,
+        ok: false,
+        error,
+        method: "direct_put",
+      })),
+      okCount: 0,
+      total: chunkPrepared.length,
+      error,
+    };
+  }
 
-  const mergedResults = settled;
-  const bulkRes = {
-    success: mergedResults.every((r) => r.ok),
-    results: mergedResults,
-    okCount: mergedResults.filter((r) => r.ok).length,
-    total: mergedResults.length,
-  };
+  const mergedResults = bulkRes.results ?? [];
 
   const { resultByIndex, resultByPostId } = mapBulkResults(bulkRes);
   const results: WpUploadRowResult[] = [];
@@ -243,7 +240,7 @@ async function uploadPreparedChunk(
     }
   }
 
-  // One progress tick per WP batch (max 25 parallel PUTs), not per row.
+  // One progress tick per WP batch (one bulk-update-overview-seo call), not per row.
   applyWpUploadBatchProgress(harnessSetters, {
     done: wpBatch,
     total: wpBatchCount,
@@ -298,10 +295,6 @@ export async function runOverviewWpUploadBatch(
   for (let pageIdx = 0; pageIdx < pageRanges.length; pageIdx += 1) {
     const { start, end, page, pageCount } = pageRanges[pageIdx]!;
     const chunkPrepared = prepared.slice(start, end);
-
-    if (pageIdx > 0) {
-      await delayMs(OVERVIEW_WP_UPLOAD_INTER_PAGE_DELAY_MS);
-    }
 
     if (pageCount > 1) {
       setOverviewBulkHarnessPageState({

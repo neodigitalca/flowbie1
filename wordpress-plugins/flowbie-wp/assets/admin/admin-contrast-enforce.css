@@ -40,14 +40,14 @@ body.flowbie-wp-admin-screen #wpbody-content :where(
 	input[type="password"],
 	textarea,
 	select
-):not([class*="flowbie"]):not(.flowbie-image-seo-inline-field):not(.flowbie-image-seo-input) {
+):not([class*="flowbie"]):not(.flowbie-image-seo-inline-field):not(.flowbie-image-seo-input):not(.fcw-textarea) {
 	background: var(--fc-input-bg, #141619) !important;
 	color: var(--fc-on-dark-text, #ffffff) !important;
 	-webkit-text-fill-color: var(--fc-on-dark-text, #ffffff) !important;
 }
 
 body.flowbie-wp-admin-screen #wpbody-content input::placeholder,
-body.flowbie-wp-admin-screen #wpbody-content textarea::placeholder {
+body.flowbie-wp-admin-screen #wpbody-content textarea:not(.fcw-textarea)::placeholder {
 	color: var(--fc-on-dark-placeholder, #9ca3af) !important;
 	-webkit-text-fill-color: var(--fc-on-dark-placeholder, #9ca3af) !important;
 	opacity: 1 !important;

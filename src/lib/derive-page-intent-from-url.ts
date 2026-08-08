@@ -1,3 +1,4 @@
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 /**
  * FIRST step: Derive page intent from URL slug via AI.
  * Use this before GSC/prompt_modifier - URL is page-level, modifier is site-level.
@@ -53,12 +54,7 @@ RULES:
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://agent-blueprint-builder.com',
-        'X-Title': 'Agent Blueprint Builder',
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model,
         messages: [{ role: 'user', content: prompt }],
@@ -97,12 +93,7 @@ In one short phrase, what service or product category does this site focus on? R
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://agent-blueprint-builder.com',
-        'X-Title': 'Agent Blueprint Builder',
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model,
         messages: [{ role: 'user', content: prompt }],

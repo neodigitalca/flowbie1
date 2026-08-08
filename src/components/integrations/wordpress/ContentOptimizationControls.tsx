@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Loader2, Sparkles, Download } from 'lucide-react';
-import { notify } from "@/lib/app-notifications";
-import { notifyDownloadingXFiles } from "@/lib/notify-messages";
-import { OptimizationFileManager } from '@/lib/optimization-file-manager';
+import { Loader2, Sparkles } from 'lucide-react';
 import { type WordPressSite } from '../types';
 import { UnifiedContentSelector } from './UnifiedContentSelector';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,7 +9,7 @@ import { saveSites, getStoredSites } from '../storage';
 import { OptimizationSettingsAccordion } from './OptimizationSettingsPopover';
 import type { OptimizationOptions } from '@/hooks/use-optimization-options';
 import type { OptimizationProgressState } from '@/hooks/content-optimization/use-optimization-state';
-import { ContentOptimizationMicroProgress } from './ContentOptimizationMicroProgress';
+import { OptimizationFileManager } from '@/lib/optimization-file-manager';
 
 interface ContentOptimizationControlsProps {
   site: WordPressSite;
@@ -72,8 +69,6 @@ export const ContentOptimizationControls: React.FC<ContentOptimizationControlsPr
   url,
   updateMode,
   isOptimizing,
-  progress,
-  fileManager,
   onUrlChange,
   onUpdateModeChange,
   onOptimize,
@@ -233,40 +228,6 @@ export const ContentOptimizationControls: React.FC<ContentOptimizationControlsPr
             disabled={isOptimizing || site.enabled === false}
             bulkOptionsVisible={bulkOptionsVisible}
           />
-        )}
-
-        <ContentOptimizationMicroProgress progress={progress} isOptimizing={isOptimizing} />
-
-        {/* Completion Message */}
-        {!isOptimizing && fileManager && fileManager.getFileCount() > 0 && (
-          <div className="rounded-lg bg-muted/40 p-4 text-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-bold text-foreground">
-                  Optimization Complete
-                </div>
-                <div className="mt-0.5 text-muted-foreground">
-                  {fileManager.getFileCount()} files generated
-                </div>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (fileManager) {
-                    fileManager.downloadAllFiles();
-                    notify.success(notifyDownloadingXFiles(fileManager.getFileCount()));
-                  }
-                }}
-                className="h-8 text-sm font-medium"
-              >
-                <Download className="h-3 w-3 mr-1" />
-                Download All
-              </Button>
-            </div>
-          </div>
         )}
 
         {/* Optimize Button */}

@@ -15,6 +15,8 @@ export interface ImagePromptOptions {
   colorBackground?: string;
   /** When true (or when people+animals are both excluded), force realistic background scene language. */
   realisticBackground?: boolean;
+  /** When true, skip default people/animals/text prohibition suffixes (explicit mature user request). */
+  relaxSafetyConstraints?: boolean;
 }
 
 export interface BlueprintContext {
@@ -121,16 +123,18 @@ export const buildImagePrompt = (
   // Combine all parts into a coherent prompt
   let prompt = parts.join('. ');
 
-  if (options.realisticBackground === true) {
-    prompt +=
-      '. CRITICAL visual contract: photorealistic background / environment / product-scene photography only. NEVER depict people, humans, faces, hands, silhouettes of people, animals, pets, wildlife, or cartoon/illustrated characters. No anime, no clipart. Empty or product-focused realistic scene only. ABSOLUTELY NO text in the image: no words, letters, numbers, labels, captions, logos, watermarks, brand callouts, product name overlays, or any written content.';
-  } else if (!options.includePeople && !options.includeAnimals) {
-    prompt += '. Do NOT include people or animals in the image.';
-  }
+  if (!options.relaxSafetyConstraints) {
+    if (options.realisticBackground === true) {
+      prompt +=
+        '. CRITICAL visual contract: photorealistic background / environment / product-scene photography only. NEVER depict people, humans, faces, hands, silhouettes of people, animals, pets, wildlife, or cartoon/illustrated characters. No anime, no clipart. Empty or product-focused realistic scene only. ABSOLUTELY NO text in the image: no words, letters, numbers, labels, captions, logos, watermarks, brand callouts, product name overlays, or any written content.';
+    } else if (!options.includePeople && !options.includeAnimals) {
+      prompt += '. Do NOT include people or animals in the image.';
+    }
 
-  if (!options.includeText && !options.isInfographic) {
-    prompt +=
-      '. ABSOLUTELY NO text, logos, characters, letters, numbers, symbols, watermarks, or any written content visible in the image. Pure visual representation only.';
+    if (!options.includeText && !options.isInfographic) {
+      prompt +=
+        '. ABSOLUTELY NO text, logos, characters, letters, numbers, symbols, watermarks, or any written content visible in the image. Pure visual representation only.';
+    }
   }
 
   // Add instruction for featured image style

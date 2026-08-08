@@ -4,11 +4,19 @@ import { getMuteOptimizationToasts } from "@/hooks/content-optimization/optimiza
 import { loadApiKey } from "@/lib/api";
 import { generateChecklistFromSelections } from "@/lib/blog-template-builder";
 import { generateBlueprintFromTemplate, type BlogTemplateContext } from "@/lib/blog-template-builder";
+import {
+  enforceForbiddenWordsOnBlueprint,
+  formatBlueprintFileContent,
+  formatChecklistFileContent,
+  prepareChecklistForPipeline,
+} from "@/lib/content-word-blocklist";
+import { buildFocusedArticlePurpose } from "@/lib/content-generation/article-length-policy";
 import type { KeywordData } from "@/lib/keyword-types";
-import { OptimizationFileManager } from "@/lib/optimization-file-manager";
 import type { WordPressSite } from "@/components/integrations/types";
+import { OptimizationFileManager } from "@/lib/optimization-file-manager";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { truncateTitleForSEO } from "@/lib/content-generation/content-sanitizer";
+import { progressWithGeneratedFiles } from "@/hooks/content-optimization/optimization-helpers";
 import { extractGeographicEntityWithAI } from "./entity";
 import { cleanTitleForNonEntity } from "./title-cleaning";
 import { analyzeEntityWithAI } from "./keyword-research";
@@ -164,45 +172,70 @@ export async function generateOptimizedBlueprint(
   if (!checklist.length) throw new Error("Failed to generate checklist");
 
   checklist = mergeForcedMediaIntoChecklist(checklist, existingMedia);
+  const pipelineChecklist = prepareChecklistForPipeline(checklist);
+
+  if (!pipelineChecklist.length) {
+    throw new Error("Failed to generate checklist (empty after sanitize)");
+  }
 
   const checklistFileName = OptimizationFileManager.generateFilename("checklist", primaryKeyword, "txt");
   fileManager.addFile(
     checklistFileName,
-    checklist.map((item, index) => `${index + 1}. ${item}`).join("\n"),
+    formatChecklistFileContent(checklist),
     "text/plain"
   );
 
-  if (!getMuteOptimizationToasts()) notify.success(notifyChecklistCreatedXItemsBuildingBluep(checklist.length), { duration: 4000 });
-  setProgress({ step: "Generating optimized blueprint...", progress: 70, message: "Converting checklist to blueprint structure..." });
+  if (!getMuteOptimizationToasts()) notify.success(notifyChecklistCreatedXItemsBuildingBluep(pipelineChecklist.length), { duration: 4000 });
+  setProgress(
+    progressWithGeneratedFiles(
+      { step: "Generating optimized blueprint...", progress: 70, message: "Converting checklist to blueprint structure..." },
+      fileManager,
+    ),
+  );
 
   const blueprintContext: BlogTemplateContext = {
     flowTitle: existingTitle || primaryKeyword,
-    flowPurpose: `Comprehensive guide about ${primaryKeyword}`,
+    flowPurpose: buildFocusedArticlePurpose(primaryKeyword),
     keywordData: primaryKeywordData,
     ...(forcedMediaPrompt ? { userPrompt: forcedMediaPrompt } : {}),
   };
 
   const entityForTemplate = extractedEntity === "N/A" ? undefined : extractedEntity;
-  const blueprintResult = await generateBlueprintFromTemplate(checklist, blueprintContext, {
-    apiKey: openRouterApiKey,
-    model: researchModel,
-    temperature: 1.0,
-    maxTokens: 8000,
-    topP: 0.9,
-    connectedSite: { name: site.name, siteUrl: site.siteUrl },
-    wordPressPosts,
-    currentPageUrl,
-    siteId: site.id,
-    primaryKeyword,
-    entity: entityForTemplate,
-    semrushKeywordsContext: semrushKeywordsCtx,
-    semrushScatterContext: semrushScatterStr,
-    semrushApprovedExternalUrls: semrushForBlueprint?.externalUrls,
-    semrushAnchorPhrases: semrushForBlueprint?.anchorPhrases,
-    ...(forcedMediaPrompt ? { userPrompt: forcedMediaPrompt } : {}),
-  } as any);
+  let blueprintResult: Awaited<ReturnType<typeof generateBlueprintFromTemplate>>;
+  try {
+    blueprintResult = await generateBlueprintFromTemplate(pipelineChecklist, blueprintContext, {
+      apiKey: openRouterApiKey,
+      model: researchModel,
+      temperature: 1.0,
+      maxTokens: 8000,
+      topP: 0.9,
+      connectedSite: { name: site.name, siteUrl: site.siteUrl },
+      wordPressPosts,
+      currentPageUrl,
+      siteId: site.id,
+      primaryKeyword,
+      entity: entityForTemplate,
+      semrushKeywordsContext: semrushKeywordsCtx,
+      semrushScatterContext: semrushScatterStr,
+      semrushApprovedExternalUrls: semrushForBlueprint?.externalUrls,
+      semrushAnchorPhrases: semrushForBlueprint?.anchorPhrases,
+      ...(forcedMediaPrompt ? { userPrompt: forcedMediaPrompt } : {}),
+    } as any);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Blueprint generation failed";
+    setProgress(
+      progressWithGeneratedFiles(
+        { step: "Blueprint failed", progress: 70, message },
+        fileManager,
+      ),
+    );
+    throw error;
+  }
 
   if (!blueprintResult.agents?.length) throw new Error("Failed to generate blueprint");
+
+  const enforcedBlueprint = enforceForbiddenWordsOnBlueprint(blueprintResult);
+  Object.assign(blueprintResult, enforcedBlueprint);
 
   const entityForBlueprint = extractedEntity === "N/A" ? undefined : extractedEntity;
   (blueprintResult as any).entity = entityForBlueprint;
@@ -244,7 +277,18 @@ export async function generateOptimizedBlueprint(
   if (!getMuteOptimizationToasts()) notify.success(notifyBlueprintCreatedXSectionsStartingCo(blueprintResult.agents.length), { duration: 4000 });
 
   const blueprintFileName = OptimizationFileManager.generateFilename("blueprint", primaryKeyword, "json");
-  fileManager.addFile(blueprintFileName, JSON.stringify(blueprintResult, null, 2), "application/json");
+  fileManager.addFile(blueprintFileName, formatBlueprintFileContent(blueprintResult as Record<string, unknown>), "application/json");
 
-  return { blueprintResult, checklist };
+  setProgress(
+    progressWithGeneratedFiles(
+      {
+        step: "Generating optimized content...",
+        progress: 75,
+        message: `Blueprint ready (${blueprintResult.agents.length} sections)`,
+      },
+      fileManager,
+    ),
+  );
+
+  return { blueprintResult, checklist: pipelineChecklist };
 }

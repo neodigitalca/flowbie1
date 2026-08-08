@@ -10,6 +10,7 @@ import { normalizeEntityHintCommaLabel } from "@/lib/comma-place-label";
 import { aiRejectBrandOrBlockedTexts } from "@/lib/content-brand-ai-gate";
 import { collapseRepeatedPlaceSegmentsInKeyword } from "@/lib/local-analysis/entity-sap-row-keyword-fill";
 import { buildSapSlugFromKeywordEntity } from "@/lib/sap-slug-from-keyword-entity";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 const SAP_TITLE_AGENT_SYSTEM = `You are a **local SEO title agent** for **transactional service-area (SAP) landing pages** — product/service pages for customers ready to buy or book, **not** blog posts.
 
@@ -108,12 +109,7 @@ async function fetchTitlesBatch(
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://flowbie.app",
-      "X-Title": "Flowbie Entity SAP Title Agent",
-    },
+    headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
       model,
       messages: [

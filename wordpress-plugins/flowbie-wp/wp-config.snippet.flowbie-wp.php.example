@@ -1,23 +1,24 @@
 <?php
 /**
- * Optional wp-config overrides for Flowbie WP v0.8+.
+ * Optional wp-config overrides for Flowbie WP.
  *
  * Paste above "That's all, stop editing!" in wp-config.php.
- * OpenRouter credentials are loaded automatically from Flowbie (Supabase) when the site is connected.
+ * Prefer plugin .env (see .env.example) or npm run embed:flowbie-wp-secrets before deploy.
  */
 
-/** Supabase (optional — defaults are bundled with the plugin). */
-// define( 'FLOWBIE_WP_SUPABASE_URL', 'https://your-project.supabase.co' );
-// define( 'FLOWBIE_WP_SUPABASE_ANON_KEY', 'your-anon-key' );
+/** OpenRouter — AI wands, chat, search ranking */
+// define( 'FLOWBIE_WP_OPENROUTER_API_KEY', 'sk-or-v1-…' );
+// define( 'FLOWBIE_WP_OPENROUTER_MODEL', 'google/gemini-2.5-flash-lite' );
+// define( 'FLOWBIE_WP_OPENROUTER_HTTP_REFERER', 'https://flowbie.ca/flowbie-wp' );
 
-/** SEO research — DataForSEO + Semrush (server-side from WordPress; no Flow API URL). */
+/** SEO research — DataForSEO + Semrush */
 // define( 'FLOWBIE_WP_DATAFORSEO_LOGIN', 'your@login' );
 // define( 'FLOWBIE_WP_DATAFORSEO_PASSWORD', 'your-password' );
 // define( 'FLOWBIE_WP_SEMRUSH_API_KEY', 'your-semrush-key' );
 
-/** Optional GSC service account JSON for Analytics (normally loaded from Flowbie Supabase after pairing). */
-// define( 'FLOWBIE_WP_GSC_SERVICE_ACCOUNT_JSON', '{"type":"service_account","project_id":"…","private_key_id":"…","private_key":"-----BEGIN PRIVATE KEY-----\\n…\\n-----END PRIVATE KEY-----\\n","client_email":"flowbie-812@flowbie-483717.iam.gserviceaccount.com","client_id":"…","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token"}' );
+/** AgentMail */
+// define( 'FLOWBIE_WP_AGENTMAIL_API_KEY', 'am_…' );
+// define( 'FLOWBIE_WP_AGENTMAIL_INBOX', 'you@agentmail.to' );
 
-/** Optional OpenRouter overrides (normally managed in Flowbie Integrations → API Keys). */
-// define( 'FLOWBIE_WP_OPENROUTER_API_KEY', 'sk-or-v1-…' );
-// define( 'FLOWBIE_WP_OPENROUTER_MODEL', 'google/gemini-2.5-flash-lite' );
+/** Optional GSC service account JSON for Analytics */
+// define( 'FLOWBIE_WP_GSC_SERVICE_ACCOUNT_JSON', '{"type":"service_account",…}' );

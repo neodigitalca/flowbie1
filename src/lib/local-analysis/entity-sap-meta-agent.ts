@@ -1,4 +1,5 @@
 import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 import {
   appendMasterInstructionsToSystemPrompt,
   buildSapMasterRulesWorkflowPrefix,
@@ -61,12 +62,7 @@ async function fetchMetasBatch(
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://flowbie.app",
-      "X-Title": "Flowbie Entity SAP Meta Agent",
-    },
+    headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
       model,
       messages: [

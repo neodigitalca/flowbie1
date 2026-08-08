@@ -7,6 +7,7 @@
 import type { WordPressSite } from "@/components/integrations/types";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { parseJsonObjectFromModelText } from "@/lib/openrouter-vision-chat";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 export type SapPeerMarketPeerInput = Pick<
   WordPressSite,
@@ -212,13 +213,7 @@ async function openRouterResolveMarketCity(params: {
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${params.apiKey.trim()}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer":
-        typeof window !== "undefined" ? window.location.origin : "https://flowbie.app",
-      "X-Title": "Flowbie Market City",
-    },
+    headers: openRouterWebAppHeaders(params.apiKey.trim()),
     body: JSON.stringify({
       model: params.model,
       messages: [
@@ -277,13 +272,7 @@ async function openRouterSameCityPeersJson(params: {
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${params.apiKey.trim()}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer":
-        typeof window !== "undefined" ? window.location.origin : "https://flowbie.app",
-      "X-Title": "Flowbie Same-City Peers",
-    },
+    headers: openRouterWebAppHeaders(params.apiKey.trim()),
     body: JSON.stringify({
       model: params.model,
       messages: [

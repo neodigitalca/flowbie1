@@ -1,0 +1,115 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Globe, Loader2, UserCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { getStoredSites } from "@/components/integrations/storage";
+import type { WordPressSite } from "@/components/integrations/types";
+import { CHAT_ICON_BTN_CLASS } from "@/components/chat/chat-theme";
+import { executeFlowbieWpTool } from "@/lib/wordpress-api/flowbie-wp-tools";
+import { cn } from "@/lib/utils";
+
+const ACTIVE_WP_SITE_STORAGE_KEY = "flowbie-active-wp-site-id";
+
+function resolveActiveWordPressSite(): WordPressSite | null {
+  const sites = getStoredSites().filter(
+    (site) => site.enabled !== false && site.siteUrl?.trim() && site.username?.trim() && site.appPassword?.trim(),
+  );
+  if (!sites.length) return null;
+  try {
+    const activeId = localStorage.getItem(ACTIVE_WP_SITE_STORAGE_KEY);
+    if (activeId) {
+      const match = sites.find((site) => site.id === activeId);
+      if (match) return match;
+    }
+  } catch {
+    /* ignore */
+  }
+  return sites[0] ?? null;
+}
+
+type ChatFrontendWidgetToggleProps = {
+  disabled?: boolean;
+};
+
+/**
+ * Team admin control: show Flow Assist on the active WordPress property frontend for logged-in WP users only.
+ */
+export function ChatFrontendWidgetToggle({ disabled = false }: ChatFrontendWidgetToggleProps): React.ReactElement | null {
+  const site = useMemo(() => resolveActiveWordPressSite(), []);
+  const [active, setActive] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!site) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const result = await executeFlowbieWpTool(site, "wp_chat_settings_get");
+      const enabled = result.enabled === true;
+      const loggedInOnly = result.logged_in_only === true;
+      setActive(enabled && loggedInOnly);
+    } catch {
+      setActive(false);
+    } finally {
+      setLoading(false);
+    }
+  }, [site]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const handleToggle = useCallback(async () => {
+    if (!site || saving) return;
+    const next = !active;
+    setSaving(true);
+    try {
+      await executeFlowbieWpTool(site, "wp_chat_settings_update", {
+        enabled: next,
+        logged_in_only: next,
+      });
+      setActive(next);
+    } finally {
+      setSaving(false);
+    }
+  }, [active, saving, site]);
+
+  if (!site) return null;
+
+  const busy = disabled || loading || saving;
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className={cn(
+        "h-8 w-8 shrink-0",
+        CHAT_ICON_BTN_CLASS,
+        active && "text-primary",
+      )}
+      aria-label={
+        active
+          ? "Flow Assist visible on site frontend for logged-in users. Click to disable."
+          : "Enable Flow Assist on site frontend for logged-in users only"
+      }
+      title={
+        active
+          ? "Flow Assist on frontend (logged-in users only)"
+          : "Show Flow Assist on frontend for logged-in users only"
+      }
+      disabled={busy}
+      onClick={() => void handleToggle()}
+    >
+      {loading || saving ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : active ? (
+        <UserCheck className="h-4 w-4" />
+      ) : (
+        <Globe className="h-4 w-4" />
+      )}
+    </Button>
+  );
+}

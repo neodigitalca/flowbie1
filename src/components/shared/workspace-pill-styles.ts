@@ -9,8 +9,9 @@ export const WORKSPACE_PILL_SQUARE_BASE = `${WORKSPACE_PILL_SHAPE} rounded-none`
 export const WORKSPACE_PILL_INACTIVE =
   "bg-black text-muted-foreground hover:bg-black hover:text-foreground";
 
+/** Neon green active tab with top gloss highlight. */
 export const WORKSPACE_PILL_ACTIVE =
-  "bg-primary text-black hover:bg-primary hover:text-black";
+  "relative isolate overflow-hidden bg-primary text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.38)] hover:bg-primary hover:text-black after:pointer-events-none after:absolute after:inset-x-0 after:top-0 after:h-[48%] after:bg-gradient-to-b after:from-white/30 after:to-transparent";
 
 /** ToggleGroupItem: same inactive/active mapping when a toggle group is required. */
 export const WORKSPACE_PILL_TOGGLE_ITEM = [

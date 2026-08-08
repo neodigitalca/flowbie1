@@ -87,7 +87,6 @@
   };
 
   var CHAT_UI_CLASS = {
-    launcher: 'fcw-hide-launcher',
     header: 'fcw-hide-header',
     avatar: 'fcw-hide-avatar',
     assistant_name: 'fcw-hide-assistant-name',
@@ -98,6 +97,7 @@
     cta_buttons: 'fcw-hide-cta-buttons',
     suggestion_chips: 'fcw-hide-suggestion-chips',
     confidence: 'fcw-hide-confidence',
+    type_badge: 'fcw-hide-type-badge',
     powered_by: 'fcw-hide-powered-by',
     send_button: 'fcw-hide-send-button',
     mic_button: 'fcw-hide-mic-button',
@@ -145,6 +145,48 @@
       ui[m[1]] = this.type === 'checkbox' ? this.checked : !!$(this).val();
     });
     return ui;
+  }
+
+  function collectSidebar($root) {
+    var sidebar = {};
+    $root.find('[name^="flowbie_design[sidebar]"]').each(function () {
+      var name = this.name;
+      var m = name.match(/flowbie_design\[sidebar\]\[([^\]]+)\]/);
+      if (!m) return;
+      if (m[1] === 'sidebar_layout') return;
+      sidebar[m[1]] = $(this).val();
+    });
+    return sidebar;
+  }
+
+  function applySidebar(el, sidebar) {
+    if (!el || !sidebar) return;
+    var isChat = el.classList.contains('flowbie-chat-widget')
+      || el.classList.contains('flowbie-chat-design-preview')
+      || el.id === 'flowbie-chat-widget-root';
+    el.classList.remove(
+      'fai-sidebar-root--left',
+      'fai-sidebar-root--right',
+      'fai-sidebar-root--transition-slide',
+      'fai-sidebar-root--transition-fade',
+      'fai-sidebar-root--transition-none',
+      'flowbie-search-wrap--sidebar-mode'
+    );
+    if (isChat || sidebar.display_mode === 'sidebar') {
+      if (!isChat) {
+        el.classList.add('flowbie-search-wrap--sidebar-mode');
+      }
+      el.classList.add('fai-sidebar-root');
+      el.classList.add('fai-sidebar-root--' + (sidebar.sidebar_side === 'left' ? 'left' : 'right'));
+      el.classList.add('fai-sidebar-root--transition-' + (sidebar.sidebar_transition || 'slide'));
+    }
+    if (sidebar.sidebar_width) {
+      el.style.setProperty('--fai-sidebar-width', sidebar.sidebar_width + 'px');
+    }
+    var heading = el.querySelector('.fbs__heading, .fcw-sidebar-heading');
+    if (heading && sidebar.sidebar_heading !== undefined) {
+      heading.textContent = sidebar.sidebar_heading;
+    }
   }
 
   function applyVars(el, map, tokens) {
@@ -203,6 +245,7 @@
     if (!$root.length) return;
     var tokens = collectTokens($root);
     var ui = collectUi($root);
+    var sidebar = collectSidebar($root);
     var chatDemo = document.querySelector(
       '.flowbie-chat-design-preview, #flowbie-chat-widget-root, .flowbie-chat-widget, .fcwd'
     );
@@ -213,10 +256,12 @@
     if (searchDemo) {
       applyVars(searchDemo, SEARCH_MAP, tokens);
       applySearchUi(searchDemo, ui);
+      applySidebar(searchDemo, sidebar);
     }
     if (chatDemo) {
       applyVars(chatDemo, CHAT_MAP, tokens);
       applyChatUi(chatDemo, ui);
+      applySidebar(chatDemo, sidebar);
     }
   }
 

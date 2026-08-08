@@ -3,11 +3,13 @@ import type { AgentConfig } from "@/types/agent-config";
 import { BLOG_HARNESS_SUMMARY_AGENT_ID } from "@/lib/bulk/blog-harness-summary-agent";
 import type { BulkHarnessOutlineSection } from "@/lib/bulk/bulk-harness-outline";
 import {
+  extractBodyAnchorsFromHarnessPieces,
   buildHarnessSectionAnchorMap,
   formatHarnessInPageAnchorBlock,
   headingTitleToHarnessAnchorId,
   HARNESS_OVERVIEW_ANCHOR_ID,
   injectHarnessSectionH2AnchorId,
+  enforceHarnessSectionHeadingTitle,
   resolveHarnessSectionInjectAnchorId,
 } from "@/lib/bulk/harness-section-anchor-ids";
 
@@ -66,6 +68,21 @@ describe("buildHarnessSectionAnchorMap", () => {
   });
 });
 
+describe("enforceHarnessSectionHeadingTitle", () => {
+  it("replaces paraphrased h2 text with harness display title", () => {
+    const html =
+      '<h2 id="bc-pst-expansion-2026-key-updates-for-businesses">2026 BC PST Expansion: Business Rules</h2><p>Body.</p>';
+    const out = enforceHarnessSectionHeadingTitle(
+      html,
+      "BC PST Expansion 2026: Key Updates for Businesses",
+    );
+    expect(out).toContain(
+      "<h2 id=\"bc-pst-expansion-2026-key-updates-for-businesses\">BC PST Expansion 2026: Key Updates for Businesses</h2>",
+    );
+    expect(out).not.toContain("Business Rules");
+  });
+});
+
 describe("injectHarnessSectionH2AnchorId", () => {
   it("adds id on the first h2", () => {
     const html = "<h2>Overview</h2>\n<p>Lead.</p>";
@@ -83,13 +100,34 @@ describe("injectHarnessSectionH2AnchorId", () => {
 });
 
 describe("resolveHarnessSectionInjectAnchorId", () => {
-  it("uses overview for index 0 and map entries for body sections", () => {
+  it("uses overview id only when overviewSection is set", () => {
     const map = buildHarnessSectionAnchorMap([
       outlineRow(0, "Overview", BLOG_HARNESS_SUMMARY_AGENT_ID),
       outlineRow(1, "Hiring Tips"),
     ]);
-    expect(resolveHarnessSectionInjectAnchorId(0, map)).toBe(HARNESS_OVERVIEW_ANCHOR_ID);
+    expect(resolveHarnessSectionInjectAnchorId(0, map, { overviewSection: true })).toBe(
+      HARNESS_OVERVIEW_ANCHOR_ID,
+    );
     expect(resolveHarnessSectionInjectAnchorId(1, map)).toBe("hiring-tips");
+  });
+
+  it("uses map entry for body index 0 when overview is generated last", () => {
+    const bodyOnly = buildHarnessSectionAnchorMap([outlineRow(0, "Hiring Tips")]);
+    expect(resolveHarnessSectionInjectAnchorId(0, bodyOnly)).toBe("hiring-tips");
+  });
+});
+
+describe("extractBodyAnchorsFromHarnessPieces", () => {
+  it("reads id and title from each body piece", () => {
+    const pieces = [
+      '<h2 id="cost-guide">Cost Guide</h2><p>Body.</p>',
+      '<h2 id="safety-first">Safety First</h2><p>More.</p>',
+    ];
+    const anchors = extractBodyAnchorsFromHarnessPieces(pieces);
+    expect(anchors).toEqual([
+      { sectionIndex: 0, displayTitle: "Cost Guide", anchorId: "cost-guide" },
+      { sectionIndex: 1, displayTitle: "Safety First", anchorId: "safety-first" },
+    ]);
   });
 });
 
@@ -108,5 +146,15 @@ describe("formatHarnessInPageAnchorBlock", () => {
     expect(block).toContain("NON-NEGOTIABLE");
     expect(block).toContain("2–4 word");
     expect(block).toContain("Do not skip any anchor");
+  });
+
+  it("contextOnly mode instructs contextual scroll-link ul", () => {
+    const block = formatHarnessInPageAnchorBlock(
+      [{ sectionIndex: 0, displayTitle: "Hiring Tips", anchorId: "hiring-tips" }],
+      { contextOnly: true },
+    );
+    expect(block).toContain("contextual <ul>");
+    expect(block).toContain("NOT \"see below\"");
+    expect(block).toContain("#hiring-tips");
   });
 });

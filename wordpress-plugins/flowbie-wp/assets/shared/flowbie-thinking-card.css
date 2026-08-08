@@ -13,84 +13,57 @@
 .flowbie-thinking-step,
 .fcw-thinking-step,
 .fcwd-thinking-step {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  font-size: 0.9rem;
+  display: block;
+  font-size: 1rem;
   line-height: 1.5;
   color: rgba(240, 240, 240, 0.8);
+}
+
+.flowbie-thinking-step-label,
+.fcw-thinking-step-label,
+.fcwd-thinking-step-label {
+  display: block;
+  text-align: left;
+}
+
+.flowbie-thinking-step--running .flowbie-thinking-step-label,
+.fcw-thinking-step--running .fcw-thinking-step-label,
+.fcwd-thinking-step--running .fcwd-thinking-step-label {
+  color: #3b82f6;
+  font-weight: 600;
+  animation: flowbiePhaseBreathe 2s ease-in-out infinite;
+}
+
+.flowbie-thinking-step--done .flowbie-thinking-step-label,
+.fcw-thinking-step--done .fcw-thinking-step-label,
+.fcwd-thinking-step--done .fcwd-thinking-step-label {
+  color: rgba(240, 240, 240, 0.55);
+}
+
+.flowbie-thinking-step--pending .flowbie-thinking-step-label,
+.fcw-thinking-step--pending .fcw-thinking-step-label,
+.fcwd-thinking-step--pending .fcwd-thinking-step-label {
+  color: rgba(240, 240, 240, 0.45);
 }
 
 .flowbie-thinking-step-icon,
 .fcw-thinking-step-icon,
 .fcwd-thinking-step-icon {
-  flex-shrink: 0;
-  width: 1.25rem;
-  text-align: center;
-  line-height: 1.5;
-}
-
-.flowbie-thinking-step--running .flowbie-thinking-step-icon,
-.fcw-thinking-step--running .fcw-thinking-step-icon,
-.fcwd-thinking-step--running .fcwd-thinking-step-icon {
-  color: #60a5fa;
-}
-
-.flowbie-thinking-step--done .flowbie-thinking-step-icon,
-.fcw-thinking-step--done .fcw-thinking-step-icon,
-.fcwd-thinking-step--done .fcwd-thinking-step-icon {
-  color: #4ade80;
-}
-
-.flowbie-thinking-step--pending .flowbie-thinking-step-icon,
-.fcw-thinking-step--pending .fcw-thinking-step-icon,
-.fcwd-thinking-step--pending .fcwd-thinking-step-icon {
-  color: rgba(255, 255, 255, 0.35);
-}
-
-.flowbie-thinking-step-icon--brain,
-.fcw-thinking-step-icon--brain,
-.fcwd-thinking-step-icon--brain {
-  width: 2rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.flowbie-thinking-step-icon--brain svg,
-.fcw-thinking-step-icon--brain svg,
-.fcwd-thinking-step-icon--brain svg {
-  animation: flowbieBrainPulse 1.4s ease-in-out infinite;
-  filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.85));
+  display: none !important;
 }
 
 .flowbie-thinking-card--active,
 .fcw-card--thinking-active,
 .fcwd-card--thinking-active {
-  border-color: rgba(34, 211, 238, 0.35);
-  animation: flowbieThinkingBreathe 2.8s ease-in-out infinite;
+  border-color: rgba(148, 163, 184, 0.35);
 }
 
-@keyframes flowbieBrainPulse {
+@keyframes flowbiePhaseBreathe {
   0%,
   100% {
-    opacity: 0.75;
-    transform: scale(1);
+    text-shadow: 0 0 0 rgba(59, 130, 246, 0);
   }
   50% {
-    opacity: 1;
-    transform: scale(1.06);
-  }
-}
-
-@keyframes flowbieThinkingBreathe {
-  0%,
-  100% {
-    border-color: rgba(34, 211, 238, 0.25);
-    box-shadow: 0 0 0 rgba(34, 211, 238, 0);
-  }
-  50% {
-    border-color: rgba(34, 211, 238, 0.45);
-    box-shadow: 0 0 12px rgba(34, 211, 238, 0.12);
+    text-shadow: 0 0 16px rgba(59, 130, 246, 0.55);
   }
 }

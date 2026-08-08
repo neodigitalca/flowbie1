@@ -257,6 +257,10 @@ trait Flowbie_Wp_Admin_Trait_Render_Ai_Widget_Design {
 				self::render_chat_voice_design_fields( $chat_settings );
 				self::render_chat_position_design_fields( $chat_settings );
 			}
+			if ( $widget === 'search' ) {
+				self::render_search_sidebar_design_fields();
+				self::render_search_insights_design_fields();
+			}
 			?>
 			</div>
 		</div>
@@ -270,8 +274,6 @@ trait Flowbie_Wp_Admin_Trait_Render_Ai_Widget_Design {
 		$checks = array(
 			'flowbie_chat_voice_enabled'     => array( __( 'Enable voice chat', 'flowbie-wp' ), ! isset( $chat_settings['voice_enabled'] ) || ! empty( $chat_settings['voice_enabled'] ) ),
 			'flowbie_chat_voice_ptt'         => array( __( 'Hold to speak (push-to-talk)', 'flowbie-wp' ), ! isset( $chat_settings['voice_ptt'] ) || ! empty( $chat_settings['voice_ptt'] ) ),
-			'flowbie_chat_voice_ack'         => array( __( 'Spoken acknowledgement', 'flowbie-wp' ), ! isset( $chat_settings['voice_ack'] ) || ! empty( $chat_settings['voice_ack'] ) ),
-			'flowbie_chat_voice_narrate'     => array( __( 'Speak assistant replies', 'flowbie-wp' ), ! isset( $chat_settings['voice_narrate'] ) || ! empty( $chat_settings['voice_narrate'] ) ),
 			'flowbie_chat_mic_replaces_send' => array( __( 'Mic replaces send when input empty', 'flowbie-wp' ), ! isset( $chat_settings['mic_replaces_send'] ) || ! empty( $chat_settings['mic_replaces_send'] ) ),
 		);
 		self::panel_form_group_open();
@@ -298,21 +300,298 @@ trait Flowbie_Wp_Admin_Trait_Render_Ai_Widget_Design {
 		self::panel_form_group_open();
 		?>
 		<div class="flowbie-schema-cell flowbie-schema-cell--full">
-			<h3 class="flowbie-design-section-title"><?php esc_html_e( 'Position', 'flowbie-wp' ); ?></h3>
+			<h3 class="flowbie-design-section-title"><?php esc_html_e( 'Sidebar panel', 'flowbie-wp' ); ?></h3>
 		</div>
 		<?php
-		self::panel_form_field_select(
-			'flowbie-wp-chat-position',
-			'flowbie_chat_position',
-			__( 'Widget position', 'flowbie-wp' ),
-			array(
-				'bottom-right' => __( 'Bottom right', 'flowbie-wp' ),
-				'bottom-left'  => __( 'Bottom left', 'flowbie-wp' ),
-			),
-			(string) ( $chat_settings['position'] ?? 'bottom-right' ),
-			'half'
+		self::render_sidebar_design_fields( 'chat', 'flowbie_design[sidebar]', Flowbie_Wp_Ai_Widget_Design::resolve_sidebar_config( 'chat', $chat_settings ) );
+		self::panel_form_group_close();
+	}
+
+	/**
+	 * Search global sidebar defaults (Appearance tab).
+	 */
+	protected static function render_search_sidebar_design_fields(): void {
+		$sidebar = Flowbie_Wp_Ai_Widget_Design::get_settings()['search_sidebar'];
+		self::panel_form_group_open();
+		?>
+		<div class="flowbie-schema-cell flowbie-schema-cell--full">
+			<h3 class="flowbie-design-section-title"><?php esc_html_e( 'Sidebar', 'flowbie-wp' ); ?></h3>
+		</div>
+		<?php
+		self::render_sidebar_design_fields( 'search', 'flowbie_design[sidebar]', $sidebar );
+		self::panel_form_group_close();
+	}
+
+	/**
+	 * Search insights and usage tracking defaults.
+	 */
+	protected static function render_search_insights_design_fields(): void {
+		$insights = Flowbie_Wp_Ai_Widget_Design::get_settings()['search_insights'];
+		self::panel_form_group_open();
+		?>
+		<div class="flowbie-schema-cell flowbie-schema-cell--full">
+			<h3 class="flowbie-design-section-title"><?php esc_html_e( 'Insights', 'flowbie-wp' ); ?></h3>
+			<div class="flowbie-design-visibility-grid flowbie-design-visibility-grid--2">
+				<?php
+				$checks = array(
+					'show_popular_terms'          => __( 'Popular searches', 'flowbie-wp' ),
+					'show_popular_pages_overseer' => __( 'General pages (Overseer)', 'flowbie-wp' ),
+					'show_popular_pages_search'   => __( 'From search clicks', 'flowbie-wp' ),
+				);
+				foreach ( $checks as $key => $label ) :
+					?>
+					<label class="flowbie-design-check">
+						<input type="checkbox" name="flowbie_design[insights][<?php echo esc_attr( $key ); ?>]" value="1" <?php checked( ! empty( $insights[ $key ] ) ); ?> />
+						<span><?php echo esc_html( $label ); ?></span>
+					</label>
+				<?php endforeach; ?>
+			</div>
+		</div>
+		<?php
+		self::panel_form_field_input(
+			'flowbie-search-insights-days',
+			'flowbie_design[insights][insights_days]',
+			__( 'Insights lookback (days)', 'flowbie-wp' ),
+			(string) (int) ( $insights['insights_days'] ?? 30 ),
+			'half',
+			'number',
+			false,
+			'',
+			'min="1" max="365"'
+		);
+		self::panel_form_field_input(
+			'flowbie-search-popular-terms-limit',
+			'flowbie_design[insights][popular_terms_limit]',
+			__( 'Popular terms limit', 'flowbie-wp' ),
+			(string) (int) ( $insights['popular_terms_limit'] ?? 5 ),
+			'half',
+			'number',
+			false,
+			'',
+			'min="1" max="20"'
 		);
 		self::panel_form_group_close();
+	}
+
+	/**
+	 * @param string              $widget 'search' | 'chat'
+	 * @param string              $name_prefix Form name prefix.
+	 * @param array<string,mixed> $sidebar Resolved sidebar config.
+	 */
+	protected static function render_sidebar_design_fields( string $widget, string $name_prefix, array $sidebar ): void {
+		if ( $widget === 'search' ) {
+			self::panel_form_field_select(
+				'flowbie-sidebar-display-' . $widget,
+				$name_prefix . '[display_mode]',
+				__( 'Display mode', 'flowbie-wp' ),
+				array(
+					'inline'    => __( 'Inline dropdown', 'flowbie-wp' ),
+					'sidebar'   => __( 'Full-height sidebar', 'flowbie-wp' ),
+					'icon_only' => __( 'Icon only', 'flowbie-wp' ),
+				),
+				(string) ( $sidebar['display_mode'] ?? 'inline' ),
+				'half'
+			);
+		}
+
+		if ( $widget === 'search' ) {
+			self::panel_form_field_select(
+				'flowbie-sidebar-launcher-icon-' . $widget,
+				$name_prefix . '[launcher_icon]',
+				__( 'Launcher icon', 'flowbie-wp' ),
+				Flowbie_Wp_Search_Icons::catalog(),
+				(string) ( $sidebar['launcher_icon'] ?? 'search' ),
+				'half'
+			);
+
+			self::panel_form_field_select(
+				'flowbie-sidebar-icon-open-as-' . $widget,
+				$name_prefix . '[icon_open_as]',
+				__( 'Opens as', 'flowbie-wp' ),
+				array(
+					'sidebar_left'  => __( 'Sidebar (left)', 'flowbie-wp' ),
+					'sidebar_right' => __( 'Sidebar (right)', 'flowbie-wp' ),
+					'modal_center'  => __( 'Center modal', 'flowbie-wp' ),
+					'expand_inline' => __( 'Expand inline', 'flowbie-wp' ),
+				),
+				(string) ( $sidebar['icon_open_as'] ?? 'sidebar_right' ),
+				'half'
+			);
+
+			self::panel_form_field_input(
+				'flowbie-sidebar-modal-width-' . $widget,
+				$name_prefix . '[modal_max_width]',
+				__( 'Modal max width (px)', 'flowbie-wp' ),
+				(string) (int) ( $sidebar['modal_max_width'] ?? 560 ),
+				'half',
+				'number',
+				false,
+				'',
+				'min="320" max="720"'
+			);
+
+			self::panel_form_field_input(
+				'flowbie-sidebar-launcher-label-' . $widget,
+				$name_prefix . '[launcher_label]',
+				__( 'Launcher label (accessibility)', 'flowbie-wp' ),
+				(string) ( $sidebar['launcher_label'] ?? '' ),
+				'half'
+			);
+		}
+
+		self::panel_form_field_select(
+			'flowbie-sidebar-side-' . $widget,
+			$name_prefix . '[sidebar_side]',
+			__( 'Sidebar side', 'flowbie-wp' ),
+			array(
+				'left'  => __( 'Left', 'flowbie-wp' ),
+				'right' => __( 'Right', 'flowbie-wp' ),
+			),
+			(string) ( $sidebar['sidebar_side'] ?? 'right' ),
+			'half'
+		);
+
+		self::panel_form_field_select(
+			'flowbie-sidebar-transition-' . $widget,
+			$name_prefix . '[sidebar_transition]',
+			__( 'Transition', 'flowbie-wp' ),
+			array(
+				'slide' => __( 'Slide', 'flowbie-wp' ),
+				'fade'  => __( 'Fade', 'flowbie-wp' ),
+				'none'  => __( 'None', 'flowbie-wp' ),
+			),
+			(string) ( $sidebar['sidebar_transition'] ?? 'slide' ),
+			'half'
+		);
+
+		self::panel_form_field_input(
+			'flowbie-sidebar-width-' . $widget,
+			$name_prefix . '[sidebar_width]',
+			__( 'Sidebar width (px)', 'flowbie-wp' ),
+			(string) (int) ( $sidebar['sidebar_width'] ?? 400 ),
+			'half',
+			'number',
+			false,
+			'',
+			'min="280" max="560"'
+		);
+
+		self::panel_form_field_input(
+			'flowbie-sidebar-heading-' . $widget,
+			$name_prefix . '[sidebar_heading]',
+			__( 'Heading (H2)', 'flowbie-wp' ),
+			(string) ( $sidebar['sidebar_heading'] ?? '' ),
+			'half'
+		);
+
+		if ( $widget === 'search' ) {
+			self::panel_form_field_select(
+				'flowbie-sidebar-panel-layout-' . $widget,
+				$name_prefix . '[panel_layout]',
+				__( 'Panel layout', 'flowbie-wp' ),
+				array(
+					'compact'   => __( 'Compact', 'flowbie-wp' ),
+					'discovery' => __( 'Discovery', 'flowbie-wp' ),
+				),
+				(string) ( $sidebar['panel_layout'] ?? 'compact' ),
+				'half'
+			);
+
+			self::panel_form_field_input(
+				'flowbie-sidebar-subtitle-' . $widget,
+				$name_prefix . '[sidebar_subtitle]',
+				__( 'Subtitle', 'flowbie-wp' ),
+				(string) ( $sidebar['sidebar_subtitle'] ?? '' ),
+				'half'
+			);
+
+			self::panel_form_field_input(
+				'flowbie-sidebar-offset-top-' . $widget,
+				$name_prefix . '[panel_offset_top]',
+				__( 'Content offset from top', 'flowbie-wp' ),
+				(string) (int) ( $sidebar['panel_offset_top'] ?? 64 ),
+				'half',
+				'number',
+				false,
+				'',
+				'min="0" max="400"'
+			);
+
+			self::panel_form_field_select(
+				'flowbie-sidebar-offset-unit-' . $widget,
+				$name_prefix . '[panel_offset_top_unit]',
+				__( 'Offset unit', 'flowbie-wp' ),
+				array(
+					'vh' => 'vh',
+					'px' => 'px',
+					'%'  => '%',
+				),
+				(string) ( $sidebar['panel_offset_top_unit'] ?? 'px' ),
+				'half'
+			);
+
+			self::panel_form_field_select(
+				'flowbie-sidebar-content-align-' . $widget,
+				$name_prefix . '[panel_content_align]',
+				__( 'Panel content alignment', 'flowbie-wp' ),
+				array(
+					'left'   => __( 'Left', 'flowbie-wp' ),
+					'center' => __( 'Center', 'flowbie-wp' ),
+				),
+				(string) ( $sidebar['panel_content_align'] ?? 'left' ),
+				'half'
+			);
+
+			self::panel_form_field_input(
+				'flowbie-sidebar-backdrop-opacity-' . $widget,
+				$name_prefix . '[backdrop_opacity]',
+				__( 'Backdrop opacity (%)', 'flowbie-wp' ),
+				(string) (int) ( $sidebar['backdrop_opacity'] ?? 35 ),
+				'half',
+				'number',
+				false,
+				'',
+				'min="0" max="100"'
+			);
+		}
+
+		$layout       = isset( $sidebar['sidebar_layout'] ) && is_array( $sidebar['sidebar_layout'] )
+			? $sidebar['sidebar_layout']
+			: ( $widget === 'search' ? array( 'heading', 'search', 'results' ) : array( 'chat' ) );
+		$layout_opts  = $widget === 'search'
+			? array(
+				'heading'                => __( 'Heading', 'flowbie-wp' ),
+				'search'                 => __( 'Search bar', 'flowbie-wp' ),
+				'popular_terms'          => __( 'Popular searches', 'flowbie-wp' ),
+				'popular_pages_overseer' => __( 'General pages', 'flowbie-wp' ),
+				'popular_pages_search'   => __( 'From search', 'flowbie-wp' ),
+				'popular_topics'         => __( 'Popular topics grid', 'flowbie-wp' ),
+				'results'                => __( 'Results area', 'flowbie-wp' ),
+			)
+			: array(
+				'heading'       => __( 'Heading', 'flowbie-wp' ),
+				'contact_human' => __( 'Talk to a human', 'flowbie-wp' ),
+				'chat'          => __( 'Chat body', 'flowbie-wp' ),
+			);
+		?>
+		<div class="flowbie-schema-cell flowbie-schema-cell--full">
+			<h3 class="flowbie-design-section-title"><?php esc_html_e( 'Sidebar layout sections', 'flowbie-wp' ); ?></h3>
+			<div class="flowbie-design-visibility-grid flowbie-design-visibility-grid--2">
+				<?php foreach ( $layout_opts as $key => $label ) : ?>
+					<label class="flowbie-design-check">
+						<input
+							type="checkbox"
+							name="<?php echo esc_attr( $name_prefix . '[sidebar_layout][]' ); ?>"
+							value="<?php echo esc_attr( $key ); ?>"
+							data-flowbie-sidebar-layout="<?php echo esc_attr( $key ); ?>"
+							<?php checked( in_array( $key, $layout, true ) ); ?>
+						/>
+						<span><?php echo esc_html( $label ); ?></span>
+					</label>
+				<?php endforeach; ?>
+			</div>
+		</div>
+		<?php
 	}
 
 	/**
@@ -385,13 +664,13 @@ trait Flowbie_Wp_Admin_Trait_Render_Ai_Widget_Design {
 	 */
 	protected static function chat_visibility_labels(): array {
 		return array(
-			'launcher'         => __( 'Launcher bubble', 'flowbie-wp' ),
 			'header'           => __( 'Panel header', 'flowbie-wp' ),
 			'avatar'           => __( 'Avatar', 'flowbie-wp' ),
 			'assistant_name'   => __( 'Assistant name', 'flowbie-wp' ),
 			'close_button'     => __( 'Close button', 'flowbie-wp' ),
 			'welcome_message'  => __( 'Welcome message', 'flowbie-wp' ),
 			'thinking_card'    => __( 'Thinking card', 'flowbie-wp' ),
+			'type_badge'       => __( 'Card type badge', 'flowbie-wp' ),
 			'source_pills'     => __( 'Source pills', 'flowbie-wp' ),
 			'cta_buttons'      => __( 'CTA buttons', 'flowbie-wp' ),
 			'suggestion_chips' => __( 'Suggestion chips', 'flowbie-wp' ),

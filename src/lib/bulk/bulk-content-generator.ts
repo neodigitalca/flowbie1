@@ -12,26 +12,32 @@ import {
 } from './bulk-harness-outline';
 import { ensurePressReleaseSectionHeading } from '@/lib/press-release/press-release-heading-guard';
 import { pressReleaseHarnessSectionLabel } from '@/lib/press-release/press-release-harness-prompts';
-import type { AIDrivenACFContext } from '@/lib/content-generation/ai-driven-acf-reader';
+import { buildFocusedArticlePurpose } from '@/lib/content-generation/article-length-policy';
 import { getProductionModel } from '@/lib/optimization-settings-storage';
 import { resolveHarnessHttpReferer, runHarnessOpenRouterSection } from '@/lib/bulk/harness-openrouter-worker-client';
-import { stripFooterElementsFromHarnessSectionHtml } from '@/lib/bulk/harness-html-strip-footer';
-import { ensureHarnessSectionLengthCompliance } from '@/lib/bulk/harness-section-length-agent';
-import { ensureOverviewBulletBoldLabels } from '@/lib/overview/overview-bullet-bold-labels';
-import { applyOverviewHarnessScrollLinks } from '@/lib/overview/overview-harness-scroll-links';
-import { wrapOverviewSectionHtml } from '@/lib/overview/wrap-overview-section-html';
+import {
+  prepareHarnessSectionHtml,
+} from '@/lib/bulk/harness-section-validate';
+import { injectBlacklistRagIntoMessages } from '@/lib/content-word-blocklist';
 import { findImportedSectionBody } from '@/lib/bulk/blog-import-parser';
 import {
   formatImportedToneForHarnessPrompt,
   getImportedToneFromRow,
 } from '@/lib/bulk/blog-import-tone';
-import { BLOG_HARNESS_SUMMARY_AGENT_ID, ensureBlogHarnessSummaryFirst } from '@/lib/bulk/blog-harness-summary-agent';
+import {
+  ensureBlogHarnessSummaryFirst,
+  ensureBlogHarnessSummaryLast,
+  splitBlogHarnessBodyAndOverview,
+} from '@/lib/bulk/blog-harness-summary-agent';
 import {
   buildHarnessSectionAnchorMap,
   formatHarnessInPageAnchorBlock,
-  injectHarnessSectionH2AnchorId,
-  resolveHarnessSectionInjectAnchorId,
 } from '@/lib/bulk/harness-section-anchor-ids';
+import {
+  assertHarnessTokenBudgetPreflight,
+  computeHarnessSectionTokenBudgets,
+  isHarnessSeoOpenerBodyAgent,
+} from '@/lib/bulk/harness-section-max-tokens';
 import { formatMandatoryEntityWikipediaForPrompt } from '@/lib/bulk/entity-wikipedia-prompt';
 
 /** Extra prompt wiring for WordPress content optimizer (RAG page URL, GSC, shared ACF context). */
@@ -165,7 +171,7 @@ export async function generateMarkdownContent(
   );
   const userPrompt = buildUserPrompt(
     blueprint.title || row.title,
-    blueprint.purpose || `Comprehensive guide about ${keywordData.keyword}`,
+    blueprint.purpose || buildFocusedArticlePurpose(keywordData.keyword),
     sectionsPrompt,
     connectedSite,
     entity, // Pass entity (or undefined for regular blog posts)
@@ -274,17 +280,11 @@ export async function generateMarkdownContentHarnessed(
   if (rawAgentsForBulk.length === 0) {
     throw new Error('Harness: blueprint has no agents to generate');
   }
-  const agentsForBulk = ensureBlogHarnessSummaryFirst(rawAgentsForBulk, promptEnv?.contentKind);
+  const agentsForBulk = ensureBlogHarnessSummaryLast(rawAgentsForBulk, promptEnv?.contentKind);
 
-  const outline = buildBulkHarnessOutlineFromAgents(agentsForBulk);
   const isPressReleaseHarness = promptEnv?.contentKind === "press_release";
   const releaseTopic =
     promptEnv?.primaryKeyword?.trim() || row.keyword?.trim() || row.keyword_focus?.trim() || "";
-  const outlineBlock = isPressReleaseHarness
-    ? formatPressReleaseOutlineForHarnessPrompt(outline)
-    : formatOutlineTitlesForHarnessPrompt(outline);
-  const harnessAnchorMap = isPressReleaseHarness ? [] : buildHarnessSectionAnchorMap(outline);
-  const overviewInPageAnchorBlock = formatHarnessInPageAnchorBlock(harnessAnchorMap);
 
   const entityFromRow =
     options.useEntitySitemapTemplate &&
@@ -326,173 +326,311 @@ export async function generateMarkdownContentHarnessed(
     isPressReleaseHarness ? 'full_article' : 'harness_section',
   );
 
-  const totalBudget = Math.min(options.maxTokens || 16000, 16000);
-  const n = agentsForBulk.length;
-  const perSectionMax = Math.min(1400, Math.max(640, Math.floor(totalBudget / Math.max(n, 1))));
-
-  const totalSections = agentsForBulk.length;
+  const totalBudget = options.maxTokens || 16000;
   const httpReferer = resolveHarnessHttpReferer();
-  const harnessFormat = promptEnv?.contentKind === "press_release" ? "markdown" : "html";
+  const harnessFormat = "markdown" as const;
 
-  const pieces = await Promise.all(
-    agentsForBulk.map(async (agent, i) => {
-      const o = outline[i];
-      const titleForCb = isPressReleaseHarness
-        ? pressReleaseHarnessSectionLabel(i)
-        : o.displayTitle;
-      const otherSectionTitles = isPressReleaseHarness
-        ? []
-        : outline.filter((_, j) => j !== i).map((x) => x.displayTitle);
+  if (isPressReleaseHarness) {
+    const outline = buildBulkHarnessOutlineFromAgents(agentsForBulk);
+    const outlineBlock = formatPressReleaseOutlineForHarnessPrompt(outline);
+    const n = agentsForBulk.length;
+    const perSectionMax = Math.min(1400, Math.max(640, Math.floor(totalBudget / Math.max(n, 1))));
+    const totalSections = agentsForBulk.length;
 
-      options.onHarnessSection?.({
-        rowIndex: harnessRowIndex,
-        sectionIndex: i,
-        totalSections,
-        title: titleForCb,
-        phase: 'start',
-      });
+    const pieces = await Promise.all(
+      agentsForBulk.map(async (agent, i) => {
+        const o = outline[i];
+        const titleForCb = pressReleaseHarnessSectionLabel(i);
 
-      const singleSectionPrompt = generateSingleSectionPrompt(
-        agent,
-        harnessFormat,
-        promptEnv?.contentKind,
-        releaseTopic,
-      );
-      const isOverviewSection = !isPressReleaseHarness && i === 0;
-      let userPrompt = buildBulkHarnessSectionUserPrompt(
-        blueprint.title || row.title,
-        blueprint.purpose || `Comprehensive guide about ${keywordData.keyword}`,
-        singleSectionPrompt,
-        outlineBlock,
-        otherSectionTitles,
-        i,
-        agentsForBulk.length,
-        connectedSite,
-        entity,
-        acfContext,
-        !!wordPressPosts?.length,
-        promptEnv?.currentPageUrl,
-        promptEnv?.gscKeywordsContext,
-        semrushKeywordsContext,
-        semrushScatterContext,
-        semrushExternalUrls,
-        portfolioBlocked,
-        promptEnv?.contentKind,
-        releaseTopic,
-        isOverviewSection ? overviewInPageAnchorBlock : undefined,
-        isOverviewSection && entity && entityWikipediaUrl ? entityWikipediaUrl : undefined,
-      );
-      if (isOverviewSection && entity && entityWikipediaUrl) {
-        const wikiBlock = formatMandatoryEntityWikipediaForPrompt({
+        options.onHarnessSection?.({
+          rowIndex: harnessRowIndex,
+          sectionIndex: i,
+          totalSections,
+          title: titleForCb,
+          phase: 'start',
+        });
+
+        const singleSectionPrompt = generateSingleSectionPrompt(
+          agent,
+          harnessFormat,
+          promptEnv?.contentKind,
+          releaseTopic,
+        );
+        let userPrompt = buildBulkHarnessSectionUserPrompt(
+          blueprint.title || row.title,
+          blueprint.purpose || buildFocusedArticlePurpose(keywordData.keyword),
+          singleSectionPrompt,
+          outlineBlock,
+          [],
+          i,
+          agentsForBulk.length,
+          connectedSite,
           entity,
-          wikipediaUrl: entityWikipediaUrl,
-          wikipediaTitle: row.wikipedia_title?.trim() || undefined,
-        });
-        if (wikiBlock) {
-          userPrompt += `\n\n${wikiBlock}`;
+          acfContext,
+          !!wordPressPosts?.length,
+          promptEnv?.currentPageUrl,
+          promptEnv?.gscKeywordsContext,
+          semrushKeywordsContext,
+          semrushScatterContext,
+          semrushExternalUrls,
+          portfolioBlocked,
+          promptEnv?.contentKind,
+          releaseTopic,
+        );
+        const importedTone = getImportedToneFromRow(row);
+        if (importedTone) {
+          userPrompt += `\n\n${formatImportedToneForHarnessPrompt(importedTone)}`;
         }
-      }
-      const importedTone = getImportedToneFromRow(row);
-      if (importedTone) {
-        userPrompt += `\n\n${formatImportedToneForHarnessPrompt(importedTone)}`;
-      }
-      const importedExcerpt = findImportedSectionBody(row, o.displayTitle);
-      if (importedExcerpt) {
-        userPrompt += `\n\n--- Imported draft excerpt (preserve facts and voice; do not change the H2 title; do not simplify vocabulary) ---\n${importedExcerpt}`;
-      }
+        const importedExcerpt = findImportedSectionBody(row, o.displayTitle);
+        if (importedExcerpt) {
+          userPrompt += `\n\n--- Imported draft excerpt ---\n${importedExcerpt}`;
+        }
 
-      const _writeT0 = Date.now();
-      const result = await runHarnessOpenRouterSection({
-        sectionIndex: i,
-        apiKey: options.openRouterApiKey,
-        model: options.selectedModel || getProductionModel(),
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: options.temperature || 1.0,
-        maxTokens: perSectionMax,
-        topP: options.topP || 0.9,
-        httpReferer,
-      });
-      const _writeMs = Date.now() - _writeT0;
-
-      let sectionContent = (result.content || '').trim();
-      if (!sectionContent) {
-        throw new Error(`Harness: empty output for section ${i + 1} (${titleForCb})`);
-      }
-
-      if (isPressReleaseHarness && releaseTopic) {
-        sectionContent = await ensurePressReleaseSectionHeading({
-          sectionMarkdown: sectionContent,
-          topic: releaseTopic,
-          headlineHint: blueprint.title || row.title,
-          sectionIntent: agent.description ?? "",
+        const result = await runHarnessOpenRouterSection({
+          sectionIndex: i,
           apiKey: options.openRouterApiKey,
-          model: options.selectedModel,
+          model: options.selectedModel || getProductionModel(),
+          messages: injectBlacklistRagIntoMessages([
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ]),
+          temperature: options.temperature || 1.0,
+          maxTokens: perSectionMax,
+          topP: options.topP || 0.9,
+          httpReferer,
         });
-      } else {
-        sectionContent = stripFooterElementsFromHarnessSectionHtml(sectionContent);
-        const _isOv = agent.id === BLOG_HARNESS_SUMMARY_AGENT_ID || i === 0;
-        const _lenT0 = Date.now();
-        sectionContent = await ensureHarnessSectionLengthCompliance({
-          sectionHtml: sectionContent,
-          sectionTitle: titleForCb,
-          siblingSectionTitles: otherSectionTitles,
-          articleTitle: blueprint.title || row.title || keywordData.keyword,
-          apiKey: options.openRouterApiKey,
-          model: options.selectedModel,
-          isOverviewSection: _isOv,
-          inPageAnchorBlock: _isOv ? overviewInPageAnchorBlock : undefined,
-          overviewBulletCount: _isOv ? harnessAnchorMap.length : undefined,
-        });
-        if (_isOv) {
-          sectionContent = ensureOverviewBulletBoldLabels(sectionContent);
-          if (harnessAnchorMap.length === 0) {
-            throw new Error('Overview scroll links: no body H2 anchors to cite');
-          }
-          sectionContent = await applyOverviewHarnessScrollLinks({
-            html: sectionContent,
-            anchorMap: harnessAnchorMap,
-            articleTitle: blueprint.title || row.title || keywordData.keyword,
-            keyword: keywordData.keyword,
+
+        let sectionContent = (result.content || '').trim();
+        if (!sectionContent) {
+          sectionContent = `# ${titleForCb}\n\n`;
+        }
+
+        if (releaseTopic) {
+          sectionContent = await ensurePressReleaseSectionHeading({
+            sectionMarkdown: sectionContent,
+            topic: releaseTopic,
+            headlineHint: blueprint.title || row.title,
+            sectionIntent: agent.description ?? "",
             apiKey: options.openRouterApiKey,
             model: options.selectedModel,
-            inPageAnchorBlock: overviewInPageAnchorBlock,
-            allowWikipediaUrl: entity && entityWikipediaUrl ? entityWikipediaUrl : undefined,
           });
         }
-        sectionContent = injectHarnessSectionH2AnchorId(
-          sectionContent,
-          resolveHarnessSectionInjectAnchorId(i, harnessAnchorMap),
-        );
-        if (_isOv) {
-          sectionContent = wrapOverviewSectionHtml(sectionContent);
+
+        const truncated = isCompletionTruncatedByTokenLimit(result.finishReason);
+        if (truncated) {
+          console.warn(`[Bulk Harness] Section ${i + 1} may be truncated (finish_reason: ${result.finishReason})`);
         }
-      }
 
-      const truncated = isCompletionTruncatedByTokenLimit(result.finishReason);
-      if (truncated) {
-        console.warn(`[Bulk Harness] Section ${i + 1} may be truncated (finish_reason: ${result.finishReason})`);
-      }
+        options.onHarnessSection?.({
+          rowIndex: harnessRowIndex,
+          sectionIndex: i,
+          totalSections,
+          title: titleForCb,
+          phase: 'done',
+          markdownSlice: sectionContent,
+          truncated,
+        });
 
-      options.onHarnessSection?.({
-        rowIndex: harnessRowIndex,
-        sectionIndex: i,
-        totalSections,
-        title: titleForCb,
-        phase: 'done',
-        markdownSlice: sectionContent,
-        truncated,
+        return sectionContent;
+      }),
+    );
+
+    const stitched = stitchHarnessSections(pieces);
+    if (!stitched?.trim()) {
+      return stripTrailingCopyrightBoilerplate(pieces.filter(Boolean).join("\n\n"));
+    }
+    return stripTrailingCopyrightBoilerplate(stitched);
+  }
+
+  const { bodyAgents, overviewAgent } = splitBlogHarnessBodyAndOverview(agentsForBulk);
+  if (!overviewAgent) {
+    throw new Error('Harness: missing Overview agent');
+  }
+  if (bodyAgents.length === 0) {
+    throw new Error('Harness: no body sections to generate');
+  }
+
+  const bodyOutline = buildBulkHarnessOutlineFromAgents(bodyAgents);
+  const bodyAnchors = buildHarnessSectionAnchorMap(bodyOutline);
+  const publishedSectionTitles = ['Overview', ...bodyOutline.map((x) => x.displayTitle)];
+  const totalSections = bodyAgents.length + 1;
+  const outlineBlock = formatOutlineTitlesForHarnessPrompt(bodyOutline);
+
+  const harnessTokenSlots = computeHarnessSectionTokenBudgets(
+    [
+      {
+        sectionKey: 'Overview',
+        agent: overviewAgent,
+        isOverview: true,
+        bodySectionCount: bodyAgents.length,
+      },
+      ...bodyAgents.map((agent, bi) => ({
+        sectionKey: bodyOutline[bi]!.displayTitle,
+        agent,
+        isOverview: false,
+        isSeoOpener: isHarnessSeoOpenerBodyAgent(agent),
+        importedExcerptChars: findImportedSectionBody(row, bodyOutline[bi]!.displayTitle)?.length ?? 0,
+      })),
+    ],
+    totalBudget,
+  );
+  assertHarnessTokenBudgetPreflight(harnessTokenSlots, totalBudget, totalSections);
+  const harnessTokenBySectionKey = new Map(
+    harnessTokenSlots.map((slot) => [slot.sectionKey, slot.maxTokens]),
+  );
+
+  const runBlogHarnessSection = async (
+    agent: AgentConfig,
+    sectionIndex: number,
+    titleForCb: string,
+    opts: {
+      maxTokens: number;
+      isOverviewSection: boolean;
+      inPageAnchorBlock?: string;
+      publishedPlanIndex: number;
+      otherSectionTitles: string[];
+    },
+  ): Promise<string> => {
+    options.onHarnessSection?.({
+      rowIndex: harnessRowIndex,
+      sectionIndex,
+      totalSections,
+      title: titleForCb,
+      phase: 'start',
+    });
+
+    const singleSectionPrompt = generateSingleSectionPrompt(
+      agent,
+      harnessFormat,
+      promptEnv?.contentKind,
+      releaseTopic,
+    );
+    let userPrompt = buildBulkHarnessSectionUserPrompt(
+      blueprint.title || row.title,
+      blueprint.purpose || buildFocusedArticlePurpose(keywordData.keyword),
+      singleSectionPrompt,
+      outlineBlock,
+      opts.otherSectionTitles,
+      opts.publishedPlanIndex,
+      totalSections,
+      connectedSite,
+      entity,
+      acfContext,
+      !!wordPressPosts?.length,
+      promptEnv?.currentPageUrl,
+      promptEnv?.gscKeywordsContext,
+      semrushKeywordsContext,
+      semrushScatterContext,
+      semrushExternalUrls,
+      portfolioBlocked,
+      promptEnv?.contentKind,
+      releaseTopic,
+      opts.inPageAnchorBlock,
+      opts.isOverviewSection && entity && entityWikipediaUrl ? entityWikipediaUrl : undefined,
+      opts.isOverviewSection ? undefined : titleForCb,
+      promptEnv?.primaryKeyword?.trim() || row.keyword_focus?.trim() || row.keyword?.trim() || undefined,
+      publishedSectionTitles,
+    );
+    if (opts.isOverviewSection && entity && entityWikipediaUrl) {
+      const wikiBlock = formatMandatoryEntityWikipediaForPrompt({
+        entity,
+        wikipediaUrl: entityWikipediaUrl,
+        wikipediaTitle: row.wikipedia_title?.trim() || undefined,
       });
+      if (wikiBlock) {
+        userPrompt += `\n\n${wikiBlock}`;
+      }
+    }
+    const importedTone = getImportedToneFromRow(row);
+    if (importedTone) {
+      userPrompt += `\n\n${formatImportedToneForHarnessPrompt(importedTone)}`;
+    }
+    if (!opts.isOverviewSection) {
+      const importedExcerpt = findImportedSectionBody(row, titleForCb);
+      if (importedExcerpt) {
+        userPrompt += `\n\n--- Imported draft excerpt (use facts from this excerpt only for this assigned section; do NOT copy headings, lists, or paragraphs belonging to other sections; output only the assigned ## block) ---\n${importedExcerpt}`;
+      }
+    }
 
-      return sectionContent;
+    const result = await runHarnessOpenRouterSection({
+      sectionIndex,
+      apiKey: options.openRouterApiKey,
+      model: options.selectedModel || getProductionModel(),
+      messages: injectBlacklistRagIntoMessages([
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ]),
+      temperature: options.temperature || 1.0,
+      maxTokens: opts.maxTokens,
+      topP: options.topP || 0.9,
+      httpReferer,
+    });
+
+    const sectionContent = (result.content || '').trim();
+    if (!sectionContent) {
+      throw new Error(`Section "${titleForCb}" returned empty content`);
+    }
+    const truncated = isCompletionTruncatedByTokenLimit(result.finishReason);
+
+    const prepared = prepareHarnessSectionHtml(sectionContent, {
+      title: titleForCb,
+      isOverview: opts.isOverviewSection,
+    });
+
+    options.onHarnessSection?.({
+      rowIndex: harnessRowIndex,
+      sectionIndex,
+      totalSections,
+      title: titleForCb,
+      phase: 'done',
+      markdownSlice: prepared,
+      truncated,
+    });
+
+    return prepared;
+  };
+
+  const bodyPieces = await Promise.all(
+    bodyAgents.map(async (agent, bi) => {
+      const o = bodyOutline[bi];
+      const titleForCb = o.displayTitle;
+      const otherSectionTitles = bodyOutline.filter((_, j) => j !== bi).map((x) => x.displayTitle);
+      const maxTokens = harnessTokenBySectionKey.get(titleForCb);
+      if (maxTokens == null) {
+        throw new Error(`Harness: missing token budget for section "${titleForCb}"`);
+      }
+      return runBlogHarnessSection(agent, bi + 1, titleForCb, {
+        maxTokens,
+        isOverviewSection: false,
+        publishedPlanIndex: bi + 1,
+        otherSectionTitles,
+      });
     }),
   );
 
-  const stitched = stitchHarnessSections(pieces);
-  if (!stitched || stitched.length < 100) {
-    throw new Error('Harness: stitched article too short or empty');
+  const overviewInPageAnchorBlock = formatHarnessInPageAnchorBlock(bodyAnchors, { contextOnly: true });
+  const overviewMaxTokens = harnessTokenBySectionKey.get('Overview');
+  if (overviewMaxTokens == null) {
+    throw new Error('Harness: missing token budget for Overview');
+  }
+  const overviewMd = await runBlogHarnessSection(
+    overviewAgent,
+    0,
+    'Overview',
+    {
+      maxTokens: overviewMaxTokens,
+      isOverviewSection: true,
+      inPageAnchorBlock: overviewInPageAnchorBlock,
+      publishedPlanIndex: 0,
+      otherSectionTitles: bodyOutline.map((x) => x.displayTitle),
+    },
+  );
+
+  const stitched = stitchHarnessSections([overviewMd, ...bodyPieces]);
+  if (!stitched?.trim()) {
+    return stripTrailingCopyrightBoilerplate(
+      [overviewMd, ...bodyPieces].filter(Boolean).join("\n"),
+    );
   }
   return stripTrailingCopyrightBoilerplate(stitched);
 }
@@ -524,10 +662,10 @@ export async function resolveEntityWikipediaUrl(
     }
   }
   if (!wikipediaUrl) {
-    const { checkWikipediaPageExists } = await import('../wikipedia-api');
-    const wikiCheck = await checkWikipediaPageExists(rowEntity);
-    if (wikiCheck.exists && wikiCheck.url) {
-      wikipediaUrl = wikiCheck.url;
+    const { resolveEntityWikipediaMediaWiki } = await import("../wikipedia/resolve-entity-wikipedia-mediawiki");
+    const hit = await resolveEntityWikipediaMediaWiki(rowEntity);
+    if (hit?.url) {
+      wikipediaUrl = hit.url;
     }
   }
   return wikipediaUrl;

@@ -3,6 +3,8 @@
  * Shared by main-thread api.ts and harness Web Workers.
  */
 
+import { OPENROUTER_WEB_APP_TITLE } from '@/lib/openrouter-attribution';
+
 const CONTEXT_LIMIT = 2_000_000;
 const RESERVED_FOR_INPUT = 200_000;
 const MAX_OUTPUT_TOKENS = 65_536;
@@ -53,7 +55,7 @@ export async function streamOpenRouterChatCompletionCore({
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
       'HTTP-Referer': httpReferer,
-      'X-Title': 'Agent Blueprint Builder',
+      'X-Title': OPENROUTER_WEB_APP_TITLE,
     },
     body: JSON.stringify({
       model,

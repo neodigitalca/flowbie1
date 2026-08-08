@@ -11,6 +11,7 @@ export type DashboardSectionPillsProps = {
   onSectionChange: (id: ManagerSettingsClusterId) => void;
   disabled?: boolean;
   className?: string;
+  sectionOrder?: readonly ManagerSettingsClusterId[];
 };
 
 export function DashboardSectionPills({
@@ -18,20 +19,22 @@ export function DashboardSectionPills({
   onSectionChange,
   disabled = false,
   className,
+  sectionOrder = DASHBOARD_SECTION_ORDER,
 }: DashboardSectionPillsProps) {
   return (
     <div
-      className={cn("flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto", className)}
+      className={cn("flex min-w-0 w-full max-w-full items-stretch gap-1", className)}
       role="group"
       aria-label="Dashboard section"
     >
-      {DASHBOARD_SECTION_ORDER.map((section) => (
+      {sectionOrder.map((section) => (
         <WorkspacePill
           key={section}
           label={DASHBOARD_SECTION_LABELS[section]}
           active={activeSection === section}
           disabled={disabled}
           square
+          className="min-w-0 flex-1 basis-0 px-2"
           onClick={() => {
             if (activeSection !== section) onSectionChange(section);
           }}

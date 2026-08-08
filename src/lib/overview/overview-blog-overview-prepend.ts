@@ -279,6 +279,35 @@ export function injectBodyH2AnchorIds(
   return result;
 }
 
+/**
+ * Bulk harness stitch: first `<h2>` is Overview; following `<h2>` tags get body anchor ids.
+ */
+export function injectHarnessH2AnchorIdsForStitchedBlog(
+  html: string,
+  bodyAnchors: HarnessSectionAnchorEntry[],
+): string {
+  const positions = findH2OpenPositions(html);
+  if (!positions.length) return html;
+
+  let result = html;
+  const overviewOpen = positions[0]!;
+  result =
+    result.slice(0, overviewOpen) +
+    injectHarnessSectionH2AnchorId(result.slice(overviewOpen), HARNESS_OVERVIEW_ANCHOR_ID);
+
+  for (let i = bodyAnchors.length - 1; i >= 0; i--) {
+    const posIdx = i + 1;
+    if (posIdx >= positions.length) continue;
+    const openAt = positions[posIdx]!;
+    const anchorId = bodyAnchors[i]?.anchorId;
+    if (!anchorId) continue;
+    result =
+      result.slice(0, openAt) +
+      injectHarnessSectionH2AnchorId(result.slice(openAt), anchorId);
+  }
+  return result;
+}
+
 export function resolveOverviewSourceHtml(row: {
   postContentOptimized?: string;
   postContent?: string;
@@ -407,6 +436,10 @@ export async function generateAndPrependOverviewHtml(args: {
     undefined,
     undefined,
     anchorBlock,
+    undefined,
+    undefined,
+    keyword,
+    ["Overview", ...bodyH2Titles],
   );
 
   const system = `You write the Overview (AI Overview) harness section for an existing blog post. Output HTML only for this section. Follow the section contract exactly. Primary keyword: ${keyword}.

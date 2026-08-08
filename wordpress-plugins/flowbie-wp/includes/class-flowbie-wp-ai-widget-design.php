@@ -13,8 +13,10 @@ class Flowbie_Wp_Ai_Widget_Design {
 
 	use Flowbie_Wp_Ai_Widget_Design_Css;
 
-	const OPTION_KEY    = 'flowbie_wp_ai_widgets_design';
-	const MIGRATION_KEY = 'flowbie_wp_ai_widgets_design_migrated_v1';
+	const OPTION_KEY       = 'flowbie_wp_ai_widgets_design';
+	const MIGRATION_KEY    = 'flowbie_wp_ai_widgets_design_migrated_v1';
+	const MIGRATION_V2_KEY = 'flowbie_wp_ai_widgets_design_migrated_v2';
+	const MIGRATION_V3_KEY = 'flowbie_wp_ai_widgets_design_migrated_v3';
 
 	/** @var array<string,mixed>|null */
 	private static $settings_cache = null;
@@ -27,6 +29,8 @@ class Flowbie_Wp_Ai_Widget_Design {
 	 */
 	public static function init(): void {
 		self::maybe_migrate();
+		self::maybe_migrate_chat_card_simplify();
+		self::maybe_migrate_chat_type_badge_off();
 		add_action( 'updated_post_meta', array( __CLASS__, 'on_post_meta_updated' ), 10, 4 );
 		add_action( 'added_post_meta', array( __CLASS__, 'on_post_meta_updated' ), 10, 4 );
 		add_action( 'elementor/core/files/clear_cache', array( __CLASS__, 'clear_resolve_cache' ) );
@@ -87,6 +91,17 @@ class Flowbie_Wp_Ai_Widget_Design {
 			isset( $merged['search_ui'] ) && is_array( $merged['search_ui'] ) ? $merged['search_ui'] : array(),
 			self::default_search_visibility()
 		);
+		$merged['search_sidebar'] = self::sanitize_sidebar_config(
+			isset( $merged['search_sidebar'] ) && is_array( $merged['search_sidebar'] ) ? $merged['search_sidebar'] : array(),
+			'search'
+		);
+		$merged['chat_sidebar'] = self::sanitize_sidebar_config(
+			isset( $merged['chat_sidebar'] ) && is_array( $merged['chat_sidebar'] ) ? $merged['chat_sidebar'] : array(),
+			'chat'
+		);
+		$merged['search_insights'] = self::sanitize_search_insights_config(
+			isset( $merged['search_insights'] ) && is_array( $merged['search_insights'] ) ? $merged['search_insights'] : array()
+		);
 		self::$settings_cache = $merged;
 		return $merged;
 	}
@@ -115,6 +130,15 @@ class Flowbie_Wp_Ai_Widget_Design {
 		}
 		if ( isset( $data['search_ui'] ) && is_array( $data['search_ui'] ) ) {
 			$out['search_ui'] = self::sanitize_visibility_map( $data['search_ui'], self::default_search_visibility() );
+		}
+		if ( isset( $data['search_sidebar'] ) && is_array( $data['search_sidebar'] ) ) {
+			$out['search_sidebar'] = self::sanitize_sidebar_config( $data['search_sidebar'], 'search' );
+		}
+		if ( isset( $data['chat_sidebar'] ) && is_array( $data['chat_sidebar'] ) ) {
+			$out['chat_sidebar'] = self::sanitize_sidebar_config( $data['chat_sidebar'], 'chat' );
+		}
+		if ( isset( $data['search_insights'] ) && is_array( $data['search_insights'] ) ) {
+			$out['search_insights'] = self::sanitize_search_insights_config( $data['search_insights'] );
 		}
 
 		// When styling both, keep bags in sync from shared.
@@ -173,7 +197,104 @@ class Flowbie_Wp_Ai_Widget_Design {
 		}
 		$data[ $ui_key ] = $normalized;
 
+		$sidebar_key = $widget === 'search' ? 'search_sidebar' : 'chat_sidebar';
+		if ( isset( $raw['sidebar'] ) && is_array( $raw['sidebar'] ) ) {
+			$data[ $sidebar_key ] = self::sanitize_sidebar_config( $raw['sidebar'], $widget );
+		}
+
+		if ( $widget === 'search' && isset( $raw['insights'] ) && is_array( $raw['insights'] ) ) {
+			$data['search_insights'] = self::sanitize_search_insights_config( $raw['insights'] );
+		}
+
 		self::save( $data );
+	}
+
+	/**
+	 * Resolve sidebar config for a widget (global defaults).
+	 *
+	 * @param string              $widget 'search' | 'chat'
+	 * @param array<string,mixed> $instance Per-instance overrides.
+	 * @return array<string,mixed>
+	 */
+	public static function resolve_sidebar_config( string $widget, array $instance = array() ): array {
+		$widget   = ( $widget === 'search' ) ? 'search' : 'chat';
+		$key      = $widget . '_sidebar';
+		$settings = self::get_settings();
+		$global   = isset( $settings[ $key ] ) && is_array( $settings[ $key ] )
+			? $settings[ $key ]
+			: ( $widget === 'search' ? self::default_search_sidebar_config() : self::default_chat_sidebar_config() );
+
+		$merged = $global;
+		$keys   = array(
+			'display_mode',
+			'sidebar_side',
+			'sidebar_transition',
+			'sidebar_width',
+			'sidebar_heading',
+			'sidebar_subtitle',
+			'sidebar_layout',
+			'launcher_icon',
+			'icon_open_as',
+			'modal_max_width',
+			'launcher_label',
+			'panel_layout',
+			'panel_offset_top',
+			'panel_offset_top_unit',
+			'panel_content_align',
+			'backdrop_opacity',
+		);
+		foreach ( $keys as $field ) {
+			if ( array_key_exists( $field, $instance ) && $instance[ $field ] !== '' ) {
+				$merged[ $field ] = $instance[ $field ];
+			}
+		}
+
+		return self::sanitize_sidebar_config( $merged, $widget );
+	}
+
+	/**
+	 * Resolve search insights toggles (global + per-instance Elementor overrides).
+	 *
+	 * @param array<string,mixed> $instance
+	 * @return array<string,mixed>
+	 */
+	public static function resolve_search_insights( array $instance = array() ): array {
+		$settings = self::get_settings();
+		$global   = isset( $settings['search_insights'] ) && is_array( $settings['search_insights'] )
+			? $settings['search_insights']
+			: self::default_search_insights_config();
+
+		$merged = $global;
+		$keys   = array(
+			'logging_enabled',
+			'show_popular_terms',
+			'show_popular_pages_overseer',
+			'show_popular_pages_search',
+			'insights_days',
+			'popular_terms_limit',
+		);
+		foreach ( $keys as $field ) {
+			if ( ! array_key_exists( $field, $instance ) ) {
+				continue;
+			}
+			$value = $instance[ $field ];
+			if ( in_array( $field, array( 'insights_days', 'popular_terms_limit' ), true ) ) {
+				$merged[ $field ] = (int) $value;
+			} elseif ( $value === 'yes' || $value === true || $value === 1 || $value === '1' ) {
+				$merged[ $field ] = true;
+			} elseif ( $value === 'no' || $value === false || $value === 0 || $value === '0' || $value === '' ) {
+				$merged[ $field ] = false;
+			}
+		}
+
+		if ( ! Flowbie_Wp_Search_Logs::is_logging_active() ) {
+			$merged['logging_enabled'] = false;
+		}
+
+		$merged['show_popular_pages_overseer'] = false;
+		$merged['show_popular_pages_search']     = false;
+
+		return self::sanitize_search_insights_config( $merged );
 	}
 
 	/**
@@ -425,6 +546,49 @@ class Flowbie_Wp_Ai_Widget_Design {
 		}
 
 		update_option( self::MIGRATION_KEY, '1', false );
+	}
+
+	/**
+	 * Hide source pills + confidence on answer cards (CTA + suggestion chips only).
+	 */
+	public static function maybe_migrate_chat_card_simplify(): void {
+		if ( get_option( self::MIGRATION_V2_KEY, '' ) === '1' ) {
+			return;
+		}
+
+		$stored = get_option( self::OPTION_KEY, array() );
+		if ( ! is_array( $stored ) ) {
+			$stored = array();
+		}
+		if ( ! isset( $stored['chat_ui'] ) || ! is_array( $stored['chat_ui'] ) ) {
+			$stored['chat_ui'] = array();
+		}
+		$stored['chat_ui']['source_pills'] = false;
+		$stored['chat_ui']['confidence']   = false;
+		update_option( self::OPTION_KEY, $stored, false );
+		update_option( self::MIGRATION_V2_KEY, '1', false );
+		self::clear_resolve_cache();
+	}
+
+	/**
+	 * Hide internal type badge (NAVIGATION, answer, etc.) on customer answer cards.
+	 */
+	public static function maybe_migrate_chat_type_badge_off(): void {
+		if ( get_option( self::MIGRATION_V3_KEY, '' ) === '1' ) {
+			return;
+		}
+
+		$stored = get_option( self::OPTION_KEY, array() );
+		if ( ! is_array( $stored ) ) {
+			$stored = array();
+		}
+		if ( ! isset( $stored['chat_ui'] ) || ! is_array( $stored['chat_ui'] ) ) {
+			$stored['chat_ui'] = array();
+		}
+		$stored['chat_ui']['type_badge'] = false;
+		update_option( self::OPTION_KEY, $stored, false );
+		update_option( self::MIGRATION_V3_KEY, '1', false );
+		self::clear_resolve_cache();
 	}
 
 	/**

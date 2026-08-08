@@ -4,8 +4,9 @@
  */
 
 import { stitchHarnessSections } from "@/lib/bulk/bulk-harness-outline";
+import { isFaqStyleHeadingTitle } from "@/lib/content-generation/faq-heading-policy";
 import { repairFaqEntriesFromSchema, type FaqEntry } from "@/lib/faq-entries";
-import { generateFaqIntroParagraph } from "@/lib/overview/overview-blog-faq-intro-agent";
+import { generateFaqIntroParagraph, isValidFaqIntroPlainText } from "@/lib/overview/overview-blog-faq-intro-agent";
 
 export const HARNESS_FAQ_ANCHOR_ID = "faq";
 export const FLO_FAQ_CLASS = "flo-faq";
@@ -73,16 +74,8 @@ function headingOpenHasFaqId(html: string, openAt: number): boolean {
   return openTag.includes(needle) || openTag.includes(needle2);
 }
 
-function normalizeFaqTitleKey(title: string): string {
-  return (title ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
-}
-
 export function isFaqHeadingTitle(title: string): boolean {
-  const key = normalizeFaqTitleKey(title);
-  return key === "faq" || key === "frequently asked questions";
+  return isFaqStyleHeadingTitle(title);
 }
 
 function isFaqHeadingAt(html: string, openAt: number): boolean {
@@ -229,7 +222,12 @@ export function appendFaqSectionToPostHtml(args: {
   const source = (args.sourceHtml ?? "").trim();
   if (!source) return null;
 
-  const faqSectionHtml = buildFaqSectionHtml(args.entries, args.introParagraph);
+  const intro = (args.introParagraph ?? "").trim();
+  if (!isValidFaqIntroPlainText(intro)) {
+    throw new Error("FAQ intro failed quality validation — row not updated with FAQ table");
+  }
+
+  const faqSectionHtml = buildFaqSectionHtml(args.entries, intro);
   if (!faqSectionHtml) return null;
 
   const body = stripTrailingFaqSection(source);

@@ -7,6 +7,7 @@ import { z } from "zod";
 import { clampOpenRouterMaxTokens } from "@/lib/openrouter-stream-chat-core";
 import type { WordPressPostContent } from "@/lib/wordpress-api/types";
 import { splitHtmlForOverviewAudit } from "@/lib/overview/overview-post-html-audit-sections";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -456,9 +457,6 @@ export function inferAuditIssueSectionIndices(
   });
 }
 
-function httpReferer(): string {
-  return typeof window !== "undefined" && window.location?.origin ? window.location.origin : "https://flowbie.app";
-}
 
 /** Strip optional ```json ... ``` fences from model output. Exported for tests. */
 export function stripMarkdownCodeFenceFromModelOutput(raw: string): string {
@@ -490,12 +488,7 @@ async function openRouterNonStreamCompletion(args: {
   const safeMax = clampOpenRouterMaxTokens(args.maxTokens);
   const response = await fetch(OPENROUTER_URL, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${args.apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": httpReferer(),
-      "X-Title": "Flowbie Overview Content Audit",
-    },
+    headers: openRouterWebAppHeaders(args.apiKey),
     body: JSON.stringify({
       model: args.model,
       messages: args.messages,

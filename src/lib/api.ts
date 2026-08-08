@@ -1,4 +1,5 @@
 import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
+import { openRouterWebAppHeaders, resolveOpenRouterWebReferer } from "@/lib/openrouter-attribution";
 import { clampOpenRouterMaxTokens, streamOpenRouterChatCompletionCore } from "@/lib/openrouter-stream-chat-core";
 
 interface GenerationResult {
@@ -207,12 +208,7 @@ export const streamGeneration = async ({
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "https://agent-blueprint-builder.com",
-      "X-Title": "Agent Blueprint Builder",
-    },
+    headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
       model: model,
       messages: [
@@ -330,6 +326,8 @@ export interface StreamChatRequest {
   maxTokens: number;
   topP: number;
   signal?: AbortSignal;
+  /** When true, prepends read-only WORD BLACKLIST RAG to the first user message. */
+  contentHarness?: boolean;
 }
 
 export const streamChatCompletion = async ({
@@ -342,19 +340,23 @@ export const streamChatCompletion = async ({
   onContentChunk,
   onFinishReason,
   signal,
+  contentHarness,
 }: StreamChatRequest & { 
   onContentChunk: (chunk: string) => void;
   onFinishReason?: (reason: string) => void;
 }): Promise<{ content: string; isGenerating: boolean; finishReason?: string }> => {
-  const httpReferer =
-    typeof window !== 'undefined' && window.location?.origin
-      ? window.location.origin
-      : 'https://agent-blueprint-builder.com';
+  const httpReferer = resolveOpenRouterWebReferer();
+
+  let outboundMessages = messages;
+  if (contentHarness) {
+    const { injectBlacklistRagIntoMessages } = await import("@/lib/content-word-blocklist");
+    outboundMessages = injectBlacklistRagIntoMessages(messages);
+  }
 
   return streamOpenRouterChatCompletionCore({
     apiKey,
     model,
-    messages,
+    messages: outboundMessages,
     temperature,
     maxTokens,
     topP,

@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Flowbie App
  * Description:       Headless FlowbieONE API for https://flowbie.ca/flowbie/ (replaces Node /api/* on WP Engine).
- * Version:           1.0.0
+ * Version:           1.0.1
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            Flowbie
@@ -14,7 +14,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FLOWBIE_APP_VERSION', '1.0.0' );
+define( 'FLOWBIE_APP_VERSION', '1.0.7' );
 define( 'FLOWBIE_APP_PLUGIN_FILE', __FILE__ );
 define( 'FLOWBIE_APP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 

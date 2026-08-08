@@ -7,6 +7,7 @@ import {
 } from "@/lib/wordpress-api";
 import { updateACFFields } from "@/lib/wordpress-acf-origin";
 import type { WordPressSite } from "@/components/integrations/types";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 export interface FixLinksOnPostResult {
   success: boolean;
@@ -77,13 +78,7 @@ ${html}`;
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer":
-        typeof window !== "undefined" ? window.location.origin : "https://agent-blueprint-builder.com",
-      "X-Title": "Agent Blueprint Builder",
-    },
+    headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
       model,
       messages: [

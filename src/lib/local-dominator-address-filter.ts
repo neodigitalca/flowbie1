@@ -2,6 +2,7 @@ import type { LocalDominatorRow } from "@/lib/local-dominator-csv";
 import { loadApiKey } from "@/lib/api";
 import { normalizeStreetLocationKey, researchAddressKeys } from "@/lib/location-address-dedupe";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 const KEY_BATCH = 80;
 /** Chunk size for AI “same storefront?” fallback (strict key match often misses wording variants). */
@@ -47,12 +48,7 @@ async function guessSameStorefrontIndicesInChunk(
   try {
     const res = await fetch(OR, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "",
-        "X-Title": "Flowbie",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: getResearchModel(siteId),
         messages: [

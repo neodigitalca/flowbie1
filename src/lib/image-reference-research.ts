@@ -15,6 +15,7 @@ import {
   type GoogleImagesSerpItem,
 } from "@/lib/overview/overview-local-image-dfs-normalize";
 import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 export const IMAGE_REF_CANDIDATE_LIMIT = 10;
 export const IMAGE_REF_FIT_MIN = 0.4;
@@ -639,13 +640,7 @@ export async function fanOutPlaceSpatialTargets(params: {
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer":
-        typeof window !== "undefined" ? window.location.origin : "https://flowbie.app",
-      "X-Title": "Flowbie Image Place Fan-Out",
-    },
+    headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
       model,
       messages: [
@@ -718,13 +713,7 @@ export async function fanOutSubjectTargets(params: {
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer":
-        typeof window !== "undefined" ? window.location.origin : "https://flowbie.app",
-      "X-Title": "Flowbie Image Subject Fan-Out",
-    },
+    headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
       model,
       messages: [
@@ -927,13 +916,7 @@ export async function classifyImageGroundingTargets(params: {
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer":
-        typeof window !== "undefined" ? window.location.origin : "https://flowbie.app",
-      "X-Title": "Flowbie Image Reference Research",
-    },
+    headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
       model,
       messages: [
@@ -1012,13 +995,7 @@ export async function planImageEvidenceNeeds(params: {
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer":
-        typeof window !== "undefined" ? window.location.origin : "https://flowbie.app",
-      "X-Title": "Flowbie Image Evidence Plan",
-    },
+    headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
       model,
       messages: [

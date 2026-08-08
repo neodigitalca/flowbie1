@@ -16,6 +16,12 @@
 
 .flowbie-voice-ptt .flowbie-voice__icon--mic {
   opacity: 1;
+  color: #ffffff;
+}
+
+.flowbie-voice-ptt .flowbie-voice__svg {
+  color: #ffffff;
+  stroke: currentColor;
 }
 
 .flowbie-voice-ptt .flowbie-voice__icon--send,
@@ -54,6 +60,7 @@
 
 .flowbie-voice-ptt:not(.flowbie-voice-ptt--has-text):not(.flowbie-voice-ptt--recording) {
   background: var(--fcw-mic-idle, var(--fcw-send-bg, #3b82f6));
+  color: #ffffff;
 }
 
 @keyframes flowbieVoicePulse {

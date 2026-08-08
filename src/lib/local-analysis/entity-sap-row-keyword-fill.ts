@@ -28,6 +28,7 @@ import {
   GLOBAL_BLOCKED_TOPIC_PROMPT_BLOCK,
 } from "@/lib/content-topic-blocklist";
 import { isOffensiveGscQuery } from "@/lib/gsc-offensive-word-blocklist";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 /** Collapse repeated comma segments (e.g. "Fort Saskatchewan, Fort Saskatchewan, AB"). */
 export function collapseRepeatedPlaceSegmentsInKeyword(keyword: string): string {
@@ -526,12 +527,7 @@ async function postOpenRouter(args: {
 }): Promise<string> {
   const res = await fetch(OR, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${args.apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://flowbie.app",
-      "X-Title": "Flowbie Entity SAP Keyword Fill",
-    },
+    headers: openRouterWebAppHeaders(args.apiKey),
     body: JSON.stringify({
       model: args.model,
       messages: args.messages,

@@ -11,8 +11,11 @@ class Flowbie_App_Loader {
 
 	public static function init(): void {
 		self::includes();
+		Flowbie_App_Gmb_Oauth::maybe_migrate_legacy_config();
 		Flowbie_App_Api_Dispatcher::init();
+		Flowbie_App_Webhook_Dispatcher::init();
 		Flowbie_App_Admin::init();
+		Flowbie_App_Front_Shell::init();
 		Flowbie_App_Gsc_Route_Handlers::register();
 		Flowbie_App_Overview_Route_Handlers::register();
 		Flowbie_App_Wp_Route_Handlers::register();
@@ -23,6 +26,13 @@ class Flowbie_App_Loader {
 
 	public static function activate(): void {
 		self::includes();
+		Flowbie_App_Teams_Store::install_tables();
+		Flowbie_App_Chat_Store::install_tables();
+		Flowbie_App_Tasks_Store::install_tables();
+		if ( class_exists( 'Flowbie_App_Chat_Flo' ) ) {
+			Flowbie_App_Chat_Flo::ensure_global_user();
+			Flowbie_App_Chat_Flo::ensure_all_teams();
+		}
 		Flowbie_App_Data_Paths::root();
 		Flowbie_App_Data_Paths::subdir( 'gsc' );
 		Flowbie_App_Data_Paths::subdir( 'seo-briefs' );
@@ -40,10 +50,14 @@ class Flowbie_App_Loader {
 
 	private static function includes(): void {
 		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/config/class-secrets-loader.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/config/class-openrouter-attribution.php';
 		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/storage/class-flowbie-data-paths.php';
 		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/storage/class-json-file-store.php';
 		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/router/class-api-dispatcher.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/webhook/class-chekkit-webhook.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/webhook/class-webhook-dispatcher.php';
 		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/admin/class-flowbie-app-admin.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/front/class-flowbie-app-front-shell.php';
 
 		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/class-flowbie-app-dataforseo.php';
 		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/dataforseo/class-dataforseo-client.php';
@@ -98,10 +112,32 @@ class Flowbie_App_Loader {
 		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/integrations/class-integrations-route-handlers.php';
 		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/integrations/class-manager-route-handlers.php';
 
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/teams/class-teams-store.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/chat/class-chat-typing.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/chat/class-chat-calls.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/chat/class-chat-mentions.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/chat/class-chat-preferences.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/chat/class-chat-openrouter.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/chat/class-chat-flo.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/chat/class-chat-store.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/chat/class-chat-activity-log.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/chat/class-chat-assets.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/chat/class-chat-link-unfurl.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/mail/class-flowbie-app-mail.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/teams/class-teams-invites.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/chat/class-chat-route-handlers.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/tasks/class-tasks-store.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/tasks/class-tasks-assets.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/tasks/class-tasks-route-handlers.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/teams/class-teams-route-handlers.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/auth/class-auth-session.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/auth/class-auth-route-handlers.php';
+
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/images/class-openrouter-image.php';
 		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/images/class-images-route-handlers.php';
 		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/bulk/class-validate-internal-links.php';
 		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/proxy/class-wikipedia-proxy.php';
-		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/maps/class-google-maps-screenshot.php';
+		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/maps/class-entity-maps-image.php';
 
 		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/seo/class-local-business-schema-extract.php';
 		require_once FLOWBIE_APP_PLUGIN_DIR . 'includes/seo/class-postal-geocode.php';

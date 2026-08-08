@@ -34,5 +34,5 @@ export const FLOWBIE_APP_DISPATCHER_MARKERS = [
   "Flowbie_App_Manager_Route_Handlers::dispatch_cloud",
   "Flowbie_App_Bulk_Validate_Links::stream",
   "Flowbie_App_Wikipedia_Proxy::proxy_query",
-  "Flowbie_App_Google_Maps_Screenshot::generate",
+  "Flowbie_App_Entity_Maps_Image::generate",
 ];

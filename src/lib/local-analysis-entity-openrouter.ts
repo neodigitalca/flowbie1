@@ -6,6 +6,7 @@
 import { appendMasterInstructionsToSystemPrompt, ensureMasterInstructionsInMemory } from "@/lib/master-instructions-storage";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { extractFirstBalancedJsonValue } from "@/lib/competitor-research/competitor-report-json-parse";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 const OR = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -117,12 +118,7 @@ async function postOpenRouter(
   try {
     res = await fetch(OR, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "",
-        "X-Title": "Flowbie",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: getResearchModel(siteId),
         messages,

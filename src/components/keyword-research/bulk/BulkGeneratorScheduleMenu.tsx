@@ -44,13 +44,12 @@ export function BulkGeneratorScheduleMenu({
             type="button"
             variant="ghost"
             size="sm"
-            className={cn(BULK_HEADER_TOOL_BTN, "max-w-[14rem] shrink-0 gap-1.5 px-2")}
+            className={cn(BULK_HEADER_TOOL_BTN, "h-8 w-8 shrink-0 p-0")}
             disabled={isDisabled}
             aria-label={`Post schedule: ${summary}`}
             title={summary}
           >
             <CalendarClock className="h-4 w-4 shrink-0" aria-hidden />
-            <span className="truncate">{summary}</span>
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[min(22rem,calc(100vw-2rem))] p-3" align="start">

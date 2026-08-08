@@ -38,6 +38,24 @@ export class OptimizationFileManager {
   }
 
   /**
+   * Replace content-*.html and content-*.md artifacts with post-processed HTML (e.g. after internal links).
+   */
+  syncContentArtifactHtml(html: string, markdown: string): boolean {
+    let updated = false;
+    for (let i = 0; i < this.files.length; i++) {
+      const name = this.files[i].name.toLowerCase();
+      if (name.startsWith("content-") && name.endsWith(".html")) {
+        this.files[i] = { ...this.files[i], content: html };
+        updated = true;
+      } else if (name.startsWith("content-") && name.endsWith(".md")) {
+        this.files[i] = { ...this.files[i], content: markdown };
+        updated = true;
+      }
+    }
+    return updated;
+  }
+
+  /**
    * Download a single file
    */
   downloadFile(file: OptimizationFile): void {

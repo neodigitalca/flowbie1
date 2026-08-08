@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 import { AgentSuggestionReview } from "./AgentSuggestionReview";
 import type { AgentConfig } from "@/types/agent-config";
 import type { KeywordData } from "@/lib/keyword-types";
+import { buildFocusedArticlePurpose } from "@/lib/content-generation/article-length-policy";
 import {
   generateChecklistFromSelections,
   generateBlueprintFromTemplate,
@@ -288,7 +289,7 @@ export const BlogTemplateCreator: React.FC<BlogTemplateCreatorProps> = ({
     try {
       const context: BlogTemplateContext = {
         flowTitle: selectedTitle,
-        flowPurpose: flowPurpose || `Comprehensive guide about ${keywordData.keyword}`,
+        flowPurpose: flowPurpose || buildFocusedArticlePurpose(keywordData.keyword),
         keywordData,
         userPrompt: lastUserPrompt?.trim() || undefined,
       };

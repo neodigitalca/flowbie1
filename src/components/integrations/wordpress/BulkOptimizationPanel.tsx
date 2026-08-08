@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DialogHeader,
   DialogTitle,
@@ -13,6 +13,8 @@ import {
   Copy,
   Download,
   FileText,
+  FileDown,
+  Map as MapIcon,
   MinusCircle,
   Upload,
   X,
@@ -28,16 +30,19 @@ import {
 import { notify } from "@/lib/app-notifications";
 import { NOTIFY_COPIED_TO_CLIPBOARD, NOTIFY_CSV_DOWNLOADED, NOTIFY_REPORT_COPIED_TO_CLIPBOARD } from "@/lib/notify-messages";
 import { cn } from "@/lib/utils";
+import { OptimizationProgressInlineStatus } from "@/components/overview/overview-tab/OptimizationProgressInlineStatus";
 import { OptimizationFileManager } from "@/lib/optimization-file-manager";
 import type { BulkOptimizationState } from "@/hooks/use-content-optimization";
 import type { GscPerformancePreviewSnapshot } from "@/hooks/content-optimization/gsc-preview-types";
 import {
-  resolveContentOptimizerStepLabel,
-  contentOptimizerStepProgress,
-  contentOptimizerStepIndex,
+  CONTENT_OPTIMIZER_URL_STEPS,
+  stepLabel,
+  urlStepIndex,
+  type ContentOptimizerStepId,
 } from "@/lib/content-optimization/content-optimizer-step-labels";
 import { GscPerformancePreviewRow } from "@/components/integrations/wordpress/GscPerformancePreviewRow";
 import { BulkHarnessSectionsPanel } from "@/components/keyword-research/bulk/BulkHarnessSectionsPanel";
+import { OptimizationArtifactDownloads } from "./OptimizationArtifactDownloads";
 import type { BulkHarnessSectionUi } from "@/hooks/use-bulk-auto-generate";
 import { humanizeSlugFromUrl } from "@/hooks/content-optimization/bulk-optimization-constants";
 import type { OverviewSitemapSource } from "@/lib/overview/overview-sitemap-source";
@@ -49,24 +54,110 @@ import {
 } from "@/lib/content-optimizer/content-optimizer-bulk-page-size";
 import { OverviewGridPagination } from "@/components/overview/OverviewGridPagination";
 import {
+  mergeGeneratedFilesByName,
   partitionPeerDetailFiles,
   shouldShowDetailsFlatGeneratedFiles,
 } from "@/lib/overview/overview-peer-csv-details";
 import { BULK_ACTIVE_SEMANTIC_BORDER_CLASS } from "@/lib/bulk/bulk-active-semantic-border";
+import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
+import { MetaOptimizerPageRowCompact } from "@/components/overview/MetaOptimizerPageRowCompact";
 import {
-  DETAILS_CO_COLLAPSE_TRIGGER,
-  DETAILS_CO_ROW_TRIGGER,
-  DETAILS_CO_SECTION_BODY,
-  DETAILS_CO_SECTION_LINE,
-  DETAILS_CO_STACK,
-  detailsDrawerRowStripeClass,
-} from "@/components/integrations/wordpress/bulk-details-drawer-styles";
+  MetaAccordionStripeRow,
+  META_FIELD_COUNT,
+  META_FIELD_END_RAIL,
+  META_FIELD_END_RAIL_BTN,
+  META_FIELD_END_RAIL_CELL,
+  META_TRIGGER_FLAT,
+  zoneMetaAccordionStack,
+} from "@/components/overview/MetaOptimizerPageRowDetails";
+import {
+  CONTENT_OPTIMIZER_MULTI_SITE_ROW_STACK_CLASS,
+  CONTENT_OPTIMIZER_MULTI_SITE_ROW_WRAPPER_CLASS,
+  contentOptimizerRowStripeClass,
+} from "@/components/overview/overview-tab/overview-tab-content-constants";
+import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
+import { isOverviewRowBulkActive } from "@/components/overview/overview-tab/overview-bulk-run-helpers";
+import {
+  CONTENT_PREP_BATCH_SECTION_TITLES,
+  CONTENT_PREP_ENTITY_SAP_BATCH_SECTION_TITLES,
+  CONTENT_PREP_POST_HARNESS_TOTAL_SECTIONS,
+  CONTENT_PREP_POST_SECTION_TITLES,
+  buildWaitingPostHarnessSections,
+} from "@/lib/overview/overview-content-prep-harness-sections";
+import { buildSeoResearchArtifactDownloadable } from "@/hooks/content-optimization/optimization-helpers-b";
 
 function bulkRowLinkLabel(url: string, keyword?: string): string {
   const kw = keyword?.trim();
   if (kw) return kw;
   return humanizeSlugFromUrl(url) || url;
 }
+
+function mergeRowHarnessSections(
+  persisted: BulkHarnessSectionUi[] | undefined,
+  live: BulkHarnessSectionUi[] | undefined,
+  isActive: boolean,
+  isParallelHarnessRow: boolean,
+): BulkHarnessSectionUi[] | undefined {
+  if (isParallelHarnessRow) return persisted?.length ? persisted : undefined;
+  const prep = persisted ?? [];
+  if (!isActive || !live?.length) {
+    return prep.length ? prep : undefined;
+  }
+  const prepCount = prep.length;
+  const contentSections = live.map((s, i) => ({
+    ...s,
+    sectionIndex: prepCount + (s.sectionIndex ?? i),
+  }));
+  return [...prep, ...contentSections];
+}
+
+function resolveRowHarnessPlannedCount(
+  merged: BulkHarnessSectionUi[] | undefined,
+  isParallelHarnessRow: boolean,
+  isActive: boolean,
+  livePlanned: number | null | undefined,
+  persistedLength: number,
+): number | null {
+  if (isParallelHarnessRow) {
+    return merged?.length ?? null;
+  }
+  const prepCount = persistedLength || CONTENT_PREP_POST_HARNESS_TOTAL_SECTIONS;
+  const contentPlanned =
+    isActive && typeof livePlanned === "number" && livePlanned > 0 ? livePlanned : 0;
+  const total = prepCount + contentPlanned;
+  if (total > 0) return total;
+  return merged?.length ?? null;
+}
+
+function sortFilesForDisplay(files: { name: string; content: string; mimeType: string }[]) {
+  const order = [
+    "gsc-data",
+    "wordpress-post-download",
+    "checklist",
+    "blueprint",
+    "content",
+    "meta-optimization",
+    "meta-",
+    "keyword-research",
+    "selected-keyword",
+    "featured-image-checklist",
+    "featured-image",
+  ];
+  const score = (name: string) => {
+    for (let i = 0; i < order.length; i++) {
+      if (name.startsWith(order[i])) return i;
+    }
+    return order.length;
+  };
+  return [...files].sort((a, b) => score(a.name) - score(b.name));
+}
+
+import {
+  BulkDetailsDrawerStack,
+  BulkDetailsTileSections,
+  resolveDetailsPipelineSections,
+  isSerpPipelineSection,
+} from "@/components/shared/bulk-details-tile-sections";
 
 export type BulkPanelVariant = "modal" | "page";
 export type BulkPanelDisplayMode = "full" | "details-only";
@@ -85,6 +176,7 @@ export interface BulkOptimizationPanelProps {
     message?: string;
     harnessSections?: BulkHarnessSectionUi[];
     harnessPlannedSectionCount?: number | null;
+    generatedFiles?: Array<{ name: string; content: string; mimeType: string }>;
   };
   onRequestClose: (opts?: { abortingRun?: boolean }) => void;
   /** Shown when variant is "page" */
@@ -102,28 +194,24 @@ export interface BulkOptimizationPanelProps {
   onUploadToWordPress?: () => void;
   /** Sitemap merge publish: destination URL → live permalink after WordPress upload. */
   publishedLinksByUrl?: Record<string, string>;
+  wpTitlesByUrl?: Record<string, string>;
+  overviewRows?: OverviewRow[];
+  onRowDateModifierChange?: (url: string, dateIso: string) => void;
+  onRowDateModifierCommit?: (url: string) => void;
 }
 
-const OPTIMIZATION_STEPS = [
-  { key: 'fetch', label: 'Fetch page', shortLabel: 'Fetch', progress: 10 },
-  { key: 'gsc', label: 'GSC data', shortLabel: 'GSC', progress: 25 },
-  { key: 'keyword-research', label: 'Keyword research', shortLabel: 'Keywords', progress: 40 },
-  { key: 'ai-analysis', label: 'AI analysis', shortLabel: 'Analysis', progress: 55 },
-  { key: 'blueprint', label: 'Blueprint', shortLabel: 'Blueprint', progress: 70 },
-  { key: 'content', label: 'Content generation', shortLabel: 'Content', progress: 82 },
-  { key: 'faq', label: 'FAQ schema', shortLabel: 'FAQ', progress: 90 },
-  { key: 'upload', label: 'Upload', shortLabel: 'Upload', progress: 95 },
-  { key: 'complete', label: 'Complete', shortLabel: 'Done', progress: 100 },
-];
+const URL_STEP_PILLS = CONTENT_OPTIMIZER_URL_STEPS.map((s) => ({
+  key: s.id,
+  shortLabel: s.label,
+}));
 
-// Compact horizontal step indicator component
 const TargetingSequence: React.FC<{ currentStepIndex: number; flat?: boolean }> = ({
   currentStepIndex,
   flat = false,
 }) => {
   return (
     <div className="flex flex-wrap items-center gap-1">
-      {OPTIMIZATION_STEPS.map((step, index) => {
+      {URL_STEP_PILLS.map((step, index) => {
         const isCompleted = currentStepIndex > index;
         const isCurrent = currentStepIndex === index;
 
@@ -197,16 +285,27 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
   sitemapSource,
   onUploadToWordPress,
   publishedLinksByUrl = {},
+  wpTitlesByUrl = {},
+  overviewRows = [],
+  onRowDateModifierChange,
+  onRowDateModifierCommit,
 }) => {
   const isDetailsOnly = displayMode === "details-only";
+  const drawerDateEditable = isDetailsOnly && Boolean(onRowDateModifierChange);
   // Extract data safely - handle null gracefully
   const urls = bulkState?.urls || [];
   const currentIndex = bulkState?.currentIndex ?? 0;
   const urlStatuses = bulkState?.urlStatuses || {};
-  const currentStep = siteProgress?.step || bulkState?.currentStep || '';
-  const currentProgress = siteProgress?.progress ?? bulkState?.currentProgress;
+  const currentStepId: ContentOptimizerStepId =
+    siteProgress?.stepId ??
+    (bulkState?.currentStepProgress?.stepId as ContentOptimizerStepId | undefined) ??
+    "load";
+  const currentStep = siteProgress?.step || bulkState?.currentStep || stepLabel(currentStepId);
+  const currentProgress =
+    siteProgress?.progress ?? bulkState?.currentProgress ?? bulkState?.currentStepProgress?.progress;
   const currentStepProgress = siteProgress
     ? {
+        stepId: siteProgress.stepId,
         step: siteProgress.step,
         progress: siteProgress.progress,
         message: siteProgress.message,
@@ -259,6 +358,7 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
     bulkState?.runKind === "aiHeaders" ||
     bulkState?.runKind === "contentCleanup" ||
     bulkState?.runKind === "aiLinks" ||
+    bulkState?.runKind === "aiWikipediaLink" ||
     bulkState?.runKind === "aiOverview" ||
     bulkState?.runKind === "aiInContentImage";
   const isHarnessParallelRun =
@@ -312,25 +412,33 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
 
   const overallProgress =
     totalCount > 0
-      ? isInitialLoading ||
-        ((isBulkExtraTextRun ||
-          isBulkAiFaqRun ||
-          isBulkAiHeadersRun ||
-          isBulkAiAllMetaRun ||
-          isBulkResearchRun ||
-          isBulkWpUploadRun) &&
-          !allComplete)
-        ? prepProgress
-        : Math.round((processedCount / totalCount) * 100)
+      ? isHarnessParallelRun
+        ? isInitialLoading || !allComplete
+          ? prepProgress
+          : Math.round((processedCount / totalCount) * 100)
+        : Math.min(
+            100,
+            Math.max(
+              0,
+              Number(
+                siteProgress?.progress ??
+                  bulkState?.currentProgress ??
+                  currentStepProgress?.progress ??
+                  0,
+              ),
+            ),
+          )
       : 0;
 
   const initialLoadingMessage =
     currentStepProgress?.message || currentStep || "Preparing bulk run…";
-  
-  // Calculate current post progress
-  const postProgress = currentProgress ?? (currentStep ? contentOptimizerStepProgress(currentStep) : 0);
 
-  const currentStepIndex = contentOptimizerStepIndex(currentStep);
+  const postProgress = Math.min(
+    100,
+    Math.max(0, Number(currentProgress ?? currentStepProgress?.progress ?? 0)),
+  );
+
+  const currentStepIndex = urlStepIndex(currentStepId);
 
   // Get optimized URLs (only completed)
   const optimizedUrls = urls.filter(url => urlStatuses[url] === 'completed');
@@ -352,7 +460,7 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
   const showBatchPrepHarness =
     !isHarnessParallelRun &&
     Boolean(batchPrepHarnessSections?.length) &&
-    (!batchInventoryDone || isDetailsOnly);
+    !batchInventoryDone;
   const showWpUploadBatchHarness =
     isBulkWpUploadRun &&
     Boolean(wpUploadBatchHarnessSections?.length) &&
@@ -365,8 +473,57 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
   ).trim();
 
   const [expandedUrls, setExpandedUrls] = useState<Set<string>>(() => new Set());
+  /** User-opened row accordions stay open until the user closes them. */
+  const pinnedExpandedUrlsRef = useRef<Set<string>>(new Set());
   const [harnessDetailsOpen, setHarnessDetailsOpen] = useState(false);
   const [uiPageIndex, setUiPageIndex] = useState(0);
+  const [detailsPrepOpen, setDetailsPrepOpen] = useState(true);
+
+  const setRowExpanded = useCallback((url: string, open: boolean) => {
+    if (open) pinnedExpandedUrlsRef.current.add(url);
+    else pinnedExpandedUrlsRef.current.delete(url);
+    setExpandedUrls((prev) => {
+      const next = new Set(prev);
+      if (open) next.add(url);
+      else next.delete(url);
+      return next;
+    });
+  }, []);
+
+  const mergePinnedExpandedUrls = useCallback((auto: Set<string>): Set<string> => {
+    const merged = new Set(auto);
+    for (const url of pinnedExpandedUrlsRef.current) merged.add(url);
+    return merged;
+  }, []);
+
+  const commitAutoExpandedUrls = useCallback(
+    (auto: Set<string>) => {
+      const merged = mergePinnedExpandedUrls(auto);
+      setExpandedUrls((prev) => {
+        if (prev.size === merged.size) {
+          let same = true;
+          for (const u of merged) {
+            if (!prev.has(u)) {
+              same = false;
+              break;
+            }
+          }
+          if (same) return prev;
+        }
+        return merged;
+      });
+    },
+    [mergePinnedExpandedUrls],
+  );
+
+  const overviewRowByUrl = useMemo(() => {
+    const map = new Map<string, OverviewRow>();
+    for (const row of overviewRows) {
+      const url = row.url?.trim();
+      if (url) map.set(normalizePageUrlKey(url), row);
+    }
+    return map;
+  }, [overviewRows]);
 
   useEffect(() => {
     setUiPageIndex(activePageFromProgress);
@@ -377,6 +534,10 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
   const visibleUrls = showBulkPagination ? urls.slice(visibleStart, visibleEnd) : urls;
   const detailsCurrentIndex =
     typeof bulkState?.currentIndex === "number" ? bulkState.currentIndex : currentIndex;
+
+  useEffect(() => {
+    if (batchInventoryDone) setDetailsPrepOpen(false);
+  }, [batchInventoryDone]);
 
   useEffect(() => {
     if (isDetailsOnly) return;
@@ -391,87 +552,77 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
     // Local Image / In Content Image: only optimizing rows stay open; collapse when done.
     if (bulkState?.runKind === "aiInContentImage") {
       if (allComplete) {
-        setExpandedUrls((prev) => (prev.size === 0 ? prev : new Set()));
+        commitAutoExpandedUrls(new Set());
         return;
       }
       const next = new Set<string>();
       for (const url of urls) {
         if (urlStatuses[url] === "optimizing") next.add(url);
       }
-      setExpandedUrls((prev) => {
-        if (prev.size === next.size) {
-          let same = true;
-          for (const u of next) {
-            if (!prev.has(u)) {
-              same = false;
-              break;
-            }
-          }
-          if (same) return prev;
-        }
-        return next;
-      });
+      commitAutoExpandedUrls(next);
       return;
     }
 
-    if (allComplete) return;
-    const toExpand = new Set<string>();
+    if (allComplete) {
+      commitAutoExpandedUrls(new Set());
+      return;
+    }
+
     if (isDetailsOnly) {
-      // Add current row only — never wipe completed rows so done blogs stay expandable with files.
+      const next = new Set<string>();
       const focusUrl = urls[detailsCurrentIndex]?.trim();
-      if (focusUrl) toExpand.add(focusUrl);
-    } else if (isParallelHarnessRow) {
+      if (focusUrl) {
+        const st = urlStatuses[focusUrl];
+        if (st !== "completed" && st !== "skipped" && st !== "error") {
+          next.add(focusUrl);
+        }
+      }
+      commitAutoExpandedUrls(next);
+      return;
+    }
+
+    const next = new Set<string>();
+    if (isParallelHarnessRow) {
       for (const url of urls) {
-        if (urlStatuses[url] === "optimizing") toExpand.add(url);
+        if (urlStatuses[url] === "optimizing") next.add(url);
       }
     } else {
       const activeUrl = bulkState?.currentUrl?.trim();
-      if (activeUrl) toExpand.add(activeUrl);
-      const warmIdx = bulkState?.warmingUpIndex;
-      if (warmIdx != null && urls[warmIdx]) toExpand.add(urls[warmIdx]!);
-    }
-    if (!toExpand.size) return;
-    setExpandedUrls((prev) => {
-      let changed = false;
-      const next = new Set(prev);
-      for (const url of toExpand) {
-        if (!next.has(url)) {
-          next.add(url);
-          changed = true;
+      if (activeUrl) {
+        const st = urlStatuses[activeUrl];
+        if (st !== "completed" && st !== "skipped" && st !== "error") {
+          next.add(activeUrl);
         }
       }
-      return changed ? next : prev;
-    });
-  }, [bulkState?.currentUrl, bulkState?.warmingUpIndex, bulkState?.currentIndex, bulkState?.runKind, detailsCurrentIndex, allComplete, isParallelHarnessRow, isDetailsOnly, urls, urlStatuses]);
+      const warmIdx = bulkState?.warmingUpIndex;
+      if (warmIdx != null && urls[warmIdx]) {
+        const warmUrl = urls[warmIdx]!;
+        const st = urlStatuses[warmUrl];
+        if (st !== "completed" && st !== "skipped" && st !== "error") {
+          next.add(warmUrl);
+        }
+      }
+    }
+
+    commitAutoExpandedUrls(next);
+  }, [
+    bulkState?.currentUrl,
+    bulkState?.warmingUpIndex,
+    bulkState?.currentIndex,
+    bulkState?.runKind,
+    detailsCurrentIndex,
+    allComplete,
+    isParallelHarnessRow,
+    isDetailsOnly,
+    urls,
+    urlStatuses,
+    commitAutoExpandedUrls,
+  ]);
 
   const BULK_ROW_GRID =
     "grid grid-cols-[auto_auto_minmax(0,1fr)_minmax(4.5rem,auto)] items-center gap-3";
   const BULK_ROW_GRID_DETAILS = "flex items-start gap-2";
   const rowGridClass = isDetailsOnly ? BULK_ROW_GRID_DETAILS : BULK_ROW_GRID;
-
-  // Helper: sort files into a canonical pipeline order for easier visual inspection
-  const sortFilesForDisplay = (files: { name: string; content: string; mimeType: string }[]) => {
-    const order = [
-      "gsc-data",
-      "wordpress-post-download",
-      "checklist",
-      "blueprint",
-      "content",
-      "meta-optimization",
-      "meta-",
-      "keyword-research",
-      "selected-keyword",
-      "featured-image-checklist",
-      "featured-image",
-    ];
-    const score = (name: string) => {
-      for (let i = 0; i < order.length; i++) {
-        if (name.startsWith(order[i])) return i;
-      }
-      return order.length;
-    };
-    return [...files].sort((a, b) => score(a.name) - score(b.name));
-  };
 
   const downloadFile = (file: { name: string; content: string; mimeType: string }) => {
     // Re-use OptimizationFileManager download logic to avoid duplicating blob handling
@@ -601,11 +752,146 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
     notify.success(NOTIFY_CSV_DOWNLOADED);
   };
 
+  if (isDetailsOnly) {
+    const prepSections =
+      batchPrepHarnessSections?.length
+        ? batchPrepHarnessSections
+        : wpUploadBatchHarnessSections?.length
+          ? wpUploadBatchHarnessSections
+          : null;
+
+    return (
+      <BulkDetailsDrawerStack
+        liveMessage={detailsLiveMessage}
+        showLiveMessage={isHarnessParallelRun}
+        prepSections={prepSections}
+        prepOpen={detailsPrepOpen}
+        onPrepOpenChange={setDetailsPrepOpen}
+        pagination={
+          showBulkPagination ? (
+            <OverviewGridPagination
+              pageIndex={uiPageIndex}
+              totalCount={totalCount}
+              pageSize={bulkPageSize}
+              onPageChange={setUiPageIndex}
+              className="rounded-none bg-zinc-900"
+            />
+          ) : null
+        }
+      >
+        {(stripeBase) =>
+          !(isBulkWpUploadRun && !prepSections) &&
+          visibleUrls.map((url, localIndex) => {
+            const row = overviewRowByUrl.get(normalizePageUrlKey(url));
+            if (!row) return null;
+            const index = showBulkPagination ? visibleStart + localIndex : localIndex;
+            const stripeIndex = stripeBase + localIndex;
+            const status =
+              urlStatuses[url] ||
+              (index < currentIndex
+                ? "completed"
+                : index === currentIndex
+                  ? "optimizing"
+                  : "pending");
+            const isActive = isOverviewRowBulkActive(row.url, bulkState, !allComplete);
+            const isExpanded = expandedUrls.has(url);
+            const persistedHarness = urlHarnessSections[url] as BulkHarnessSectionUi[] | undefined;
+            const liveHarness =
+              isActive && !isParallelHarnessRow
+                ? (currentStepProgress?.harnessSections as BulkHarnessSectionUi[] | undefined)
+                : undefined;
+            const rowHarnessSectionsList = resolveDetailsPipelineSections(persistedHarness, liveHarness);
+            const rawFiles = mergeGeneratedFilesByName(
+              urlGeneratedFiles[url] || [],
+              isActive ? siteProgress?.generatedFiles ?? [] : [],
+            );
+            const { otherFiles } = partitionPeerDetailFiles({ peers: [], files: rawFiles });
+            const displayFiles = sortFilesForDisplay(
+              isInContentImageRun
+                ? otherFiles.filter((f) => f.name === "in-content-image.md")
+                : otherFiles,
+            );
+            const rowKeyword = row.focusKeyword?.trim() || bulkRowLinkLabel(url, urlKeywords[url]);
+            const serpBriefDownload =
+              row.seoResearch?.trim() && rowHarnessSectionsList.some(isSerpPipelineSection)
+                ? buildSeoResearchArtifactDownloadable(rowKeyword, row.seoResearch)
+                : null;
+            const toggleRow = () => {
+              setRowExpanded(url, !isExpanded);
+            };
+            const panelId = `bulk-details-row-${index}`;
+
+            if (isExpanded) {
+              return (
+                <div key={url} className={CONTENT_OPTIMIZER_MULTI_SITE_ROW_WRAPPER_CLASS}>
+                  <div className={contentOptimizerRowStripeClass(stripeIndex, { isActiveOptimize: isActive })}>
+                    <MetaOptimizerPageRowCompact
+                      row={row}
+                      wpTitlesByUrl={wpTitlesByUrl}
+                      isExpanded
+                      embedded
+                      stripeIndex={stripeIndex}
+                      isActiveOptimize={isActive}
+                      panelId={panelId}
+                      onToggle={toggleRow}
+                      editableDate={drawerDateEditable}
+                      onDateModifierChange={
+                        drawerDateEditable
+                          ? (dateIso) => onRowDateModifierChange!(url, dateIso)
+                          : undefined
+                      }
+                      onDateModifierCommit={
+                        drawerDateEditable
+                          ? () => onRowDateModifierCommit?.(url)
+                          : undefined
+                      }
+                    />
+                    <BulkDetailsTileSections
+                      harnessSections={rowHarnessSectionsList}
+                      files={displayFiles}
+                      onDownloadFile={downloadFile}
+                      onDownloadAll={downloadAllForUrl}
+                      stripeBaseIndex={stripeIndex + 1}
+                      serpBriefDownload={serpBriefDownload}
+                    />
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div key={url} className={CONTENT_OPTIMIZER_MULTI_SITE_ROW_WRAPPER_CLASS}>
+                <MetaOptimizerPageRowCompact
+                  row={row}
+                  wpTitlesByUrl={wpTitlesByUrl}
+                  isExpanded={false}
+                  stripeIndex={stripeIndex}
+                  isActiveOptimize={isActive}
+                  panelId={panelId}
+                  onToggle={toggleRow}
+                  editableDate={drawerDateEditable}
+                  onDateModifierChange={
+                    drawerDateEditable
+                      ? (dateIso) => onRowDateModifierChange!(url, dateIso)
+                      : undefined
+                  }
+                  onDateModifierCommit={
+                    drawerDateEditable ? () => onRowDateModifierCommit?.(url) : undefined
+                  }
+                />
+              </div>
+            );
+          })
+        }
+      </BulkDetailsDrawerStack>
+    );
+  }
+
   return (
     <div
       className={cn(
         "flex min-h-0 flex-1 flex-col bg-transparent shadow-none",
-        isDetailsOnly ? "overflow-visible" : "overflow-hidden",
+        isDetailsOnly ? "min-h-0" : "min-h-0 flex-1 overflow-hidden",
         variant === "modal" && "max-h-[90vh]",
         variant === "page" &&
           !isDetailsOnly &&
@@ -667,7 +953,7 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
         </div>
         ) : null}
 
-        <div className={cn("flex min-h-0 flex-1 flex-col space-y-4", isDetailsOnly ? "py-2" : "px-4 pb-4")}>
+        <div className={cn("flex min-h-0 flex-1 flex-col", isDetailsOnly ? "overflow-hidden" : "space-y-4 px-4 pb-4")}>
         {/* Harness runs: pages-done ticker (matches workspace MetaBulkMicroProgress bar) */}
         {totalCount > 0 && isHarnessParallelRun && !isDetailsOnly && (
           <div className="shrink-0 space-y-1.5">
@@ -717,13 +1003,8 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
           </div>
         )}
 
-        {(isDetailsOnly || (isHarnessParallelRun && variant === "page" ? harnessDetailsOpen : true)) ? (
+        {(isHarnessParallelRun && variant === "page" ? harnessDetailsOpen : true) ? (
         <>
-        {isDetailsOnly && isHarnessParallelRun && detailsLiveMessage ? (
-          <div className={cn(DETAILS_CO_SECTION_LINE, detailsDrawerRowStripeClass(0))}>
-            <span className="text-white">{detailsLiveMessage}</span>
-          </div>
-        ) : null}
         {(() => {
           const { planFile, combinedCsvFile, summaryFile } = partitionPeerDetailFiles({
             peers: [],
@@ -731,15 +1012,15 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
           });
           if (!planFile && !combinedCsvFile && !summaryFile) return null;
           return (
-            <div className={DETAILS_CO_SECTION_BODY}>
-              <div className={DETAILS_CO_SECTION_LINE}>
+            <div className="space-y-0 border-0 bg-transparent px-2.5 pb-2 pt-0 sm:px-3">
+              <div className="flex min-h-9 w-full items-center justify-between gap-2 border-0 px-2.5 py-1.5 text-white sm:px-3">
                 <span className="text-white">
                   {summaryFile && !planFile && !combinedCsvFile
                     ? "Local Image summary"
                     : "City sitemap plan"}
                 </span>
               </div>
-              <div className={DETAILS_CO_SECTION_LINE}>
+              <div className="flex min-h-9 w-full items-center justify-between gap-2 border-0 px-2.5 py-1.5 text-white sm:px-3">
                 {planFile ? (
                   <Button
                     type="button"
@@ -793,9 +1074,10 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
             currentRow={harnessPagesDone}
             totalRows={totalCount}
             isProcessing={!allComplete}
-            hideHeader={isDetailsOnly}
-            activeIndicator={isDetailsOnly ? "border" : "spinner"}
-            variant={isDetailsOnly ? "details-flat" : "default"}
+            hideHeader={false}
+            activeIndicator="spinner"
+            variant="default"
+            hideProgressMicroLines={false}
           />
         ) : null}
         {totalCount > 0 && isInitialLoading && !isDetailsOnly && (
@@ -842,21 +1124,22 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
         {/* Target list */}
         <section
           aria-label="Bulk targets"
-          className={cn("min-h-0 flex-1", !isDetailsOnly && "overflow-y-auto")}
+          className={cn(isDetailsOnly ? undefined : "min-h-0 flex-1 overflow-y-auto")}
         >
-          {urls.length > 0 && !(isDetailsOnly && isBulkWpUploadRun) && (
+          {urls.length > 0 && (
             <div className="space-y-2">
               {showBatchPrepHarness && batchPrepHarnessSections ? (
-                <div className={cn("px-3 py-2", !isDetailsOnly && "rounded-md bg-black/20")}>
+                <div className={cn("px-3 py-2", "rounded-md bg-black/20")}>
                   <BulkHarnessSectionsPanel
                     harnessSections={batchPrepHarnessSections}
                     harnessPlannedSectionCount={batchPrepHarnessSections.length}
                     currentRow={0}
                     totalRows={1}
                     isProcessing={!allComplete}
-                    hideHeader={isDetailsOnly}
-                    activeIndicator={isDetailsOnly ? "border" : "spinner"}
-                    variant={isDetailsOnly ? "details-flat" : "default"}
+                    hideHeader={false}
+                    activeIndicator="spinner"
+                    variant="default"
+                    hideProgressMicroLines={false}
                   />
                 </div>
               ) : null}
@@ -876,22 +1159,20 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                   ) : null}
                 </div>
               ) : null}
-              {!isDetailsOnly ? (
-                <div
-                  className={cn(
-                    "sticky top-0 z-10 rounded-md bg-black/40 px-3 py-2 text-base font-semibold uppercase tracking-[0.12em] text-muted-foreground backdrop-blur-sm",
-                    BULK_ROW_GRID,
-                  )}
-                  role="row"
-                >
-                  <div aria-hidden className="w-4" />
-                  <div className="whitespace-nowrap">Status</div>
-                  <div className="min-w-0">Keyword</div>
-                  <div className="text-right">Progress</div>
-                </div>
-              ) : null}
+              <div
+                className={cn(
+                  "sticky top-0 z-10 rounded-md bg-black/40 px-3 py-2 text-base font-semibold uppercase tracking-[0.12em] text-muted-foreground backdrop-blur-sm",
+                  BULK_ROW_GRID,
+                )}
+                role="row"
+              >
+                <div aria-hidden className="w-4" />
+                <div className="whitespace-nowrap">Status</div>
+                <div className="min-w-0">Keyword</div>
+                <div className="text-right">Progress</div>
+              </div>
 
-              <ul className={cn("space-y-2", isDetailsOnly && "space-y-1")} role="list">
+              <ul className="space-y-2" role="list">
                 {visibleUrls.map((url, localIndex) => {
                   const index = showBulkPagination ? visibleStart + localIndex : localIndex;
                   const status =
@@ -907,16 +1188,6 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                   const isCompleted = status === "completed";
                   const isSkipped = status === "skipped";
                   const isError = status === "error";
-                  // #region agent log
-                  if (
-                    isSkipped &&
-                    (url.toLowerCase().includes("city-centre") ||
-                      url.toLowerCase().includes("city_centre") ||
-                      (urlKeywords[url] || "").toLowerCase().includes("city centre"))
-                  ) {
-                    fetch('http://127.0.0.1:7781/ingest/50ee427b-23ed-4bec-99ab-67b267c19331',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ae1ef'},body:JSON.stringify({sessionId:'8ae1ef',runId:'post-fix',hypothesisId:'A',location:'BulkOptimizationPanel.tsx:skipped-render',message:'UI rendering SKIPPED banner',data:{url:url.slice(0,140),runKind:bulkState?.runKind||null,urlKeyword:(urlKeywords[url]||'').slice(0,120),skipReason:(urlSkipReasons[url]||'').slice(0,160)},timestamp:Date.now()})}).catch(()=>{});
-                  }
-                  // #endregion
                   const isPending = status === "pending";
                   const localImageOutcome = urlLocalImageOutcomes[url];
                   const isWarmingUp =
@@ -1000,15 +1271,12 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                     isActive && !isParallelHarnessRow
                       ? (currentStepProgress?.harnessSections as BulkHarnessSectionUi[] | undefined)
                       : undefined;
-                  const rowHarnessSectionsList = isParallelHarnessRow
-                    ? persistedHarness
-                    : persistedHarness?.length
-                      ? isActive && liveHarness?.length
-                        ? liveHarness
-                        : persistedHarness
-                      : isActive && liveHarness?.length
-                        ? liveHarness
-                        : undefined;
+                  const rowHarnessSectionsList = mergeRowHarnessSections(
+                    persistedHarness,
+                    liveHarness,
+                    isActive,
+                    isParallelHarnessRow,
+                  );
                   const showRowHarness = Boolean(rowHarnessSectionsList?.length);
                   const showHarnessForRow = isParallelHarnessRow
                     ? isActive || isCompleted || isSkipped || isError
@@ -1045,13 +1313,6 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                     isError,
                   });
 
-                  // #region agent log
-                  if (isDetailsOnly && (isActive || isCompleted || isError || isDetailsActivePost)) {
-                    const _files = urlGeneratedFiles[url] || [];
-                    fetch('http://127.0.0.1:7781/ingest/50ee427b-23ed-4bec-99ab-67b267c19331',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ae1ef'},body:JSON.stringify({sessionId:'8ae1ef',runId:'empty-peers',hypothesisId:'D',location:'BulkOptimizationPanel.tsx:details-gates',message:'Details drawer CSV visibility gates',data:{runKind:bulkState?.runKind??null,isParallelHarnessRow,showOptimizationSequence,showDetailsFlatBody,isDetailsOnly,isActive,isCompleted,isError,fileCount:_files.length,batchPeerFileCount:batchPeerLibraryFiles.length,batchPeerNames:batchPeerLibraryFiles.slice(0,8).map((f)=>f.name),csvCount:_files.filter((f)=>String(f.name||'').includes('peer-local-images')||String(f.mimeType||'').includes('csv')).length,fileNames:_files.slice(0,8).map((f)=>f.name),harnessSectionCount:rowHarnessSectionsList?.length??0,showHarnessForRow},timestamp:Date.now()})}).catch(()=>{});
-                  }
-                  // #endregion
-
                   const isDetailsCurrentRow =
                     isDetailsOnly &&
                     !allComplete &&
@@ -1061,7 +1322,7 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                     !isError;
 
                   const detailsStepLabel = isDetailsCurrentRow
-                    ? resolveContentOptimizerStepLabel(bulkState?.currentStep || currentStep)
+                    ? stepLabel(currentStepId)
                     : null;
 
                   return (
@@ -1069,12 +1330,7 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                     <Collapsible
                       open={isExpanded}
                       onOpenChange={(open) => {
-                        setExpandedUrls((prev) => {
-                          const next = new Set(prev);
-                          if (open) next.add(url);
-                          else next.delete(url);
-                          return next;
-                        });
+                        setRowExpanded(url, open);
                       }}
                       className={cn(
                         isDetailsOnly
@@ -1246,155 +1502,14 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                         </button>
                       </CollapsibleTrigger>
 
+                      {!isDetailsOnly ? (
                       <CollapsibleContent
                         className={cn(
-                          isDetailsOnly ? "p-0" : "space-y-3 px-3 pb-3",
+                          "space-y-3 px-3 pb-3",
                           "data-[state=closed]:animate-none",
                         )}
                       >
-                        {isDetailsOnly ? (
-                          <div className="border-0 bg-transparent px-2.5 py-0 sm:px-3">
-                            {(() => {
-                              const gscSnap = gscPreviewByUrl[url];
-                              const showGscRow =
-                                gscSnap?.queries?.length ||
-                                (gscFetching &&
-                                  isActive &&
-                                  gscActiveUrl === url &&
-                                  !gscSnap?.queries?.length);
-                              if (!showGscRow) return null;
-                              return (
-                                <div className="mb-2">
-                                  <GscPerformancePreviewRow
-                                    snapshot={gscSnap ?? null}
-                                    loading={Boolean(
-                                      gscFetching &&
-                                        isActive &&
-                                        gscActiveUrl === url &&
-                                        !gscSnap?.queries?.length,
-                                    )}
-                                  />
-                                </div>
-                              );
-                            })()}
-
-                            {showDetailsFlatBody
-                              ? (() => {
-                                  const files = urlGeneratedFiles[url] || [];
-                                  const { otherFiles } = partitionPeerDetailFiles({
-                                    peers: [],
-                                    files,
-                                  });
-                                  const dedupedByName: typeof otherFiles = [];
-                                  const seenNames = new Set<string>();
-                                  for (const f of otherFiles) {
-                                    const name = (f.name || "").trim();
-                                    if (!name || seenNames.has(name)) continue;
-                                    seenNames.add(name);
-                                    dedupedByName.push(f);
-                                  }
-                                  const forDisplay =
-                                    bulkState?.runKind === "aiInContentImage"
-                                      ? dedupedByName.filter(
-                                          (f) => f.name === "in-content-image.md",
-                                        )
-                                      : dedupedByName;
-                                  const sortedOtherFiles = forDisplay.length
-                                    ? sortFilesForDisplay(forDisplay)
-                                    : [];
-                                  const harnessSectionsForRow = rowHarnessSectionsList ?? [];
-
-                                  return (
-                                    <div className={DETAILS_CO_STACK}>
-                                      <BulkHarnessSectionsPanel
-                                        harnessSections={harnessSectionsForRow}
-                                        harnessPlannedSectionCount={
-                                          isParallelHarnessRow
-                                            ? (currentStepProgress?.harnessPlannedSectionCount ??
-                                              (harnessSectionsForRow.length || null))
-                                            : (currentStepProgress?.harnessPlannedSectionCount ??
-                                              harnessSectionsForRow.length ??
-                                              null)
-                                        }
-                                        currentRow={index}
-                                        totalRows={Math.max(urls.length, 1)}
-                                        isProcessing={isActive || isWarmingUp}
-                                        hideHeader
-                                        activeIndicator="border"
-                                        variant="details-flat"
-                                        hideSectionDownloads={
-                                          bulkState?.runKind === "aiInContentImage"
-                                        }
-                                      />
-
-                                      {sortedOtherFiles.length > 0 ? (
-                                        <div className={DETAILS_CO_SECTION_BODY}>
-                                          <div className={DETAILS_CO_SECTION_LINE}>
-                                            <span className="text-white">
-                                              Generated files · {sortedOtherFiles.length}
-                                            </span>
-                                          </div>
-                                          <div className={DETAILS_CO_SECTION_LINE}>
-                                            <Button
-                                              type="button"
-                                              variant="ghost"
-                                              size="sm"
-                                              className="h-8 px-0 text-base text-white hover:bg-white/10 hover:text-white"
-                                              onClick={() => downloadAllForUrl(sortedOtherFiles)}
-                                            >
-                                              <Download className="mr-1.5 h-3.5 w-3.5" />
-                                              Download all
-                                            </Button>
-                                          </div>
-                                          {sortedOtherFiles.map((file, idx) => (
-                                            <div key={`${file.name}-${idx}`} className={DETAILS_CO_SECTION_LINE}>
-                                              <span
-                                                className="min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere]"
-                                                title={file.name}
-                                              >
-                                                {file.name}
-                                              </span>
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-7 shrink-0 px-2 text-base text-white hover:bg-white/10 hover:text-white"
-                                                onClick={() => downloadFile(file)}
-                                              >
-                                                <Download className="mr-1 h-3 w-3" />
-                                                File
-                                              </Button>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  );
-                                })()
-                              : null}
-
-                            {isSkipped ? (
-                              <div className="mt-2 rounded-md bg-yellow-500/[0.07] px-3 py-2">
-                                <div className="mb-1 text-base font-semibold uppercase tracking-wide text-yellow-400">
-                                  Skipped
-                                </div>
-                                <div className="text-base text-yellow-400/80">
-                                  {urlSkipReasons[url]?.trim() ||
-                                    "Could not derive a keyword from sitemap or page context. Check the URL, title, and entity sitemap settings, then retry."}
-                                </div>
-                              </div>
-                            ) : null}
-
-                            {isError ? (
-                              <div className="mt-2 rounded-md bg-red-500/[0.07] px-3 py-2">
-                                <div className="text-base text-red-400/85">
-                                  {urlSkipReasons[url]?.trim() ||
-                                    "Processing failed for this target."}
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <>
+                        <>
                         {entityLabel ? (
                           <div className="text-base">
                             <span className="text-muted-foreground">Entity · </span>
@@ -1423,15 +1538,26 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                       {showHarnessForRow &&
                       showRowHarness &&
                       rowHarnessSectionsList ? (
+                        <>
+                          {isActive ? (
+                            <OptimizationArtifactDownloads
+                              files={
+                                urlGeneratedFiles[url]?.length
+                                  ? urlGeneratedFiles[url]
+                                  : siteProgress?.generatedFiles ?? []
+                              }
+                              className="mt-2"
+                            />
+                          ) : null}
                             <BulkHarnessSectionsPanel
                               harnessSections={rowHarnessSectionsList}
-                              harnessPlannedSectionCount={
-                                isParallelHarnessRow
-                                  ? rowHarnessSectionsList.length
-                                  : (currentStepProgress?.harnessPlannedSectionCount ??
-                                    rowHarnessSectionsList.length ??
-                                    null)
-                              }
+                              harnessPlannedSectionCount={resolveRowHarnessPlannedCount(
+                                rowHarnessSectionsList,
+                                isParallelHarnessRow,
+                                isActive,
+                                currentStepProgress?.harnessPlannedSectionCount,
+                                persistedHarness?.length ?? 0,
+                              )}
                               currentRow={index}
                               totalRows={Math.max(urls.length, 1)}
                               isProcessing={isActive || isWarmingUp}
@@ -1442,6 +1568,7 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                                 bulkState?.runKind === "aiInContentImage"
                               }
                             />
+                        </>
                           ) : null}
 
                       {showOptimizationSequence ? (
@@ -1450,9 +1577,7 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                             <div className="min-w-0 flex-1">
                               <span className="text-muted-foreground">Sequence · </span>
                               <span className="font-medium text-primary">
-                                {resolveContentOptimizerStepLabel(
-                                  isWarmingUp ? bulkState?.currentStep || currentStep : currentStep,
-                                )}
+                                {isWarmingUp ? stepLabel(currentStepId) : currentStep}
                               </span>
                             </div>
                             <span className="shrink-0 tabular-nums text-foreground">
@@ -1629,8 +1754,8 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                         </div>
                       )}
                           </>
-                        )}
                       </CollapsibleContent>
+                      ) : null}
                     </Collapsible>
                     </li>
                   );

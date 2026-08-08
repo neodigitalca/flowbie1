@@ -5,6 +5,7 @@
 
 import type { WordPressSite } from "@/components/integrations/types";
 import { streamChatCompletion } from "@/lib/api";
+import { appendUniversalContentRulesToSystemPrompt } from "@/lib/content-word-blocklist";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { parseFaqEntries, type FaqEntry } from "@/lib/faq-entries";
 
@@ -131,9 +132,10 @@ Return only Q:/A: blocks as specified - no numbering, no markdown headings, no J
       apiKey: params.apiKey,
       model: getResearchModel(params.siteId ?? null),
       messages: [
-        { role: "system", content: systemPrompt },
+        { role: "system", content: appendUniversalContentRulesToSystemPrompt(systemPrompt) },
         { role: "user", content: prompt },
       ],
+      contentHarness: true,
       temperature: 0.55,
       maxTokens: 4500,
       topP: 0.9,

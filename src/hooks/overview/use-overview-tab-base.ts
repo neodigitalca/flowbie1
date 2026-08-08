@@ -39,6 +39,12 @@ import {
   type OverviewRowErrorFilterKey,
 } from "@/lib/overview/overview-row-error-filters";
 import { overviewBulkScopeUrlKeysFromRows } from "@/lib/overview/overview-bulk-row-scope";
+import {
+  overviewDateModifierTodayIso,
+  patchOverviewRowsDateModifierForUrls,
+  pushOverviewDateModifiersToAcfForUrls,
+} from "@/lib/overview/overview-bulk-seo-payload";
+import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
 
 export function useOverviewTabBase({
   site,
@@ -67,6 +73,9 @@ export function useOverviewTabBase({
   );
 
   const opt = useWordPressOptimization();
+  const contentOptDateSyncedRef = useRef(new Set<string>());
+  const bulkBatchKey = site ? `${site.id}-batch` : "";
+
   const { sites: wordPressSites } = useWordPressSites();
   const portfolioBlockedHostsForSemrush = useMemo(
     () => buildPortfolioBlockedHosts(wordPressSites, { excludeSiteId: site?.id }),
@@ -98,6 +107,43 @@ export function useOverviewTabBase({
     remapBindingUrl,
     mergeInventoryContentForSource,
   } = useOverviewWordPressBinding(site?.id, sitemapSource);
+
+  useEffect(() => {
+    if (!site || !bulkBatchKey) return;
+    const statuses = opt.bulkOptimizationState[bulkBatchKey]?.urlStatuses;
+    if (!statuses) {
+      contentOptDateSyncedRef.current.clear();
+      return;
+    }
+
+    const statusValues = Object.values(statuses);
+    if (statusValues.length > 0 && statusValues.every((status) => status === "pending")) {
+      contentOptDateSyncedRef.current.clear();
+    }
+
+    const newlyOptimizing: string[] = [];
+    for (const [url, status] of Object.entries(statuses)) {
+      if (status !== "optimizing") continue;
+      const key = normalizePageUrlKey(url);
+      if (contentOptDateSyncedRef.current.has(key)) continue;
+      contentOptDateSyncedRef.current.add(key);
+      newlyOptimizing.push(url);
+    }
+
+    if (newlyOptimizing.length > 0) {
+      const iso = overviewDateModifierTodayIso();
+      patchOverviewRowsDateModifierForUrls(setRows, newlyOptimizing, iso);
+      if (site.username?.trim() && site.appPassword?.trim()) {
+        void pushOverviewDateModifiersToAcfForUrls(
+          site,
+          bindings,
+          rowsRef.current,
+          newlyOptimizing,
+          iso,
+        );
+      }
+    }
+  }, [opt.bulkOptimizationState, site, bulkBatchKey, setRows, bindings]);
 
   const getInventoryRow = useCallback(
     (url: string) => getInventoryRowForUrl(site, url),

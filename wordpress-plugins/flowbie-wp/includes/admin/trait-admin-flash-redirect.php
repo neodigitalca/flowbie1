@@ -103,6 +103,24 @@ trait Flowbie_Wp_Admin_Trait_Flash_Redirect {
 	 * @param int                  $id   Report ID for view-report.
 	 * @param array<string, mixed> $query Extra query args.
 	 */
+	/**
+	 * @param string               $view list|import-export|settings
+	 * @param int                  $id   Unused.
+	 * @param array<string, mixed> $query Extra query args.
+	 */
+	private static function redirect_to_search_logs( string $view = 'list', int $id = 0, array $query = array() ): void {
+		unset( $id );
+		$url = admin_url( 'admin.php?page=flowbie-wp-search-logs' );
+		if ( 'list' !== $view ) {
+			$url = add_query_arg( 'action', $view, $url );
+		}
+		if ( ! empty( $query ) ) {
+			$url = add_query_arg( $query, $url );
+		}
+		wp_safe_redirect( $url );
+		exit;
+	}
+
 	private static function redirect_to_chat_logs( string $view = 'list', int $id = 0, array $query = array() ): void {
 		$url = admin_url( 'admin.php?page=flowbie-wp-chat-logs' );
 		if ( 'list' !== $view ) {

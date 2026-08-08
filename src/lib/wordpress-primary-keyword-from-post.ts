@@ -1,3 +1,4 @@
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 /**
  * Single AI path: send full WordPress post (API response) to OpenRouter research model.
  * AI reads everything and returns the primary SEO keyword. No pattern matching, no fallbacks.
@@ -69,13 +70,7 @@ Rules:
 
   const response = await fetch(OPENROUTER_URL, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer":
-        typeof window !== "undefined" ? window.location.origin : "https://agent-blueprint-builder.com",
-      "X-Title": "Agent Blueprint Builder",
-    },
+    headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
       model,
       messages: [

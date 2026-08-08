@@ -8,6 +8,7 @@ import {
   readStoredContentOptimizerSection,
   writeStoredContentOptimizerSection,
 } from "./content-optimizer-sections";
+import type { ContentOptimizerGeneratorChrome } from "./content-optimizer-generator-chrome";
 import { MultiSiteContentOptimizerPanel } from "./MultiSiteContentOptimizerPanel";
 import { resolveOverviewGridPaginationLayoutTotal } from "@/lib/overview/overview-grid-pagination-layout-total";
 
@@ -20,6 +21,7 @@ export interface ContentOptimizerShellProps {
   temperature: number;
   maxTokens: number;
   topP: number;
+  generatorChrome?: ContentOptimizerGeneratorChrome;
 }
 
 export const ContentOptimizerShell: React.FC<ContentOptimizerShellProps> = ({
@@ -28,6 +30,7 @@ export const ContentOptimizerShell: React.FC<ContentOptimizerShellProps> = ({
   temperature,
   maxTokens,
   topP,
+  generatorChrome,
 }) => {
   const { sites } = useWordPressSites();
   const { activeWordPressSiteId, setActiveWordPressSiteId } = useWordPressOptimization();
@@ -83,6 +86,7 @@ export const ContentOptimizerShell: React.FC<ContentOptimizerShellProps> = ({
           optimizerSection={section}
           onOptimizerSectionChange={setSection}
           paginationLayoutTotal={paginationLayoutTotal}
+          generatorChrome={generatorChrome}
         />
       </div>
     );
@@ -100,6 +104,7 @@ export const ContentOptimizerShell: React.FC<ContentOptimizerShellProps> = ({
         optimizerSection={section}
         onOptimizerSectionChange={setSection}
         paginationLayoutTotal={paginationLayoutTotal}
+        generatorChrome={generatorChrome}
       />
     </div>
   );

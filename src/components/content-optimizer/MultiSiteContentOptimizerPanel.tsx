@@ -6,6 +6,7 @@ import {
   MultiSiteSitemapModeSelect,
 } from "@/components/content-optimizer/MultiSiteSitemapModeSelect";
 import type { ContentOptimizerSectionId } from "@/components/content-optimizer/content-optimizer-sections";
+import type { ContentOptimizerGeneratorChrome } from "@/components/content-optimizer/content-optimizer-generator-chrome";
 import { useWordPressSites } from "@/hooks/use-wordpress-sites";
 import { useOptimizationActivityCounts } from "@/hooks/use-optimization-activity-counts";
 import { useWordPressOptimization } from "@/contexts/wordpress-optimization-context";
@@ -78,12 +79,14 @@ export type MultiSiteContentOptimizerPanelProps = {
   optimizerSection: ContentOptimizerSectionId;
   onOptimizerSectionChange: (id: ContentOptimizerSectionId) => void;
   paginationLayoutTotal: number;
+  generatorChrome?: ContentOptimizerGeneratorChrome;
 };
 
 export const MultiSiteContentOptimizerPanel: React.FC<MultiSiteContentOptimizerPanelProps> = ({
   optimizerSection,
   onOptimizerSectionChange,
   paginationLayoutTotal,
+  generatorChrome,
 }) => {
   const { sites } = useWordPressSites();
   /** Every property under Integrations */
@@ -93,7 +96,6 @@ export const MultiSiteContentOptimizerPanel: React.FC<MultiSiteContentOptimizerP
 
   const {
     handleOptimizeMultipleContentClick,
-    approveBulkKeywordApproval,
     resetBulkBatch,
     bulkOptimizationState,
     isOptimizingContent,
@@ -500,9 +502,9 @@ export const MultiSiteContentOptimizerPanel: React.FC<MultiSiteContentOptimizerP
           gscMap={gscMap}
           gscPreviewLoadingDs={gscPreviewLoadingDs}
           bulkActiveUrlDs={bulkActiveUrlDs}
-          onApproveKeywords={approveBulkKeywordApproval}
           onBatchClose={handleBatchClose}
           paginationLayoutTotal={paginationLayoutTotal}
+          generatorChrome={generatorChrome}
         />
       </div>
 

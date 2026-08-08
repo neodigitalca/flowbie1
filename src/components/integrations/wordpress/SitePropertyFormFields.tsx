@@ -12,6 +12,7 @@ import type { WordPressSite } from "../types";
 import { matchSemrushProjectForSite } from "@/lib/wordpress-api/semrush";
 import { isOptimizationPackageTier } from "@/lib/wordpress-optimization-package";
 import { buildUnifiedContentBankProvisioningSqlBlock } from "@/lib/unified-content-bank-api";
+import { normalizeGbpLocationIdInput } from "@/lib/gbp-post/normalize-gbp-location-id";
 import {
   WP_PANEL_INSET_BAND,
   WP_PANEL_LIST_GAP,
@@ -165,6 +166,9 @@ export interface SitePropertyFormFieldsProps {
   formGa4PropertyId: string;
   formGbpLocationId: string;
   formSemrushSiteAuditProjectId: string;
+  /** Saved on site row / server mirror when form state is still empty. */
+  persistedGbpLocationId?: string;
+  persistedGa4PropertyId?: string;
   formEditorialCountsPeriodStartYmd: string;
   /** Empty string = no package (unlimited). */
   formOptimizationPackage: string;
@@ -201,6 +205,8 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
   formAppPassword,
   formGa4PropertyId,
   formGbpLocationId,
+  persistedGbpLocationId = "",
+  persistedGa4PropertyId = "",
   formSemrushSiteAuditProjectId,
   formEditorialCountsPeriodStartYmd,
   formOptimizationPackage,
@@ -223,6 +229,8 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
 }) => {
   const hc = helpClass(chrome);
   const sh = strongHelpClass(chrome);
+  const gbpFieldValue = formGbpLocationId.trim() || persistedGbpLocationId.trim();
+  const ga4FieldValue = formGa4PropertyId.trim() || persistedGa4PropertyId.trim();
   const [semrushMatching, setSemrushMatching] = useState(false);
 
   const semrushBtnClass =
@@ -464,8 +472,13 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
                   chrome={chrome}
                   id="ga4PropertyId"
                   type="text"
-                  value={formGa4PropertyId}
+                  value={ga4FieldValue}
                   onChange={(e) => onFormGa4PropertyIdChange(e.target.value)}
+                  onFocus={() => {
+                    if (!formGa4PropertyId.trim() && persistedGa4PropertyId.trim()) {
+                      onFormGa4PropertyIdChange(persistedGa4PropertyId.trim());
+                    }
+                  }}
                   placeholder="e.g. 123456789"
                 />
               }
@@ -487,8 +500,19 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
                   chrome={chrome}
                   id="gbpLocationId"
                   type="text"
-                  value={formGbpLocationId}
+                  value={gbpFieldValue}
                   onChange={(e) => onFormGbpLocationIdChange(e.target.value)}
+                  onFocus={() => {
+                    if (!formGbpLocationId.trim() && persistedGbpLocationId.trim()) {
+                      onFormGbpLocationIdChange(persistedGbpLocationId.trim());
+                    }
+                  }}
+                  onBlur={() => {
+                    const normalized = normalizeGbpLocationIdInput(formGbpLocationId || persistedGbpLocationId);
+                    if (normalized && normalized !== formGbpLocationId) {
+                      onFormGbpLocationIdChange(normalized);
+                    }
+                  }}
                   placeholder="Paste full business.google.com profile URL or Advanced settings → Copy ID"
                 />
               }

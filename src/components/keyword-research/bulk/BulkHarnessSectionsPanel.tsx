@@ -10,12 +10,16 @@ import {
 } from '@/components/research/reporting/reporting-toolbar-styles';
 import { BULK_ACTIVE_SEMANTIC_BORDER_CLASS } from '@/lib/bulk/bulk-active-semantic-border';
 import {
-  detailsDrawerRowStripeClass,
-  DETAILS_CO_COLLAPSE_TRIGGER,
-  DETAILS_CO_SECTION_BODY,
-  DETAILS_CO_SECTION_LINE,
-  DETAILS_CO_STACK,
-} from '@/components/integrations/wordpress/bulk-details-drawer-styles';
+  CONTENT_OPTIMIZER_MULTI_SITE_ROW_STACK_CLASS,
+  contentOptimizerRowStripeClass,
+} from "@/components/overview/overview-tab/overview-tab-content-constants";
+
+const DETAILS_FLAT_SECTION_LINE =
+  "flex min-h-9 w-full items-center justify-between gap-2 border-0 px-2.5 py-1.5 text-white sm:px-3";
+const DETAILS_FLAT_SECTION_BODY =
+  "space-y-0 border-0 bg-transparent px-2.5 pb-2 pt-0 sm:px-3";
+const DETAILS_FLAT_COLLAPSE_TRIGGER =
+  "flex min-h-9 w-full items-center justify-between gap-2 rounded-none border-0 bg-zinc-950 px-3 py-1.5 text-left text-base text-white [&[data-state=open]>svg]:rotate-180";
 import { cn } from '@/lib/utils';
 import type { BulkHarnessSectionUi } from '@/hooks/use-bulk-auto-generate';
 
@@ -80,6 +84,8 @@ interface BulkHarnessSectionsPanelProps {
   blogImportCompact?: boolean;
   /** When true, hide per-section File download buttons (status + micro lines stay). */
   hideSectionDownloads?: boolean;
+  /** Details drawer: hide streaming micro lines under active sections (milestone status lives elsewhere). */
+  hideProgressMicroLines?: boolean;
 }
 
 export function BulkHarnessSectionsPanel({
@@ -96,6 +102,7 @@ export function BulkHarnessSectionsPanel({
   variant = 'default',
   blogImportCompact = false,
   hideSectionDownloads = false,
+  hideProgressMicroLines = false,
 }: BulkHarnessSectionsPanelProps) {
   const isDetailsFlat = variant === 'details-flat';
   const sectionTotal =
@@ -107,10 +114,26 @@ export function BulkHarnessSectionsPanel({
 
   if (harnessSections.length === 0 && !isDetailsFlat) return null;
 
+  const displaySections: BulkHarnessSectionUi[] = (() => {
+    if (isDetailsFlat || sectionTotal <= harnessSections.length) {
+      return harnessSections;
+    }
+    const padded = [...harnessSections];
+    while (padded.length < sectionTotal) {
+      padded.push({
+        sectionIndex: padded.length,
+        title: '',
+        status: 'waiting',
+      });
+    }
+    return padded;
+  })();
+
   const sectionList = (
-    <ul className={cn(isDetailsFlat ? DETAILS_CO_STACK : 'space-y-0', !isDetailsFlat && DETAILS_CO_STACK)}>
-      {harnessSections.map((s, sectionIndex) => {
-        const title = s.title || `Section ${s.sectionIndex + 1}`;
+    <ul className={cn(isDetailsFlat ? CONTENT_OPTIMIZER_MULTI_SITE_ROW_STACK_CLASS : 'space-y-0', !isDetailsFlat && CONTENT_OPTIMIZER_MULTI_SITE_ROW_STACK_CLASS)}>
+      {displaySections.map((s, sectionIndex) => {
+        const isPlaceholder = isDetailsFlat && !s.title && s.status === 'waiting' && sectionIndex >= harnessSections.length;
+        const title = s.title || (isPlaceholder ? '' : `Section ${s.sectionIndex + 1}`);
         const isGenerating = s.status === 'generating';
         return (
           <li
@@ -121,8 +144,8 @@ export function BulkHarnessSectionsPanel({
                 ? cn(
                     blogImportCompact
                       ? "flex min-h-7 w-full items-center gap-2 border-0 px-2.5 py-0.5 text-base text-white sm:px-3"
-                      : DETAILS_CO_SECTION_LINE,
-                    detailsDrawerRowStripeClass(sectionIndex, {
+                      : DETAILS_FLAT_SECTION_LINE,
+                    contentOptimizerRowStripeClass(sectionIndex, {
                       isActiveOptimize: isGenerating,
                     }),
                   )
@@ -143,14 +166,16 @@ export function BulkHarnessSectionsPanel({
               <span className="h-2 w-2 shrink-0 rounded-full bg-muted-foreground/50" aria-hidden />
             ) : null}
             <span className="min-w-0 flex-1 whitespace-normal text-base leading-snug text-white [overflow-wrap:anywhere]">
-              <span className={cn(!isDetailsFlat && !blogImportCompact && 'text-muted-foreground')}>
-                {s.sectionIndex + 1}.{' '}
-              </span>
+              {!isPlaceholder ? (
+                <span className={cn(!isDetailsFlat && !blogImportCompact && 'text-muted-foreground')}>
+                  {s.sectionIndex + 1}.{' '}
+                </span>
+              ) : null}
               {title}
               {s.status === 'generating' && !isDetailsFlat && !blogImportCompact ? (
                 <span className="text-white/70"> …</span>
               ) : null}
-              {isDetailsFlat && isGenerating && s.markdown?.trim() ? (
+              {isDetailsFlat && isGenerating && s.markdown?.trim() && !hideProgressMicroLines ? (
                 <span className="mt-0.5 block space-y-0.5 text-base [overflow-wrap:anywhere]">
                   {s.markdown
                     .trim()
@@ -212,11 +237,11 @@ export function BulkHarnessSectionsPanel({
 
   if (isDetailsFlat) {
     return (
-      <div className={DETAILS_CO_SECTION_BODY}>
-        {harnessSections.length > 0 ? (
+      <div className={DETAILS_FLAT_SECTION_BODY}>
+        {displaySections.length > 0 ? (
           sectionList
         ) : (
-          <div className={cn(DETAILS_CO_SECTION_LINE, detailsDrawerRowStripeClass(0))}>
+          <div className={cn(DETAILS_FLAT_SECTION_LINE, contentOptimizerRowStripeClass(0))}>
             <span>No sections yet</span>
           </div>
         )}

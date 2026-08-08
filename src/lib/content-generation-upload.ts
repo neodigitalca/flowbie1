@@ -27,21 +27,23 @@ import { readACFFieldsAgentically, hasExtraTextField, hasExtraImageField, type A
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { normalizeInternalUrl, extractInternalLinksFromContent } from "@/lib/wordpress-api/validate-internal-links";
 import { ensureWhatWeOfferTablePageLinks } from "@/lib/content-generation/what-we-offer-table-page-links";
-import { removeInvalidInternalLinks, deduplicateInternalLinksInMarkdown, deduplicateInternalLinksInHtml, ensureNoLinkEndsInPeriod } from "@/lib/content-generation/content-sanitizer";
+import { removeInvalidInternalLinks, deduplicateInternalLinksInHtml } from "@/lib/content-generation/content-sanitizer";
+import { integrateOrphanInternalLinksInHtml } from "@/lib/content-generation/integrate-orphan-internal-links";
 import {
-  ensureLinksEvery200WordsForHtml,
-  ensureLinksEvery200Words,
-  ensureMinimumLinksInHtml,
-  countInternalLinksInMarkdown,
   countInternalLinksInHtmlContent,
   MIN_LINKS_PER_POST,
 } from "@/lib/content-generation/ensure-links-per-section";
+import { prepareHarnessContentForUpload } from "@/lib/content-generation/harness-upload-prep";
+import { parseExternalSemrushPairsFromAgents } from "@/lib/content-generation/external-link-placeholders";
 import { ensureSemrushExternalLinksInHtml } from "@/lib/content-generation/ensure-semrush-external-links";
 import { reduceHarnessSectionList } from "@/lib/bulk/harness-sections-reducer";
 import {
   mergeHarnessProgressSiteAndBatch,
   mergeOptimizationProgress,
+  progressWithGeneratedFiles,
 } from "@/hooks/content-optimization/optimization-helpers";
+import type { RunProgressReporter, ContentOptimizerStepId } from "@/lib/content-optimization/content-optimizer-run-progress";
+import { harnessSubProgress } from "@/lib/content-optimization/content-optimizer-run-progress";
 
 /** WordPress REST API can return content/excerpt as { raw, rendered }. Normalize to string. */
 function toStringContent(value: unknown): string {
@@ -146,7 +148,7 @@ export async function generateAndUploadContent(
   site: WordPressSite,
   context: OptimizationContext,
   fileManager: OptimizationFileManager,
-  setProgress: (progress: { step: string; progress: number; message?: string }) => void,
+  setProgress: RunProgressReporter,
   onContentChunk?: (chunk: string) => void,
   optimizationOptions?: {
     optimizeTitle?: boolean;
@@ -178,16 +180,16 @@ export async function generateAndUploadContent(
     optimizeExcerpt: false,
     optimizeContent: true,
     optimizeFeaturedImage: false,
-    optimizeExtraText: true,
+    optimizeExtraText: false,
     optimizeExtraImage: false,
   };
 
   const opts = { ...DEFAULT_OPTIMIZATION_OPTIONS, ...context.optimizationOptions, ...optimizationOptions };
   const seoExtraTextFieldOnly = opts.seoExtraTextFieldOnly === true;
 
-  // CRITICAL FIX: Explicitly check for true - undefined/false means skip
-  // This ensures unchecked boxes (false) and missing properties (undefined) both skip
-  const shouldOptimizeContent = opts.optimizeContent === true;
+  // Content optimizer bulk runs always generate body HTML unless SEO-extra-text-only mode.
+  const shouldOptimizeContent =
+    seoExtraTextFieldOnly !== true && opts.optimizeContent !== false;
   const shouldOptimizeFeaturedImage = opts.optimizeFeaturedImage === true;
   const shouldOptimizeTitle = opts.optimizeTitle === true;
   const shouldOptimizeMeta = opts.optimizeMeta === true;
@@ -199,6 +201,12 @@ export async function generateAndUploadContent(
     opts.optimizeContent === true;
   const contentOnlyUpload =
     opts.contentOnlyUpload === true || (opts.contentOnlyUpload !== false && legacyContentOnlyInference);
+  const skipMediaPipeline =
+    (contentOnlyUpload && !seoExtraTextFieldOnly) ||
+    (shouldOptimizeContent &&
+      !shouldOptimizeFeaturedImage &&
+      opts.optimizeExtraText !== true &&
+      opts.optimizeExtraImage !== true);
   const bulkFaqMinimum4 = opts.bulkFaqMinimum4 === true;
   const writeFocusKeywords = !contentOnlyUpload;
   const generateFaqSchema = !contentOnlyUpload;
@@ -247,38 +255,17 @@ export async function generateAndUploadContent(
   // Keep excerpt empty so UI and upload code can't render or persist it.
   excerpt = '';
 
+  const legacyProgress = (stepId: ContentOptimizerStepId) =>
+    (p: { step: string; progress: number; message?: string }) => {
+      setProgress(stepId, Math.min(1, Math.max(0, p.progress / 100)), p.message ?? p.step);
+    };
+
   if (!shouldOptimizeContent) {
-    // Content optimization disabled - skip main body generation; may still run SEO extra text only.
-    console.log('[Content Generation Upload] ⚠️ CONTENT OPTIMIZATION DISABLED - Skipping main content generation', {
-      optimizeContent: opts.optimizeContent,
-      shouldOptimizeContent,
-      seoExtraTextFieldOnly,
-    });
-    markdownContent = toStringContent(context.existingContent) || '';
-    htmlContent = toStringContent(context.existingContent) || '';
-    if (seoExtraTextFieldOnly) {
-      setProgress({
-        step: 'Body unchanged...',
-        progress: 40,
-        message: 'Main post HTML unchanged; generating SEO extra text only…',
-      });
-      if (setOptimizationProgressRaw) {
-        setOptimizationProgressRaw((prev: any) =>
-          mergeHarnessProgressSiteAndBatch(prev, site.id, {
-            harnessSections: [],
-            harnessPlannedSectionCount: EXTRA_TEXT_HARNESS_TOTAL_SECTIONS,
-          }),
-        );
-      }
-    } else {
-      setProgress({ step: 'Skipping content generation...', progress: 90, message: 'Content optimization disabled, proceeding to upload...' });
-      if (!getMuteOptimizationToasts()) notify.info(NOTIFY_CONTENT_OPTIMIZATION_DISABLED_PROCEEDING, { duration: 3000 });
-    }
-  } else {
-    console.log('[Content Generation Upload] ✅ Content optimization ENABLED - proceeding with content generation');
-    // Generate optimized content
-    if (!getMuteOptimizationToasts()) notify.info(notifyXPostInWordpress(context.updateMode === 'update' ? 'Updating' : 'Creating'), { duration: 3000 });
-    setProgress({ step: `${context.updateMode === 'update' ? 'Updating' : 'Creating'} post...`, progress: 90, message: 'Generating content and preparing for upload...' });
+    throw new Error("Content optimization is required for this pipeline.");
+  }
+
+  if (!getMuteOptimizationToasts()) notify.info(notifyXPostInWordpress(context.updateMode === "update" ? "Updating" : "Creating"), { duration: 3000 });
+  setProgress("write", 0, "Generating content and meta…");
 
     const portfolioList = buildPortfolioBlockedHosts(getStoredSites(), {
       excludeSiteId: site.id,
@@ -287,11 +274,21 @@ export async function generateAndUploadContent(
     const portfolioBlockedHostsForPrompts =
       portfolioList.length > 0 ? portfolioList : undefined;
 
+    const blueprintAgents = Array.isArray(blueprintResult?.agents) ? blueprintResult.agents : [];
+    const plannedContentSections = blueprintAgents.length;
+    const waitingContentHarness = Array.from({ length: plannedContentSections }, (_, sectionIndex) => ({
+      sectionIndex,
+      title: '',
+      status: 'waiting' as const,
+    }));
+
     if (setOptimizationProgressRaw) {
       setOptimizationProgressRaw((prev: any) =>
         mergeOptimizationProgress(prev, site.id, {
-          harnessSections: [],
-          harnessPlannedSectionCount: null,
+          stepId: "write",
+          subProgress: 0,
+          harnessSections: waitingContentHarness,
+          harnessPlannedSectionCount: plannedContentSections > 0 ? plannedContentSections : null,
         }),
       );
     }
@@ -306,7 +303,7 @@ export async function generateAndUploadContent(
         wordPressPosts: context.wordPressPosts,
         url: context.url,
         existingContent: toStringContent(context.existingContent),
-        inContentImageRequest: context.inContentImageRequest,
+        inContentImageRequest: skipMediaPipeline ? undefined : context.inContentImageRequest,
         acfFields,
         acfContext: resolvedAcfContext,
         isPage: context.resolved?.subtype === 'page',
@@ -317,7 +314,7 @@ export async function generateAndUploadContent(
         portfolioBlockedHosts: portfolioBlockedHostsForPrompts,
       },
       fileManager,
-      setProgress,
+      setProgress: legacyProgress("write"),
       onContentChunk,
       shouldOptimizeContent,
       hasEntityOverride: optimizationOptions?.hasEntity,
@@ -328,9 +325,10 @@ export async function generateAndUploadContent(
               const entry = prev[site.id] || {};
               const nextSections = reduceHarnessSectionList(entry.harnessSections || [], payload);
               return mergeHarnessProgressSiteAndBatch(prev, site.id, {
+                stepId: "write",
+                subProgress: harnessSubProgress("write", payload.sectionIndex, payload.totalSections, payload.phase),
                 harnessSections: nextSections,
                 harnessPlannedSectionCount: payload.totalSections,
-                step: "Generating optimized content...",
                 message: `Harness ${payload.sectionIndex + 1}/${payload.totalSections}: ${payload.title}${payload.phase === "start" ? "…" : ""}`,
               });
             });
@@ -353,39 +351,36 @@ export async function generateAndUploadContent(
       throw new Error('Content optimization was enabled but no content was generated. Refusing to overwrite with empty content.');
     }
 
-  }
+  // Shared harness upload prep (Overview scroll links, anchor ids, placeholder resolve, HTML repair)
+  setProgress("polish", 0.1, "Preparing content for upload…");
+  const externalUrlPairs = parseExternalSemrushPairsFromAgents(blueprintAgents);
+  htmlContent = await prepareHarnessContentForUpload({
+    markdownContent: markdownContent || htmlContent,
+    blueprintAgents,
+    wordPressPosts: context.wordPressPosts,
+    siteId: site.id,
+    siteUrl: site.siteUrl,
+    currentPageUrl: context.url,
+    externalUrlPairs,
+  });
 
-  // Ensure links in main content: 1 per 200 words, then dedupe (each URL once), then top up to minimum 10
   if (context.wordPressPosts && context.wordPressPosts.length > 0) {
-    setProgress({ step: 'Ensuring links every 200 words...', progress: 62, message: 'Adding internal links to content...' });
     try {
-      htmlContent = await ensureLinksEvery200WordsForHtml({
-        htmlContent,
-        wordPressPosts: context.wordPressPosts,
-        currentPageUrl: context.url,
-        siteUrl: site.siteUrl,
-        apiKey: openRouterApiKey,
-        siteId: site.id,
-        setProgress,
-      });
       htmlContent = deduplicateInternalLinksInHtml(htmlContent);
-      htmlContent = await ensureMinimumLinksInHtml({
-        htmlContent,
-        wordPressPosts: context.wordPressPosts,
-        currentPageUrl: context.url,
+      htmlContent = integrateOrphanInternalLinksInHtml(htmlContent, {
         siteUrl: site.siteUrl,
-        apiKey: openRouterApiKey,
-        siteId: site.id,
-        setProgress,
-        minTotalLinks: MIN_LINKS_PER_POST,
+        currentPageUrl: context.url,
+        wordPressPosts: context.wordPressPosts,
       });
-      htmlContent = ensureNoLinkEndsInPeriod(htmlContent);
       const earlyLinks = countInternalLinksInHtmlContent(htmlContent, context.wordPressPosts, site.siteUrl);
       if (earlyLinks > 0) {
         console.log('[Content Generation Upload] Main content: ', earlyLinks, ' internal link(s) (min ', MIN_LINKS_PER_POST, ')');
       }
+      if (earlyLinks < MIN_LINKS_PER_POST) {
+        console.warn('[Content Generation Upload] Internal link count below minimum after placeholder resolve:', earlyLinks);
+      }
     } catch (err) {
-      console.error('[Content Generation Upload] Early ensure links failed:', err);
+      console.error('[Content Generation Upload] Post-prep link integration failed:', err);
     }
   }
 
@@ -402,33 +397,9 @@ export async function generateAndUploadContent(
     htmlContent = ensureSemrushExternalLinksInHtml(htmlContent, context.semrushExternalUrls);
   }
 
-  // Step 2: Handle featured image
-  // Extract entity from blueprint (for Google Maps image generation)
   const blueprintEntity = (blueprintResult as any)?.entity;
   const entity = blueprintEntity && blueprintEntity !== 'N/A' ? blueprintEntity : undefined;
-  const featuredImageType = optimizationOptions?.featuredImageType || 'ai-generated';
-  
-  const featuredImageResult = await handleFeaturedImage({
-    blueprintResult,
-    existingTitle,
-    primaryKeyword,
-    site,
-    markdownContent,
-    existingContent: toStringContent(context.existingContent),
-    existingPost: context.existingPost,
-    fileManager,
-    setProgress,
-    shouldOptimizeFeaturedImage,
-    apiKey: openRouterApiKey,
-    featuredImageType,
-    entity,
-  });
 
-  const { featuredImageId } = featuredImageResult;
-
-  // Step 3: Upload to WordPress
-  // Safety check: Clean existingTitle if entity is N/A (though uploadToWordPress will also clean)
-  // This ensures we pass the cleanest title possible
   let cleanedExistingTitle = existingTitle;
   if (!blueprintEntity || blueprintEntity === 'N/A') {
     cleanedExistingTitle = cleanTitleForNonEntity(existingTitle, blueprintEntity || 'N/A');
@@ -440,143 +411,11 @@ export async function generateAndUploadContent(
       });
     }
   }
-  
-  // DEBUG: Log selectedPeopleAlsoAsk before passing to uploader
-  console.log('[Content Generation Upload] PAA questions from context:', {
-    hasSelectedPeopleAlsoAsk: !!context.selectedPeopleAlsoAsk,
-    selectedPeopleAlsoAskLength: context.selectedPeopleAlsoAsk?.length || 0,
-    selectedPeopleAlsoAskPreview: context.selectedPeopleAlsoAsk?.slice(0, 2) || [],
-    entity
-  });
-  
-  // Step 2.5: Generate extra text and image when the post has the field (post/page agnostic)
+
+  let strippedHtml = removeInvalidInternalLinks(htmlContent, context.wordPressPosts, site.siteUrl);
   let extraTextContent: string | undefined;
   let extraImageBase64: string | undefined;
-  
-  const isPage = context.resolved?.subtype === 'page' ||
-                 context.resolved?.endpoint === 'pages' ||
-                 context.existingPost?.postTypeEndpoint === 'pages';
-  // Use AI-driven context to detect extra text/image field presence (no static ACF key names)
-  const hasExtraText = resolvedAcfContext ? hasExtraTextField(resolvedAcfContext) : false;
-  const shouldGenerateExtraText =
-    Boolean(optimizationOptions?.optimizeExtraText) &&
-    (seoExtraTextFieldOnly ? true : resolvedAcfContext ? hasExtraText || isPage : isPage);
-
-  if (shouldGenerateExtraText) {
-    try {
-      if (setOptimizationProgressRaw) {
-        setOptimizationProgressRaw((prev: any) =>
-          mergeHarnessProgressSiteAndBatch(prev, site.id, {
-            harnessSections: [],
-            harnessPlannedSectionCount: EXTRA_TEXT_HARNESS_TOTAL_SECTIONS,
-          }),
-        );
-      }
-      setProgress({
-        step: 'Generating extra text...',
-        progress: 78,
-        message: `Extra text 1/${EXTRA_TEXT_HARNESS_TOTAL_SECTIONS}: H2…`,
-      });
-      const existingBody = toStringContent(context.existingContent).trim();
-      const pageRagFromPost =
-        context.wordPressRAGContext?.trim() ||
-        (existingBody
-          ? `Main post content (match this topic):\n${existingBody.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 4500)}`
-          : "");
-      extraTextContent = await generateExtraTextForPage({
-        existingContent: existingBody,
-        primaryKeyword,
-        secondaryKeywords: context.clusterKeywords || [],
-        pageUrl: context.url,
-        pageTitle: cleanedExistingTitle,
-        wordPressRAGContext: pageRagFromPost,
-        wordPressPosts: context.wordPressPosts || [],
-        site,
-        apiKey: openRouterApiKey,
-        siteId: site.id,
-        setProgress,
-        onHarnessSection: setOptimizationProgressRaw
-          ? (payload) => {
-              setOptimizationProgressRaw((prev: any) => {
-                const entry = prev[site.id] || {};
-                const nextSections = reduceHarnessSectionList(entry.harnessSections || [], payload);
-                const harnessPatch = {
-                  harnessSections: nextSections,
-                  harnessPlannedSectionCount: payload.totalSections,
-                  step: "Generating extra text...",
-                  message: `Extra text ${payload.sectionIndex + 1}/${payload.totalSections}: ${payload.title}${payload.phase === "start" ? "…" : ""}`,
-                };
-                return mergeHarnessProgressSiteAndBatch(prev, site.id, harnessPatch);
-              });
-            }
-          : undefined,
-      });
-      console.log('[Content Generation Upload] Extra text generated for page:', extraTextContent?.substring(0, 100));
-    } catch (error) {
-      console.error('[Content Generation Upload] Failed to generate extra text:', error);
-      if (!getMuteOptimizationToasts()) notify.warning(NOTIFY_FAILED_TO_GENERATE_EXTRA_TEXT_CONTINUING, { duration: 3000 });
-    }
-  }
-  
-  const hasExtraImage = resolvedAcfContext ? hasExtraImageField(resolvedAcfContext) : false;
-  const shouldGenerateExtraImage = Boolean(optimizationOptions?.optimizeExtraImage) && (resolvedAcfContext ? hasExtraImage : isPage);
-  if (shouldGenerateExtraImage) {
-    try {
-      setProgress({ step: 'Generating extra image...', progress: 79, message: 'Creating AI-generated image (1:1 ratio, no people/pets)...' });
-      const extraImageResult = await generateExtraImageForPage({
-        existingContent: toStringContent(context.existingContent),
-        primaryKeyword,
-        site,
-        apiKey: openRouterApiKey,
-        siteId: site.id
-      });
-      extraImageBase64 = extraImageResult.imageBase64;
-      console.log('[Content Generation Upload] Extra image generated for page');
-    } catch (error) {
-      console.error('[Content Generation Upload] Failed to generate extra image:', error);
-      if (!getMuteOptimizationToasts()) notify.warning(NOTIFY_FAILED_TO_GENERATE_EXTRA_IMAGE_CONTINUIN, { duration: 3000 });
-    }
-  }
-
-  // Ensure links in extra text only (main content was ensured earlier)
-  if (context.wordPressPosts && context.wordPressPosts.length > 0 && extraTextContent?.trim()) {
-    setProgress({ step: 'Ensuring links in extra text...', progress: 88, message: 'Adding internal links to extra content...' });
-    try {
-      extraTextContent = await ensureLinksEvery200WordsForHtml({
-        htmlContent: extraTextContent,
-        wordPressPosts: context.wordPressPosts,
-        currentPageUrl: context.url,
-        siteUrl: site.siteUrl,
-        apiKey: openRouterApiKey,
-        siteId: site.id,
-        setProgress,
-      });
-      const mainLinks = countInternalLinksInHtmlContent(htmlContent, context.wordPressPosts, site.siteUrl);
-      const extraLinks = countInternalLinksInHtmlContent(extraTextContent, context.wordPressPosts, site.siteUrl);
-      const totalLinks = mainLinks + extraLinks;
-      console.log('[Content Generation Upload] Ensure links: total internal links', totalLinks, '(main:', mainLinks, ', extra:', extraLinks, ')');
-      if (totalLinks === 0) {
-        console.warn('[Content Generation Upload] No links in content after ensure step – upload will continue; add more linkable posts or retry.');
-      }
-    } catch (err) {
-      console.error('[Content Generation Upload] Ensure links in extra text failed:', err);
-      if (!getMuteOptimizationToasts()) notify.warning(NOTIFY_FAILED_TO_ENSURE_LINKS_IN_EXTRA_CONTENT_, { duration: 4000 });
-    }
-  }
-
-  // Ensure each internal link URL appears at most once in SEO extra content
-  if (extraTextContent?.trim()) {
-    extraTextContent = deduplicateInternalLinksInHtml(extraTextContent);
-  }
-
-  // Sanitize before validate: remove internal links not in allowed list (200-only) so we never throw on 404s
-  const htmlForValidation = removeInvalidInternalLinks(htmlContent, context.wordPressPosts, site.siteUrl);
-  const extraForValidation = extraTextContent
-    ? removeInvalidInternalLinks(extraTextContent, context.wordPressPosts, site.siteUrl)
-    : undefined;
-
-  const strippedHtml = htmlForValidation;
-  const strippedExtra = extraForValidation;
+  let strippedExtra: string | undefined;
 
   const prefetchedFaqRaw = (() => {
     if (!acfFields) return '';
@@ -586,51 +425,233 @@ export async function generateAndUploadContent(
     return '';
   })();
 
-  // HTML + canonical link are stored after a successful WordPress upload (below).
+  const allowedExternalUrls = dedupeTrimmedUrls([
+    ...(context.semrushExternalUrls ?? []),
+    ...preservedMediaUrls,
+  ]);
 
-  const uploadResult = await uploadToWordPress({
-    context,
-    blueprintResult,
-    existingTitle: cleanedExistingTitle, // Use cleaned title
-    primaryKeyword,
-    htmlContent: strippedHtml,
-    excerpt,
-    featuredImageId,
-    shouldOptimizeTitle,
-    writeFocusKeywords,
-    generateFaqSchema,
-    prefetchedFaqRaw,
-    bulkFaqMinimum4,
-    writeMetaDescription,
-    writeExcerpt,
-    setProgress,
-    entity, // Pass entity to uploader for ACF origin field update
-    faqQuestions: context.selectedPeopleAlsoAsk, // Pass PAA questions for FAQ schema generation
-    allowedExternalUrls: (() => {
-      const u = dedupeTrimmedUrls([
-        ...(context.semrushExternalUrls ?? []),
-        ...preservedMediaUrls,
-      ]);
-      return u;
-    })(),
-    apiKey: openRouterApiKey, // Pass API key for AI-driven question generation when PAA questions are missing
-    extraTextContent: strippedExtra ?? extraTextContent, // Pass stripped extra for pages
-    extraImageBase64, // Pass extra image for pages
-    seoExtraTextFieldOnly,
-  });
+  let uploadResult: Awaited<ReturnType<typeof uploadToWordPress>>;
+
+  setProgress("publish", 0.05, "Uploading to WordPress…");
+
+  if (skipMediaPipeline) {
+    if (shouldOptimizeContent && strippedHtml?.trim()) {
+      fileManager.syncContentArtifactHtml(strippedHtml, htmlToMarkdown(strippedHtml));
+      const filesPatch = progressWithGeneratedFiles(
+        { stepId: "publish", subProgress: 0.2, message: "Saving optimized body to WordPress…" },
+        fileManager,
+      );
+      setProgress(filesPatch.stepId!, filesPatch.subProgress!, filesPatch.message, filesPatch);
+    }
+
+    uploadResult = await uploadToWordPress({
+      context,
+      blueprintResult,
+      existingTitle: cleanedExistingTitle,
+      primaryKeyword,
+      htmlContent: strippedHtml,
+      excerpt,
+      featuredImageId: undefined,
+      shouldOptimizeTitle,
+      writeFocusKeywords,
+      generateFaqSchema,
+      prefetchedFaqRaw,
+      bulkFaqMinimum4,
+      writeMetaDescription,
+      writeExcerpt,
+      setProgress: legacyProgress("publish"),
+      entity,
+      faqQuestions: context.selectedPeopleAlsoAsk,
+      allowedExternalUrls,
+      apiKey: openRouterApiKey,
+      extraTextContent: undefined,
+      extraImageBase64: undefined,
+      seoExtraTextFieldOnly: false,
+    });
+  } else {
+    const featuredImageType = opts.featuredImageType || "ai-generated";
+
+    const featuredImageResult = await handleFeaturedImage({
+      blueprintResult,
+      existingTitle,
+      primaryKeyword,
+      site,
+      markdownContent,
+      existingContent: toStringContent(context.existingContent),
+      existingPost: context.existingPost,
+      fileManager,
+      setProgress: legacyProgress("polish"),
+      shouldOptimizeFeaturedImage,
+      apiKey: openRouterApiKey,
+      featuredImageType,
+      entity,
+    });
+
+    const { featuredImageId } = featuredImageResult;
+
+    const isPage = context.resolved?.subtype === 'page' ||
+                   context.resolved?.endpoint === 'pages' ||
+                   context.existingPost?.postTypeEndpoint === 'pages';
+    const hasExtraText = resolvedAcfContext ? hasExtraTextField(resolvedAcfContext) : false;
+    const shouldGenerateExtraText =
+      opts.optimizeExtraText === true &&
+      (resolvedAcfContext ? hasExtraText || isPage : isPage);
+
+    if (shouldGenerateExtraText) {
+      try {
+        if (setOptimizationProgressRaw) {
+          setOptimizationProgressRaw((prev: any) =>
+            mergeHarnessProgressSiteAndBatch(prev, site.id, {
+              stepId: "write",
+              subProgress: 0.85,
+              harnessSections: [],
+              harnessPlannedSectionCount: EXTRA_TEXT_HARNESS_TOTAL_SECTIONS,
+            }),
+          );
+        }
+        setProgress("write", 0.85, `Extra text 1/${EXTRA_TEXT_HARNESS_TOTAL_SECTIONS}: H2…`);
+        const existingBody = toStringContent(context.existingContent).trim();
+        const pageRagFromPost =
+          context.wordPressRAGContext?.trim() ||
+          (existingBody
+            ? `Main post content (match this topic):\n${existingBody.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 4500)}`
+            : "");
+        extraTextContent = await generateExtraTextForPage({
+          existingContent: existingBody,
+          primaryKeyword,
+          secondaryKeywords: context.clusterKeywords || [],
+          pageUrl: context.url,
+          pageTitle: cleanedExistingTitle,
+          wordPressRAGContext: pageRagFromPost,
+          wordPressPosts: context.wordPressPosts || [],
+          site,
+          apiKey: openRouterApiKey,
+          siteId: site.id,
+          setProgress: legacyProgress("write"),
+          onHarnessSection: setOptimizationProgressRaw
+            ? (payload) => {
+                setOptimizationProgressRaw((prev: any) => {
+                  const entry = prev[site.id] || {};
+                  const nextSections = reduceHarnessSectionList(entry.harnessSections || [], payload);
+                  return mergeHarnessProgressSiteAndBatch(prev, site.id, {
+                    stepId: "write",
+                    subProgress: harnessSubProgress("write", payload.sectionIndex, payload.totalSections, payload.phase),
+                    harnessSections: nextSections,
+                    harnessPlannedSectionCount: payload.totalSections,
+                    message: `Extra text ${payload.sectionIndex + 1}/${payload.totalSections}: ${payload.title}${payload.phase === "start" ? "…" : ""}`,
+                  });
+                });
+              }
+            : undefined,
+        });
+        console.log('[Content Generation Upload] Extra text generated for page:', extraTextContent?.substring(0, 100));
+      } catch (error) {
+        console.error('[Content Generation Upload] Failed to generate extra text:', error);
+        if (!getMuteOptimizationToasts()) notify.warning(NOTIFY_FAILED_TO_GENERATE_EXTRA_TEXT_CONTINUING, { duration: 3000 });
+      }
+    }
+
+    const hasExtraImage = resolvedAcfContext ? hasExtraImageField(resolvedAcfContext) : false;
+    const shouldGenerateExtraImage = opts.optimizeExtraImage === true && (resolvedAcfContext ? hasExtraImage : isPage);
+    if (shouldGenerateExtraImage) {
+      try {
+        setProgress("write", 0.9, "Generating extra image…");
+        const extraImageResult = await generateExtraImageForPage({
+          existingContent: toStringContent(context.existingContent),
+          primaryKeyword,
+          site,
+          apiKey: openRouterApiKey,
+          siteId: site.id
+        });
+        extraImageBase64 = extraImageResult.imageBase64;
+        console.log('[Content Generation Upload] Extra image generated for page');
+      } catch (error) {
+        console.error('[Content Generation Upload] Failed to generate extra image:', error);
+        if (!getMuteOptimizationToasts()) notify.warning(NOTIFY_FAILED_TO_GENERATE_EXTRA_IMAGE_CONTINUIN, { duration: 3000 });
+      }
+    }
+
+    if (context.wordPressPosts && context.wordPressPosts.length > 0 && extraTextContent?.trim()) {
+      setProgress("polish", 0.6, "Matching extra text link placeholders to sitemap…");
+      try {
+        extraTextContent = resolveInternalLinkPlaceholdersInHtml(extraTextContent, {
+          siteId: site.id,
+          siteUrl: site.siteUrl,
+          currentPageUrl: context.url,
+          wordPressPosts: context.wordPressPosts,
+        });
+        extraTextContent = deduplicateInternalLinksInHtml(extraTextContent);
+        extraTextContent = integrateOrphanInternalLinksInHtml(extraTextContent, {
+          siteUrl: site.siteUrl,
+          currentPageUrl: context.url,
+          wordPressPosts: context.wordPressPosts,
+        });
+        const mainLinks = countInternalLinksInHtmlContent(htmlContent, context.wordPressPosts, site.siteUrl);
+        const extraLinks = countInternalLinksInHtmlContent(extraTextContent, context.wordPressPosts, site.siteUrl);
+        const totalLinks = mainLinks + extraLinks;
+        console.log('[Content Generation Upload] Resolved links: total internal links', totalLinks, '(main:', mainLinks, ', extra:', extraLinks, ')');
+        if (totalLinks === 0) {
+          console.warn('[Content Generation Upload] No links in content after placeholder resolve – upload will continue; add [[LINK:...]] placeholders or more linkable posts.');
+        }
+      } catch (err) {
+        console.error('[Content Generation Upload] Resolve links in extra text failed:', err);
+        if (!getMuteOptimizationToasts()) notify.warning(NOTIFY_FAILED_TO_ENSURE_LINKS_IN_EXTRA_CONTENT_, { duration: 4000 });
+      }
+    }
+
+    if (extraTextContent?.trim()) {
+      extraTextContent = deduplicateInternalLinksInHtml(extraTextContent);
+    }
+
+    strippedHtml = removeInvalidInternalLinks(htmlContent, context.wordPressPosts, site.siteUrl);
+    strippedExtra = extraTextContent
+      ? removeInvalidInternalLinks(extraTextContent, context.wordPressPosts, site.siteUrl)
+      : undefined;
+
+    if (shouldOptimizeContent && strippedHtml?.trim()) {
+      fileManager.syncContentArtifactHtml(strippedHtml, htmlToMarkdown(strippedHtml));
+      const filesPatch = progressWithGeneratedFiles(
+        { stepId: "polish", subProgress: 0.95, message: "Content saved with resolved internal links" },
+        fileManager,
+      );
+      setProgress(filesPatch.stepId!, filesPatch.subProgress!, filesPatch.message, filesPatch);
+    }
+
+    uploadResult = await uploadToWordPress({
+      context,
+      blueprintResult,
+      existingTitle: cleanedExistingTitle,
+      primaryKeyword,
+      htmlContent: strippedHtml,
+      excerpt,
+      featuredImageId,
+      shouldOptimizeTitle,
+      writeFocusKeywords,
+      generateFaqSchema,
+      prefetchedFaqRaw,
+      bulkFaqMinimum4,
+      writeMetaDescription,
+      writeExcerpt,
+      setProgress: legacyProgress("publish"),
+      entity,
+      faqQuestions: context.selectedPeopleAlsoAsk,
+      allowedExternalUrls,
+      apiKey: openRouterApiKey,
+      extraTextContent: strippedExtra ?? extraTextContent,
+      extraImageBase64,
+      seoExtraTextFieldOnly: false,
+    });
+  }
 
   const { result, postId, link, finalTitle } = uploadResult;
 
-  // Persist HTML + WordPress canonical link for the Overview row patch.
   try {
     const { storeOverviewOptimizedHtml } = await import("@/lib/overview/overview-content-opt-html-store");
     storeOverviewOptimizedHtml(context.url, strippedHtml, link || undefined);
   } catch {
     /* ignore */
   }
-  
-  // CRITICAL: Do not proceed when WordPress REST upload failed.
-  // Bulk runner assumes "completed" means upload + ACF updates succeeded.
+
   if (result?.success !== true || !postId || !link) {
     const errorMessage =
       result?.error
@@ -642,7 +663,6 @@ export async function generateAndUploadContent(
     throw new Error(`WordPress upload failed: ${String(result.contentSaveWarning)}`);
   }
 
-  // Save WordPress upload confirmation file so the user has proof of a successful upload
   const uploadConfirmationFileName = OptimizationFileManager.generateFilename(
     'wordpress-post-upload',
     postId.toString(),
@@ -719,7 +739,7 @@ export async function generateAndUploadContent(
       site,
       existingPost: context.existingPost,
       resolved: context.resolved,
-      setProgress,
+      setProgress: legacyProgress("publish"),
       pageUrl: context.url,
       excerpt, // AI agent uses excerpt + title + slug to fill Origin (no manual extraction)
       existingOrigin: context.existingPost?.acf?.origin ?? undefined,
@@ -740,7 +760,7 @@ export async function generateAndUploadContent(
       postLink: link,
       existingPost: context.existingPost,
       fileManager,
-      setProgress,
+      setProgress: legacyProgress("publish"),
       shouldOptimizeMeta,
       gscKeywordsContext: context.gscKeywordsContext,
     });
@@ -790,7 +810,7 @@ export async function generateAndUploadContent(
 
   // Step 6: Generate Implementation Report
   try {
-    setProgress({ step: 'Generating implementation report...', progress: 95, message: 'Creating comparison report...' });
+    setProgress("done", 0.9, "Generating implementation report…");
     
     // Get original content as markdown for comparison (WordPress API may return { raw, rendered })
     let originalContentMarkdown = toStringContent(context.existingContent);
@@ -825,7 +845,7 @@ export async function generateAndUploadContent(
       }
     );
 
-    setProgress({ step: 'Complete', progress: 100, message: 'Implementation report generated successfully!' });
+    setProgress("done", 1, "Implementation report generated successfully!");
     if (!getMuteOptimizationToasts()) notify.success(NOTIFY_IMPLEMENTATION_REPORT_GENERATED, { duration: 3000 });
   } catch (error) {
     console.error('[Content Generation] Error generating implementation report:', error);

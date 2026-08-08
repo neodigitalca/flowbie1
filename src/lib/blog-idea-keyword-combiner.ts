@@ -1,6 +1,7 @@
 import type { KeywordExtractionResult } from './blog-idea-kb-keyword-extractor';
 import type { SelectedKeywords } from './blog-idea-gsc-keyword-selector';
 import { isBlockedContentTopicPhrase } from './content-topic-blocklist';
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 export interface BlogIdeaKeywords {
   primaryKeyword: string;
@@ -193,12 +194,7 @@ Select exactly ${blogCount} primary keywords and 3-5 related keywords for each. 
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model,
         messages: [

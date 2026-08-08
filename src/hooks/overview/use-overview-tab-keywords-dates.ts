@@ -24,6 +24,12 @@ import { normalizeOverviewKeywordUrlKey } from "@/lib/overview/overview-keyword-
 import { pathSlugToFocusHint } from "@/lib/overview/focus-keyword-path-hint";
 import type { OverviewSitemapSource } from "@/lib/overview/overview-sitemap-source";
 import { overviewBulkRowIndices, overviewRowInBulkScope } from "@/lib/overview/overview-bulk-row-scope";
+import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
+import {
+  overviewDateModifierTodayIso,
+  pushOverviewDateModifiersToAcfForUrls,
+  pushOverviewRowDateModifierToAcf,
+} from "@/lib/overview/overview-bulk-seo-payload";
 
 type Args = Pick<
   OverviewTabBase,
@@ -383,13 +389,52 @@ export function useOverviewTabKeywordsDates({
     [rows, sitemapSource, runKeywordBulkInBatches, bulkScopeUrlKeys],
   );
 
+  const pushDateModifierToAcfForRow = useCallback(
+    async (rowIndex: number, dateIso?: string) => {
+      if (!site?.username?.trim() || !site.appPassword?.trim()) return;
+      const row = rows[rowIndex];
+      if (!row) return;
+      const iso = (dateIso ?? row.dateModifier ?? "").trim();
+      if (!iso) return;
+      const binding = resolveBindings(row.url);
+      if (!binding?.postId) return;
+      await pushOverviewRowDateModifierToAcf(site, binding, iso);
+    },
+    [site, rows, resolveBindings],
+  );
+
+  const patchRowDateModifierByUrl = useCallback(
+    (url: string, dateIso: string) => {
+      const key = normalizePageUrlKey(url);
+      const idx = rows.findIndex((r) => normalizePageUrlKey(r.url) === key);
+      if (idx >= 0) updateRow(idx, { dateModifier: dateIso });
+    },
+    [rows, updateRow],
+  );
+
+  const commitRowDateModifierByUrl = useCallback(
+    (url: string) => {
+      const key = normalizePageUrlKey(url);
+      const idx = rows.findIndex((r) => normalizePageUrlKey(r.url) === key);
+      if (idx >= 0) void pushDateModifierToAcfForRow(idx);
+    },
+    [rows, pushDateModifierToAcfForRow],
+  );
+
+  const commitRowDateModifier = useCallback(
+    (rowIndex: number) => {
+      void pushDateModifierToAcfForRow(rowIndex);
+    },
+    [pushDateModifierToAcfForRow],
+  );
+
   const handleSetDateToday = useCallback(
     (rowIndex: number) => {
-      const today = new Date();
-      const iso = today.toISOString().slice(0, 10);
+      const iso = overviewDateModifierTodayIso();
       updateRow(rowIndex, { dateModifier: iso });
+      void pushDateModifierToAcfForRow(rowIndex, iso);
     },
-    [updateRow],
+    [updateRow, pushDateModifierToAcfForRow],
   );
 
   const handleSetAllDatesToday = useCallback(() => {
@@ -398,12 +443,18 @@ export function useOverviewTabKeywordsDates({
       ...p,
       dates: initBulkSliceWithStatus("dates", 1, 0),
     }));
-    const iso = new Date().toISOString().slice(0, 10);
+    const iso = overviewDateModifierTodayIso();
+    const scopedUrls = rows
+      .filter((row) => overviewRowInBulkScope(row.url, bulkScopeUrlKeys))
+      .map((row) => row.url);
     setRows((prev) =>
       prev.map((row) =>
         overviewRowInBulkScope(row.url, bulkScopeUrlKeys) ? { ...row, dateModifier: iso } : row,
       ),
     );
+    if (site && scopedUrls.length > 0) {
+      void pushOverviewDateModifiersToAcfForUrls(site, bindings, rows, scopedUrls, iso);
+    }
     setBulkActionProgress((p) => ({
       ...p,
       dates: initBulkSliceWithStatus("dates", 1, 1),
@@ -416,7 +467,7 @@ export function useOverviewTabKeywordsDates({
         return next;
       });
     }, 400);
-  }, [bulkScopeUrlKeys, setRows, setBulkActionProgress]);
+  }, [bulkScopeUrlKeys, setRows, setBulkActionProgress, site, bindings, rows]);
 
   const handleKeywordsAll = useCallback(async () => {
     if (bulkScopeUrlKeys.size === 0) return;
@@ -456,5 +507,8 @@ export function useOverviewTabKeywordsDates({
     handleAiKeywordRow,
     handleSetDateToday,
     handleSetAllDatesToday,
+    patchRowDateModifierByUrl,
+    commitRowDateModifierByUrl,
+    commitRowDateModifier,
   };
 }

@@ -18,19 +18,25 @@ export type ManagerDashboardShellProps = {
   activeSection: ManagerSettingsClusterId;
   onSectionChange: (id: ManagerSettingsClusterId) => void;
   sections: ManagerDashboardSection[];
+  visibleSectionIds?: readonly ManagerSettingsClusterId[];
 };
 
 export function ManagerDashboardShell({
   activeSection,
   onSectionChange,
   sections,
+  visibleSectionIds,
 }: ManagerDashboardShellProps) {
   const activeContent = sections.find((section) => section.id === activeSection)?.content;
 
   return (
     <div className={cn(SEO_WORKSPACE_SHELL_CLASS, "font-sans text-base")}>
       <div className={SEO_WORKSPACE_HEADER_CLASS}>
-        <DashboardWorkspaceHeader activeSection={activeSection} onSectionChange={onSectionChange} />
+        <DashboardWorkspaceHeader
+          activeSection={activeSection}
+          onSectionChange={onSectionChange}
+          visibleSectionIds={visibleSectionIds}
+        />
       </div>
       <div className={cn(SEO_WORKSPACE_BODY_SCROLL_CLASS, CONTENT_OPTIMIZER_BODY_INSET_CLASS)}>
         {activeContent}

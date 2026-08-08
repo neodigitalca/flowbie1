@@ -1,5 +1,6 @@
 import { isBlockedContentTopicPhrase } from "@/lib/content-topic-blocklist";
 import { isOffensiveGscQuery } from "@/lib/gsc-offensive-word-blocklist";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 /** Phrases that must NEVER be used as primary keyword (wrong-topic / known bad / competitor or wrong business). */
 const BLOCKLISTED_PHRASES: string[] = [
@@ -112,12 +113,7 @@ export async function isCompetitorFocusedKeyword(
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://agent-blueprint-builder.com',
-        'X-Title': 'Agent Blueprint Builder',
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model,
         messages: [
@@ -451,12 +447,7 @@ Return the primary keyword on the first line, then up to 5 secondary keywords (o
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${options.apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(options.apiKey),
       body: JSON.stringify({
         model: options.model,
         messages: [{ role: "user", content: prompt }],
@@ -646,12 +637,7 @@ RULES:
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://agent-blueprint-builder.com',
-        'X-Title': 'Agent Blueprint Builder',
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model,
         messages: [{ role: 'user', content: prompt }],

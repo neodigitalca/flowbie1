@@ -11,6 +11,11 @@ import {
 } from "@/components/overview/overview-tab-constants";
 import { pickActiveBulkProgressSlice } from "@/lib/overview/overview-bulk-inline-status";
 import { WorkspaceDetailsPipelineStepRow } from "@/components/shared/WorkspaceDetailsPipelineSteps";
+import type { OptimizationProgressState } from "@/hooks/content-optimization/use-optimization-state";
+import { pickLatestOptimizationStatus } from "@/lib/content-optimization/optimization-progress-humanize";
+import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
+import { overviewGridCountLabelMinCh } from "@/components/overview/OverviewGridPagination";
+
 export type MetaBulkMicroSnapshot = {
   label: string;
   completed: number;
@@ -18,6 +23,8 @@ export type MetaBulkMicroSnapshot = {
   statusMessage?: string;
   /** Harness batch fill % for neon bar (optional). */
   progressPct?: number;
+  /** 1-based active post index for header ticker (multi-post batch). */
+  tickerPost?: number;
 };
 
 /** Hide inline row when it repeats the header (e.g. default BULK_INLINE_STATUS copy). */
@@ -25,6 +32,99 @@ function shouldShowBulkInlineStatus(headerLabel: string, statusMessage?: string)
   const status = statusMessage?.trim();
   if (!status) return false;
   return status.toLowerCase() !== headerLabel.trim().toLowerCase();
+}
+
+function batchProgressBarUsesPostCompletion(batchState: BulkOptimizationState): boolean {
+  if (batchState.runKind === "wpUpload" && batchState.batchPipelineSteps?.length) {
+    return false;
+  }
+  return (batchState.urls?.length ?? 0) > 1;
+}
+
+function countBatchCurrentPost(
+  batchState: BulkOptimizationState,
+  completed: number,
+  total: number,
+): number {
+  if (total <= 0) return 0;
+  if (completed >= total) return total;
+
+  const urls = batchState.urls ?? [];
+
+  for (let i = 0; i < urls.length; i++) {
+    const url = urls[i]!;
+    if (batchState.urlStatuses?.[url] === "optimizing") {
+      return i + 1;
+    }
+  }
+
+  if (typeof batchState.warmingUpIndex === "number" && batchState.warmingUpIndex >= 0) {
+    return Math.min(total, batchState.warmingUpIndex + 1);
+  }
+
+  const currentIndex = batchState.currentIndex ?? 0;
+  if (currentIndex >= 0 && currentIndex < urls.length) {
+    const url = urls[currentIndex]!;
+    const status = batchState.urlStatuses?.[url];
+    if (status === "optimizing" || status === "pending" || !status) {
+      return currentIndex + 1;
+    }
+  }
+
+  const currentUrl = batchState.currentUrl?.trim();
+  if (currentUrl) {
+    const key = normalizePageUrlKey(currentUrl);
+    const idx = urls.findIndex((u) => normalizePageUrlKey(u) === key);
+    if (idx >= 0) return idx + 1;
+  }
+
+  return Math.min(total, completed + 1);
+}
+
+export function resolveBulkPostTicker(
+  batchState: BulkOptimizationState | null | undefined,
+): { current: number; total: number; completed: number } | null {
+  if (!batchState?.urls?.length || !batchProgressBarUsesPostCompletion(batchState)) {
+    return null;
+  }
+  const { completed, total } = countBatchProcessed(batchState);
+  return {
+    current: countBatchCurrentPost(batchState, completed, total),
+    total,
+    completed,
+  };
+}
+
+export function BulkPostProgressLeading({
+  batchState,
+  className,
+}: {
+  batchState: BulkOptimizationState;
+  className?: string;
+}) {
+  const ticker = resolveBulkPostTicker(batchState);
+  if (!ticker) return null;
+  const countMinCh = overviewGridCountLabelMinCh(ticker.total);
+
+  return (
+    <div
+      className={cn(
+        "flex min-h-11 flex-wrap items-center justify-start gap-2 rounded-none border border-zinc-800 bg-zinc-900 px-3 py-2",
+        className,
+      )}
+      role="status"
+      aria-live="polite"
+      aria-label={`Processing post ${ticker.current} of ${ticker.total}`}
+    >
+      <span
+        className="inline-block shrink-0 text-left text-base tabular-nums text-muted-foreground"
+        style={{ minWidth: `${countMinCh}ch` }}
+      >
+        <span className="text-foreground">{ticker.current}</span>/
+        <span className="text-foreground">{ticker.total}</span>
+      </span>
+    </div>
+  );
 }
 
 function countBatchProcessed(batchState: BulkOptimizationState): { completed: number; total: number } {
@@ -65,6 +165,8 @@ function batchRunLabel(batchState: BulkOptimizationState, siteName?: string): st
       return `Clean Up${siteSuffix}`;
     case "aiLinks":
       return `Links${siteSuffix}`;
+    case "aiWikipediaLink":
+      return `Wikipedia link${siteSuffix}`;
     case "aiOverview":
       return `Overview${siteSuffix}`;
     case "aiInContentImage":
@@ -92,6 +194,8 @@ function defaultBatchStatusMessage(batchState: BulkOptimizationState): string {
       return "Cleaning post HTML";
     case "aiLinks":
       return "Processing internal links";
+    case "aiWikipediaLink":
+      return "Inserting Wikipedia links";
     case "aiOverview":
       return "Prepending Overview";
     case "aiInContentImage":
@@ -117,12 +221,18 @@ function buildBatchMicroSnapshot(
   const pagePct = total > 0 ? Math.round((completed / total) * 100) : 0;
   const harnessPct =
     typeof rawPct === "number" && Number.isFinite(rawPct) ? Math.min(100, Math.max(0, rawPct)) : 0;
-  const progressPct = Math.min(100, Math.max(pagePct, harnessPct));
+  const progressPct = batchProgressBarUsesPostCompletion(batchState)
+    ? pagePct
+    : Math.min(100, Math.max(pagePct, harnessPct));
+  const tickerPost = batchProgressBarUsesPostCompletion(batchState)
+    ? countBatchCurrentPost(batchState, completed, total)
+    : undefined;
   return {
     label,
     completed,
     total,
     progressPct,
+    tickerPost,
     statusMessage: shouldShowBulkInlineStatus(label, step) ? step : undefined,
   };
 }
@@ -175,6 +285,46 @@ export function pickMetaBulkMicroSnapshot(
   return null;
 }
 
+function truncateUrlLabel(url: string, maxLen = 56): string {
+  const trimmed = url.trim();
+  if (trimmed.length <= maxLen) return trimmed;
+  return `${trimmed.slice(0, maxLen - 1)}…`;
+}
+
+export function buildSinglePageOptimizationSnapshot(
+  progress: OptimizationProgressState | undefined,
+  options?: { isOptimizing?: boolean; pageUrl?: string },
+): MetaBulkMicroSnapshot | null {
+  const isOptimizing = options?.isOptimizing ?? false;
+  const hasProgress = Boolean(
+    progress?.step?.trim() ||
+      (typeof progress?.progress === "number" && progress.progress > 0) ||
+      (progress?.microLog?.length ?? 0) > 0 ||
+      (progress?.harnessSections?.length ?? 0) > 0 ||
+      (progress?.filesRevision ?? 0) > 0,
+  );
+  if (!isOptimizing && !hasProgress) return null;
+
+  const pct = Math.min(
+    100,
+    Math.max(0, Math.round(typeof progress?.progress === "number" ? progress.progress : isOptimizing ? 0 : 0)),
+  );
+  const step = progress?.step?.trim() || (isOptimizing ? "Optimizing…" : "Content optimization");
+  const pageUrl = options?.pageUrl?.trim();
+  const label = pageUrl ? `Optimize — ${truncateUrlLabel(pageUrl)}` : "Content optimization";
+  const humanStatus = pickLatestOptimizationStatus(progress);
+  const statusMessage =
+    humanStatus && humanStatus.toLowerCase() !== step.toLowerCase() ? humanStatus : undefined;
+
+  return {
+    label,
+    completed: 0,
+    total: 0,
+    progressPct: pct,
+    statusMessage: shouldShowBulkInlineStatus(label, statusMessage) ? statusMessage : undefined,
+  };
+}
+
 function BulkInlineStatusRow({ message }: { message: string }) {
   return (
     <div
@@ -197,26 +347,18 @@ function PipelineStepRow({ step, index }: { step: MetaPipelineStepUi; index: num
 /** Slim bar centered in slot; padding above/below the track. */
 export const META_BULK_PROGRESS_SLOT_MIN_H = "h-8";
 
-type HeaderProgressTicker = {
-  pagesDone: number;
-  pagesTotal: number;
-};
-
 function HarnessNeonProgressBar({
   pct,
   indeterminate,
   ariaLabel,
   variant = "default",
-  ticker,
 }: {
   pct: number;
   indeterminate?: boolean;
   ariaLabel?: string;
   variant?: "default" | "header";
-  ticker?: HeaderProgressTicker | null;
 }) {
   if (variant === "header") {
-    const showTicker = Boolean(ticker && ticker.pagesTotal > 0);
     if (indeterminate) {
       return (
         <div
@@ -225,11 +367,6 @@ function HarnessNeonProgressBar({
           aria-busy="true"
         >
           <div className="flowbie-overview-header-progress-indeterminate" aria-hidden />
-          {showTicker ? (
-            <span className="flowbie-overview-header-progress-ticker" aria-hidden>
-              {ticker!.pagesDone} / {ticker!.pagesTotal}
-            </span>
-          ) : null}
         </div>
       );
     }
@@ -245,11 +382,6 @@ function HarnessNeonProgressBar({
           aria-valuemax={100}
           aria-label={ariaLabel}
         />
-        {showTicker ? (
-          <span className="flowbie-overview-header-progress-ticker" aria-hidden>
-            {ticker!.pagesDone} / {ticker!.pagesTotal}
-          </span>
-        ) : null}
       </div>
     );
   }
@@ -299,16 +431,17 @@ function EmbeddedMicroProgressRow({
 }) {
   const barAriaLabel = pagesTotal > 0 ? `${pagesDone} of ${pagesTotal} pages` : undefined;
   const allPagesDone = pagesTotal > 0 && pagesDone >= pagesTotal;
+  /** Multi-post batch: bar = finished posts only (0% until first completes). */
   const fillPct = allPagesDone
     ? 100
-    : typeof progressPct === "number" && Number.isFinite(progressPct)
-      ? progressPct
-      : pagesTotal > 0
-        ? pct
-        : 0;
+    : pagesTotal > 1
+      ? pct
+      : typeof progressPct === "number" && Number.isFinite(progressPct)
+        ? progressPct
+        : pagesTotal > 0
+          ? pct
+          : 0;
   const inProgress = !idle && pagesTotal > 0 && pagesDone < pagesTotal;
-
-  const ticker = pagesTotal > 0 ? { pagesDone, pagesTotal } : null;
 
   return (
     <div
@@ -329,7 +462,6 @@ function EmbeddedMicroProgressRow({
           pct={fillPct}
           indeterminate={false}
           ariaLabel={barAriaLabel}
-          ticker={ticker}
         />
       )}
     </div>

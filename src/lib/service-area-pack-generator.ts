@@ -10,6 +10,7 @@ import { parseSitemap } from './wordpress-api';
 import { extractEntitiesFromWikipediaList, checkWikipediaPageExists } from './wikipedia-api';
 import { parseTitleTemplate } from './title-template-parser';
 import { generateEntityTitleFromSitemap } from './bulk-auto-generate';
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 export interface ServiceAreaPackResult {
   serviceAreas: Array<{
@@ -226,12 +227,7 @@ What is the Wikipedia page title?`;
     const researchModel = getResearchModel();
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: researchModel,
         messages: [

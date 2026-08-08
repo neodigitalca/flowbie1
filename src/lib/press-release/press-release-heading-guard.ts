@@ -1,4 +1,5 @@
 import { getProductionModel } from "@/lib/optimization-settings-storage";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 /** Structural labels models copy; used only for detection, never shown in prompts. */
 const BANNED_HEADING_NORMALIZED = new Set([
@@ -80,13 +81,7 @@ export async function ensurePressReleaseSectionHeading(opts: {
   const model = opts.model || getProductionModel();
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${opts.apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer":
-        typeof window !== "undefined" ? window.location.origin : "https://flowbie.com",
-      "X-Title": "Flowbie Press Release",
-    },
+    headers: openRouterWebAppHeaders(opts.apiKey),
     body: JSON.stringify({
       model,
       response_format: { type: "json_object" },

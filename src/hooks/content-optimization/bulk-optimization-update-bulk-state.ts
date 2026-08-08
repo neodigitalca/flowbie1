@@ -1,12 +1,13 @@
-import { getStepProgress } from "./optimization-helpers";
+import { stepLabel } from "@/lib/content-optimization/content-optimizer-run-progress";
 
-export function updateBulkStateForPost(  setBulkOptimizationState: (prev: any) => any,
+export function updateBulkStateForPost(
+  setBulkOptimizationState: (prev: any) => any,
   batchKey: string,
   url: string,
   index: number,
   currentPost: number,
   totalPosts: number,
-  status: "optimizing" | "completed" | "skipped" | "error"
+  status: "optimizing" | "completed" | "skipped" | "error",
 ): void {
   setBulkOptimizationState((prev: any) => {
     const current = prev[batchKey];
@@ -14,17 +15,14 @@ export function updateBulkStateForPost(  setBulkOptimizationState: (prev: any) =
       return prev;
     }
 
-    const stepProgress =
+    const stepId = status === "completed" ? "done" : "load";
+    const subProgress = status === "completed" ? 1 : 0;
+    const message =
       status === "completed"
-        ? 100
-        : getStepProgress(status === "optimizing" ? "Targeting Computer" : status);
-    const step = status === "completed" ? "Complete" : status === "optimizing" ? "Targeting Computer" : status;
-
-    const harnessFromStep = current.currentStepProgress?.harnessSections;
-    const shouldPersistHarness =
-      (status === "completed" || status === "error") &&
-      Array.isArray(harnessFromStep) &&
-      harnessFromStep.length > 0;
+        ? `Post ${currentPost} of ${totalPosts} completed`
+        : status === "optimizing"
+          ? current.currentStepProgress?.message?.trim() || undefined
+          : status;
 
     return {
       ...prev,
@@ -32,26 +30,17 @@ export function updateBulkStateForPost(  setBulkOptimizationState: (prev: any) =
         ...current,
         currentIndex: index,
         currentUrl: url,
-        currentStep: step,
-        currentProgress: stepProgress,
+        currentStep: message || stepLabel(stepId),
         currentStepProgress: {
-          step,
-          progress: stepProgress,
-          message:
-            status === "completed"
-              ? `Post ${currentPost} of ${totalPosts} completed`
-              : `Processing post ${currentPost} of ${totalPosts}...`,
+          stepId,
+          subProgress,
+          step: stepLabel(stepId),
+          ...(message ? { message } : {}),
         },
         urlStatuses: {
           ...current.urlStatuses,
           [url]: status,
         },
-        ...(shouldPersistHarness && {
-          urlHarnessSections: {
-            ...(current.urlHarnessSections || {}),
-            [url]: harnessFromStep,
-          },
-        }),
       },
     };
   });

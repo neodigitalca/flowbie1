@@ -1,5 +1,6 @@
 import { AgentConfig } from "@/types/agent-config";
 import { ARTICLE_MAX_WORDS } from "@/lib/content-generation/article-length-policy";
+import { FORBIDDEN_WORDS_USER_PROMPT_REMINDER } from "@/lib/content-word-blocklist";
 import { mapFeatureToInstruction } from "../feature-mapping";
 import { BLOG_HARNESS_SUMMARY_AGENT_ID } from "@/lib/bulk/blog-harness-summary-agent";
 
@@ -54,37 +55,37 @@ export const generateSingleSectionPrompt = (
   const useMarkdown = format === 'markdown';
 
   if (agent.id === BLOG_HARNESS_SUMMARY_AGENT_ID) {
+    const overviewLinkRules =
+      "- Each bullet: **2-3 word label**: one short sentence with exactly ONE in-page link ([2-4 word phrase](#exact-id) in markdown, or [[SCROLL:#exact-id|2-4 word phrase]] in HTML).\n" +
+      "- FORBIDDEN per bullet: two links, duplicate links to the same #id, keyword-echo second links, or \"including [link]\" phrasing.\n" +
+      "- FORBIDDEN in all Overview copy: em dashes (Unicode U+2014 or U+2013). Use comma, period, or hyphen instead.\n" +
+      '- FORBIDDEN: "see below", "below", "click here", or boilerplate pointers. Link text must belong in the sentence.';
     if (useMarkdown) {
       return `## Overview
-REQUIRED OUTPUT SHAPE (do not skip any part):
-## Overview
-paragraph 1 (keyword in first sentence)
-optional paragraph 2
-- **Label**: description with [#citation](#anchor-id)
-(one bullet per IN-PAGE SECTION ANCHOR; each bullet has exactly one # link to its assigned anchor)
-
-Rules: HEAVILY SEO-ORIENTED. FIRST sentence MUST include the exact primary keyword and answer it. Every bullet: **Label**: then colon, then description (never a comma after the label). LINKS (MANDATORY): every link in Overview MUST be a same-page click-to-scroll citation using ONLY ids from IN-PAGE SECTION ANCHORS — form [short phrase](#anchor-id). Anchor text MUST be a subtle 2–4 word phrase woven into the sentence (e.g. "cost factors", "system pricing", "tax rebates") — NEVER the full H2 / section title, NEVER "as detailed in [Full Title]", NEVER paste the display title after the #id list. NON-NEGOTIABLE: one bullet per IN-PAGE anchor; each bullet contains exactly one # citation. When a MANDATORY ENTITY WIKIPEDIA block is present in the prompt, ALSO link the entity place name to that exact Wikipedia URL (one http(s) link only). FORBIDDEN in Overview: other http/https URLs, site page paths, Semrush externals, or any non-# href that is not that exact entity Wikipedia URL. No tables. No extra headings. Paragraphs alone without the bullet list = INVALID. Markdown only.]`;
+Rules:
+- First sentence includes the primary keyword and answers it.
+- Output ## Overview, 1-2 short lead paragraphs, then a mandatory - bullet list (one item per IN-PAGE anchor).
+${overviewLinkRules}
+- Use exact #ids from IN-PAGE ANCHORS in the user prompt. Stop after the bullet list.
+- Markdown only.
+${FORBIDDEN_WORDS_USER_PROMPT_REMINDER}`;
     }
     return `<h2>Overview</h2>
-REQUIRED OUTPUT SHAPE (do not skip any part):
-<h2>Overview</h2>
-<p>…keyword in first sentence…</p>
-<p>…optional second paragraph…</p>
-<ul>
-<li><strong>Label</strong>: description with <a href="#anchor-id">short phrase</a> woven in</li>
-(one <li> per IN-PAGE SECTION ANCHOR; each bullet has exactly one # link to its assigned anchor)
-</ul>
-(never omit <ul>; bullet count must match IN-PAGE SECTION ANCHORS count)
-
-Rules: HEAVILY SEO-ORIENTED. FIRST sentence MUST include the exact primary keyword and answer it. Every <li> MUST start [BOLD]: <strong>Label</strong>: then colon, then description (the <strong> HTML tag is required; never a comma after </strong>). LINKS (MANDATORY): every <a> in Overview MUST be a same-page click-to-scroll citation — href MUST start with # and MUST be an id from IN-PAGE SECTION ANCHORS. Anchor text MUST be a subtle 2–4 word phrase woven into the sentence (e.g. <a href="#…">cost factors</a>, <a href="#…">system pricing</a>, <a href="#…">tax rebates</a>) — NEVER the full H2 / section title as link text, NEVER "as detailed in <a>Full Title</a>", NEVER copy the display title from the anchors list into the <a>…</a>. NON-NEGOTIABLE: one bullet per IN-PAGE anchor; each bullet contains exactly one # citation. When a MANDATORY ENTITY WIKIPEDIA block is present in the prompt, ALSO include one <a href="exact-wikipedia-url"> linking the entity place name. FORBIDDEN in Overview: other http/https URLs, site page paths, Semrush externals, or any href that is not #anchor-id or that exact entity Wikipedia URL. No tables. No extra headings. Two paragraphs with no <ul> = INVALID. HTML only.]`;
+Rules:
+- First sentence includes the primary keyword and answers it.
+- Output <h2>Overview</h2>, 1-2 short <p> lead paragraphs, then mandatory <ul>.
+${overviewLinkRules}
+- Use exact #ids from IN-PAGE ANCHORS in the user prompt. Stop after </ul>.
+- HTML only.
+${FORBIDDEN_WORDS_USER_PROMPT_REMINDER}`;
   }
 
   const hasFAQFeature =
     agent.features?.some((f) => {
-      return (
-        typeof f === 'string' &&
-        (f.toLowerCase().trim().includes('[faq]') || f.toLowerCase().trim().includes('faq'))
-      );
+      if (typeof f !== 'string') return false;
+      const lower = f.toLowerCase().trim();
+      if (lower.startsWith('[forbidden_words')) return false;
+      return lower.includes('[faq]') || lower.includes('faq');
     }) ?? false;
 
   if (hasFAQFeature) {
@@ -95,10 +96,15 @@ Rules: HEAVILY SEO-ORIENTED. FIRST sentence MUST include the exact primary keywo
   }
 
   const isFirstAgent = agent.step === 1;
-  // After the mandatory AI Overview summary (step 1), the SEO opener H2 is the first body section (step 2).
-  const isSeoOpenerSection = contentKind !== "press_release" && agent.step === 2;
+  const isSeoOpenerSection =
+    contentKind !== "press_release" &&
+    agent.id !== BLOG_HARNESS_SUMMARY_AGENT_ID &&
+    agent.step === 1;
 
-  const featureInstructions = agent.features.map((f) => mapFeatureToInstruction(f, format)).join(", ");
+  const featureInstructions = agent.features
+    .filter((f) => typeof f === "string" && !f.trim().toLowerCase().startsWith("[forbidden_words"))
+    .map((f) => mapFeatureToInstruction(f, format))
+    .join(", ");
   const hasListFeature = agent.features.some((f) => f.toLowerCase().trim().startsWith('[list]'));
   const isNumberedList =
     hasListFeature &&
@@ -136,7 +142,7 @@ Rules: HEAVILY SEO-ORIENTED. FIRST sentence MUST include the exact primary keywo
       isFirstAgent && contentKind === "press_release"
         ? "\n**PRESS RELEASE OPENING (SECTION 1 ONLY)**: First output line is ## plus a topical headline for the keyword (service/expertise angle, not a fake launch). Next paragraph: start with the exact Wire dateline from ACF when provided (once only in the full release); otherwise city, region, and full date in AP style. Never [CITY], [STATE], [Month DD, YYYY], or bracket templates. Then a lead about the business and topic. Neutral AP tone. Do not frame as a new announcement unless user context says so."
         : isSeoOpenerSection
-          ? "\n**CRITICAL FIRST BODY SECTION**: Write exactly 3 short paragraphs (2-3 sentences each). **FOCUS KEYWORD AT START**: First paragraph MUST directly address the primary keyword in its FIRST sentence - not allude to it, not dance around it. If the primary keyword is a question (e.g. 'can a night guard straighten teeth'), the very first sentence must explicitly state the question and provide a direct answer. NEVER open with vague background context that only hints at the topic. Lead with the keyword, answer it, THEN expand. **MINIMAL LINKING**: Only link entity to Wikipedia (if entity) and main service to its page. **CRITICAL**: H2 MUST be SEO-friendly (e.g. 'Understanding Child Safe Window Treatments') - NEVER 'Introduction' or 'Intro'. Markdown only."
+          ? "\n**CRITICAL FIRST BODY SECTION**: Write exactly 3 short paragraphs (2-3 sentences each). **FOCUS KEYWORD AT START**: First paragraph MUST directly address the primary keyword in its FIRST sentence - not allude to it, not dance around it. If the primary keyword is a question (e.g. 'can a night guard straighten teeth'), the very first sentence must explicitly state the question and provide a direct answer. NEVER open with vague background context that only hints at the topic. Lead with the keyword, answer it, THEN expand. **MINIMAL LINKING**: Only link entity to Wikipedia (if entity) and main service to its page. **CRITICAL**: H2 MUST be active and SEO-friendly (e.g. 'Child-Safe Window Treatments: Key Rules') - NEVER 'Introduction', 'Intro', 'Understanding…', or 'Navigating…'. Markdown only."
           : "";
     const prTopicBlock =
       contentKind === "press_release" && topicAnchor?.trim()
@@ -146,7 +152,25 @@ Rules: HEAVILY SEO-ORIENTED. FIRST sentence MUST include the exact primary keywo
       contentKind === "press_release"
         ? "\n**## LINE**: Invent a topical subhead tied to the keyword and business (service, expertise, or reader need). Not a template label; not a fake launch headline unless user context requires it."
         : "";
-    contentInstruction = `[Write content in Markdown. Based on: ${agent.description}${agent.features.length > 0 ? `\nKey points: ${featureInstructions}` : ''}${prTopicBlock}${firstAgentSpecialInstructions}${prLaterSectionNote}${prHeadingRule}${sublistPreventionNote}${listFormatNote} Use ##, ###, paragraphs, - or 1. lists, [text](url), | table |. NEVER HTML.]`;
+    const harnessBodyContract =
+      contentKind !== "press_release" && agent.id !== BLOG_HARNESS_SUMMARY_AGENT_ID
+        ? `\n**NON-NEGOTIABLE OUTPUT CONTRACT**:
+- Exactly ONE ## heading: text MUST be exactly "${agent.title}" — no paraphrase or substitute wording.
+- Flat structure: never nest ## inside ##. Never output a second ##.
+- Body prose: at least one lead paragraph before any list or table. At most **2** paragraphs (3 only if this block requires list/table-heavy content). Each paragraph: at most **3** sentences. Every paragraph ends with a complete sentence.
+- Optional pipe table OR - / 1. list only if this section block requires it.
+- Write ONLY this section. Do not cover topics assigned to other ## sections in the plan. No Overview scroll-link bullet list.
+- STOP: after your last paragraph, table, or list, output nothing else. No preview of sibling sections.`
+        : "";
+    const harnessScopeNote =
+      contentKind !== "press_release"
+        ? `\n**SECTION SCOPE**: Keep this section within the harness word budget (full article max ${ARTICLE_MAX_WORDS} words). No ### unless h3Enabled; no extra topics beyond this section block.`
+        : "";
+    const harnessKeywordNote =
+      contentKind !== "press_release"
+        ? "\n**HARNESS KEYWORD**: Include the **writing keyword** phrase at least once in this section (see KEYWORD PUNCTUATION block in system/user prompt). Canonical hyphens required (X-ray, e-commerce). Semantic synonyms elsewhere only."
+        : "";
+    contentInstruction = `[Write content in Markdown. Based on: ${agent.description}${agent.features.length > 0 ? `\nKey points: ${featureInstructions}` : ''}${harnessBodyContract}${prTopicBlock}${firstAgentSpecialInstructions}${prLaterSectionNote}${prHeadingRule}${harnessScopeNote}${harnessKeywordNote}${sublistPreventionNote}${listFormatNote} Use ##, ###, paragraphs, - or 1. lists, [text](url), | table |. NEVER HTML.]`;
   } else {
     sublistPreventionNote = !hasListFeature
       ? "\nBreakdowns/steps/series MUST use <ul><li> or <ol><li> - NEVER separate <p> paragraphs."
@@ -157,13 +181,27 @@ Rules: HEAVILY SEO-ORIENTED. FIRST sentence MUST include the exact primary keywo
         : "\n**LIST FORMAT**: HTML only. Use <ul><li><strong>Label</strong>. Text.</li></ul> for unordered items, or <ol><li>...</li></ol> for steps. NEVER markdown (- or 1.)."
       : "";
     firstAgentSpecialInstructions = isSeoOpenerSection
-      ? "\n**CRITICAL FIRST BODY SECTION**: Write exactly 2 short <p> paragraphs (2-3 sentences each). **FOCUS KEYWORD AT START**: First paragraph MUST directly address the primary keyword in its FIRST sentence - not allude to it, not dance around it. If the primary keyword is a question (e.g. 'can a night guard straighten teeth'), the very first sentence must explicitly state the question and provide a direct answer. NEVER open with vague background context that only hints at the topic. Lead with the keyword, answer it, THEN expand. **MINIMAL LINKING**: Only link entity to Wikipedia (if entity) and main service to its page. **CRITICAL**: <h2> MUST be SEO-friendly (e.g. 'Understanding Child Safe Window Treatments') - NEVER 'Introduction' or 'Intro'. HTML only."
+      ? "\n**CRITICAL FIRST BODY SECTION**: Write exactly 2 short <p> paragraphs (2-3 sentences each). **FOCUS KEYWORD AT START**: First paragraph MUST directly address the primary keyword in its FIRST sentence - not allude to it, not dance around it. If the primary keyword is a question (e.g. 'can a night guard straighten teeth'), the very first sentence must explicitly state the question and provide a direct answer. NEVER open with vague background context that only hints at the topic. Lead with the keyword, answer it, THEN expand. **MINIMAL LINKING**: Only link entity to Wikipedia (if entity) and main service to its page. **H2 TITLE (NON-NEGOTIABLE)**: Use the exact <h2> title from this section block — do not paraphrase or invent a different heading. HTML only."
       : "";
+    const harnessBodyContract =
+      contentKind !== "press_release" && agent.id !== BLOG_HARNESS_SUMMARY_AGENT_ID
+        ? `\n**NON-NEGOTIABLE OUTPUT CONTRACT**:
+- Exactly ONE <h2>: inner text MUST be exactly "${agent.title}" — no paraphrase or substitute wording.
+- Flat structure: never nest <h2> inside <h2>. Never output a second <h2>.
+- Body prose: at most **2** <p> tags (3 only if this block requires list/table-heavy content). Each <p>: at most **3** sentences. Every paragraph ends with a complete sentence — never a standalone word or partial link text. If tight on length, finish the current sentence and STOP — never mid-sentence.
+- Optional table OR list only if this section block requires it.
+- Write ONLY this H2 block. Do not cover topics assigned to other H2s in the plan. No Overview scroll-link <ul>.
+- STOP: after your last </p>, </table>, or </ol>, output nothing else. No preview of sibling sections.`
+        : "";
     const harnessScopeNote =
       contentKind !== "press_release"
         ? `\n**SECTION SCOPE**: Keep this section within the harness word budget (full article max ${ARTICLE_MAX_WORDS} words). No H3 unless h3Enabled; no extra topics beyond this section block.`
         : "";
-    contentInstruction = `[Write content in HTML. Based on: ${agent.description}${agent.features.length > 0 ? `\nKey points: ${featureInstructions}` : ''}${firstAgentSpecialInstructions}${harnessScopeNote}${sublistPreventionNote}${listFormatNote} Use <${hTag}>, <p>, <ul><li>, <ol><li>, <a href=\"...\">text</a>, <table>. NEVER markdown.]`;
+    const harnessKeywordNote =
+      contentKind !== "press_release"
+        ? "\n**HARNESS KEYWORD**: Include the **writing keyword** phrase at least once in this section (see KEYWORD PUNCTUATION block in system/user prompt). Canonical hyphens required (X-ray, e-commerce). Semantic synonyms elsewhere only."
+        : "";
+    contentInstruction = `[Write content in HTML. Based on: ${agent.description}${agent.features.length > 0 ? `\nKey points: ${featureInstructions}` : ''}${harnessBodyContract}${firstAgentSpecialInstructions}${harnessScopeNote}${harnessKeywordNote}${sublistPreventionNote}${listFormatNote} Use <${hTag}>, <p>, <ul><li>, <ol><li>, <a href=\"...\">text</a>, <table>. NEVER markdown.]`;
   }
 
   let sectionPrompt =
@@ -215,7 +253,7 @@ Rules: HEAVILY SEO-ORIENTED. FIRST sentence MUST include the exact primary keywo
     }
   }
 
-  return sectionPrompt;
+  return `${sectionPrompt}\n${FORBIDDEN_WORDS_USER_PROMPT_REMINDER}`;
 };
 
 export const generateSectionsPrompt = (agents: AgentConfig[], format: 'markdown' | 'html' = 'html'): string => {

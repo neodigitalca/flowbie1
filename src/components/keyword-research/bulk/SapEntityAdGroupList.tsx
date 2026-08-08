@@ -22,6 +22,8 @@ export type SapEntityAdGroupListProps = {
   isProcessing: boolean;
   onRowChange: (index: number, patch: Partial<CSVRow>) => void;
   directionsSiteName?: string;
+  emptyRowPadCount?: number;
+  showBusySpinner?: boolean;
 };
 
 export function SapEntityAdGroupList({
@@ -32,6 +34,8 @@ export function SapEntityAdGroupList({
   isProcessing,
   onRowChange,
   directionsSiteName,
+  emptyRowPadCount = BULK_GENERATOR_EMPTY_ROW_COUNT,
+  showBusySpinner = true,
 }: SapEntityAdGroupListProps) {
   const [expandedIndices, setExpandedIndices] = useState<Set<number>>(new Set());
   const sections = useMemo(() => buildEntityAdGroupSections(generatedRows), [generatedRows]);
@@ -91,7 +95,7 @@ export function SapEntityAdGroupList({
   const sectionRowCount = sections.reduce((n, s) => n + 1 + s.rowIndices.length, 0);
   const flatRowCount = sections.length === 0 ? generatedRows.length : 0;
   const contentStripeSlots = selectAllRows + sectionRowCount + flatRowCount;
-  const placeholderPad = Math.max(0, BULK_GENERATOR_EMPTY_ROW_COUNT - contentStripeSlots);
+  const placeholderPad = Math.max(0, emptyRowPadCount - contentStripeSlots);
 
   return (
     <div className={CONTENT_OPTIMIZER_MULTI_SITE_ROW_STACK_CLASS}>
@@ -165,7 +169,7 @@ export function SapEntityAdGroupList({
                       isSelected={selectedRowIndices.has(rowIndex)}
                       isExpanded={expandedIndices.has(rowIndex)}
                       isProcessing={isProcessing}
-                      busy={isGenerating}
+                      busy={showBusySpinner && isGenerating}
                       showDirections={false}
                       onToggleSelect={() => toggleSelected(rowIndex)}
                       onToggleExpand={() => toggleExpanded(rowIndex)}
@@ -193,7 +197,7 @@ export function SapEntityAdGroupList({
                   isSelected={selectedRowIndices.has(rowIndex)}
                   isExpanded={expandedIndices.has(rowIndex)}
                   isProcessing={isProcessing}
-                  busy={isGenerating}
+                  busy={showBusySpinner && isGenerating}
                   showDirections={false}
                   onToggleSelect={() => toggleSelected(rowIndex)}
                   onToggleExpand={() => toggleExpanded(rowIndex)}

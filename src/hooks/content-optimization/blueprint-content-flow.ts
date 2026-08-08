@@ -1,11 +1,17 @@
 import { notify } from "@/lib/app-notifications";
 import { NOTIFY_USING_TEST_BLUEPRINT_DATA } from "@/lib/notify-messages";
+import {
+  enforceForbiddenWordsOnBlueprint,
+  formatBlueprintFileContent,
+  formatChecklistFileContent,
+  prepareChecklistForPipeline,
+} from "@/lib/content-word-blocklist";
 import type { KeywordData } from "@/lib/keyword-types";
 import { OptimizationFileManager } from "@/lib/optimization-file-manager";
 import { type WordPressSite } from "@/components/integrations/types";
 import { generateOptimizedBlueprint, generateAndUploadContent } from "@/lib/content-optimization-helpers";
 import { updateOptimizationProgress, patchOptimizationProgress } from "./optimization-helpers";
-import type { AIDrivenACFContext } from "@/lib/content-generation/ai-driven-acf-reader";
+import type { ContentOptimizerStepId } from "@/lib/content-optimization/content-optimizer-run-progress";
 import type { SemrushClusterScatterPlan } from "@/lib/semrush-cluster-scatter";
 
 export async function generateBlueprintFlow(
@@ -36,23 +42,7 @@ export async function generateBlueprintFlow(
   existingContent?: string,
 ): Promise<{ blueprintResult: any; checklist: string[] }> {
   if (testMode) {
-    notify.info(NOTIFY_USING_TEST_BLUEPRINT_DATA);
-    const { createMockBlueprint } = await import('@/lib/content-optimization-helpers');
-    const blueprintResult = createMockBlueprint(primaryKeyword, titleForBlueprint);
-    const checklist = [
-      `Introduction to ${primaryKeyword}`,
-      `Benefits of ${primaryKeyword}`,
-      `How to Choose the Right ${primaryKeyword} Provider`
-    ];
-
-    const blueprintFileName = OptimizationFileManager.generateFilename('blueprint', primaryKeyword, 'json');
-    fileManager.addFile(blueprintFileName, JSON.stringify(blueprintResult, null, 2), 'application/json');
-
-    const checklistFileName = OptimizationFileManager.generateFilename('checklist', primaryKeyword, 'txt');
-    fileManager.addFile(checklistFileName, checklist.map((item, index) => `${index + 1}. ${item}`).join('\n'), 'text/plain');
-
-    updateOptimizationProgress(setOptimizationProgress, siteId, 'TEST MODE: Using mock blueprint...', 75, 'Skipping blueprint generation');
-    return { blueprintResult, checklist };
+    throw new Error("Test mode is not supported.");
   }
 
   const blueprintResultData = await generateOptimizedBlueprint(
@@ -66,7 +56,14 @@ export async function generateBlueprintFlow(
     paaRawResponse,
     site,
     fileManager,
-    (progress) => patchOptimizationProgress(setOptimizationProgress, siteId, progress),
+    (legacy) => {
+      const sub = Math.min(1, Math.max(0, legacy.progress / 100));
+      patchOptimizationProgress(setOptimizationProgress, siteId, {
+        stepId: "plan" as ContentOptimizerStepId,
+        subProgress: 0.7 + sub * 0.25,
+        message: legacy.message ?? legacy.step,
+      });
+    },
     wordPressPosts,
     wordPressPagesForOfferTable,
     url,
@@ -115,7 +112,12 @@ export async function generateAndUploadFlow(
   fileManager: OptimizationFileManager,
   siteId: string,
   setOptimizationProgress: (prev: any) => any,
-  setBulkOptimizationState: (prev: any) => any
+  setBulkOptimizationState: (prev: any) => any,
+  report?: (
+    stepId: ContentOptimizerStepId,
+    subProgress: number,
+    message?: string,
+  ) => void,
 ): Promise<{ excerpt: string | undefined; changes?: { titleChanged?: boolean; metaChanged?: boolean; contentChanged?: boolean; title?: string; meta?: string } }> {
   const defaultOptimizationOptions = {
     optimizeTitle: true,
@@ -155,6 +157,12 @@ export async function generateAndUploadFlow(
     acfFullPostSnapshot,
   };
 
+  const progressReporter =
+    report ??
+    ((stepId: ContentOptimizerStepId, subProgress: number, message?: string) => {
+      updateOptimizationProgress(setOptimizationProgress, siteId, stepId, subProgress, message);
+    });
+
   const { result, markdownContent, excerpt, changes } = await generateAndUploadContent(
     blueprintResult,
     existingTitle,
@@ -162,7 +170,7 @@ export async function generateAndUploadFlow(
     site,
     optimizationContext,
     fileManager,
-    (progress) => patchOptimizationProgress(setOptimizationProgress, siteId, progress),
+    progressReporter,
     undefined,
     mergedOptimizationOptions,
     acfFields,

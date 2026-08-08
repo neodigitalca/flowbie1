@@ -76,6 +76,53 @@
 	align-items: center;
 }
 
+.flowbie-wp-chat-logs__ai-bar-form .flowbie-wp-chat-logs__ai-bar-actions .button-primary {
+	margin-right: 0;
+}
+
+body.flowbie-wp-admin-screen #wpbody-content .flowbie-wp-chat-logs__gap-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 0;
+	background: #000 !important;
+	color: #fff !important;
+	-webkit-text-fill-color: #fff !important;
+	border: none !important;
+	box-shadow: none !important;
+	font-size: 1rem;
+	font-weight: 600;
+	line-height: 1.4;
+	padding: 8px 16px;
+	border-radius: 6px;
+}
+
+body.flowbie-wp-admin-screen #wpbody-content .flowbie-wp-chat-logs__gap-btn:hover,
+body.flowbie-wp-admin-screen #wpbody-content .flowbie-wp-chat-logs__gap-btn:focus {
+	background: #181818 !important;
+	color: #fff !important;
+	-webkit-text-fill-color: #fff !important;
+	border: none !important;
+	box-shadow: none !important;
+}
+
+body.flowbie-wp-admin-screen #wpbody-content .flowbie-wp-chat-logs__gap-btn[disabled] {
+	opacity: 0.55;
+	color: #fff !important;
+	-webkit-text-fill-color: #fff !important;
+}
+
+.flowbie-wp-chat-logs__gap-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 1em;
+	font-size: 1rem;
+	font-weight: 700;
+	line-height: 1;
+	color: #fff;
+	-webkit-text-fill-color: #fff;
+}
+
 .flowbie-wp-chat-logs__ai-bar .notice {
 	margin: 0 0 12px;
 }

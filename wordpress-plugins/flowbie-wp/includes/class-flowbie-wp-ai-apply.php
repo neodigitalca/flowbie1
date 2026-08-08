@@ -46,8 +46,6 @@ class Flowbie_Wp_Ai_Apply {
 
 		self::stamp_date_modifier( $post_id );
 
-		delete_transient( 'flowbie_wp_dashboard_' . md5( Flowbie_Wp_Api::get_paired_site_id() . '|' . FLOWBIE_WP_VERSION ) );
-
 		$client = Flowbie_Wp_Ai_Gate::get_client();
 		$usage  = is_array( $client ) ? Flowbie_Wp_Site_Progress::optimization_usage_for_client( $client ) : null;
 

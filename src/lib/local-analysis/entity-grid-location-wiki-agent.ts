@@ -39,6 +39,7 @@ import {
   LOCAL_ANALYSIS_SUGGEST_SAP_MIN_PER_TARGET,
 } from "@/lib/local-analysis-target-constants";
 import { entityTypeFocusWantsNeighbourhoods } from "@/lib/entity-geographic-level";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 const OR = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -211,12 +212,7 @@ export async function pickNeighbourhoodEntitiesForCluster(
   try {
     const res = await fetch(OR, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://flowbie.app",
-        "X-Title": "Flowbie Neighbourhood Pick",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: getResearchModel(siteId),
         messages: [

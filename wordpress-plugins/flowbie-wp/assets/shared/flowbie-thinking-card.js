@@ -4,32 +4,19 @@
 (function (global) {
   'use strict';
 
-  function hasVoiceNarrate() {
-    var cfg = global.flowbieVoiceConfig || {};
-    return !!(cfg.narrateUrl && String(cfg.narrateUrl).length > 0);
-  }
-
-  function defaultQaSteps(includeVoice) {
-    var steps = [
+  function defaultQaSteps() {
+    return [
       { label: 'Understanding your request', status: 'running', step_kind: 'plan' },
       { label: 'Composing your answer', status: 'pending' }
     ];
-    if (includeVoice) {
-      steps.push({ label: 'Sharing aloud', status: 'pending' });
-    }
-    return steps;
   }
 
-  function streamSteps(includeVoice) {
-    var steps = [
+  function streamSteps() {
+    return [
       { label: 'Searching content…', status: 'running' },
       { label: 'Thinking…', status: 'pending' },
       { label: 'Formatting response…', status: 'pending' }
     ];
-    if (includeVoice) {
-      steps.push({ label: 'Sharing aloud', status: 'pending' });
-    }
-    return steps;
   }
 
   function streamLabelToStepIndex(label) {
@@ -48,8 +35,7 @@
 
   function createThinkingCard(host, opts) {
     opts = opts || {};
-    var includeVoice = opts.includeVoice !== false && hasVoiceNarrate();
-    var steps = opts.stream ? streamSteps(includeVoice) : defaultQaSteps(includeVoice);
+    var steps = opts.stream ? streamSteps() : defaultQaSteps();
     var card = {
       type: 'workflow',
       title: opts.title || 'Working on it…',
@@ -60,7 +46,6 @@
     if (host.setWorkflowCardActive) {
       host.setWorkflowCardActive(shell, true);
     }
-    shell._thinkingVoiceStep = includeVoice ? steps.length - 1 : -1;
     return shell;
   }
 
@@ -115,44 +100,16 @@
       host.populateCardExtras(shell, card);
     }
     if (typeof host.scrollDown === 'function') {
-      host.scrollDown();
+      host.scrollDown(shell.root);
     }
-  }
-
-  function markVoiceStep(shell, host, status) {
-    if (!shell || shell._thinkingVoiceStep < 0) {
-      return;
-    }
-    setStep(shell, host, shell._thinkingVoiceStep, status);
-  }
-
-  function narrateAndVoiceStep(card, userMessage, shell, host) {
-    if (!hasVoiceNarrate()) {
-      return Promise.resolve();
-    }
-    if (shell && host) {
-      markVoiceStep(shell, host, 'running');
-    }
-    var narrate =
-      global.FlowbieVoice && typeof global.FlowbieVoice.narrateCard === 'function'
-        ? global.FlowbieVoice.narrateCard(card, userMessage)
-        : Promise.resolve();
-    return Promise.resolve(narrate).then(function () {
-      if (shell && host) {
-        markVoiceStep(shell, host, 'done');
-      }
-    });
   }
 
   global.FlowbieThinkingCard = {
-    hasVoiceNarrate: hasVoiceNarrate,
     defaultQaSteps: defaultQaSteps,
     streamSteps: streamSteps,
     createThinkingCard: createThinkingCard,
     setStep: setStep,
     advanceStreamLabel: advanceStreamLabel,
-    finalizeToCard: finalizeToCard,
-    markVoiceStep: markVoiceStep,
-    narrateAndVoiceStep: narrateAndVoiceStep
+    finalizeToCard: finalizeToCard
   };
 })(typeof window !== 'undefined' ? window : this);

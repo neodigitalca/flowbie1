@@ -1,6 +1,6 @@
 <?php
 /**
- * Settings: tabbed panel (property, OpenRouter, GSC, DataForSEO).
+ * Settings: tabbed panel (site, OpenRouter, GSC, DataForSEO).
  *
  * @package Flowbie_Wp
  */
@@ -14,15 +14,6 @@ trait Flowbie_Wp_Admin_Trait_Render_Settings_Placeholder {
 			return;
 		}
 
-		$s             = Flowbie_Wp_Api::get_settings();
-		$paired_id     = isset( $s['paired_site_id'] ) ? (string) $s['paired_site_id'] : '';
-		$paired_name   = isset( $s['paired_client_name'] ) ? (string) $s['paired_client_name'] : '';
-		$dashboard_url = admin_url( 'admin.php?page=flowbie-wp' );
-		$paired        = Flowbie_Wp_Api::is_paired();
-		$dashboard_rs  = $paired ? Flowbie_Wp_Api::fetch_plugin_dashboard_state() : null;
-		$dashboard     = ( is_array( $dashboard_rs ) && ! empty( $dashboard_rs['ok'] ) && is_array( $dashboard_rs['dashboard'] ) ) ? $dashboard_rs['dashboard'] : null;
-		$client        = is_array( $dashboard ) && isset( $dashboard['client'] ) && is_array( $dashboard['client'] ) ? $dashboard['client'] : array();
-		$client_name   = isset( $client['name'] ) ? (string) $client['name'] : $paired_name;
 		$openrouter_configured = Flowbie_Wp_OpenRouter::get_api_key() !== '';
 		$openrouter_source     = Flowbie_Wp_OpenRouter::get_openrouter_source();
 		$has_site_openrouter   = Flowbie_Wp_Api::get_agency_openrouter_api_key() !== '';
@@ -43,7 +34,7 @@ trait Flowbie_Wp_Admin_Trait_Render_Settings_Placeholder {
 			array(
 				'heading' => __( 'Settings', 'flowbie-wp' ),
 				'tabs'    => array(
-					'property'   => __( 'Flowbie property', 'flowbie-wp' ),
+					'property'   => __( 'Site', 'flowbie-wp' ),
 					'openrouter' => __( 'Editor AI', 'flowbie-wp' ),
 					'gsc'        => __( 'Search Console', 'flowbie-wp' ),
 					'dataforseo' => __( 'SEO research', 'flowbie-wp' ),
@@ -58,7 +49,7 @@ trait Flowbie_Wp_Admin_Trait_Render_Settings_Placeholder {
 		self::panel_layout_start( 'flowbie-wp-settings', $nav_groups, $tab, __( 'Settings sections', 'flowbie-wp' ) );
 		switch ( $tab ) {
 			case 'openrouter':
-				self::render_settings_section_openrouter( $paired, $openrouter_configured, $openrouter_source, $has_site_openrouter );
+				self::render_settings_section_openrouter( $openrouter_configured, $openrouter_source, $has_site_openrouter );
 				break;
 			case 'gsc':
 				self::render_settings_section_gsc();
@@ -73,7 +64,7 @@ trait Flowbie_Wp_Admin_Trait_Render_Settings_Placeholder {
 				self::render_settings_section_comments();
 				break;
 			default:
-				self::render_settings_section_property( $paired_id, $client_name, $paired, $dashboard_rs, $client, $dashboard_url );
+				self::render_settings_section_property();
 				break;
 		}
 		self::panel_layout_end();
@@ -81,73 +72,25 @@ trait Flowbie_Wp_Admin_Trait_Render_Settings_Placeholder {
 		self::flowbie_group_shell_close();
 	}
 
-	private static function render_settings_section_property(
-		string $paired_id,
-		string $client_name,
-		bool $paired,
-		$dashboard_rs,
-		array $client,
-		string $dashboard_url
-	): void {
-		$form_id = 'flowbie-wp-settings-property-form';
+	private static function render_settings_section_property(): void {
+		$plugin_ver = defined( 'FLOWBIE_WP_VERSION' ) ? FLOWBIE_WP_VERSION : '';
 		?>
-		<h2 class="flowbie-wp-panel-content__title"><?php esc_html_e( 'Flowbie property', 'flowbie-wp' ); ?></h2>
+		<h2 class="flowbie-wp-panel-content__title"><?php esc_html_e( 'Site', 'flowbie-wp' ); ?></h2>
 		<p class="flowbie-wp-panel-content__desc">
-			<?php esc_html_e( 'Paste the site ID from your property in Flowbie Integrations, then click Connect.', 'flowbie-wp' ); ?>
+			<?php esc_html_e( 'This WordPress site runs Flowbie WP standalone. API keys load from the plugin .env file or the tabs below.', 'flowbie-wp' ); ?>
 		</p>
 
-		<?php if ( $paired_id !== '' ) : ?>
-			<div class="flowbie-wp-panel-info-box" role="status">
-				<p><strong><?php esc_html_e( 'Connected property', 'flowbie-wp' ); ?></strong></p>
-				<p><?php echo esc_html( $client_name !== '' ? $client_name : $paired_id ); ?></p>
-				<p><a href="<?php echo esc_url( $dashboard_url ); ?>"><?php esc_html_e( 'Open dashboard', 'flowbie-wp' ); ?></a></p>
-			</div>
-		<?php endif; ?>
-
-		<form id="<?php echo esc_attr( $form_id ); ?>" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="flowbie-wp-settings__form flowbie-schema-form" autocomplete="off">
-			<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_PAIR ); ?>" />
-			<?php wp_nonce_field( self::ACTION_PAIR, 'flowbie_wp_pair_nonce' ); ?>
-			<?php
-			self::panel_form_group_open();
-			self::panel_form_field_input(
-				'flowbie-wp-settings-site-id',
-				'flowbie_site_id',
-				__( 'Site ID', 'flowbie-wp' ),
-				$paired_id,
-				'full',
-				'text',
-				true,
-				'',
-				' placeholder="' . esc_attr__( 'Paste from Flowbie Integrations', 'flowbie-wp' ) . '"'
-			);
-			self::panel_form_group_close();
-			?>
-		</form>
-
-		<?php if ( $paired && is_array( $dashboard_rs ) && ! empty( $dashboard_rs['ok'] ) && $client !== array() ) : ?>
-			<section class="flowbie-wp-settings__card flowbie-wp-settings__card--details" aria-labelledby="flowbie-wp-settings-details-heading">
-				<h3 id="flowbie-wp-settings-details-heading" class="flowbie-wp-settings__card-title flowbie-wp-settings__card-title--details"><?php esc_html_e( 'Property details', 'flowbie-wp' ); ?></h3>
-				<?php self::render_property_detail_grid( $client ); ?>
-			</section>
-		<?php elseif ( $paired && ( ! is_array( $dashboard_rs ) || empty( $dashboard_rs['ok'] ) ) ) : ?>
-			<div class="flowbie-wp-panel-info-box" role="alert">
-				<p><strong><?php esc_html_e( 'Property details', 'flowbie-wp' ); ?></strong></p>
-				<p>
-					<?php echo esc_html( is_array( $dashboard_rs ) && ! empty( $dashboard_rs['error'] ) ? (string) $dashboard_rs['error'] : __( 'Could not load property from Flowbie.', 'flowbie-wp' ) ); ?>
-				</p>
-			</div>
-		<?php endif; ?>
-
-		<div class="flowbie-wp-panel-footer">
-			<p class="flowbie-wp-settings__actions flowbie-wp-panel-footer__right">
-				<button type="submit" form="<?php echo esc_attr( $form_id ); ?>" class="button button-primary flowbie-wp-settings__btn"><?php esc_html_e( 'Connect', 'flowbie-wp' ); ?></button>
-			</p>
+		<div class="flowbie-wp-panel-info-box" role="status">
+			<p><strong><?php echo esc_html( get_bloginfo( 'name' ) ); ?></strong></p>
+			<p><a href="<?php echo esc_url( home_url( '/' ) ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html( home_url( '/' ) ); ?></a></p>
+			<?php if ( $plugin_ver !== '' ) : ?>
+				<p><?php echo esc_html( sprintf( /* translators: %s: plugin version */ __( 'Flowbie WP %s', 'flowbie-wp' ), $plugin_ver ) ); ?></p>
+			<?php endif; ?>
 		</div>
 		<?php
 	}
 
 	private static function render_settings_section_openrouter(
-		bool $paired,
 		bool $openrouter_configured,
 		string $openrouter_source,
 		bool $has_site_openrouter
@@ -156,19 +99,17 @@ trait Flowbie_Wp_Admin_Trait_Render_Settings_Placeholder {
 		?>
 		<h2 class="flowbie-wp-panel-content__title"><?php esc_html_e( 'Editor AI (OpenRouter)', 'flowbie-wp' ); ?></h2>
 		<p class="flowbie-wp-panel-content__desc">
-			<?php esc_html_e( 'Required for AI wands in the post editor. Paste your agency OpenRouter key here, or save it in Flowbie Integrations → API Keys (cloud sync).', 'flowbie-wp' ); ?>
+			<?php esc_html_e( 'Required for AI wands in the post editor and Flow Assist chat. Keys can live in the plugin .env file or here.', 'flowbie-wp' ); ?>
 		</p>
 
 		<div class="flowbie-wp-panel-info-box" role="status">
 			<p>
 				<?php
 				if ( $openrouter_configured ) {
-					if ( 'flowbie' === $openrouter_source ) {
-						esc_html_e( 'Status: configured (loaded from Flowbie cloud).', 'flowbie-wp' );
-					} elseif ( 'site' === $openrouter_source ) {
+					if ( 'site' === $openrouter_source ) {
 						esc_html_e( 'Status: configured (saved on this site).', 'flowbie-wp' );
 					} elseif ( 'wp-config' === $openrouter_source || 'environment' === $openrouter_source ) {
-						esc_html_e( 'Status: configured (wp-config / server env).', 'flowbie-wp' );
+						esc_html_e( 'Status: configured (wp-config / plugin .env).', 'flowbie-wp' );
 					} else {
 						esc_html_e( 'Status: configured.', 'flowbie-wp' );
 					}
@@ -203,22 +144,13 @@ trait Flowbie_Wp_Admin_Trait_Render_Settings_Placeholder {
 			<p class="description"><?php esc_html_e( 'Ask a site administrator to add the OpenRouter key here.', 'flowbie-wp' ); ?></p>
 		<?php endif; ?>
 
-		<div class="flowbie-wp-panel-footer">
-			<div class="flowbie-wp-panel-footer__left">
-				<?php if ( $paired ) : ?>
-					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="flowbie-wp-panel-inline-form">
-						<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_REFRESH_OPENROUTER ); ?>" />
-						<?php wp_nonce_field( self::ACTION_REFRESH_OPENROUTER, 'flowbie_wp_refresh_openrouter_nonce' ); ?>
-						<button type="submit" class="button button-secondary"><?php esc_html_e( 'Refresh from Flowbie cloud', 'flowbie-wp' ); ?></button>
-					</form>
-				<?php endif; ?>
-			</div>
-			<?php if ( current_user_can( 'manage_options' ) ) : ?>
+		<?php if ( current_user_can( 'manage_options' ) ) : ?>
+			<div class="flowbie-wp-panel-footer">
 				<p class="flowbie-wp-settings__actions flowbie-wp-panel-footer__right">
 					<button type="submit" form="<?php echo esc_attr( $form_id ); ?>" class="button button-primary flowbie-wp-settings__btn"><?php esc_html_e( 'Save OpenRouter key', 'flowbie-wp' ); ?></button>
 				</p>
-			<?php endif; ?>
-		</div>
+			</div>
+		<?php endif; ?>
 		<?php
 	}
 
@@ -309,14 +241,13 @@ trait Flowbie_Wp_Admin_Trait_Render_Settings_Placeholder {
 		<?php endif; ?>
 		<?php
 	}
-	// â”€â”€ GMB settings tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 	private static function render_settings_section_gmb(): void {
-		$configured  = Flowbie_Wp_Gmb::is_configured();
-		$connected   = Flowbie_Wp_Gmb::is_connected();
-		$location_id = Flowbie_Wp_Gmb::get_location_id();
+		$configured   = Flowbie_Wp_Gmb::is_configured();
+		$connected    = Flowbie_Wp_Gmb::is_connected();
+		$location_id  = Flowbie_Wp_Gmb::get_location_id();
 		$redirect_uri = Flowbie_Wp_Gmb::get_redirect_uri();
-		$form_id = 'flowbie-wp-settings-gmb-form';
+		$form_id      = 'flowbie-wp-settings-gmb-form';
 
 		$notice = isset( $_GET['flowbie_gmb_notice'] ) ? sanitize_text_field( wp_unslash( $_GET['flowbie_gmb_notice'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification
 		$notice_type = '';

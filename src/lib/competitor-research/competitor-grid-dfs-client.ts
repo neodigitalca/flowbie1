@@ -1,8 +1,5 @@
 import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
-
-function normalizeHostname(host: string): string {
-  return host.trim().replace(/^www\./i, "").toLowerCase();
-}
+import { normalizeCompetitorHostname } from "@/lib/competitor/filter-connected-site-competitors";
 
 /**
  * Extract business website hostname from DataForSEO my_business_info JSON response.
@@ -30,12 +27,12 @@ export function hostnameFromMyBusinessInfoResponse(json: unknown): string | null
   const item = items.find((x) => x.type === "google_business_info") ?? items[0];
   const dom = typeof item.domain === "string" ? item.domain.trim() : "";
   if (dom) {
-    return normalizeHostname(dom.split("/")[0]);
+    return normalizeCompetitorHostname(dom.split("/")[0]);
   }
   const url = typeof item.url === "string" ? item.url.trim() : "";
   if (url) {
     try {
-      return normalizeHostname(new URL(url).hostname);
+      return normalizeCompetitorHostname(new URL(url).hostname);
     } catch {
       return null;
     }
@@ -43,15 +40,11 @@ export function hostnameFromMyBusinessInfoResponse(json: unknown): string | null
   return null;
 }
 
-/**
- * Resolve a Google Maps business (cid or place_id keyword) to a website hostname via DataForSEO.
- */
-export async function fetchGridCompetitorHostnameFromDataForSEO(options: {
+async function fetchGridCompetitorGmbJsonFromDataForSEO(options: {
   dfsKeyword: string;
-  /** When set, preferred for DataForSEO location targeting. */
   latitude: number | null;
   longitude: number | null;
-}): Promise<string | null> {
+}): Promise<unknown> {
   const base = (BACKEND_API_BASE || "").replace(/\/$/, "");
   const url = `${base}/api/mcp/DataForSEO_business_data_google_my_business_info_live`;
 
@@ -62,7 +55,6 @@ export async function fetchGridCompetitorHostnameFromDataForSEO(options: {
 
   const { latitude: lat, longitude: lng } = options;
   if (lat != null && lng != null && Number.isFinite(lat) && Number.isFinite(lng)) {
-    // Radius in meters (same pattern as other Business Data calls in this codebase).
     body.location_coordinate = `${lat},${lng},10000`;
   } else {
     body.location_name = "United States";
@@ -79,7 +71,31 @@ export async function fetchGridCompetitorHostnameFromDataForSEO(options: {
     throw new Error(j.error || `DataForSEO request failed (${res.status})`);
   }
 
+  return j;
+}
+
+/**
+ * Resolve a Google Maps business (cid or place_id keyword) to a website hostname via DataForSEO.
+ */
+export async function fetchGridCompetitorHostnameFromDataForSEO(options: {
+  dfsKeyword: string;
+  latitude: number | null;
+  longitude: number | null;
+}): Promise<string | null> {
+  const j = await fetchGridCompetitorGmbJsonFromDataForSEO(options);
   return hostnameFromMyBusinessInfoResponse(j);
+}
+
+export async function fetchGridCompetitorGmbFromDataForSEO(options: {
+  dfsKeyword: string;
+  latitude: number | null;
+  longitude: number | null;
+}): Promise<{ host: string | null; gmbJson: unknown }> {
+  const gmbJson = await fetchGridCompetitorGmbJsonFromDataForSEO(options);
+  return {
+    host: hostnameFromMyBusinessInfoResponse(gmbJson),
+    gmbJson,
+  };
 }
 
 /** One grid row - DataForSEO keyword + optional map coords (+ UI labels from the CSV parser). */
@@ -97,9 +113,15 @@ export type GridDfsHostnameResult = {
   error: string | null;
 };
 
+export type GridDfsGmbResult = {
+  place: GridPlaceForDfs;
+  host: string | null;
+  gmbJson: unknown | null;
+  error: string | null;
+};
+
 /**
  * Resolve each grid place **in parallel** (concurrent DataForSEO requests).
- * Await this fully before starting any Semrush work.
  */
 export async function fetchGridCompetitorHostnamesParallel(
   places: GridPlaceForDfs[],
@@ -117,9 +139,22 @@ export async function fetchGridCompetitorHostnamesParallel(
   );
 }
 
-/**
- * Resolve each grid place **sequentially** (one DataForSEO request after another).
- */
+export async function fetchGridCompetitorGmbParallel(
+  places: GridPlaceForDfs[],
+): Promise<GridDfsGmbResult[]> {
+  return Promise.all(
+    places.map(async (place) => {
+      try {
+        const { host, gmbJson } = await fetchGridCompetitorGmbFromDataForSEO(place);
+        return { place, host, gmbJson, error: null };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return { place, host: null, gmbJson: null, error: msg };
+      }
+    }),
+  );
+}
+
 export async function fetchGridCompetitorHostnamesSequential(
   places: GridPlaceForDfs[],
 ): Promise<GridDfsHostnameResult[]> {

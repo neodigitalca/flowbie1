@@ -1,6 +1,7 @@
 import type { AgentConfig } from "@/types/agent-config";
 import type { MarkdownSection } from "@/lib/section-parser";
 import type { ImageChecklistItem } from "@/lib/image-checklist-builder";
+import type { ManualImageReference } from "@/lib/image-generator/manual-reference-upload";
 
 export type ImageSourceMode = "featured" | "section" | "solo";
 
@@ -25,6 +26,8 @@ export type ImageGeneratorOptions = {
   colorForeground: string;
   colorBackground: string;
   imageModel: string;
+  /** User-uploaded references; when present, auto Google Images research is skipped. */
+  manualReferences?: ManualImageReference[];
 };
 
 export type ImageGeneratorRunContext = {
@@ -95,6 +98,7 @@ export function buildSoloImagePrompt(
     | "colorBackground"
   >,
   hasReferencePhotos: boolean,
+  relaxSafetyConstraints = false,
 ): string {
   const parts: string[] = [
     `Create a photorealistic image of: ${keyword.trim()}.`,
@@ -134,31 +138,33 @@ export function buildSoloImagePrompt(
   if (fg) parts.push(`Foreground color preference: ${fg}.`);
   if (bg) parts.push(`Background color preference: ${bg}.`);
 
-  if (!options.includePeople && !options.includeAnimals) {
-    if (hasReferencePhotos) {
-      parts.push(
-        "Do not invent animals unless the keyword names them.",
-        "Do not include people or animals unless the keyword requires them — ignore incidental people in reference photos when the keyword does not ask for them.",
-      );
-    } else {
-      parts.push("Do not include people or animals.");
+  if (!relaxSafetyConstraints) {
+    if (!options.includePeople && !options.includeAnimals) {
+      if (hasReferencePhotos) {
+        parts.push(
+          "Do not invent animals unless the keyword names them.",
+          "Do not include people or animals unless the keyword requires them — ignore incidental people in reference photos when the keyword does not ask for them.",
+        );
+      } else {
+        parts.push("Do not include people or animals.");
+      }
+    }
+    if (!options.includeText && !options.isInfographic) {
+      if (hasReferencePhotos) {
+        parts.push(
+          "No invented text, watermarks, or UI chrome. Place branding/signage that appears in place refs and identifies the place may appear as in those refs.",
+        );
+      } else {
+        parts.push(
+          "Absolutely no text, logos, letters, numbers, watermarks, or written content in the image.",
+        );
+      }
     }
   }
   if (!options.includeCars) {
     parts.push(
       "Do not invent trains, LRT, streetcars, or transit unless the keyword names them.",
     );
-  }
-  if (!options.includeText && !options.isInfographic) {
-    if (hasReferencePhotos) {
-      parts.push(
-        "No invented text, watermarks, or UI chrome. Place branding/signage that appears in place refs and identifies the place may appear as in those refs.",
-      );
-    } else {
-      parts.push(
-        "Absolutely no text, logos, letters, numbers, watermarks, or written content in the image.",
-      );
-    }
   }
 
   return parts.join(" ");

@@ -37,14 +37,16 @@ import {
   Link2,
   ListTree,
   ImageIcon,
+  MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { parseFaqEntries, serializeFaqEntriesPlain } from "@/lib/faq-entries";
 import { extractH2TextsFromHtml } from "@/lib/overview/overview-blog-headers-extract";
 import { extractInternalLinksFromHtml } from "@/lib/overview/overview-blog-links-extract";
+import { isWikipediaHref, extractWikipediaLinksWithContext, wikipediaTitleFromHref } from "@/lib/overview/overview-blog-wikipedia-link-insert";
 import { extractOverviewSectionHtml } from "@/lib/overview/overview-blog-overview-prepend";
 import { overviewRowUrlPathLabel, overviewTitlePrimarySegment } from "@/lib/overview/overview-tab-display";
-import { overviewBindingForRow } from "@/lib/overview/overview-bulk-seo-payload";
+import { overviewBindingForRow, overviewDateModifierTodayIso } from "@/lib/overview/overview-bulk-seo-payload";
 import { subtypeToEndpoint } from "@/hooks/content-optimization/optimization-helpers";
 import type { OverviewSitemapSource } from "@/lib/overview/overview-sitemap-source";
 import { overviewTitleOptimizationExcluded } from "@/lib/overview/overview-page-bucket";
@@ -72,16 +74,16 @@ const META_FAQ_PAIR_TILE = "space-y-2 rounded-none bg-zinc-950 py-1.5";
 const META_INPUT_SURFACE =
   "rounded-none border-0 bg-zinc-900 text-white shadow-inner shadow-black/40 placeholder:text-cyan-400 placeholder:opacity-95 focus-visible:ring-2 focus-visible:ring-cyan-400/30 focus-visible:ring-offset-0 selection:bg-cyan-500/20";
 
-const META_TRIGGER_FLAT =
+export const META_TRIGGER_FLAT =
   "flex w-full items-center gap-2 rounded-none border-0 bg-transparent px-0 py-1.5 text-left text-base font-medium text-white";
 
 /** Character counts in end rails — blue */
-const META_FIELD_COUNT = "text-base font-medium tabular-nums text-sky-400";
+export const META_FIELD_COUNT = "text-base font-medium tabular-nums text-sky-400";
 /** WordPress-style post bar: horizontal cells, dividers, right stack */
-const META_FIELD_END_RAIL =
+export const META_FIELD_END_RAIL =
   "flex h-7 shrink-0 items-stretch divide-x divide-white/25 rounded-none border-0 bg-zinc-950/90 sm:h-8";
-const META_FIELD_END_RAIL_CELL = "flex min-w-[2rem] items-center justify-center px-2";
-const META_FIELD_END_RAIL_BTN =
+export const META_FIELD_END_RAIL_CELL = "flex min-w-[2rem] items-center justify-center px-2";
+export const META_FIELD_END_RAIL_BTN =
   "h-full min-h-0 min-w-[2rem] shrink-0 rounded-none border-0 bg-transparent px-0 shadow-none hover:bg-white/10 focus-visible:ring-1 focus-visible:ring-cyan-400/35 focus-visible:ring-offset-0 disabled:opacity-45 [&_svg]:text-emerald-400";
 
 const META_EDITABLE_LIST_ITEM = "flex min-w-0 items-start gap-2";
@@ -191,9 +193,9 @@ const ZONE_BASE = "space-y-2.5 rounded-none";
 const zoneTop = ZONE_BASE;
 const zoneSerp = cn(ZONE_BASE, "min-h-[12.5rem]");
 /** Brief JSON + headers / links / FAQs / content — flush alternating stripes */
-const zoneMetaAccordionStack = "flex flex-col gap-0 rounded-none pt-2.5";
+export const zoneMetaAccordionStack = "flex flex-col gap-0 rounded-none pt-2.5";
 
-function MetaAccordionStripeRow({
+export function MetaAccordionStripeRow({
   stripeIndex,
   children,
 }: {
@@ -232,11 +234,13 @@ export interface MetaOptimizerPageRowDetailsProps {
   handleAiMetaRow: (index: number) => void | Promise<void>;
   handleAiKeywordRow: (index: number) => void | Promise<void>;
   handleSetDateToday: (index: number) => void;
+  commitRowDateModifier: (index: number) => void;
   handleAiFaqRowAll: (index: number) => void | Promise<void>;
   handleAiFaqQuestion: (index: number, faqIndex: number) => void | Promise<void>;
   handleAiFaqAnswer: (index: number, faqIndex: number) => void | Promise<void>;
   handleAiHeadersRow: (index: number) => void | Promise<void>;
   handleAiLinksRow: (index: number) => void | Promise<void>;
+  handleAiWikipediaLinkRow: (index: number) => void | Promise<void>;
   handleAiOverviewRow: (index: number) => void | Promise<void>;
   handleAiInContentImageRow: (index: number) => void | Promise<void>;
   /** Shell-only tile: empty fields, actions disabled (no URLs loaded yet). */
@@ -271,11 +275,13 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
   handleAiMetaRow,
   handleAiKeywordRow,
   handleSetDateToday,
+  commitRowDateModifier,
   handleAiFaqRowAll,
   handleAiFaqQuestion,
   handleAiFaqAnswer,
   handleAiHeadersRow,
   handleAiLinksRow,
+  handleAiWikipediaLinkRow,
   handleAiOverviewRow,
   handleAiInContentImageRow,
   placeholder = false,
@@ -299,10 +305,11 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
   const [headersPlanOpen, setHeadersPlanOpen] = React.useState(false);
   const [linksOpen, setLinksOpen] = React.useState(false);
   const [linksPlanOpen, setLinksPlanOpen] = React.useState(false);
+  const [wikiLinksOpen, setWikiLinksOpen] = React.useState(false);
   const [overviewOpen, setOverviewOpen] = React.useState(false);
   const [inContentImageOpen, setInContentImageOpen] = React.useState(false);
   const inContentImageReady = Boolean(row.blogInContentImageUrl?.trim());
-  const linkList =
+  const rawLinkList =
     row.blogLinkList?.length
       ? row.blogLinkList
       : bodyHtmlForUi && site?.siteUrl
@@ -311,6 +318,13 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
             anchor: l.anchor,
           }))
         : [];
+  const linkList = rawLinkList.filter((l) => !isWikipediaHref(l.href));
+  const wikiLinkList =
+    row.blogWikiLinkList?.length
+      ? row.blogWikiLinkList
+      : rawLinkList.filter((l) => isWikipediaHref(l.href));
+  const wikiLinksInBody = bodyHtmlForUi ? extractWikipediaLinksWithContext(bodyHtmlForUi) : [];
+  const wikiLinkCount = wikiLinksInBody.length > 0 ? wikiLinksInBody.length : wikiLinkList.length;
   const briefJsonCharCount = (row.seoResearch ?? "").length;
   const [faqEditorOpen, setFaqEditorOpen] = React.useState(false);
   const suggestedFullUrl =
@@ -661,6 +675,7 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
               <Input
                 value={row.dateModifier || ""}
                 onChange={(e) => updateRow(index, { dateModifier: e.target.value })}
+                onBlur={() => commitRowDateModifier(index)}
                 className={cn(
                   "h-8 min-w-0 w-full py-2 pl-3 pr-10 text-left text-base",
                   META_INPUT_SURFACE,
@@ -1136,6 +1151,105 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
         </MetaAccordionStripeRow>
 
         <MetaAccordionStripeRow stripeIndex={3}>
+        <Collapsible open={wikiLinksOpen} onOpenChange={setWikiLinksOpen}>
+          <CollapsibleTrigger asChild>
+            <button type="button" className={cn(META_TRIGGER_FLAT, "w-full font-semibold")}>
+              <MapPin className="h-4 w-4 shrink-0" aria-hidden />
+              <span className="min-w-0 flex-1 truncate text-left">Wikipedia link</span>
+              <div className={cn(META_FIELD_END_RAIL, "pointer-events-auto shrink-0")}>
+                <span
+                  className={cn(META_FIELD_COUNT, META_FIELD_END_RAIL_CELL, "min-w-[1.75rem] tabular-nums font-semibold")}
+                  title="Wikipedia link in body"
+                >
+                  {wikiLinkCount > 0 ? "1" : "0"}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={META_FIELD_END_RAIL_BTN}
+                  disabled={shellOnly}
+                  title="Find entity and insert Wikipedia link"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void handleAiWikipediaLinkRow(index);
+                  }}
+                >
+                  {row.status === "ai-wikipedia-link" ? (
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
+                  ) : (
+                    <MapPin className="h-4 w-4 shrink-0 text-emerald-400" />
+                  )}
+                </Button>
+              </div>
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 shrink-0 transition-transform",
+                  wikiLinksOpen && "rotate-180",
+                )}
+              />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-3 pt-3">
+            {wikiLinkCount > 0 ? (
+              <div className="space-y-3 text-base">
+                {wikiLinksInBody.length > 0
+                  ? wikiLinksInBody.map((link, i) => (
+                      <div key={`wiki-body-${i}`} className="space-y-1.5 rounded-none bg-zinc-900/60 p-3">
+                        <p className="leading-relaxed text-zinc-200">
+                          {link.contextBefore ? (
+                            <span className="text-muted-foreground">…{link.contextBefore} </span>
+                          ) : null}
+                          <a
+                            href={link.href.replace(/&amp;/g, "&")}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium text-emerald-400 underline underline-offset-2"
+                          >
+                            {link.anchor}
+                          </a>
+                          {link.contextAfter ? (
+                            <span className="text-muted-foreground"> {link.contextAfter}…</span>
+                          ) : null}
+                        </p>
+                        <a
+                          href={link.href.replace(/&amp;/g, "&")}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block break-all text-emerald-400 underline underline-offset-2"
+                        >
+                          {wikipediaTitleFromHref(link.href)}
+                        </a>
+                      </div>
+                    ))
+                  : wikiLinkList.map((link, i) => (
+                      <div key={`wiki-staged-${i}`} className="space-y-1.5 rounded-none bg-zinc-900/60 p-3">
+                        <p className="text-zinc-200">
+                          Staged anchor:{" "}
+                          <span className="font-medium text-foreground">{link.anchor || "Wikipedia"}</span>
+                        </p>
+                        <a
+                          href={link.href.replace(/&amp;/g, "&")}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block break-all text-emerald-400 underline underline-offset-2"
+                        >
+                          {wikipediaTitleFromHref(link.href)}
+                        </a>
+                      </div>
+                    ))}
+              </div>
+            ) : (
+              <p className="text-base text-muted-foreground">
+                No Wikipedia link in body yet.
+              </p>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+        </MetaAccordionStripeRow>
+
+        <MetaAccordionStripeRow stripeIndex={4}>
         <Collapsible open={overviewOpen} onOpenChange={setOverviewOpen}>
           <CollapsibleTrigger asChild>
             <button type="button" className={cn(META_TRIGGER_FLAT, "w-full font-semibold")}>
@@ -1190,7 +1304,7 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
         </Collapsible>
         </MetaAccordionStripeRow>
 
-        <MetaAccordionStripeRow stripeIndex={4}>
+        <MetaAccordionStripeRow stripeIndex={5}>
         <Collapsible open={inContentImageOpen} onOpenChange={setInContentImageOpen}>
           <CollapsibleTrigger asChild>
             <button type="button" className={cn(META_TRIGGER_FLAT, "w-full font-semibold")}>
@@ -1351,7 +1465,7 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
         </Collapsible>
         </MetaAccordionStripeRow>
 
-        <MetaAccordionStripeRow stripeIndex={5}>
+        <MetaAccordionStripeRow stripeIndex={6}>
         <Collapsible open={faqEditorOpen} onOpenChange={setFaqEditorOpen}>
           <CollapsibleTrigger asChild>
             <button type="button" className={cn(META_TRIGGER_FLAT, "w-full font-semibold")}>
@@ -1516,7 +1630,7 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
         </Collapsible>
         </MetaAccordionStripeRow>
 
-        <MetaAccordionStripeRow stripeIndex={6}>
+        <MetaAccordionStripeRow stripeIndex={7}>
         <Collapsible
           open={expandedContentUrl === row.url}
           onOpenChange={(next) => setExpandedContentUrl(next ? row.url : null)}
@@ -1534,6 +1648,9 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
             </button>
           </CollapsibleTrigger>
           <CollapsibleContent className="pt-3">
+            {opt.isOptimizingContent[site.id] ? (
+              <p className="mb-3 text-base text-muted-foreground">Running — see Details in the header.</p>
+            ) : null}
             <ContentOptimizationControls
               site={site}
               panelTitle={null}
@@ -1569,6 +1686,7 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
               onOptimize={(postData) => {
                 void (async () => {
                   const oldUrl = row.url;
+                  updateRow(index, { dateModifier: overviewDateModifierTodayIso() });
                   await opt.handleOptimizeContentClick(
                     site,
                     row.url,
@@ -1611,6 +1729,10 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
                 }),
                 optimizeTitle: !titleReadOnly,
                 optimizeContent: true,
+                optimizeFeaturedImage: false,
+                optimizeExtraText: false,
+                optimizeExtraImage: false,
+                contentOnlyUpload: true,
                 autoOptimize: true,
                 hasEntity: sitemapSource === "sap",
                 useAcfKeyword: false,

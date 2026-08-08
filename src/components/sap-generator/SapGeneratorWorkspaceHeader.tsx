@@ -6,6 +6,7 @@ import {
   type BlogGeneratorSectionId,
 } from "@/components/blog-generator/blog-generator-sections";
 import { LocalAnalysisDetailsPanel } from "@/components/sap-generator/LocalAnalysisDetailsPanel";
+import { EntityDetailsDrawer } from "@/components/sap-generator/EntityDetailsDrawer";
 import { SapGeneratorToolbar } from "@/components/sap-generator/SapGeneratorToolbar";
 import type { LocalAnalysisWorkspaceControls } from "@/components/sap-generator/LocalAnalysisPanel";
 import type { MetaBulkMicroSnapshot } from "@/components/overview/OverviewBulkMicroProgress";
@@ -46,6 +47,7 @@ export type SapGeneratorWorkspaceHeaderProps = {
   > & {
     headerProgress: React.ComponentProps<typeof LocalAnalysisDetailsPanel>["headerProgress"];
   };
+  onDetailsOpenChange?: (open: boolean) => void;
 };
 
 export function SapGeneratorWorkspaceHeader({
@@ -75,6 +77,7 @@ export function SapGeneratorWorkspaceHeader({
   hasSapRowsForCsv,
   onDownloadTargetsCsv,
   detailsProps,
+  onDetailsOpenChange,
 }: SapGeneratorWorkspaceHeaderProps) {
   const showTempUrl =
     workspace.mode === "temp" || (!workspace.showConnectedToggle && workspace.mode !== "connected");
@@ -107,6 +110,7 @@ export function SapGeneratorWorkspaceHeader({
       canOpenDetails={canOpenDetails}
       isProcessing={isProcessing}
       detailsPanelId="sap-local-analysis-details-panel"
+      onDetailsOpenChange={onDetailsOpenChange}
       toolbar={
         <SapGeneratorToolbar
           workspaceBusy={workspaceBusy}
@@ -130,22 +134,7 @@ export function SapGeneratorWorkspaceHeader({
         />
       }
       detailsPanel={
-        <LocalAnalysisDetailsPanel
-          workspaceBusy={workspaceBusy}
-          headerProgress={detailsProps.headerProgress}
-          uploadLabel={detailsProps.uploadLabel}
-          keywordTargetCount={detailsProps.keywordTargetCount}
-          sapRowCount={detailsProps.sapRowCount}
-          entityGeographicLevel={detailsProps.entityGeographicLevel}
-          entityTypeFocus={detailsProps.entityTypeFocus}
-          gridSummaryMarkdown={detailsProps.gridSummaryMarkdown}
-          strategyMarkdown={detailsProps.strategyMarkdown}
-          hasSapRowsForCsv={detailsProps.hasSapRowsForCsv}
-          sitemapInventoryLinks={detailsProps.sitemapInventoryLinks}
-          gscHostedLink={detailsProps.gscHostedLink}
-          onDownloadTargetsCsv={detailsProps.onDownloadTargetsCsv}
-          onDownloadStrategyMarkdown={detailsProps.onDownloadStrategyMarkdown}
-        />
+        <EntityDetailsDrawer workspaceBusy={workspaceBusy} {...detailsProps} />
       }
     />
   );

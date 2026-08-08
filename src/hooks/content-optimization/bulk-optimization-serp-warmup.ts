@@ -3,13 +3,13 @@ import {
   fetchDataForSeoSerpBriefJson,
   hasSubstantiveSeoResearch,
 } from "./bulk-optimization-missing-seo-research";
+import { pageGscQueryStringsFromPending } from "./bulk-optimization-prefetch-page-gsc";
 import { readKeywordFocusFromAcfFields } from "@/lib/content-generation/ai-driven-acf-reader";
 import type { HandleOptimizeMultipleContentParams } from "./bulk-optimization-params";
 import {
   markContentPrepHarnessSection,
   type ContentPrepHarnessSetters,
 } from "@/lib/overview/overview-content-prep-harness-run";
-import { writeMissingFocusKeywordWithAi } from "./write-missing-focus-keyword-ai";
 
 /** Always keep SERP research this many posts ahead of the active optimization index. */
 export const BULK_SERP_WARMUP_BUFFER_AHEAD = 2;
@@ -62,58 +62,12 @@ export function createBulkSerpWarmupController(params: CreateBulkSerpWarmupParam
     return acfKw.trim() || null;
   };
 
-  /** If ACF has no keyword_focus, OpenRouter writes one. Never skip for a blank keyword. */
+  /** If ACF has no keyword_focus, fail fast. Bulk prep requires keyword_focus on every target. */
   const ensureKeywordForIndex = async (index: number): Promise<string> => {
     const existing = keywordFor(index);
     if (existing) return existing;
     const url = urls[index];
-    if (!url) {
-      throw new Error("Missing URL for focus keyword write.");
-    }
-    const pend = prefetchedPendingCache.get(index);
-    const p = (pend?.pending ?? {}) as Record<string, unknown>;
-    const site = p.site as { id?: string } | undefined;
-    const title = String(p.existingTitle ?? "").trim();
-    const acfRow = prefetchedAcfFieldsCache.get(index) as Record<string, unknown> | undefined;
-    const meta = String(acfRow?.rank_math_description ?? acfRow?.meta_description ?? "").trim();
-
-    const written = await writeMissingFocusKeywordWithAi({
-      url,
-      title,
-      meta,
-      siteId: site?.id,
-    });
-
-    const prev = prefetchedAcfFieldsCache.get(index) ?? {};
-    prefetchedAcfFieldsCache.set(index, { ...prev, keyword_focus: written });
-    if (pend) {
-      const prevAf =
-        p.acfFields && typeof p.acfFields === "object"
-          ? (p.acfFields as Record<string, unknown>)
-          : {};
-      p.acfFields = { ...prevAf, keyword_focus: written };
-      const prevCtx =
-        p.acfContext && typeof p.acfContext === "object"
-          ? (p.acfContext as Record<string, unknown>)
-          : {};
-      p.acfContext = { ...prevCtx, keywordFocus: written };
-      prefetchedPendingCache.set(index, { pending: p, primaryKeyword: written });
-    }
-    setBulkOptimizationState((prevState: Record<string, unknown>) => {
-      const current = (prevState as Record<string, Record<string, unknown>>)[batchKey];
-      if (!current) return prevState;
-      return {
-        ...prevState,
-        [batchKey]: {
-          ...current,
-          urlKeywords: {
-            ...((current.urlKeywords as Record<string, string>) || {}),
-            [url]: written,
-          },
-        },
-      };
-    });
-    return written;
+    throw new Error(`ACF keyword_focus is required before SERP warmup (${url ?? `index ${index}`}).`);
   };
 
   const isIndexReady = (index: number): boolean => {
@@ -201,6 +155,7 @@ export function createBulkSerpWarmupController(params: CreateBulkSerpWarmupParam
         keyword,
         pageUrl: url,
         muteToasts,
+        gscQueries: pageGscQueryStringsFromPending(prefetchedPendingCache.get(index)?.pending),
       });
       if (bulkCancelled(batchKey, setBulkOptimizationState)) return false;
       if (!brief) {

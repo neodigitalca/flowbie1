@@ -72,7 +72,7 @@ class Flowbie_Wp_Tools_Library {
 		if ( in_array( $tool_name, array( 'wp_audit_list', 'wp_revision_restore' ), true ) ) {
 			return 'safety';
 		}
-		if ( in_array( $tool_name, array( 'wp_ping', 'wp_whoami', 'wp_site_dashboard', 'wp_site_index', 'wp_site_index_search', 'wp_openrouter_status', 'wp_theme_functions_get', 'wp_theme_functions_put' ), true ) ) {
+		if ( in_array( $tool_name, array( 'wp_ping', 'wp_whoami', 'wp_site_dashboard', 'wp_site_index', 'wp_site_index_search', 'wp_openrouter_status', 'wp_chat_settings_get', 'wp_chat_settings_update', 'wp_theme_functions_get', 'wp_theme_functions_put' ), true ) ) {
 			return 'connection';
 		}
 		return 'posts';
@@ -115,6 +115,17 @@ class Flowbie_Wp_Tools_Library {
 			'wp_openrouter_status'       => array(
 				'summary' => __( 'Reports whether OpenRouter is configured on this site. Does not return the API key.', 'flowbie-wp' ),
 				'params'  => array(),
+			),
+			'wp_chat_settings_get'       => array(
+				'summary' => __( 'Returns Flow Assist chat widget enabled and logged-in-only flags.', 'flowbie-wp' ),
+				'params'  => array(),
+			),
+			'wp_chat_settings_update'    => array(
+				'summary' => __( 'Updates Flow Assist chat widget enabled and/or logged-in-only visibility.', 'flowbie-wp' ),
+				'params'  => array(
+					'enabled'        => __( 'Master on/off for the frontend chat widget.', 'flowbie-wp' ),
+					'logged_in_only' => __( 'When true, only logged-in WordPress users see the widget.', 'flowbie-wp' ),
+				),
 			),
 			'wp_theme_functions_get'     => array(
 				'summary' => __( 'Reads the active theme functions.php (child theme when active). Requires edit_themes.', 'flowbie-wp' ),

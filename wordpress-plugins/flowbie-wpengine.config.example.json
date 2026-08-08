@@ -1,9 +1,0 @@
-{
-  "site": "https://flowbie.ca/",
-  "host": "flowbietest.sftp.wpengine.com",
-  "port": 2222,
-  "protocol": "sftp",
-  "username": "flowbietest-sean",
-  "password": "",
-  "remotePath": "/wp-content/plugins/flowbie-wp"
-}

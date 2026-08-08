@@ -10,6 +10,7 @@ import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
 import {
   mcp_DataForSEO_serp_organic_live_advanced,
 } from "@/lib/mcp-tools";
+import { pageGscQueryStringsFromPending } from "./bulk-optimization-prefetch-page-gsc";
 
 /** Caps parallel MCP / DataForSEO SERP calls during bulk content run research. */
 const BULK_SERP_RESEARCH_CONCURRENCY = 8;
@@ -49,8 +50,10 @@ export async function fetchDataForSeoSerpBriefJson(opts: {
   keyword: string;
   pageUrl: string;
   muteToasts?: boolean;
+  /** Page-scoped GSC query strings from batch prefetch (optional). */
+  gscQueries?: string[];
 }): Promise<string | null> {
-  const { keyword, pageUrl, muteToasts } = opts;
+  const { keyword, pageUrl, muteToasts, gscQueries = [] } = opts;
   const k = keyword.trim();
   if (!k) return null;
 
@@ -87,7 +90,7 @@ export async function fetchDataForSeoSerpBriefJson(opts: {
       pageUrl: pageUrl.trim(),
       focusKeyword: k,
       gscPageUrl: pageUrl.trim(),
-      gscQueries: [],
+      gscQueries,
       semrushOverviewJson: null,
     });
     const brief = JSON.stringify(merged, null, 2);
@@ -175,6 +178,7 @@ export async function fillMissingBulkSeoResearchFromSerp(opts: {
     keyword: string;
     pageUrl: string;
     muteToasts?: boolean;
+    gscQueries?: string[];
   }) => Promise<string | null>;
 }): Promise<void> {
   const {
@@ -266,6 +270,7 @@ export async function fillMissingBulkSeoResearchFromSerp(opts: {
           keyword: job.keyword,
           pageUrl: job.url,
           muteToasts,
+          gscQueries: pageGscQueryStringsFromPending(prefetchedPendingCache.get(job.index)?.pending),
         });
 
         if (bulkCancelled(batchKey, setBulkOptimizationState)) return;

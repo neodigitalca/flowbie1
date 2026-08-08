@@ -2,6 +2,7 @@ import type { OverviewTabContentProps } from "@/components/overview/overview-tab
 import { useOverviewTabBlogHeaders } from "@/hooks/overview/use-overview-tab-blog-headers";
 import { useOverviewTabContentCleanup } from "@/hooks/overview/use-overview-tab-content-cleanup";
 import { useOverviewTabBlogLinks } from "@/hooks/overview/use-overview-tab-blog-links";
+import { useOverviewTabBlogWikipediaLink } from "@/hooks/overview/use-overview-tab-blog-wikipedia-link";
 import { useOverviewTabBlogOverview } from "@/hooks/overview/use-overview-tab-blog-overview";
 import { useOverviewTabBlogInContentImage } from "@/hooks/overview/use-overview-tab-blog-in-content-image";
 import { useOverviewTabBase } from "@/hooks/overview/use-overview-tab-base";
@@ -195,6 +196,21 @@ export function useOverviewTabController(props: OverviewTabContentProps) {
     getInventoryMatchForUrl: base.getInventoryMatchForUrl,
   });
 
+  const blogWikipediaLink = useOverviewTabBlogWikipediaLink({
+    site,
+    sitemapSource: base.sitemapSource,
+    rows: base.visibleRows,
+    bindings: base.bindings,
+    resolveBindings: base.resolveBindings,
+    updateRow: base.updateRow,
+    opt: base.opt,
+    bulkScopeUrlKeys: base.bulkScopeUrlKeys,
+    apiKey: props.apiKey,
+    getInventoryMatchForUrl: base.getInventoryMatchForUrl,
+    prefetchOverviewInventory: base.prefetchOverviewInventory,
+    mergeInventoryContentForSource: base.mergeInventoryContentForSource,
+  });
+
   const blogOverview = useOverviewTabBlogOverview({
     site,
     sitemapSource: base.sitemapSource,
@@ -242,6 +258,7 @@ export function useOverviewTabController(props: OverviewTabContentProps) {
     ...blogHeaders,
     ...contentCleanup,
     ...blogLinks,
+    ...blogWikipediaLink,
     ...blogOverview,
     ...blogInContentImage,
   };

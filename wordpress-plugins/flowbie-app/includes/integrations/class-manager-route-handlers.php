@@ -118,7 +118,21 @@ class Flowbie_App_Manager_Route_Handlers {
 		}
 
 		if ( $subpath === 'sync-openrouter' && $method === 'POST' ) {
-			Flowbie_App_Api_Dispatcher::send_json( array( 'ok' => true, 'updated' => 0 ) );
+			$openrouter = isset( $body['openRouterApiKey'] ) ? trim( (string) $body['openRouterApiKey'] ) : '';
+			if ( $openrouter !== '' && class_exists( 'Flowbie_Wp_Api' ) ) {
+				Flowbie_Wp_Api::save_agency_openrouter_api_key( $openrouter );
+			}
+			if ( $openrouter !== '' ) {
+				$keys_path = Flowbie_App_Data_Paths::root() . '/email-worker-keys.json';
+				$existing  = Flowbie_App_Json_File_Store::read( $keys_path );
+				if ( ! is_array( $existing ) ) {
+					$existing = array();
+				}
+				$existing['openRouterApiKey'] = $openrouter;
+				$existing['updatedAt']        = gmdate( 'c' );
+				Flowbie_App_Json_File_Store::write( $keys_path, $existing );
+			}
+			Flowbie_App_Api_Dispatcher::send_json( array( 'ok' => true, 'updated' => $openrouter !== '' ? 1 : 0 ) );
 			return;
 		}
 

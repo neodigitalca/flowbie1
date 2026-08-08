@@ -1,6 +1,7 @@
 import { ImageGeneratorChecklistPanel } from "@/components/generator/image/ImageGeneratorChecklistPanel";
 import { ImageGeneratorPreviewPanel } from "@/components/generator/image/ImageGeneratorPreviewPanel";
 import { ImageGeneratorSettingsPanel } from "@/components/generator/image/ImageGeneratorSettingsPanel";
+import { ImageReferenceUploadPanel } from "@/components/generator/image/ImageReferenceUploadPanel";
 import type { UseImageGeneratorResult } from "@/components/generator/image/image-generator-types";
 
 type ImageGeneratorBodyProps = {
@@ -35,6 +36,14 @@ export function ImageGeneratorBody({ generator, hideHeader = false }: ImageGener
           onRegenerateChecklist={() => void generator.handleGenerateChecklist()}
         />
       ) : null}
+
+      <ImageReferenceUploadPanel
+        manualReferences={generator.manualReferences}
+        isPreparingReferences={generator.isPreparingReferences}
+        disabled={generator.isGenerating || generator.isGeneratingChecklist}
+        onAddFiles={(files) => void generator.addManualReferences(files)}
+        onRemoveReference={generator.removeManualReference}
+      />
 
       <ImageGeneratorPreviewPanel
         imageDisplayUrl={generator.imageDisplayUrl}

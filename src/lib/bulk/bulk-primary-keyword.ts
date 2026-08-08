@@ -2,7 +2,7 @@ import type { CSVRow } from './bulk-csv-parser';
 import type { KeywordData } from '../keyword-types';
 
 /**
- * Single source of truth for bulk / prompt-generator primary keyword (Rank Math / ACF parity).
+ * Single source of truth for bulk / prompt-generator primary keyword (focus keyword / ACF parity).
  * CSV `keyword` wins when set (SAP / Local Analysis exact phrase - not overridden by keyword_focus or DFS).
  * Then explicit keyword_focus, research keyword, titles.
  */

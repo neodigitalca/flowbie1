@@ -1,6 +1,8 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Building2,
+  UserRound,
+  Users,
   Cloud,
   Crosshair,
   FlaskConical,
@@ -13,6 +15,7 @@ import {
   Megaphone,
   Mail,
   MessageCircle,
+  CheckSquare,
   Share2,
   ScrollText,
   Search,
@@ -34,6 +37,8 @@ export type ManagerNavItem = {
   children?: ManagerNavItem[];
   /** Selects Dashboard tab and this settings section (in-page nav hidden). */
   dashboardCluster?: ManagerSettingsClusterId;
+  /** Opens a React Router path outside manager tabs (e.g. /docs). */
+  docsPath?: string;
 };
 
 export type ManagerNavSection = {
@@ -95,6 +100,31 @@ export const MANAGER_NAV_SECTIONS: ManagerNavSection[] = [
     ],
   },
   {
+    id: "teams",
+    label: "Teams",
+    icon: Users,
+    items: [
+      {
+        value: "users",
+        label: "Users",
+        description: "Agency seats, invites, and member profiles",
+        icon: UserRound,
+      },
+      {
+        value: "chat",
+        label: "Chat",
+        description: "Team channels and direct messages",
+        icon: MessageCircle,
+      },
+      {
+        value: "tasks",
+        label: "Tasks",
+        description: "Team projects, tasks, and notes",
+        icon: CheckSquare,
+      },
+    ],
+  },
+  {
     id: "communication",
     label: "Communication",
     icon: Mail,
@@ -105,12 +135,6 @@ export const MANAGER_NAV_SECTIONS: ManagerNavSection[] = [
         description: "AgentMail send/list - thread view lives under Properties → Email on each site",
         icon: Mail,
       },
-      {
-        value: "chat",
-        label: "Chat",
-        description: "Talk with the same email agent pipeline (classify, KWR, meta, blog, tools)",
-        icon: MessageCircle,
-      },
     ],
   },
   {
@@ -119,22 +143,16 @@ export const MANAGER_NAV_SECTIONS: ManagerNavSection[] = [
     icon: Search,
     items: [
       {
-        value: "content-optimizer",
-        label: "Content Optimizer",
-        description: "Page SEO, per-URL content optimization, and multi-site bulk runs",
-        icon: Crosshair,
+        value: "generator",
+        label: "Generator",
+        description: "Opt, CSV, prompt, import, PR, entity, flow, and image",
+        icon: TrendingUp,
       },
       {
         value: "gsc-reporting",
         label: "Report",
         description: "GSC MoM or API bundle, outline, section writers, stitched Markdown",
         icon: LineChart,
-      },
-      {
-        value: "generator",
-        label: "Generator",
-        description: "CSV, prompt, blog import, PR, entity, flow, and image",
-        icon: TrendingUp,
       },
       {
         value: "sitemap-optimizer",

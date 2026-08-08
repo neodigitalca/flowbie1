@@ -7,11 +7,11 @@ Stable tag: 0.8.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Companion plugin: connect WordPress to Flowbie for property metrics and in-editor AI wands.
+Companion plugin: chat, search, SEO tools, and in-editor AI wands for WordPress.
 
 == Description ==
 
-Flowbie WP connects your site to a Flowbie property via Site ID, shows dashboard metrics (post bank, SAP bank, optimization usage), and adds **Flowbie AI wands** on post and entity edit screens when the site is connected and has an optimization package.
+Flowbie WP runs standalone on each WordPress site. API keys load from the plugin `.env` file (filled before deploy) or **Flowbie WP → Settings**. Includes **Flowbie AI wands** on post and entity edit screens, Flow Assist chat, AI search, and SEO tooling.
 
 == Frequently Asked Questions ==
 
@@ -19,13 +19,13 @@ Flowbie WP connects your site to a Flowbie property via Site ID, shows dashboard
 
 On **post** and **entity** edit screens, open **Flowbie AI** (block sidebar or classic meta box), then **Content Optimizer** (or the meta editor from the snippet card). Use a wand on a field there to **Preview**, then **Apply**. The browser calls your WordPress REST API (`/wp-json/flowbie/v1/ai/*`); **OpenRouter runs from PHP** on your server (`wp_remote_post` to openrouter.ai). No Flowbie Node hop and no API keys in the browser.
 
-**Requirements:** Site connected under **Flowbie WP → Settings**, optimization package **basic**, **pro**, or **plus** on the property, and an OpenRouter key saved in **Flowbie Integrations → API Keys** (synced to Supabase for this property). Optional wp-config overrides: `FLOWBIE_WP_OPENROUTER_API_KEY` / `FLOWBIE_WP_OPENROUTER_MODEL`.
+**Requirements:** OpenRouter key in plugin `.env`, wp-config, or **Flowbie WP → Settings → Editor AI**. Optional wp-config overrides: `FLOWBIE_WP_OPENROUTER_API_KEY` / `FLOWBIE_WP_OPENROUTER_MODEL`.
 
 **Wands (v0.8):** Title, Focus keyword, Meta/excerpt, SEO research, FAQ, Page URL. Apply updates Rank Math meta, core title/excerpt, and custom fields (Flowbie Fields or legacy ACF meta); sets `date_modifier` for optimization counting.
 
 = Body optimizer (harness, block editor) =
 
-Requires non-empty **seo_research**, **focus keyword**, and OpenRouter via **wp-config**, environment, or **Flowbie WP → Settings** (body harness does not use cloud-only Supabase key sync).
+Requires non-empty **seo_research**, **focus keyword**, and OpenRouter via **wp-config**, plugin **.env**, or **Flowbie WP → Settings**.
 
 In the post editor **Flowbie AI** sidebar:
 
@@ -86,6 +86,10 @@ Use **Speed → Images** for compression and WebP sidecars (original uploads are
 
 = 0.9.21 =
 * Admin Tool Library page: searchable dictionary of all MCP/agent tools with parameters and examples.
+
+= 0.9.34 =
+* WP-native secrets: plugin `.env` loaded at boot; `npm run embed:flowbie-wp-secrets` before customer deploy.
+* Removed Supabase pairing and cloud credential sync.
 
 = 0.9.20 =
 * MCP tools API: `POST /flowbie/v1/tools/list` and `/tools/execute` with 58 agent tools, audit log, and idempotency keys.

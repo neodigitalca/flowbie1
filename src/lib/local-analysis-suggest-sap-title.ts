@@ -1,4 +1,5 @@
 import { BULK_WORDPRESS_POST_TITLE_RULE, TITLE_WELL_KNOWN_ACRONYMS_RULE } from "@/lib/prompt-builders/system-user";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 /**
  * One-shot SAP page title from keyword + entity (Local Analysis wand).
@@ -61,12 +62,7 @@ Return {"title":"Your single title here"}.`;
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://flowbie.app",
-      "X-Title": "Flowbie Local Analysis Title",
-    },
+    headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
       model,
       messages: [

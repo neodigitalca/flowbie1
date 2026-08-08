@@ -39,7 +39,7 @@ export function ManagerCloudSettingsCard({
   maxTokens,
   topP,
 }: ManagerCloudSettingsCardProps) {
-  const { user } = useAuth();
+  const { user, activeTeam } = useAuth();
   const [status, setStatus] = useState<Awaited<ReturnType<typeof getManagerCloudSettingsStatus>> | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -72,7 +72,7 @@ export function ManagerCloudSettingsCard({
         },
         { selectedModel, temperature, maxTokens, topP },
       );
-      const r = await saveManagerSettingsToCloud(snapshot);
+      const r = await saveManagerSettingsToCloud(snapshot, activeTeam?.id);
       if (!r.ok) {
         notify.error(r.error || "Cloud save failed");
         return;
@@ -111,7 +111,7 @@ export function ManagerCloudSettingsCard({
     }
     setLoading(true);
     try {
-      const r = await loadManagerSettingsFromCloud();
+      const r = await loadManagerSettingsFromCloud(activeTeam?.id);
       if (!r.ok || !r.snapshot) {
         notify.error(r.error || "No cloud backup found");
         return;

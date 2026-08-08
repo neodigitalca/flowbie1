@@ -9,7 +9,7 @@ defined( 'ABSPATH' ) || exit;
 
 class Flowbie_Wp_Chat_Logs {
 
-	const TABLE_VERSION       = '1.0';
+	const TABLE_VERSION       = '1.2';
 	const REPORTS_VERSION     = '1.0';
 	const OPTION_KEY          = 'flowbie_wp_chat_logs_settings';
 	const DB_VERSION_OPTION   = 'flowbie_wp_chat_logs_db_version';
@@ -60,6 +60,11 @@ class Flowbie_Wp_Chat_Logs {
 			card_type varchar(32) DEFAULT NULL,
 			confidence varchar(20) DEFAULT NULL,
 			page_url varchar(512) DEFAULT NULL,
+			accepted_url varchar(512) DEFAULT NULL,
+			accepted_label varchar(255) DEFAULT NULL,
+			accepted_type varchar(20) DEFAULT NULL,
+			accepted_at datetime DEFAULT NULL,
+			input_origin varchar(20) DEFAULT NULL,
 			created_at datetime NOT NULL,
 			PRIMARY KEY  (id),
 			UNIQUE KEY message_uid (message_uid),
@@ -176,6 +181,21 @@ class Flowbie_Wp_Chat_Logs {
 	}
 
 	/**
+	 * @param string $origin typed|starter|topic_chip|template.
+	 */
+	public static function is_valid_input_origin( string $origin ): bool {
+		return in_array( $origin, array( 'typed', 'starter', 'topic_chip', 'template' ), true );
+	}
+
+	/**
+	 * @param string $origin Raw origin from client or heuristics.
+	 */
+	public static function sanitize_input_origin( string $origin ): string {
+		$origin = sanitize_key( $origin );
+		return self::is_valid_input_origin( $origin ) ? $origin : 'typed';
+	}
+
+	/**
 	 * @param array<string, mixed> $data Row data.
 	 * @return array{ok: bool, id?: int, error?: string}
 	 */
@@ -215,6 +235,14 @@ class Flowbie_Wp_Chat_Logs {
 			$page_url = substr( $page_url, 0, 512 );
 		}
 
+		$input_origin = '';
+		if ( $role === 'user' && isset( $data['input_origin'] ) ) {
+			$raw_origin = sanitize_key( (string) $data['input_origin'] );
+			if ( self::is_valid_input_origin( $raw_origin ) ) {
+				$input_origin = $raw_origin;
+			}
+		}
+
 		global $wpdb;
 		$table = self::messages_table_name();
 		$now   = current_time( 'mysql', true );
@@ -229,7 +257,7 @@ class Flowbie_Wp_Chat_Logs {
 			)
 		);
 		if ( $existing ) {
-			return array( 'ok' => true, 'id' => (int) $existing );
+			return array( 'ok' => true, 'id' => (int) $existing, 'message_uid' => $message_uid );
 		}
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
@@ -243,10 +271,11 @@ class Flowbie_Wp_Chat_Logs {
 				'content'     => $content,
 				'card_type'   => $card_type !== '' ? $card_type : null,
 				'confidence'  => $confidence !== '' ? $confidence : null,
-				'page_url'    => $page_url !== '' ? $page_url : null,
-				'created_at'  => $now,
+				'page_url'     => $page_url !== '' ? $page_url : null,
+				'input_origin' => $input_origin !== '' ? $input_origin : null,
+				'created_at'   => $now,
 			),
-			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
 		);
 
 		if ( false === $inserted ) {
@@ -255,7 +284,11 @@ class Flowbie_Wp_Chat_Logs {
 
 		self::maybe_prune_retention();
 
-		return array( 'ok' => true, 'id' => (int) $wpdb->insert_id );
+		return array(
+			'ok'          => true,
+			'id'          => (int) $wpdb->insert_id,
+			'message_uid' => $message_uid,
+		);
 	}
 
 	/**
@@ -275,15 +308,17 @@ class Flowbie_Wp_Chat_Logs {
 		if ( ! self::is_valid_session_id( $session_id ) ) {
 			return;
 		}
-		self::insert(
-			array(
-				'session_id' => $session_id,
-				'source'     => isset( $meta['source'] ) ? (string) $meta['source'] : 'frontend',
-				'role'       => 'user',
-				'content'    => $message,
-				'page_url'   => isset( $meta['page_url'] ) ? (string) $meta['page_url'] : '',
-			)
+		$row = array(
+			'session_id' => $session_id,
+			'source'     => isset( $meta['source'] ) ? (string) $meta['source'] : 'frontend',
+			'role'       => 'user',
+			'content'    => $message,
+			'page_url'   => isset( $meta['page_url'] ) ? (string) $meta['page_url'] : '',
 		);
+		if ( isset( $meta['input_origin'] ) ) {
+			$row['input_origin'] = self::sanitize_input_origin( (string) $meta['input_origin'] );
+		}
+		self::insert( $row );
 	}
 
 	/**
@@ -291,15 +326,16 @@ class Flowbie_Wp_Chat_Logs {
 	 *
 	 * @param array<string, mixed> $card   Response card.
 	 * @param array<string, mixed> $meta   session_id, source, page_url.
+	 * @return string Message UID when logged.
 	 */
-	public static function log_assistant_card( array $card, array $meta ): void {
+	public static function log_assistant_card( array $card, array $meta ): string {
 		$source = isset( $meta['source'] ) ? (string) $meta['source'] : 'frontend';
 		if ( ! self::should_log_source( $source ) ) {
-			return;
+			return '';
 		}
 		$session_id = isset( $meta['session_id'] ) ? (string) $meta['session_id'] : '';
 		if ( ! self::is_valid_session_id( $session_id ) ) {
-			return;
+			return '';
 		}
 
 		$body = isset( $card['body'] ) ? (string) $card['body'] : '';
@@ -309,10 +345,10 @@ class Flowbie_Wp_Chat_Logs {
 			$content = $title;
 		}
 		if ( $content === '' ) {
-			return;
+			return '';
 		}
 
-		self::insert(
+		$result = self::insert(
 			array(
 				'session_id' => $session_id,
 				'source'     => isset( $meta['source'] ) ? (string) $meta['source'] : 'frontend',
@@ -323,20 +359,80 @@ class Flowbie_Wp_Chat_Logs {
 				'page_url'   => isset( $meta['page_url'] ) ? (string) $meta['page_url'] : '',
 			)
 		);
+
+		return ! empty( $result['message_uid'] ) ? (string) $result['message_uid'] : '';
+	}
+
+	/**
+	 * @param array<string, mixed> $data Accept data.
+	 * @return array{ok: bool, error?: string}
+	 */
+	public static function record_accept( array $data ) {
+		if ( ! self::is_logging_active() ) {
+			return array( 'ok' => false, 'error' => 'logging_disabled' );
+		}
+
+		$message_uid = isset( $data['message_uid'] ) ? sanitize_text_field( (string) $data['message_uid'] ) : '';
+		if ( ! self::is_valid_uuid( $message_uid ) ) {
+			return array( 'ok' => false, 'error' => 'invalid_message' );
+		}
+
+		$url = isset( $data['url'] ) ? esc_url_raw( (string) $data['url'] ) : '';
+		if ( $url === '' ) {
+			return array( 'ok' => false, 'error' => 'empty_url' );
+		}
+		if ( strlen( $url ) > 512 ) {
+			$url = substr( $url, 0, 512 );
+		}
+
+		$label = isset( $data['label'] ) ? sanitize_text_field( (string) $data['label'] ) : '';
+		if ( strlen( $label ) > 255 ) {
+			$label = substr( $label, 0, 255 );
+		}
+
+		$type = isset( $data['type'] ) ? sanitize_key( (string) $data['type'] ) : 'link';
+		if ( ! in_array( $type, array( 'cta', 'source', 'link' ), true ) ) {
+			$type = 'link';
+		}
+
+		global $wpdb;
+		$table = self::messages_table_name();
+		$now   = current_time( 'mysql', true );
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$updated = $wpdb->update(
+			$table,
+			array(
+				'accepted_url'   => $url,
+				'accepted_label' => $label !== '' ? $label : null,
+				'accepted_type'  => $type,
+				'accepted_at'    => $now,
+			),
+			array( 'message_uid' => $message_uid ),
+			array( '%s', '%s', '%s', '%s' ),
+			array( '%s' )
+		);
+
+		if ( false === $updated ) {
+			return array( 'ok' => false, 'error' => __( 'Could not update chat log.', 'flowbie-wp' ) );
+		}
+
+		return array( 'ok' => true );
 	}
 
 	/**
 	 * Parse logging meta from chat JSON body.
 	 *
 	 * @param array<string, mixed>|null $body Request body.
-	 * @return array{session_id: string, source: string, page_url: string}
+	 * @return array{session_id: string, source: string, page_url: string, input_origin: string}
 	 */
 	public static function parse_meta_from_body( ?array $body ): array {
 		if ( ! is_array( $body ) ) {
 			return array(
-				'session_id' => '',
-				'source'     => 'frontend',
-				'page_url'   => '',
+				'session_id'   => '',
+				'source'       => 'frontend',
+				'page_url'     => '',
+				'input_origin' => 'typed',
 			);
 		}
 		$session_id = isset( $body['session_id'] ) ? sanitize_text_field( (string) $body['session_id'] ) : '';
@@ -345,10 +441,12 @@ class Flowbie_Wp_Chat_Logs {
 			$source = 'frontend';
 		}
 		$page_url = isset( $body['page_url'] ) ? esc_url_raw( (string) $body['page_url'] ) : '';
+		$origin   = isset( $body['input_origin'] ) ? self::sanitize_input_origin( (string) $body['input_origin'] ) : 'typed';
 		return array(
-			'session_id' => $session_id,
-			'source'     => $source,
-			'page_url'   => $page_url,
+			'session_id'   => $session_id,
+			'source'       => $source,
+			'page_url'     => $page_url,
+			'input_origin' => $origin,
 		);
 	}
 

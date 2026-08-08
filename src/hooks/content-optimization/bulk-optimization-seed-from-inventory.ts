@@ -221,7 +221,7 @@ export function seedAllBulkPrefetchCachesFromInventory(
         }
       : {
           ...optimizationOptions,
-          optimizeContent: optimizationOptions?.optimizeContent !== false,
+          optimizeContent: true,
           optimizeTitle: optimizationOptions?.optimizeTitle === true,
           optimizeMeta: optimizationOptions?.optimizeMeta === true,
           optimizeExcerpt: optimizationOptions?.optimizeExcerpt === true,

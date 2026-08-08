@@ -14,6 +14,7 @@ import {
   findHtmlParagraphSpans,
   type BlogInternalLinkSpan,
 } from "@/lib/overview/overview-blog-links-extract";
+import { isWikipediaHref } from "@/lib/overview/overview-blog-wikipedia-link-insert";
 import type { BlogHeadersGscPicks } from "@/lib/overview/overview-blog-headers-gsc";
 import { computeBlogLinksBudget } from "@/lib/overview/overview-blog-links-budget";
 import type { LinkInventoryBucket } from "@/lib/overview/overview-blog-links-bucket";
@@ -84,6 +85,7 @@ export function buildBlogLinksCatalog(
   linkPool: BlogLinksSiteLinkPool,
   sitemapSource?: OverviewSitemapSource,
   rowHtmlByIndex?: Record<number, string>,
+  opts?: { wikipediaOnly?: boolean },
 ): BuildBlogLinksCatalogResult {
   const catalog: BlogLinksCatalogRow[] = [];
   const skippedNoHtml: number[] = [];
@@ -131,12 +133,18 @@ export function buildBlogLinksCatalog(
     const existingLinks = extractInternalLinksFromHtml(html, siteUrl, trimmedUrl);
     const budget = computeBlogLinksBudget(html);
     const hasTargets = linkPoolHasTargets(linkPool, siteUrl, trimmedUrl);
-    const userLinkTargets = row.blogLinkList ?? [];
+    const userLinkTargets = [
+      ...(row.blogLinkList ?? []).filter((t) => !isWikipediaHref(t.href)),
+      ...(row.blogWikiLinkList ?? []),
+    ];
     const hasUserLinkWork =
       userLinkTargets.length > existingLinks.length ||
       userLinkTargets.some((t) => t.anchor.trim() || t.href.trim());
 
-    if (!hasTargets || (budget.linksToAdd === 0 && !existingLinks.length && !hasUserLinkWork)) {
+    if (
+      !opts?.wikipediaOnly &&
+      (!hasTargets || (budget.linksToAdd === 0 && !existingLinks.length && !hasUserLinkWork))
+    ) {
       skippedNoWork.push(index);
       return;
     }

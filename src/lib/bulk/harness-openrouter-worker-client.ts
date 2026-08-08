@@ -1,14 +1,12 @@
 import type { Message } from '@/lib/api';
 import { streamChatCompletion } from '@/lib/api';
 import type { HarnessOpenRouterWorkerPayload } from '@/lib/bulk/harness-openrouter-payload';
+import { resolveOpenRouterWebReferer } from '@/lib/openrouter-attribution';
 
 export type { HarnessOpenRouterWorkerPayload };
 
 export function resolveHarnessHttpReferer(): string {
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return window.location.origin;
-  }
-  return 'https://agent-blueprint-builder.com';
+  return resolveOpenRouterWebReferer();
 }
 
 /**

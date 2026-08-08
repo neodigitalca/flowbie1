@@ -1,4 +1,5 @@
 import { loadApiKey, streamChatCompletion } from "@/lib/api";
+import { appendUniversalContentRulesToSystemPrompt } from "@/lib/content-word-blocklist";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { appendMasterInstructionsToSystemPrompt, ensureMasterInstructionsInMemory } from "@/lib/master-instructions-storage";
 import { BULK_WORDPRESS_POST_TITLE_RULE, META_DESCRIPTION_ANTI_CLICKBAIT_RULE } from "@/lib/prompt-builders/system-user";
@@ -153,9 +154,11 @@ IMPORTANT:
 Return ONLY a JSON object with the optimized meta fields.`;
 
   let aiResponse = '';
-  const systemWithMaster = appendMasterInstructionsToSystemPrompt(
-    systemPrompt,
-    siteId ?? null
+  const systemWithMaster = appendUniversalContentRulesToSystemPrompt(
+    appendMasterInstructionsToSystemPrompt(
+      systemPrompt,
+      siteId ?? null
+    ),
   );
 
   try {
@@ -166,6 +169,7 @@ Return ONLY a JSON object with the optimized meta fields.`;
         { role: 'system', content: systemWithMaster },
         { role: 'user', content: userPrompt },
       ],
+      contentHarness: true,
       temperature: 0.7,
       maxTokens: 4000,
       topP: 0.9,

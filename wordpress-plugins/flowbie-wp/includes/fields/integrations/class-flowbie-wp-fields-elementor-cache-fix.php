@@ -18,9 +18,29 @@ class Flowbie_Wp_Fields_Elementor_Cache_Fix {
 		if ( self::$booted ) {
 			return;
 		}
-		add_action( 'init', array( __CLASS__, 'maybe_fix_all_documents' ), 25 );
 		add_filter( 'elementor/element/is_dynamic_content', array( __CLASS__, 'mark_icon_list_dynamic' ), 10, 3 );
 		self::$booted = true;
+	}
+
+	/**
+	 * Whether Flowbie Fields (or ACF) is ready before rewriting Elementor dynamic tags.
+	 */
+	public static function fields_ready_for_migration(): bool {
+		if ( function_exists( 'acf_get_field_groups' ) ) {
+			$groups = acf_get_field_groups();
+			if ( is_array( $groups ) && $groups !== array() ) {
+				return true;
+			}
+		}
+		if ( ! class_exists( 'Flowbie_Wp_Fields_Storage', false ) ) {
+			require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/fields/class-flowbie-wp-fields-storage.php';
+		}
+		foreach ( Flowbie_Wp_Fields_Storage::get_all_groups( true ) as $group ) {
+			if ( is_array( $group ) && $group !== array() ) {
+				return true;
+			}
+		}
+		return (bool) get_option( 'flowbie_wp_elementor_migration_opt_in', false );
 	}
 
 	/**
@@ -39,25 +59,53 @@ class Flowbie_Wp_Fields_Elementor_Cache_Fix {
 		return self::settings_have_dynamic_tags( isset( $raw_data['settings'] ) && is_array( $raw_data['settings'] ) ? $raw_data['settings'] : array() );
 	}
 
-	public static function maybe_fix_all_documents(): void {
-		if ( get_option( self::OPTION_KEY, false ) ) {
-			return;
-		}
-		self::fix_all_documents();
-		update_option( self::OPTION_KEY, 1, false );
-	}
-
 	/**
-	 * Disable element caching on dynamic widgets and clear Elementor output cache.
+	 * Opt-in: migrate ACF tags, patch cache flags, flush Elementor caches (Super Import or admin action).
 	 *
-	 * @return array{documents_processed: int, documents_patched: int}
+	 * @return array{documents_processed: int, documents_patched: int, migration_skipped: bool}
 	 */
 	public static function fix_all_documents(): array {
 		if ( ! class_exists( 'Flowbie_Wp_Migrate_Elementor_Dynamic_Tags', false ) ) {
 			require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/super-migrate/class-flowbie-wp-migrate-elementor-dynamic-tags.php';
 		}
 
-		Flowbie_Wp_Migrate_Elementor_Dynamic_Tags::repair_all_documents();
+		$migration_skipped = false;
+		if ( self::fields_ready_for_migration() ) {
+			Flowbie_Wp_Migrate_Elementor_Dynamic_Tags::repair_all_documents();
+		} else {
+			$migration_skipped = true;
+		}
+
+		$processed = 0;
+		$patched   = 0;
+		foreach ( Flowbie_Wp_Migrate_Elementor_Dynamic_Tags::elementor_document_ids() as $post_id ) {
+			++$processed;
+			if ( self::fix_post( (int) $post_id ) ) {
+				++$patched;
+			}
+		}
+
+		self::clear_all_element_output_cache();
+		Flowbie_Wp_Migrate_Elementor_Dynamic_Tags::clear_elementor_cache();
+
+		update_option( self::OPTION_KEY, 1, false );
+
+		return array(
+			'documents_processed' => $processed,
+			'documents_patched'   => $patched,
+			'migration_skipped'   => $migration_skipped,
+		);
+	}
+
+	/**
+	 * Patch element-cache flags only (no tag migration).
+	 *
+	 * @return array{documents_processed: int, documents_patched: int}
+	 */
+	public static function patch_element_cache_all_documents(): array {
+		if ( ! class_exists( 'Flowbie_Wp_Migrate_Elementor_Dynamic_Tags', false ) ) {
+			require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/super-migrate/class-flowbie-wp-migrate-elementor-dynamic-tags.php';
+		}
 
 		$processed = 0;
 		$patched   = 0;

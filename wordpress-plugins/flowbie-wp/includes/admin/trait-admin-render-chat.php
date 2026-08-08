@@ -63,6 +63,14 @@ trait Flowbie_Wp_Admin_Trait_Render_Chat {
 
 	private static function render_chat_section_general( array $chat_settings, bool $openrouter_ok ): void {
 		$form_id = 'flowbie-wp-chat-general-form';
+		$chekkit_configured = class_exists( 'Flowbie_Wp_Chekkit' ) && Flowbie_Wp_Chekkit::is_configured();
+		$chekkit_enabled        = ! isset( $chat_settings['chekkit_enabled'] ) || ! empty( $chat_settings['chekkit_enabled'] );
+		$chekkit_teaser_enabled = ! isset( $chat_settings['chekkit_teaser_enabled'] ) || ! empty( $chat_settings['chekkit_teaser_enabled'] );
+		$chekkit_cta_label  = isset( $chat_settings['chekkit_cta_label'] ) ? (string) $chat_settings['chekkit_cta_label'] : __( 'Send Us A Text', 'flowbie-wp' );
+		$chekkit_event_type = isset( $chat_settings['chekkit_event_type'] ) ? (string) $chat_settings['chekkit_event_type'] : 'contact_request';
+		$chekkit_webhook_url = isset( $chat_settings['chekkit_webhook_url'] ) && trim( (string) $chat_settings['chekkit_webhook_url'] ) !== ''
+			? (string) $chat_settings['chekkit_webhook_url']
+			: Flowbie_Wp_Chekkit::DEFAULT_WEBHOOK_URL;
 		?>
 		<h2 class="flowbie-wp-panel-content__title"><?php esc_html_e( 'General', 'flowbie-wp' ); ?></h2>
 		<p class="flowbie-wp-panel-content__desc">
@@ -96,6 +104,11 @@ trait Flowbie_Wp_Admin_Trait_Render_Chat {
 				__( 'Enable chat widget on the frontend', 'flowbie-wp' ),
 				! empty( $chat_settings['enabled'] )
 			);
+			self::panel_form_toggle(
+				'flowbie_chat_logged_in_only',
+				__( 'Show chat on the frontend for logged-in WordPress users only', 'flowbie-wp' ),
+				! empty( $chat_settings['logged_in_only'] )
+			);
 			self::panel_form_field_input(
 				'flowbie-wp-chat-welcome',
 				'flowbie_chat_welcome_message',
@@ -107,6 +120,70 @@ trait Flowbie_Wp_Admin_Trait_Render_Chat {
 				__( 'Greeting shown when a visitor opens the chat panel.', 'flowbie-wp' ),
 				' placeholder="' . esc_attr__( 'Hi! Ask me anything about this website.', 'flowbie-wp' ) . '"'
 			);
+			self::panel_form_group_close();
+
+			self::panel_form_group_open();
+			?>
+			<h3 class="flowbie-chat-settings-section__title"><?php esc_html_e( 'Talk To A Human (Chekkit)', 'flowbie-wp' ); ?></h3>
+			<?php
+			self::panel_form_toggle(
+				'flowbie_chat_chekkit_enabled',
+				__( 'Enable Talk To A Human contact form in chat sidebar', 'flowbie-wp' ),
+				$chekkit_enabled
+			);
+			self::panel_form_toggle(
+				'flowbie_chat_chekkit_teaser_enabled',
+				__( 'Show text-message teaser above launcher', 'flowbie-wp' ),
+				$chekkit_teaser_enabled
+			);
+			self::panel_form_field_input(
+				'flowbie-chat-chekkit-cta-label',
+				'flowbie_chat_chekkit_cta_label',
+				__( 'CTA label', 'flowbie-wp' ),
+				$chekkit_cta_label,
+				'half',
+				'text',
+				false,
+				'',
+				' placeholder="' . esc_attr__( 'Send Us A Text', 'flowbie-wp' ) . '"'
+			);
+			self::panel_form_field_input(
+				'flowbie-chat-chekkit-event-type',
+				'flowbie_chat_chekkit_event_type',
+				__( 'Chekkit event type', 'flowbie-wp' ),
+				$chekkit_event_type,
+				'half',
+				'text',
+				false,
+				'',
+				' placeholder="contact_request"'
+			);
+			self::panel_form_field_input(
+				'flowbie-chat-chekkit-webhook-url',
+				'flowbie_chat_chekkit_webhook_url',
+				__( 'Chekkit webhook URL', 'flowbie-wp' ),
+				$chekkit_webhook_url,
+				'full',
+				'url',
+				false,
+				__( 'Contact form submissions POST here (Flowbie hub for all client sites).', 'flowbie-wp' ),
+				' placeholder="' . esc_attr( Flowbie_Wp_Chekkit::DEFAULT_WEBHOOK_URL ) . '"'
+			);
+			?>
+			<p class="flowbie-field__note">
+				<?php
+				if ( $chekkit_configured ) {
+					printf(
+						/* translators: %s: webhook URL */
+						esc_html__( 'Active webhook: %s', 'flowbie-wp' ),
+						esc_html( Flowbie_Wp_Chekkit::get_webhook_url() )
+					);
+				} else {
+					esc_html_e( 'Chekkit webhook URL is missing.', 'flowbie-wp' );
+				}
+				?>
+			</p>
+			<?php
 			self::panel_form_group_close();
 			?>
 		</form>
@@ -161,6 +238,19 @@ trait Flowbie_Wp_Admin_Trait_Render_Chat {
 		$indexed_types     = isset( $chat_settings['indexed_post_types'] ) && is_array( $chat_settings['indexed_post_types'] ) ? $chat_settings['indexed_post_types'] : array( 'post', 'page' );
 		$excluded_cats     = isset( $chat_settings['excluded_categories'] ) && is_array( $chat_settings['excluded_categories'] ) ? $chat_settings['excluded_categories'] : array();
 		$full_content      = ! empty( $chat_settings['full_content'] );
+		$lead_conversion   = ! isset( $chat_settings['lead_conversion_enabled'] ) || ! empty( $chat_settings['lead_conversion_enabled'] );
+		$lead_forms        = isset( $chat_settings['lead_forms'] ) && is_array( $chat_settings['lead_forms'] ) ? $chat_settings['lead_forms'] : array();
+		$lead_form_booking = isset( $lead_forms['booking'] ) ? (int) $lead_forms['booking'] : 0;
+		$lead_form_contact = isset( $lead_forms['contact'] ) ? (int) $lead_forms['contact'] : 0;
+		$lead_form_pricing = isset( $lead_forms['pricing'] ) ? (int) $lead_forms['pricing'] : 0;
+		$flowbie_forms     = class_exists( 'Flowbie_Wp_Forms_Storage' ) ? Flowbie_Wp_Forms_Storage::get_all_forms( true ) : array();
+		$form_options      = array( '0' => __( 'None', 'flowbie-wp' ) );
+		foreach ( $flowbie_forms as $form ) {
+			if ( empty( $form['ID'] ) ) {
+				continue;
+			}
+			$form_options[ (string) (int) $form['ID'] ] = (string) ( $form['title'] ?? ( 'Form #' . (int) $form['ID'] ) );
+		}
 
 		$all_post_types = get_post_types( array( 'public' => true ), 'objects' );
 		$all_categories = get_categories( array( 'hide_empty' => false ) );
@@ -230,13 +320,54 @@ trait Flowbie_Wp_Admin_Trait_Render_Chat {
 				</p>
 			</section>
 
+			<?php // ── Lead conversion ── ?>
+			<section class="flowbie-schema-group flowbie-chat-settings-section" aria-labelledby="flowbie-chat-lead-heading">
+				<h3 id="flowbie-chat-lead-heading" class="flowbie-chat-settings-section__title">
+					<?php esc_html_e( 'Lead conversion', 'flowbie-wp' ); ?>
+				</h3>
+				<div class="flowbie-schema-grid">
+					<div class="flowbie-schema-cell flowbie-schema-cell--full">
+						<label class="flowbie-wp-panel-toggle">
+							<input type="checkbox" name="flowbie_chat_lead_conversion_enabled" value="1" <?php checked( $lead_conversion ); ?> />
+							<span class="flowbie-wp-panel-toggle__label"><?php esc_html_e( 'Enable lead conversion specialist', 'flowbie-wp' ); ?></span>
+						</label>
+					</div>
+					<?php
+					self::panel_form_field_select(
+						'flowbie-chat-lead-form-booking',
+						'flowbie_chat_lead_form_booking',
+						__( 'Booking form', 'flowbie-wp' ),
+						$form_options,
+						(string) $lead_form_booking,
+						'full'
+					);
+					self::panel_form_field_select(
+						'flowbie-chat-lead-form-contact',
+						'flowbie_chat_lead_form_contact',
+						__( 'Contact form', 'flowbie-wp' ),
+						$form_options,
+						(string) $lead_form_contact,
+						'full'
+					);
+					self::panel_form_field_select(
+						'flowbie-chat-lead-form-pricing',
+						'flowbie_chat_lead_form_pricing',
+						__( 'Pricing / quote form', 'flowbie-wp' ),
+						$form_options,
+						(string) $lead_form_pricing,
+						'full'
+					);
+					?>
+				</div>
+			</section>
+
 			<?php // ── Content Sources ── ?>
 			<section class="flowbie-schema-group flowbie-chat-settings-section" aria-labelledby="flowbie-chat-sources-heading">
 				<h3 id="flowbie-chat-sources-heading" class="flowbie-chat-settings-section__title">
 					<?php esc_html_e( 'Content Sources', 'flowbie-wp' ); ?>
 				</h3>
 				<p class="flowbie-field__note flowbie-chat-settings-section__intro">
-					<?php esc_html_e( 'Control which content feeds the assistant\'s knowledge. Changes take effect after the cache refreshes (~1 hour) or when a post is saved.', 'flowbie-wp' ); ?>
+					<?php esc_html_e( 'Chat indexes the intersection of checked post types here and post types enabled in the Flowbie sitemap (Include in XML). Unchecking a type removes it from chat even if it stays in the sitemap for SEO. Save to refresh the index cache.', 'flowbie-wp' ); ?>
 				</p>
 
 				<div class="flowbie-schema-grid">
@@ -448,10 +579,30 @@ trait Flowbie_Wp_Admin_Trait_Render_Chat {
 	// ── Demo tab ────────────────────────────────────────────────
 
 	private static function render_chat_section_demo( bool $openrouter_ok ): void {
+		$chat_settings = Flowbie_Wp_Chat::get_settings();
+		$design        = Flowbie_Wp_Ai_Widget_Design::get_settings();
+		$chat_ui       = isset( $design['chat_ui'] ) && is_array( $design['chat_ui'] ) ? $design['chat_ui'] : array();
+		$user          = wp_get_current_user();
+		$display_name  = $user->exists() ? $user->display_name : __( 'there', 'flowbie-wp' );
+		$site_name     = get_bloginfo( 'name' );
+		$starters      = Flowbie_Wp_Chat::conversation_starters( $chat_settings );
+		$demo_classes  = array( 'flowbie-chat-widget', 'fcw-demo-inline' );
+		$hide_map      = array(
+			'type_badge'       => 'fcw-hide-type-badge',
+			'source_pills'     => 'fcw-hide-source-pills',
+			'confidence'       => 'fcw-hide-confidence',
+			'cta_buttons'      => 'fcw-hide-cta-buttons',
+			'suggestion_chips' => 'fcw-hide-suggestion-chips',
+		);
+		foreach ( $hide_map as $ui_key => $hide_class ) {
+			if ( empty( $chat_ui[ $ui_key ] ) ) {
+				$demo_classes[] = $hide_class;
+			}
+		}
 		?>
 		<h2 class="flowbie-wp-panel-content__title"><?php esc_html_e( 'Flow Assist Demo', 'flowbie-wp' ); ?></h2>
 		<p class="flowbie-wp-panel-content__desc">
-			<?php esc_html_e( 'Test the chat widget here. Messages are processed through the same RAG + sub-agent pipeline your visitors will use.', 'flowbie-wp' ); ?>
+			<?php esc_html_e( 'Preview the same chat chrome visitors see on the frontend (greeting, starters, composer). Messages use the live RAG + sub-agent pipeline.', 'flowbie-wp' ); ?>
 		</p>
 
 		<?php if ( ! $openrouter_ok ) : ?>
@@ -460,366 +611,61 @@ trait Flowbie_Wp_Admin_Trait_Render_Chat {
 			</div>
 		<?php endif; ?>
 
-		<div id="flowbie-chat-demo" class="fcwd">
-			<div class="fcwd-header">
-				<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-				<span class="fcwd-header__title"><?php echo esc_html( get_bloginfo( 'name' ) ); ?> &mdash; <?php esc_html_e( 'Flow Assist', 'flowbie-wp' ); ?></span>
-			</div>
-			<div id="flowbie-chat-demo-messages" class="fcwd-messages"></div>
-			<div class="fcwd-input-row">
-				<input
-					type="text"
-					id="flowbie-chat-demo-input"
-					class="fcwd-input"
-					placeholder="<?php esc_attr_e( 'Ask Flow Assist something...', 'flowbie-wp' ); ?>"
-					<?php echo $openrouter_ok ? '' : 'disabled'; ?>
-				/>
-				<button type="button" id="flowbie-chat-demo-send" class="fcwd-send" aria-label="<?php esc_attr_e( 'Hold to speak', 'flowbie-wp' ); ?>" <?php echo $openrouter_ok ? '' : 'disabled'; ?>>
-					<span class="fcwd-send__icon fcwd-send__icon--send" aria-hidden="true">
-						<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-					</span>
-				</button>
+		<div class="fcw-demo-wrap">
+			<div id="flowbie-chat-demo" class="<?php echo esc_attr( implode( ' ', $demo_classes ) ); ?>" aria-label="<?php esc_attr_e( 'Flow Assist sidebar preview', 'flowbie-wp' ); ?>">
+				<div class="fai-sidebar-panel fcw-panel fcw-panel--sidebar fcw-demo-panel">
+					<div class="fai-sidebar-panel__toolbar">
+						<div class="fcw-demo-toolbar-actions">
+							<button type="button" id="flowbie-chat-demo-clear" class="fcw-demo-toolbar-btn fcw-demo-clear-chat" aria-label="<?php esc_attr_e( 'Clear chat', 'flowbie-wp' ); ?>" <?php echo $openrouter_ok ? '' : 'disabled'; ?>>
+								<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+							</button>
+							<button type="button" id="flowbie-chat-demo-copy-log" class="fcw-demo-copy-log" <?php echo $openrouter_ok ? '' : 'disabled'; ?>>
+								<?php esc_html_e( 'Copy log', 'flowbie-wp' ); ?>
+							</button>
+							<span class="fcw-demo-toolbar-btn" title="<?php esc_attr_e( 'Preview', 'flowbie-wp' ); ?>" aria-hidden="true">
+								<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+							</span>
+						</div>
+					</div>
+					<div class="fai-sidebar-panel__body">
+						<div class="fcw-sidebar-main">
+							<div id="flowbie-chat-demo-empty" class="fcw-demo-empty">
+								<div>
+									<p class="fcw-demo-greeting"><?php echo esc_html( sprintf( __( 'Hello, %s', 'flowbie-wp' ), $display_name ) ); ?></p>
+									<p class="fcw-demo-sub"><?php esc_html_e( 'How can I help you today?', 'flowbie-wp' ); ?></p>
+								</div>
+								<div class="fcw-demo-starters">
+									<?php foreach ( $starters as $starter ) : ?>
+										<button type="button" class="fcw-demo-starter" data-prompt="<?php echo esc_attr( $starter ); ?>" <?php echo $openrouter_ok ? '' : 'disabled'; ?>>
+											<?php echo esc_html( $starter ); ?>
+										</button>
+									<?php endforeach; ?>
+								</div>
+							</div>
+							<div id="flowbie-chat-demo-messages" class="fcw-messages" hidden></div>
+							<form class="fcw-input-row fcw-demo-composer">
+								<div class="fcw-demo-composer-shell">
+									<textarea
+										id="flowbie-chat-demo-input"
+										class="fcw-textarea"
+										rows="1"
+										placeholder="<?php echo esc_attr( sprintf( __( 'Ask about %s…', 'flowbie-wp' ), $site_name ) ); ?>"
+										<?php echo $openrouter_ok ? '' : 'disabled'; ?>
+									></textarea>
+									<div class="fcw-demo-composer-actions">
+										<button type="button" id="flowbie-chat-demo-send" class="fcw-send" aria-label="<?php esc_attr_e( 'Hold to speak', 'flowbie-wp' ); ?>" <?php echo $openrouter_ok ? '' : 'disabled'; ?>>
+											<span class="fcw-send__icon fcw-send__icon--send" aria-hidden="true">
+												<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/><path d="M19 13l.75 2.25L22 16l-2.25.75L19 19l-.75-2.25L16 16l2.25-.75L19 13z"/></svg>
+											</span>
+										</button>
+									</div>
+								</div>
+							</form>
+						</div>
+					</div>
+				</div>
 			</div>
 		</div>
-
-		<style>
-			.fcwd{border-radius:16px;overflow:hidden;background:#111;border:1px solid rgba(255,255,255,.06);box-shadow:0 8px 40px rgba(0,0,0,.4)}
-			.fcwd-header{display:flex;align-items:center;gap:8px;padding:14px 18px;background:#181818;border-bottom:1px solid rgba(255,255,255,.06);color:#e5e5e5;font-weight:600;font-size:13px}
-			.fcwd-header svg{flex-shrink:0;opacity:.5}
-			.fcwd-header__title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-			.fcwd-messages{min-height:280px;max-height:480px;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:12px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.1) transparent}
-			.fcwd-messages::-webkit-scrollbar{width:5px}
-			.fcwd-messages::-webkit-scrollbar-track{background:transparent}
-			.fcwd-messages::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:4px}
-			.fcwd-input-row{display:flex;gap:8px;padding:12px 18px;border-top:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02)}
-			.fcwd-input{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;color:#e5e5e5;font-size:13px;outline:none;transition:border-color .2s}
-			.fcwd-input:focus{border-color:rgba(255,255,255,.3)}
-			.fcwd-input::placeholder{color:rgba(255,255,255,.65)}
-			.fcwd-input:disabled{opacity:.4;cursor:not-allowed}
-			.fcwd-send{position:relative;width:40px;height:40px;border-radius:10px;border:none;background:#333;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;touch-action:none;user-select:none;transition:background .15s,transform .1s}
-			.fcwd-send:hover{background:#444;transform:translateY(-1px)}
-			.fcwd-send:disabled{opacity:.3;cursor:not-allowed;transform:none}
-
-			.fcwd-user{align-self:flex-end;max-width:80%;padding:10px 14px;border-radius:14px 14px 4px 14px;background:#2a2a2a;color:#fff;font-size:13px;line-height:1.5;animation:fcwdFadeIn .25s ease}
-
-			.fcwd-card{border-radius:12px;padding:14px 16px;background:rgba(255,255,255,.03);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.07);max-width:100%;font-size:13px;line-height:1.6;color:#e5e5e5;animation:fcwdSlideIn .3s ease}
-
-			.fcwd-title-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-			.fcwd-type-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.78)}
-			.fcwd-title{font-weight:600;font-size:14px;color:#f5f5f5}
-			.fcwd-title strong{font-weight:700;color:#fff}
-			.fcwd-body{color:rgba(229,229,229,.8);margin-top:4px}
-			.fcwd-body a{color:#e5e7eb;text-decoration:underline;text-underline-offset:2px}
-			.fcwd-body a:hover{color:#fff}
-			.fcwd-body strong{font-weight:600;color:#f5f5f5}
-			.fcwd-confidence{font-size:11px;color:rgba(255,255,255,.65);margin-top:6px;font-style:italic}
-
-			.fcwd-links{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-			.fcwd-pill{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);font-size:12px;text-decoration:none;color:#e5e7eb;transition:all .15s}
-			.fcwd-pill:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff;text-decoration:none}
-
-			.fcwd-cta-wrap{margin-top:12px}
-			.fcwd-cta{display:inline-block;padding:8px 18px;border-radius:8px;background:#333;color:#fff;font-size:12px;font-weight:600;text-decoration:none;transition:background .15s,transform .1s}
-			.fcwd-cta:hover{background:#444;transform:translateY(-1px);color:#fff;text-decoration:none}
-
-			.fcwd-topics{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)}
-			.fcwd-chip{padding:4px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:transparent;color:#e5e7eb;font-size:11px;cursor:pointer;transition:all .15s}
-			.fcwd-chip:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);color:#fff}
-
-			.fcwd-thinking-steps{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
-			.fcwd-thinking-step{display:flex;align-items:flex-start;gap:10px;font-size:12px;line-height:1.5;color:rgba(240,240,240,.8)}
-			.fcwd-thinking-step-icon{flex-shrink:0;width:1.25rem;text-align:center;line-height:1.5}
-			.fcwd-thinking-step--running .fcwd-thinking-step-icon{color:#60a5fa}
-			.fcwd-thinking-step--done .fcwd-thinking-step-icon{color:#4ade80}
-			.fcwd-thinking-step--pending .fcwd-thinking-step-icon{color:rgba(255,255,255,.65)}
-			.fcwd-thinking-step-icon--brain{width:2rem;display:inline-flex;align-items:center;justify-content:center}
-			.fcwd-thinking-step-icon--brain svg{animation:fcwdBrainPulse 1.4s ease-in-out infinite;filter:drop-shadow(0 0 8px rgba(34,211,238,.85))}
-			.fcwd-card--thinking-active{border-color:rgba(34,211,238,.35);animation:fcwdThinkingBreathe 2.8s ease-in-out infinite}
-			@keyframes fcwdBrainPulse{0%,100%{opacity:.75;transform:scale(1)}50%{opacity:1;transform:scale(1.06)}}
-			@keyframes fcwdThinkingBreathe{0%,100%{border-color:rgba(34,211,238,.25);box-shadow:0 0 0 rgba(34,211,238,0)}50%{border-color:rgba(34,211,238,.45);box-shadow:0 0 12px rgba(34,211,238,.12)}}
-			.fcwd-status{font-size:12px;color:rgba(255,255,255,.4);font-style:italic;padding:10px 0;animation:fcwdPulse 1.8s ease-in-out infinite}
-			@keyframes fcwdPulse{0%,100%{opacity:.4}50%{opacity:1}}
-			@keyframes fcwdFadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
-			@keyframes fcwdSlideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-		</style>
-
-		<script>
-		(function(){
-			window.flowbieVoiceSafeUnlock=window.flowbieVoiceSafeUnlock||function(){return Promise.resolve();};
-			window.flowbieVoiceSafeAckPlayback=window.flowbieVoiceSafeAckPlayback||function(){};
-			window.flowbieVoicePresentCard=window.flowbieVoicePresentCard||function(_c,_m,cb){if(cb&&cb.append)cb.append();if(cb&&cb.finish)cb.finish();return Promise.resolve();};
-			var ajaxUrl=<?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
-			var streamNonce=<?php echo wp_json_encode( wp_create_nonce( 'flowbie_chat_stream' ) ); ?>;
-			var msgs=document.getElementById('flowbie-chat-demo-messages');
-			var input=document.getElementById('flowbie-chat-demo-input');
-			var btn=document.getElementById('flowbie-chat-demo-send');
-			var history=[],loading=false;
-			function getChatSessionId(){
-				var key='flowbie_chat_session_id';
-				var id=sessionStorage.getItem(key);
-				if(!id){
-					id='csess_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
-					sessionStorage.setItem(key,id);
-				}
-				return id;
-			}
-			if(!msgs||!input||!btn)return;
-			btn.addEventListener('click',function(){
-				if(input.value.trim()){send();}
-			});
-			function voiceUnlock(){
-				if(typeof window.flowbieVoiceSafeUnlock==='function'){return window.flowbieVoiceSafeUnlock();}
-				return Promise.resolve();
-			}
-			function voiceAckPlaybackParallel(text){
-				if(typeof window.flowbieVoiceSafeAckPlayback==='function'){window.flowbieVoiceSafeAckPlayback(text);return;}
-				if(window.FlowbieVoice&&typeof window.FlowbieVoice.playbackAckParallel==='function'){FlowbieVoice.playbackAckParallel(text);}
-			}
-			var FCWD_BRAIN_SVG=<?php echo wp_json_encode( self::brand_icon_svg( '#22d3ee', 24 ) ); ?>;
-			function fcwdStepIcon(st){if(st==='done')return '\u2713';if(st==='error')return '\u2717';return '\u25cb';}
-			function fcwdApplyStepIcon(iconEl,st){
-				iconEl.className='fcwd-thinking-step-icon';
-				if(st==='running'&&FCWD_BRAIN_SVG){iconEl.className+=' fcwd-thinking-step-icon--brain';iconEl.innerHTML=FCWD_BRAIN_SVG;}
-				else{iconEl.textContent=fcwdStepIcon(st);}
-			}
-			function fcwdBuildStepsList(steps){
-				var ul=document.createElement('ul');ul.className='fcwd-thinking-steps';
-				(steps||[]).forEach(function(step,idx){
-					var st=step.status||'pending';
-					var li=document.createElement('li');li.className='fcwd-thinking-step fcwd-thinking-step--'+st;
-					li.setAttribute('data-step-index',String(idx));
-					var icon=document.createElement('span');fcwdApplyStepIcon(icon,st);
-					var lbl=document.createElement('span');lbl.className='fcwd-thinking-step-label';lbl.textContent=step.label||'Step '+(idx+1);
-					li.appendChild(icon);li.appendChild(lbl);ul.appendChild(li);
-				});
-				return ul;
-			}
-			function fcwdAppendWorkflowCard(card){
-				var c=document.createElement('div');c.className='fcwd-card fcwd-card--thinking-active';
-				var tr=document.createElement('div');tr.className='fcwd-title-row';
-				var badge=document.createElement('span');badge.className='fcwd-type-badge';badge.textContent='working';
-				var title=document.createElement('span');title.className='fcwd-title';title.innerHTML=renderMd(card.title||'Working on it\u2026');
-				tr.appendChild(badge);tr.appendChild(title);c.appendChild(tr);
-				var body=document.createElement('div');body.className='fcwd-body';
-				if(card.body){body.innerHTML=renderMd(card.body);}else{body.style.display='none';}
-				c.appendChild(body);
-				var stepsList=fcwdBuildStepsList(card.steps||[]);c.appendChild(stepsList);
-				msgs.appendChild(c);scrollDown();
-				return {root:c,cardEl:c,badgeEl:badge,titleEl:title,bodyEl:body,stepsList:stepsList};
-			}
-			function fcwdSetWorkflowStepStatus(shell,idx,status){
-				if(!shell||!shell.stepsList)return;
-				var li=shell.stepsList.querySelector('[data-step-index="'+idx+'"]');
-				if(!li)return;
-				li.className='fcwd-thinking-step fcwd-thinking-step--'+status;
-				var icon=li.children[0];if(icon)fcwdApplyStepIcon(icon,status);
-			}
-			function fcwdSetWorkflowCardActive(shell,active){
-				if(shell&&shell.cardEl){shell.cardEl.classList.toggle('fcwd-card--thinking-active',!!active);}
-			}
-			function fcwdApplyCardBadge(badgeEl,t){badgeEl.textContent=t||'answer';}
-			function fcwdPopulateCardExtras(shell,card){
-				if(!shell||!shell.cardEl)return;
-				var c=shell.cardEl;
-				var old=c.querySelectorAll('.fcwd-confidence,.fcwd-links,.fcwd-cta-wrap,.fcwd-topics');
-				old.forEach(function(n){if(n.parentNode)n.parentNode.removeChild(n);});
-				var confMap={high:'High confidence',medium:'Based on site content',low:'Limited information'};
-				var conf=document.createElement('div');conf.className='fcwd-confidence';
-				conf.textContent=confMap[card.confidence]||confMap.medium;c.appendChild(conf);
-			}
-			function fcwdThinkingHost(){
-				return {
-					appendWorkflowCard:fcwdAppendWorkflowCard,
-					setWorkflowStepStatus:fcwdSetWorkflowStepStatus,
-					setWorkflowCardActive:fcwdSetWorkflowCardActive,
-					applyCardBadge:fcwdApplyCardBadge,
-					renderMd:renderMd,
-					populateCardExtras:fcwdPopulateCardExtras,
-					scrollDown:scrollDown
-				};
-			}
-			function presentCardWithVoice(card,userMessage,opts){
-				opts=opts||{};
-				var shell=opts.shell;
-				var host=fcwdThinkingHost();
-				var finish=function(){
-					history.push({role:'assistant',content:card.body||card.title});
-					if(typeof opts.onDone==='function'){opts.onDone();}
-				};
-				if(shell&&window.FlowbieThinkingCard){
-					FlowbieThinkingCard.finalizeToCard(shell,card,host);
-					finish();
-					return FlowbieThinkingCard.narrateAndVoiceStep(card,userMessage,shell,host);
-				}
-				if(typeof window.flowbieVoicePresentCard==='function'){
-					return window.flowbieVoicePresentCard(card,userMessage,{
-						append:function(){appendCard(card);},
-						finish:finish
-					});
-				}
-				appendCard(card);
-				finish();
-				return Promise.resolve();
-			}
-
-			input.addEventListener('keydown',function(e){
-				if(e.key==='Enter'){
-					voiceUnlock();
-					e.preventDefault();
-					send();
-				}
-			});
-
-			function bindVoiceWhenReady(){
-				if(!window.FlowbieVoice||typeof window.FlowbieVoice.bindPtt!=='function'||typeof window.flowbieVoiceUnlock!=='function'){
-					setTimeout(bindVoiceWhenReady,50);
-					return;
-				}
-				FlowbieVoice.bindPtt(btn,input,{
-					isLoading:function(){return loading;},
-					onTranscript:function(text){deliverMessage(text);},
-					onError:function(msg){showVoiceToast(msg);}
-				});
-			}
-			bindVoiceWhenReady();
-
-			function showVoiceToast(msg){
-				var t=document.createElement('div');
-				t.className='flowbie-voice-toast';
-				t.textContent=msg;
-				msgs.appendChild(t);
-				setTimeout(function(){if(t.parentNode)t.parentNode.removeChild(t);},4500);
-			}
-
-			function deliverMessage(text){
-				if(!text||loading)return;
-				voiceUnlock();
-				input.value='';
-				if(window.FlowbieVoice&&typeof window.FlowbieVoice.updateSendMicVisibility==='function'){
-					FlowbieVoice.updateSendMicVisibility(input,btn);
-				}
-				voiceAckPlaybackParallel(text);
-				appendUser(text);
-				history.push({role:'user',content:text});
-				runStream(text);
-			}
-
-			function send(){
-				var text=input.value.trim();
-				if(!text||loading)return;
-				deliverMessage(text);
-			}
-
-			function runStream(text){
-				loading=true;btn.disabled=true;
-				var host=fcwdThinkingHost();
-				var thinkingShell=window.FlowbieThinkingCard?FlowbieThinkingCard.createThinkingCard(host,{stream:true}):null;
-				var url=ajaxUrl+'?action=flowbie_chat_stream&_nonce='+encodeURIComponent(streamNonce);
-				fetch(url,{
-					method:'POST',
-					headers:{'Content-Type':'application/json'},
-					body:JSON.stringify({
-						message:text,
-						history:history.slice(-10),
-						session_id:getChatSessionId(),
-						source:'demo',
-						page_url:''
-					})
-				}).then(function(res){
-					if(!res.ok)throw new Error('HTTP '+res.status);
-					var reader=res.body.getReader();
-					var decoder=new TextDecoder();
-					var buf='';
-					function pump(){
-						return reader.read().then(function(result){
-							if(result.done)return;
-							buf+=decoder.decode(result.value,{stream:true});
-							var lines=buf.split('\n');
-							buf=lines.pop();
-							lines.forEach(function(line){
-								line=line.trim();if(!line)return;
-								var evt;try{evt=JSON.parse(line);}catch(_){return;}
-								if(evt.status==='done'&&evt.card){
-									presentCardWithVoice(evt.card,text,{
-										shell:thinkingShell,
-										onDone:function(){loading=false;btn.disabled=false;input.focus();}
-									});
-								}else if(evt.label&&thinkingShell&&window.FlowbieThinkingCard){
-									FlowbieThinkingCard.advanceStreamLabel(thinkingShell,host,evt.label);
-								}
-							});
-							return pump();
-						});
-					}
-					return pump();
-				}).catch(function(){
-					loading=false;btn.disabled=false;
-					if(window.FlowbieVoice){FlowbieVoice.updateSendMicVisibility(input,btn);}
-					presentCardWithVoice({type:'not-found',title:'Connection error',body:'Could not reach the server.',confidence:'low'},text,{
-						shell:thinkingShell,
-						onDone:function(){input.focus();}
-					});
-				});
-			}
-
-			function appendUser(text){
-				var d=document.createElement('div');d.className='fcwd-user';
-				d.textContent=text;msgs.appendChild(d);scrollDown();
-			}
-
-			function appendStatus(label){
-				var d=document.createElement('div');d.className='fcwd-status';
-				d.textContent=label;msgs.appendChild(d);scrollDown();return d;
-			}
-			function updateStatus(el,label){if(el)el.textContent=label;scrollDown();}
-
-			function appendCard(card){
-				var c=document.createElement('div');c.className='fcwd-card';
-				var tr=document.createElement('div');tr.className='fcwd-title-row';
-				var badge=document.createElement('span');
-				badge.className='fcwd-type-badge';
-				badge.textContent=card.type||'answer';
-				var title=document.createElement('span');title.className='fcwd-title';title.innerHTML=renderMd(card.title||'');
-				tr.appendChild(badge);tr.appendChild(title);c.appendChild(tr);
-
-				if(card.body){var body=document.createElement('div');body.className='fcwd-body';body.innerHTML=renderMd(card.body);c.appendChild(body);}
-
-				var confMap={high:'High confidence',medium:'Based on site content',low:'Limited information'};
-				var conf=document.createElement('div');conf.className='fcwd-confidence';
-				conf.textContent=confMap[card.confidence]||confMap.medium;c.appendChild(conf);
-
-				if(card.links&&card.links.length){
-					var lw=document.createElement('div');lw.className='fcwd-links';
-					card.links.forEach(function(link){
-						var a=document.createElement('a');a.className='fcwd-pill';a.href=link.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=link.label;lw.appendChild(a);
-					});c.appendChild(lw);
-				}
-				if(card.cta&&card.cta.url){
-					var cw=document.createElement('div');cw.className='fcwd-cta-wrap';
-					var ca=document.createElement('a');ca.className='fcwd-cta';ca.href=card.cta.url;ca.target='_blank';ca.rel='noopener noreferrer';ca.textContent=card.cta.label||'Learn more';
-					cw.appendChild(ca);c.appendChild(cw);
-				}
-				if(card.relatedTopics&&card.relatedTopics.length){
-					var tw=document.createElement('div');tw.className='fcwd-topics';
-					card.relatedTopics.forEach(function(topic){
-						var chip=document.createElement('button');chip.type='button';chip.className='fcwd-chip';chip.textContent=topic;
-						chip.addEventListener('click',function(){input.value=topic;send();});
-						tw.appendChild(chip);
-					});c.appendChild(tw);
-				}
-				msgs.appendChild(c);scrollDown();
-			}
-
-			function removeEl(el){if(el&&el.parentNode)el.parentNode.removeChild(el);}
-			function scrollDown(){msgs.scrollTop=msgs.scrollHeight;}
-			function renderMd(text){
-				var d=document.createElement('div');d.textContent=text;var s=d.innerHTML;
-				s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
-				s=s.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-				s=s.replace(/\n/g,'<br>');return s;
-			}
-		})();
-		</script>
 		<?php
 	}
 }

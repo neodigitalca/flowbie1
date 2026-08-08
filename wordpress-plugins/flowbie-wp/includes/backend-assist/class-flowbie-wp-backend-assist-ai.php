@@ -21,12 +21,7 @@ class Flowbie_Wp_Backend_Assist_Ai {
 			Flowbie_Wp_OpenRouter::API_URL,
 			array(
 				'timeout' => Flowbie_Wp_OpenRouter::get_timeout(),
-				'headers' => array(
-					'Content-Type'  => 'application/json',
-					'Authorization' => 'Bearer ' . $key,
-					'HTTP-Referer'  => Flowbie_Wp_OpenRouter::get_http_referer(),
-					'X-Title'       => 'Flowbie Backend Assist',
-				),
+				'headers' => Flowbie_Wp_OpenRouter::request_headers( $key ),
 				'body'    => wp_json_encode( array(
 					'model'       => $model,
 					'messages'    => array(

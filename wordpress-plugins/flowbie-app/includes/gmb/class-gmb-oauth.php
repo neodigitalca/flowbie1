@@ -21,6 +21,27 @@ class Flowbie_App_Gmb_Oauth {
 		self::$config_cache = null;
 	}
 
+	/**
+	 * One-time migration: flowbie-wp wp_options or env-only setup → gmb-oauth.json on flowbie.ca.
+	 */
+	public static function maybe_migrate_legacy_config(): void {
+		if ( self::is_configured() ) {
+			return;
+		}
+		$legacy = self::legacy_wp_gmb_credentials();
+		if ( $legacy['clientId'] === '' || $legacy['clientSecret'] === '' ) {
+			return;
+		}
+		self::write_config(
+			array(
+				'clientId'     => $legacy['clientId'],
+				'clientSecret' => $legacy['clientSecret'],
+				'redirectUri'  => self::redirect_uri(),
+				'frontendUrl'  => self::frontend_url_default(),
+			)
+		);
+	}
+
 	public static function is_configured(): bool {
 		$config = self::load_config();
 		return $config['clientId'] !== '' && $config['clientSecret'] !== '' && $config['redirectUri'] !== '';
@@ -30,13 +51,17 @@ class Flowbie_App_Gmb_Oauth {
 		return home_url( '/api/gmb/callback' );
 	}
 
+	public static function frontend_url_default(): string {
+		return home_url( '/flowbie/' );
+	}
+
 	public static function frontend_url(): string {
 		$config = self::load_config();
-		return $config['frontendUrl'] !== '' ? $config['frontendUrl'] : home_url( '/' );
+		return $config['frontendUrl'] !== '' ? $config['frontendUrl'] : self::frontend_url_default();
 	}
 
 	/**
-	 * @return array{configured:bool,hasClientId:bool,clientId:string,redirectUri:string,authUrl:string}
+	 * @return array{configured:bool,hasClientId:bool,clientId:string,redirectUri:string,frontendUrl:string,authUrl:string}
 	 */
 	public static function config_status(): array {
 		$config     = self::load_config();
@@ -50,11 +75,12 @@ class Flowbie_App_Gmb_Oauth {
 			}
 		}
 		return array(
-			'configured'  => $configured,
-			'hasClientId' => $config['clientId'] !== '',
-			'clientId'    => $config['clientId'],
-			'redirectUri' => $config['redirectUri'],
-			'authUrl'     => $auth_url,
+			'configured'   => $configured,
+			'hasClientId'  => $config['clientId'] !== '',
+			'clientId'     => $config['clientId'],
+			'redirectUri'  => $config['redirectUri'],
+			'frontendUrl'  => self::frontend_url(),
+			'authUrl'      => $auth_url,
 		);
 	}
 
@@ -68,7 +94,7 @@ class Flowbie_App_Gmb_Oauth {
 				'statusCode' => 403,
 				'body'       => array(
 					'success' => false,
-					'error'   => 'Saving GMB config from the UI is only allowed locally. On production, set GMB_CLIENT_ID, GMB_CLIENT_SECRET, GMB_REDIRECT_URI (and FRONTEND_URL) in Environment.',
+					'error'   => 'Saving GMB config from the UI is only allowed locally. On production, set FLOWBIE_APP_GMB_CLIENT_ID, FLOWBIE_APP_GMB_CLIENT_SECRET, FLOWBIE_APP_GMB_REDIRECT_URI, and FLOWBIE_APP_FRONTEND_URL in wp-config or flowbie-app-secrets.php.',
 				),
 			);
 		}
@@ -117,7 +143,7 @@ class Flowbie_App_Gmb_Oauth {
 				'statusCode' => 403,
 				'body'       => array(
 					'success' => false,
-					'error'   => 'Test and save is only allowed locally. On production, set GMB_CLIENT_ID, GMB_CLIENT_SECRET (and GMB_REDIRECT_URI, FRONTEND_URL) in Environment.',
+					'error'   => 'Test and save is only allowed locally. On production, set FLOWBIE_APP_GMB_CLIENT_ID, FLOWBIE_APP_GMB_CLIENT_SECRET, FLOWBIE_APP_GMB_REDIRECT_URI, and FLOWBIE_APP_FRONTEND_URL in wp-config or flowbie-app-secrets.php.',
 				),
 			);
 		}
@@ -143,7 +169,7 @@ class Flowbie_App_Gmb_Oauth {
 				'clientId'     => $client_id,
 				'clientSecret' => $client_secret,
 				'redirectUri'  => self::redirect_uri(),
-				'frontendUrl'  => home_url( '/' ),
+				'frontendUrl'  => self::frontend_url_default(),
 			)
 		) ) {
 			return array(
@@ -343,23 +369,51 @@ class Flowbie_App_Gmb_Oauth {
 			$config['frontendUrl']  = trim( (string) ( $file['frontendUrl'] ?? $file['frontend_url'] ?? '' ) );
 		}
 		$env = Flowbie_App_Secrets::gmb_oauth_env();
-		if ( $config['clientId'] === '' && $env['clientId'] !== '' ) {
+		if ( $env['clientId'] !== '' ) {
 			$config['clientId'] = $env['clientId'];
 		}
-		if ( $config['clientSecret'] === '' && $env['clientSecret'] !== '' ) {
+		if ( $env['clientSecret'] !== '' ) {
 			$config['clientSecret'] = $env['clientSecret'];
 		}
-		if ( $config['redirectUri'] === '' && $env['redirectUri'] !== '' ) {
+		if ( $env['redirectUri'] !== '' ) {
 			$config['redirectUri'] = $env['redirectUri'];
 		}
-		if ( $config['frontendUrl'] === '' && $env['frontendUrl'] !== '' ) {
+		if ( $env['frontendUrl'] !== '' ) {
 			$config['frontendUrl'] = $env['frontendUrl'];
+		}
+		if ( $config['clientId'] === '' || $config['clientSecret'] === '' ) {
+			$wp = self::legacy_wp_gmb_credentials();
+			if ( $config['clientId'] === '' && $wp['clientId'] !== '' ) {
+				$config['clientId'] = $wp['clientId'];
+			}
+			if ( $config['clientSecret'] === '' && $wp['clientSecret'] !== '' ) {
+				$config['clientSecret'] = $wp['clientSecret'];
+			}
 		}
 		if ( $config['redirectUri'] === '' ) {
 			$config['redirectUri'] = self::redirect_uri();
 		}
+		if ( $config['frontendUrl'] === '' ) {
+			$config['frontendUrl'] = self::frontend_url_default();
+		}
 		self::$config_cache = $config;
 		return $config;
+	}
+
+	/**
+	 * @return array{clientId:string,clientSecret:string}
+	 */
+	private static function legacy_wp_gmb_credentials(): array {
+		if ( ! function_exists( 'get_option' ) ) {
+			return array(
+				'clientId'     => '',
+				'clientSecret' => '',
+			);
+		}
+		return array(
+			'clientId'     => trim( (string) get_option( 'flowbie_wp_gmb_client_id', '' ) ),
+			'clientSecret' => trim( (string) get_option( 'flowbie_wp_gmb_client_secret', '' ) ),
+		);
 	}
 
 	/**

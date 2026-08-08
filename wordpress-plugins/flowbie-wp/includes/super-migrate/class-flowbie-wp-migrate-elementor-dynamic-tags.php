@@ -958,6 +958,82 @@ class Flowbie_Wp_Migrate_Elementor_Dynamic_Tags {
 	/**
 	 * @return array{documents_processed: int, documents_patched: int, replacements: int}
 	 */
+	public static function revert_all_documents(): array {
+		$previous = self::$walk_mode;
+		self::set_walk_mode( self::WALK_MODE_REVERT_TO_ACF );
+		$processed    = 0;
+		$patched      = 0;
+		$replacements = 0;
+		try {
+			foreach ( self::elementor_document_ids() as $post_id ) {
+				++$processed;
+				$result = self::revert_post( (int) $post_id );
+				$replacements += (int) ( $result['replacements'] ?? 0 );
+				if ( ! empty( $result['changed'] ) ) {
+					++$patched;
+				}
+			}
+		} finally {
+			self::set_walk_mode( $previous );
+		}
+		if ( $patched > 0 ) {
+			self::clear_elementor_cache();
+		}
+		return array(
+			'documents_processed' => $processed,
+			'documents_patched'   => $patched,
+			'replacements'        => $replacements,
+		);
+	}
+
+	/**
+	 * @return array{ok: bool, changed: bool, replacements: int}
+	 */
+	public static function revert_post( int $post_id ): array {
+		$raw = get_post_meta( $post_id, self::META_KEY, true );
+		if ( ! is_string( $raw ) || $raw === '' ) {
+			return array(
+				'ok'           => true,
+				'changed'      => false,
+				'replacements' => 0,
+			);
+		}
+		$data = json_decode( $raw, true );
+		if ( ! is_array( $data ) ) {
+			return array(
+				'ok'           => false,
+				'changed'      => false,
+				'replacements' => 0,
+			);
+		}
+		$result = self::walk_elements( $data );
+		if ( (int) $result['replacements'] < 1 ) {
+			return array(
+				'ok'           => true,
+				'changed'      => false,
+				'replacements' => 0,
+			);
+		}
+		$json = wp_json_encode( $result['elements'] );
+		if ( ! is_string( $json ) ) {
+			return array(
+				'ok'           => false,
+				'changed'      => false,
+				'replacements' => 0,
+			);
+		}
+		update_post_meta( $post_id, self::META_KEY, wp_slash( $json ) );
+		delete_post_meta( $post_id, '_elementor_element_cache' );
+		return array(
+			'ok'           => true,
+			'changed'      => true,
+			'replacements' => (int) $result['replacements'],
+		);
+	}
+
+	/**
+	 * @return array{documents_processed: int, documents_patched: int, replacements: int}
+	 */
 	public static function repair_all_documents(): array {
 		$previous = self::$walk_mode;
 		self::set_walk_mode( self::WALK_MODE_MIGRATE_TO_FLOWBIE );

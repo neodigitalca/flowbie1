@@ -22,7 +22,7 @@ class Flowbie_Wp_Overseer_Settings {
 			$days = 3650;
 		}
 		return array(
-			'tracking_enabled'    => ! array_key_exists( 'tracking_enabled', $raw ) || ! empty( $raw['tracking_enabled'] ),
+			'tracking_enabled'    => ! empty( $raw['tracking_enabled'] ),
 			'retention_days'      => $days,
 			'anonymize_ip'        => ! empty( $raw['anonymize_ip'] ),
 			'exclude_admins'      => ! array_key_exists( 'exclude_admins', $raw ) || ! empty( $raw['exclude_admins'] ),

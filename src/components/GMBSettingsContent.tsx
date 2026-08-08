@@ -15,6 +15,10 @@ const GMB_CALLBACK_EXAMPLE = FLOWBIE_CA_DEPLOY
   ? "https://flowbie.ca/api/gmb/callback"
   : "http://localhost:3001/api/gmb/callback";
 
+const GMB_FRONTEND_URL_EXAMPLE = FLOWBIE_CA_DEPLOY
+  ? "https://flowbie.ca/flowbie/"
+  : "http://localhost:5173/";
+
 /** Same base as WordPress/AgentMail: VITE_MCP_API_BASE minus /api/mcp, unless overridden. */
 const BACKEND_API_BASE =
   (typeof import.meta.env.VITE_BACKEND_API_BASE === "string" ? import.meta.env.VITE_BACKEND_API_BASE : "").trim() ||
@@ -25,6 +29,7 @@ export function GMBSettingsContent() {
   const [connected, setConnected] = useState(false);
   const [configConfigured, setConfigConfigured] = useState(false);
   const [redirectUri, setRedirectUri] = useState<string>("");
+  const [frontendUrl, setFrontendUrl] = useState<string>("");
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [testing, setTesting] = useState(false);
   const [pullingStats, setPullingStats] = useState(false);
@@ -43,15 +48,17 @@ export function GMBSettingsContent() {
   const fetchStatus = async () => {
     setLoadingStatus(true);
     try {
+      const cacheBust = `_=${Date.now()}`;
       const [statusRes, configRes] = await Promise.all([
-        fetch(`${BACKEND_API_BASE}/api/gmb/status`, { credentials: "include" }),
-        fetch(`${BACKEND_API_BASE}/api/gmb/config-status`, { credentials: "include" }),
+        fetch(`${BACKEND_API_BASE}/api/gmb/status?${cacheBust}`, { credentials: "include", cache: "no-store" }),
+        fetch(`${BACKEND_API_BASE}/api/gmb/config-status?${cacheBust}`, { credentials: "include", cache: "no-store" }),
       ]);
       const statusData = await statusRes.json().catch(() => ({}));
       const configData = await configRes.json().catch(() => ({}));
       setConnected(Boolean(statusData?.connected));
       setConfigConfigured(Boolean(configData?.configured));
       setRedirectUri(typeof configData?.redirectUri === "string" ? configData.redirectUri : "");
+      setFrontendUrl(typeof configData?.frontendUrl === "string" ? configData.frontendUrl : "");
     } catch {
       setConnected(false);
       setConfigConfigured(false);
@@ -268,7 +275,23 @@ ${footnote}`;
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            Redirect URI and Frontend URL default to localhost. Override with <code className="bg-muted px-1 rounded">GMB_REDIRECT_URI</code> and <code className="bg-muted px-1 rounded">FRONTEND_URL</code> in <code className="bg-muted px-1 rounded">.env</code> if needed.
+            {FLOWBIE_CA_DEPLOY ? (
+              <>
+                Production reads credentials from{" "}
+                <code className="bg-muted px-1 rounded">FLOWBIE_APP_GMB_CLIENT_ID</code>,{" "}
+                <code className="bg-muted px-1 rounded">FLOWBIE_APP_GMB_CLIENT_SECRET</code>,{" "}
+                <code className="bg-muted px-1 rounded">FLOWBIE_APP_GMB_REDIRECT_URI</code>, and{" "}
+                <code className="bg-muted px-1 rounded">FLOWBIE_APP_FRONTEND_URL</code> in wp-config or{" "}
+                <code className="bg-muted px-1 rounded">flowbie-app-secrets.php</code>.
+              </>
+            ) : (
+              <>
+                Redirect URI and Frontend URL default to localhost. Override with{" "}
+                <code className="bg-muted px-1 rounded">GMB_REDIRECT_URI</code> and{" "}
+                <code className="bg-muted px-1 rounded">FRONTEND_URL</code> in{" "}
+                <code className="bg-muted px-1 rounded">.env</code> if needed.
+              </>
+            )}
           </p>
           <Button type="submit" disabled={saving || (!!clientIdTrimmed && !clientIdLooksValid)} className="gap-2">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -339,13 +362,33 @@ ${footnote}`;
                   <Copy className="h-4 w-4" />
                 </Button>
               </div>
+              {frontendUrl && (
+                <>
+                  <p className="text-xs font-medium text-foreground pt-1">Frontend URL (post-OAuth return)</p>
+                  <code className="text-xs bg-background px-2 py-1 rounded block truncate" title={frontendUrl}>
+                    {frontendUrl}
+                  </code>
+                </>
+              )}
               <p className="text-xs text-amber-500/90">
                 If you see &quot;The OAuth client was not found&quot; (401): use the <strong>same</strong> Client ID from Credentials, set Application type to <strong>Web application</strong>, and add the redirect URI above under Authorized redirect URIs.
               </p>
             </div>
           )}
           <p className="text-xs text-muted-foreground">
-            Production uses the same API URL as the rest of the app (from <code className="bg-muted px-1 rounded">VITE_MCP_API_BASE</code> at build time). You can override with <code className="bg-muted px-1 rounded">VITE_BACKEND_API_BASE</code> if needed.
+            {FLOWBIE_CA_DEPLOY ? (
+              <>
+                On flowbie.ca, GBP uses the same-origin API at{" "}
+                <code className="bg-muted px-1 rounded">/api/gmb/*</code>. Set OAuth credentials in{" "}
+                <code className="bg-muted px-1 rounded">flowbie-app-secrets.php</code> or wp-config (
+                <code className="bg-muted px-1 rounded">FLOWBIE_APP_GMB_*</code>).
+              </>
+            ) : (
+              <>
+                Local dev uses <code className="bg-muted px-1 rounded">http://localhost:3001/api/gmb/*</code> unless{" "}
+                <code className="bg-muted px-1 rounded">VITE_MCP_API_BASE</code> points elsewhere.
+              </>
+            )}
           </p>
         </div>
       )}
@@ -364,6 +407,9 @@ ${footnote}`;
           <div className="px-3 pb-3 pt-0 text-sm space-y-3 border-t border-border mt-0 pt-3 text-foreground">
             <p className="text-foreground">
               In the OAuth client, under <strong className="text-white">Authorized redirect URIs</strong>, add exactly <code className="bg-muted px-1 rounded">{GMB_CALLBACK_EXAMPLE}</code>.
+            </p>
+            <p className="text-foreground">
+              After sign-in, Flowbie returns to <code className="bg-muted px-1 rounded">{GMB_FRONTEND_URL_EXAMPLE}</code> (Settings).
             </p>
             <p className="text-foreground">
               Then use <strong className="text-white">Connect Google Business</strong> on SEO → GBP Post and <strong className="text-white">Test connection</strong> here.

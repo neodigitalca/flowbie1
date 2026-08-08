@@ -6,6 +6,7 @@
 import { parseSitemap } from './wordpress-api';
 import type { WordPressSite } from '@/components/integrations/types';
 import { loadApiKey } from './api';
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 export interface WPPageAnalysis {
   titlePattern?: string; // Extracted title template pattern
@@ -378,12 +379,7 @@ What is the common pattern or template?`;
     const researchModel = getResearchModel();
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: researchModel,
         messages: [
@@ -432,12 +428,7 @@ What is the common pattern or template?`;
     const researchModel = getResearchModel();
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: researchModel,
         messages: [

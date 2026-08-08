@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { BulkAutoGeneratePanel } from "./BulkAutoGeneratePanel";
 import { BLOG_GENERATOR_TAB_ROOT_CLASS, BLOG_GENERATOR_WORKSPACE_BODY_CLASS, BLOG_GENERATOR_WORKSPACE_HEADER_CLASS, BULK_GENERATOR_EMPTY_ROW_COUNT } from "@/components/keyword-research/blog-generator-tab-classes";
+import { WORKSPACE_DETAILS_DIM_OVERLAY_CLASS } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import { cn } from "@/lib/utils";
 import { BlogImportWorkspaceHeader } from "@/components/keyword-research/bulk/BlogImportWorkspaceHeader";
 import { BulkCsvRunProgressGrid } from "@/components/keyword-research/bulk/BulkCsvRunProgressGrid";
@@ -54,7 +55,7 @@ export interface BulkBlogGenerationTabProps {
 const PROGRESS_LABELS = {
   csv: "CSV",
   prompt: "Prompt",
-  "blog-import": "Blog import",
+  "blog-import": "Import",
   "press-release": "PR",
 } as const;
 
@@ -72,6 +73,8 @@ export function BulkBlogGenerationTab({
   flowPurpose,
 }: BulkBlogGenerationTabProps) {
   const effectiveDataForSeoApiKey = dataForSEOApiKey ?? pressReleaseDataForSeoApiKey;
+
+  const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false);
 
   const isCsv = variant === "csv";
   const isBlogImport = variant === "blog-import";
@@ -304,6 +307,7 @@ export function BulkBlogGenerationTab({
     status: bulkBindings?.status ?? "",
     processingStepLog: bulkBindings?.processingStepLog ?? [],
     harnessSections: bulkBindings?.harnessSections ?? [],
+    harnessByRow: bulkBindings?.harnessByRow ?? new Map(),
     harnessPlannedSectionCount: bulkBindings?.harnessPlannedSectionCount ?? null,
     currentRow: bulkBindings?.currentRow ?? 0,
     totalRows: bulkBindings?.totalRows ?? 0,
@@ -413,7 +417,13 @@ export function BulkBlogGenerationTab({
               variant: "csv",
               csvFileName: bulkBindings?.csvFileName ?? null,
               rowCount: bulkBindings?.rows.length ?? 0,
+              filesByRow: bulkBindings?.filesByRow,
+              downloadFile: bulkBindings?.downloadFile,
+              publishDateLabelByIndex: bulkBindings?.publishDateLabelByIndex,
+              draftOnly: bulkBindings?.wordpressDraftOnly,
+              directionsSiteName: bulkBindings?.connectedSite?.name,
             }}
+            onDetailsOpenChange={setDetailsDrawerOpen}
           />
         ) : null}
 
@@ -453,7 +463,13 @@ export function BulkBlogGenerationTab({
               selectedCount: bulkBindings?.selectedBlogIndices.size ?? 0,
               sitemapInventoryLinks: bulkBindings?.sitemapInventoryLinks ?? [],
               siteKwHostedLink: bulkBindings?.siteKwHostedLink ?? null,
+              filesByRow: bulkBindings?.filesByRow,
+              downloadFile: bulkBindings?.downloadFile,
+              publishDateLabelByIndex: bulkBindings?.publishDateLabelByIndex,
+              draftOnly: bulkBindings?.wordpressDraftOnly,
+              directionsSiteName: bulkBindings?.connectedSite?.name,
             }}
+            onDetailsOpenChange={setDetailsDrawerOpen}
           />
         ) : null}
 
@@ -494,7 +510,11 @@ export function BulkBlogGenerationTab({
               downloadFile: bulkBindings?.downloadFile,
               canDownloadBlog,
               onDownloadBlog: handleDownloadBlog,
+              publishDateLabelByIndex: bulkBindings?.publishDateLabelByIndex,
+              draftOnly: bulkBindings?.wordpressDraftOnly,
+              directionsSiteName: bulkBindings?.connectedSite?.name,
             }}
+            onDetailsOpenChange={setDetailsDrawerOpen}
           />
         ) : null}
 
@@ -524,6 +544,7 @@ export function BulkBlogGenerationTab({
               harnessPlannedSectionCount: pressReleaseBindings?.harnessPlannedSectionCount ?? null,
               inventoryJsonLink: pressReleaseBindings?.inventoryJsonLink ?? null,
             }}
+            onDetailsOpenChange={setDetailsDrawerOpen}
           />
         ) : null}
       </div>
@@ -531,10 +552,13 @@ export function BulkBlogGenerationTab({
       <div
         className={cn(
           BLOG_GENERATOR_WORKSPACE_BODY_CLASS,
-          "flex flex-col",
+          "relative flex flex-col",
           placeholderOnlyBody && "overflow-y-hidden",
         )}
       >
+        {detailsDrawerOpen ? (
+          <div className={WORKSPACE_DETAILS_DIM_OVERLAY_CLASS} aria-hidden />
+        ) : null}
         {isCsv ? (
           <BulkCsvRunProgressGrid
             displayRows={bulkBindings?.displayRows ?? []}

@@ -17,11 +17,11 @@ import {
 import type { ImportedBlogDraft } from "@/lib/bulk/blog-import-parser";
 import type { WordPressPostDestination } from "@/lib/bulk-auto-generate";
 import { cn } from "@/lib/utils";
-import {
-  DETAILS_CO_SECTION_LINE,
-  DETAILS_CO_STACK,
-  detailsDrawerRowStripeClass,
-} from "@/components/integrations/wordpress/bulk-details-drawer-styles";
+import { contentOptimizerRowStripeClass } from "@/components/overview/overview-tab/overview-tab-content-constants";
+
+const DETAILS_FLAT_SECTION_LINE =
+  "flex min-h-9 w-full items-center justify-between gap-2 border-0 px-2.5 py-1.5 text-white sm:px-3";
+const DETAILS_FLAT_STACK = "flex flex-col gap-0";
 import {
   WorkspaceDetailsKvRow,
   WorkspaceDetailsLiveMessage,
@@ -46,7 +46,7 @@ const POST_DESTINATION_LABEL: Record<WordPressPostDestination, string> = {
 const VARIANT_LABEL: Record<BulkGeneratorDetailsVariant, string> = {
   csv: "CSV",
   prompt: "Prompt",
-  "blog-import": "Blog import",
+  "blog-import": "Import",
 };
 
 export type BulkGeneratorDetailsPanelProps = {
@@ -59,6 +59,8 @@ export type BulkGeneratorDetailsPanelProps = {
   checklistPhase?: string;
   processingStepLog?: string[];
   harnessSections: BulkHarnessSectionUi[];
+  harnessByRow?: Map<number, BulkHarnessSectionUi[]>;
+  batchPrepHarnessSections?: BulkHarnessSectionUi[];
   harnessPlannedSectionCount: number | null;
   currentRow: number;
   totalRows: number;
@@ -77,6 +79,9 @@ export type BulkGeneratorDetailsPanelProps = {
   downloadFile?: (file: BulkGeneratedFile) => void;
   canDownloadBlog?: boolean;
   onDownloadBlog?: () => void;
+  publishDateLabelByIndex?: Record<number, string>;
+  draftOnly?: boolean;
+  directionsSiteName?: string;
 };
 
 export function bulkGeneratorDetailsCanOpen(
@@ -224,8 +229,8 @@ function BulkIdeasRunDetail({ phase }: { phase: string }) {
   return (
     <div
       className={cn(
-        DETAILS_CO_SECTION_LINE,
-        detailsDrawerRowStripeClass(0, { isActiveOptimize: true }),
+        DETAILS_FLAT_SECTION_LINE,
+        contentOptimizerRowStripeClass(0, { isActiveOptimize: true }),
         "px-2.5 sm:px-3",
       )}
     >
@@ -239,7 +244,7 @@ function BulkIdeasRunDetail({ phase }: { phase: string }) {
 
 export { SitemapInventoryLinksList } from "@/components/keyword-research/bulk/SitemapInventoryLinksList";
 
-function BulkPromptCsvRunDetail({
+export function BulkPromptCsvRunDetail({
   activeRow,
   status,
   currentRow,
@@ -261,8 +266,8 @@ function BulkPromptCsvRunDetail({
     <>
       <div
         className={cn(
-          DETAILS_CO_SECTION_LINE,
-          detailsDrawerRowStripeClass(0, { isActiveOptimize: Boolean(phase) }),
+          DETAILS_FLAT_SECTION_LINE,
+          contentOptimizerRowStripeClass(0, { isActiveOptimize: Boolean(phase) }),
           "px-2.5 sm:px-3",
         )}
       >

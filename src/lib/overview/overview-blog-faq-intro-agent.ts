@@ -16,6 +16,20 @@ Rules:
 - Do not invent brand names, URLs, or facts not implied by the inputs.
 - Do not start with "FAQ" or "Frequently Asked Questions".`;
 
+const REJECTED_SINGLE_WORD_INTROS = new Set(["for", "the", "faq", "a", "an"]);
+
+/** Returns true when intro text meets minimum quality for the flo-faq paragraph. */
+export function isValidFaqIntroPlainText(intro: string): boolean {
+  const t = intro.trim();
+  if (t.length < 40) return false;
+  if (!/[.?]$/.test(t)) return false;
+  const words = t.split(/\s+/).filter(Boolean);
+  if (words.length === 1 && REJECTED_SINGLE_WORD_INTROS.has(words[0].toLowerCase())) {
+    return false;
+  }
+  return true;
+}
+
 function stripWrappingQuotes(text: string): string {
   let t = text.trim();
   if (
@@ -27,7 +41,6 @@ function stripWrappingQuotes(text: string): string {
   return t;
 }
 
-/** Normalize model output to a single intro paragraph (plain text). */
 export function normalizeFaqIntroPlainText(raw: string): string {
   let t = (raw ?? "").trim();
   if (!t) return "";
@@ -86,7 +99,7 @@ Write the FAQ intro paragraph now.`;
     model: args.model?.trim() || getProductionModel(),
     system: SYSTEM,
     user,
-    maxTokens: 256,
+    maxTokens: 512,
     temperature: 0.4,
     signal: args.signal,
   });
@@ -94,6 +107,9 @@ Write the FAQ intro paragraph now.`;
   const intro = normalizeFaqIntroPlainText(content || "");
   if (!intro) {
     throw new Error("FAQ intro model returned empty text");
+  }
+  if (!isValidFaqIntroPlainText(intro)) {
+    throw new Error("FAQ intro model returned text that failed quality validation");
   }
   return intro;
 }

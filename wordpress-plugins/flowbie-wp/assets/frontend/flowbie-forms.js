@@ -6,6 +6,10 @@
 		return window[key] || null;
 	}
 
+	function setConfig(formId, cfg) {
+		window['flowbieFormsConfig_' + formId] = cfg;
+	}
+
 	function showMessage(wrap, text, isError) {
 		var box = wrap.querySelector('.flowbie-form__messages');
 		if (!box) return;
@@ -68,11 +72,23 @@
 		}
 	}
 
-	document.querySelectorAll('.flowbie-form').forEach(function (wrap) {
+	function bindForm(wrap, cfg) {
+		if (!wrap || wrap.getAttribute('data-flowbie-form-bound') === '1') {
+			return;
+		}
 		var formId = parseInt(wrap.getAttribute('data-form-id'), 10);
-		var cfg = getConfig(formId);
+		if (!cfg && formId) {
+			cfg = getConfig(formId);
+		}
 		var form = wrap.querySelector('.flowbie-form__form');
-		if (!form || !cfg) return;
+		if (!form || !cfg) {
+			return;
+		}
+
+		wrap.setAttribute('data-flowbie-form-bound', '1');
+		if (formId && cfg) {
+			setConfig(formId, cfg);
+		}
 
 		form.addEventListener('submit', function (e) {
 			e.preventDefault();
@@ -120,5 +136,21 @@
 					if (btn) btn.disabled = false;
 				});
 		});
+	}
+
+	function mount(wrap, cfg) {
+		if (!wrap) return;
+		if (cfg && cfg.formId) {
+			setConfig(cfg.formId, cfg);
+		}
+		bindForm(wrap, cfg || null);
+	}
+
+	document.querySelectorAll('.flowbie-form').forEach(function (wrap) {
+		mount(wrap);
 	});
+
+	window.FlowbieForms = {
+		mount: mount
+	};
 })();

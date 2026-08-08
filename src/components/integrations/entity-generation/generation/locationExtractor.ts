@@ -3,8 +3,6 @@
  * Main orchestration for location extraction
  */
 
-import { notify } from "@/lib/app-notifications";
-import { notifyCouldNotExtractLocationFromModifier } from "@/lib/notify-messages";
 import type { WordPressSite } from "../../types";
 import type { LocationExtractionResult } from "../types";
 import { extractLocationFromUrls, determinePrimaryCity, extractLocationFromUrlsWithRegex, analyzeTitleFormat } from "./urlLocationExtractor";
@@ -54,7 +52,6 @@ export async function extractLocation(
       const hasLocationKeywords = /\b(calgary|edmonton|toronto|vancouver|montreal|ottawa|winnipeg|halifax|victoria|saskatoon|regina|new york|los angeles|chicago|houston|phoenix|philadelphia|san antonio|san diego|dallas)\b/i.test(promptModifier);
       if (hasLocationKeywords) {
         console.warn(`[Entity Generation] WARNING: Modifier "${promptModifier}" appears to mention a location but extraction failed. Using sitemap-detected city: "${primaryCity}"`);
-        notify.error(notifyCouldNotExtractLocationFromModifier(promptModifier, primaryCity));
       } else {
         console.log(`[Entity Generation] No location found in modifier: "${promptModifier}", using sitemap-detected city: "${primaryCity}"`);
       }

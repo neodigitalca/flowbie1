@@ -1,7 +1,7 @@
 import { Check } from "lucide-react";
 import type { MetaPipelineStepUi } from "@/components/overview/overview-tab-constants";
 import { cn } from "@/lib/utils";
-import { detailsDrawerRowStripeClass } from "@/components/integrations/wordpress/bulk-details-drawer-styles";
+import { contentOptimizerRowStripeClass } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import type { ReactNode } from "react";
 
 export function WorkspaceDetailsPipelineStepRow({
@@ -19,7 +19,7 @@ export function WorkspaceDetailsPipelineStepRow({
     <li
       className={cn(
         "flex items-center gap-2 px-2.5 py-1.5 sm:px-3",
-        detailsDrawerRowStripeClass(stripeIndex),
+        contentOptimizerRowStripeClass(stripeIndex),
         isRunning && "relative z-10 border border-[hsl(var(--semantic-data)/0.55)]",
       )}
     >

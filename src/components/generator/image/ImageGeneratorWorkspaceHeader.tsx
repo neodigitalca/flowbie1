@@ -4,7 +4,7 @@ import {
   GENERATOR_WORKSPACE_TITLE,
   type BlogGeneratorSectionId,
 } from "@/components/blog-generator/blog-generator-sections";
-import { ImageGeneratorDetailsPanel } from "@/components/generator/image/ImageGeneratorDetailsPanel";
+import { ImageDetailsDrawer } from "@/components/generator/image/ImageDetailsDrawer";
 import { ImageGeneratorToolbar } from "@/components/generator/image/ImageGeneratorToolbar";
 import type { UseImageGeneratorResult } from "@/components/generator/image/image-generator-types";
 import type { MetaBulkMicroSnapshot } from "@/components/overview/OverviewBulkMicroProgress";
@@ -14,6 +14,7 @@ export type ImageGeneratorWorkspaceHeaderProps = {
   onSectionChange: (id: BlogGeneratorSectionId) => void;
   workspaceBusy: boolean;
   generator: UseImageGeneratorResult;
+  onDetailsOpenChange?: (open: boolean) => void;
 };
 
 export function ImageGeneratorWorkspaceHeader({
@@ -21,6 +22,7 @@ export function ImageGeneratorWorkspaceHeader({
   onSectionChange,
   workspaceBusy,
   generator,
+  onDetailsOpenChange,
 }: ImageGeneratorWorkspaceHeaderProps) {
   const imageBusy = generator.isGenerating || generator.isGeneratingChecklist;
   const hasRefs = Boolean(generator.referenceResearch);
@@ -71,8 +73,9 @@ export function ImageGeneratorWorkspaceHeader({
       canOpenDetails={canOpenDetails}
       isProcessing={imageBusy}
       detailsPanelId="image-generator-details-panel"
+      onDetailsOpenChange={onDetailsOpenChange}
       detailsPanel={
-        <ImageGeneratorDetailsPanel
+        <ImageDetailsDrawer
           isGenerating={generator.isGenerating}
           isGeneratingChecklist={generator.isGeneratingChecklist}
           error={generator.error}

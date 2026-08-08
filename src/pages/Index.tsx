@@ -52,6 +52,7 @@ import {
   readStoredLlmNumberForIndex,
 } from "@/lib/manager-cloud-settings-snapshot";
 import { FLOWBIE_OPEN_MASTER_RULES_EVENT } from "@/lib/open-master-rules-settings";
+import { isApiTabHash } from "@/lib/api-docs/api-docs-hash";
 
 const OPENROUTER_API_KEY_STORAGE_KEY = "openrouter-api-key";
 
@@ -82,6 +83,7 @@ const VALID_MANAGER_TABS = new Set([
   "content-optimizer",
   "communication",
   "chat",
+  "tasks",
   "research",
   "gsc-reporting",
   "sitemap-optimizer",
@@ -89,10 +91,22 @@ const VALID_MANAGER_TABS = new Set([
   "gbp-post",
   "vertical-benchmarks",
   "ppc-google",
+  "api",
   /** Legacy tab ids (hash / stored); normalized to `generator` at runtime */
   "blog-generator",
   "sap-generator",
 ]);
+
+function redirectContentOptimizerToGeneratorOpt(): "generator" {
+  try {
+    writeStoredBlogGeneratorSection("opt");
+    sessionStorage.setItem(CONTENT_OPTIMIZER_SECTION_STORAGE_KEY, "content");
+    localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "generator");
+  } catch {
+    /* ignore */
+  }
+  return "generator";
+}
 
 function redirectPressReleaseTabToGenerator(): "generator" {
   try {
@@ -105,6 +119,9 @@ function redirectPressReleaseTabToGenerator(): "generator" {
 }
 
 function normalizeLegacyGeneratorTab(tab: string): string {
+  if (tab === "content-optimizer") {
+    return redirectContentOptimizerToGeneratorOpt();
+  }
   if (tab === "blog-generator" || tab === "keyword-research" || tab === "bulk-blog-generation" || tab === "auto-blog-generate") {
     return "generator";
   }
@@ -124,6 +141,9 @@ function normalizeLegacyGeneratorTab(tab: string): string {
     }
     return "generator";
   }
+  if (tab === "api-docs") {
+    return "api";
+  }
   return tab;
 }
 
@@ -134,6 +154,9 @@ const Index = () => {
   const [managerTab, setManagerTab] = useState<string>(() => {
     try {
       const hashTab = window.location.hash.replace(/^#/, "").trim();
+      if (isApiTabHash(hashTab)) {
+        return "api";
+      }
       if (hashTab === "settings") {
         return "dashboard";
       }
@@ -179,23 +202,8 @@ const Index = () => {
         }
         return "generator";
       }
-      if (t === "elementor-optimizer") {
-        try {
-          sessionStorage.setItem(CONTENT_OPTIMIZER_SECTION_STORAGE_KEY, "content");
-          localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "content-optimizer");
-        } catch {
-          /* ignore */
-        }
-        return "content-optimizer";
-      }
-      if (t === "overview") {
-        try {
-          sessionStorage.setItem(CONTENT_OPTIMIZER_SECTION_STORAGE_KEY, "content");
-          localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "content-optimizer");
-        } catch {
-          /* ignore */
-        }
-        return "content-optimizer";
+      if (t === "elementor-optimizer" || t === "overview" || t === "content-optimizer") {
+        return redirectContentOptimizerToGeneratorOpt();
       }
       if (t === "bulk-blog-generation") {
         try {
@@ -257,6 +265,7 @@ const Index = () => {
         }
         return "research";
       }
+      if (t === "api-docs") return "api";
       if (t && VALID_MANAGER_TABS.has(t)) return normalizeLegacyGeneratorTab(t);
       const w = localStorage.getItem(LEGACY_WORKSPACE_STORAGE_KEY);
       if (w === "freeflow") {
@@ -308,7 +317,15 @@ const Index = () => {
         setManagerTab(normalized);
       }
       try {
-        const hash = normalized === "dashboard" ? "settings" : normalized;
+        let hash: string;
+        if (normalized === "dashboard") {
+          hash = "settings";
+        } else if (normalized === "api") {
+          const current = window.location.hash.replace(/^#/, "").trim();
+          hash = current.startsWith("api") ? current : "api";
+        } else {
+          hash = normalized;
+        }
         if (window.location.hash.replace(/^#/, "") !== hash) {
           window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${hash}`);
         }

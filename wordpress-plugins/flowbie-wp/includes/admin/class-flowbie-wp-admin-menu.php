@@ -142,6 +142,13 @@ class Flowbie_Wp_Admin_Menu {
 						'callback'   => array( 'Flowbie_Wp_Admin', 'render_search_page' ),
 					),
 					array(
+						'slug'       => 'flowbie-wp-search-logs',
+						'page_title' => __( 'Search Logs', 'flowbie-wp' ),
+						'menu_title' => __( 'Search Logs', 'flowbie-wp' ),
+						'capability' => 'manage_options',
+						'callback'   => array( 'Flowbie_Wp_Admin', 'render_search_logs_page' ),
+					),
+					array(
 						'slug'       => 'flowbie-wp-overseer',
 						'page_title' => __( 'Overseer', 'flowbie-wp' ),
 						'menu_title' => __( 'Overseer', 'flowbie-wp' ),

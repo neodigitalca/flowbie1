@@ -59,6 +59,8 @@ class Flowbie_Wp_Tools {
 			array( 'wp_site_index', 'read', 'Site content graph index', 'wp_site_index', 'read' ),
 			array( 'wp_site_index_search', 'read', 'Search site index by query', 'wp_site_index_search', 'read' ),
 			array( 'wp_openrouter_status', 'read', 'Whether OpenRouter is configured', 'wp_openrouter_status', 'read' ),
+			array( 'wp_chat_settings_get', 'read', 'Read Flow Assist chat widget settings', 'wp_chat_settings_get', 'manage_options' ),
+			array( 'wp_chat_settings_update', 'write', 'Update Flow Assist chat widget settings', 'wp_chat_settings_update', 'manage_options' ),
 			array( 'wp_theme_functions_get', 'read', 'Read active theme functions.php', 'wp_theme_functions_get', 'edit_themes' ),
 			array( 'wp_theme_functions_put', 'destructive', 'Write active theme functions.php (backs up first)', 'wp_theme_functions_put', 'edit_themes' ),
 			array( 'wp_list_posts', 'read', 'List posts or pages', 'wp_list_posts', 'edit_posts' ),

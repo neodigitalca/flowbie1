@@ -1,20 +1,11 @@
 import type { ReactNode } from "react";
-import {
-  DETAILS_CO_SECTION_BODY,
-  DETAILS_CO_STACK,
-  DETAILS_DRAWER_BODY_CLASS,
-  detailsDrawerRowStripeClass,
-} from "@/components/integrations/wordpress/bulk-details-drawer-styles";
+import { contentOptimizerRowStripeClass } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import type { BulkProgressSlice } from "@/components/overview/overview-tab-constants";
 import { cn } from "@/lib/utils";
 import { WorkspaceDetailsPipelineSteps } from "@/components/shared/WorkspaceDetailsPipelineSteps";
 
 export function WorkspaceDetailsStack({ children }: { children: ReactNode }) {
-  return (
-    <div className={DETAILS_DRAWER_BODY_CLASS}>
-      <div className={DETAILS_CO_STACK}>{children}</div>
-    </div>
-  );
+  return <div className="px-0 pb-0 pt-0 font-sans text-base">{children}</div>;
 }
 
 export function WorkspaceDetailsSection({
@@ -28,11 +19,11 @@ export function WorkspaceDetailsSection({
   children: ReactNode;
 }) {
   return (
-    <div className={detailsDrawerRowStripeClass(stripeIndex)}>
+    <div className={contentOptimizerRowStripeClass(stripeIndex)}>
       {title ? (
         <div className="border-0 px-3 py-1.5 text-base font-normal text-white">{title}</div>
       ) : null}
-      <div className={DETAILS_CO_SECTION_BODY}>{children}</div>
+      <div className="space-y-0 border-0 bg-transparent px-2.5 pb-2 pt-0 sm:px-3">{children}</div>
     </div>
   );
 }
@@ -52,7 +43,7 @@ export function WorkspaceDetailsKvRow({
     <div
       className={cn(
         "flex min-h-9 flex-wrap items-center justify-between gap-x-3 gap-y-0.5 border-0 px-2.5 py-1.5 sm:px-3",
-        detailsDrawerRowStripeClass(stripeIndex),
+        contentOptimizerRowStripeClass(stripeIndex),
       )}
     >
       <span className={cn("shrink-0", whiteLabels ? "text-white" : "text-muted-foreground")}>{label}</span>
@@ -71,7 +62,7 @@ export function WorkspaceDetailsLiveMessage({
   const text = message.trim();
   if (!text) return null;
   return (
-    <div className={detailsDrawerRowStripeClass(stripeIndex)}>
+    <div className={contentOptimizerRowStripeClass(stripeIndex)}>
       <div className="border-0 px-2.5 py-1.5 text-base text-white sm:px-3">{text}</div>
     </div>
   );
@@ -95,7 +86,7 @@ export function WorkspaceDetailsProgressRow({
   const activeLabel = slice.activeRowLabel?.trim();
 
   return (
-    <div className={detailsDrawerRowStripeClass(stripeIndex)}>
+    <div className={contentOptimizerRowStripeClass(stripeIndex)}>
       {status ? (
         <div className="border-0 px-2.5 py-1.5 text-base text-white sm:px-3">{status}</div>
       ) : (

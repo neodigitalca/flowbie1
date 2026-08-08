@@ -22,6 +22,7 @@ require_once $flowbie_wp_admin_dir . 'trait-admin-handlers-sitemap.php';
 require_once $flowbie_wp_admin_dir . 'trait-admin-handlers-robots-txt.php';
 require_once $flowbie_wp_admin_dir . 'trait-admin-handlers-redirects.php';
 require_once $flowbie_wp_admin_dir . 'trait-admin-handlers-chat-logs.php';
+require_once $flowbie_wp_admin_dir . 'trait-admin-handlers-search-logs.php';
 require_once $flowbie_wp_admin_dir . 'trait-admin-handlers-overseer.php';
 require_once $flowbie_wp_admin_dir . 'trait-admin-handlers-script-manager.php';
 require_once $flowbie_wp_admin_dir . 'trait-admin-handlers-speed.php';
@@ -32,6 +33,7 @@ require_once $flowbie_wp_admin_dir . 'trait-admin-render-sitemap.php';
 require_once $flowbie_wp_admin_dir . 'trait-admin-render-robots-txt.php';
 require_once $flowbie_wp_admin_dir . 'trait-admin-render-redirects.php';
 require_once $flowbie_wp_admin_dir . 'trait-admin-render-chat-logs.php';
+require_once $flowbie_wp_admin_dir . 'trait-admin-render-search-logs.php';
 require_once $flowbie_wp_admin_dir . 'trait-admin-render-overseer.php';
 require_once $flowbie_wp_admin_dir . 'trait-admin-render-script-manager.php';
 require_once $flowbie_wp_admin_dir . 'trait-admin-render-image-seo.php';
@@ -55,6 +57,8 @@ require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/forms/admin/trait-admin-forms-ren
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/forms/admin/trait-admin-forms-handlers.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/seo-builder/admin/trait-admin-render-agent-hub.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/seo-builder/admin/trait-admin-handlers-agent-hub.php';
+require_once $flowbie_wp_admin_dir . 'trait-admin-content-tools-handlers.php';
+require_once $flowbie_wp_admin_dir . 'trait-admin-content-tools-ui.php';
 
 /**
  * Top-level app UI.
@@ -64,11 +68,7 @@ class Flowbie_Wp_Admin {
 	const NOTICE_USER_META = 'flowbie_wp_notice_dismissed';
 	const DISMISS_ACTION   = 'flowbie_wp_dismiss_notice';
 
-	const ACTION_PAIR = 'flowbie_wp_pair';
-
 	const ACTION_SAVE_OPENROUTER = 'flowbie_wp_save_openrouter';
-
-	const ACTION_REFRESH_OPENROUTER = 'flowbie_wp_refresh_openrouter';
 
 	const ACTION_SAVE_DATAFORSEO = 'flowbie_wp_save_dataforseo';
 
@@ -82,6 +82,7 @@ class Flowbie_Wp_Admin {
 	use Flowbie_Wp_Admin_Trait_Handlers_Robots_Txt;
 	use Flowbie_Wp_Admin_Trait_Handlers_Redirects;
 	use Flowbie_Wp_Admin_Trait_Handlers_Chat_Logs;
+	use Flowbie_Wp_Admin_Trait_Handlers_Search_Logs;
 	use Flowbie_Wp_Admin_Trait_Handlers_Overseer;
 	use Flowbie_Wp_Admin_Trait_Handlers_Script_Manager;
 	use Flowbie_Wp_Admin_Trait_Handlers_Speed;
@@ -99,6 +100,7 @@ class Flowbie_Wp_Admin {
 	use Flowbie_Wp_Admin_Trait_Render_Robots_Txt;
 	use Flowbie_Wp_Admin_Trait_Render_Redirects;
 	use Flowbie_Wp_Admin_Trait_Render_Chat_Logs;
+	use Flowbie_Wp_Admin_Trait_Render_Search_Logs;
 	use Flowbie_Wp_Admin_Trait_Render_Overseer;
 	use Flowbie_Wp_Admin_Trait_Render_Script_Manager;
 	use Flowbie_Wp_Admin_Trait_Render_Speed;
@@ -121,6 +123,8 @@ class Flowbie_Wp_Admin {
 	use Flowbie_Wp_Admin_Trait_Forms_Handlers;
 	use Flowbie_Wp_Admin_Trait_Render_Agent_Hub;
 	use Flowbie_Wp_Admin_Trait_Handlers_Agent_Hub;
+	use Flowbie_Wp_Admin_Trait_Content_Tools_Handlers;
+	use Flowbie_Wp_Admin_Trait_Content_Tools_Ui;
 
 	public static function required_capability(): string {
 		return apply_filters( 'flowbie_wp_capability', 'edit_posts' );
@@ -165,10 +169,9 @@ class Flowbie_Wp_Admin {
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue_admin_bar_assets' ) );
 		add_action( 'admin_init', array( __CLASS__, 'maybe_migrate_notice_user_meta' ), 1 );
 		add_action( 'admin_init', array( __CLASS__, 'maybe_dismiss_notice' ) );
+		add_action( 'admin_init', array( __CLASS__, 'suppress_foreign_admin_notices' ), 999 );
 		add_action( 'admin_notices', array( __CLASS__, 'render_notice' ) );
-		add_action( 'admin_post_' . self::ACTION_PAIR, array( __CLASS__, 'handle_pair' ) );
 		add_action( 'admin_post_' . self::ACTION_SAVE_OPENROUTER, array( __CLASS__, 'handle_save_openrouter' ) );
-		add_action( 'admin_post_' . self::ACTION_REFRESH_OPENROUTER, array( __CLASS__, 'handle_refresh_openrouter' ) );
 		add_action( 'admin_post_' . self::ACTION_SAVE_DATAFORSEO, array( __CLASS__, 'handle_save_dataforseo' ) );
 		add_action( 'admin_post_' . self::ACTION_SAVE_COMMENTS, array( __CLASS__, 'handle_save_comments' ) );
 		add_action( 'admin_post_' . self::ACTION_SAVE_SITEMAP, array( __CLASS__, 'handle_save_sitemap' ) );
@@ -187,6 +190,8 @@ class Flowbie_Wp_Admin {
 		add_action( 'admin_post_' . self::ACTION_DOWNLOAD_SPEED_PRESET, array( __CLASS__, 'handle_download_speed_preset' ) );
 		add_action( 'admin_post_' . self::ACTION_SAVE_SPEED_IMAGES, array( __CLASS__, 'handle_save_speed_images' ) );
 		add_action( 'admin_post_' . self::ACTION_FLUSH_SPEED_IMAGE_META, array( __CLASS__, 'handle_flush_speed_image_meta' ) );
+		add_action( 'admin_post_' . self::ACTION_RECOVER_ELEMENTOR_SITE, array( __CLASS__, 'handle_recover_elementor_site' ) );
+		add_action( 'admin_post_' . self::ACTION_RUN_ELEMENTOR_MIGRATION, array( __CLASS__, 'handle_run_elementor_migration' ) );
 		add_action( 'admin_post_' . self::ACTION_REFRESH_ANALYTICS, array( __CLASS__, 'handle_refresh_analytics' ) );
 		add_action( 'admin_post_' . self::ACTION_SAVE_REDIRECT, array( __CLASS__, 'handle_save_redirect' ) );
 		add_action( 'admin_post_' . self::ACTION_DELETE_REDIRECT, array( __CLASS__, 'handle_delete_redirect' ) );
@@ -203,6 +208,12 @@ class Flowbie_Wp_Admin {
 		add_action( 'admin_post_' . self::ACTION_DELETE_CHAT_LOG, array( __CLASS__, 'handle_delete_chat_log' ) );
 		add_action( 'admin_post_' . self::ACTION_BULK_CHAT_LOGS, array( __CLASS__, 'handle_bulk_chat_logs' ) );
 		add_action( 'admin_post_' . self::ACTION_DELETE_CHAT_LOG_REPORT, array( __CLASS__, 'handle_delete_chat_log_report' ) );
+		add_action( 'admin_post_' . self::ACTION_GENERATE_CHAT_LOG_POSTS_GAP_CSV, array( __CLASS__, 'handle_generate_chat_log_posts_gap_csv' ) );
+		add_action( 'admin_post_' . self::ACTION_GENERATE_CHAT_LOG_PAGES_GAP_CSV, array( __CLASS__, 'handle_generate_chat_log_pages_gap_csv' ) );
+		add_action( 'admin_post_' . self::ACTION_EXPORT_SEARCH_LOGS, array( __CLASS__, 'handle_export_search_logs' ) );
+		add_action( 'admin_post_' . self::ACTION_SAVE_SEARCH_LOG_SETTINGS, array( __CLASS__, 'handle_save_search_log_settings' ) );
+		add_action( 'admin_post_' . self::ACTION_DELETE_SEARCH_LOG, array( __CLASS__, 'handle_delete_search_log' ) );
+		add_action( 'admin_post_' . self::ACTION_BULK_SEARCH_LOGS, array( __CLASS__, 'handle_bulk_search_logs' ) );
 		add_action( 'admin_post_' . self::ACTION_EXPORT_OVERSEER, array( __CLASS__, 'handle_export_overseer' ) );
 		add_action( 'admin_post_' . self::ACTION_SAVE_OVERSEER_SETTINGS, array( __CLASS__, 'handle_save_overseer_settings' ) );
 		add_action( 'admin_post_' . self::ACTION_SAVE_OVERSEER_CONVERSION, array( __CLASS__, 'handle_save_overseer_conversion' ) );
@@ -241,6 +252,8 @@ class Flowbie_Wp_Admin {
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_speed_images_assets' ) );
 		self::register_fields_handlers();
 		self::register_forms_handlers();
+		self::register_content_tools_handlers();
+		self::register_content_tools_ui();
 		add_action( 'admin_enqueue_scripts', array( 'Flowbie_Wp_Forms', 'enqueue_admin_assets' ) );
 	}
 }

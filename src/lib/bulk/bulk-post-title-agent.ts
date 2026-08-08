@@ -3,6 +3,7 @@ import { stripTitleSeparatorSuffix } from "@/lib/content-generation/content-sani
 import { parseJsonWithRepair } from "@/lib/json-repair-utility";
 import { getProductionModel } from "@/lib/optimization-settings-storage";
 import { BULK_WORDPRESS_POST_TITLE_RULE } from "@/lib/prompt-builders/system-user";
+import { buildKeywordPunctuationPromptBlock } from "@/lib/prompt-builders/keyword-canonical-punctuation";
 
 /** When true, bulk publish uses one OpenRouter pass to finalize the WordPress post title. */
 export const BULK_AI_TITLE_RETRY = true;
@@ -72,7 +73,8 @@ export async function resolveBulkWordPressPostTitle(args: {
     .filter(Boolean)
     .join("\n");
 
-  const user = `PRIMARY KEYWORD (exact phrase for Rank Math): ${kw || "(none)"}
+  const user = `PRIMARY KEYWORD (stored ACF phrase): ${kw || "(none)"}
+${kw ? buildKeywordPunctuationPromptBlock(kw) : ""}
 
 Candidate titles (intent only; synthesize ONE new complete title; do not truncate; do not cut mid-word):
 ${candidateLines || "(no candidates)"}

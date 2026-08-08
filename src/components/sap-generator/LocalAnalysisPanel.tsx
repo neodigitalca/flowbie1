@@ -32,6 +32,7 @@ import {
   mergeWikipediaSearchAugmentParts,
 } from "@/lib/local-analysis-metro-context";
 import { applySapOriginFromTitleToRows } from "@/lib/sap-origin-from-title";
+import { sapBudgetIntFromLooseInput } from "@/lib/sap-page-budget-input";
 import {
   LOCAL_ANALYSIS_DEFAULT_SAP_PAGES as DEFAULT_SAP_PAGES,
   LOCAL_ANALYSIS_SAP_MAX,
@@ -124,13 +125,13 @@ import {
   type EntityTitleClusterKeywordTarget,
 } from "@/lib/local-analysis/entity-sap-title-cluster-jobs";
 import {
-  applyClusterHarnessPhase,
   buildEntityTitleHarnessGroupsFromTargets,
   countEntityHarnessSteps,
   hydrateEntityTitleHarnessFromSapRows,
   mergeEntityGenerateProgress,
   titlesMapFromRows,
 } from "@/lib/local-analysis/entity-title-harness-state";
+import { resolveEntityDetailsCurrentRow } from "@/lib/local-analysis/entity-details-current-row";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { loadApiKey } from "@/lib/api";
 import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
@@ -209,14 +210,6 @@ const SAP_COUNT_MAX = LOCAL_ANALYSIS_SAP_MAX;
 /** Max total SAP rows across all target keywords in one run. */
 const TOTAL_SAP_CAP = LOCAL_ANALYSIS_TOTAL_SAP_CAP;
 /** Soft warning when a large unfiltered grid may include many competitor rows. */
-/** Digits from the budget field; empty or invalid uses min only for internal caps (does not rewrite the input). */
-function sapBudgetIntFromLooseInput(raw: string): number {
-  const digits = raw.trim().replace(/[^\d]/g, "");
-  if (!digits) return SAP_COUNT_MIN;
-  const n = Math.floor(Number(digits));
-  if (!Number.isFinite(n) || n < 1) return SAP_COUNT_MIN;
-  return n;
-}
 
 const LA_SESSION_KEY = (siteId: string) => `flowbie.local-analysis.v1.${siteId}`;
 
@@ -507,6 +500,7 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
   flowPurpose,
 }) => {
   const [uploadLabel, setUploadLabel] = useState<string>("");
+  const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false);
   const [csvParsing, setCsvParsing] = useState(false);
   const [gridSummaryMarkdown, setGridSummaryMarkdown] = useState<string>("");
   /** Weakness-by-keyword from last grid CSV (drives weighted SAP allocation on suggest). */
@@ -1979,6 +1973,15 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
   const hasGeneratedSapRows = displaySapRows.length > 0;
   const entityListRows = hasGeneratedSapRows ? displaySapRows : entitySlotRows;
   const entityHasEmptyKeywordRow = entityListRows.some((r) => !r.keyword?.trim());
+  const entityDetailsCurrentRow = useMemo(
+    () =>
+      resolveEntityDetailsCurrentRow(
+        headerProgress,
+        workspaceBusy,
+        entityListRows.length,
+      ),
+    [headerProgress, workspaceBusy, entityListRows.length],
+  );
   /** Idle track off when placeholders/empty keywords remain; active run still shows bar. */
   const hideIdleProgressTrack =
     !headerProgress && (!hasGeneratedSapRows || entityHasEmptyKeywordRow);
@@ -2100,6 +2103,7 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
         onEntityTypeFocusChange={setEntityTypeFocus}
         hasSapRowsForCsv={hasSapRowsForCsv}
         onDownloadTargetsCsv={() => void downloadHeaderTargetsCsv()}
+        onDetailsOpenChange={setDetailsDrawerOpen}
         detailsProps={{
           headerProgress,
           uploadLabel,
@@ -2110,6 +2114,8 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
           gridSummaryMarkdown,
           strategyMarkdown,
           hasSapRowsForCsv,
+          displayRows: entityListRows,
+          currentRow: entityDetailsCurrentRow,
           sitemapInventoryLinks,
           gscHostedLink: gscKeywordsHostedLink,
           onDownloadTargetsCsv: () => void downloadHeaderTargetsCsv(),
@@ -2122,10 +2128,13 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
       <div
         className={cn(
           SEO_WORKSPACE_BODY_SCROLL_CLASS,
-          "flex w-full min-w-0 flex-col",
+          "relative flex w-full min-w-0 flex-col",
           entityListRows.length === 0 && "overflow-y-hidden",
         )}
       >
+        {detailsDrawerOpen ? (
+          <div className="pointer-events-none absolute inset-0 z-10 bg-zinc-950/78 backdrop-blur-md backdrop-brightness-[0.45] backdrop-saturate-50 transition-[opacity,backdrop-filter] duration-300" aria-hidden />
+        ) : null}
         <BulkEntityWorkspaceBody
           hasGeneratedSapRows={hasGeneratedSapRows}
           generatedRows={entityListRows}

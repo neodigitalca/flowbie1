@@ -12,10 +12,9 @@ class Flowbie_App_Admin {
 	const MENU_SLUG = 'flowbie-one-app';
 
 	public static function init(): void {
-		if ( ! is_admin() ) {
-			return;
+		if ( is_admin() ) {
+			add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
 		}
-		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
 		add_action( 'admin_bar_menu', array( __CLASS__, 'admin_bar_link' ), 100 );
 	}
 
@@ -42,11 +41,15 @@ class Flowbie_App_Admin {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
 		}
+		$href = is_admin()
+			? admin_url( 'admin.php?page=' . self::MENU_SLUG )
+			: self::app_url();
+
 		$bar->add_node(
 			array(
 				'id'    => 'flowbie-one-app',
 				'title' => 'Flowbie ONE',
-				'href'  => admin_url( 'admin.php?page=' . self::MENU_SLUG ),
+				'href'  => $href,
 				'meta'  => array(
 					'title' => __( 'Open Flowbie ONE workspace', 'flowbie-app' ),
 				),

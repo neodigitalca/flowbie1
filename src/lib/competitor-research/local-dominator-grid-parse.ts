@@ -1,4 +1,5 @@
 import Papa from "papaparse";
+import { hostnameFromUrl } from "@/lib/competitor/filter-connected-site-competitors";
 
 export interface CompetitorGridPlaceRow {
   /** DataForSEO `keyword` value, e.g. `cid:123` or `place_id:ChIJ...`. */
@@ -10,6 +11,8 @@ export interface CompetitorGridPlaceRow {
   longitude: number | null;
   /** Human-readable id for errors (cid or place id snippet). */
   idLabel: string;
+  /** Hostname from CSV Website column when present. */
+  websiteHostname: string | null;
 }
 
 function num(v: string | undefined): number {
@@ -109,7 +112,7 @@ export function parseCompetitorGridTopPlaces(csvText: string, maxPlaces = GRID_C
   /** canonical id → best row (lowest rank wins). */
   const bestById = new Map<
     string,
-    { dfsKeyword: string; businessName: string; rank: number; lat: number | null; lng: number | null; idLabel: string }
+    { dfsKeyword: string; businessName: string; rank: number; lat: number | null; lng: number | null; idLabel: string; websiteHostname: string | null }
   >();
 
   for (const raw of data) {
@@ -155,6 +158,8 @@ export function parseCompetitorGridTopPlaces(csvText: string, maxPlaces = GRID_C
       dfsKeyword.startsWith("cid:") ? `cid:${dfsKeyword.slice(4)}` : `place:${dfsKeyword.replace(/^place_id:/, "")}`;
     const idLabel = dfsKeyword.startsWith("cid:") ? `cid ${dfsKeyword.slice(4)}` : dfsKeyword.replace(/^place_id:/, "place_id ");
 
+    const websiteHostname = hostnameFromUrl(websiteUrl);
+
     const prev = bestById.get(canon);
     if (!prev || rank < prev.rank) {
       bestById.set(canon, {
@@ -164,6 +169,7 @@ export function parseCompetitorGridTopPlaces(csvText: string, maxPlaces = GRID_C
         lat: latOk ? lat : null,
         lng: lngOk ? lng : null,
         idLabel,
+        websiteHostname,
       });
     }
   }
@@ -187,6 +193,7 @@ export function parseCompetitorGridTopPlaces(csvText: string, maxPlaces = GRID_C
       latitude: r.lat,
       longitude: r.lng,
       idLabel: r.idLabel,
+      websiteHostname: r.websiteHostname,
     })),
   };
 }

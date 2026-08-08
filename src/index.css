@@ -368,6 +368,22 @@ All colors MUST be HSL.
     font-size: inherit;
   }
 
+  /** API tab: Lato + 1rem floor; overrides WP theme link/table sizes on SPA. */
+  .flowbie-api-tab {
+    font-family: "Lato", sans-serif;
+    font-size: var(--font-size-min);
+  }
+
+  .flowbie-api-tab :where(p, span, li, button, td, th, a, code, pre, strong, em, label, small) {
+    font-family: inherit;
+    font-size: inherit;
+  }
+
+  .flowbie-api-tab :where(h1, h2, h3, h4, th) {
+    font-family: inherit;
+    font-weight: 400;
+  }
+
   /** Chrome autofill: keep black field + inherited text. */
   .local-analysis-panel input:-webkit-autofill,
   .local-analysis-panel input:-webkit-autofill:hover,
@@ -558,15 +574,9 @@ All colors MUST be HSL.
     height: 1.25rem;
     border-radius: 0;
     overflow: hidden;
-    background: linear-gradient(
-      180deg,
-      hsl(var(--semantic-data) / 0.16) 0%,
-      hsl(var(--semantic-data) / 0.1) 46%,
-      hsl(214 62% 26% / 0.5) 54%,
-      hsl(214 68% 20% / 0.62) 100%
-    );
+    background: hsl(0 0% 0% / 0.92);
     border: 1px solid hsl(var(--semantic-data) / 0.28);
-    box-shadow: inset 0 1px 0 hsl(var(--semantic-data) / 0.12);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.04);
   }
 
   .flowbie-overview-header-progress-fill {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AiModelsSettingsContent } from "@/components/manager/AiModelsSettingsContent";
 import { ApiKeysSettingsContent } from "@/components/manager/ApiKeysSettingsContent";
 import { GoogleServicesSettingsContent } from "@/components/manager/GoogleServicesSettingsContent";
@@ -12,6 +12,8 @@ import {
   readStoredManagerSettingsCluster,
   writeStoredManagerSettingsCluster,
 } from "@/components/manager/manager-settings-cluster";
+import { dashboardClusterToArea, useTeamPermission } from "@/hooks/use-team-permission";
+import { DASHBOARD_SECTION_ORDER } from "@/components/manager/dashboard/dashboard-section-labels";
 
 export interface ManagerSettingsContentProps {
   apiKey: string;
@@ -63,6 +65,8 @@ export function ManagerSettingsContent({
   const cluster =
     settingsClusterControlled !== undefined ? settingsClusterControlled : internalCluster;
 
+  const { canRead } = useTeamPermission();
+
   const onClusterChange = useCallback(
     (id: ManagerSettingsClusterId) => {
       if (onSettingsClusterChange) {
@@ -73,6 +77,21 @@ export function ManagerSettingsContent({
     },
     [onSettingsClusterChange],
   );
+
+  const visibleSectionIds = useMemo(
+    () =>
+      DASHBOARD_SECTION_ORDER.filter((id) => {
+        const area = dashboardClusterToArea(id);
+        return !area || canRead(area);
+      }),
+    [canRead],
+  );
+
+  useEffect(() => {
+    if (!visibleSectionIds.includes(cluster) && visibleSectionIds.length > 0) {
+      onClusterChange(visibleSectionIds[0]);
+    }
+  }, [cluster, visibleSectionIds, onClusterChange]);
 
   useEffect(() => {
     writeStoredManagerSettingsCluster(cluster);
@@ -152,7 +171,10 @@ export function ManagerSettingsContent({
       <ManagerDashboardShell
         activeSection={cluster}
         onSectionChange={onClusterChange}
-        sections={sections.map(({ id, content }) => ({ id, content }))}
+        sections={sections
+          .filter(({ id }) => visibleSectionIds.includes(id))
+          .map(({ id, content }) => ({ id, content }))}
+        visibleSectionIds={visibleSectionIds}
       />
     </PropertiesDashboardChromeProvider>
   );

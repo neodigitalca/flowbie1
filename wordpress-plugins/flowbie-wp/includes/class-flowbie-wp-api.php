@@ -124,16 +124,13 @@ class Flowbie_Wp_Api {
 	}
 
 	/**
-	 * @return array{api_base:string,wp_username:string,app_password:string,paired_site_id:string,paired_client_name:string,paired_at:string}
+	 * @return array{api_base:string,wp_username:string,app_password:string}
 	 */
 	public static function get_settings(): array {
 		$defaults = array(
 			'api_base'                    => '',
 			'wp_username'                 => '',
 			'app_password'                => '',
-			'paired_site_id'              => '',
-			'paired_client_name'          => '',
-			'paired_at'                   => '',
 			'agency_openrouter_api_key'   => '',
 			'agency_dataforseo_login'     => '',
 			'agency_dataforseo_password'  => '',
@@ -141,21 +138,7 @@ class Flowbie_Wp_Api {
 		$saved = get_option( self::OPTION_KEY, array() );
 		$merged = wp_parse_args( (array) $saved, $defaults );
 
-		// Migrate legacy manual site id into paired_site_id when present.
-		if ( $merged['paired_site_id'] === '' && ! empty( $saved['flowbie_site_id'] ) ) {
-			$merged['paired_site_id'] = sanitize_text_field( (string) $saved['flowbie_site_id'] );
-		}
-
 		return $merged;
-	}
-
-	public static function get_paired_site_id(): string {
-		$s = self::get_settings();
-		return isset( $s['paired_site_id'] ) ? trim( (string) $s['paired_site_id'] ) : '';
-	}
-
-	public static function is_paired(): bool {
-		return self::get_paired_site_id() !== '';
 	}
 
 	public static function dev_credentials_active(): bool {
@@ -250,22 +233,6 @@ class Flowbie_Wp_Api {
 		update_option( self::OPTION_KEY, $merged, false );
 	}
 
-	/**
-	 * @param array{siteId?:string,clientName?:string,pairedAt?:string} $pairing
-	 */
-	public static function save_pairing( array $pairing ): void {
-		$prev = self::get_settings();
-		$merged = array_merge(
-			$prev,
-			array(
-				'paired_site_id'     => isset( $pairing['siteId'] ) ? sanitize_text_field( (string) $pairing['siteId'] ) : '',
-				'paired_client_name' => isset( $pairing['clientName'] ) ? sanitize_text_field( (string) $pairing['clientName'] ) : '',
-				'paired_at'          => isset( $pairing['pairedAt'] ) ? sanitize_text_field( (string) $pairing['pairedAt'] ) : '',
-			)
-		);
-		update_option( self::OPTION_KEY, $merged, false );
-	}
-
 	public static function get_agency_openrouter_api_key(): string {
 		$s = self::get_settings();
 		return isset( $s['agency_openrouter_api_key'] ) ? trim( (string) $s['agency_openrouter_api_key'] ) : '';
@@ -322,22 +289,6 @@ class Flowbie_Wp_Api {
 		update_option( self::OPTION_KEY, $merged, false );
 	}
 
-	public static function clear_pairing(): void {
-		$prev = self::get_settings();
-		update_option(
-			self::OPTION_KEY,
-			array_merge(
-				$prev,
-				array(
-					'paired_site_id'     => '',
-					'paired_client_name' => '',
-					'paired_at'          => '',
-				)
-			),
-			false
-		);
-	}
-
 	public static function get_site_url(): string {
 		return (string) apply_filters( 'flowbie_wp_site_url', home_url() );
 	}
@@ -361,39 +312,27 @@ class Flowbie_Wp_Api {
 	}
 
 	/**
+	 * Local WordPress site dashboard (no cloud pairing).
+	 *
 	 * @return array{ok:bool,dashboard:?array<string,mixed>,error:string,error_code:string}
 	 */
 	public static function fetch_plugin_dashboard_state(): array {
-		return Flowbie_Wp_Supabase::fetch_dashboard_state( self::get_paired_site_id() );
-	}
-
-	/**
-	 * @return array{ok:bool,client:?array<string,mixed>,error:string}|WP_Error
-	 */
-	public static function pair_with_site_id( string $site_id ) {
-		$result = Flowbie_Wp_Supabase::connect( $site_id );
-		if ( is_wp_error( $result ) ) {
-			return $result;
-		}
-
-		$client = isset( $result['client'] ) && is_array( $result['client'] ) ? $result['client'] : array();
-		$name   = isset( $client['name'] ) ? (string) $client['name'] : '';
-		$at     = isset( $client['pluginPairedAt'] ) ? (string) $client['pluginPairedAt'] : gmdate( 'c' );
-
-		self::save_pairing(
-			array(
-				'siteId'     => sanitize_text_field( trim( $site_id ) ),
-				'clientName' => $name,
-				'pairedAt'   => $at,
-			)
+		$dashboard = array(
+			'ok'       => true,
+			'client'   => array(
+				'name'    => get_bloginfo( 'name' ),
+				'siteUrl' => self::get_site_url(),
+			),
+			'progress' => array(
+				'ok' => false,
+			),
 		);
 
-		delete_transient( 'flowbie_wp_dashboard_' . md5( sanitize_text_field( trim( $site_id ) ) . '|' . FLOWBIE_WP_VERSION ) );
-		Flowbie_Wp_OpenRouter::clear_credentials_cache();
-
 		return array(
-			'ok'     => true,
-			'client' => $client,
+			'ok'         => true,
+			'dashboard'  => $dashboard,
+			'error'      => '',
+			'error_code' => '',
 		);
 	}
 
@@ -408,7 +347,7 @@ class Flowbie_Wp_Api {
 		if ( $s['api_base'] === '' ) {
 			return new WP_Error(
 				'flowbie_no_base',
-				__( 'Set the Flowbie API URL under Settings (same backend as Integrations — not the browser app URL). Credentials load from Supabase when you connect.', 'flowbie-wp' )
+				__( 'Set the Flowbie API URL under Settings.', 'flowbie-wp' )
 			);
 		}
 

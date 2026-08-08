@@ -16,21 +16,9 @@ trait Flowbie_Wp_Admin_Trait_Render_App {
 
 		$flash        = self::get_and_clear_flash();
 		$settings_url = admin_url( 'admin.php?page=flowbie-wp-settings' );
-		$paired       = Flowbie_Wp_Api::is_paired();
-		$dashboard_rs = $paired ? Flowbie_Wp_Api::fetch_plugin_dashboard_state() : null;
+		$dashboard_rs = Flowbie_Wp_Api::fetch_plugin_dashboard_state();
 		$dashboard    = ( is_array( $dashboard_rs ) && ! empty( $dashboard_rs['ok'] ) && is_array( $dashboard_rs['dashboard'] ) ) ? $dashboard_rs['dashboard'] : null;
 		$progress     = is_array( $dashboard ) && isset( $dashboard['progress'] ) && is_array( $dashboard['progress'] ) ? $dashboard['progress'] : null;
-		$paired_ok    = $paired && is_array( $dashboard_rs ) && ! empty( $dashboard_rs['ok'] );
-
-		$metrics_progress = null;
-		if ( $paired_ok && is_array( $progress ) ) {
-			$metrics_progress = $progress;
-		} elseif ( $paired && is_array( $dashboard_rs ) && empty( $dashboard_rs['ok'] ) ) {
-			$metrics_progress = array(
-				'ok'    => false,
-				'error' => isset( $dashboard_rs['error'] ) && is_string( $dashboard_rs['error'] ) ? $dashboard_rs['error'] : '',
-			);
-		}
 
 		?>
 		<div class="wrap flowbie-wp-app flowbie-wp-app--dashboard">
@@ -42,25 +30,9 @@ trait Flowbie_Wp_Admin_Trait_Render_App {
 				</div>
 			<?php endif; ?>
 
-			<?php if ( ! $paired ) : ?>
-				<div class="flowbie-wp-card flowbie-wp-card--notice">
-					<h2 class="flowbie-wp-card__title"><?php esc_html_e( 'Connect this site', 'flowbie-wp' ); ?></h2>
-					<p><?php esc_html_e( 'Copy the site ID from your property in Integrations and enter it under Settings.', 'flowbie-wp' ); ?></p>
-					<p><a class="button button-primary" href="<?php echo esc_url( $settings_url ); ?>"><?php esc_html_e( 'Open Settings', 'flowbie-wp' ); ?></a></p>
-				</div>
-			<?php elseif ( ! $paired_ok ) : ?>
-				<div class="flowbie-wp-card flowbie-wp-card--notice">
-					<h2 class="flowbie-wp-card__title"><?php esc_html_e( 'Could not load property', 'flowbie-wp' ); ?></h2>
-					<p><?php echo esc_html( is_array( $dashboard_rs ) && ! empty( $dashboard_rs['error'] ) ? (string) $dashboard_rs['error'] : __( 'Unknown error.', 'flowbie-wp' ) ); ?></p>
-					<p><a href="<?php echo esc_url( $settings_url ); ?>"><?php esc_html_e( 'Check Settings', 'flowbie-wp' ); ?></a></p>
-				</div>
-			<?php endif; ?>
-
 			<div class="flowbie-wp-dashboard">
 				<?php
 				self::render_dashboard_site_overview(
-					$paired,
-					$paired_ok,
 					is_array( $dashboard ) ? $dashboard : null,
 					$settings_url
 				);
@@ -68,7 +40,7 @@ trait Flowbie_Wp_Admin_Trait_Render_App {
 				<div class="flowbie-wp-dashboard__metrics-panel">
 					<h2 class="flowbie-wp-dashboard__section-title"><?php esc_html_e( 'Property metrics', 'flowbie-wp' ); ?></h2>
 					<div class="flowbie-wp-dashboard__metrics">
-						<?php self::render_site_progress_strip( $metrics_progress, 'full' ); ?>
+						<?php self::render_site_progress_strip( $progress, 'full' ); ?>
 					</div>
 				</div>
 
@@ -81,23 +53,18 @@ trait Flowbie_Wp_Admin_Trait_Render_App {
 	/**
 	 * Site summary panel at the top of the dashboard.
 	 *
-	 * @param bool                        $paired       Site ID saved locally.
-	 * @param bool                        $paired_ok    Flowbie dashboard payload loaded.
-	 * @param array<string,mixed>|null    $dashboard    Dashboard payload when paired_ok.
-	 * @param string                      $settings_url Settings admin URL.
+	 * @param array<string,mixed>|null $dashboard    Dashboard payload.
+	 * @param string                   $settings_url Settings admin URL.
 	 */
-	private static function render_dashboard_site_overview( bool $paired, bool $paired_ok, ?array $dashboard, string $settings_url ): void {
-		$settings      = Flowbie_Wp_Api::get_settings();
-		$paired_id     = isset( $settings['paired_site_id'] ) ? trim( (string) $settings['paired_site_id'] ) : '';
-		$paired_name   = isset( $settings['paired_client_name'] ) ? trim( (string) $settings['paired_client_name'] ) : '';
-		$client        = is_array( $dashboard ) && isset( $dashboard['client'] ) && is_array( $dashboard['client'] ) ? $dashboard['client'] : array();
-		$client_name   = isset( $client['name'] ) ? trim( (string) $client['name'] ) : '';
-		$display_name  = $client_name !== '' ? $client_name : ( $paired_name !== '' ? $paired_name : get_bloginfo( 'name' ) );
-		$site_url      = isset( $client['siteUrl'] ) ? trim( (string) $client['siteUrl'] ) : '';
-		$production    = isset( $client['productionSiteUrl'] ) ? trim( (string) $client['productionSiteUrl'] ) : '';
+	private static function render_dashboard_site_overview( ?array $dashboard, string $settings_url ): void {
+		$client       = is_array( $dashboard ) && isset( $dashboard['client'] ) && is_array( $dashboard['client'] ) ? $dashboard['client'] : array();
+		$client_name  = isset( $client['name'] ) ? trim( (string) $client['name'] ) : '';
+		$display_name = $client_name !== '' ? $client_name : get_bloginfo( 'name' );
+		$site_url     = isset( $client['siteUrl'] ) ? trim( (string) $client['siteUrl'] ) : '';
 		$home         = home_url( '/' );
-		$primary_url  = $production !== '' ? $production : ( $site_url !== '' ? $site_url : $home );
+		$primary_url  = $site_url !== '' ? $site_url : $home;
 		$plugin_ver   = defined( 'FLOWBIE_WP_VERSION' ) ? FLOWBIE_WP_VERSION : '';
+		$openrouter_ok = Flowbie_Wp_OpenRouter::get_api_key() !== '';
 
 
 		$entity_slug = Flowbie_Wp_Site_Progress::resolve_entity_post_type_for_client( $client );
@@ -111,14 +78,6 @@ trait Flowbie_Wp_Admin_Trait_Render_App {
 		}
 
 		$facts = array();
-
-		if ( $paired_id !== '' ) {
-			$facts[] = array(
-				'label' => __( 'Flowbie site ID', 'flowbie-wp' ),
-				'value' => $paired_id,
-				'mono'  => true,
-			);
-		}
 
 		if ( is_string( $entity_slug ) && $entity_slug !== '' ) {
 			$entity_counts = wp_count_posts( $entity_slug );
@@ -137,6 +96,13 @@ trait Flowbie_Wp_Admin_Trait_Render_App {
 			);
 		}
 
+		if ( $openrouter_ok ) {
+			$facts[] = array(
+				'label' => __( 'OpenRouter', 'flowbie-wp' ),
+				'value' => __( 'Configured', 'flowbie-wp' ),
+			);
+		}
+
 		?>
 		<section class="flowbie-wp-dashboard-overview" aria-label="<?php esc_attr_e( 'Site overview', 'flowbie-wp' ); ?>">
 			<div class="flowbie-wp-dashboard-overview__hero">
@@ -147,23 +113,17 @@ trait Flowbie_Wp_Admin_Trait_Render_App {
 					</p>
 					<?php if ( $site_url !== '' && $site_url !== $primary_url ) : ?>
 						<p class="flowbie-wp-dashboard-overview__url flowbie-wp-dashboard-overview__url--secondary">
-							<span class="flowbie-wp-dashboard-overview__url-prefix"><?php esc_html_e( 'Staging', 'flowbie-wp' ); ?>:</span>
+							<span class="flowbie-wp-dashboard-overview__url-prefix"><?php esc_html_e( 'Site URL', 'flowbie-wp' ); ?>:</span>
 							<a href="<?php echo esc_url( $site_url ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html( $site_url ); ?></a>
 						</p>
 					<?php endif; ?>
 				</div>
 				<div class="flowbie-wp-dashboard-overview__status">
-					<?php if ( $paired_ok ) : ?>
-						<span class="flowbie-wp-badge flowbie-wp-badge--connected"><?php esc_html_e( 'Connected', 'flowbie-wp' ); ?></span>
-					<?php elseif ( $paired ) : ?>
-						<span class="flowbie-wp-badge flowbie-wp-badge--warn"><?php esc_html_e( 'Sync issue', 'flowbie-wp' ); ?></span>
+					<?php if ( $openrouter_ok ) : ?>
+						<span class="flowbie-wp-badge flowbie-wp-badge--connected"><?php esc_html_e( 'AI ready', 'flowbie-wp' ); ?></span>
 					<?php else : ?>
-						<span class="flowbie-wp-badge flowbie-wp-badge--muted"><?php esc_html_e( 'Not connected', 'flowbie-wp' ); ?></span>
-					<?php endif; ?>
-					<?php if ( ! $paired ) : ?>
-						<a class="button button-primary flowbie-wp-dashboard-overview__connect" href="<?php echo esc_url( $settings_url ); ?>"><?php esc_html_e( 'Connect site', 'flowbie-wp' ); ?></a>
-					<?php elseif ( ! $paired_ok ) : ?>
-						<a class="button flowbie-wp-dashboard-overview__connect" href="<?php echo esc_url( $settings_url ); ?>"><?php esc_html_e( 'Check settings', 'flowbie-wp' ); ?></a>
+						<span class="flowbie-wp-badge flowbie-wp-badge--warn"><?php esc_html_e( 'OpenRouter missing', 'flowbie-wp' ); ?></span>
+						<a class="button button-primary flowbie-wp-dashboard-overview__connect" href="<?php echo esc_url( $settings_url . '&tab=openrouter' ); ?>"><?php esc_html_e( 'Add API key', 'flowbie-wp' ); ?></a>
 					<?php endif; ?>
 				</div>
 			</div>
@@ -207,18 +167,18 @@ trait Flowbie_Wp_Admin_Trait_Render_App {
 	 */
 	public static function dashboard_modules(): array {
 		$modules = array();
-		$paired  = Flowbie_Wp_Api::is_paired();
+		$openrouter_ok = Flowbie_Wp_OpenRouter::get_api_key() !== '';
 
 		if ( current_user_can( self::required_capability() ) ) {
 			$modules[] = array(
 				'slug'     => 'settings',
 				'title'    => __( 'Settings', 'flowbie-wp' ),
-				'desc'     => __( 'Connect and configure API keys.', 'flowbie-wp' ),
+				'desc'     => __( 'Configure API keys.', 'flowbie-wp' ),
 				'url'      => admin_url( 'admin.php?page=flowbie-wp-settings' ),
 				'icon'     => 'dashicons-admin-generic',
 				'tone'     => 'settings',
-				'badge'    => $paired ? __( 'Connected', 'flowbie-wp' ) : __( 'Not connected', 'flowbie-wp' ),
-				'badge_ok' => $paired,
+				'badge'    => $openrouter_ok ? __( 'AI ready', 'flowbie-wp' ) : __( 'Needs OpenRouter', 'flowbie-wp' ),
+				'badge_ok' => $openrouter_ok,
 			);
 
 			$modules[] = array(

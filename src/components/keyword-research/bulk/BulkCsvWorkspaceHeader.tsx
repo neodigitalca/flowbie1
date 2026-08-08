@@ -15,9 +15,9 @@ import {
 } from "@/components/blog-generator/blog-generator-sections";
 import { BulkGeneratorRunActions } from "@/components/keyword-research/bulk/BulkGeneratorRunActions";
 import {
-  BulkGeneratorDetailsPanel,
-  type BulkGeneratorDetailsPanelProps,
-} from "@/components/keyword-research/bulk/BulkGeneratorDetailsPanel";
+  BulkGeneratorDetailsDrawer,
+} from "@/components/keyword-research/bulk/BulkGeneratorDetailsDrawer";
+import type { BulkGeneratorDetailsPanelProps } from "@/components/keyword-research/bulk/BulkGeneratorDetailsPanel";
 import {
   BULK_HEADER_ICON_RUN_BTN,
   BULK_HEADER_ICON_TOOL_BTN,
@@ -57,6 +57,7 @@ export type BulkCsvWorkspaceHeaderProps = {
   scheduleMenu?: ReactNode;
   sitemapMenu?: ReactNode;
   detailsProps: BulkGeneratorDetailsPanelProps;
+  onDetailsOpenChange?: (open: boolean) => void;
 };
 
 export function BulkCsvWorkspaceHeader({
@@ -80,6 +81,7 @@ export function BulkCsvWorkspaceHeader({
   scheduleMenu,
   sitemapMenu,
   detailsProps,
+  onDetailsOpenChange,
 }: BulkCsvWorkspaceHeaderProps) {
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -103,6 +105,7 @@ export function BulkCsvWorkspaceHeader({
       canOpenDetails={canOpenDetails}
       isProcessing={isProcessing}
       detailsPanelId="bulk-csv-details-panel"
+      onDetailsOpenChange={onDetailsOpenChange}
       toolbar={
         <>
           <input
@@ -180,7 +183,7 @@ export function BulkCsvWorkspaceHeader({
           />
         </>
       }
-      detailsPanel={<BulkGeneratorDetailsPanel {...detailsProps} />}
+      detailsPanel={<BulkGeneratorDetailsDrawer {...detailsProps} />}
     />
   );
 }

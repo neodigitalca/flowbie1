@@ -1,5 +1,7 @@
 import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
 import type { ManagerCloudSnapshotV1 } from "@/lib/manager-cloud-settings-snapshot";
+import { loadTeamWorkspace, saveTeamWorkspace } from "@/lib/teams-api";
+import { AUTH_DISABLED } from "@/lib/auth-disabled";
 
 function baseUrl(): string {
   return (import.meta.env.VITE_MCP_API_BASE?.replace(/\/api\/mcp\/?$/, "") || BACKEND_API_BASE || "").replace(
@@ -32,7 +34,12 @@ export async function getManagerCloudSettingsStatus(): Promise<ManagerCloudSetti
 
 export async function saveManagerSettingsToCloud(
   snapshot: ManagerCloudSnapshotV1,
+  teamId?: number | null,
 ): Promise<{ ok: boolean; error?: string; code?: string; updatedAt?: string }> {
+  if (!AUTH_DISABLED && teamId) {
+    const r = await saveTeamWorkspace(teamId, snapshot);
+    return { ok: r.ok, error: r.error, updatedAt: r.updatedAt };
+  }
   try {
     const res = await fetch(url("/save"), {
       method: "POST",
@@ -55,13 +62,17 @@ export async function saveManagerSettingsToCloud(
   }
 }
 
-export async function loadManagerSettingsFromCloud(): Promise<{
+export async function loadManagerSettingsFromCloud(teamId?: number | null): Promise<{
   ok: boolean;
   snapshot: ManagerCloudSnapshotV1 | null;
   updatedAt?: string | null;
   error?: string;
   code?: string;
 }> {
+  if (!AUTH_DISABLED && teamId) {
+    const r = await loadTeamWorkspace(teamId);
+    return { ok: r.ok, snapshot: r.snapshot, updatedAt: r.updatedAt };
+  }
   try {
     const res = await fetch(url("/load"), { credentials: "include" });
     const data = (await res.json().catch(() => ({}))) as {

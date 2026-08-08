@@ -20,6 +20,7 @@ export function getOverviewBulkPageTitle(
   if (runKind === "aiHeaders") return `Headers - ${site.name}`;
   if (runKind === "contentCleanup") return `Clean Up - ${site.name}`;
   if (runKind === "aiLinks") return `Links - ${site.name}`;
+  if (runKind === "aiWikipediaLink") return `Wikipedia link - ${site.name}`;
   if (runKind === "aiOverview") return `Overview - ${site.name}`;
   if (runKind === "aiInContentImage") return `In Content Image - ${site.name}`;
   if (runKind === "wpUpload") return `WordPress upload - ${site.name}`;

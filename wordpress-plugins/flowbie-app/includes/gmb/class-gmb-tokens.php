@@ -14,10 +14,39 @@ class Flowbie_App_Gmb_Tokens {
 	 */
 	public static function get_tokens(): ?array {
 		$data = Flowbie_App_Json_File_Store::read( Flowbie_App_Data_Paths::gmb_tokens_path() );
-		if ( ! is_array( $data ) || empty( $data['access_token'] ) ) {
+		if ( is_array( $data ) && ! empty( $data['access_token'] ) ) {
+			return $data;
+		}
+		$legacy = self::legacy_wp_gmb_tokens();
+		if ( is_array( $legacy ) && ! empty( $legacy['access_token'] ) ) {
+			self::save_tokens( $legacy );
+			return $legacy;
+		}
+		return null;
+	}
+
+	/**
+	 * @return array{access_token:string,refresh_token?:string,expiry_date?:int}|null
+	 */
+	private static function legacy_wp_gmb_tokens(): ?array {
+		if ( ! function_exists( 'get_option' ) ) {
 			return null;
 		}
-		return $data;
+		$raw = get_option( 'flowbie_wp_gmb_tokens' );
+		if ( ! is_array( $raw ) || empty( $raw['access_token'] ) ) {
+			return null;
+		}
+		$expiry = 0;
+		if ( ! empty( $raw['expiry_date'] ) ) {
+			$expiry = (int) $raw['expiry_date'];
+		} elseif ( ! empty( $raw['expires_at'] ) ) {
+			$expiry = (int) $raw['expires_at'] * 1000;
+		}
+		return array(
+			'access_token'  => (string) $raw['access_token'],
+			'refresh_token' => isset( $raw['refresh_token'] ) ? (string) $raw['refresh_token'] : '',
+			'expiry_date'   => $expiry,
+		);
 	}
 
 	/**

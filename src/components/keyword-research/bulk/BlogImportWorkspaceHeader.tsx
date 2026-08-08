@@ -15,9 +15,9 @@ import {
   type BlogGeneratorSectionId,
 } from "@/components/blog-generator/blog-generator-sections";
 import {
-  BulkGeneratorDetailsPanel,
-  type BulkGeneratorDetailsPanelProps,
-} from "@/components/keyword-research/bulk/BulkGeneratorDetailsPanel";
+  BulkGeneratorDetailsDrawer,
+} from "@/components/keyword-research/bulk/BulkGeneratorDetailsDrawer";
+import type { BulkGeneratorDetailsPanelProps } from "@/components/keyword-research/bulk/BulkGeneratorDetailsPanel";
 import { BulkGeneratorRunActions } from "@/components/keyword-research/bulk/BulkGeneratorRunActions";
 import {
   BULK_HEADER_FIELD,
@@ -67,6 +67,7 @@ export type BlogImportWorkspaceHeaderProps = {
   onDownloadBlog?: () => void;
   scheduleMenu?: ReactNode;
   detailsProps: BulkGeneratorDetailsPanelProps;
+  onDetailsOpenChange?: (open: boolean) => void;
 };
 
 export function BlogImportWorkspaceHeader({
@@ -98,6 +99,7 @@ export function BlogImportWorkspaceHeader({
   onDownloadBlog,
   scheduleMenu,
   detailsProps,
+  onDetailsOpenChange,
 }: BlogImportWorkspaceHeaderProps) {
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -114,6 +116,7 @@ export function BlogImportWorkspaceHeader({
       canOpenDetails={canOpenDetails}
       isProcessing={isProcessing}
       detailsPanelId="blog-import-details-panel"
+      onDetailsOpenChange={onDetailsOpenChange}
       toolbar={
         <div className="flex w-full min-w-0 flex-nowrap items-center gap-1">
           <input
@@ -245,7 +248,7 @@ export function BlogImportWorkspaceHeader({
           />
         </div>
       }
-      detailsPanel={<BulkGeneratorDetailsPanel {...detailsProps} />}
+      detailsPanel={<BulkGeneratorDetailsDrawer {...detailsProps} />}
     />
   );
 }

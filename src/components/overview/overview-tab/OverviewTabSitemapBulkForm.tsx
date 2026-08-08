@@ -1,6 +1,7 @@
 import React from "react";
 import { OverviewContentHeader } from "@/components/overview/overview-tab/OverviewMetaWorkspaceBar";
 import type { ContentOptimizerSectionId } from "@/components/content-optimizer/content-optimizer-sections";
+import type { ContentOptimizerGeneratorChrome } from "@/components/content-optimizer/content-optimizer-generator-chrome";
 import type { MetaBulkMicroSnapshot } from "@/components/overview/OverviewBulkMicroProgress";
 import type { OverviewTabController } from "@/hooks/overview/use-overview-tab-controller";
 import type { useWordPressOptimization } from "@/contexts/wordpress-optimization-context";
@@ -14,6 +15,7 @@ export interface OverviewTabSitemapBulkFormProps {
   bulkWorkspaceBusy: boolean;
   bulkMicroSnapshot: MetaBulkMicroSnapshot | null;
   isBatchContentRunning: boolean;
+  isSinglePageOptimizing: boolean;
   batchBulkState: Opt["bulkOptimizationState"][string] | undefined;
   bulkBatchKey: string;
   batchProgress: Opt["optimizationProgress"][string] | undefined;
@@ -25,6 +27,8 @@ export interface OverviewTabSitemapBulkFormProps {
   optimizerSection: ContentOptimizerSectionId;
   onOptimizerSectionChange: (id: ContentOptimizerSectionId) => void;
   paginationLayoutTotal: number;
+  onDetailsOpenChange?: (open: boolean) => void;
+  generatorChrome?: ContentOptimizerGeneratorChrome;
 }
 
 export function OverviewTabSitemapBulkForm({
@@ -33,6 +37,7 @@ export function OverviewTabSitemapBulkForm({
   bulkWorkspaceBusy,
   bulkMicroSnapshot,
   isBatchContentRunning,
+  isSinglePageOptimizing,
   batchBulkState,
   bulkBatchKey,
   batchProgress,
@@ -42,6 +47,8 @@ export function OverviewTabSitemapBulkForm({
   optimizerSection,
   onOptimizerSectionChange,
   paginationLayoutTotal,
+  onDetailsOpenChange,
+  generatorChrome,
 }: OverviewTabSitemapBulkFormProps) {
   return (
     <OverviewContentHeader
@@ -50,6 +57,7 @@ export function OverviewTabSitemapBulkForm({
       bulkWorkspaceBusy={bulkWorkspaceBusy}
       bulkMicroSnapshot={bulkMicroSnapshot}
       isBatchContentRunning={isBatchContentRunning}
+      isSinglePageOptimizing={isSinglePageOptimizing}
       batchBulkState={batchBulkState}
       bulkBatchKey={bulkBatchKey}
       batchProgress={batchProgress}
@@ -59,6 +67,8 @@ export function OverviewTabSitemapBulkForm({
       optimizerSection={optimizerSection}
       onOptimizerSectionChange={onOptimizerSectionChange}
       paginationLayoutTotal={paginationLayoutTotal}
+      onDetailsOpenChange={onDetailsOpenChange}
+      generatorChrome={generatorChrome}
     />
   );
 }

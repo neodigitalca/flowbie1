@@ -17,6 +17,7 @@ import {
   formatModifierExternalLinksForPrompt,
   type ModifierExternalLink,
 } from "./bulk/modifier-external-links";
+import type { ExternalLinkPair } from "./content-generation/external-link-placeholders";
 import { formatMandatoryEntityWikipediaForPrompt } from "./bulk/entity-wikipedia-prompt";
 import {
   formatImportedToneForChecklistPrompt,
@@ -27,6 +28,21 @@ import {
   buildArticleLengthChecklistBlock,
   buildBlueprintArticleLengthBlock,
 } from "@/lib/content-generation/article-length-policy";
+import {
+  INTERNAL_LINK_PLACEHOLDER_FEATURE_SUFFIX,
+} from "@/lib/content-generation/internal-link-placeholders";
+import {
+  appendUniversalContentRulesToSystemPrompt,
+  enforceForbiddenWordsOnBlueprint,
+  sanitizeBlueprintAgentsForPipeline,
+  sanitizeForbiddenHeadingTitle,
+  sanitizeForbiddenWordsInChecklistItem,
+} from "@/lib/content-word-blocklist";
+import { isFaqStyleHeadingTitle } from "@/lib/content-generation/faq-heading-policy";
+import { parseJsonWithRepair } from "@/lib/json-repair-utility";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+
+const LINK_FEATURE_PLACEHOLDER = `[LINK]: ${INTERNAL_LINK_PLACEHOLDER_FEATURE_SUFFIX}`;
 
 /**
  * Converts a keyword to proper/title case
@@ -60,10 +76,11 @@ export interface BlogTemplateContext {
   prefilledRowContract?: string;
 }
 
-/** Semrush Bulk: exact href + verbatim anchor phrases in checklist / blueprint prompts */
+/** User-specified or Semrush external link prompt parts for checklist / blueprint */
 function buildSemrushExactPromptParts(options: {
   semrushApprovedExternalUrls?: string[];
   semrushAnchorPhrases?: string[];
+  userExternalLinks?: ExternalLinkPair[];
   normalizedSiteUrl: string;
 }): {
   semrushExactBlock: string;
@@ -72,15 +89,24 @@ function buildSemrushExactPromptParts(options: {
   linksBulletExternal: string;
   externalCompetitorBlock: string;
 } {
-  const semrushUrlList = (options.semrushApprovedExternalUrls ?? [])
-    .map((u) => String(u).trim())
-    .filter(Boolean)
-    .slice(0, 80);
-  const semrushAnchorList = (options.semrushAnchorPhrases ?? [])
-    .map((a) => String(a).trim())
-    .filter(Boolean)
-    .slice(0, 150);
-  const hasSemrushExactMode = semrushUrlList.length > 0 || semrushAnchorList.length > 0;
+  const userLinks = (options.userExternalLinks ?? []).filter(
+    (link) => link.url.trim() && link.anchor.trim(),
+  );
+  const semrushUrlList =
+    userLinks.length > 0
+      ? userLinks.map((link) => link.url.trim())
+      : (options.semrushApprovedExternalUrls ?? [])
+          .map((u) => String(u).trim())
+          .filter(Boolean)
+          .slice(0, 80);
+  const semrushAnchorList =
+    userLinks.length > 0
+      ? userLinks.map((link) => link.anchor.trim())
+      : (options.semrushAnchorPhrases ?? [])
+          .map((a) => String(a).trim())
+          .filter(Boolean)
+          .slice(0, 150);
+  const hasSemrushExactMode = semrushUrlList.length > 0 && semrushAnchorList.length > 0;
   const siteRef = options.normalizedSiteUrl || "the target website";
 
   const semrushExactBlock = hasSemrushExactMode
@@ -98,7 +124,7 @@ ${semrushAnchorList.map((a, i) => `${i + 1}. ${a}`).join("\n") || "(none)"}
 - **FORBIDDEN**: placeholder domains, "e.g." external URLs, competitor sites not in the list, nytimes.com/hunterdouglas.com or any domain unless that **exact** URL string appears in the list above.
 - **ALLOWED**: (1) Paste the full URL verbatim from the list into a checklist item; OR (2) Reference by index only, e.g. "[EXTERNAL_SEMRUSH]: use SEMRUSH approved URL #2 and anchor phrase #2 from the lists above" - **without writing a URL string you did not copy from the list**.
 - Anchor phrases in checklists: same rule - only verbatim copies from **SEMRUSH - APPROVED ANCHOR PHRASES**, or reference by index; never invent anchor text for external sites.
-- Feature tag form (when listing concrete pairs): "[EXTERNAL_SEMRUSH]: href=<paste exact URL from list> | anchor=<paste exact phrase from list>" - both sides must be **lifted from the lists**, not improvised.
+- Feature tag form (when listing concrete pairs): "[EXTERNAL_SEMRUSH]: href=<paste exact URL from list> | anchor=<paste exact phrase from list>" - both sides must be **lifted from the lists**, not improvised. Section body must insert **[[EXTERNAL:exact-url|exact-anchor]]** (same pair) woven mid-sentence — never <a href> for third-party URLs.
 
 === END SEMRUSH EXACT ===
 `
@@ -125,11 +151,11 @@ ${semrushAnchorList.map((a, i) => `${i + 1}. ${a}`).join("\n") || "(none)"}
 
   const linksBulletExternal = hasSemrushExactMode
     ? `- Every section MUST specify BOTH:
-  - **[LINK]: 3-5 internal links** - list full URLs **copied verbatim** from the WordPress posts list in this prompt (do not invent internal URLs).
+  - **${LINK_FEATURE_PLACEHOLDER}**
   - **[EXTERNAL_SEMRUSH]: at least 1 outbound citation** - href MUST be the **exact string** from a line in "SEMRUSH - APPROVED EXTERNAL URLs" above (copy-paste only), OR say "SEMRUSH URL #N and anchor #N" without typing a URL you did not copy from that list. Anchor: exact phrase from "SEMRUSH - APPROVED ANCHOR PHRASES" only.
 - **Spread outbound links**: include **[EXTERNAL_SEMRUSH]** in the majority of H2 sections (at least half the checklist items, or 6+ items when the checklist is long). Rotate different **numbered** Semrush URLs across sections - do not cite only one external domain in the whole article.
 - Internal links: WordPress posts ONLY. Third-party externals: Semrush lists ONLY (plus entity Wikipedia when provided in context). **Never fabricate or example third-party URLs.**`
-    : `- Every section: "[LINK]: 3-5 internal links - list full URLs from WordPress posts list (e.g. https://site.com/page/)"
+    : `- Every section: "${LINK_FEATURE_PLACEHOLDER}"
 - Internal links come from WordPress posts ONLY. External links come ONLY from the pre-validated AI Mode research list above (if provided).`;
 
   const externalCompetitorBlock = `**CRITICAL - NEVER MENTION EXTERNAL SITES OR COMPETITORS**:
@@ -248,12 +274,7 @@ DO NOT include explanations, numbering, or any other text. ONLY return the JSON 
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: model || "google/gemini-2.0-flash-exp",
         messages: [
@@ -401,7 +422,7 @@ export const buildBlogTemplateUserPrompt = (
 ): string => {
   const parts: string[] = [];
 
-  parts.push("Generate a comprehensive checklist for creating a blog template blueprint based on the following requirements:\n");
+  parts.push("Generate a focused checklist (max 2000-word article) for creating a blog template blueprint based on the following requirements:\n");
 
   if (context.userPrompt && context.userPrompt.trim()) {
     parts.push(`User Requirements: ${context.userPrompt.trim()}\n`);
@@ -441,10 +462,10 @@ export function parseBlogTemplateChecklist(aiResponse: string, keywords: string[
     const items = lines
       .map((line) => line.trim())
       .filter((line) => line.length > 10 && !line.startsWith("#"));
-    return validateAndEnforceMandatoryElements(items.slice(0, 10)); // Limit to 10 items
+    return validateAndEnforceMandatoryElements(items.slice(0, 10)).map(sanitizeForbiddenWordsInChecklistItem);
   }
 
-  return validateAndEnforceMandatoryElements(checklist);
+  return validateAndEnforceMandatoryElements(checklist).map(sanitizeForbiddenWordsInChecklistItem);
 }
 
 /**
@@ -602,6 +623,8 @@ export async function generateChecklistFromSelections(
     wikipediaTitle?: string;
     /** Prefixed CSV field contract — use title/meta/wiki/slug verbatim. */
     prefilledRowContract?: string;
+    /** Row-only external links (modifier_links_json + imported_links_json). */
+    userExternalLinks?: ExternalLinkPair[];
   }
 ): Promise<string[]> {
   const {
@@ -647,9 +670,9 @@ CRITICAL KEYWORD CAPITALIZATION RULE:
   * WRONG: "Blinds for Windows near Me", "Custom Blinds near Me", "Modern Roller Shades"
   * CORRECT: "Zebra Blinds" (product name), "New York" (location), "Blinds are essential" (sentence start)
 
-RANK MATH / FOCUS KEYWORD DENSITY (EXPLICIT - THE CHECKLIST MUST STATE THIS IN PLAIN LANGUAGE):
-- Plugins like Rank Math show **Focus Keyword Density** (e.g. **0.50%**) and messages like **"needs to be at least 1"** - that means **at least ~1.0%** density for the focus keyword (plus their counted **word-order combinations**), **not** staying near **0.5%**.
-- Every generated checklist MUST include an explicit line such as: **[RANK MATH / DENSITY]**: Target **minimum ~1.0%** focus keyword density across the **full article** (exact phrase + Rank Math–recognized combinations). **Do not** ship content that sits around **~0.5%** when the goal is to pass the plugin check.
+FOCUS KEYWORD DENSITY (EXPLICIT - THE CHECKLIST MUST STATE THIS IN PLAIN LANGUAGE):
+- Target **at least ~1.0%** focus keyword density for the primary phrase (plus word-order combinations), **not** staying near **0.5%**.
+- Every generated checklist MUST include an explicit line such as: **[FOCUS KEYWORD DENSITY]**: Target **minimum ~1.0%** focus keyword density across the **full article** (exact phrase + word-order combinations). **Do not** ship content around **~0.5%** when the goal is **~1%** or higher.
 - Require **multiple** natural placements across **introduction, several H2 sections, body paragraphs, and conclusion** - spread usage, do not cram everything into one paragraph.
 - If density is still low despite many mentions, the checklist should say to **weave the exact focus phrase** and close combinations in a few more sections until **~1%** is met, without robotic repetition in one block.
 
@@ -665,14 +688,14 @@ READABILITY - PARAGRAPH LENGTH (CHECKLIST SHOULD STATE **[PARAGRAPH LENGTH]**):
 
 CRITICAL KEYWORD USAGE - NATURAL LANGUAGE PRIORITY (2026 SEO STANDARDS):
 - AVOID KEYWORD STUFFING: Never repeat the exact-match phrase in every sentence or stack it unnaturally. Modern search engines penalize repetitive, robotic-sounding content.
-- Use semantic variations **and** Rank Math–counted combinations to reach **~1%** density:
+- Use semantic variations **and** word-order combinations to reach **~1%** density:
   * If primary keyword is "Wood Window Blinds Seagrove Beach", use variations like:
     - "wood blinds" (often)
     - "wood window treatments in Seagrove Beach" (varied)
     - "wooden blinds for coastal homes" (natural alternative)
     - "wood blinds in the Seagrove Beach area" (natural phrasing)
   * Distribute **exact** and **partial** matches across the whole article so total focus-keyword presence meets **~1%** - do **not** rely on "1–2 exact uses only" if that leaves density at **~0.5%**
-  * Split multi-word keywords naturally across sentences where it reads well, but ensure components still appear often enough overall for Rank Math
+  * Split multi-word keywords naturally across sentences where it reads well, but ensure components still appear often enough overall for density targets
 - Natural language patterns:
   * Write as a human would speak, not as SEO software would generate
   * Use conversational, engaging language that prioritizes reader experience
@@ -683,13 +706,13 @@ CRITICAL KEYWORD USAGE - NATURAL LANGUAGE PRIORITY (2026 SEO STANDARDS):
   * Branded examples: "In The Shade's collection", "our showroom", "contact our team"
   * Natural descriptive: "this guide to humidity-resistant blinds", "learn more about motorization", "explore your options"
   * Avoid overusing exact keyword phrase as anchor text - this signals over-optimization
-- Keyword density guidance (aligned with Rank Math):
-  * Target **at least ~1.0%** focus keyword density (exact phrase + combinations Rank Math counts). **Avoid** finishing around **~0.5%** when the plugin expects **"at least 1"** (~1%).
+- Keyword density guidance (for SEO):
+  * Target **at least ~1.0%** focus keyword density (exact phrase + word-order combinations). **Avoid** finishing around **~0.5%** when the target is **~1%** or higher.
   * Prefer spreading exact and partial matches across sections over a single paragraph stuffed with repeats
   * Use partial matches and semantic variations for readability, but **do not** use "variations only" as an excuse for **below ~1%** total focus-keyword score
   * Focus on topical relevance **and** meeting the explicit density bar the checklist states
 - Content quality over keyword matching:
-  * Readability, user value, and natural flow matter - but the checklist must still **explicitly** require **~1%** Rank Math–style density, not **~0.5%**
+  * Readability, user value, and natural flow matter - but the checklist must still **explicitly** require **~1%** focus keyword density, not **~0.5%**
   * Content should sound like it was written by a human expert, not an SEO tool
   * If a paragraph feels stuffed, **redistribute** mentions to other sections rather than dropping below **~1%** overall
 `;
@@ -814,15 +837,17 @@ ${selectedH2Sections.map((h2, idx) => `${idx + 1}. ${h2}`).join("\n")}
   const semrushParts = buildSemrushExactPromptParts({
     semrushApprovedExternalUrls: options.semrushApprovedExternalUrls,
     semrushAnchorPhrases: options.semrushAnchorPhrases,
+    userExternalLinks: options.userExternalLinks,
     normalizedSiteUrl,
   });
 
   const paaSectionLabel = options.verbatimImportedH2Outline
     ? "Imported draft headings (verbatim — optimize body only)"
-    : "Selected People Also Ask Questions (MUST BE ANSWERED)";
+    : "People Also Ask (appended flo-faq only — not body H2 sections)";
   const paaSection = paaQuestions.length > 0
     ? `
 --- ${paaSectionLabel} ---
+These questions feed the appended flo-faq FAQ block at upload. Do NOT create a dedicated FAQ, Q&A, or "Answering Your Questions" body H2. Weave topical answers into normal topic H2s only when natural.
 ${paaQuestions.map((paa, idx) => {
   const label = options.verbatimImportedH2Outline ? "Heading" : "Question";
   let item = `${idx + 1}. ${label}: "${paa.question}"`;
@@ -1099,10 +1124,11 @@ ${options.semrushScatterContext}
 The user imported a draft blog. Each listed H2 heading MUST become **exactly one** main body section:
 
 - **H2 heading text** must equal the imported heading **verbatim** (same wording, punctuation, and casing). Do not rewrite, shorten, merge, or "SEO clean" the heading.
-- **Preserve factual claims** from "Existing draft excerpt" where present; rewrite for SEO, readability, Rank Math density, links, and structure.
+- **Preserve factual claims** from "Existing draft excerpt" where present; rewrite for SEO, readability, focus keyword density, links, and structure.
 - **Voice**: Match the imported draft's tone and sophistication (see TONE & VOICE block). Do **not** dumb down, casualize, or rewrite into generic SEO-blog voice.
 - **No duplicate H2s** for the same heading string.
-- Under **each** H2: **at least one H3** subsection, and **either** a **[TABLE]** or a **[LIST]** - state both explicitly in the checklist line for that section.
+- Under **each** H2: **at most 2 H3** subsections with **1-2 short paragraphs** each, and **either** a **[TABLE]** or a **[LIST]** when needed — state both explicitly in the checklist line for that section.
+- Harness writes **one H2 per pass**; imported excerpt is **fact source only** — never copy sibling H2 headings or their body HTML into this pass.
 - Produce **one numbered checklist item per imported H2** (same order as listed). Each item must quote the exact H2 title and require matching source voice at the same sophistication level.
 - The Blog Title is the WordPress post title only. Body HTML starts with the first imported H2. Never write an H1 in the article body.
 - Do **not** replace these with generic topic H2s from "Selected H2 Sections".
@@ -1131,7 +1157,9 @@ The user supplied **verbatim** research questions (see "Selected People Also Ask
 
 ${keywordSection}
 
-CRITICAL: Use natural, conversational language - avoid stuffing one paragraph. **Rank Math**: The checklist MUST explicitly require **minimum ~1.0%** focus keyword density (exact phrase + counted combinations), **not ~0.5%**. Distribute the focus keyword across intro, multiple H2s, body, and conclusion. Use semantic variations where they help readability, but do not leave total density below **~1%** just to avoid exact matches. **[EXACT PRIMARY PER H2]**: The checklist MUST require the **exact** Primary Keyword phrase **at least once in the body of every H2 section** (see Keyword Context above).
+CRITICAL: Use natural, conversational language - avoid stuffing one paragraph. **Focus keyword**: The checklist MUST explicitly require **minimum ~1.0%** focus keyword density (exact phrase + counted combinations), **not ~0.5%**. Distribute the focus keyword across intro, multiple H2s, body, and conclusion. Use semantic variations where they help readability, but do not leave total density below **~1%** just to avoid exact matches. **[EXACT PRIMARY PER H2]**: The checklist MUST require the **exact** Primary Keyword phrase **at least once in the body of every H2 section** (see Keyword Context above).
+
+**FORBIDDEN BODY H2 HEADERS (NON-NEGOTIABLE)**: NEVER use FAQ-style section titles in the article body. FAQ is appended later as flo-faq with H2 id="faq". Forbidden titles include: "FAQ", "Frequently Asked Questions", "Answering Your Questions…", "Common Questions…", "Q&A", or any dedicated Question/Answer section H2. PAA questions are NOT standalone body sections.
 
 --- Blog Title ---
 ${title}
@@ -1141,21 +1169,26 @@ ${buildArticleLengthChecklistBlock(!!options.entity)}
 
 Create a checklist (5-6 items for blog, 6-7 for service area SAP) based on selected H2 sections. Each item must include:
 
+**Harness contract (mandatory)**:
+- Each checklist item becomes **exactly one H2** written in a **separate harness pass**. State: "Output is ONLY this H2 block (~${Math.floor(ARTICLE_MAX_WORDS / 6)} words)." **Never** instruct writing other H2 sections in the same pass.
+- **No duplicate H2 titles** and **no duplicate topics** (merge overlapping service/location sections into one H2).
+- Entire article: **at most 2** [TABLE] items across all checklist lines—not every section gets a table.
+
 **Structure** (SEO HIERARCHY MANDATORY):
 - H2 = main section titles ONLY. H3 = subsections under H2. H4 = sub-subsections. NEVER use H3 for a main section.
 - **[EXACT PRIMARY PER H2]**: Every checklist item that creates an H2 section MUST state that the **exact** Primary Keyword (from Keyword Context) appears **at least once** in that section's body - **every** H2, no exceptions.
 - **[PARAGRAPH LENGTH]**: Every checklist item should require **moderately short** paragraphs (**~2–3 sentences** typical); **avoid long** single paragraphs; **avoid** all-one-sentence choppiness unless a line truly needs emphasis.
 - H2 sections: 1-2 paragraphs. If more needed: "[STRUCTURE]: Include at most 2 H3 subheadings with 1-2 short paragraphs under each covering [specific subtopics]"
-- Mix content: Include [TABLE] or [LIST] where appropriate for variety. For lists, suggest both bulleted lists (unordered) and numbered lists (ordered) depending on the content type - use numbered lists for step-by-step processes, rankings, or sequences, and bulleted lists for features, benefits, or general items
+- Mix content: Include [TABLE] or [LIST] where appropriate—but **entire article: max 2 [TABLE] items total**. For lists, suggest bulleted or numbered lists depending on content type
 - Block quotes: You can creatively present entity facts using [BLOCKQUOTE]: [entity fact description] - use these sparingly, MAXIMUM 1-2 block quotes per entire blueprint, only where entity facts would add value and visual interest
 
 **Links**:
 ${semrushParts.linksBulletExternal}
 - Distribute selected keywords across sections as anchor text
-- If no keywords: "[LINK]: 3-5 internal links - list full URLs from WordPress posts list"
+- If no keywords: "[LINK]: 3–5 [[LINK:query|anchor]] placeholders per section (no raw https:// internal URLs)"
 - Weave keywords elegantly into anchor text - integrate them naturally within sentence structure using semantic variations and natural syntax
-- **Include in the checklist**: **[RANK MATH / DENSITY]**: **minimum ~1.0%** focus keyword density (exact + combinations); **not** **~0.5%** when the plugin says **"needs to be at least 1"**. **[EXACT PRIMARY PER H2]**: **exact** Primary Keyword phrase **once per H2** section body (minimum). **[PARAGRAPH LENGTH]**: **moderately short** paragraphs (**~2–4 sentences**); no long walls of text; not all single-sentence paragraphs.
-- Use semantic variations for flow, but spread exact/partial matches across the article so Rank Math density clears **~1%**
+- **Include in the checklist**: **[FOCUS KEYWORD DENSITY]**: **minimum ~1.0%** focus keyword density (exact + combinations); **not** **~0.5%** when the target is **~1%** or higher. **[EXACT PRIMARY PER H2]**: **exact** Primary Keyword phrase **once per H2** section body (minimum). **[PARAGRAPH LENGTH]**: **moderately short** paragraphs (**~2–4 sentences**); no long walls of text; not all single-sentence paragraphs.
+- Use semantic variations for flow, but spread exact/partial matches across the article so focus keyword density clears **~1%**
 - Vary anchor text: 50% natural descriptive, 30% branded, 20% keyword-rich - avoid identical anchor every time, not "never use exact phrase"
 - If one paragraph feels repetitive, **redistribute** focus-keyword usage to other sections instead of dropping below **~1%** overall
 - **CRITICAL: Keep anchor text SHORT (2-5 words maximum)** - only link the key phrase, NOT entire sentences. Extract only the essential keyword phrase for linking
@@ -1207,11 +1240,11 @@ CRITICAL FORMAT REQUIREMENT:
 Format your response as a numbered list, one item per line. Each item should be a clear, actionable instruction with explicit feature requirements.
 
 Example format (NOTE: This example shows ALL 3 MANDATORY elements - 1 TABLE, 1 NUMBERED LIST, 1 BULLETED LIST - distributed across sections):
-1. Create a first section agent with a SEO-friendly, descriptive header (NEVER use "Introduction" or "Intro" - use something like "Understanding [Topic]", "Why [Topic] Matters", or "Complete Guide to [Topic]"). [STRUCTURE]: 3 short split paragraphs (each paragraph should be 2-3 sentences only, keep paragraphs concise and well-spaced). **FOCUS KEYWORD AT START (Rank Math)**: The first paragraph (or first 1-2 sentences) MUST include the Focus Keyword (or a natural variation) near the beginning. **[EXACT PRIMARY PER H2]**: Include the **exact** Primary Keyword phrase **at least once** in this H2's body. **[RANK MATH / DENSITY]**: Target **minimum ~1.0%** focus keyword density across the **full** article (exact phrase + combinations) - **not ~0.5%**. ${entityWikiUrl && entityName ? `[EXTERNAL_WIKI]: Link "${entityName}" to ${entityWikiUrl} (mandatory Wikipedia). ` : ""}[LINK]: Minimal linking - ${entityWikiUrl && entityName ? `include the mandatory entity Wikipedia link above and ` : `link the entity name to its Wikipedia page (if entity exists) and `}the main service/product name to its service page. Do NOT include excessive links - keep the opening section clean and readable. Note: Distribute focus-keyword usage across sections; write natural sentences. Note: Do NOT create sublists, bullet lists, or 'Key Features' lists unless the [LIST] feature is explicitly specified in this checklist item. Write content in flowing paragraphs only. Only include lists when [LIST] is explicitly mentioned as a feature requirement.
-2. Create an agent for H2 "${selectedH2Sections[0] || "Section 1"}". **[EXACT PRIMARY PER H2]**: **Exact** Primary Keyword phrase **≥1×** in this section's body. [STRUCTURE]: 1-2 paragraphs, include **[TABLE]: Feature comparison table** (MANDATORY - every blog needs at least 1 table). [LINK]: 3-5 internal links with varied anchor text (natural descriptive phrases like "learn more about humidity-resistant options", branded like "our showroom", keyword-rich where appropriate). [REAL-WORLD EXAMPLE]: Include natural expertise statement demonstrating hands-on experience (e.g., "After installing hundreds of systems in the local area, we've found that..."). **[RANK MATH / DENSITY]**: Contribute to **~1%+** combined focus-keyword presence across the post. Vary location mentions (use broader geographic terms, not exact location repeatedly). IMPORTANT: Use ONLY generic city names - NEVER use specific neighborhoods or directional qualifiers. Avoid repetitive keyword patterns in one paragraph.
-3. Create an agent for H2 "${selectedH2Sections[1] || "Section 2"}". **[EXACT PRIMARY PER H2]**: **Exact** Primary Keyword phrase **≥1×** in this section's body (any H3 under this H2 counts). [STRUCTURE]: Include 3-4 H3 subheadings with 2-3 paragraphs under each covering [specific subtopics]. **H3 FEATURES**: Each H3 can include [LINK]: 3-5 internal links, [LIST]: Bulleted or Numbered lists, and [TABLE] where appropriate - distribute these across H3s. [LINK]: 3-5 internal links to other blog posts with natural anchor text variety. Note: Use partial keyword matches and semantic equivalents while keeping overall Rank Math density **≥ ~1%**. Vary location references (use "local area", "regional", "local homes" - mix exact location name sparingly with broader terms). IMPORTANT: Use ONLY generic city names (e.g., "Edmonton", "New York") - NEVER use specific neighborhoods or directional qualifiers. Write as a human expert would, not as SEO software generates.
+1. Create a first section agent with a SEO-friendly, descriptive header (NEVER use "Introduction", "Intro", "Understanding [Topic]", or "Navigating [Topic]" - use active titles like "Why [Topic] Matters", "[Topic]: Key Rules", or "Complete Guide to [Topic]"). [STRUCTURE]: 3 short split paragraphs (each paragraph should be 2-3 sentences only, keep paragraphs concise and well-spaced). **FOCUS KEYWORD AT START (focus keyword)**: The first paragraph (or first 1-2 sentences) MUST include the Focus Keyword (or a natural variation) near the beginning. **[EXACT PRIMARY PER H2]**: Include the **exact** Primary Keyword phrase **at least once** in this H2's body. **[FOCUS KEYWORD DENSITY]**: Target **minimum ~1.0%** focus keyword density across the **full** article (exact phrase + combinations) - **not ~0.5%**. ${entityWikiUrl && entityName ? `[EXTERNAL_WIKI]: Link "${entityName}" to ${entityWikiUrl} (mandatory Wikipedia). ` : ""}[LINK]: Minimal linking - ${entityWikiUrl && entityName ? `include the mandatory entity Wikipedia link above and ` : `link the entity name to its Wikipedia page (if entity exists) and `}the main service/product name to its service page. Do NOT include excessive links - keep the opening section clean and readable. Note: Distribute focus-keyword usage across sections; write natural sentences. Note: Do NOT create sublists, bullet lists, or 'Key Features' lists unless the [LIST] feature is explicitly specified in this checklist item. Write content in flowing paragraphs only. Only include lists when [LIST] is explicitly mentioned as a feature requirement.
+2. Create an agent for H2 "${selectedH2Sections[0] || "Section 1"}". **[EXACT PRIMARY PER H2]**: **Exact** Primary Keyword phrase **≥1×** in this section's body. [STRUCTURE]: 1-2 paragraphs, include **[TABLE]: Feature comparison table** (MANDATORY - every blog needs at least 1 table). [LINK]: 3-5 internal links with varied anchor text (natural descriptive phrases like "learn more about humidity-resistant options", branded like "our showroom", keyword-rich where appropriate). [REAL-WORLD EXAMPLE]: Include natural expertise statement demonstrating hands-on experience (e.g., "After installing hundreds of systems in the local area, we've found that..."). **[FOCUS KEYWORD DENSITY]**: Contribute to **~1%+** combined focus-keyword presence across the post. Vary location mentions (use broader geographic terms, not exact location repeatedly). IMPORTANT: Use ONLY generic city names - NEVER use specific neighborhoods or directional qualifiers. Avoid repetitive keyword patterns in one paragraph.
+3. Create an agent for H2 "${selectedH2Sections[1] || "Section 2"}". **[EXACT PRIMARY PER H2]**: **Exact** Primary Keyword phrase **≥1×** in this section's body (any H3 under this H2 counts). [STRUCTURE]: **max 2 H3** subheadings with **1-2 short paragraphs** under each covering [specific subtopics]. **H3 FEATURES**: Each H3 can include [LINK]: 1-2 internal links, [LIST]: Bulleted or Numbered lists, and [TABLE] where appropriate - distribute these across H3s. [LINK]: 1-2 internal links to other blog posts with natural anchor text variety. Note: Use partial keyword matches and semantic equivalents while keeping overall focus keyword density **≥ ~1%**. Vary location references (use "local area", "regional", "local homes" - mix exact location name sparingly with broader terms). IMPORTANT: Use ONLY generic city names (e.g., "Edmonton", "New York") - NEVER use specific neighborhoods or directional qualifiers. Write as a human expert would, not as SEO software generates.
 4. Create an agent for H2 "${selectedH2Sections[2] || "Section 3"}". **[EXACT PRIMARY PER H2]**: **Exact** Primary Keyword phrase **≥1×** in this section's body. [STRUCTURE]: 1-2 paragraphs, include **[LIST]: Numbered list of key steps** (MANDATORY - every blog needs at least 1 numbered list for processes/rankings/sequences). [LINK]: 3-5 internal links using descriptive, natural anchor text (mix branded and keyword-rich). Note: If focus density is thin, add natural focus-keyword/combination mentions in this section toward **~1%** total. Use location variation naturally (broader geographic terms frequently, exact location name sparingly). IMPORTANT: Use ONLY generic city names - NEVER use specific neighborhoods or directional qualifiers. Note: This checklist item explicitly includes [LIST] feature, so a numbered list IS required here.
-5. Create an agent for H2 "${selectedH2Sections[3] || "Section 4"}". **[EXACT PRIMARY PER H2]**: **Exact** Primary Keyword phrase **≥1×** in this section's body. [STRUCTURE]: 1-2 paragraphs, include **[LIST]: Bulleted list of features/benefits** (MANDATORY - every blog needs at least 1 bulleted list for items/features/benefits). [LINK]: 3-5 internal links with varied anchor text types (natural descriptive, branded, keyword-rich). Note: Natural content - avoid stuffing one paragraph; **still** meet **[RANK MATH / DENSITY]** **~1%+** across the full article. Mix location references (exact name rare, broader region common, general area frequent). IMPORTANT: Use ONLY generic city names - NEVER use specific neighborhoods or directional qualifiers. Note: This checklist item explicitly includes [LIST] feature, so a bulleted list IS required here.${options.entity && options.entity.trim() ? `\n6. Create an agent for H2 "${selectedH2Sections[4] || "Section 5"}". **[EXACT PRIMARY PER H2]**: **Exact** Primary Keyword phrase **≥1×** in this section's body. [STRUCTURE]: 1-2 paragraphs, include [BLOCKQUOTE]: Entity fact about ${options.entity.trim()}. [LINK]: 3-5 internal links using natural anchor text variety. Note: **[RANK MATH / DENSITY]**: whole-article **~1%+** focus keyword presence. Vary location mentions (use broader geographic terms frequently, exact location name sparingly - 2-3 times maximum). IMPORTANT: Use ONLY generic city names - NEVER use specific neighborhoods or directional qualifiers. Use semantic variations and natural phrasing throughout. (Note: Only use 1-2 block quotes maximum per blueprint)` : ''}
+5. Create an agent for H2 "${selectedH2Sections[3] || "Section 4"}". **[EXACT PRIMARY PER H2]**: **Exact** Primary Keyword phrase **≥1×** in this section's body. [STRUCTURE]: 1-2 paragraphs, include **[LIST]: Bulleted list of features/benefits** (MANDATORY - every blog needs at least 1 bulleted list for items/features/benefits). [LINK]: 3-5 internal links with varied anchor text types (natural descriptive, branded, keyword-rich). Note: Natural content - avoid stuffing one paragraph; **still** meet **[FOCUS KEYWORD DENSITY]** **~1%+** across the full article. Mix location references (exact name rare, broader region common, general area frequent). IMPORTANT: Use ONLY generic city names - NEVER use specific neighborhoods or directional qualifiers. Note: This checklist item explicitly includes [LIST] feature, so a bulleted list IS required here.${options.entity && options.entity.trim() ? `\n6. Create an agent for H2 "${selectedH2Sections[4] || "Section 5"}". **[EXACT PRIMARY PER H2]**: **Exact** Primary Keyword phrase **≥1×** in this section's body. [STRUCTURE]: 1-2 paragraphs, include [BLOCKQUOTE]: Entity fact about ${options.entity.trim()}. [LINK]: 3-5 internal links using natural anchor text variety. Note: **[FOCUS KEYWORD DENSITY]**: whole-article **~1%+** focus keyword presence. Vary location mentions (use broader geographic terms frequently, exact location name sparingly - 2-3 times maximum). IMPORTANT: Use ONLY generic city names - NEVER use specific neighborhoods or directional qualifiers. Use semantic variations and natural phrasing throughout. (Note: Only use 1-2 block quotes maximum per blueprint)` : ''}
 
 Output ONLY the numbered checklist items, no additional text or explanations.`;
 
@@ -1222,7 +1255,7 @@ Output ONLY the numbered checklist items, no additional text or explanations.`;
 
 ${buildArticleLengthChecklistBlock(isServiceArea)}
 
-CRITICAL: Weave keywords elegantly into content using natural, human-like syntax. Keywords should flow organically within sentences. **Rank Math**: The checklist MUST state **[RANK MATH / DENSITY]**: **minimum ~1.0%** focus keyword density (exact phrase + counted combinations), **not ~0.5%** - distribute across the article. **EXACT PRIMARY PER H2**: The checklist MUST state that the **exact** Primary Keyword phrase appears **at least once in the body of every H2** (intro, each topic H2, conclusion, mandatory H2s). Use semantic variations where they help readability; if a phrase feels forced in one spot, place the **exact** primary phrase in another sentence within that same H2.
+CRITICAL: Weave keywords elegantly into content using natural, human-like syntax. Keywords should flow organically within sentences. **Focus keyword**: The checklist MUST state **[FOCUS KEYWORD DENSITY]**: **minimum ~1.0%** focus keyword density (exact phrase + counted combinations), **not ~0.5%** - distribute across the article. **EXACT PRIMARY PER H2**: The checklist MUST state that the **exact** Primary Keyword phrase appears **at least once in the body of every H2** (intro, each topic H2, conclusion, mandatory H2s). Use semantic variations where they help readability; if a phrase feels forced in one spot, place the **exact** primary phrase in another sentence within that same H2.
 
 **PARAGRAPH LENGTH**: The checklist MUST state **[PARAGRAPH LENGTH]** - **moderately short** paragraphs (**~2–4 sentences** typical); **split** long blocks (avoid “paragraph is long” warnings); **do not** use only one-sentence paragraphs throughout (too choppy).
 
@@ -1250,7 +1283,7 @@ CRITICAL: This is a SERVICE AREA page. You MUST include the following three sect
    - Create ONE short agent "We Care About ${options.entity || '[Location/Entity]'}" (1-2 paragraphs + short bullet list). NO H3s. Place after introduction.
    - Merge overlapping topics into fewer H2s (pick the 2-3 strongest main topics only). Each major concept = its own H2 agent when essential. Do NOT nest "What is" or "Core Principles" under "We Care About" as H3s.
    - CRITICAL: Every agent for a main topic MUST use headingLevel: 1 in the blueprint JSON, which renders as H2. NEVER use headingLevel: 2 (H3) for main topics. The ONLY things that should be H3 are sub-sections WITHIN an H2 agent (via h3Enabled/h3Count).
-   - [LIST]: "We Care About" section: bullet list explaining how we understand the area.
+   - [LIST]: "We Care About" section: bullet list explaining local market knowledge and how we serve businesses in the area.
    - [LINK]: 3-5 internal links per section.
    - Use natural, authentic language throughout
 
@@ -1271,7 +1304,7 @@ Blog Details:
 - H2 Sections to cover: ${selectedH2Sections.join(", ")}
 - Primary Keyword: "${primaryKeywordProper}"
 - Related Keywords: ${selectedKeywordsProper.slice(0, 5).join(", ")}
-${paaQuestions.length > 0 ? `- People Also Ask Questions to Answer: ${paaQuestions.map(p => `"${p.question}"`).join(", ")}` : ""}
+${paaQuestions.length > 0 ? `- People Also Ask (flo-faq append only, not body H2s): ${paaQuestions.map(p => `"${p.question}"`).join(", ")}` : ""}
 
 Requirements:
 1. Create ${isServiceArea ? "6-7" : "5-6"} checklist items maximum: introduction-style first H2, ${isServiceArea ? "'What We Offer', 'We Care About [Entity]', 2-3 body topics, 'Next Steps'," : "3-4 body topics,"} conclusion. **DEPTH IN FEWER H2s**: Cover main topics in fewer, tighter sections. One H2 per major topic when essential - NOT nested as H3s. Meet SEO with concise copy, not extra sections.
@@ -1281,14 +1314,14 @@ Requirements:
    - **[ARTICLE LENGTH]**: Entire published article MUST NOT exceed ${ARTICLE_MAX_WORDS} words.
    - Mix content types: Include [TABLE] or [LIST] where appropriate for variety. For lists, suggest both bulleted lists (unordered) and numbered lists (ordered) depending on the content type - use numbered lists for step-by-step processes, rankings, or sequences, and bulleted lists for features, benefits, or general items. For entity facts, you can creatively use [BLOCKQUOTE]: [entity fact description], but MAXIMUM 1-2 block quotes per entire blueprint
    - ${semrushParts.hasSemrushExactMode
-      ? "**[LINK] + [EXTERNAL_SEMRUSH]**: MANDATORY for EVERY section. **[LINK]**: 3-5 internal links (full URLs from WordPress posts list). **[EXTERNAL_SEMRUSH]**: at least 1 outbound citation per section - exact href from SEMRUSH APPROVED EXTERNAL URLs and exact anchor from SEMRUSH APPROVED ANCHOR PHRASES in the system prompt. Spread citations across many sections (majority of H2 items); rotate different Semrush URLs."
+      ? `**[LINK] + [EXTERNAL_SEMRUSH]**: MANDATORY for EVERY section. **${LINK_FEATURE_PLACEHOLDER}**. **[EXTERNAL_SEMRUSH]**: at least 1 outbound citation per section - exact href from SEMRUSH APPROVED EXTERNAL URLs and exact anchor from SEMRUSH APPROVED ANCHOR PHRASES in the system prompt. Spread citations across many sections (majority of H2 items); rotate different Semrush URLs.`
       : "**[LINK]: 3-5 internal links to other blog posts/pages** - This is MANDATORY for EVERY section. Use anchor text with keywords integrated naturally into sentences. Link to related blog posts, service pages, and relevant content from knowledge files. Every H2 and H3 section MUST have internal links."}
-   - CRITICAL: Always add a note in each checklist item including **[RANK MATH / DENSITY]**, **[EXACT PRIMARY PER H2]**, and **[PARAGRAPH LENGTH]**: **minimum ~1.0%** focus keyword density across the **full article**; **exact** Primary Keyword **≥1× per H2** body; paragraphs **moderately short** (**~2–4 sentences**), **not** long walls of text, **not** all one-sentence choppiness. **Do not** aim for **~0.5%** when the plugin shows **"needs to be at least 1"** (~1%). Also note: natural, conversational language - avoid stuffing **one** paragraph; **distribute** focus-keyword usage across intro, H2s, body, conclusion. Mix anchor text: 50% natural descriptive, 30% branded, 20% keyword-rich."
+   - CRITICAL: Always add a note in each checklist item including **[FOCUS KEYWORD DENSITY]**, **[EXACT PRIMARY PER H2]**, and **[PARAGRAPH LENGTH]**: **minimum ~1.0%** focus keyword density across the **full article**; **exact** Primary Keyword **≥1× per H2** body; paragraphs **moderately short** (**~2–4 sentences**), **not** long walls of text, **not** all one-sentence choppiness. **Do not** aim for **~0.5%** when the target is **~1%** or higher. Also note: natural, conversational language - avoid stuffing **one** paragraph; **distribute** focus-keyword usage across intro, H2s, body, conclusion. Mix anchor text: 50% natural descriptive, 30% branded, 20% keyword-rich."
    - CRITICAL: PREVENT UNNECESSARY SUBLISTS: Explicitly state in each checklist item: "Note: Do NOT create sublists, bullet lists, or 'Key Features' lists unless the [LIST] feature is explicitly specified in this checklist item. Write content in flowing paragraphs only. Only include lists when [LIST] is explicitly mentioned as a feature requirement."
-3. Distribute keywords naturally across sections - semantic variations **and** enough exact/combination usage to hit **[RANK MATH / DENSITY] ~1%+** (not ~0.5%)
-4. **RANK MATH / DENSITY (NON-NEGOTIABLE IN CHECKLIST)**: Every checklist must explicitly require **minimum ~1.0%** focus keyword density (exact phrase + combinations the plugin counts). Avoid **~0.5%** totals that trigger **"needs to be at least 1"**. Avoid stuffing one paragraph: **spread** mentions across the article. Mix anchor text types (descriptive, branded, keyword-rich).
+3. Distribute keywords naturally across sections - semantic variations **and** enough exact/combination usage to hit **[FOCUS KEYWORD DENSITY] ~1%+** (not ~0.5%)
+4. **FOCUS KEYWORD DENSITY (NON-NEGOTIABLE IN CHECKLIST)**: Every checklist must explicitly require **minimum ~1.0%** focus keyword density (exact phrase + word-order combinations). Avoid **~0.5%** totals when the target is **~1%** or higher. Avoid stuffing one paragraph: **spread** mentions across the article. Mix anchor text types (descriptive, branded, keyword-rich).
 5. **EXACT PRIMARY PER H2 (NON-NEGOTIABLE)**: Every checklist item that defines an **H2** section must require the **exact** Primary Keyword string (**"${primaryKeywordProper}"** / same words and order as **Primary Keyword**) **at least once** in that section's body copy - **every** H2 including intro and conclusion. State it explicitly as **[EXACT PRIMARY PER H2]** in each such item.
-6. Include first section and conclusion agents. For the first section agent: **CRITICAL - NEVER use "Introduction" or "Intro" as the header**. Use a SEO-friendly, descriptive header like "Understanding [Topic]", "Why [Topic] Matters", or "Complete Guide to [Topic]". [STRUCTURE]: 2 short paragraphs (each paragraph should be 2-3 sentences only, keep paragraphs concise and well-spaced). **FOCUS KEYWORD AT START (Rank Math)**: The first paragraph (or first 1-2 sentences) MUST include the Focus Keyword (or a natural variation) near the beginning. **[EXACT PRIMARY PER H2]**: **Exact** Primary Keyword phrase **≥1×** in this H2's body. ${semrushParts.hasSemrushExactMode ? "[LINK]: 3-5 internal links (full WordPress URLs from posts list). [EXTERNAL_SEMRUSH]: at least 1 Semrush outbound citation (exact href + anchor from SEMRUSH blocks). Keep prose readable - integrate links naturally." : "[LINK]: Minimal linking - only link the entity name to its Wikipedia page (if entity exists) and the main service/product name to its service page. Do NOT include excessive links - keep the opening section clean and readable."} For the conclusion agent: [STRUCTURE]: 1-2 paragraphs; **[EXACT PRIMARY PER H2]** applies to the conclusion H2 as well.${semrushParts.hasSemrushExactMode ? " [LINK] + [EXTERNAL_SEMRUSH] as in other sections." : ""}
+6. Include first section and conclusion agents. For the first section agent: **CRITICAL - NEVER use "Introduction", "Intro", "Understanding [Topic]", or "Navigating [Topic]" as the header**. Use an active, SEO-friendly header like "Why [Topic] Matters", "[Topic]: Key Rules", or "Complete Guide to [Topic]". [STRUCTURE]: 2 short paragraphs (each paragraph should be 2-3 sentences only, keep paragraphs concise and well-spaced). **FOCUS KEYWORD AT START (focus keyword)**: The first paragraph (or first 1-2 sentences) MUST include the Focus Keyword (or a natural variation) near the beginning. **[EXACT PRIMARY PER H2]**: **Exact** Primary Keyword phrase **≥1×** in this H2's body. ${semrushParts.hasSemrushExactMode ? `${LINK_FEATURE_PLACEHOLDER}. [EXTERNAL_SEMRUSH]: at least 1 Semrush outbound citation (exact href + anchor from SEMRUSH blocks). Keep prose readable - integrate links naturally.` : "[LINK]: Minimal linking - only link the entity name to its Wikipedia page (if entity exists) and the main service/product name to its service page. Do NOT include excessive links - keep the opening section clean and readable."} For the conclusion agent: [STRUCTURE]: 1-2 paragraphs; **[EXACT PRIMARY PER H2]** applies to the conclusion H2 as well.${semrushParts.hasSemrushExactMode ? " [LINK] + [EXTERNAL_SEMRUSH] as in other sections." : ""}
 7. CRITICAL: Include [REAL-WORLD EXAMPLE] in at least one section (Benefits, Features, or How-To work best). Add authentic expertise statements demonstrating hands-on experience - examples: "After installing hundreds of systems in [location variation], we've found..." or "Our experience serving [broader area] has shown..." Make it sound specific and genuine, not generic
 8. **MANDATORY CONTENT STRUCTURE ELEMENTS (NON-NEGOTIABLE)** - Every blog MUST include ALL THREE of the following elements to break up text and improve readability:
    - **AT LEAST 1 TABLE**: You MUST include [TABLE] in at least one section. Use for comparisons, features, specifications, or data. When comparing Pros/Cons or Manual vs Motorized: use an HTML table (<table><thead><tr><th>Pros</th><th>Cons</th></tr></thead><tbody>...</tbody></table>), NOT Pros/Cons sub-headings with bullet lists. NEVER markdown tables.
@@ -1313,7 +1346,7 @@ Requirements:
   // Always add link requirements (Semrush mode: internal + outbound; otherwise internal-only unless keywords branch adds detail)
   if (semrushParts.hasSemrushExactMode) {
     userPrompt += `\n\n--- MANDATORY: INTERNAL + SEMRUSH OUTBOUND IN EVERY CHECKLIST ITEM (NON-NEGOTIABLE) ---
-- **EVERY numbered checklist item** must explicitly include BOTH: (1) "[LINK]: 3-5 internal links" with full URLs **copied verbatim** from the WordPress posts list in this prompt, AND (2) "[EXTERNAL_SEMRUSH]" requiring at least one outbound citation drawn **only** from the numbered SEMRUSH APPROVED EXTERNAL URLs / ANCHOR PHRASES blocks in the system prompt.
+- **EVERY numbered checklist item** must explicitly include BOTH: (1) "${LINK_FEATURE_PLACEHOLDER}", AND (2) "[EXTERNAL_SEMRUSH]" requiring at least one outbound citation drawn **only** from the numbered SEMRUSH APPROVED EXTERNAL URLs / ANCHOR PHRASES blocks in the system prompt.
 - **ZERO HALLUCINATED EXTERNAL URLS**: Do NOT type any third-party https:// URL in the checklist unless it is a **verbatim copy** from the SEMRUSH APPROVED EXTERNAL URLs list. **FORBIDDEN**: invented URLs, "e.g." external links, competitor domains, or plausible-looking URLs not in the list. **ALLOWED**: paste URL(s) exactly from the list, OR write "use SEMRUSH approved URL #N with anchor phrase #N" with no URL string.
 - **Spread outbound links**: the majority of sections (at least half of H2 items, or 6+ items when the checklist is long) must mention [EXTERNAL_SEMRUSH]. Use **different Semrush list indices** across sections where possible.
 - **FORBIDDEN**: Checklist lines that only say "internal links" or "WordPress URLs only" without [EXTERNAL_SEMRUSH] when SEMRUSH data is in the system prompt.
@@ -1324,7 +1357,7 @@ Requirements:
 - **CRITICAL - EVERY SECTION MUST HAVE 3-5 INTERNAL LINKS**: This is NON-NEGOTIABLE. Every H2 section and every H3 subsection MUST include "[LINK]: 3-5 internal links to other blog posts/pages"
 - Internal links connect to OTHER blog posts and pages on the same website - they are CRITICAL for SEO and user navigation
 - Link to related blog articles, service pages, product pages, and category pages using natural anchor text
-- Distribute keywords naturally in anchor text: vary phrasing; do not use the **same** anchor text on every link. Mix anchor text types: 50% natural descriptive phrases, 30% branded text, 20% keyword-rich. Whole-article focus keyword density must still meet **[RANK MATH / DENSITY] ~1%+** (see Requirements above)
+- Distribute keywords naturally in anchor text: vary phrasing; do not use the **same** anchor text on every link. Mix anchor text types: 50% natural descriptive phrases, 30% branded text, 20% keyword-rich. Whole-article focus keyword density must still meet **[FOCUS KEYWORD DENSITY] ~1%+** (see Requirements above)
 - Selected keywords for anchor text: ${selectedKeywords.join(", ")}
 - **H3 SECTIONS ALSO NEED LINKS**: When a section has H3 subheadings, each H3 should also have 3-5 internal links distributed throughout
 - **VALIDATION**: Before generating the checklist, count the [LINK] requirements - every section must have one specifying 3-5 internal links`;
@@ -1375,9 +1408,10 @@ ${pageLines}
         apiKey,
         model,
         messages: [
-          { role: "system", content: systemPrompt },
+          { role: "system", content: appendUniversalContentRulesToSystemPrompt(systemPrompt) },
           { role: "user", content: userPrompt },
         ],
+        contentHarness: true,
         temperature,
         maxTokens,
         topP,
@@ -1438,6 +1472,7 @@ export async function generateBlueprintFromTemplate(
     semrushAnchorPhrases?: string[];
     importedDraftLinks?: ImportedDraftLink[];
     modifierExternalLinks?: ModifierExternalLink[];
+    userExternalLinks?: ExternalLinkPair[];
     wikipediaUrl?: string;
     wikipediaTitle?: string;
   }
@@ -1605,32 +1640,33 @@ ${options.semrushScatterContext}
   const semrushPartsBlueprint = buildSemrushExactPromptParts({
     semrushApprovedExternalUrls: options.semrushApprovedExternalUrls,
     semrushAnchorPhrases: options.semrushAnchorPhrases,
+    userExternalLinks: options.userExternalLinks,
     normalizedSiteUrl: normalizedSiteUrlForBlueprint,
   });
 
   const wordpressOnlyLinksSection = semrushPartsBlueprint.hasSemrushExactMode
     ? `**ABSOLUTELY CRITICAL - WORDPRESS INTERNAL + SEMRUSH EXTERNAL (EXACT)**:
-- **INTERNAL [LINK]**: ONLY full URLs from the WordPress posts list - copy character-for-character. These are mandatory for on-site links.
-- **SEMRUSH EXTERNAL**: Third-party URLs MUST come ONLY from the "SEMRUSH - APPROVED EXTERNAL URLs" block above; anchor text MUST be copied EXACTLY from the "SEMRUSH - APPROVED ANCHOR PHRASES" block. Represent each pair as a feature: "[EXTERNAL_SEMRUSH]: href=<exact URL from Semrush list> | anchor=<exact phrase from Semrush anchor list>".
+- **INTERNAL [LINK]**: ${INTERNAL_LINK_PLACEHOLDER_FEATURE_SUFFIX}. URLs resolve from the sitemap after generation — do not paste raw https:// internal URLs in blueprint features.
+- **SEMRUSH EXTERNAL**: Third-party URLs MUST come ONLY from the "SEMRUSH - APPROVED EXTERNAL URLs" block above; anchor text MUST be copied EXACTLY from the "SEMRUSH - APPROVED ANCHOR PHRASES" block. Blueprint feature: "[EXTERNAL_SEMRUSH]: href=<exact URL> | anchor=<exact phrase>". Section body: insert **[[EXTERNAL:exact-url|exact-anchor]]** mid-sentence — code replaces with <a href>; never write third-party <a href> yourself.
 - **NEVER hallucinate external URLs** in blueprint features or agent descriptions - every third-party href must be a **verbatim substring** from the Semrush URL list above, or use index-only wording ("SEMRUSH URL #N") with no made-up URL.
 - **Tone**: Instruct writers to use Semrush URLs as **neutral reference / knowledge-base** links in body copy - never as "buy from this site" or "do not buy from" retail advice.
 - **NEVER** add external hrefs that are not in the Semrush URL list (entity Wikipedia from checklist/entity context is still allowed when applicable).
 - **NEVER use links from knowledge files** as hrefs - knowledge files are for content reference ONLY.
 - **NEVER create, invent, or fabricate** URLs - internal links must exist in the WordPress list; external must match Semrush lists above.
-- When including "[LINK]" features, **list the FULL URLs** from the WordPress posts list.
-- **NEVER use abstract descriptors** like [About Us] for internal links - ONLY full URLs from the connected site.
+- When including "[LINK]" features, use "${LINK_FEATURE_PLACEHOLDER}" (example tokens: [[LINK:employment expenses checklist|employment expense rules]]).
+- **NEVER use abstract descriptors** like [About Us] for internal links - use [[LINK:query|anchor]] placeholders only.
 - If no relevant WordPress post exists for a topic, do NOT create an internal link for that topic - skip linking for that section`
     : `**ABSOLUTELY CRITICAL - WORDPRESS POSTS ONLY FOR LINKS**:
 - **ONLY use links from the WordPress posts list** - These are the ONLY links allowed
 - **NEVER use external links** that are NOT in the WordPress posts list
 - **NEVER use links from knowledge files** - Knowledge files are for content reference ONLY, NOT for linking
 - **NEVER create, invent, or fabricate any links** - If a link is not in the WordPress posts list, you MUST NOT use it
-- When including "[LINK]" features, **list the FULL URLs** from the WordPress posts list - e.g. "[LINK]: 3-5 internal links including {actual URLs from the WordPress posts list above} - use exact URLs from list"
-- **NEVER use abstract descriptors** like [About Us], [interior design services], [topic] - ONLY full URLs from the connected site.
+- When including "[LINK]" features, use "${LINK_FEATURE_PLACEHOLDER}" (example: [[LINK:topic phrase|anchor text]]).
+- **NEVER use abstract descriptors** like [About Us], [interior design services], [topic] - use [[LINK:query|anchor]] placeholders only.
 - If no relevant WordPress post exists for a topic, do NOT create a link for that topic - simply skip linking for that section`;
 
   const semrushBlueprintLinkValidationLine = semrushPartsBlueprint.hasSemrushExactMode
-    ? `  - **CRITICAL: INTERNAL links** - ONLY from WordPress posts list (exact URLs). **SEMRUSH** - third-party hrefs only from Semrush URL list above; anchors verbatim from Semrush anchor list. Never use knowledge files for hrefs.`
+    ? `  - **CRITICAL: INTERNAL links** - ${INTERNAL_LINK_PLACEHOLDER_FEATURE_SUFFIX}. **SEMRUSH** - third-party hrefs only from Semrush URL list above; anchors verbatim from Semrush anchor list. Never use knowledge files for hrefs.`
     : `  - **CRITICAL: ONLY use links from WordPress posts - NEVER use external links or knowledge file links**`;
 
   const semrushBlueprintSecondLinkLine = semrushPartsBlueprint.hasSemrushExactMode
@@ -1644,7 +1680,7 @@ ${options.semrushScatterContext}
    **ABSOLUTELY MANDATORY: Count every character. Title cannot exceed 50 characters.**
    **If your title is longer than 50 characters, it will be automatically truncated and may lose important information.**
    ${TITLE_WELL_KNOWN_ACRONYMS_RULE}`
-    : `**CRITICAL: Title MUST be MAXIMUM 60 characters (WordPress + Rank Math)**
+    : `**CRITICAL: Title MUST be MAXIMUM 60 characters (WordPress SEO)**
    **ABSOLUTELY MANDATORY: Count every character. Title cannot exceed 60 characters. End on a complete word.**
    PRIMARY KEYWORD for this article: "${primaryKwForTitle}"
    ${BULK_WORDPRESS_POST_TITLE_RULE}
@@ -1682,11 +1718,11 @@ The checklist items may contain explicit feature requirements in formats like:
 - "[LIST]: description" - Include this as a feature
 - "[TABLE]: description" OR "[TABLE]: [COMPLETE MARKDOWN TABLE STRUCTURE]" - Include this as a feature. If a complete markdown table is provided in the checklist, preserve it exactly in the agent description or as a [CUSTOM] feature
 - "[BLOCKQUOTE]: description" - Include this as a feature for entity facts. Format as a block quote (use markdown > format). MAXIMUM 1-2 block quotes per entire blueprint
-- "[IMAGE]: description" OR "[IMAGE]: ![ ](url)" - Only include this if the user explicitly provided an image in the checklist. DO NOT add [IMAGE] features that weren't explicitly provided by the user
-- "[LINK]: 3-5 internal links - FULL URLs REQUIRED": This feature MUST be included in EVERY agent. **CRITICAL: List the FULL URLs** from the WordPress posts list - copy them verbatim from that list, not invented paths - NEVER use [topic], [About Us], or abstract descriptors. Copy URLs character-for-character. Applies to ALL agents.
+- "[IMAGE]: description" OR "[IMAGE]: ![ ](url)" - Only include this if the user explicitly provided an image in the checklist. DO NOT add [IMAGE] features that weren't explicitly provided by the user. When url is present, the harness MUST embed <figure><img src="url" alt="label" /> in that section — NEVER <a href> text links to the image file
+- "${LINK_FEATURE_PLACEHOLDER}": This feature MUST be included in EVERY agent. Use [[LINK:query|anchor]] tokens in agent descriptions — never raw https:// internal URLs, [topic], [About Us], or abstract descriptors. Applies to ALL agents.
 - "[EXTERNAL_WIKI]: href=<exact Wikipedia URL> | anchor=<entity place name>": When the mandatory entity Wikipedia block appears above, include this in the intro agent (step 1) and at least one body agent. Copy href character-for-character from the mandatory block.
 ${semrushPartsBlueprint.hasSemrushExactMode ? `- "[EXTERNAL_SEMRUSH]: href=<exact URL from Semrush URL list> | anchor=<exact phrase from Semrush anchor list>": When the Semrush URL and anchor blocks appear above, use this for third-party external citations only - href and anchor must be **copy-pasted** from those lists character-for-character; never invent or "imagine" a plausible third-party URL.` : ""}
-- "[FAQ]: 2-column Q&A table" - HTML table ONLY. Same format as all tables. Use <table><thead><tr><th>Question</th><th>Answer</th></tr></thead><tbody>...</tbody></table>. NEVER | Question | Answer | or |-|-|.
+${isGSCReport ? `- "[FAQ]: 2-column Q&A table" - HTML table ONLY. Same format as all tables. Use <table><thead><tr><th>Question</th><th>Answer</th></tr></thead><tbody>...</tbody></table>. NEVER | Question | Answer | or |-|-|.` : `- **NO [FAQ] BODY SECTIONS**: FAQ is appended later as flo-faq. Do NOT add [FAQ] features or FAQ-style agent titles.`}
 - "Note: User specified [requirement]" - Pay special attention to these requirements
 
 When you see these in checklist items, you MUST include them as features in the corresponding agent object.
@@ -1708,24 +1744,26 @@ Every agent object MUST have the following exact structure:
   "maxTokens": 1000
 }
 
-- **headingLevel FIELD (CRITICAL)**: headingLevel: 1 = H2 tag (main section). headingLevel: 2 = H3 tag (subordinate subsection ONLY). ALL main topic agents MUST have headingLevel: 1. This includes: introduction, "We Care About [Entity]", "What We Offer", "What is [X]?", costs, benefits, styles, trends, FAQ, conclusion - ALL headingLevel: 1. NEVER set headingLevel: 2 for a main topic. headingLevel: 2 is ONLY for agents that are true sub-sections nested under a parent H2 (extremely rare in blueprints).
+- **headingLevel FIELD (CRITICAL)**: headingLevel: 1 = H2 tag (main section). headingLevel: 2 = H3 tag (subordinate subsection ONLY). ALL main topic agents MUST have headingLevel: 1. This includes: introduction, "We Care About [Entity]", "What We Offer", "What is [X]?", costs, benefits, styles, trends, conclusion - ALL headingLevel: 1. NEVER set headingLevel: 2 for a main topic. headingLevel: 2 is ONLY for agents that are true sub-sections nested under a parent H2 (extremely rare in blueprints).
 
 CRITICAL REQUIREMENTS:
 - Use "title" NOT "name" for the agent title field
-- **ABSOLUTELY FORBIDDEN - NEVER USE "INTRODUCTION"**: NEVER use "Introduction", "Intro", "Overview", "Getting Started", or any generic non-SEO headers as agent titles. The first agent (step 1) MUST have a SEO-friendly, descriptive, agentic header that helps with SEO (e.g., "Understanding Child Safe Window Treatments", "Why Window Covering Safety Matters", "Complete Guide to Child-Safe Blinds"). Generic headers like "Introduction" provide no SEO value and are FORBIDDEN.
+- **ABSOLUTELY FORBIDDEN - NEVER USE "INTRODUCTION", "UNDERSTANDING", OR FAQ-STYLE HEADINGS**: NEVER use "Introduction", "Intro", "Overview", "Getting Started", "Understanding [Topic]", "Navigating [Topic]", "FAQ", "Frequently Asked Questions", "Answering Your Questions…", "Common Questions…", "Q&A", or any dedicated Q&A section title as agent titles. The first agent (step 1) MUST have an active, SEO-friendly header (e.g., "Why Window Covering Safety Matters", "Child-Safe Blinds: Key Rules", "Complete Guide to Child-Safe Blinds"). Generic, passive, or FAQ-style headers are FORBIDDEN.
 - The "description" field MUST be a string describing what the agent does. If checklist contains exact markdown table or image, you may reference it in the description
 - The "features" field MUST be an array of strings. Each feature should follow the format: "[TYPE]: description" where TYPE is one of: LIST, LINK, CUSTOM, FAQ, BLOCKQUOTE
 - When checklist items mention "[TABLE]" with a complete markdown table structure, include it as "[CUSTOM]: [preserve the complete markdown table structure exactly as provided in checklist]" OR include the table structure in the agent description
-- DO NOT include [IMAGE] features unless the user explicitly provided an image in the checklist. If an image markdown format (![ ](url)) is explicitly provided in the checklist, include it as "[IMAGE]: [preserve the exact markdown image format from checklist]"
+- DO NOT include [IMAGE] features unless the user explicitly provided an image in the checklist. If an image markdown format (![ ](url)) is explicitly provided in the checklist, include it as "[IMAGE]: [preserve the exact markdown image format from checklist]" and state in the agent description that output must use <figure><img src="exact-url"> — never a text link to the image URL
+- When checklist keyword uses unpunctuated compounds (xray, ecommerce), note the canonical writing form in the agent description (X-ray, e-commerce) for harness copy
 - When checklist items mention "[LIST]", include it as "[LIST]: [description from checklist]"
 - **CRITICAL: PREVENT UNNECESSARY SUBLISTS**: Only include [LIST] features when explicitly specified in the checklist item. If a checklist item does NOT contain "[LIST]" as a feature requirement, the agent description must explicitly state: "Write content in flowing paragraphs only. Do NOT create sublists, bullet lists, or 'Key Features' lists. Only include lists when [LIST] is explicitly mentioned as a feature requirement."
-- When checklist items mention "[BLOCKQUOTE]", include it as "[BLOCKQUOTE]: [description from checklist]" - format as a block quote for entity facts
+- When checklist items mention "[BLOCKQUOTE]", include it as "[BLOCKQUOTE]: [description from checklist]" - format as a block quote for entity facts. **Never use banned words from the WORD BLACKLIST in blockquote text** (no crucial, vital, navigate, navigating, understand, understanding, or any listed banned word).
+- **WORD BLACKLIST IN AGENT METADATA (NON-NEGOTIABLE)**: Never put banned words from the system WORD BLACKLIST in agent titles, descriptions, or features. Metadata must use plain direct wording only.
 - **H3 LIMIT (NON-NEGOTIABLE)**: When checklist mentions H3 subheadings, set h3Enabled: true and h3Count: 1 or 2. NEVER set h3Count above 2. MAX 2 H3s per H2 section.
-- **ABSOLUTELY MANDATORY - 3-5 LINKS REQUIRED - FULL URLs ONLY**: When checklist items mention [LINK], include FULL URLs from the WordPress posts list - e.g. "[LINK]: 3-5 internal links including https://site.com/page1/, https://site.com/page2/ - use exact URLs from list". NEVER use [topic], [About Us], or abstract descriptors. Copy URLs character-for-character.
-- **CRITICAL VALIDATION - 3-5 LINKS MANDATORY**: Before outputting the blueprint, verify that EVERY agent has a [LINK] feature that SPECIFICALLY mentions "3-5 internal links". Count through each agent:
+- **ABSOLUTELY MANDATORY - 3-5 INTERNAL LINK PLACEHOLDERS**: When checklist items mention [LINK], use "${LINK_FEATURE_PLACEHOLDER}" with example tokens like [[LINK:topic phrase|anchor text]]. NEVER use raw https:// internal URLs, [topic], [About Us], or abstract descriptors in blueprint features.
+- **CRITICAL VALIDATION - 3-5 LINKS MANDATORY**: Before outputting the blueprint, verify that EVERY agent has a [LINK] feature that SPECIFICALLY mentions 3-5 [[LINK:query|anchor]] placeholders. Count through each agent:
   - Does EVERY agent have a [LINK] feature? If NO, add it immediately.
   - Does the [LINK] feature specify "3-5" (not just "links")? If NO, update it to include "3-5".
-  - **MANDATORY: List FULL URLs** - e.g. "[LINK]: 3-5 internal links including https://site.com/about/, https://site.com/services/ - from WordPress posts list"
+  - **MANDATORY**: "${LINK_FEATURE_PLACEHOLDER}" — no full WordPress URLs in features.
 ${semrushBlueprintLinkValidationLine}
   - This validation applies to ALL agents without exception.
 ${options.currentPageUrl ? `- **CRITICAL: NEVER SELF-LINK**: When optimizing an existing post, NEVER link the post's URL (${options.currentPageUrl}) to itself in any agent features. Self-referential links are bad for SEO and must be completely avoided. Only suggest links to OTHER pages/posts, never to the current page being optimized.` : ""}
@@ -1734,7 +1772,7 @@ ${semrushBlueprintSecondLinkLine}
 - The "id" field MUST be a unique string for each agent (e.g., "agent-1", "agent-2", etc.)
 - The "step" field MUST be a number indicating the order (1, 2, 3, etc.). Steps MUST be sequential and non-overlapping
 - Create one agent for each major section/requirement in the checklist
-- **ABSOLUTELY MANDATORY REQUIREMENT - 3-5 LINKS with FULL URLs**: EVERY agent MUST include [LINK] with FULL URLs from the WordPress posts list - e.g. "[LINK]: 3-5 internal links including https://site.com/about/, https://site.com/services/ - use exact URLs from list". NEVER use [topic], [About Us], or abstract descriptors. Copy URLs character-for-character from the connected site.
+- **ABSOLUTELY MANDATORY REQUIREMENT - 3-5 LINK PLACEHOLDERS**: EVERY agent MUST include "${LINK_FEATURE_PLACEHOLDER}". NEVER use raw https:// internal URLs, [topic], [About Us], or abstract descriptors in blueprint features.
 - If checklist items mention "Note: User specified [requirement]", ensure those requirements are reflected in the agent features and description
 ${context.userPrompt && context.userPrompt.trim() ? `- **PROMPT MODIFIER (PRIMARY FOCUS)**: When User Requirements / Prompt Modifier is present (see above), section content must stay on-theme and tie back to the focus. Do NOT repeat the modifier phrase in every agent title/heading - that is keyword stuffing. Vary headings: some can imply the theme; only use the exact phrase where it fits naturally (e.g. one or two sections). Agent descriptions/features should guide on-theme content without requiring the phrase in every H2.` : ""}
 - If checklist contains exact markdown table, preserve the exact format in features or description
@@ -1751,10 +1789,11 @@ ${wordpressOnlyLinksSection}
 - Keep titles concise and focused - prioritize the primary keyword and main topic
 - Content Optimizer module requirement: MAXIMUM 50 characters - NO EXCEPTIONS
 
-**ABSOLUTELY FORBIDDEN - NEVER USE "INTRODUCTION" AS A HEADER**:
-- NEVER use "Introduction", "Intro", or any variation as an agent title or H2 header
+**ABSOLUTELY FORBIDDEN - NEVER USE "INTRODUCTION" OR FAQ-STYLE HEADERS**:
+- NEVER use "Introduction", "Intro", "FAQ", "Frequently Asked Questions", "Answering Your Questions…", "Common Questions…", "Q&A", or any variation as an agent title or H2 header
 - The first agent (step 1) MUST have a SEO-friendly, descriptive, agentic header that helps with SEO
-- Examples of GOOD first headers: "Understanding Child Safe Window Treatments", "Why Window Covering Safety Matters", "Complete Guide to Child-Safe Blinds"
+- Examples of GOOD first headers: "Why Window Covering Safety Matters", "Child-Safe Blinds: Key Rules", "Complete Guide to Child-Safe Blinds"
+- Examples of FORBIDDEN first headers: "Introduction", "Understanding Child Safe Window Treatments", "Navigating Window Covering Safety"
 - Examples of BAD first headers: "Introduction", "Intro", "Overview", "Getting Started"
 - A separate "Overview" AI Overview block is auto-prepended to every article, so do NOT create your own top "Summary", "Overview", or "Key Takeaways" section - start with real body sections.
 
@@ -1766,9 +1805,9 @@ Example structure:
     {
       "id": "agent-1",
       "step": 1,
-      "title": "Understanding [Primary Topic]",
+      "title": "[Primary Topic]: Key Rules",
       "description": "Provides an engaging overview of the topic with SEO-friendly context",
-      "features": ["[LIST]: Key points overview", "[LINK]: 3-5 internal links including https://site.com/page1/, https://site.com/page2/ - use exact URLs from WordPress posts list"],
+      "features": ["[LIST]: Key points overview", "[LINK]: 3–5 [[LINK:query|anchor]] placeholders per section (no raw https:// internal URLs)"],
       "h2Count": 1,
       "h3Count": 0,
       "h3Enabled": false,
@@ -1782,7 +1821,7 @@ Note: In every agent, use "headingLevel": 1 (1 = H2 main section; ALWAYS 1 for m
 
 Output ONLY valid JSON. Do not include markdown code blocks, explanations, or any text outside the JSON structure.`;
 
-  let userPrompt = `Generate the complete blueprint JSON structure based on the checklist above. Include a title, purpose, and agents array with one agent for each checklist item. REQUIRED: Every agent must have a [LINK] feature with exactly "3-5 internal links" and full URLs from the WordPress posts list - no exceptions. Output valid JSON only.`;
+  let userPrompt = `Generate the complete blueprint JSON structure based on the checklist above. Include a title, purpose, and agents array with one agent for each checklist item. REQUIRED: Every agent must have a [LINK] feature with ${INTERNAL_LINK_PLACEHOLDER_FEATURE_SUFFIX} - no exceptions. Output valid JSON only.`;
   if ((options.importedDraftLinks?.length ?? 0) > 0) {
     userPrompt += ` REQUIRED: Every [IMPORTED_DRAFT_LINK] from the checklist must appear as a blueprint agent feature with the exact markdown [anchor](url) shown — do not change href or anchor text.`;
   }
@@ -1810,9 +1849,10 @@ Output ONLY valid JSON. Do not include markdown code blocks, explanations, or an
       apiKey,
       model,
       messages: [
-        { role: "system", content: systemPrompt },
+        { role: "system", content: appendUniversalContentRulesToSystemPrompt(systemPrompt) },
         { role: "user", content: userPrompt },
       ],
+      contentHarness: true,
       temperature,
       maxTokens,
       topP,
@@ -1844,12 +1884,16 @@ Output ONLY valid JSON. Do not include markdown code blocks, explanations, or an
       }
     }
 
-    // Parse JSON response
-    const parsed = JSON.parse(cleanedResponse);
+    // Parse JSON response (repair truncated / malformed model output)
+    const { parsed } = parseJsonWithRepair<{
+      title?: string;
+      purpose?: string;
+      agents?: unknown[];
+    }>(cleanedResponse, { targetKeys: ["agents", "title", "purpose"] });
 
     // Validate and structure the response
     let agents: AgentConfig[] = Array.isArray(parsed.agents)
-      ? parsed.agents.map((agent: any, index: number) => {
+      ? sanitizeBlueprintAgentsForPipeline(parsed.agents.map((agent: any, index: number) => {
           const features = Array.isArray(agent.features) ? agent.features : [];
           
           // MANDATORY: Ensure every agent has a [LINK] feature with 3-5 links specification
@@ -1866,14 +1910,14 @@ Output ONLY valid JSON. Do not include markdown code blocks, explanations, or an
           
           if (!hasLinkFeature) {
             // Repair: add [LINK] when model omitted it (prompt requires it; this is fallback only)
-            features.push("[LINK]: 3-5 internal links - use full URLs from WordPress posts list (copy exact URLs)");
+            features.push(LINK_FEATURE_PLACEHOLDER);
             console.warn(`[Blueprint] Agent "${agent.title || `agent-${index + 1}`}" was missing required [LINK] feature - repaired. Ensure prompt limits data so model outputs this.`);
           } else if (!hasCorrectLinkFormat) {
             const linkIndex = features.findIndex((f: string) => 
               typeof f === 'string' && f.toLowerCase().trim().startsWith('[link]')
             );
             if (linkIndex >= 0) {
-              features[linkIndex] = "[LINK]: 3-5 internal links - use full URLs from WordPress posts list (copy exact URLs)";
+              features[linkIndex] = LINK_FEATURE_PLACEHOLDER;
               console.warn(`[Blueprint] Agent "${agent.title || `agent-${index + 1}`}" had [LINK] but not 3-5 links - repaired. Ensure prompt limits data so model outputs correct format.`);
             }
           }
@@ -1889,7 +1933,7 @@ Output ONLY valid JSON. Do not include markdown code blocks, explanations, or an
               const flowTitle = context.flowTitle || '';
               const topicMatch = flowTitle.match(/(.+?)(?:\s*[:|]|\s+vs\.|\s+Guide|\s+Complete)/i);
               const topic = topicMatch ? topicMatch[1].trim() : 'the Topic';
-              agentTitle = `Understanding ${topic}`;
+              agentTitle = `${topic}: What You Need to Know`;
               console.warn(`[Blueprint Validation] Replaced "Introduction" with SEO-friendly header: "${agentTitle}"`);
             } else {
               // For other agents, use a more descriptive title based on description
@@ -1899,6 +1943,8 @@ Output ONLY valid JSON. Do not include markdown code blocks, explanations, or an
             }
           }
           
+          agentTitle = sanitizeForbiddenHeadingTitle(agentTitle);
+
           const isFAQ = features?.some((f: string) =>
             typeof f === 'string' && (f.toLowerCase().includes('[faq]') || f.toLowerCase().includes('faq'))
           ) ?? false;
@@ -1914,7 +1960,7 @@ Output ONLY valid JSON. Do not include markdown code blocks, explanations, or an
             headingLevel: agent.headingLevel ?? 1,
             maxTokens: agent.maxTokens ?? 2000,
           };
-        })
+        }), { allowFaqAgents: isGSCReport })
       : [];
 
     // CRITICAL: On entity/service-area pages, ALL agents should be H2 (headingLevel: 1).
@@ -1958,7 +2004,7 @@ Output ONLY valid JSON. Do not include markdown code blocks, explanations, or an
             const chunk = feats.slice(i, i + FEATS_PER_AGENT);
             // Ensure each split agent gets a [LINK] feature
             const hasLink = chunk.some((f: string) => typeof f === 'string' && f.toLowerCase().startsWith('[link]'));
-            if (!hasLink) chunk.push("[LINK]: 3-5 internal links - use full URLs from WordPress posts list (copy exact URLs)");
+            if (!hasLink) chunk.push(LINK_FEATURE_PLACEHOLDER);
             const idx = expanded.length + 1;
             // Derive a title from the first feature or from checklist
             const checklistTitle = checklist[expanded.length]?.replace(/^\[.*?\]:\s*/, '').slice(0, 60) || `Section ${idx}`;
@@ -1983,24 +2029,7 @@ Output ONLY valid JSON. Do not include markdown code blocks, explanations, or an
       }
     }
 
-    // CRITICAL: Remove any FAQ agent entirely.
-    // Content Optimizer module handles FAQ only in the Overview tab; do not generate FAQ sections here.
-    const beforeCount = agents.length;
-    agents = agents.filter((agent) => {
-      const hasFAQFeature = agent.features?.some((f: string) =>
-        typeof f === 'string' && (f.toLowerCase().trim().includes('[faq]') || f.toLowerCase().trim().includes('faq'))
-      ) ?? false;
-      const hasFaqId = typeof agent.id === 'string' && agent.id.toLowerCase().includes('faq');
-      const hasFaqTitle = typeof agent.title === 'string' && agent.title.toLowerCase().includes('faq');
-      return !(hasFAQFeature || hasFaqId || hasFaqTitle);
-    });
-
-    const removedCount = beforeCount - agents.length;
-    if (removedCount > 0) {
-      console.warn(`[Blueprint Validation] Removed ${removedCount} FAQ agent(s) from optimizer blueprint.`);
-    }
-
-    // Update step numbers to be sequential after removal
+    // Update step numbers to be sequential
     agents.forEach((agent, index) => {
       agent.step = index + 1;
     });
@@ -2018,11 +2047,11 @@ Output ONLY valid JSON. Do not include markdown code blocks, explanations, or an
       });
     }
 
-    return {
+    return enforceForbiddenWordsOnBlueprint({
       title: finalTitle,
       purpose: parsed.purpose || context.flowPurpose || "Not specified",
       agents,
-    };
+    });
   } catch (error) {
     console.error(`[Blueprint] Attempt ${bpAttempt}/${MAX_BLUEPRINT_ATTEMPTS} error:`, error);
     if (bpAttempt === MAX_BLUEPRINT_ATTEMPTS) {

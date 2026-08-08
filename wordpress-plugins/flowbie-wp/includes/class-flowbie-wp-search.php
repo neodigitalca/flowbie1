@@ -157,6 +157,7 @@ class Flowbie_Wp_Search {
 		add_shortcode( 'flowbie_search', array( __CLASS__, 'render_shortcode' ) );
 		add_action( 'rest_api_init', array( __CLASS__, 'register_routes' ) );
 		add_action( 'plugins_loaded', array( __CLASS__, 'maybe_migrate_settings' ), 30 );
+		add_action( 'init', array( __CLASS__, 'register_search_assets' ), 5 );
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'register_search_assets' ) );
 
 		if ( defined( 'ELEMENTOR_VERSION' ) ) {
@@ -270,13 +271,15 @@ class Flowbie_Wp_Search {
 	 * @return string
 	 */
 	public static function render_instance( array $instance = array() ): string {
-		$settings  = self::merge_instance_settings( $instance );
-		$wrap_class = self::build_wrap_class( $instance );
-		$css_vars   = self::build_css_vars( $settings, $instance );
+		$settings   = self::merge_instance_settings( $instance );
+		$sidebar    = Flowbie_Wp_Ai_Widget_Design::resolve_sidebar_config( 'search', $instance );
+		$insights   = Flowbie_Wp_Ai_Widget_Design::resolve_search_insights( $instance );
+		$wrap_class = self::build_wrap_class( $instance, $sidebar );
+		$css_vars   = self::build_css_vars( $settings, $instance, $sidebar );
 		$rest_url   = esc_url( rest_url( self::REST_NAMESPACE . '/search' ) );
 		$nonce      = wp_create_nonce( 'wp_rest' );
 
-		self::enqueue_search_assets();
+		self::enqueue_search_assets( $sidebar );
 
 		return self::render_search_markup(
 			$wrap_class,
@@ -284,7 +287,9 @@ class Flowbie_Wp_Search {
 			$rest_url,
 			$nonce,
 			$settings,
-			$instance
+			$instance,
+			$sidebar,
+			$insights
 		);
 	}
 
@@ -363,8 +368,9 @@ class Flowbie_Wp_Search {
 
 	/**
 	 * @param array<string,mixed> $instance
+	 * @param array<string,mixed> $sidebar
 	 */
-	private static function build_wrap_class( array $instance ): string {
+	private static function build_wrap_class( array $instance, array $sidebar = array() ): string {
 		$wrap_class = 'flowbie-search-wrap';
 
 		$layout = isset( $instance['layout'] ) ? (string) $instance['layout'] : '';
@@ -391,14 +397,51 @@ class Flowbie_Wp_Search {
 			$wrap_class .= ' flowbie-search-wrap--full-width';
 		}
 
+		if ( ! empty( $sidebar['display_mode'] ) && $sidebar['display_mode'] === 'sidebar' ) {
+			$wrap_class .= ' flowbie-search-wrap--sidebar fai-sidebar-root';
+			$side = ( $sidebar['sidebar_side'] ?? 'right' ) === 'left' ? 'left' : 'right';
+			$wrap_class .= ' fai-sidebar-root--' . $side;
+			$transition = (string) ( $sidebar['sidebar_transition'] ?? 'slide' );
+			if ( ! in_array( $transition, array( 'slide', 'fade', 'none' ), true ) ) {
+				$transition = 'slide';
+			}
+			$wrap_class .= ' fai-sidebar-root--transition-' . $transition;
+		}
+
+		if ( ! empty( $sidebar['display_mode'] ) && $sidebar['display_mode'] === 'icon_only' ) {
+			$wrap_class .= ' flowbie-search-wrap--icon-only';
+			$open_as = (string) ( $sidebar['icon_open_as'] ?? 'sidebar_right' );
+			if ( $open_as === 'expand_inline' ) {
+				$wrap_class .= ' flowbie-search-wrap--icon-expand';
+			} elseif ( $open_as === 'modal_center' ) {
+				$wrap_class .= ' fbs-modal-root';
+			} else {
+				// In-flow launcher (header/toolbar). Do not use fai-sidebar-root — it fixed-positions the wrap off-layout.
+				$wrap_class .= ' fbs-icon-panel-root fai-sidebar-root--inline-launcher';
+				$side = ( $sidebar['sidebar_side'] ?? 'right' ) === 'left' ? 'left' : 'right';
+				$wrap_class .= ' fai-sidebar-root--' . $side;
+				$transition = (string) ( $sidebar['sidebar_transition'] ?? 'slide' );
+				if ( ! in_array( $transition, array( 'slide', 'fade', 'none' ), true ) ) {
+					$transition = 'slide';
+				}
+				$wrap_class .= ' fai-sidebar-root--transition-' . $transition;
+			}
+		}
+
+		$panel_modes = ! empty( $sidebar['display_mode'] ) && in_array( $sidebar['display_mode'], array( 'sidebar', 'icon_only' ), true );
+		if ( $panel_modes && (string) ( $sidebar['panel_content_align'] ?? 'left' ) === 'center' ) {
+			$wrap_class .= ' flowbie-search-wrap--panel-align-center';
+		}
+
 		return $wrap_class;
 	}
 
 	/**
 	 * @param array<string,mixed> $settings
 	 * @param array<string,mixed> $instance
+	 * @param array<string,mixed> $sidebar
 	 */
-	private static function build_css_vars( array $settings, array $instance ): string {
+	private static function build_css_vars( array $settings, array $instance, array $sidebar = array() ): string {
 		$tokens = Flowbie_Wp_Ai_Widget_Design::resolve( 'search' );
 
 		// Instance style overrides when not using global settings.
@@ -432,7 +475,56 @@ class Flowbie_Wp_Search {
 			}
 		}
 
-		return Flowbie_Wp_Ai_Widget_Design::build_search_css_vars( $tokens, $instance );
+		$vars = Flowbie_Wp_Ai_Widget_Design::build_search_css_vars( $tokens, $instance );
+		$panel_mode = ! empty( $sidebar['display_mode'] ) ? (string) $sidebar['display_mode'] : '';
+		if ( $panel_mode === 'sidebar' || $panel_mode === 'icon_only' ) {
+			$vars .= Flowbie_Wp_Ai_Widget_Design::build_sidebar_css_vars( $sidebar, $tokens );
+		}
+		if ( $panel_mode === 'icon_only' ) {
+			$modal_width = max( 320, min( 720, (int) ( $sidebar['modal_max_width'] ?? 560 ) ) );
+			$vars .= '--fbs-modal-max-width:' . $modal_width . 'px;';
+			$vars .= '--fbs-launcher-bg:var(--fai-sidebar-launcher-bg);';
+			$vars .= '--fbs-launcher-color:var(--fai-sidebar-launcher-text);';
+		}
+		return $vars;
+	}
+
+	/**
+	 * Register shared sidebar shell assets.
+	 */
+	public static function register_sidebar_assets(): void {
+		$base_url = plugin_dir_url( FLOWBIE_WP_PLUGIN_FILE );
+		$ver      = self::search_asset_version();
+
+		wp_register_style(
+			'flowbie-ai-sidebar-shell',
+			$base_url . 'assets/shared/flowbie-ai-sidebar-shell.css',
+			array(),
+			$ver
+		);
+
+		wp_register_script(
+			'flowbie-ai-sidebar-shell',
+			$base_url . 'assets/shared/flowbie-ai-sidebar-shell.js',
+			array(),
+			$ver,
+			true
+		);
+
+		wp_register_style(
+			'flowbie-ai-sidebar-unify',
+			$base_url . 'assets/shared/flowbie-ai-sidebar-unify.css',
+			array( 'flowbie-ai-sidebar-shell' ),
+			$ver
+		);
+
+		wp_register_script(
+			'flowbie-ai-sidebar-unify',
+			$base_url . 'assets/shared/flowbie-ai-sidebar-unify.js',
+			array( 'flowbie-ai-sidebar-shell' ),
+			$ver,
+			true
+		);
 	}
 
 	/**
@@ -441,6 +533,8 @@ class Flowbie_Wp_Search {
 	public static function register_search_assets(): void {
 		$asset_ver = self::search_asset_version();
 		$base_url  = plugin_dir_url( FLOWBIE_WP_PLUGIN_FILE );
+
+		self::register_sidebar_assets();
 
 		wp_register_style(
 			'flowbie-wp-lato',
@@ -467,11 +561,34 @@ class Flowbie_Wp_Search {
 
 	/**
 	 * Enqueue registered search assets.
+	 *
+	 * @param array<string,mixed> $sidebar Optional sidebar config.
 	 */
-	public static function enqueue_search_assets(): void {
+	public static function enqueue_search_assets( array $sidebar = array() ): void {
+		$display_mode = ! empty( $sidebar['display_mode'] ) ? (string) $sidebar['display_mode'] : '';
+		$is_sidebar   = $display_mode === 'sidebar';
+		$icon_open_as = (string) ( $sidebar['icon_open_as'] ?? 'sidebar_right' );
+		$needs_shell  = $is_sidebar || ( $display_mode === 'icon_only' && $icon_open_as !== 'expand_inline' );
 		self::register_search_assets();
+		if ( $needs_shell ) {
+			self::register_sidebar_assets();
+			wp_deregister_script( 'flowbie-search' );
+			wp_register_script(
+				'flowbie-search',
+				plugin_dir_url( FLOWBIE_WP_PLUGIN_FILE ) . 'assets/search/flowbie-search.js',
+				array( 'flowbie-ai-sidebar-shell', 'flowbie-ai-sidebar-unify' ),
+				self::search_asset_version(),
+				true
+			);
+		}
 		wp_enqueue_style( 'flowbie-wp-lato' );
 		wp_enqueue_style( 'flowbie-search' );
+		if ( $needs_shell ) {
+			wp_enqueue_style( 'flowbie-ai-sidebar-shell' );
+			wp_enqueue_style( 'flowbie-ai-sidebar-unify' );
+			wp_enqueue_script( 'flowbie-ai-sidebar-shell' );
+			wp_enqueue_script( 'flowbie-ai-sidebar-unify' );
+		}
 		wp_enqueue_script( 'flowbie-search' );
 	}
 
@@ -507,12 +624,13 @@ class Flowbie_Wp_Search {
 		string $rest_url,
 		string $nonce,
 		array $settings,
-		array $instance = array()
+		array $instance = array(),
+		array $sidebar = array(),
+		array $insights = array()
 	): string {
 		$placeholder  = isset( $settings['placeholder'] ) ? (string) $settings['placeholder'] : '';
 		$button_label = isset( $settings['button_label'] ) ? (string) $settings['button_label'] : '';
 		$max_results  = isset( $settings['max_results'] ) ? (int) $settings['max_results'] : 8;
-		$min_query    = isset( $instance['min_query'] ) ? max( 1, min( 5, (int) $instance['min_query'] ) ) : 2;
 
 		$hide_ai      = self::instance_flag_is_off( $instance, 'show_ai_banner', true );
 		$hide_scores  = self::instance_flag_is_off( $instance, 'show_relevance_scores', true );
@@ -533,9 +651,46 @@ class Flowbie_Wp_Search {
 		$hide_shadow   = empty( $design_ui['dropdown_shadow'] );
 		$hide_empty    = empty( $design_ui['empty_state'] );
 
-		$icon_svg = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg>';
+		$icon_id   = Flowbie_Wp_Search_Icons::sanitize_id( (string) ( $sidebar['launcher_icon'] ?? 'search' ) );
+		$icon_svg  = Flowbie_Wp_Search_Icons::render( $icon_id );
 
 		$hide_clear = empty( $design_ui['clear_button'] );
+
+		$is_sidebar   = ! empty( $sidebar['display_mode'] ) && $sidebar['display_mode'] === 'sidebar';
+		$is_icon_only = ! empty( $sidebar['display_mode'] ) && $sidebar['display_mode'] === 'icon_only';
+		$icon_open_as = (string) ( $sidebar['icon_open_as'] ?? 'sidebar_right' );
+		$layout       = isset( $sidebar['sidebar_layout'] ) && is_array( $sidebar['sidebar_layout'] )
+			? $sidebar['sidebar_layout']
+			: array( 'heading', 'search', 'results' );
+		$show_heading = in_array( 'heading', $layout, true ) && ! empty( $sidebar['sidebar_heading'] );
+		$show_search  = in_array( 'search', $layout, true );
+		$show_results = in_array( 'results', $layout, true );
+		if ( ! $show_search && ! $show_results ) {
+			$show_search  = true;
+			$show_results = true;
+		}
+
+		$is_panel_search = $is_sidebar || ( $is_icon_only && $icon_open_as !== 'expand_inline' );
+		if ( $is_panel_search ) {
+			$layout = self::normalize_sidebar_panel_layout( $layout );
+		}
+		if ( $is_panel_search && $show_search ) {
+			if ( ! in_array( 'results', $layout, true ) ) {
+				$layout[] = 'results';
+			}
+			$show_results = true;
+		}
+
+		if ( empty( $insights ) ) {
+			$insights = Flowbie_Wp_Ai_Widget_Design::resolve_search_insights( $instance );
+		}
+
+		$log_url       = esc_url( rest_url( self::REST_NAMESPACE . '/search/log' ) );
+		$accept_url    = esc_url( rest_url( self::REST_NAMESPACE . '/search/accept' ) );
+		$insights_url  = esc_url( rest_url( self::REST_NAMESPACE . '/search/insights' ) );
+		$word_ready_url = esc_url( rest_url( self::REST_NAMESPACE . '/search/word-ready' ) );
+		$logging_on    = ! empty( $insights['logging_enabled'] );
+		$insight_order = ( $is_sidebar || ( $is_icon_only && $icon_open_as !== 'expand_inline' ) ) ? $layout : array( 'popular_terms' );
 
 		$extra_classes = '';
 		if ( $hide_shadow ) {
@@ -556,6 +711,35 @@ class Flowbie_Wp_Search {
 		if ( $hide_clear ) {
 			$extra_classes .= ' fbs--no-clear';
 		}
+		if ( $is_sidebar ) {
+			$extra_classes .= ' flowbie-search-wrap--sidebar-mode';
+		}
+		if ( $is_icon_only ) {
+			$extra_classes .= ' flowbie-search-wrap--icon-only-mode';
+			if ( $icon_open_as !== 'expand_inline' ) {
+				$extra_classes .= ' flowbie-search-wrap--sidebar-mode';
+			}
+		}
+
+		$launcher_label = self::launcher_aria_label( $sidebar, $button_label );
+		$fbs_modifiers  = $extra_classes;
+		$panel_layout   = (string) ( $sidebar['panel_layout'] ?? 'compact' );
+		$elementor_edit_context = ! empty( $instance['elementor_edit_context'] );
+
+		if ( $elementor_edit_context ) {
+			$extra_classes .= ' flowbie-search-wrap--elementor-edit';
+		}
+
+		$panel_markup_hidden = $is_panel_search && $elementor_edit_context;
+
+		$panel_align_class = '';
+		if ( $is_panel_search && (string) ( $sidebar['panel_content_align'] ?? 'left' ) === 'center' ) {
+			$panel_align_class = ' fai-sidebar-panel--align-center';
+		}
+
+		if ( $elementor_edit_context ) {
+			$css_vars = preg_replace( '/--fbs-panel-offset-top:\s*[^;]+;?/', '', $css_vars ) ?? $css_vars;
+		}
 
 		ob_start();
 		?>
@@ -563,11 +747,35 @@ class Flowbie_Wp_Search {
 			class="<?php echo esc_attr( $wrap_class . $extra_classes ); ?>"
 			style="<?php echo esc_attr( $css_vars ); ?>"
 			data-rest-url="<?php echo esc_url( $rest_url ); ?>"
+			data-log-url="<?php echo esc_url( $log_url ); ?>"
+			data-accept-url="<?php echo esc_url( $accept_url ); ?>"
+			data-insights-url="<?php echo esc_url( $insights_url ); ?>"
+			data-word-ready-url="<?php echo esc_url( $word_ready_url ); ?>"
 			data-nonce="<?php echo esc_attr( $nonce ); ?>"
+			<?php if ( $logging_on ) : ?>
+				data-logging-enabled="1"
+			<?php endif; ?>
+			<?php if ( ! empty( $insights['show_popular_terms'] ) ) : ?>
+				data-show-popular-terms="1"
+			<?php endif; ?>
+			<?php if ( ! empty( $insights['show_popular_pages_overseer'] ) ) : ?>
+				data-show-popular-pages-overseer="1"
+			<?php endif; ?>
+			<?php if ( ! empty( $insights['show_popular_pages_search'] ) ) : ?>
+				data-show-popular-pages-search="1"
+			<?php endif; ?>
+			data-insights-days="<?php echo (int) ( $insights['insights_days'] ?? 30 ); ?>"
+			data-popular-terms-limit="<?php echo (int) ( $insights['popular_terms_limit'] ?? 5 ); ?>"
 			data-placeholder="<?php echo esc_attr( $placeholder ); ?>"
 			data-button-label="<?php echo esc_attr( $button_label ); ?>"
 			data-max-results="<?php echo (int) $max_results; ?>"
-			data-min-query="<?php echo (int) $min_query; ?>"
+			<?php if ( $is_sidebar || ( $is_icon_only && $icon_open_as !== 'expand_inline' ) ) : ?>
+				data-sidebar-mode="1"
+			<?php endif; ?>
+			<?php if ( $is_icon_only ) : ?>
+				data-icon-mode="1"
+				data-icon-open-as="<?php echo esc_attr( $icon_open_as ); ?>"
+			<?php endif; ?>
 			<?php if ( $hide_ai ) : ?>
 				data-hide-ai-banner="1"
 			<?php endif; ?>
@@ -580,35 +788,442 @@ class Flowbie_Wp_Search {
 			<?php if ( $hide_clear ) : ?>
 				data-hide-clear="1"
 			<?php endif; ?>
+			<?php if ( $is_panel_search ) : ?>
+				data-panel-layout="<?php echo esc_attr( $panel_layout ); ?>"
+				data-topics-limit="4"
+				data-fbs-icon-ids="<?php echo esc_attr( implode( ',', Flowbie_Wp_Search_Icons::ids() ) ); ?>"
+			<?php endif; ?>
+			<?php if ( $elementor_edit_context ) : ?>
+				data-elementor-edit-preview="1"
+			<?php endif; ?>
 		>
-			<div class="fbs">
-				<form class="fbs__form" role="search" action="#" method="get" autocomplete="off">
-					<input
-						type="text"
-						class="fbs__input"
-						name="flowbie_search_query"
-						value=""
-						placeholder="<?php echo esc_attr( $placeholder ); ?>"
-						aria-label="<?php echo esc_attr( $placeholder ); ?>"
-						autocomplete="off"
-						inputmode="search"
-						enterkeyhint="search"
-					/>
-					<button type="submit" class="fbs__btn fbs__btn--icon" aria-label="<?php echo esc_attr( $button_label ); ?>">
-						<span class="fbs__btn-icon"><?php echo $icon_svg; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- inline SVG ?></span>
-						<span class="fbs__btn-label"><?php echo esc_html( $button_label ); ?></span>
-					</button>
-				</form>
-				<div class="fbs__panel">
-					<div class="fbs__dropdown" role="listbox" hidden style="display:none;"></div>
-					<div class="fbs__status" aria-live="polite" style="display:none;"></div>
+			<?php if ( $is_icon_only ) : ?>
+				<button type="button" class="fbs__icon-launcher" aria-label="<?php echo esc_attr( $launcher_label ); ?>" aria-expanded="false">
+					<?php echo $icon_svg; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- inline SVG ?>
+				</button>
+				<?php if ( $icon_open_as === 'expand_inline' ) : ?>
+					<div class="fbs__icon-panel fbs__icon-panel--expand"<?php echo $panel_markup_hidden ? ' hidden' : ''; ?>>
+						<div class="fbs">
+							<?php
+							// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+							echo self::render_inline_search_body(
+								$placeholder,
+								$button_label,
+								$icon_svg,
+								$insight_order,
+								$insights,
+								false
+							);
+							?>
+						</div>
+					</div>
+				<?php else : ?>
+					<?php
+					$backdrop_class = $icon_open_as === 'modal_center' ? 'fbs-modal-backdrop fai-sidebar-backdrop' : 'fai-sidebar-backdrop';
+					$panel_class    = $icon_open_as === 'modal_center' ? 'fbs-modal-panel fai-sidebar-panel' : 'fai-sidebar-panel';
+					?>
+					<div class="<?php echo esc_attr( $backdrop_class ); ?>" aria-hidden="true"<?php echo $panel_markup_hidden ? ' hidden' : ''; ?>></div>
+					<div class="<?php echo esc_attr( $panel_class . $panel_align_class ); ?>" style="<?php echo esc_attr( $css_vars ); ?>" role="dialog" aria-modal="true" aria-label="<?php esc_attr_e( 'Site search', 'flowbie-wp' ); ?>"<?php echo $panel_markup_hidden ? ' hidden' : ''; ?>>
+						<?php
+						// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+						echo self::render_panel_close_button();
+						// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+						echo self::render_sidebar_panel_body(
+							$css_vars,
+							$fbs_modifiers,
+							true,
+							$layout,
+							$placeholder,
+							$button_label,
+							$icon_svg,
+							$insights,
+							$show_search,
+							$show_results,
+							$sidebar,
+							false
+						);
+						?>
+					</div>
+				<?php endif; ?>
+			<?php elseif ( $is_sidebar ) : ?>
+				<button type="button" class="fai-sidebar-launcher" aria-label="<?php esc_attr_e( 'Open search', 'flowbie-wp' ); ?>">
+					<?php echo $icon_svg; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- inline SVG ?>
+				</button>
+				<div class="fai-sidebar-backdrop" aria-hidden="true"<?php echo $panel_markup_hidden ? ' hidden' : ''; ?>></div>
+				<div class="fai-sidebar-panel<?php echo esc_attr( $panel_align_class ); ?>" style="<?php echo esc_attr( $css_vars ); ?>" role="dialog" aria-modal="true" aria-label="<?php esc_attr_e( 'Site search', 'flowbie-wp' ); ?>"<?php echo $panel_markup_hidden ? ' hidden' : ''; ?>>
+					<?php
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+					echo self::render_panel_close_button();
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+					echo self::render_sidebar_panel_body(
+						$css_vars,
+						$fbs_modifiers,
+						false,
+						$layout,
+						$placeholder,
+						$button_label,
+						$icon_svg,
+						$insights,
+						$show_search,
+						$show_results,
+						$sidebar,
+						false
+					);
+					?>
 				</div>
-				<a class="fbs__powered" href="https://flowbie.ca" target="_blank" rel="noopener noreferrer">
-					<svg class="fbs__powered-icon" viewBox="0 0 20 20" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M11.3 1.05a1 1 0 0 0-1.6 0L5.7 7H2a1 1 0 0 0-.8 1.6l4 5.5a1 1 0 0 0 .8.4h2.2l-1.1 3.9a.75.75 0 0 0 1.3.7l6-7A1 1 0 0 0 14.6 11H12l1.9-5.2A1 1 0 0 0 13 4.5h-1.8l.1-3.45z"/></svg>
-					<?php esc_html_e( 'Powered by', 'flowbie-wp' ); ?> <strong>Flowbie</strong>
-				</a>
+			<?php else : ?>
+			<div class="fbs">
+				<?php
+				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+				echo self::render_inline_search_body(
+					$placeholder,
+					$button_label,
+					$icon_svg,
+					$insight_order,
+					$insights,
+					true
+				);
+				?>
+			</div>
+			<?php endif; ?>
+			<?php if ( $is_panel_search ) : ?>
+				<div class="fbs__icon-sprites" hidden aria-hidden="true">
+					<?php
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+					echo self::render_icon_sprite_templates();
+					?>
+				</div>
+			<?php endif; ?>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * @param array<string,mixed> $sidebar
+	 */
+	private static function launcher_aria_label( array $sidebar, string $button_label ): string {
+		$custom = isset( $sidebar['launcher_label'] ) ? trim( (string) $sidebar['launcher_label'] ) : '';
+		if ( $custom !== '' ) {
+			return $custom;
+		}
+		if ( $button_label !== '' ) {
+			return $button_label;
+		}
+		return __( 'Open search', 'flowbie-wp' );
+	}
+
+	/**
+	 * Sidebar / icon panel body with scoped search shell (survives portal to body).
+	 *
+	 * @param array<int,string>   $layout
+	 * @param array<string,mixed> $insights
+	 */
+	private static function render_sidebar_panel_body(
+		string $css_vars,
+		string $modifier_classes,
+		bool $is_icon_panel,
+		array $layout,
+		string $placeholder,
+		string $button_label,
+		string $icon_svg,
+		array $insights,
+		bool $show_search,
+		bool $show_results,
+		array $sidebar,
+		bool $panel_editor_open = false
+	): string {
+		$panel_layout     = (string) ( $sidebar['panel_layout'] ?? 'compact' );
+		$is_discovery     = $panel_layout === 'discovery';
+		$sidebar_heading  = (string) ( $sidebar['sidebar_heading'] ?? '' );
+		$sidebar_subtitle = trim( (string) ( $sidebar['sidebar_subtitle'] ?? '' ) );
+		$intro_text       = $sidebar_subtitle;
+		if ( $panel_editor_open && $intro_text === '' ) {
+			$intro_text = __( 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.', 'flowbie-wp' );
+		}
+		$show_heading     = in_array( 'heading', $layout, true ) && $sidebar_heading !== '';
+
+		$shell_class = 'flowbie-search-wrap flowbie-search-wrap--sidebar-mode flowbie-search-wrap--panel-inner';
+		if ( $is_icon_panel ) {
+			$shell_class .= ' flowbie-search-wrap--icon-only-mode';
+		}
+		if ( $is_discovery ) {
+			$shell_class .= ' flowbie-search-wrap--panel-layout-discovery';
+		}
+
+		ob_start();
+		?>
+		<div class="fai-sidebar-panel__body">
+			<?php if ( $is_discovery && ( $show_heading || $intro_text !== '' ) ) : ?>
+				<div class="fbs__panel-hero">
+					<?php if ( $show_heading ) : ?>
+						<h2 class="fbs__panel-title"><?php echo esc_html( $sidebar_heading ); ?></h2>
+					<?php endif; ?>
+					<?php if ( $intro_text !== '' ) : ?>
+						<p class="fbs__panel-subtitle"><?php echo esc_html( $intro_text ); ?></p>
+					<?php endif; ?>
+				</div>
+			<?php elseif ( $show_heading ) : ?>
+				<h2 class="fai-sidebar-heading fbs__heading"><?php echo esc_html( $sidebar_heading ); ?></h2>
+				<?php if ( $intro_text !== '' ) : ?>
+					<p class="fbs__sidebar-intro"><?php echo esc_html( $intro_text ); ?></p>
+				<?php endif; ?>
+			<?php endif; ?>
+			<div class="<?php echo esc_attr( $shell_class . $modifier_classes ); ?>" style="<?php echo esc_attr( $css_vars ); ?>">
+				<div class="fbs fbs--sidebar-inner">
+					<?php
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+					echo self::render_sidebar_layout_sections(
+						$layout,
+						$placeholder,
+						$button_label,
+						$icon_svg,
+						$insights,
+						$show_search,
+						$show_results,
+						$panel_editor_open,
+						$is_discovery
+					);
+					?>
+					<?php
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+					echo self::render_powered_by_markup();
+					?>
+				</div>
 			</div>
 		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * @param array<int,string>   $layout
+	 * @param array<string,mixed> $insights
+	 */
+	private static function render_sidebar_layout_sections(
+		array $layout,
+		string $placeholder,
+		string $button_label,
+		string $icon_svg,
+		array $insights,
+		bool $show_search,
+		bool $show_results,
+		bool $panel_editor_open = false,
+		bool $is_discovery = false
+	): string {
+		$insight_sections = array( 'popular_terms', 'popular_topics' );
+		$has_query_search = $show_search && in_array( 'search', $layout, true );
+		$has_query_results = $show_results && in_array( 'results', $layout, true );
+		ob_start();
+
+		if ( $has_query_search ) {
+			?>
+			<section class="fbs__sidebar-search" aria-label="<?php esc_attr_e( 'Search', 'flowbie-wp' ); ?>">
+				<?php
+				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+				echo self::render_search_form( $placeholder, $button_label, $icon_svg );
+				?>
+			</section>
+			<?php
+		}
+
+		if ( $has_query_results ) {
+			echo '<div class="fbs__sidebar-query-scroll">';
+			?>
+			<section class="fbs__sidebar-results" aria-label="<?php esc_attr_e( 'Search results', 'flowbie-wp' ); ?>">
+				<div class="fbs__results-slot">
+					<div class="fbs__results-slot-empty" data-elementor-preview-placeholder="1">
+						<p class="fbs__results-slot-empty-label"><?php esc_html_e( 'Search results appear here', 'flowbie-wp' ); ?></p>
+					</div>
+					<div class="fbs__panel fbs__panel--sidebar">
+						<div class="fbs__dropdown" role="listbox" hidden></div>
+						<div class="fbs__status" aria-live="polite" hidden></div>
+					</div>
+				</div>
+			</section>
+			<?php
+			echo '</div>';
+		}
+
+		$insights_open         = false;
+		$pages_group_open      = false;
+		$page_sections         = array( 'popular_pages_overseer', 'popular_pages_search' );
+		$page_sections_rendered = 0;
+		$has_both_page_sections = in_array( 'popular_pages_overseer', $layout, true ) && in_array( 'popular_pages_search', $layout, true );
+		foreach ( $insight_sections as $section ) {
+			if ( ! in_array( $section, $layout, true ) ) {
+				continue;
+			}
+			if ( ! $insights_open ) {
+				?>
+				<aside class="fbs__sidebar-insights" aria-label="<?php esc_attr_e( 'Suggestions', 'flowbie-wp' ); ?>">
+				<?php
+				$insights_open = true;
+			}
+
+			$is_page_section = in_array( $section, $page_sections, true );
+			if ( $is_page_section && ! $pages_group_open ) {
+				$group_class = 'fbs__insights-pages-group';
+				if ( $has_both_page_sections ) {
+					$group_class .= ' fbs__insights-pages-group--paired';
+				}
+				echo '<div class="' . esc_attr( $group_class ) . '">';
+				$pages_group_open = true;
+			}
+			if ( ! $is_page_section && $pages_group_open ) {
+				echo '</div>';
+				$pages_group_open = false;
+				$page_sections_rendered = 0;
+			}
+
+			if ( $is_page_section && $page_sections_rendered > 0 ) {
+				echo '<span class="fbs__insights-pages-separator" aria-hidden="true">,</span>';
+			}
+
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			echo self::render_insight_block( $section, $insights, $panel_editor_open, $is_discovery, true );
+			if ( $is_page_section ) {
+				$page_sections_rendered += 1;
+			}
+		}
+		if ( $pages_group_open ) {
+			echo '</div>';
+		}
+		if ( $insights_open ) {
+			?>
+			</aside>
+			<?php
+		}
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Panel sidebar order: heading → search → results → insight modules.
+	 *
+	 * @param array<int,string> $layout Raw layout keys.
+	 * @return array<int,string>
+	 */
+	private static function normalize_sidebar_panel_layout( array $layout ): array {
+		$ordered = array( 'heading', 'search', 'results' );
+		$insight = array( 'popular_terms', 'popular_topics' );
+		$out     = array();
+		foreach ( $ordered as $key ) {
+			if ( in_array( $key, $layout, true ) ) {
+				$out[] = $key;
+			}
+		}
+		foreach ( $insight as $key ) {
+			if ( in_array( $key, $layout, true ) ) {
+				$out[] = $key;
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * @param array<int,string>   $insight_order
+	 * @param array<string,mixed> $insights
+	 */
+	private static function render_inline_search_body(
+		string $placeholder,
+		string $button_label,
+		string $icon_svg,
+		array $insight_order,
+		array $insights,
+		bool $include_powered
+	): string {
+		ob_start();
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		echo self::render_search_form( $placeholder, $button_label, $icon_svg );
+		$page_sections          = array( 'popular_pages_overseer', 'popular_pages_search' );
+		$pages_group_open       = false;
+		$page_sections_rendered = 0;
+		$has_both_page_sections = in_array( 'popular_pages_overseer', $insight_order, true ) && in_array( 'popular_pages_search', $insight_order, true );
+		foreach ( $insight_order as $section ) {
+			if ( ! in_array( $section, array( 'popular_terms', 'popular_pages_overseer', 'popular_pages_search' ), true ) ) {
+				continue;
+			}
+			$is_page_section = in_array( $section, $page_sections, true );
+			if ( $is_page_section && ! $pages_group_open ) {
+				$group_class = 'fbs__insights-pages-group';
+				if ( $has_both_page_sections ) {
+					$group_class .= ' fbs__insights-pages-group--paired';
+				}
+				echo '<div class="' . esc_attr( $group_class ) . '">';
+				$pages_group_open = true;
+			}
+			if ( ! $is_page_section && $pages_group_open ) {
+				echo '</div>';
+				$pages_group_open = false;
+				$page_sections_rendered = 0;
+			}
+			if ( $is_page_section && $page_sections_rendered > 0 ) {
+				echo '<span class="fbs__insights-pages-separator" aria-hidden="true">,</span>';
+			}
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			echo self::render_insight_block( $section, $insights );
+			if ( $is_page_section ) {
+				$page_sections_rendered += 1;
+			}
+		}
+		if ( $pages_group_open ) {
+			echo '</div>';
+		}
+		?>
+		<div class="fbs__panel">
+			<div class="fbs__dropdown" role="listbox" hidden style="display:none;"></div>
+			<div class="fbs__status" aria-live="polite" style="display:none;"></div>
+		</div>
+		<?php
+		if ( $include_powered ) {
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			echo self::render_powered_by_markup();
+		}
+		return (string) ob_get_clean();
+	}
+
+	private static function render_search_form( string $placeholder, string $button_label, string $icon_svg ): string {
+		ob_start();
+		?>
+		<form class="fbs__form" role="search" action="#" method="get" autocomplete="off">
+			<input
+				type="text"
+				class="fbs__input"
+				name="flowbie_search_query"
+				value=""
+				placeholder="<?php echo esc_attr( $placeholder ); ?>"
+				aria-label="<?php echo esc_attr( $placeholder ); ?>"
+				autocomplete="off"
+				inputmode="search"
+				enterkeyhint="search"
+			/>
+			<button type="submit" class="fbs__btn fbs__btn--icon" aria-label="<?php echo esc_attr( $button_label ); ?>">
+				<span class="fbs__btn-icon"><?php echo $icon_svg; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- inline SVG ?></span>
+				<span class="fbs__btn-label"><?php echo esc_html( $button_label ); ?></span>
+			</button>
+		</form>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	private static function render_powered_by_markup(): string {
+		ob_start();
+		?>
+		<a class="fbs__powered" href="https://flowbie.ca" target="_blank" rel="noopener noreferrer">
+			<svg class="fbs__powered-icon" viewBox="0 0 20 20" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M11.3 1.05a1 1 0 0 0-1.6 0L5.7 7H2a1 1 0 0 0-.8 1.6l4 5.5a1 1 0 0 0 .8.4h2.2l-1.1 3.9a.75.75 0 0 0 1.3.7l6-7A1 1 0 0 0 14.6 11H12l1.9-5.2A1 1 0 0 0 13 4.5h-1.8l.1-3.45z"/></svg>
+			<?php esc_html_e( 'Powered by', 'flowbie-wp' ); ?> <strong>Flowbie</strong>
+		</a>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	private static function render_panel_close_button(): string {
+		ob_start();
+		?>
+		<button type="button" class="fai-sidebar-close" aria-label="<?php esc_attr_e( 'Close search', 'flowbie-wp' ); ?>">
+			<?php echo Flowbie_Wp_Search_Icons::render_close(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- inline SVG ?>
+		</button>
 		<?php
 		return (string) ob_get_clean();
 	}
@@ -653,6 +1268,77 @@ class Flowbie_Wp_Search {
 					),
 				),
 			)
+		);
+
+		register_rest_route(
+			self::REST_NAMESPACE,
+			'/search/log',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( __CLASS__, 'handle_search_log' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+
+		register_rest_route(
+			self::REST_NAMESPACE,
+			'/search/accept',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( __CLASS__, 'handle_search_accept' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+
+		register_rest_route(
+			self::REST_NAMESPACE,
+			'/search/insights',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( __CLASS__, 'handle_search_insights' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+
+		register_rest_route(
+			self::REST_NAMESPACE,
+			'/search/word-ready',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( __CLASS__, 'handle_search_word_ready' ),
+				'permission_callback' => '__return_true',
+				'args'                => array(
+					'query' => array(
+						'required'          => true,
+						'type'              => 'string',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+	}
+
+	/**
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public static function handle_search_word_ready( WP_REST_Request $request ): WP_REST_Response {
+		$query_text = trim( (string) $request->get_param( 'query' ) );
+		if ( $query_text === '' ) {
+			return new WP_REST_Response( array( 'ready' => false ), 200 );
+		}
+
+		$ip_key = 'fbs_wrl_' . md5( $_SERVER['REMOTE_ADDR'] ?? 'unknown' );
+		if ( get_transient( $ip_key ) ) {
+			return new WP_REST_Response( array( 'ready' => false ), 200 );
+		}
+		set_transient( $ip_key, 1, self::RATE_LIMIT_TTL );
+
+		return new WP_REST_Response(
+			array(
+				'ready' => self::openrouter_query_has_complete_word( $query_text ),
+			),
+			200
 		);
 	}
 
@@ -827,6 +1513,36 @@ class Flowbie_Wp_Search {
 		);
 	}
 
+	/**
+	 * @param string $query Raw search input.
+	 */
+	private static function openrouter_query_has_complete_word( string $query ): bool {
+		if ( Flowbie_Wp_OpenRouter::get_api_key() === '' ) {
+			return false;
+		}
+
+		$system = 'You judge whether a search box input contains at least one complete, correctly spelled real word (English or a proper noun). Partial mid-word typing is not ready. Trailing space is optional. Respond with ONLY valid JSON (no markdown): {"ready": true} or {"ready": false}. Examples: "plu" false, "plumber" true, "plumber edmonton" true, "plumber ed" true when "plumber" is complete, "asdfgh" false.';
+
+		$result = Flowbie_Wp_OpenRouter::complete( $system, $query, 64, 0.0 );
+		if ( is_wp_error( $result ) ) {
+			return false;
+		}
+
+		$text = trim( (string) $result );
+		if ( strpos( $text, '```' ) !== false ) {
+			$text = preg_replace( '/```(?:json)?\s*/i', '', $text );
+			$text = preg_replace( '/```/', '', $text );
+			$text = trim( (string) $text );
+		}
+
+		$parsed = json_decode( $text, true );
+		if ( ! is_array( $parsed ) || ! array_key_exists( 'ready', $parsed ) ) {
+			return false;
+		}
+
+		return (bool) $parsed['ready'];
+	}
+
 	// ── Ranking ──────────────────────────────────────────────────
 
 	/**
@@ -998,5 +1714,215 @@ class Flowbie_Wp_Search {
 		} );
 
 		return array_slice( $wp_results, 0, $limit );
+	}
+
+	private static function render_icon_sprite_templates(): string {
+		ob_start();
+		foreach ( Flowbie_Wp_Search_Icons::ids() as $icon_id ) {
+			?>
+			<template class="fbs__icon-sprite" data-icon="<?php echo esc_attr( $icon_id ); ?>">
+				<?php echo Flowbie_Wp_Search_Icons::render( $icon_id, array( 'width' => 20, 'height' => 20 ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- inline SVG ?>
+			</template>
+			<?php
+		}
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * @param string              $section Insight section key.
+	 * @param array<string,mixed> $insights Resolved insights config.
+	 */
+	private static function render_insight_block( string $section, array $insights, bool $preview_demo = false, bool $is_discovery = false, bool $reserve_slot = false ): string {
+		$toggles = array(
+			'popular_terms'          => 'show_popular_terms',
+			'popular_pages_overseer' => 'show_popular_pages_overseer',
+			'popular_pages_search'   => 'show_popular_pages_search',
+			'popular_topics'         => 'show_popular_pages_overseer',
+		);
+		if ( ! isset( $toggles[ $section ] ) ) {
+			return '';
+		}
+		if ( ! $preview_demo && ! $reserve_slot && empty( $insights[ $toggles[ $section ] ] ) ) {
+			return '';
+		}
+
+		$labels = array(
+			'popular_terms'          => __( 'Popular searches', 'flowbie-wp' ),
+			'popular_pages_overseer' => __( 'General pages', 'flowbie-wp' ),
+			'popular_pages_search'   => __( 'From search', 'flowbie-wp' ),
+			'popular_topics'         => __( 'Popular Topics', 'flowbie-wp' ),
+		);
+
+		$list_class  = $section === 'popular_topics' ? 'fbs__insights-list fbs__topics-grid' : 'fbs__insights-list';
+		$label_class = $section === 'popular_topics' ? 'fbs__insights-label fbs__insights-label--topics' : 'fbs__insights-label';
+		if ( $section === 'popular_terms' ) {
+			$list_class .= ' fbs__insights-list--terms';
+		}
+		if ( in_array( $section, array( 'popular_pages_overseer', 'popular_pages_search' ), true ) ) {
+			$list_class .= ' fbs__insights-list--links';
+		}
+
+		$block_class = 'fbs__insights-block';
+		if ( $reserve_slot ) {
+			$block_class .= ' fbs__insights-block--slot';
+		}
+		$hidden_attr = ( $preview_demo || $reserve_slot ) ? '' : ' hidden';
+		$demo_attr   = $preview_demo ? ' data-elementor-demo="1"' : '';
+
+		$list_markup = '';
+		if ( $preview_demo ) {
+			$list_markup = self::render_elementor_preview_insight_list( $section );
+		}
+
+		return sprintf(
+			'<div class="%8$s" data-insight="%1$s"%5$s%6$s><div class="%3$s">%2$s</div><div class="%4$s" role="list">%7$s</div></div>',
+			esc_attr( $section ),
+			esc_html( $labels[ $section ] ),
+			esc_attr( $label_class ),
+			esc_attr( $list_class ),
+			$hidden_attr,
+			$demo_attr,
+			$list_markup,
+			esc_attr( $block_class )
+		);
+	}
+
+	private static function render_elementor_preview_insight_list( string $section ): string {
+		if ( $section === 'popular_terms' ) {
+			$terms = array( 'Lorem ipsum', 'Dolor sit amet', 'Consectetur', 'Adipiscing elit', 'Sed eiusmod' );
+			$out   = '';
+			foreach ( $terms as $term ) {
+				$out .= sprintf(
+					'<button type="button" class="fbs__insight-chip" tabindex="-1">%s</button>',
+					esc_html( $term )
+				);
+			}
+			return $out;
+		}
+
+		if ( $section === 'popular_topics' ) {
+			$topics = array( 'Lorem Topic', 'Ipsum Pages', 'Dolor Guides', 'Sit Resources' );
+			$out    = '';
+			foreach ( $topics as $topic ) {
+				$out .= sprintf(
+					'<a class="fbs__topic-tile" href="#" tabindex="-1"><span class="fbs__topic-label">%s</span></a>',
+					esc_html( $topic )
+				);
+			}
+			return $out;
+		}
+
+		$pages = array(
+			'Lorem ipsum dolor',
+			'Sit amet consectetur',
+			'Adipiscing elit sed',
+			'Eiusmod tempor incididunt',
+		);
+		$out   = '';
+		foreach ( $pages as $page ) {
+			$out .= sprintf(
+				'<a class="fbs__insight-link" href="#" tabindex="-1">%s</a>',
+				esc_html( $page )
+			);
+		}
+		return $out;
+	}
+
+	/**
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public static function handle_search_log( WP_REST_Request $request ) {
+		$body = $request->get_json_params();
+		if ( ! is_array( $body ) ) {
+			$body = array();
+		}
+
+		$result = Flowbie_Wp_Search_Logs::insert(
+			array(
+				'session_id'   => isset( $body['session_id'] ) ? (string) $body['session_id'] : '',
+				'page_url'     => isset( $body['page_url'] ) ? (string) $body['page_url'] : '',
+				'query'        => isset( $body['query'] ) ? (string) $body['query'] : '',
+				'result_count' => isset( $body['result_count'] ) ? (int) $body['result_count'] : 0,
+				'intent'       => isset( $body['intent'] ) ? (string) $body['intent'] : '',
+				'sentiment'    => isset( $body['sentiment'] ) ? (string) $body['sentiment'] : '',
+				'results'      => isset( $body['results'] ) && is_array( $body['results'] ) ? $body['results'] : array(),
+			)
+		);
+
+		if ( empty( $result['ok'] ) ) {
+			$status = ( isset( $result['error'] ) && $result['error'] === 'logging_disabled' ) ? 200 : 400;
+			return new WP_REST_Response( $result, $status );
+		}
+
+		return new WP_REST_Response(
+			array(
+				'ok'       => true,
+				'eventUid' => $result['event_uid'],
+			),
+			200
+		);
+	}
+
+	/**
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public static function handle_search_accept( WP_REST_Request $request ) {
+		$body = $request->get_json_params();
+		if ( ! is_array( $body ) ) {
+			$body = array();
+		}
+
+		$result = Flowbie_Wp_Search_Logs::record_accept(
+			array(
+				'event_uid' => isset( $body['eventUid'] ) ? (string) $body['eventUid'] : '',
+				'url'       => isset( $body['url'] ) ? (string) $body['url'] : '',
+				'title'     => isset( $body['title'] ) ? (string) $body['title'] : '',
+				'rank'      => isset( $body['rank'] ) ? (int) $body['rank'] : 0,
+			)
+		);
+
+		if ( empty( $result['ok'] ) ) {
+			$status = ( isset( $result['error'] ) && $result['error'] === 'logging_disabled' ) ? 200 : 400;
+			return new WP_REST_Response( $result, $status );
+		}
+
+		return new WP_REST_Response( array( 'ok' => true ), 200 );
+	}
+
+	/**
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public static function handle_search_insights( WP_REST_Request $request ): WP_REST_Response {
+		$days  = (int) $request->get_param( 'days' );
+		$limit = (int) $request->get_param( 'limit' );
+		if ( $days < 1 ) {
+			$days = 30;
+		}
+		if ( $limit < 1 ) {
+			$limit = 5;
+		}
+
+		$insights = Flowbie_Wp_Ai_Widget_Design::resolve_search_insights( array() );
+
+		$payload = array(
+			'popularTerms'            => array(),
+			'popularPagesOverseer'    => array(),
+			'popularPagesFromSearch'  => array(),
+		);
+
+		if ( ! empty( $insights['show_popular_terms'] ) ) {
+			$payload['popularTerms'] = Flowbie_Wp_Search_Logs::aggregate_popular_terms_curated( $days, $limit );
+		}
+		if ( ! empty( $insights['show_popular_pages_overseer'] ) ) {
+			$payload['popularPagesOverseer'] = Flowbie_Wp_Search_Logs::aggregate_popular_pages_overseer( $days, $limit );
+		}
+		if ( ! empty( $insights['show_popular_pages_search'] ) ) {
+			$payload['popularPagesFromSearch'] = Flowbie_Wp_Search_Logs::aggregate_popular_pages_from_search( $days, $limit );
+		}
+
+		return new WP_REST_Response( $payload, 200 );
 	}
 }

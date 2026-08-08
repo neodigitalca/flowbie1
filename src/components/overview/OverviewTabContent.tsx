@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   SEO_WORKSPACE_BODY_SCROLL_CLASS,
   SEO_WORKSPACE_HEADER_CLASS,
@@ -9,6 +9,7 @@ import type { OverviewTabContentProps } from "@/components/overview/overview-tab
 import {
   CONTENT_OPTIMIZER_BODY_INSET_CLASS,
   CONTENT_OPTIMIZER_WORKSPACE_SHELL_CLASS,
+  WORKSPACE_DETAILS_DIM_OVERLAY_CLASS,
 } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import { useOverviewTabController } from "@/hooks/overview/use-overview-tab-controller";
 import { useOverviewTabShellDerived } from "@/hooks/overview/use-overview-tab-shell-derived";
@@ -21,6 +22,7 @@ export function OverviewTabContent(props: OverviewTabContentProps) {
     ? ctrl.opt.optimizationProgress[derived.bulkBatchKey]
     : undefined;
   const { site } = ctrl;
+  const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false);
 
   return (
     <div className={CONTENT_OPTIMIZER_WORKSPACE_SHELL_CLASS}>
@@ -31,6 +33,7 @@ export function OverviewTabContent(props: OverviewTabContentProps) {
           bulkWorkspaceBusy={derived.bulkWorkspaceBusy}
           bulkMicroSnapshot={derived.bulkMicroSnapshot}
           isBatchContentRunning={derived.isBatchContentRunning}
+          isSinglePageOptimizing={derived.isSinglePageOptimizing}
           batchBulkState={derived.batchBulkState}
           bulkBatchKey={derived.bulkBatchKey}
           batchProgress={batchProgress}
@@ -40,9 +43,20 @@ export function OverviewTabContent(props: OverviewTabContentProps) {
           optimizerSection={props.optimizerSection}
           onOptimizerSectionChange={props.onOptimizerSectionChange}
           paginationLayoutTotal={props.paginationLayoutTotal}
+          onDetailsOpenChange={setDetailsDrawerOpen}
+          generatorChrome={props.generatorChrome}
         />
       </div>
-      <div className={cn(SEO_WORKSPACE_BODY_SCROLL_CLASS, CONTENT_OPTIMIZER_BODY_INSET_CLASS)}>
+      <div
+        className={cn(
+          SEO_WORKSPACE_BODY_SCROLL_CLASS,
+          CONTENT_OPTIMIZER_BODY_INSET_CLASS,
+          "relative",
+        )}
+      >
+        {detailsDrawerOpen ? (
+          <div className={WORKSPACE_DETAILS_DIM_OVERLAY_CLASS} aria-hidden />
+        ) : null}
         <OverviewPagesSection
         site={site}
         sitemapSource={ctrl.sitemapSource}
@@ -70,11 +84,13 @@ export function OverviewTabContent(props: OverviewTabContentProps) {
         handleAiMetaRow={ctrl.handleAiMetaRow}
         handleAiKeywordRow={ctrl.handleAiKeywordRow}
         handleSetDateToday={ctrl.handleSetDateToday}
+        commitRowDateModifier={ctrl.commitRowDateModifier}
         handleAiFaqRowAll={ctrl.handleAiFaqRowAll}
         handleAiFaqQuestion={ctrl.handleAiFaqQuestion}
         handleAiFaqAnswer={ctrl.handleAiFaqAnswer}
         handleAiHeadersRow={ctrl.handleAiHeadersRow}
         handleAiLinksRow={ctrl.handleAiLinksRow}
+        handleAiWikipediaLinkRow={ctrl.handleAiWikipediaLinkRow}
         handleAiOverviewRow={ctrl.handleAiOverviewRow}
         handleAiInContentImageRow={ctrl.handleAiInContentImageRow}
       />

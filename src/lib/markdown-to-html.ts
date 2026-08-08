@@ -5,6 +5,19 @@
 
 import { marked } from 'marked';
 
+/** Collapse `[text] (url)` to `[text](url)` so marked always parses links. */
+export function normalizeMarkdownLinks(markdown: string): string {
+  let out = markdown.replace(
+    /\[([^\]]+)\]\s+\((https?:\/\/[^)]+)\)/g,
+    '[$1]($2)',
+  );
+  out = out.replace(
+    /\[([^\]]+)\]\s+\((#[^)]+)\)/g,
+    '[$1]($2)',
+  );
+  return out;
+}
+
 /**
  * Convert markdown content to WordPress-compatible HTML
  * 
@@ -15,6 +28,8 @@ export function markdownToHtml(markdown: string): string {
   if (!markdown || markdown.trim().length === 0) {
     return '';
   }
+
+  const normalized = normalizeMarkdownLinks(markdown);
   
   // Configure marked options for WordPress compatibility
   marked.setOptions({
@@ -23,7 +38,7 @@ export function markdownToHtml(markdown: string): string {
   });
   
   // Convert markdown to HTML
-  let html = marked.parse(markdown) as string;
+  let html = marked.parse(normalized) as string;
   
   // Post-process HTML for WordPress compatibility
   html = postProcessHtml(html);

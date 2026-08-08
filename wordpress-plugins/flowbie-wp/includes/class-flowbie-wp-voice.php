@@ -1,6 +1,6 @@
 <?php
 /**
- * Flowbie Voice: REST endpoints for STT and spoken acknowledgments.
+ * Flowbie Voice: REST endpoint for speech-to-text (push-to-talk input).
  *
  * @package Flowbie_Wp
  */
@@ -22,7 +22,7 @@ class Flowbie_Wp_Voice {
 	}
 
 	/**
-	 * Keep voice scripts out of Autoptimize bundles (stale bundles caused missing unlock helpers).
+	 * Keep voice scripts out of Autoptimize bundles.
 	 *
 	 * @param string $exclude Comma-separated exclude list.
 	 * @return string
@@ -31,7 +31,7 @@ class Flowbie_Wp_Voice {
 		if ( ! is_string( $exclude ) ) {
 			$exclude = '';
 		}
-		$needles = array( 'flowbie-voice', 'flowbie-thinking-card', 'flowbie-chat-widget' );
+		$needles = array( 'flowbie-voice', 'flowbie-thinking-card', 'flowbie-chat-widget', 'flowbie-markdown' );
 		foreach ( $needles as $needle ) {
 			if ( strpos( $exclude, $needle ) === false ) {
 				$exclude .= ( $exclude !== '' ? ', ' : '' ) . $needle;
@@ -50,36 +50,6 @@ class Flowbie_Wp_Voice {
 			array(
 				'methods'             => 'POST',
 				'callback'            => array( __CLASS__, 'rest_transcribe' ),
-				'permission_callback' => array( __CLASS__, 'rest_permission' ),
-			)
-		);
-
-		register_rest_route(
-			self::REST_NAMESPACE,
-			'/voice/ack',
-			array(
-				'methods'             => 'POST',
-				'callback'            => array( __CLASS__, 'rest_ack' ),
-				'permission_callback' => array( __CLASS__, 'rest_permission' ),
-			)
-		);
-
-		register_rest_route(
-			self::REST_NAMESPACE,
-			'/voice/speak',
-			array(
-				'methods'             => 'POST',
-				'callback'            => array( __CLASS__, 'rest_speak' ),
-				'permission_callback' => array( __CLASS__, 'rest_permission' ),
-			)
-		);
-
-		register_rest_route(
-			self::REST_NAMESPACE,
-			'/voice/narrate',
-			array(
-				'methods'             => 'POST',
-				'callback'            => array( __CLASS__, 'rest_narrate' ),
 				'permission_callback' => array( __CLASS__, 'rest_permission' ),
 			)
 		);
@@ -174,179 +144,13 @@ class Flowbie_Wp_Voice {
 	}
 
 	/**
-	 * @param WP_REST_Request $request
-	 * @return WP_REST_Response
-	 */
-	public static function rest_ack( WP_REST_Request $request ): WP_REST_Response {
-		if ( Flowbie_Wp_OpenRouter::get_api_key() === '' ) {
-			return new WP_REST_Response(
-				array( 'error' => __( 'OpenRouter API key is not configured.', 'flowbie-wp' ) ),
-				503
-			);
-		}
-
-		$body = $request->get_json_params();
-		if ( ! is_array( $body ) ) {
-			$body = array();
-		}
-
-		$message = isset( $body['message'] ) ? sanitize_textarea_field( wp_unslash( $body['message'] ) ) : '';
-		if ( trim( $message ) === '' ) {
-			return new WP_REST_Response(
-				array( 'error' => __( 'Message cannot be empty.', 'flowbie-wp' ) ),
-				400
-			);
-		}
-
-		$ack_text = Flowbie_Wp_OpenRouter::voice_ack_text( $message );
-		if ( is_wp_error( $ack_text ) ) {
-			return new WP_REST_Response(
-				array( 'error' => $ack_text->get_error_message() ),
-				502
-			);
-		}
-
-		$response = self::build_tts_response( $ack_text );
-		if ( is_wp_error( $response ) ) {
-			return new WP_REST_Response(
-				array(
-					'ack_text' => $ack_text,
-					'error'    => $response->get_error_message(),
-				),
-				200
-			);
-		}
-
-		$response['ack_text'] = $ack_text;
-		return new WP_REST_Response( $response, 200 );
-	}
-
-	/**
-	 * @param WP_REST_Request $request
-	 * @return WP_REST_Response
-	 */
-	public static function rest_speak( WP_REST_Request $request ): WP_REST_Response {
-		if ( Flowbie_Wp_OpenRouter::get_api_key() === '' ) {
-			return new WP_REST_Response(
-				array( 'error' => __( 'OpenRouter API key is not configured.', 'flowbie-wp' ) ),
-				503
-			);
-		}
-
-		$body = $request->get_json_params();
-		if ( ! is_array( $body ) ) {
-			$body = array();
-		}
-
-		$text = isset( $body['text'] ) ? sanitize_textarea_field( wp_unslash( $body['text'] ) ) : '';
-		if ( trim( $text ) === '' ) {
-			return new WP_REST_Response(
-				array( 'error' => __( 'Text cannot be empty.', 'flowbie-wp' ) ),
-				400
-			);
-		}
-
-		if ( strlen( $text ) > 500 ) {
-			$text = substr( $text, 0, 497 ) . '...';
-		}
-
-		$response = self::build_tts_response( $text );
-		if ( is_wp_error( $response ) ) {
-			return new WP_REST_Response(
-				array( 'error' => $response->get_error_message() ),
-				502
-			);
-		}
-
-		return new WP_REST_Response( $response, 200 );
-	}
-
-	/**
-	 * @param WP_REST_Request $request
-	 * @return WP_REST_Response
-	 */
-	public static function rest_narrate( WP_REST_Request $request ): WP_REST_Response {
-		if ( Flowbie_Wp_OpenRouter::get_api_key() === '' ) {
-			return new WP_REST_Response(
-				array( 'error' => __( 'OpenRouter API key is not configured.', 'flowbie-wp' ) ),
-				503
-			);
-		}
-
-		$body = $request->get_json_params();
-		if ( ! is_array( $body ) ) {
-			$body = array();
-		}
-
-		$message = isset( $body['message'] ) ? sanitize_textarea_field( wp_unslash( $body['message'] ) ) : '';
-		$card    = isset( $body['card'] ) && is_array( $body['card'] ) ? $body['card'] : array();
-
-		$card_clean = array(
-			'type'  => isset( $card['type'] ) ? sanitize_text_field( (string) $card['type'] ) : 'answer',
-			'title' => isset( $card['title'] ) ? sanitize_text_field( wp_unslash( (string) $card['title'] ) ) : '',
-			'body'  => isset( $card['body'] ) ? sanitize_textarea_field( wp_unslash( (string) $card['body'] ) ) : '',
-		);
-
-		if ( trim( $card_clean['title'] ) === '' && trim( $card_clean['body'] ) === '' ) {
-			return new WP_REST_Response(
-				array( 'error' => __( 'Card content is required.', 'flowbie-wp' ) ),
-				400
-			);
-		}
-
-		$script = Flowbie_Wp_OpenRouter::voice_narrate_script( $message, $card_clean );
-		if ( is_wp_error( $script ) ) {
-			return new WP_REST_Response(
-				array( 'error' => $script->get_error_message() ),
-				502
-			);
-		}
-
-		$response = self::build_tts_response( $script );
-		if ( is_wp_error( $response ) ) {
-			return new WP_REST_Response(
-				array(
-					'script' => $script,
-					'error'  => $response->get_error_message(),
-				),
-				200
-			);
-		}
-
-		$response['script'] = $script;
-		return new WP_REST_Response( $response, 200 );
-	}
-
-	/**
-	 * @param string $text
-	 * @return array<string, string>|WP_Error
-	 */
-	private static function build_tts_response( string $text ) {
-		$audio = Flowbie_Wp_OpenRouter::synthesize_speech( $text );
-		if ( is_wp_error( $audio ) ) {
-			return $audio;
-		}
-
-		$mime = 'audio/mpeg';
-		if ( strlen( $audio ) >= 4 && substr( $audio, 0, 4 ) === 'RIFF' ) {
-			$mime = 'audio/wav';
-		}
-
-		return array(
-			'text'           => $text,
-			'audio_base64'   => base64_encode( $audio ),
-			'mime'           => $mime,
-		);
-	}
-
-	/**
 	 * Enqueue thinking-card script (loading checklist UI).
 	 *
 	 * @param bool $in_footer Load script in footer.
 	 */
 	public static function enqueue_thinking_card_assets( bool $in_footer = true ): void {
-		$base        = plugin_dir_url( FLOWBIE_WP_PLUGIN_FILE ) . 'assets/shared/';
-		$thinking_js = FLOWBIE_WP_PLUGIN_DIR . 'assets/shared/flowbie-thinking-card.js';
+		$base         = plugin_dir_url( FLOWBIE_WP_PLUGIN_FILE ) . 'assets/shared/';
+		$thinking_js  = FLOWBIE_WP_PLUGIN_DIR . 'assets/shared/flowbie-thinking-card.js';
 		$thinking_css = FLOWBIE_WP_PLUGIN_DIR . 'assets/shared/flowbie-thinking-card.css';
 		$thinking_ver = FLOWBIE_WP_VERSION;
 		if ( is_readable( $thinking_js ) ) {
@@ -373,6 +177,84 @@ class Flowbie_Wp_Voice {
 			);
 		}
 		wp_enqueue_script( 'flowbie-thinking-card' );
+
+		$stream_js  = FLOWBIE_WP_PLUGIN_DIR . 'assets/shared/flowbie-chat-stream.js';
+		$stream_ver = FLOWBIE_WP_VERSION;
+		if ( is_readable( $stream_js ) ) {
+			$stream_ver .= '.' . (string) filemtime( $stream_js );
+		}
+		if ( ! wp_script_is( 'flowbie-chat-stream', 'registered' ) ) {
+			wp_register_script(
+				'flowbie-chat-stream',
+				$base . 'flowbie-chat-stream.js',
+				array( 'flowbie-thinking-card' ),
+				$stream_ver,
+				$in_footer
+			);
+		}
+		wp_enqueue_script( 'flowbie-chat-stream' );
+
+		$prefetch_js  = FLOWBIE_WP_PLUGIN_DIR . 'assets/shared/flowbie-chat-prefetch.js';
+		$prefetch_ver = FLOWBIE_WP_VERSION;
+		if ( is_readable( $prefetch_js ) ) {
+			$prefetch_ver .= '.' . (string) filemtime( $prefetch_js );
+		}
+		if ( ! wp_script_is( 'flowbie-chat-prefetch', 'registered' ) ) {
+			wp_register_script(
+				'flowbie-chat-prefetch',
+				$base . 'flowbie-chat-prefetch.js',
+				array(),
+				$prefetch_ver,
+				$in_footer
+			);
+		}
+		wp_enqueue_script( 'flowbie-chat-prefetch' );
+
+		$debug_log_js  = FLOWBIE_WP_PLUGIN_DIR . 'assets/shared/flowbie-chat-debug-log.js';
+		$debug_log_ver = FLOWBIE_WP_VERSION;
+		if ( is_readable( $debug_log_js ) ) {
+			$debug_log_ver .= '.' . (string) filemtime( $debug_log_js );
+		}
+		if ( ! wp_script_is( 'flowbie-chat-debug-log', 'registered' ) ) {
+			wp_register_script(
+				'flowbie-chat-debug-log',
+				$base . 'flowbie-chat-debug-log.js',
+				array(),
+				$debug_log_ver,
+				$in_footer
+			);
+		}
+		wp_enqueue_script( 'flowbie-chat-debug-log' );
+
+		$display_text_js  = FLOWBIE_WP_PLUGIN_DIR . 'assets/shared/flowbie-display-text.js';
+		$display_text_ver = FLOWBIE_WP_VERSION;
+		if ( is_readable( $display_text_js ) ) {
+			$display_text_ver .= '.' . (string) filemtime( $display_text_js );
+		}
+		if ( ! wp_script_is( 'flowbie-display-text', 'registered' ) ) {
+			wp_register_script(
+				'flowbie-display-text',
+				$base . 'flowbie-display-text.js',
+				array(),
+				$display_text_ver,
+				$in_footer
+			);
+		}
+
+		$markdown_js = FLOWBIE_WP_PLUGIN_DIR . 'assets/shared/flowbie-markdown.js';
+		$markdown_ver = FLOWBIE_WP_VERSION;
+		if ( is_readable( $markdown_js ) ) {
+			$markdown_ver .= '.' . (string) filemtime( $markdown_js );
+		}
+		if ( ! wp_script_is( 'flowbie-markdown', 'registered' ) ) {
+			wp_register_script(
+				'flowbie-markdown',
+				$base . 'flowbie-markdown.js',
+				array( 'flowbie-display-text' ),
+				$markdown_ver,
+				$in_footer
+			);
+		}
 	}
 
 	/**
@@ -382,9 +264,9 @@ class Flowbie_Wp_Voice {
 	 * @param bool                $in_footer Load script in footer (false = head, for admin pages with inline JS).
 	 */
 	public static function enqueue_assets( array $config = array(), bool $in_footer = true ): void {
-		$base    = plugin_dir_url( FLOWBIE_WP_PLUGIN_FILE ) . 'assets/shared/';
-		$ver     = FLOWBIE_WP_VERSION;
-		$js_path = FLOWBIE_WP_PLUGIN_DIR . 'assets/shared/flowbie-voice.js';
+		$base     = plugin_dir_url( FLOWBIE_WP_PLUGIN_FILE ) . 'assets/shared/';
+		$ver      = FLOWBIE_WP_VERSION;
+		$js_path  = FLOWBIE_WP_PLUGIN_DIR . 'assets/shared/flowbie-voice.js';
 		$css_path = FLOWBIE_WP_PLUGIN_DIR . 'assets/shared/flowbie-voice.css';
 		if ( is_readable( $js_path ) ) {
 			$ver .= '.' . (string) filemtime( $js_path );
@@ -407,22 +289,10 @@ class Flowbie_Wp_Voice {
 			$in_footer
 		);
 
-		wp_add_inline_script(
-			'flowbie-voice',
-			'window.flowbieVoiceSafeUnlock=window.flowbieVoiceSafeUnlock||function(){return Promise.resolve();};'
-			. 'window.flowbieVoiceSafeAckPlayback=window.flowbieVoiceSafeAckPlayback||function(){};'
-			. 'window.flowbieVoiceSafePlayAck=window.flowbieVoiceSafePlayAck||window.flowbieVoiceSafeAckPlayback;'
-			. 'window.flowbieVoicePresentCard=window.flowbieVoicePresentCard||function(_c,_m,cb){if(cb&&cb.append)cb.append();if(cb&&cb.finish)cb.finish();return Promise.resolve();};',
-			'before'
-		);
-
 		wp_enqueue_script( 'flowbie-voice' );
 
 		$defaults = array(
 			'transcribeUrl' => esc_url_raw( rest_url( self::REST_NAMESPACE . '/voice/transcribe' ) ),
-			'ackUrl'        => esc_url_raw( rest_url( self::REST_NAMESPACE . '/voice/ack' ) ),
-			'speakUrl'      => esc_url_raw( rest_url( self::REST_NAMESPACE . '/voice/speak' ) ),
-			'narrateUrl'    => esc_url_raw( rest_url( self::REST_NAMESPACE . '/voice/narrate' ) ),
 			'nonce'         => wp_create_nonce( 'wp_rest' ),
 			'voiceNonce'    => wp_create_nonce( 'flowbie_chat_stream' ),
 		);

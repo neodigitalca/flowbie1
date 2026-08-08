@@ -1,31 +1,47 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import { clearAllMasterInstructionsMemory } from "@/lib/master-instructions-storage";
+import { clearDeviceAuth, loadDeviceAuth, saveDeviceAuth, setSessionToken, getSessionToken } from "@/lib/auth-device";
 import { AUTH_DISABLED } from "@/lib/auth-disabled";
-
-type User = { username: string } | null;
+import { fetchAuthMe, loginWithEmail, logoutApi } from "@/lib/teams-api";
+import type { AuthUser, TeamPermissions, TeamSummary } from "@/lib/teams-types";
 
 type AuthContextValue = {
-  user: User;
+  user: AuthUser | null;
   loading: boolean;
-  login: (username: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  activeTeam: TeamSummary | null;
+  permissions: TeamPermissions | null;
+  login: (email: string, password: string, rememberDevice?: boolean) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
+  setActiveTeam: (team: TeamSummary | null) => void;
+  setPermissions: (permissions: TeamPermissions | null) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-// In production (e.g. Render), frontend and API are different origins - use backend URL from env
-const AUTH_API_BASE =
-  import.meta.env.VITE_MCP_API_BASE?.replace(/\/api\/mcp\/?$/, "") || "";
-
-const api = (path: string, options?: RequestInit) =>
-  fetch(`${AUTH_API_BASE}${path}`, { ...options, credentials: "include" });
-
-const DEV_ADMIN_USER: User = { username: "admin" };
+const DEV_ADMIN_USER: AuthUser = {
+  id: 0,
+  email: "admin@flowbie.local",
+  displayName: "Admin",
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User>(AUTH_DISABLED ? DEV_ADMIN_USER : null);
+  const [user, setUser] = useState<AuthUser | null>(AUTH_DISABLED ? DEV_ADMIN_USER : null);
+  const [activeTeam, setActiveTeam] = useState<TeamSummary | null>(null);
+  const [permissions, setPermissions] = useState<TeamPermissions | null>(null);
   const [loading, setLoading] = useState(!AUTH_DISABLED);
+
+  const applyMe = useCallback((data: Awaited<ReturnType<typeof fetchAuthMe>>) => {
+    if (data.user) {
+      setUser(data.user);
+    } else if (data.username) {
+      setUser({ id: 0, email: data.username, displayName: data.username });
+    } else {
+      setUser(null);
+    }
+    setActiveTeam(data.activeTeam ?? null);
+    setPermissions(data.permissions ?? data.activeTeam?.permissions ?? null);
+  }, []);
 
   const checkAuth = useCallback(async () => {
     if (AUTH_DISABLED) {
@@ -34,58 +50,92 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const res = await api("/api/auth/me");
-      if (res.ok) {
-        const data = (await res.json()) as { username?: string | null };
-        if (data && typeof data.username === "string" && data.username.length > 0) {
-          setUser({ username: data.username });
-        } else {
-          setUser(null);
-        }
-      } else {
-        setUser(null);
+      const device = loadDeviceAuth();
+      if (device?.sessionToken && !getSessionToken()) {
+        setSessionToken(device.sessionToken);
       }
+      let data = await fetchAuthMe();
+      if (!data.user && !data.username) {
+        const device = loadDeviceAuth();
+        if (device) {
+          const loginResult = await loginWithEmail(device.email, device.password);
+          if (loginResult.ok) {
+            if (loginResult.sessionToken) {
+              setSessionToken(loginResult.sessionToken);
+            }
+            data = await fetchAuthMe();
+          } else {
+            clearDeviceAuth();
+          }
+        }
+      }
+      applyMe(data);
     } catch {
       setUser(null);
+      setActiveTeam(null);
+      setPermissions(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyMe]);
 
   useEffect(() => {
-    checkAuth();
+    void checkAuth();
   }, [checkAuth]);
 
-  const login = useCallback(async (username: string, password: string) => {
-    if (AUTH_DISABLED) {
-      setUser(DEV_ADMIN_USER);
-      return { ok: true };
-    }
-    const res = await api("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok && data.ok) {
-      setUser(data.user ?? { username });
-      return { ok: true };
-    }
-    return { ok: false, error: data.error || "Login failed" };
-  }, []);
+  const login = useCallback(
+    async (email: string, password: string, rememberDevice = true) => {
+      if (AUTH_DISABLED) {
+        setUser(DEV_ADMIN_USER);
+        return { ok: true };
+      }
+      const result = await loginWithEmail(email, password);
+      if (result.ok) {
+        if (result.sessionToken) {
+          setSessionToken(result.sessionToken);
+        }
+        if (rememberDevice) {
+          saveDeviceAuth(email, password, result.sessionToken);
+        } else {
+          clearDeviceAuth();
+          if (result.sessionToken) {
+            setSessionToken(result.sessionToken);
+          }
+        }
+        await checkAuth();
+      }
+      return result;
+    },
+    [checkAuth],
+  );
 
   const logout = useCallback(async () => {
     if (AUTH_DISABLED) {
       setUser(DEV_ADMIN_USER);
       return;
     }
-    await api("/api/auth/logout", { method: "POST" });
+    clearDeviceAuth();
+    await logoutApi();
     setUser(null);
+    setActiveTeam(null);
+    setPermissions(null);
     clearAllMasterInstructionsMemory();
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, checkAuth }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        activeTeam,
+        permissions,
+        login,
+        logout,
+        checkAuth,
+        setActiveTeam,
+        setPermissions,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -95,4 +145,10 @@ export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
+}
+
+/** @deprecated use user.email */
+export function useAuthUsername(): string | null {
+  const { user } = useAuth();
+  return user?.email ?? null;
 }

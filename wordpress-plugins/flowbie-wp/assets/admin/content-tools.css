@@ -1,0 +1,23 @@
+.flowbie-content-tools-duplicate .button {
+	width: 100%;
+	text-align: center;
+}
+
+/* Column exists for bulk edit hook only; keep it off the list table. */
+.wp-list-table .column-flowbie_content_type {
+	display: none;
+}
+
+.flowbie-content-tools-bulk-edit .inline-edit-group {
+	display: block;
+	margin-top: 0.5rem;
+}
+
+.flowbie-content-tools-bulk-edit .inline-edit-group .title {
+	display: block;
+	margin-bottom: 0.25rem;
+}
+
+.flowbie-content-tools-bulk-edit select {
+	max-width: 100%;
+}

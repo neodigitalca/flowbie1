@@ -5,6 +5,44 @@ import { loadApiKey } from "@/lib/api";
 import { getRecommendedKeywordFromGSC, isBlocklistedPrimaryKeyword, deriveKeywordFromModifier, firstNonBlocklistedQuery, isPrimaryKeywordFromGSC, bestGSCQueryForInvalidKeyword, keywordMatchesUrlIntent, isSearchOperatorOrRawQuery } from "@/lib/gsc-simple-keyword-recommendation";
 import { type WordPressSite } from "@/components/integrations/types";
 import { getResearchModel } from "./optimization-settings-storage";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { sortGscQueriesByStats } from "@/lib/bulk/bulk-gsc-site-queries";
+import type { GscSiteQueryRow } from "@/lib/competitor-research/types";
+
+export type GscPageQueryRow = {
+  query: string;
+  clicks: number;
+  impressions: number;
+  ctr?: number;
+  position?: number;
+};
+
+/**
+ * Pre-sort page GSC rows (clicks desc, impressions desc), strip stats for LLM prompts.
+ */
+export function formatGscPageQueriesForLlm(
+  queries: GscPageQueryRow[],
+  pageUrl: string,
+  limit = 50,
+): string {
+  if (!queries.length) return "";
+  const sorted = sortGscQueriesByStats(queries as GscSiteQueryRow[]);
+  const seen = new Set<string>();
+  const keywords: string[] = [];
+  for (const row of sorted) {
+    const kw = row.query?.trim();
+    if (!kw || seen.has(kw.toLowerCase())) continue;
+    seen.add(kw.toLowerCase());
+    keywords.push(kw);
+    if (keywords.length >= limit) break;
+  }
+  if (!keywords.length) return "";
+  const urlLabel = pageUrl.trim() || "this page";
+  return [
+    `GSC keywords for ${urlLabel} (pre-sorted: clicks descending, then impressions descending; stats stripped):`,
+    ...keywords.map((k, i) => `${i + 1}. ${k}`),
+  ].join("\n");
+}
 
 /**
  * Unified AI-forward query filtering and ranking
@@ -33,9 +71,7 @@ export async function filterAndRankQueriesWithAI(
   }
 
   const results = await Promise.all(batches.map(async (batch) => {
-    const queriesList = batch.map((q, idx) => 
-      `${idx + 1}. "${q.query}" - ${q.impressions} impressions, ${q.clicks} clicks, position ${q.position?.toFixed(1) || 'N/A'}`
-    ).join('\n');
+    const queriesList = formatGscPageQueriesForLlm(batch, pageUrl, batch.length);
 
     const titleBlock = pageTitle ? `**PAGE TITLE (HIGHEST PRIORITY)**: "${pageTitle}"\nThe title defines EXACTLY what this page is about. Only queries matching this topic should rank high.\n\n` : '';
     const prompt = `You are a local SEO expert. Analyze these GSC queries for ${context}${companyNameLower ? ` (company: "${companyNameLower}")` : ''}.
@@ -46,9 +82,9 @@ Key topic terms: [${slugTerms.join(', ')}].
 RANKING RULES (strict priority order):
 1. Queries whose meaning/topic MATCHES the page title AND/OR URL slug topic must be ranked FIRST. The title and URL slug tell you exactly what this page is about - rank queries that share the same subject matter highest.
 2. Queries that are UNRELATED to the page's title/URL topic must be ranked LAST or EXCLUDED, even if they have high traffic. A high-traffic keyword that doesn't match the page topic is useless for optimization.
-3. Among topic-relevant queries, rank by traffic potential (impressions/clicks).
+3. Among topic-relevant queries, preserve the pre-sorted traffic order when relevance is equal.
 
-Filter and rank. Return JSON array of query numbers to KEEP, ordered by: (1) semantic match to URL topic, (2) traffic potential. First in array = best match for this URL's intent.
+Filter and rank. Return JSON array of query numbers to KEEP, ordered by: (1) semantic match to URL topic, (2) list order (already sorted by clicks then impressions). First in array = best match for this URL's intent.
 
 Consider:
 - English only
@@ -62,12 +98,7 @@ Return: [3, 1, 5, 7] (query numbers, best first)`;
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: model,
         messages: [{ role: "user", content: prompt }],

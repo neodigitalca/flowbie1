@@ -1,5 +1,5 @@
 import { notify } from "@/lib/app-notifications";
-import { NOTIFY_FETCHING_POST_BY_URL, notifyUrlIntentX } from "@/lib/notify-messages";
+import { NOTIFY_FETCHING_POST_BY_URL } from "@/lib/notify-messages";
 import { getMuteOptimizationToasts } from "./optimization-toast-mute";
 import { getWordPressPostContent } from "@/lib/wordpress-api";
 import { getFieldsForPost } from "@/lib/wordpress-api/fields-client";
@@ -8,7 +8,6 @@ import {
   findEndpointFromSitemap,
   updateOptimizationProgress,
 } from "./optimization-helpers";
-import { derivePageIntentFromUrlViaAI } from "@/lib/derive-page-intent-from-url";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { HandleOptimizeContentParams } from "./handle-optimize-content-params";
 
@@ -108,8 +107,8 @@ export async function loadHandleOptimizePostAndIntent(params: {
       updateOptimizationProgress(
         setOptimizationProgress,
         site.id,
-        "Using sheet post content...",
-        10,
+        "load",
+        0.2,
         "Sheet inventory",
       );
     }
@@ -117,7 +116,7 @@ export async function loadHandleOptimizePostAndIntent(params: {
 
   if (!resolved && optimizationOptions?.stagingSite) {
     if (!getMuteOptimizationToasts()) notify.info(NOTIFY_FETCHING_POST_BY_URL);
-    updateOptimizationProgress(setOptimizationProgress, site.id, "Fetching post by URL...", 10, "Using URL");
+    updateOptimizationProgress(setOptimizationProgress, site.id, "load", 0.15, "Using URL");
     const urlObj = new URL(url.startsWith("http") ? url : `${site.siteUrl}${url.startsWith("/") ? url : "/" + url}`);
     const pathSegments = urlObj.pathname.split("/").filter((s: string) => s.length > 0);
     const slug = pathSegments[pathSegments.length - 1] || "page";
@@ -233,29 +232,6 @@ export async function loadHandleOptimizePostAndIntent(params: {
   const manualKeyword = (optimizationOptions?.manualKeyword ?? "").trim();
 
   let urlDerivedIntent: string | null = null;
-  const shouldDeriveUrlIntent = !optimizationOptions?.useAcfKeyword && !manualKeyword;
-  if (shouldDeriveUrlIntent) {
-    updateOptimizationProgress(
-      setOptimizationProgress,
-      site.id,
-      "Reading URL intent...",
-      5,
-      url.split("/").pop() || url
-    );
-    if (openRouterApiKey && researchModel) {
-      urlDerivedIntent = await derivePageIntentFromUrlViaAI(url, openRouterApiKey, researchModel, {
-        title: existingTitle || undefined,
-        metaDescription: existingExcerpt
-          ? existingExcerpt.replace(/<[^>]+>/g, "").trim().substring(0, 200)
-          : undefined,
-      });
-      if (urlDerivedIntent) {
-        if (!getMuteOptimizationToasts()) {
-          notify.info(notifyUrlIntentX(urlDerivedIntent), { duration: 2500 });
-        }
-      }
-    }
-  }
 
   return {
     resolved,

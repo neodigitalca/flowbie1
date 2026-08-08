@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       Flowbie WP
  * Plugin URI:        https://github.com/flowbie/flowbie
- * Description:       Flowbie client dashboard. Paste your site ID from Integrations and connect.
- * Version:           0.9.33
+ * Description:       Flowbie AI tools for WordPress — chat, search, SEO, and editor wands.
+	 * Version:           0.9.49
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            Flowbie
@@ -16,18 +16,16 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FLOWBIE_WP_VERSION', '0.9.33' );
+define( 'FLOWBIE_WP_VERSION', '0.9.56' );
 define( 'FLOWBIE_WP_PLUGIN_FILE', __FILE__ );
 define( 'FLOWBIE_WP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-env.php';
+Flowbie_Wp_Env::load();
 
 /** Set true in wp-config to re-enable optimization cap on Apply. */
 if ( ! defined( 'FLOWBIE_WP_AI_CAP_ENFORCED' ) ) {
 	define( 'FLOWBIE_WP_AI_CAP_ENFORCED', false );
-}
-
-$config_file = FLOWBIE_WP_PLUGIN_DIR . 'includes/flowbie-wp-supabase-config.php';
-if ( is_readable( $config_file ) ) {
-	require_once $config_file;
 }
 
 $gsc_config_file = FLOWBIE_WP_PLUGIN_DIR . 'includes/flowbie-wp-gsc-config.php';
@@ -40,7 +38,6 @@ if ( ! defined( 'FLOWBIE_WP_DEFAULT_API_BASE' ) ) {
 	define( 'FLOWBIE_WP_DEFAULT_API_BASE', '' );
 }
 
-require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-supabase.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-gsc.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-gsc-prompt.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-site-progress.php';
@@ -118,13 +115,25 @@ require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-image-seo-rest.p
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-gmb.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-gmb-rest.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-comments.php';
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/search/class-flowbie-wp-search-icons.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-search.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-ai-widget-design.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-rag.php';
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-display-text.php';
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-history.php';
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-links.php';
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-lead.php';
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-starters.php';
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-page-context.php';
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-page-summary.php';
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-suggestion-templates.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-agents.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-logs-csv.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-logs.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-logs-analysis.php';
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat-logs-gap-csv.php';
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-search-logs-csv.php';
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-search-logs.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-overseer.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-overseer-conversions.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-overseer-collect.php';
@@ -135,6 +144,8 @@ require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-overseer-gsc.php
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-overseer-reports.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-overseer-analysis.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chat.php';
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chekkit.php';
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-chekkit-rest.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-tools-audit.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-tools-handlers.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-tools.php';
@@ -151,6 +162,7 @@ require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/seo-builder/class-flowbie-wp-seo-
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/admin/class-flowbie-wp-admin-menu.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-admin.php';
 require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-dashboard-preferences.php';
+require_once FLOWBIE_WP_PLUGIN_DIR . 'includes/class-flowbie-wp-content-tools.php';
 
 register_activation_hook(
 	FLOWBIE_WP_PLUGIN_FILE,
@@ -158,15 +170,13 @@ register_activation_hook(
 		Flowbie_Wp_Sitemap::flush_rewrites();
 		Flowbie_Wp_Redirects::install();
 		Flowbie_Wp_Chat_Logs::install();
+		Flowbie_Wp_Search_Logs::install();
 		Flowbie_Wp_Script_Manager::install();
 		Flowbie_Wp_Overseer::install();
 		Flowbie_Wp_Forms::install();
 		Flowbie_Wp_Seo_Builder::install();
 		Flowbie_Wp_Speed_Cache::ensure_dirs();
 		Flowbie_Wp_Speed_Settings::seed_default_config_if_missing();
-		if ( ! get_option( 'flowbie_wp_welcome_completed', '' ) ) {
-			set_transient( 'flowbie_wp_activation_welcome', 1, 60 );
-		}
 	}
 );
 
@@ -175,6 +185,15 @@ add_action(
 	static function () {
 		load_plugin_textdomain( 'flowbie-wp', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
 		Flowbie_Wp_Fields::init();
+		Flowbie_Wp_Content_Tools::init();
+
+		$installed = (string) get_option( 'flowbie_wp_installed_version', '' );
+		if ( $installed !== FLOWBIE_WP_VERSION ) {
+			update_option( 'flowbie_wp_installed_version', FLOWBIE_WP_VERSION, false );
+			if ( class_exists( 'Flowbie_Wp_Cache_Flush', false ) ) {
+				Flowbie_Wp_Cache_Flush::flush_all();
+			}
+		}
 	},
 	4
 );
@@ -213,9 +232,11 @@ add_action(
 		Flowbie_Wp_Search::init();
 		Flowbie_Wp_Ai_Widget_Design::init();
 		Flowbie_Wp_Chat_Logs::init();
+		Flowbie_Wp_Search_Logs::init();
 		Flowbie_Wp_Overseer::init();
 		Flowbie_Wp_Overseer_Collect::init();
 		Flowbie_Wp_Chat::init();
+		Flowbie_Wp_Chekkit_Rest::init();
 		Flowbie_Wp_Voice::init();
 		Flowbie_Wp_Seo_Builder::init();
 		Flowbie_Wp_Backend_Assist::init();

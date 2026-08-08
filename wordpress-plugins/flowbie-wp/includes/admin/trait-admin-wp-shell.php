@@ -21,6 +21,7 @@ trait Flowbie_Wp_Admin_Trait_Wp_Shell {
 			'flowbie-wp_page_flowbie-wp-analytics',
 			'flowbie-wp_page_flowbie-wp-redirects',
 			'flowbie-wp_page_flowbie-wp-chat-logs',
+			'flowbie-wp_page_flowbie-wp-search-logs',
 			'flowbie-wp_page_flowbie-wp-overseer',
 			'flowbie-wp_page_flowbie-wp-script-manager',
 			'flowbie-wp_page_flowbie-wp-speed',
@@ -64,6 +65,25 @@ trait Flowbie_Wp_Admin_Trait_Wp_Shell {
 			$classes .= ' flowbie-wp-admin-screen';
 		}
 		return $classes;
+	}
+
+	/**
+	 * Strip third-party WP admin notices on Flowbie screens (ACF, SEO plugins, etc.).
+	 */
+	public static function suppress_foreign_admin_notices(): void {
+		if ( ! is_admin() ) {
+			return;
+		}
+
+		$page = isset( $_GET['page'] ) ? sanitize_key( (string) wp_unslash( $_GET['page'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( $page === '' || strpos( $page, 'flowbie-wp' ) !== 0 ) {
+			return;
+		}
+
+		remove_all_actions( 'admin_notices' );
+		remove_all_actions( 'all_admin_notices' );
+		remove_all_actions( 'network_admin_notices' );
+		remove_all_actions( 'user_admin_notices' );
 	}
 
 	public static function enqueue_admin_assets( string $hook_suffix ): void {
@@ -144,6 +164,10 @@ trait Flowbie_Wp_Admin_Trait_Wp_Shell {
 			self::enqueue_backend_assist_script();
 		}
 
+		if ( 'flowbie-wp_page_flowbie-wp-chat' === $hook_suffix ) {
+			self::enqueue_chat_demo_assets();
+		}
+
 		if ( 'toplevel_page_flowbie-wp' === $hook_suffix ) {
 			self::enqueue_dashboard_reorder_script();
 		}
@@ -199,6 +223,67 @@ trait Flowbie_Wp_Admin_Trait_Wp_Shell {
 		);
 	}
 
+	/**
+	 * Chat admin demo: inline sidebar preview styles (matches frontend widget).
+	 */
+	private static function enqueue_chat_demo_assets(): void {
+		$base = plugin_dir_url( FLOWBIE_WP_PLUGIN_FILE );
+		$ver  = defined( 'FLOWBIE_WP_VERSION' ) ? FLOWBIE_WP_VERSION : '0.9.33';
+
+		Flowbie_Wp_Voice::enqueue_thinking_card_assets( true );
+		wp_enqueue_script( 'flowbie-display-text' );
+		wp_enqueue_script( 'flowbie-markdown' );
+
+		wp_enqueue_style( 'flowbie-ai-sidebar-shell', $base . 'assets/shared/flowbie-ai-sidebar-shell.css', array( 'flowbie-wp-lato' ), $ver );
+		wp_enqueue_style( 'flowbie-chat-widget', $base . 'assets/frontend/flowbie-chat-widget.css', array( 'flowbie-wp-lato' ), $ver );
+		wp_enqueue_style( 'flowbie-chat-chrome', $base . 'assets/frontend/flowbie-chat-chrome.css', array( 'flowbie-chat-widget' ), $ver );
+
+		$demo_css = FLOWBIE_WP_PLUGIN_DIR . 'assets/admin/admin-chat-demo.css';
+		if ( is_readable( $demo_css ) ) {
+			$ver .= '.' . (string) filemtime( $demo_css );
+		}
+		wp_enqueue_style(
+			'flowbie-chat-demo',
+			$base . 'assets/admin/admin-chat-demo.css',
+			array( 'flowbie-chat-chrome', 'flowbie-ai-sidebar-shell', 'flowbie-wp-admin-contrast' ),
+			$ver
+		);
+
+		if ( class_exists( 'Flowbie_Wp_Forms' ) ) {
+			Flowbie_Wp_Forms::enqueue_frontend_assets();
+		}
+
+		$demo_js = FLOWBIE_WP_PLUGIN_DIR . 'assets/admin/admin-chat-demo.js';
+		$js_ver  = $ver;
+		if ( is_readable( $demo_js ) ) {
+			$js_ver .= '.' . (string) filemtime( $demo_js );
+		}
+		$demo_deps = array( 'flowbie-thinking-card', 'flowbie-chat-stream', 'flowbie-chat-prefetch', 'flowbie-chat-debug-log', 'flowbie-display-text', 'flowbie-markdown' );
+		if ( class_exists( 'Flowbie_Wp_Forms' ) ) {
+			$demo_deps[] = 'flowbie-forms';
+		}
+		wp_enqueue_script(
+			'flowbie-chat-demo',
+			$base . 'assets/admin/admin-chat-demo.js',
+			$demo_deps,
+			$js_ver,
+			true
+		);
+
+		$chat_settings = Flowbie_Wp_Chat::get_settings();
+		wp_localize_script(
+			'flowbie-chat-demo',
+			'flowbieChatDemo',
+			array(
+				'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
+				'streamNonce'   => wp_create_nonce( 'flowbie_chat_stream' ),
+				'greetingStyle' => isset( $chat_settings['greeting_style'] ) ? (string) $chat_settings['greeting_style'] : 'friendly',
+				'brainSvg'      => self::brand_icon_svg( '#4285f4', 24 ),
+				'ui'            => Flowbie_Wp_Ai_Widget_Design::get_settings()['chat_ui'] ?? array(),
+			)
+		);
+	}
+
 	public static function maybe_dismiss_notice(): void {
 		if ( ! isset( $_GET[ self::DISMISS_ACTION ] ) || ! isset( $_GET['_wpnonce'] ) ) {
 			return;
@@ -233,7 +318,7 @@ trait Flowbie_Wp_Admin_Trait_Wp_Shell {
 		?>
 		<div class="notice notice-info">
 			<p>
-				<?php esc_html_e( 'Flowbie WP is active. Paste your site ID from Integrations under Settings and click Connect.', 'flowbie-wp' ); ?>
+				<?php esc_html_e( 'Flowbie WP is active. Configure API keys under Settings.', 'flowbie-wp' ); ?>
 				<a href="<?php echo esc_url( $app_url ); ?>">
 					<?php esc_html_e( 'Open Settings', 'flowbie-wp' ); ?>
 				</a>

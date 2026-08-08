@@ -29,6 +29,7 @@ function metaOptimizerPipelineBusy(row: OverviewRow): boolean {
     row.status === "ai-faq" ||
     row.status === "ai-headers" ||
     row.status === "ai-links" ||
+    row.status === "ai-wikipedia-link" ||
     row.status === "ai-overview" ||
     row.status === "ai-in-content-image" ||
     row.status === "ai-focus-kw" ||
@@ -78,6 +79,7 @@ export interface OverviewPagesSectionProps {
   ) => Promise<{ metaDescription: string; aiMeta: string } | null>;
   handleAiKeywordRow: (index: number) => Promise<string | null>;
   handleSetDateToday: (rowIndex: number) => void;
+  commitRowDateModifier: (rowIndex: number) => void;
   handleAiFaqRowAll: (
     rowIndex: number,
     rowOverride?: OverviewRow,
@@ -92,6 +94,7 @@ export interface OverviewPagesSectionProps {
   handleAiFaqAnswer: (rowIndex: number, faqIndex: number) => Promise<void>;
   handleAiHeadersRow: (index: number) => Promise<void>;
   handleAiLinksRow: (index: number) => Promise<void>;
+  handleAiWikipediaLinkRow: (index: number) => Promise<void>;
   handleAiOverviewRow: (index: number) => Promise<void>;
   handleAiInContentImageRow: (index: number) => Promise<void>;
 }
@@ -123,11 +126,13 @@ export function OverviewPagesSection({
   handleAiMetaRow,
   handleAiKeywordRow,
   handleSetDateToday,
+  commitRowDateModifier,
   handleAiFaqRowAll,
   handleAiFaqQuestion,
   handleAiFaqAnswer,
   handleAiHeadersRow,
   handleAiLinksRow,
+  handleAiWikipediaLinkRow,
   handleAiOverviewRow,
   handleAiInContentImageRow,
 }: OverviewPagesSectionProps) {
@@ -165,11 +170,13 @@ export function OverviewPagesSection({
     handleAiMetaRow,
     handleAiKeywordRow,
     handleSetDateToday,
+    commitRowDateModifier,
     handleAiFaqRowAll,
     handleAiFaqQuestion,
     handleAiFaqAnswer,
     handleAiHeadersRow,
     handleAiLinksRow,
+    handleAiWikipediaLinkRow,
     handleAiOverviewRow,
     handleAiInContentImageRow,
   } satisfies Omit<
@@ -179,7 +186,9 @@ export function OverviewPagesSection({
 
   const renderPageRow = (row: OverviewRow, index: number, stripeIndex: number, placeholder = false) => {
     const busy = metaOptimizerPipelineBusy(row);
-    const isActiveOptimize = isOverviewRowBulkActive(row.url, batchBulkState, batchRunning);
+    const isActiveOptimize =
+      isOverviewRowBulkActive(row.url, batchBulkState, batchRunning) ||
+      row.status === "ai-wikipedia-link";
     const panelId = `flowbie-meta-panel-${index}`;
     const isExpanded = !placeholder && expandedPageUrl === row.url;
 

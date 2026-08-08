@@ -6,6 +6,7 @@
 import { getSiteCache } from "@/lib/wordpress-site-cache";
 import type { SiteDigest } from "@/lib/wordpress-site-cache";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 const MAX_POSTS_FOR_COMPACT = 30;
 
@@ -56,12 +57,7 @@ export async function getOrCreateSiteDigest(
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://flowbie.com",
-        "X-Title": "Flowbie",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model,
         messages: [

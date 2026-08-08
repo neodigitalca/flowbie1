@@ -5,6 +5,7 @@ import {
   MAX_CHECKLIST_ITEMS_SAP,
   buildArticleLengthChecklistBlock,
   buildBlueprintArticleLengthBlock,
+  buildFocusedArticlePurpose,
   buildHarnessArticleBudgetBlock,
   buildHarnessArticleCapLine,
   perSectionWordBudget,
@@ -35,6 +36,21 @@ describe("article-length-policy", () => {
     const block = buildBlueprintArticleLengthBlock();
     expect(block).toContain("2000");
     expect(block).toContain("focused guide");
+    expect(block).toContain("One agent = one H2");
+    expect(block).toContain("Never use \"comprehensive\"");
+  });
+
+  it("focused article purpose avoids comprehensive wording", () => {
+    const purpose = buildFocusedArticlePurpose("dentist ebbers edmonton");
+    expect(purpose).toContain("2000");
+    expect(purpose).toContain("Focused guide");
+    expect(purpose).not.toMatch(/comprehensive/i);
+  });
+
+  it("checklist block caps tables and duplicate topics", () => {
+    const blog = buildArticleLengthChecklistBlock(false);
+    expect(blog).toContain("at most 2");
+    expect(blog).toContain("NO DUPLICATE TOPICS");
   });
 
   it("harness budget scales by section index", () => {

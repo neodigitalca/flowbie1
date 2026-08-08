@@ -1,0 +1,33 @@
+import { join } from "path";
+import { execSync } from "child_process";
+import { buildPluginZip } from "../deploy/lib/build-zip.js";
+import { deployZip } from "../deploy/lib/deploy-zip.js";
+import { loadProductionSites } from "../deploy/lib/csv-sites.js";
+
+const dir = join(import.meta.dirname, "..");
+const repoRoot = join(dir, "..");
+const csvPath = join(dir, "Customer List", "SFTP Users_Clients List.csv");
+const zipPath = join(dir, "flowbie-wp.zip");
+const pluginDir = join(dir, "flowbie-wp");
+
+execSync("node scripts/embed-wp-secrets.mjs", { cwd: repoRoot, stdio: "inherit" });
+console.log("Building flowbie-wp zip...");
+buildPluginZip(pluginDir, zipPath, (done, total) => {
+  process.stdout.write(`\r zip ${Math.round((done / total) * 100)}%`);
+});
+process.stdout.write("\n");
+
+const sites = loadProductionSites(csvPath);
+const site = sites.find((s) => s.site === "blindmagic.com");
+if (!site) {
+  console.error("blindmagic.com not found in production CSV");
+  process.exit(1);
+}
+
+console.log("Deploying to", site.label, site.host);
+const result = await deployZip(site, zipPath, pluginDir);
+if (!result.ok) {
+  console.error(result.error);
+  process.exit(1);
+}
+console.log("blindmagic.com deployed");

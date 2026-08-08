@@ -1,9 +1,10 @@
 import { loadApiKey } from "@/lib/api";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { appendMasterInstructionsToSystemPrompt, ensureMasterInstructionsInMemory } from "@/lib/master-instructions-storage";
-import { TITLE_ANTI_CLICKBAIT_RULE, TITLE_KEYWORD_WEAVING_RULE, TITLE_CASE_RULE, TITLE_WELL_KNOWN_ACRONYMS_RULE } from "@/lib/prompt-builders";
+import { TITLE_ANTI_CLICKBAIT_RULE, TITLE_KEYWORD_WEAVING_RULE, TITLE_CASE_RULE, TITLE_WELL_KNOWN_ACRONYMS_RULE, buildKeywordPunctuationPromptBlock } from "@/lib/prompt-builders";
 import { truncateTitleForSEO } from "./content-generation/content-sanitizer";
 import { cleanTitleForNonEntity } from "./content-optimization-helpers";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 /**
  * Generate an optimized SEO title from existing title and primary keyword.
@@ -49,12 +50,7 @@ ${TITLE_KEYWORD_WEAVING_RULE}`
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${openRouterApiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(openRouterApiKey),
       body: JSON.stringify({
         model: researchModel,
         messages: [
@@ -65,6 +61,7 @@ ${TITLE_KEYWORD_WEAVING_RULE}`
 
 Existing Title: "${existingTitle}"
 Primary Keyword: "${primaryKeyword}"
+${buildKeywordPunctuationPromptBlock(primaryKeyword)}
 
 ${entityContext}
 

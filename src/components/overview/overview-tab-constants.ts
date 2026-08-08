@@ -23,6 +23,7 @@ export type MetaBulkActionKey =
   | "aiFaq"
   | "aiHeaders"
   | "aiLinks"
+  | "aiWikipediaLink"
   | "aiOverview"
   | "aiInContentImage"
   | "contentCleanup"
@@ -66,6 +67,7 @@ export const BULK_INLINE_STATUS: Partial<Record<MetaBulkActionKey, string>> = {
   aiFaq: "AI FAQs",
   aiHeaders: "Headers",
   aiLinks: "Links",
+  aiWikipediaLink: "Wikipedia link",
   aiOverview: "Overview",
   aiInContentImage: "In Content Image",
   contentCleanup: "Clean Up",
@@ -96,6 +98,7 @@ export const META_BULK_MICRO_ORDER: MetaBulkActionKey[] = [
   "aiFaq",
   "aiHeaders",
   "aiLinks",
+  "aiWikipediaLink",
   "aiOverview",
   "aiInContentImage",
   "contentCleanup",
@@ -118,6 +121,7 @@ export const META_BULK_MICRO_LABELS: Record<MetaBulkActionKey, string> = {
   aiFaq: "AI FAQs",
   aiHeaders: "Headers (H2)",
   aiLinks: "Links (internal)",
+  aiWikipediaLink: "Wikipedia link",
   aiOverview: "Overview (prepend)",
   aiInContentImage: "In Content Image",
   contentCleanup: "Clean Up",

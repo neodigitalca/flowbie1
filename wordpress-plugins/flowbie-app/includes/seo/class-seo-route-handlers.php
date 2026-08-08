@@ -38,6 +38,10 @@ class Flowbie_App_Seo_Route_Handlers {
 			self::enrich_location_page_addresses( $body );
 			return;
 		}
+		if ( $subpath === 'fetch-external-sitemap' && $method === 'POST' ) {
+			self::fetch_external_sitemap( $body );
+			return;
+		}
 
 		Flowbie_App_Api_Dispatcher::send_json( array( 'error' => 'Not found' ), 404 );
 	}
@@ -386,6 +390,129 @@ class Flowbie_App_Seo_Route_Handlers {
 				array(
 					'error'   => $e->getMessage() ?: 'Failed to enrich addresses',
 					'results' => array(),
+				),
+				502
+			);
+		}
+	}
+
+	/** @param array<string,mixed> $body */
+	private static function fetch_external_sitemap( array $body ): void {
+		try {
+			$url    = isset( $body['url'] ) ? trim( (string) $body['url'] ) : '';
+			$domain = isset( $body['domain'] ) ? trim( (string) $body['domain'] ) : '';
+			if ( $url === '' && $domain !== '' ) {
+				$domain = preg_replace( '#^https?://#i', '', $domain );
+				$domain = preg_replace( '#/.*$#', '', $domain );
+				$url    = 'https://' . $domain;
+			}
+			if ( $url === '' ) {
+				Flowbie_App_Api_Dispatcher::send_json( array( 'error' => 'Missing url or domain', 'urls' => array() ), 400 );
+				return;
+			}
+
+			$parsed = Flowbie_App_Seo_Http::safe_parse_url( $url );
+			if ( ! $parsed ) {
+				Flowbie_App_Api_Dispatcher::send_json( array( 'error' => 'Invalid url', 'urls' => array() ), 400 );
+				return;
+			}
+
+			$parts = wp_parse_url( $parsed );
+			if ( empty( $parts['scheme'] ) || empty( $parts['host'] ) ) {
+				Flowbie_App_Api_Dispatcher::send_json( array( 'error' => 'Invalid url', 'urls' => array() ), 400 );
+				return;
+			}
+
+			$origin      = $parts['scheme'] . '://' . $parts['host'];
+			$candidates  = array(
+				$origin . '/sitemap_index.xml',
+				$origin . '/sitemap.xml',
+				$origin . '/sitemap-index.xml',
+			);
+			$robots      = Flowbie_App_Seo_Http::fetch_html( $origin . '/robots.txt', 12 );
+			if ( ! empty( $robots['ok'] ) && ! empty( $robots['html'] ) ) {
+				if ( preg_match_all( '/^Sitemap:\s*(\S+)/mi', (string) $robots['html'], $sm ) ) {
+					foreach ( $sm[1] as $loc ) {
+						$loc = trim( $loc );
+						if ( $loc !== '' ) {
+							$candidates[] = $loc;
+						}
+					}
+				}
+			}
+
+			$all_urls    = array();
+			$seen        = array();
+			$sitemap_src = null;
+
+			foreach ( array_unique( $candidates ) as $candidate ) {
+				$fetch = Flowbie_App_Seo_Http::fetch_html( $candidate, 18 );
+				if ( empty( $fetch['ok'] ) || empty( $fetch['html'] ) ) {
+					continue;
+				}
+				$xml  = (string) $fetch['html'];
+				$locs = Flowbie_App_Seo_Http::extract_locs_from_sitemap_xml( $xml );
+				if ( empty( $locs ) ) {
+					continue;
+				}
+
+				$is_index = stripos( $xml, '<sitemapindex' ) !== false;
+				if ( $is_index ) {
+					$sitemap_src = $candidate;
+					$child_count = 0;
+					foreach ( $locs as $child ) {
+						if ( $child_count >= 8 ) {
+							break;
+						}
+						$child_fetch = Flowbie_App_Seo_Http::fetch_html( $child, 18 );
+						if ( empty( $child_fetch['ok'] ) || empty( $child_fetch['html'] ) ) {
+							continue;
+						}
+						foreach ( Flowbie_App_Seo_Http::extract_locs_from_sitemap_xml( (string) $child_fetch['html'] ) as $u ) {
+							if ( count( $all_urls ) >= 200 ) {
+								break 3;
+							}
+							$u = trim( $u );
+							if ( $u === '' || isset( $seen[ $u ] ) ) {
+								continue;
+							}
+							$seen[ $u ] = true;
+							$all_urls[] = $u;
+						}
+						++$child_count;
+					}
+				} else {
+					$sitemap_src = $candidate;
+					foreach ( $locs as $u ) {
+						if ( count( $all_urls ) >= 200 ) {
+							break 2;
+						}
+						$u = trim( $u );
+						if ( $u === '' || isset( $seen[ $u ] ) ) {
+							continue;
+						}
+						$seen[ $u ] = true;
+						$all_urls[] = $u;
+					}
+				}
+
+				if ( ! empty( $all_urls ) ) {
+					break;
+				}
+			}
+
+			Flowbie_App_Api_Dispatcher::send_json(
+				array(
+					'urls'       => $all_urls,
+					'sitemapUrl' => $sitemap_src,
+					'origin'     => $origin,
+				)
+			);
+		} catch ( Exception $e ) {
+			Flowbie_App_Api_Dispatcher::send_json(
+				array(
+					'error' => $e->getMessage() ?: 'Failed to fetch sitemap',
+					'urls'  => array(),
 				),
 				502
 			);

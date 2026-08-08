@@ -23,6 +23,10 @@ trait Flowbie_Wp_Admin_Trait_Handlers_Speed {
 
 	const ACTION_DOWNLOAD_SPEED_PRESET = 'flowbie_wp_download_speed_preset';
 
+	const ACTION_RECOVER_ELEMENTOR_SITE = 'flowbie_wp_recover_elementor_site';
+
+	const ACTION_RUN_ELEMENTOR_MIGRATION = 'flowbie_wp_run_elementor_migration';
+
 	public static function handle_save_speed(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( 'You do not have permission to manage Speed settings.', 'flowbie-wp' ) );
@@ -350,5 +354,56 @@ trait Flowbie_Wp_Admin_Trait_Handlers_Speed {
 		}
 		$json = wp_json_encode( $slice );
 		return is_string( $json ) ? $json : '';
+	}
+
+	public static function handle_recover_elementor_site(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to recover Elementor content.', 'flowbie-wp' ) );
+		}
+		check_admin_referer( self::ACTION_RECOVER_ELEMENTOR_SITE, 'flowbie_wp_recover_elementor_nonce' );
+
+		$tab    = isset( $_POST['flowbie_speed_tab'] ) ? sanitize_key( wp_unslash( (string) $_POST['flowbie_speed_tab'] ) ) : 'general';
+		$result = Flowbie_Wp_Elementor_Site_Recovery::recover();
+
+		self::set_flash(
+			array(
+				'kind'    => 'speed',
+				'success' => true,
+				'message' => sprintf(
+					/* translators: 1: documents patched, 2: tag replacements */
+					__( 'Elementor recovery complete. Speed disabled. Reverted tags in %1$d documents (%2$d replacements). Purge your host cache and test in a private window.', 'flowbie-wp' ),
+					(int) ( $result['documents_patched'] ?? 0 ),
+					(int) ( $result['tag_replacements'] ?? 0 )
+				),
+			)
+		);
+		self::redirect_to_speed( $tab );
+	}
+
+	public static function handle_run_elementor_migration(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to migrate Elementor tags.', 'flowbie-wp' ) );
+		}
+		check_admin_referer( self::ACTION_RUN_ELEMENTOR_MIGRATION, 'flowbie_wp_run_elementor_migration_nonce' );
+
+		$tab    = isset( $_POST['flowbie_speed_tab'] ) ? sanitize_key( wp_unslash( (string) $_POST['flowbie_speed_tab'] ) ) : 'general';
+		$result = Flowbie_Wp_Elementor_Site_Recovery::run_elementor_migration();
+
+		$message = ! empty( $result['migration_skipped'] )
+			? __( 'Elementor cache flags patched. Tag migration skipped until Flowbie Fields or ACF field groups exist on this site.', 'flowbie-wp' )
+			: sprintf(
+				/* translators: 1: documents patched */
+				__( 'Elementor tag migration complete. Patched %1$d documents.', 'flowbie-wp' ),
+				(int) ( $result['documents_patched'] ?? 0 )
+			);
+
+		self::set_flash(
+			array(
+				'kind'    => 'speed',
+				'success' => true,
+				'message' => $message,
+			)
+		);
+		self::redirect_to_speed( $tab );
 	}
 }

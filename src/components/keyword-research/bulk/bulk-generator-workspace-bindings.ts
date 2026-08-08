@@ -20,6 +20,7 @@ export type BulkGeneratorWorkspaceBindings = {
   totalRows: number;
   stats: { total: number; completed: number; error: number };
   harnessSections: BulkHarnessSectionUi[];
+  harnessByRow: Map<number, BulkHarnessSectionUi[]>;
   harnessPlannedSectionCount: number | null;
   rows: CSVRow[];
   displayRows: CSVRow[];

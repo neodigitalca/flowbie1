@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Flowbie WP admin — design tokens & typography
  * @layer flowbie-wp-admin
  */
@@ -354,7 +354,7 @@ body.flowbie-wp-admin-screen #wpfooter a {
 .flowbie-wp-forms a:not(.button),
 .flowbie-wp-agent-hub a:not(.button),
 .flowbie-wp-chat-logs a:not(.button),
-.flowbie-wp-chat a:not(.button):not(.flowbie-wp-panel-nav__item),
+.flowbie-wp-chat a:not(.button):not(.flowbie-wp-panel-nav__item):not(.flowbie-chat-widget a),
 .flowbie-wp-overseer a:not(.button),
 .flowbie-wp-script-manager a:not(.button),
 .flowbie-fields-admin a:not(.button) {
@@ -375,8 +375,8 @@ body.flowbie-wp-admin-screen #wpfooter a {
 .flowbie-wp-forms a:not(.button):focus,
 .flowbie-wp-chat-logs a:not(.button):hover,
 .flowbie-wp-chat-logs a:not(.button):focus,
-.flowbie-wp-chat a:not(.button):not(.flowbie-wp-panel-nav__item):hover,
-.flowbie-wp-chat a:not(.button):not(.flowbie-wp-panel-nav__item):focus,
+.flowbie-wp-chat a:not(.button):not(.flowbie-wp-panel-nav__item):not(.flowbie-chat-widget a):hover,
+.flowbie-wp-chat a:not(.button):not(.flowbie-wp-panel-nav__item):not(.flowbie-chat-widget a):focus,
 .flowbie-wp-overseer a:not(.button):hover,
 .flowbie-wp-overseer a:not(.button):focus,
 .flowbie-wp-script-manager a:not(.button):hover,
@@ -505,6 +505,13 @@ body.flowbie-wp-admin-screen #wpfooter a {
 }
 
 /* WordPress core chrome — black & grey only (no white surfaces) */
+body.flowbie-wp-admin-screen #wpbody-content > .notice,
+body.flowbie-wp-admin-screen #wpbody-content > .update-nag,
+body.flowbie-wp-admin-screen #wpbody-content > .updated,
+body.flowbie-wp-admin-screen #wpbody-content > .error {
+	display: none !important;
+}
+
 body.flowbie-wp-admin-screen .notice {
 	margin: 0 0 16px 20px;
 	padding: 12px 16px;
@@ -715,7 +722,7 @@ body.flowbie-wp-admin-screen input[type="text"],
 body.flowbie-wp-admin-screen input[type="search"],
 body.flowbie-wp-admin-screen input[type="number"],
 body.flowbie-wp-admin-screen input[type="url"],
-body.flowbie-wp-admin-screen textarea {
+body.flowbie-wp-admin-screen textarea:not(.fcw-textarea) {
 	background: var(--fc-input-bg);
 	color: var(--fc-text);
 	-webkit-text-fill-color: var(--fc-text);
@@ -728,7 +735,7 @@ body.flowbie-wp-admin-screen select option {
 }
 
 body.flowbie-wp-admin-screen input::placeholder,
-body.flowbie-wp-admin-screen textarea::placeholder {
+body.flowbie-wp-admin-screen textarea:not(.fcw-textarea)::placeholder {
 	color: var(--fc-on-dark-placeholder, #9ca3af);
 	opacity: 1;
 	-webkit-text-fill-color: var(--fc-on-dark-placeholder, #9ca3af);

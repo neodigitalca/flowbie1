@@ -4,7 +4,7 @@ import {
   LEGACY_REDIRECT_PHASES,
 } from "@/lib/sitemap-optimizer/legacy-redirect-header-progress";
 import type { LegacyRedirectBatchProgress, LegacyRedirectHeaderProgress } from "@/lib/sitemap-optimizer/types";
-import { detailsDrawerRowStripeClass } from "@/components/integrations/wordpress/bulk-details-drawer-styles";
+import { contentOptimizerRowStripeClass } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import {
   WorkspaceDetailsKvRow,
   WorkspaceDetailsSection,
@@ -109,7 +109,7 @@ export function SitemapLegacyRedirectDetailsPanel({
                         key={batch.batchIndex}
                         className={cn(
                           "flex items-center justify-between gap-2 border-0 px-2.5 py-1.5 text-base sm:px-3",
-                          detailsDrawerRowStripeClass(i, { isActiveOptimize: batch.status === "running" }),
+                          contentOptimizerRowStripeClass(i, { isActiveOptimize: batch.status === "running" }),
                           batch.status === "done" && "text-muted-foreground",
                           batch.status === "pending" && "text-muted-foreground/70",
                           batch.status === "running" && "text-white",
@@ -140,7 +140,7 @@ export function SitemapLegacyRedirectDetailsPanel({
                     key={step}
                     className={cn(
                       "border-0 px-2.5 py-1.5 text-base sm:px-3",
-                      detailsDrawerRowStripeClass(i + 2, { isActiveOptimize: status === "active" }),
+                      contentOptimizerRowStripeClass(i + 2, { isActiveOptimize: status === "active" }),
                       status === "done" && "text-muted-foreground",
                       status === "pending" && "text-muted-foreground/70",
                       status === "active" && "text-white",

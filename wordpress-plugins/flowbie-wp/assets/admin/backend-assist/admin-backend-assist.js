@@ -1,7 +1,4 @@
-﻿(function(){
-	window.flowbieVoiceSafeUnlock=window.flowbieVoiceSafeUnlock||function(){return Promise.resolve();};
-	window.flowbieVoiceSafeAckPlayback=window.flowbieVoiceSafeAckPlayback||function(){};
-	window.flowbieVoicePresentCard=window.flowbieVoicePresentCard||function(_c,_m,cb){if(cb&&cb.append)cb.append();if(cb&&cb.finish)cb.finish();return Promise.resolve();};
+(function(){
 	var cfg=window.flowbieBackendAssist||{};
 	var baseUrl=cfg.baseUrl||'';
 	var stepUrl=cfg.stepUrl||'';
@@ -69,20 +66,6 @@
 	btn.addEventListener('click',function(){
 		if(input.value.trim()){send();}
 	});
-	function voiceUnlock(){
-		if(typeof window.flowbieVoiceSafeUnlock==='function'){return window.flowbieVoiceSafeUnlock();}
-		return Promise.resolve();
-	}
-	function voiceAckPlaybackParallel(text){
-		if(typeof window.flowbieVoiceSafeAckPlayback==='function'){window.flowbieVoiceSafeAckPlayback(text);return;}
-		if(window.FlowbieVoice&&typeof window.FlowbieVoice.playbackAckParallel==='function'){FlowbieVoice.playbackAckParallel(text);}
-	}
-	function voiceAckPlaybackAwait(text){
-		if(typeof window.flowbieVoiceAckPlayback==='function'){return window.flowbieVoiceAckPlayback(text);}
-		if(typeof window.flowbieVoicePlayAckAwait==='function'){return window.flowbieVoicePlayAckAwait(text);}
-		if(window.FlowbieVoice&&typeof window.FlowbieVoice.playbackAck==='function'){return window.FlowbieVoice.playbackAck(text);}
-		return Promise.resolve();
-	}
 	function fbaApplyCardBadge(badgeEl,t){
 		var type=t||'answer';
 		badgeEl.className='fba-card-badge'+(type==='action'?' fba-card-badge--action':type==='error'?' fba-card-badge--error':type==='prompt'?' fba-card-badge--prompt':type==='workflow'?' fba-card-badge--workflow':'');
@@ -100,36 +83,28 @@
 			scrollDown:scrollDown
 		};
 	}
-	function presentCardWithVoice(card,userMessage,opts){
+	function presentCard(card,opts){
 		opts=opts||{};
 		var shell=opts.shell;
 		var host=fbaThinkingHost();
 		if(shell&&window.FlowbieThinkingCard){
 			FlowbieThinkingCard.finalizeToCard(shell,card,host);
-			if(opts.finish){opts.finish();}else{finishAssistantCard(card);}
-			return FlowbieThinkingCard.narrateAndVoiceStep(card,userMessage,shell,host);
+		}else{
+			appendCard(card);
 		}
-		if(typeof window.flowbieVoicePresentCard==='function'){
-			return window.flowbieVoicePresentCard(card,userMessage,{
-				append:function(){appendCard(card);},
-				finish:function(){finishAssistantCard(card);}
-			});
-		}
-		appendCard(card);
-		finishAssistantCard(card);
+		if(opts.finish){opts.finish();}else{finishAssistantCard(card);}
 		return Promise.resolve();
 	}
 
 	input.addEventListener('keydown',function(e){
 		if(e.key==='Enter'){
-			voiceUnlock();
 			e.preventDefault();
 			send();
 		}
 	});
 
 	function bindVoiceWhenReady(){
-		if(!window.FlowbieVoice||typeof window.FlowbieVoice.bindPtt!=='function'||typeof window.flowbieVoiceUnlock!=='function'){
+		if(!window.FlowbieVoice||typeof window.FlowbieVoice.bindPtt!=='function'){
 			setTimeout(bindVoiceWhenReady,50);
 			return;
 		}
@@ -209,7 +184,6 @@
 
 	async function deliverMessage(text){
 		if(!text||loading)return;
-		voiceUnlock();
 		input.value='';
 		if(window.FlowbieVoice&&typeof window.FlowbieVoice.updateSendMicVisibility==='function'){
 			FlowbieVoice.updateSendMicVisibility(input,btn);
@@ -217,14 +191,10 @@
 		appendUser(text);
 		history.push({role:'user',content:text,ts:Math.floor(Date.now()/1000)});
 		if(assistMode==='chat'){
-			voiceAckPlaybackParallel(text);
 			runFlowChat(text);
 			return;
 		}
 		loading=true;btn.disabled=true;
-		try{
-			await voiceAckPlaybackAwait(text);
-		}catch(_){}
 		try{
 			await runBackendAssist(text);
 		}finally{
@@ -263,7 +233,7 @@
 						line=line.trim();if(!line)return;
 						var evt;try{evt=JSON.parse(line);}catch(_){return;}
 						if(evt.status==='done'&&evt.card){
-							presentCardWithVoice(evt.card,text,{
+							presentCard(evt.card,{
 								shell:thinkingShell,
 								finish:function(){finishAssistantCard(evt.card);}
 							}).then(function(){
@@ -278,7 +248,7 @@
 			}
 			return pump();
 		}).catch(function(){
-			presentCardWithVoice({type:'error',title:'Connection error',body:'Could not reach the server.',confidence:'low'},text,{
+			presentCard({type:'error',title:'Connection error',body:'Could not reach the server.',confidence:'low'},{
 				shell:thinkingShell,
 				finish:function(){}
 			}).then(function(){
@@ -290,7 +260,7 @@
 	// â”€â”€ Backend assist (plan-first + chained steps) â”€â”€
 	async function runBackendAssist(text){
 		var host=fbaThinkingHost();
-		var thinkingShell=window.FlowbieThinkingCard?FlowbieThinkingCard.createThinkingCard(host,{includeVoice:true}):null;
+		var thinkingShell=window.FlowbieThinkingCard?FlowbieThinkingCard.createThinkingCard(host,{}):null;
 		var histSlice=history.slice(-10);
 
 		try{
@@ -304,7 +274,7 @@
 					body:(plan&&plan.error)||'Something went wrong.',
 					confidence:'low'
 				};
-				await presentCardWithVoice(errCard,text,{shell:thinkingShell});
+				await presentCard(errCard,{shell:thinkingShell});
 				return;
 			}
 
@@ -313,7 +283,7 @@
 					FlowbieThinkingCard.setStep(thinkingShell,host,0,'done');
 					FlowbieThinkingCard.setStep(thinkingShell,host,1,'done');
 				}
-				await presentCardWithVoice(plan,text,{shell:thinkingShell});
+				await presentCard(plan,{shell:thinkingShell});
 				return;
 			}
 
@@ -350,14 +320,14 @@
 				var stepData=stepRes.data;
 				if(!stepRes.ok||!stepData){
 					if(isWorkflowStepVisible(stepMeta)){setWorkflowStepStatus(wfShell,i,'error');}
-					await presentCardWithVoice({
+					await presentCard({
 						type:'workflow',
 						title:'Step failed',
 						body:(stepData&&stepData.error)||'Could not run step.',
 						workflow_complete:true,
 						steps:plan.steps,
 						confidence:'low'
-					},text,{shell:wfShell});
+					},{shell:wfShell});
 					break;
 				}
 				if(stepData.skipped){
@@ -369,21 +339,21 @@
 				if(plan.steps&&plan.steps[i]){plan.steps[i].status=stepData.status||'done';}
 
 				if(stepData.workflow_complete&&stepData.card){
-					await presentCardWithVoice(stepData.card,text,{shell:wfShell});
+					await presentCard(stepData.card,{shell:wfShell});
 					break;
 				}
 				if(stepData.status==='error'&&stepData.card){
-					await presentCardWithVoice(stepData.card,text,{shell:wfShell});
+					await presentCard(stepData.card,{shell:wfShell});
 					break;
 				}
 			}
 		}catch(_){
-			await presentCardWithVoice({
+			await presentCard({
 				type:'error',
 				title:'Connection error',
 				body:'Could not reach the server.',
 				confidence:'low'
-			},text,{shell:thinkingShell});
+			},{shell:thinkingShell});
 		}
 	}
 
@@ -646,6 +616,7 @@
 	function removeEl(el){if(el&&el.parentNode)el.parentNode.removeChild(el);}
 	function scrollDown(){msgs.scrollTop=msgs.scrollHeight;}
 	function renderMd(text){
+		if(window.FlowbieMarkdown&&typeof window.FlowbieMarkdown.render==='function'){return FlowbieMarkdown.render(text);}
 		var d=document.createElement('div');d.textContent=text;var s=d.innerHTML;
 		s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
 		s=s.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');

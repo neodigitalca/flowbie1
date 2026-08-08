@@ -12,7 +12,7 @@ import {
 } from "@/lib/local-analysis/header-progress";
 import { EntityTitleClusterHarnessPanel } from "@/components/sap-generator/EntityTitleClusterHarnessPanel";
 import { cn } from "@/lib/utils";
-import { detailsDrawerRowStripeClass } from "@/components/integrations/wordpress/bulk-details-drawer-styles";
+import { contentOptimizerRowStripeClass } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import {
   WorkspaceDetailsKvRow,
   WorkspaceDetailsSection,
@@ -22,6 +22,8 @@ import { BulkSitemapInventoryRunDetail } from "@/components/keyword-research/bul
 import type { PromptBulkSitemapInventoryLink } from "@/lib/bulk/prompt-bulk-sitemap-inventory";
 import type { BulkGscKeywordsHostedLink } from "@/lib/bulk/bulk-gsc-keywords-hosted-link";
 import { workspaceDetailsCanOpen } from "@/lib/workspace/workspace-details-can-open";
+import type { BulkHarnessSectionUi } from "@/hooks/use-bulk-auto-generate";
+import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
 
 export type LocalAnalysisDetailsPanelProps = {
   workspaceBusy: boolean;
@@ -34,6 +36,10 @@ export type LocalAnalysisDetailsPanelProps = {
   gridSummaryMarkdown: string;
   strategyMarkdown: string;
   hasSapRowsForCsv: boolean;
+  displayRows: CSVRow[];
+  currentRow: number;
+  harnessByRow?: Map<number, BulkHarnessSectionUi[]>;
+  batchPrepHarnessSections?: BulkHarnessSectionUi[];
   sitemapInventoryLinks?: PromptBulkSitemapInventoryLink[];
   gscHostedLink?: BulkGscKeywordsHostedLink | null;
   onDownloadTargetsCsv: () => void;
@@ -136,7 +142,7 @@ export function LocalAnalysisDetailsPanel({
                       key={step}
                       className={cn(
                         "border-0 px-2.5 py-1.5 text-base sm:px-3",
-                        detailsDrawerRowStripeClass(i + 1, { isActiveOptimize: status === "active" }),
+                        contentOptimizerRowStripeClass(i + 1, { isActiveOptimize: status === "active" }),
                         status === "done" && "text-muted-foreground",
                         status === "pending" && "text-muted-foreground/70",
                         status === "active" && "text-white",

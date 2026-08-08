@@ -51,10 +51,6 @@ export function notifyFoundXUrlsAnalyzingWithAi(parseresultUrlsLength: string | 
   return `Found ${parseresultUrlsLength} URLs. Analyzing with AI`;
 }
 
-export function notifyCouldNotExtractLocationFromModifier(promptModifier: string | number, primaryCity: string | number): string {
-  return `Could not extract location from modifier "${promptModifier}". Using detected city: ${primaryCity}`;
-}
-
 export function notifyUsingDataforseoToSearchGoogleForEn(promptModifier: string | number): string {
   return `Using DataForSEO to search Google for entities matching "${promptModifier}"`;
 }

@@ -1,4 +1,5 @@
 import { REPORT_TEMPERATURE } from "@/lib/competitor-research/competitor-report-openrouter-limits";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 const OR = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -36,12 +37,7 @@ export async function callOpenRouterChatCompletion(args: {
   const res = await fetch(OR, {
     method: "POST",
     signal: args.signal,
-    headers: {
-      Authorization: `Bearer ${args.apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "",
-      "X-Title": "Flowbie",
-    },
+    headers: openRouterWebAppHeaders(args.apiKey),
     body: JSON.stringify(body),
   });
 

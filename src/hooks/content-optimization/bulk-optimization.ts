@@ -1,8 +1,11 @@
 import { notify } from "@/lib/app-notifications";
-import { NOTIFY_PLEASE_SELECT_AT_LEAST_ONE_POST_TO_OPTIM, notifyBulkSeoExtraTextFailedX, notifyProcessingXTargetsInXPagesOfX } from "@/lib/notify-messages";
-import { mergeOptimizationProgress, setOptimizingState } from "./optimization-helpers";
+import { NOTIFY_PLEASE_SELECT_AT_LEAST_ONE_POST_TO_OPTIM, notifyProcessingXTargetsInXPagesOfX } from "@/lib/notify-messages";
+import { setOptimizingState, updateOptimizationProgress } from "./optimization-helpers";
+import { stepLabel, computePrepProgress } from "@/lib/content-optimization/content-optimizer-run-progress";
 import { buildWordPressPostsForLinkingFromInventory, buildWordPressPagesForLinkingFromInventory } from "@/lib/content-generation/extra-text-inventory-links";
-import { seedSiteCacheFromLinkablePosts } from "@/lib/wordpress-site-cache";
+import { clearSiteCache, seedSiteCacheFromLinkablePosts } from "@/lib/wordpress-site-cache";
+import { clearValidationCache } from "@/lib/cached-link-validation";
+import { clearRelevanceCache } from "@/lib/content-generation/ai-link-relevance-filter";
 import type { HandleOptimizeMultipleContentParams } from "./bulk-optimization-params";
 import { seedBulkUrlKeywordsFromCaches } from "./bulk-optimization-seed-keywords";
 import {
@@ -17,26 +20,23 @@ import { mergeSeoResearchFromAcfIntoContext } from "@/lib/content-generation/ai-
 import { createBulkSerpWarmupController } from "./bulk-optimization-serp-warmup";
 import { prefetchBulkAcfFieldsByPostIdForUrls } from "./bulk-optimization-prefetch-acf-by-post-id";
 import {
+  applyPageGscToPendingCache,
+  prefetchBulkPageGscForUrls,
+} from "./bulk-optimization-prefetch-page-gsc";
+import {
   bulkSapGoogleMapsImageWarmupEnabled,
   createBulkGoogleMapsImageWarmupController,
 } from "./bulk-optimization-google-maps-image-warmup";
 import { clearGoogleMapsImageSessionCache } from "@/lib/content-generation/google-maps-image-api";
 import { bulkOptimizationRunPostLoop } from "./bulk-optimization-post-loop";
 import { patchBulkPrefetchedPendingLinkPools } from "./bulk-optimization-pending-link-pools";
-import { runBulkSeoExtraTextBatch } from "./bulk-seo-extra-text-run";
-import { initBulkExtraTextHarnessBatchState } from "./bulk-seo-extra-text-harness";
 import type { WpPostSnapshotFromAcfByUrl } from "@/lib/wordpress-api/fields-client";
 import {
   getSiteMirrorIndex,
   siteHasFlowbieWp,
 } from "@/lib/wordpress-api/fields-client";
-import { snapshotHasInventoryEntries, type BulkOptimizerInventorySnapshot } from "@/lib/wordpress-api/inventory-match";
+import { type BulkOptimizerInventorySnapshot } from "@/lib/wordpress-api/inventory-match";
 import { ensureBulkOptimizerInventoryForRun, ensurePostsInventoryForHarness, ensurePagesInventoryForHarness, ensureSapInventoryForHarness } from "./bulk-optimization-load-inventory-snapshot";
-import {
-  everyUrlHasOverviewFastPathData,
-  seedSeoExtraTextCachesFromOverviewTargets,
-} from "./bulk-seo-extra-text-fast-path";
-import { getMergedBulkInventorySessionSnapshot } from "@/lib/wordpress-bulk-inventory-session-cache";
 import {
   CONTENT_OPTIMIZER_BULK_PAGE_SIZE,
   contentOptimizerBulkPageRanges,
@@ -61,7 +61,6 @@ import {
   buildMergedInventoryHarnessMarkdown,
 } from "@/lib/overview/overview-inventory-csv";
 
-export { approveBulkKeywordApproval } from "./bulk-optimization-approval";
 
 function bulkRunCancelRequested(
   batchKey: string,
@@ -106,7 +105,6 @@ export async function handleOptimizeMultipleContent(params: HandleOptimizeMultip
   const batchKey = `${site.id}-batch`;
   setOptimizingState(setIsOptimizingContent, batchKey, true);
   const isAcfKeywordMode = true;
-  const seoExtraTextFieldOnly = optimizationOptions?.seoExtraTextFieldOnly === true;
   const useInventoryOnlyPrep = Boolean(site.username?.trim() && site.appPassword?.trim());
   const inventorySitemapSource = optimizationOptions?.inventorySitemapSource;
   const isEntitySapRun =
@@ -193,19 +191,21 @@ export async function handleOptimizeMultipleContent(params: HandleOptimizeMultip
         urls,
         currentIndex: 0,
         urlStatuses: initialUrlStatuses,
-        currentStep: "Initializing...",
+        currentStep: stepLabel("prepInventory"),
+        currentProgress: 0,
         currentUrl: firstUrl,
         urlKeywords: { ...prefilledUrlKeywords, ...(existing?.urlKeywords || {}) },
         urlSerpResearchReady: {},
-        keywordApprovalStatus: undefined,
         warmingUpIndex: null,
         warmingUpIndex2: null,
         researchedUrls: [],
         urlHarnessSections,
         batchPrepHarnessSections,
         currentStepProgress: {
-          step: "Initializing...",
-          progress: 2,
+          stepId: "prepInventory",
+          subProgress: 0,
+          step: stepLabel("prepInventory"),
+          progress: 0,
           message: "Initializing batch…",
           harnessSections: batchPrepHarnessSections,
           harnessPlannedSectionCount: batchPrepHarnessTotalSections,
@@ -223,9 +223,13 @@ export async function handleOptimizeMultipleContent(params: HandleOptimizeMultip
 
   if (bulkUsesPagination && !muteToasts) {
     notify.info(
-      `Processing ${urls.length} targets in ${bulkPageRanges.length} pages of ${CONTENT_OPTIMIZER_BULK_PAGE_SIZE}…`,
+      notifyProcessingXTargetsInXPagesOfX(urls.length, bulkPageRanges.length, CONTENT_OPTIMIZER_BULK_PAGE_SIZE),
     );
   }
+
+  updateOptimizationProgress(setOptimizationProgress, batchKey, "prepInventory", 0, "Initializing batch…", {
+    bulkMeta: { totalUrls: urls.length, completedUrls: 0, prepComplete: false },
+  });
 
   const recordGeneratedFilesForUrl = (siteId: string, url: string) => {
     const fm = optimizationFileManagers[siteId];
@@ -251,33 +255,6 @@ export async function handleOptimizeMultipleContent(params: HandleOptimizeMultip
 
   let wordPressPostsForRun = wordPressPosts;
   let wordPressPagesForOfferTable: ReturnType<typeof buildWordPressPagesForLinkingFromInventory> = [];
-  type PrepHarnessTarget = { scope: "batch" } | { scope: "post"; sectionIndex: number };
-
-  const prepSectionForStep = (step: string): PrepHarnessTarget | null => {
-    const s = step.toLowerCase();
-    if (
-      s.includes("keyword") ||
-      s.includes("focus") ||
-      s.includes("inventory") ||
-      s.includes("preparing batch") ||
-      s.includes("initializ") ||
-      s.includes("acf") ||
-      s.includes("reading") ||
-      s.includes("prefetch") ||
-      s.includes("saving keyword") ||
-      s.includes("using inventory") ||
-      s.includes("loading sitemap") ||
-      s.includes("loading site") ||
-      s.includes("validat")
-    ) {
-      return { scope: "batch" };
-    }
-    if (s.includes("seo research") || s.includes("serp")) return { scope: "post", sectionIndex: 0 };
-    if (s.includes("optimiz") || s.includes("generat") || s.includes("content")) {
-      return { scope: "post", sectionIndex: 1 };
-    }
-    return null;
-  };
 
   const markBatchPrepHarnessSectionDone = (
     sectionIndex: number,
@@ -328,21 +305,21 @@ export async function handleOptimizeMultipleContent(params: HandleOptimizeMultip
   };
 
   const setBulkStep = (
-    step: string,
-    _message: string,
-    progress = 0,
+    stepId: "prepInventory" | "prepResearch",
+    message: string,
+    subProgress: number,
     opts?: { batchSectionIndex?: number },
   ) => {
-    setOptimizationProgress((prev: any) => mergeOptimizationProgress(prev, batchKey, { step, progress, message: "" }));
+    const progress = computePrepProgress(stepId, subProgress);
+    updateOptimizationProgress(setOptimizationProgress, batchKey, stepId, subProgress, message);
     setBulkOptimizationState((prev: any) => {
       const current = prev[batchKey];
       if (!current) return prev;
       const activeUrl = (current.currentUrl || urls[current.currentIndex ?? 0] || urls[0] || "").trim();
-      const target = prepSectionForStep(step);
       let batchPrepHarnessSections =
         current.batchPrepHarnessSections ?? waitingBatchPrepHarnessSections();
       let urlHarnessSections = current.urlHarnessSections ?? buildContentPrepUrlHarnessMap(urls);
-      if (target?.scope === "batch" && opts?.batchSectionIndex !== undefined) {
+      if (stepId === "prepInventory" && opts?.batchSectionIndex !== undefined) {
         const sectionIndex = opts.batchSectionIndex;
         const existingSection = batchPrepHarnessSections.find((s) => s.sectionIndex === sectionIndex);
         if (existingSection?.status !== "done") {
@@ -352,34 +329,30 @@ export async function handleOptimizeMultipleContent(params: HandleOptimizeMultip
             waitingBatchPrepHarnessSections(),
           );
         }
-      } else if (target?.scope === "post" && activeUrl) {
-        const payload = buildPostPrepHarnessPayload(
-          current.currentIndex ?? 0,
-          target.sectionIndex,
-          "start",
-        );
+      } else if (stepId === "prepResearch" && activeUrl) {
+        const payload = buildPostPrepHarnessPayload(current.currentIndex ?? 0, 0, "start");
         urlHarnessSections = {
           ...urlHarnessSections,
           [activeUrl]: applyPostPrepHarnessPayload(urlHarnessSections[activeUrl], payload),
         };
       }
       const harnessForProgress =
-        target?.scope === "post" && activeUrl
-          ? urlHarnessSections[activeUrl]
-          : batchPrepHarnessSections;
+        stepId === "prepResearch" && activeUrl ? urlHarnessSections[activeUrl] : batchPrepHarnessSections;
       return {
         ...prev,
         [batchKey]: {
           ...current,
-          currentStep: step,
+          currentStep: stepLabel(stepId),
           currentProgress: progress,
           currentStepProgress: {
-            step,
+            stepId,
+            subProgress,
+            step: stepLabel(stepId),
             progress,
-            message: "",
+            message,
             harnessSections: harnessForProgress,
             harnessPlannedSectionCount:
-              target?.scope === "post"
+              stepId === "prepResearch"
                 ? CONTENT_PREP_POST_HARNESS_TOTAL_SECTIONS
                 : batchPrepHarnessTotalSections,
           },
@@ -389,8 +362,6 @@ export async function handleOptimizeMultipleContent(params: HandleOptimizeMultip
       };
     });
   };
-
-  const stagingSite = !!optimizationOptions?.stagingSite;
 
   let linkingInventorySnapshot: BulkOptimizerInventorySnapshot | null = null;
 
@@ -424,200 +395,28 @@ export async function handleOptimizeMultipleContent(params: HandleOptimizeMultip
     return buildWordPressPostsForLinkingFromInventory(bulkSnapshot, site.siteUrl);
   };
 
-  const resolveExtraTextInventoryLinkPool = async (
-    snapshot: BulkOptimizerInventorySnapshot | null,
-    onMsg?: (message: string) => void,
-  ): Promise<{
-    snapshot: BulkOptimizerInventorySnapshot | null;
-    posts: ReturnType<typeof buildWordPressPostsForLinkingFromInventory>;
-  }> => {
-    let inv = snapshot;
-    if (!inv || !snapshotHasInventoryEntries(inv)) {
-      inv = getMergedBulkInventorySessionSnapshot(site.id);
-    }
-    if (!inv || !snapshotHasInventoryEntries(inv)) {
-      inv = await ensureBulkOptimizerInventoryForRun(
-        site,
-        urls,
-        optimizationOptions?.inventorySitemapSource,
-        onMsg,
-      );
-    }
-    const posts = inv ? await buildLinkPoolFromInventory(inv, onMsg) : [];
-    return { snapshot: inv, posts };
-  };
-
-  const runBulkSeoExtraTextAndFinish = async (
-    bulkInventorySnapshotForRun: BulkOptimizerInventorySnapshot | null,
-    wordPressPostsForExtraText: typeof wordPressPostsForRun,
-  ) => {
-    if (!optimizationFileManagers[site.id]) {
-      const { OptimizationFileManager } = await import("@/lib/optimization-file-manager");
-      optimizationFileManagers[site.id] = new OptimizationFileManager();
-    }
-    try {
-      initBulkExtraTextHarnessBatchState({
-        site,
-        urls,
-        urlKeywords: prefilledUrlKeywords,
-        setBulkOptimizationState,
-        setOptimizationProgress,
-        setIsOptimizingContent,
-        prepMessage: "Keywords ready — starting bulk extra text…",
-      });
-      await runBulkSeoExtraTextBatch({
-        site,
-        urls,
-        batchKey,
-        muteToasts,
-        stagingSite,
-        bulkInventorySnapshot: bulkInventorySnapshotForRun,
-        prefetchedPendingCache,
-        prefetchedAcfFieldsCache,
-        prefilledOverviewTargets,
-        wordPressPostsForRun: wordPressPostsForExtraText,
-        fileManager: optimizationFileManagers[site.id],
-        recordGeneratedFilesForUrl,
-        setBulkOptimizationState,
-        setOptimizationProgress,
-      });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      console.error("[Bulk SEO extra text] Fatal error:", error);
-      if (!muteToasts) notify.error(notifyBulkSeoExtraTextFailedX(errorMessage));
-    } finally {
-      setOptimizingState(setIsOptimizingContent, batchKey, false);
-      try {
-        const { clearSiteCache } = await import("@/lib/wordpress-site-cache");
-        const { clearValidationCache } = await import("@/lib/cached-link-validation");
-        const { clearRelevanceCache } = await import("@/lib/content-generation/ai-link-relevance-filter");
-        clearSiteCache(site.id);
-        clearValidationCache(site.id);
-        clearRelevanceCache(site.id);
-      } catch (cacheError) {
-        console.warn("[Batch Optimization] Error clearing cache:", cacheError);
-      }
-    }
-  };
-
-  const canUseSeoExtraTextFastPath =
-    seoExtraTextFieldOnly &&
-    useInventoryOnlyPrep &&
-    prefilledOverviewTargets &&
-    everyUrlHasOverviewFastPathData(urls, prefilledOverviewTargets, prefilledUrlKeywords ?? {});
-
-  if (seoExtraTextFieldOnly && useInventoryOnlyPrep) {
-    const gridTargetCount = prefilledOverviewTargets
-      ? Object.keys(prefilledOverviewTargets).length
-      : 0;
-    const hasGridTargets = gridTargetCount > 0;
-
-    setBulkStep(
-      "Generating extra text",
-      hasGridTargets
-        ? `Using ${gridTargetCount} loaded grid row(s). No prep.`
-        : "Using session inventory (no ACF re-fetch).",
-      10,
-    );
-
-    if (hasGridTargets && prefilledOverviewTargets) {
-      seedSeoExtraTextCachesFromOverviewTargets(
-        urls,
-        prefilledOverviewTargets,
-        prefilledUrlKeywords ?? {},
-        prefetchedPendingCache,
-        prefetchedAcfFieldsCache,
-      );
-      seedBulkUrlKeywordsFromCaches({
-        urls,
-        batchKey,
-        prefetchedAcfFieldsCache,
-        setBulkOptimizationState,
-      });
-      const { snapshot: gridLinkSnapshot, posts: gridLinkPosts } =
-        await resolveExtraTextInventoryLinkPool(null, (msg) => {
-          setBulkStep("Preparing batch...", msg, 12);
-        });
-      await runBulkSeoExtraTextAndFinish(gridLinkSnapshot, gridLinkPosts);
-      return;
-    }
-
-    setBulkStep("Using inventory", "", 8);
-    const extraTextSnapshot = await ensureBulkOptimizerInventoryForRun(
-      site,
-      urls,
-      optimizationOptions?.inventorySitemapSource,
-      (msg) => setBulkStep("Using inventory", msg, 10),
-      { requireBody: false, requireKeyword: false },
-    );
-    setBulkStep("Using inventory", "", 12);
-
-    assertBulkInventorySnapshotReady(extraTextSnapshot);
-
-    wordPressPostsForRun = await buildLinkPoolFromInventory(extraTextSnapshot, (msg) =>
-      setBulkStep("Using inventory", msg, 10),
-    );
-    if (wordPressPostsForRun.length > 0) {
-      seedSiteCacheFromLinkablePosts(site, wordPressPostsForRun);
-    }
-
-    if (isAcfKeywordMode && site.username && site.appPassword) {
-      seedAllBulkPrefetchCachesFromInventory({
-        site,
-        urls,
-        batchKey,
-        bulkInventorySnapshot: extraTextSnapshot,
-        updateMode,
-        optimizationOptions,
-        inContentImageRequest,
-        wordPressPostsForRun,
-        isAcfKeywordMode,
-        prefetchedAcfFieldsCache,
-        prefetchedPostPayloadByUrlIndex,
-        prefetchedAcfFullPostByUrlIndex,
-        prefetchedPendingCache,
-        setBulkOptimizationState,
-      });
-    }
-
-    seedBulkUrlKeywordsFromCaches({
-      urls,
-      batchKey,
-      prefetchedAcfFieldsCache,
-      setBulkOptimizationState,
-    });
-
-    const extraTextLinkPosts = extraTextSnapshot
-      ? await buildLinkPoolFromInventory(extraTextSnapshot, (msg) =>
-          setBulkStep("Using inventory", msg, 10),
-        )
-      : [];
-    await runBulkSeoExtraTextAndFinish(extraTextSnapshot, extraTextLinkPosts);
-    return;
-  }
-
   let bulkInventorySnapshot: BulkOptimizerInventorySnapshot | null = null;
   const skipUrlSet = new Set<string>();
 
   try {
 
   if (useInventoryOnlyPrep) {
-    setBulkStep("Using inventory", "Loading site inventory…", 5);
+    setBulkStep("prepInventory", "Loading site inventory…", 0.1);
     bulkInventorySnapshot = await ensureBulkOptimizerInventoryForRun(
       site,
       urls,
       inventorySitemapSource ?? (isEntitySapRun ? "sap" : undefined),
-      (msg) => setBulkStep("Using inventory", msg, 8),
+      (msg) => setBulkStep("prepInventory", msg, 0.25),
       { requireBody: false, requireKeyword: false },
     );
     assertBulkInventorySnapshotReady(bulkInventorySnapshot);
 
     const [postsSnapshot, pagesSnapshot] = await Promise.all([
       ensurePostsInventoryForHarness(site, (msg) =>
-        setBulkStep("Using inventory", msg, 10, { batchSectionIndex: 0 }),
+        setBulkStep("prepInventory", msg, 0.4, { batchSectionIndex: 0 }),
       ),
       ensurePagesInventoryForHarness(site, (msg) =>
-        setBulkStep("Using inventory", msg, 10, { batchSectionIndex: 1 }),
+        setBulkStep("prepInventory", msg, 0.55, { batchSectionIndex: 1 }),
       ),
     ]);
     linkingInventorySnapshot = {
@@ -631,7 +430,7 @@ export async function handleOptimizeMultipleContent(params: HandleOptimizeMultip
     if (prepIncludesEntitySitemap) {
       const sapSnapshot = await ensureSapInventoryForHarness(
         site,
-        (msg) => setBulkStep("Using inventory", msg, 10, { batchSectionIndex: 2 }),
+        (msg) => setBulkStep("prepInventory", msg, 0.7, { batchSectionIndex: 2 }),
         { includeContent: false, includeRawAcf: false },
       );
       markBatchPrepHarnessSectionDone(2, sapSnapshot, "entity");
@@ -644,10 +443,10 @@ export async function handleOptimizeMultipleContent(params: HandleOptimizeMultip
       );
     }
 
-    setBulkStep("Using inventory", "", 12);
+    setBulkStep("prepInventory", "Building link pool…", 0.75);
 
     wordPressPostsForRun = await buildLinkPoolFromInventory(bulkInventorySnapshot, (msg) =>
-      setBulkStep("Using inventory", msg, 10),
+      setBulkStep("prepInventory", msg, 0.85),
     );
     if (wordPressPostsForRun.length > 0) {
       seedSiteCacheFromLinkablePosts(site, wordPressPostsForRun);
@@ -704,7 +503,7 @@ export async function handleOptimizeMultipleContent(params: HandleOptimizeMultip
     }
 
     // Inventory list often omits large seo_research; backfill from WP so SERP is skipped when research already exists.
-    setBulkStep("Using inventory", "Loading existing seo_research…", 14);
+    setBulkStep("prepInventory", "Loading existing seo_research…", 0.9);
     await prefetchBulkAcfFieldsByPostIdForUrls({
       site,
       urls,
@@ -716,7 +515,11 @@ export async function handleOptimizeMultipleContent(params: HandleOptimizeMultip
       prefetchedPendingCache,
     });
 
-    setBulkStep("Using inventory", "", 16);
+    setBulkStep("prepInventory", "Prefetching page GSC…", 0.95);
+    const pageGscCache = await prefetchBulkPageGscForUrls(site.siteUrl, urls);
+    applyPageGscToPendingCache(urls, prefetchedPendingCache, pageGscCache);
+
+    setBulkStep("prepInventory", "Inventory ready", 1);
   }
 
   patchBulkPrefetchedPendingLinkPools(
@@ -725,7 +528,7 @@ export async function handleOptimizeMultipleContent(params: HandleOptimizeMultip
     wordPressPagesForOfferTable.length ? wordPressPagesForOfferTable : undefined,
   );
 
-  if (wordPressPostsForRun.length > 0 && !stagingSite && !seoExtraTextFieldOnly) {
+  if (wordPressPostsForRun.length > 0) {
     setPendingOptimization((prev: any) => ({
       ...prev,
       wordPressPosts: wordPressPostsForRun,
@@ -735,7 +538,7 @@ export async function handleOptimizeMultipleContent(params: HandleOptimizeMultip
 
   let siteServiceContext: string | null = null;
 
-  if (!useInventoryOnlyPrep && !seoExtraTextFieldOnly) {
+  if (!useInventoryOnlyPrep) {
     throw new Error(
       "Bulk content optimization requires WordPress credentials and a loaded inventory snapshot.",
     );
@@ -786,6 +589,10 @@ export async function handleOptimizeMultipleContent(params: HandleOptimizeMultip
     setBulkOptimizationState,
   });
 
+  updateOptimizationProgress(setOptimizationProgress, batchKey, "load", 0, "Inventory loaded — starting content optimization…", {
+    bulkMeta: { totalUrls: urls.length, completedUrls: 0, prepComplete: true },
+  });
+
   setBulkOptimizationState((prev: any) => {
     const current = prev[batchKey];
     if (!current) return prev;
@@ -793,22 +600,17 @@ export async function handleOptimizeMultipleContent(params: HandleOptimizeMultip
       ...prev,
       [batchKey]: {
         ...current,
-        keywordApprovalStatus: "approved",
-        currentStep: "Starting optimization...",
+        currentStep: stepLabel("load"),
         currentStepProgress: {
-          step: "Starting optimization...",
-          progress: 16,
+          stepId: "load",
+          subProgress: 0,
+          step: stepLabel("load"),
+          progress: current.currentProgress ?? 0,
           message: "Inventory loaded — starting content optimization…",
         },
       },
     };
   });
-
-  if (seoExtraTextFieldOnly) {
-    await runBulkSeoExtraTextAndFinish(bulkInventorySnapshot, wordPressPostsForRun);
-    return;
-  }
-
 
   const serpHarnessSetters: ContentPrepHarnessSetters = {
     siteId: site.id,
@@ -846,7 +648,7 @@ export async function handleOptimizeMultipleContent(params: HandleOptimizeMultip
         break;
       }
 
-      if (isAcfKeywordMode && !seoExtraTextFieldOnly) {
+      if (isAcfKeywordMode) {
         seedBulkUrlSerpResearchReadyFromAcfCache({
           urls,
           batchKey,
@@ -856,31 +658,10 @@ export async function handleOptimizeMultipleContent(params: HandleOptimizeMultip
       }
 
       setBulkStep(
-        "SEO research…",
+        "prepResearch",
         `${pageProgressLabel(start, end, page, pageCount)}: SERP warmup (2-post buffer)…`,
-        18,
+        0,
       );
-
-      setBulkOptimizationState((prev: any) => {
-        const current = prev[batchKey];
-        if (!current) return prev;
-        return {
-          ...prev,
-          [batchKey]: {
-            ...current,
-            currentStep: "Starting optimization...",
-            currentProgress: 0,
-            currentStepProgress: {
-              step: "Starting optimization...",
-              progress: 5,
-              message: bulkUsesPagination
-                ? `${pageProgressLabel(start, end, page, pageCount)}: optimizing…`
-                : "Using ACF keyword_focus + seo_research.",
-            },
-            keywordApprovalStatus: "approved",
-          },
-        };
-      });
 
       await bulkOptimizationRunPostLoop({
         urls,
@@ -920,16 +701,9 @@ export async function handleOptimizeMultipleContent(params: HandleOptimizeMultip
     setOptimizingState(setIsOptimizingContent, batchKey, false);
 
     // Link-validation cache is intentionally retained across URLs for the batch; clears run here (and on cancel above), not inside bulkOptimizationRunPostLoop.
-    try {
-      const { clearSiteCache } = await import("@/lib/wordpress-site-cache");
-      const { clearValidationCache } = await import("@/lib/cached-link-validation");
-      const { clearRelevanceCache } = await import("@/lib/content-generation/ai-link-relevance-filter");
-      clearSiteCache(site.id);
-      clearValidationCache(site.id);
-      clearRelevanceCache(site.id);
-    } catch (cacheError) {
-      console.warn("[Batch Optimization] Error clearing cache:", cacheError);
-    }
+    clearSiteCache(site.id);
+    clearValidationCache(site.id);
+    clearRelevanceCache(site.id);
     clearGoogleMapsImageSessionCache();
   }
 }

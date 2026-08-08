@@ -1,0 +1,36 @@
+{
+  "tasks": [
+    {
+      "id": "test-task-id",
+      "status_code": 20000,
+      "result": [
+        {
+          "items": [
+            {
+              "type": "organic",
+              "rank_absolute": 1
+            },
+            {
+              "type": "map",
+              "rectangle": {
+                "x": 1200,
+                "y": 180,
+                "width": 420,
+                "height": 360
+              }
+            },
+            {
+              "type": "map",
+              "rectangle": {
+                "x": 80,
+                "y": 120,
+                "width": 1760,
+                "height": 520
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

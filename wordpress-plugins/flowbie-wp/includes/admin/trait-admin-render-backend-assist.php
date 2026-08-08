@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Backend Assist panel: centered chat modal with suggested actions.
  *
@@ -22,10 +22,13 @@ trait Flowbie_Wp_Admin_Trait_Render_Backend_Assist {
 		$ver = defined( 'FLOWBIE_WP_VERSION' ) ? FLOWBIE_WP_VERSION : '0.9.31';
 		$ver .= '.' . (string) filemtime( $abs );
 
+		Flowbie_Wp_Voice::enqueue_thinking_card_assets( true );
+		wp_enqueue_script( 'flowbie-markdown' );
+
 		wp_enqueue_script(
 			'flowbie-wp-backend-assist',
 			plugin_dir_url( FLOWBIE_WP_PLUGIN_FILE ) . $rel,
-			array(),
+			array( 'flowbie-markdown' ),
 			$ver,
 			true
 		);

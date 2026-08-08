@@ -31,6 +31,7 @@ class Flowbie_Wp_Chat_Logs_List_Table extends WP_List_Table {
 			'source'     => __( 'Source', 'flowbie-wp' ),
 			'role'       => __( 'Role', 'flowbie-wp' ),
 			'content'    => __( 'Message', 'flowbie-wp' ),
+			'accepted'   => __( 'Accepted', 'flowbie-wp' ),
 		);
 	}
 
@@ -133,6 +134,23 @@ class Flowbie_Wp_Chat_Logs_List_Table extends WP_List_Table {
 			$text = substr( $text, 0, 200 ) . '…';
 		}
 		return esc_html( $text );
+	}
+
+	/**
+	 * @param object $item Row.
+	 */
+	protected function column_accepted( $item ): string {
+		$url   = (string) ( $item->accepted_url ?? '' );
+		$label = (string) ( $item->accepted_label ?? '' );
+		if ( $url === '' ) {
+			return '&mdash;';
+		}
+		$display = $label !== '' ? $label : $url;
+		return sprintf(
+			'<a href="%1$s" target="_blank" rel="noopener noreferrer">%2$s</a>',
+			esc_url( $url ),
+			esc_html( $display )
+		);
 	}
 
 	/**

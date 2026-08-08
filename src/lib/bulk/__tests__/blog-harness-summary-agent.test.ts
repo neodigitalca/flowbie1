@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { AgentConfig } from "@/types/agent-config";
 import {
-  BLOG_HARNESS_SUMMARY_AGENT_ID,
   ensureBlogHarnessSummaryFirst,
+  ensureBlogHarnessSummaryLast,
+  BLOG_HARNESS_SUMMARY_AGENT_ID,
 } from "@/lib/bulk/blog-harness-summary-agent";
 
 const body = (id: string, step: number, title = id): AgentConfig => ({
@@ -50,5 +51,42 @@ describe("ensureBlogHarnessSummaryFirst", () => {
 
     expect(out).toBe(agents);
     expect(out.some((a) => a.id === BLOG_HARNESS_SUMMARY_AGENT_ID)).toBe(false);
+  });
+});
+
+describe("ensureBlogHarnessSummaryLast", () => {
+  it("appends the summary agent at the last index and reindexes steps", () => {
+    const agents = [body("a", 1), body("b", 2), body("c", 3)];
+    const out = ensureBlogHarnessSummaryLast(agents);
+
+    expect(out[out.length - 1].id).toBe(BLOG_HARNESS_SUMMARY_AGENT_ID);
+    expect(out).toHaveLength(4);
+    expect(out.map((a) => a.step)).toEqual([1, 2, 3, 4]);
+    expect(out.slice(0, 3).map((a) => a.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("does not duplicate the summary agent when already present", () => {
+    const first = ensureBlogHarnessSummaryLast([body("a", 1), body("b", 2)]);
+    const second = ensureBlogHarnessSummaryLast(first);
+
+    const summaryCount = second.filter((a) => a.id === BLOG_HARNESS_SUMMARY_AGENT_ID).length;
+    expect(summaryCount).toBe(1);
+    expect(second[second.length - 1].id).toBe(BLOG_HARNESS_SUMMARY_AGENT_ID);
+  });
+
+  it("removes a blueprint Overview section and appends the canonical summary last", () => {
+    const agents = [body("x", 1, "Overview"), body("y", 2, "Costs")];
+    const out = ensureBlogHarnessSummaryLast(agents);
+
+    expect(out[out.length - 1].id).toBe(BLOG_HARNESS_SUMMARY_AGENT_ID);
+    expect(out).toHaveLength(2);
+    expect(out[0].title).toBe("Costs");
+  });
+
+  it("leaves press releases unchanged", () => {
+    const agents = [body("a", 1), body("b", 2)];
+    const out = ensureBlogHarnessSummaryLast(agents, "press_release");
+
+    expect(out).toBe(agents);
   });
 });

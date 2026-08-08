@@ -196,6 +196,10 @@ export function useBulkAutoGenerate({
   const [status, setStatus] = useState<string>('');
   const [processingStepLog, setProcessingStepLog] = useState<string[]>([]);
   const [harnessSections, setHarnessSections] = useState<BulkHarnessSectionUi[]>([]);
+  const [harnessByRow, setHarnessByRow] = useState<Map<number, BulkHarnessSectionUi[]>>(
+    () => new Map(),
+  );
+  const harnessSectionsRef = useRef<BulkHarnessSectionUi[]>([]);
   /** Fixed blueprint section count for the current row's harness (not `harnessSections.length`, which grows one-at-a-time). */
   const [harnessPlannedSectionCount, setHarnessPlannedSectionCount] = useState<number | null>(null);
   const [fileManager] = useState(() => new BulkFileManager());
@@ -216,6 +220,20 @@ export function useBulkAutoGenerate({
 
   const recordRunStatus = useCallback((message: string) => {
     setStatus(message);
+  }, []);
+
+  useEffect(() => {
+    harnessSectionsRef.current = harnessSections;
+  }, [harnessSections]);
+
+  const snapshotHarnessForRow = useCallback((rowIndex: number) => {
+    const sections = harnessSectionsRef.current;
+    if (sections.length === 0) return;
+    setHarnessByRow((prev) => {
+      const next = new Map(prev);
+      next.set(rowIndex, [...sections]);
+      return next;
+    });
   }, []);
 
   const wordPressPosting = useMemo((): WordPressPostingOptions | undefined => {
@@ -394,17 +412,10 @@ isAnalyzingRef.current = isAnalyzing;
         pageUrl: pageUrlEarly,
         seedKeyword: seedEarly,
         portfolioBlockedHosts,
-      }).catch((err: unknown) => {
-        console.warn('[Bulk Generate] Parallel Semrush fetch failed:', err);
-        return {
-          skipped: true as const,
-          reason: 'client_error',
-          errors: [{ step: 'fetch', message: err instanceof Error ? err.message : String(err) }],
-        };
       });
 
       // Step 1: Fetch Wikipedia and run keyword research
-      const initialFiles = await generateRowOutputs(
+      const { files: initialFiles, research: keywordResearchFromRow } = await generateRowOutputs(
         rowIndex,
         activeRow,
         options,
@@ -457,57 +468,29 @@ isAnalyzingRef.current = isAnalyzing;
         );
         allFiles.push(dfsFile);
       } else {
-        let attempts = 0;
-        const maxAttempts = 180;
-
-        while (attempts < maxAttempts) {
-          const currentIsAnalyzing = isAnalyzingRef.current;
-          const currentIsAnalyzingWithAI = isAnalyzingWithAIRef.current;
-          const currentResultValue = currentResultRef.current;
-          const currentAiAnalysis = aiAnalysisRef.current;
-
-          if (!currentIsAnalyzing && !currentIsAnalyzingWithAI && currentResultValue && currentAiAnalysis) {
-            if (currentResultValue.primaryKeyword?.toLowerCase().trim() !== row.keyword.toLowerCase().trim()) {
-              throw new Error(`Keyword research result mismatch. Expected: ${row.keyword}, Got: ${currentResultValue?.primaryKeyword}`);
-            }
-
-            if (!currentResultValue.keywordData) {
-              throw new Error('Keyword data is missing from research results');
-            }
-
-            if (!currentAiAnalysis) {
-              throw new Error('AI analysis is missing from research results');
-            }
-
-            break;
-          }
-
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          attempts++;
+        const csvPrimary = activeRow.keyword?.trim() || activeRow.keyword_focus?.trim() || '';
+        if (!keywordResearchFromRow?.result?.keywordData || !keywordResearchFromRow.aiAnalysis) {
+          const stub = buildBlogImportKeywordResearchStub(activeRow);
+          finalKeywordData = stub.keywordData;
+          finalAiAnalysis = stub.aiAnalysis;
+        } else {
+          finalKeywordData = {
+            ...keywordResearchFromRow.result.keywordData,
+            keyword: csvPrimary || keywordResearchFromRow.result.keywordData.keyword,
+          };
+          finalAiAnalysis = keywordResearchFromRow.aiAnalysis;
         }
-
-        if (attempts >= maxAttempts) {
-          throw new Error('Keyword research timeout - analysis took too long');
-        }
-
-        const finalResult = currentResultRef.current;
-        const polledAiAnalysis = aiAnalysisRef.current;
-
-        if (!finalResult || !polledAiAnalysis) {
-          throw new Error('Keyword research incomplete - missing results');
-        }
-
-        finalKeywordData = finalResult.keywordData!;
-        finalAiAnalysis = polledAiAnalysis;
         semrushResult = await semrushPromise;
 
+        options.onProgress?.(rowIndex, 0, 'Merging keyword research with Semrush...');
         const mergeResult = await runIntelligentKeywordResearchMerge(row, finalKeywordData, semrushResult, {
           apiKey: openRouterApiKey,
           model: selectedModel || getResearchModel(),
         });
         intelligentMerge = mergeResult.merge;
         primaryExternalCitationUrl = mergeResult.primaryExternalCitationUrl;
-        volumeDataForBlueprint = Array.from(keywordsVolumeData.values());
+        const rowPaaRawResponse = keywordResearchFromRow.paaRawResponse ?? paaRawResponse;
+        volumeDataForBlueprint = keywordResearchFromRow.keywordsVolumeData;
 
         const dfsSnapshotTs = Date.now();
         const dfsFile = addKeywordResearchSnapshotToBulkFiles(
@@ -520,8 +503,8 @@ isAnalyzingRef.current = isAnalyzing;
             keywordData: finalKeywordData,
             aiAnalysis: finalAiAnalysis,
             keywordsVolumeData: volumeDataForBlueprint,
-            paaRawResponse,
-            primaryKeyword: finalResult.primaryKeyword,
+            paaRawResponse: rowPaaRawResponse,
+            primaryKeyword: csvPrimary || keywordResearchFromRow?.result?.primaryKeyword || finalKeywordData.keyword,
             semrush: semrushResult,
             intelligentMerge,
             primaryExternalCitationUrl,
@@ -598,6 +581,7 @@ isAnalyzingRef.current = isAnalyzing;
       // Step 5: Generate blueprint and content with knowledge base (including Wikipedia and WordPress posts)
       setHarnessSections([]);
       setHarnessPlannedSectionCount(null);
+      options.onProgress?.(rowIndex, 0, 'Generating checklist and blueprint...');
       const optionsWithHarness: BulkProcessingOptions = {
         ...options,
         openRouterOnly: skipDataForSeoApiKey,
@@ -624,7 +608,7 @@ isAnalyzingRef.current = isAnalyzing;
         finalKeywordData,
         finalAiAnalysis,
         volumeDataForBlueprint,
-        paaRawResponse,
+        keywordResearchFromRow?.paaRawResponse ?? paaRawResponse,
         optionsWithHarness,
         fileManager,
         knowledgeFiles,
@@ -696,6 +680,7 @@ isAnalyzingRef.current = isAnalyzing;
     setTotalRows(csvRows.length);
     setHarnessSections([]);
     setHarnessPlannedSectionCount(null);
+    setHarnessByRow(new Map());
     setProcessingStepLog([]);
     setFailedRowIndices(new Set());
     setFailedRowMessages({});
@@ -940,12 +925,13 @@ isAnalyzingRef.current = isAnalyzing;
         try {
           // processRow now clears state internally before processing
           const files = await processRow(displayRowIndex, csvRows[i], options);
+          snapshotHarnessForRow(i);
           // Only mark as complete if we got files back (all generation succeeded)
           if (files && files.length > 0) {
             options.onRowComplete?.(i, files);
           }
         } catch (error) {
-          fileManager.removeFilesByRowIndex(displayRowIndex);
+          snapshotHarnessForRow(i);
           setFailedRowIndices((prev) => new Set(prev).add(i));
           runHadFailure = true;
           const msg = error instanceof Error ? error.message : String(error);
@@ -1015,7 +1001,7 @@ isAnalyzingRef.current = isAnalyzing;
       abortControllerRef.current = null;
       processingInFlightRef.current = false;
     }
-  }, [apiKey, openRouterApiKey, selectedModel, temperature, maxTokens, topP, flowPurpose, fileManager, processRow, connectedSite, wordPressPosting, siteConfigs, selectedWordPressSites, skipDataForSeoApiKey, blogImportSourceFile, blogImportForm, recordRunStatus]);
+  }, [apiKey, openRouterApiKey, selectedModel, temperature, maxTokens, topP, flowPurpose, fileManager, processRow, connectedSite, wordPressPosting, siteConfigs, selectedWordPressSites, skipDataForSeoApiKey, blogImportSourceFile, blogImportForm, recordRunStatus, snapshotHarnessForRow]);
 
   /**
    * Cancel processing
@@ -1060,6 +1046,7 @@ isAnalyzingRef.current = isAnalyzing;
     status,
     processingStepLog,
     harnessSections,
+    harnessByRow,
     harnessPlannedSectionCount,
     rows,
     setRows,

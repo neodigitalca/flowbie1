@@ -15,7 +15,8 @@ import { useQuarterEditorialCounts } from "@/hooks/use-quarter-editorial-counts"
 import { useOptimizationActivityCounts } from "@/hooks/use-optimization-activity-counts";
 import { OPTIMIZATION_TILE_COUNTS_ENABLED } from "@/lib/wordpress-optimization-tile-counts";
 import type { WordPressSite } from "./types";
-import { sortWordPressSitesByName } from "./storage";
+import { sortWordPressSitesByName, mergeServerGbpLocationIdsIntoLocalSites } from "./storage";
+import { normalizeGbpLocationIdInput } from "@/lib/gbp-post/normalize-gbp-location-id";
 import { getManagerCloudSettingsStatus } from "@/lib/manager-cloud-settings-api";
 import { saveWordPressPropertiesToSupabase, getWordPressPropertiesCloudStatus, syncOpenRouterToSupabaseProperties } from "@/lib/manager-wordpress-properties-api";
 import { loadApiKey } from "@/lib/api";
@@ -68,6 +69,7 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
     getScrapingKey,
     handlePatchSite,
     handleAppendManualChildSitemap,
+    reloadSitesFromStorage,
   } = useWordPressSites();
 
   const { user } = useAuth();
@@ -265,9 +267,12 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
       if (prev === siteId) {
         return null;
       }
+      void mergeServerGbpLocationIdsIntoLocalSites().then((merged) => {
+        if (merged) reloadSitesFromStorage();
+      });
       return sites.some((s) => s.id === siteId) ? siteId : prev;
     });
-  }, [sites]);
+  }, [sites, reloadSitesFromStorage]);
 
   /** Close the expanded panel only if the site was removed (e.g. deleted). */
   useEffect(() => {
@@ -303,11 +308,21 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
       lastExpandedSyncedRef.current = null;
       return;
     }
-    if (lastExpandedSyncedRef.current === expandedSiteId) return;
-    lastExpandedSyncedRef.current = expandedSiteId;
     const site = sites.find((s) => s.id === expandedSiteId);
-    if (site) populateFormFromSite(site);
+    if (!site) return;
+    const syncKey = `${expandedSiteId}:${site.gbpLocationId ?? ""}:${site.ga4PropertyId ?? ""}`;
+    if (lastExpandedSyncedRef.current === syncKey) return;
+    lastExpandedSyncedRef.current = syncKey;
+    populateFormFromSite(site);
   }, [expandedSiteId, sites, populateFormFromSite]);
+
+  /** Keep GBP field in sync when the site row gains an id (save or server hydrate) without clobbering in-progress edits. */
+  useEffect(() => {
+    if (!expandedSiteId) return;
+    const gbp = sites.find((s) => s.id === expandedSiteId)?.gbpLocationId?.trim();
+    if (!gbp) return;
+    setFormGbpLocationId((prev) => (prev.trim() ? prev : gbp));
+  }, [expandedSiteId, sites]);
 
   const handleAddSite = useCallback(() => {
     const formData = handleAddSiteInit();
@@ -335,15 +350,27 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
   );
 
   const handleSaveSiteClick = useCallback(() => {
+    const activeEdit =
+      editingSite ??
+      (expandedSiteId ? sites.find((s) => s.id === expandedSiteId) ?? null : null);
+    const liveEdit = activeEdit
+      ? sites.find((s) => s.id === activeEdit.id) ?? activeEdit
+      : null;
+    const gbpForSave =
+      formGbpLocationId.trim() ||
+      liveEdit?.gbpLocationId?.trim() ||
+      normalizeGbpLocationIdInput(formGbpLocationId).trim();
+    const ga4ForSave =
+      formGa4PropertyId.trim() || liveEdit?.ga4PropertyId?.trim() || "";
     const saved = handleSaveSite(
       formName,
       formSiteUrl,
       formUsername,
       formAppPassword,
-      editingSite,
+      activeEdit,
       formProductionSiteUrl,
-      formGa4PropertyId,
-      formGbpLocationId,
+      ga4ForSave,
+      gbpForSave,
       formSemrushSiteAuditProjectId,
       formEditorialCountsPeriodStartYmd,
       formOptimizationPackage,
@@ -352,8 +379,14 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
     if (saved) {
       setIsDialogOpen(false);
       setExpandedSiteId(saved.id);
-      populateFormFromSite(saved);
-      if (!editingSite) {
+      setEditingSite(saved);
+      const gbp = saved.gbpLocationId?.trim() ?? gbpForSave;
+      setFormGbpLocationId(gbp);
+      if (saved.ga4PropertyId?.trim()) {
+        setFormGa4PropertyId(saved.ga4PropertyId.trim());
+      }
+      lastExpandedSyncedRef.current = `${saved.id}:${gbp}:${saved.ga4PropertyId ?? ""}`;
+      if (!activeEdit) {
         void (async () => {
           const r = await applyGbpPropertyWand(saved, {
             openRouterApiKey: loadApiKey()?.trim() || undefined,
@@ -375,8 +408,9 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
     formOptimizationPackage,
     formBenchmarkCustomTag,
     editingSite,
+    expandedSiteId,
+    sites,
     handleSaveSite,
-    populateFormFromSite,
   ]);
 
   const performSaveToSupabase = useCallback(
@@ -688,9 +722,11 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
         quarterStatsBySite={quarterStatsBySite}
         optimizationStatsBySite={optimizationStatsBySite}
         propertyRowDisplay="compact"
-        embeddedSiteEditPanel={(site) => (
+        embeddedSiteEditPanel={(rowSite) => {
+          const liveSite = sites.find((s) => s.id === rowSite.id) ?? rowSite;
+          return (
           <SitePropertyEditPanel
-            site={site}
+            site={liveSite}
             editingSite={editingSite}
             formName={formName}
             formSiteUrl={formSiteUrl}
@@ -715,11 +751,12 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
             onFormOptimizationPackageChange={setFormOptimizationPackage}
             onFormBenchmarkCustomTagChange={setFormBenchmarkCustomTag}
             onPatchSite={handlePatchSite}
-            patchSiteId={site.id}
-            semrushActionsDisabled={site.enabled === false}
+            patchSiteId={liveSite.id}
+            semrushActionsDisabled={liveSite.enabled === false}
             onSave={handleSaveSiteClick}
           />
-        )}
+          );
+        }}
       />
       </div>
 

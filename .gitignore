@@ -17,6 +17,7 @@ dist-ssr
 
 # WP Engine deploy config (contains credentials)
 wordpress-plugins/flowbie-wpengine.config.json
+wordpress-plugins/Customer List/SFTP Users_Clients List.csv
 
 # Local credential overrides (never commit)
 gsc-config.local.js
@@ -24,7 +25,8 @@ gsc-config.local.js
 *.credentials.json
 
 # Generated WP plugin credentials (may contain keys)
-wordpress-plugins/flowbie-wp/includes/flowbie-wp-supabase-config.php
+wordpress-plugins/flowbie-wp/.env
+wordpress-plugins/flowbie-wp/includes/flowbie-wp-secrets.php
 wordpress-plugins/flowbie-wp/includes/flowbie-wp-gsc-config.php
 wordpress-plugins/flowbie-app/includes/flowbie-app-secrets.php
 

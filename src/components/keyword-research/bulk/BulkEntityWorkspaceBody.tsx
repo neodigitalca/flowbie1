@@ -10,6 +10,9 @@ export type BulkEntityWorkspaceBodyProps = {
   isProcessing: boolean;
   onRowChange: (index: number, patch: Partial<CSVRow>) => void;
   directionsSiteName?: string;
+  /** Placeholder stripes below content rows; 0 shows only real rows (competitor generator). */
+  emptyRowPadCount?: number;
+  showBusySpinner?: boolean;
 };
 
 /** Entity SAP list — AdGroup layout for preload slots and post-Clusters rows. */
@@ -22,6 +25,8 @@ export function BulkEntityWorkspaceBody({
   isProcessing,
   onRowChange,
   directionsSiteName,
+  emptyRowPadCount,
+  showBusySpinner,
 }: BulkEntityWorkspaceBodyProps) {
   return (
     <SapEntityAdGroupList
@@ -32,6 +37,8 @@ export function BulkEntityWorkspaceBody({
       isProcessing={isProcessing}
       onRowChange={onRowChange}
       directionsSiteName={directionsSiteName}
+      emptyRowPadCount={emptyRowPadCount}
+      showBusySpinner={showBusySpinner}
     />
   );
 }

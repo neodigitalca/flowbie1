@@ -1,4 +1,5 @@
 import type { KeywordAIAnalysis } from '../keyword-types';
+import { filterOutFaqStyleHeadingTitles } from '../content-generation/faq-heading-policy';
 
 /**
  * Helper functions for auto-selection (extracted from KeywordResearchTab logic)
@@ -30,7 +31,8 @@ export function autoSelectH2Sections(aiAnalysis: KeywordAIAnalysis): string[] {
   }
   // Select top 5-7 H2 sections - extract heading strings if objects
   const sections = aiAnalysis.h2Suggestions.slice(0, 7);
-  return sections.map(section => typeof section === 'string' ? section : section.heading || section.description || '');
+  const headings = sections.map(section => typeof section === 'string' ? section : section.heading || section.description || '');
+  return filterOutFaqStyleHeadingTitles(headings.filter(Boolean));
 }
 
 export function autoSelectPeopleAlsoAsk(aiAnalysis: KeywordAIAnalysis): string[] {

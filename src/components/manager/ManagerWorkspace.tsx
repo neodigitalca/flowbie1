@@ -6,9 +6,10 @@ import { StoredFile, KnowledgeBaseTab } from "@/components/KnowledgeBaseTab";
 import { ManagerSettingsContent } from "@/components/manager/ManagerSettingsContent";
 import { BlogGeneratorShell } from "@/components/blog-generator/BlogGeneratorShell";
 import { IntegrationsTab } from "@/components/IntegrationsTab";
-import { ChatTabContent } from "@/components/manager/ChatTabContent";
+import { ChatTabContent } from "@/components/chat/ChatTabContent";
+import { TasksTabContent } from "@/components/manager/tasks/TasksTabContent";
+import { UsersTabContent } from "@/components/manager/UsersTabContent";
 import { CommunicationTabContent } from "@/components/manager/CommunicationTabContent";
-import { ContentOptimizerTabContent } from "@/components/content-optimizer/ContentOptimizerTabContent";
 import { PpcTabContent } from "@/components/ppc/PpcTabContent";
 import { GbpPostShell } from "@/components/gbp-post/GbpPostShell";
 import { ResearchWorkspaceShell } from "@/components/research/ResearchWorkspaceShell";
@@ -16,6 +17,7 @@ import { SitemapOptimizerResearchTab } from "@/components/research/sitemap-optim
 import { ReportingTab } from "@/components/research/reporting/ReportingTab";
 import { VerticalBenchmarkShell } from "@/components/vertical-benchmark/VerticalBenchmarkShell";
 import { GridLocalShell } from "@/components/grid-local/GridLocalShell";
+import { ApiDocsTabContent } from "@/components/api-docs/ApiDocsTabContent";
 import { saveDataForSEOApiKey, loadAgentMailApiKey, saveAgentMailApiKey } from "@/lib/api";
 import type { ManagerSettingsClusterId } from "@/components/manager/manager-settings-cluster";
 import type { GeneratorFreeFlowBindings } from "@/components/generator/generator-free-flow-bindings";
@@ -109,6 +111,7 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
   const [agentMailApiKey, setAgentMailApiKey] = useState<string>(() => loadAgentMailApiKey());
 
   const embedded = variant === "embedded";
+  const chatFullBleed = embedded && (managerTab === "chat" || managerTab === "tasks" || managerTab === "api");
   /** Radix tabpanel must participate in flex-1 chain when embedded; parent-only selectors are unreliable. */
   const embeddedTabPanelStretch = embedded ? "flex h-full min-h-0 flex-1 flex-col overflow-hidden" : undefined;
   const showResetToolbar = embedded && onResetBlueprint && onResetWorkspace;
@@ -217,16 +220,18 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
         <div
           className={cn(
             "h-0 min-h-0 w-full max-h-full flex-1",
-            embedded && "px-[10%]",
+            embedded && !chatFullBleed && "px-[10%]",
             /* Embedded tabs (non-Free Flow): column flex keeps each visible tabpanel at intrinsic height so scrollHeight matches content */
             embedded &&
               cn(
                 "flex flex-col overflow-x-hidden overscroll-y-contain",
-                /* Integrations + Content Optimizer: inner shells own vertical scroll; outer must not scroll */
+                /* Integrations + Generator (incl. Opt): inner shells own vertical scroll; outer must not scroll */
                 managerTab === "integrations" ||
-                  managerTab === "content-optimizer" ||
                   managerTab === "knowledge" ||
-                  managerTab === "generator"
+                  managerTab === "generator" ||
+                  managerTab === "chat" ||
+                  managerTab === "tasks" ||
+                  managerTab === "api"
                   ? "overflow-y-hidden"
                   : "overflow-y-auto",
               ),
@@ -286,6 +291,14 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
           <ChatTabContent />
         </TabsContent>
 
+        <TabsContent value="tasks" className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}>
+          <TasksTabContent />
+        </TabsContent>
+
+        <TabsContent value="users" className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}>
+          <UsersTabContent />
+        </TabsContent>
+
         <TabsContent
           value="dashboard"
           className={cn(
@@ -314,24 +327,6 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
             setTopP={setTopP}
             settingsCluster={managerDashboardCluster}
             onSettingsClusterChange={onManagerDashboardClusterChange}
-          />
-        </TabsContent>
-
-        <TabsContent
-          value="content-optimizer"
-          className={cn(
-            embeddedTabPanelTopClass,
-            "data-[state=inactive]:hidden",
-            embeddedTabPanelStretch,
-            embedded && "overflow-hidden",
-          )}
-        >
-          <ContentOptimizerTabContent
-            apiKey={apiKey}
-            selectedModel={selectedModel}
-            temperature={temperature}
-            maxTokens={maxTokens}
-            topP={topP}
           />
         </TabsContent>
 
@@ -390,6 +385,10 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
 
         <TabsContent value="research" className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}>
           <ResearchWorkspaceShell />
+        </TabsContent>
+
+        <TabsContent value="api" className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}>
+          <ApiDocsTabContent />
         </TabsContent>
         </div>
         {embedded && embeddedFooter ? <div className="w-full shrink-0">{embeddedFooter}</div> : null}

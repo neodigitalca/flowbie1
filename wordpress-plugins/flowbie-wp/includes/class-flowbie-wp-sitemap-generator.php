@@ -65,6 +65,44 @@ class Flowbie_Wp_Sitemap_Generator {
 	}
 
 	/**
+	 * All published posts from every XML-enabled post type (full sitemap inventory).
+	 *
+	 * @param array<string, mixed>|null $config Optional sitemap config; loads saved config when null.
+	 * @return array<int, array{post:WP_Post,type:string}>
+	 */
+	public static function collect_all_posts( ?array $config = null ): array {
+		$config = null !== $config ? $config : Flowbie_Wp_Sitemap_Settings::get_config();
+		$out    = array();
+
+		foreach ( self::enabled_post_types( $config ) as $post_type ) {
+			$page_count = self::post_type_page_count( $post_type, $config );
+			for ( $page = 1; $page <= $page_count; $page++ ) {
+				foreach ( self::query_posts( $post_type, $page, $config ) as $post ) {
+					if ( $post instanceof WP_Post ) {
+						$out[] = array(
+							'post' => $post,
+							'type' => $post_type,
+						);
+					}
+				}
+			}
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Post type slugs included in the XML sitemap (for chat index debug).
+	 *
+	 * @param array<string, mixed>|null $config Optional sitemap config.
+	 * @return array<int, string>
+	 */
+	public static function sitemap_index_post_types( ?array $config = null ): array {
+		$config = null !== $config ? $config : Flowbie_Wp_Sitemap_Settings::get_config();
+		return self::enabled_post_types( $config );
+	}
+
+	/**
 	 * @param array<string, mixed> $config Settings config.
 	 */
 	public static function build_post_type_sitemap( string $post_type, int $page, array $config ): string {

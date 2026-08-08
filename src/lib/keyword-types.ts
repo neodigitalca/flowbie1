@@ -48,6 +48,15 @@ export interface KeywordAnalysisOptions {
   peopleAlsoAskClickDepth?: number;
   limit?: number;
   forceRefresh?: boolean; // If true, bypass cache and fetch fresh data from API
+  /** When true, throw on API/AI failures instead of returning partial stub data. */
+  strict?: boolean;
+}
+
+export interface KeywordAnalysisComplete {
+  result: KeywordResearchResult;
+  aiAnalysis: KeywordAIAnalysis;
+  keywordsVolumeData: KeywordData[];
+  paaRawResponse?: unknown;
 }
 
 export interface KeywordAIAnalysis {

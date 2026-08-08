@@ -253,12 +253,7 @@ class Flowbie_App_Overview_Meta_Ai {
 			self::OPENROUTER_URL,
 			array(
 				'timeout' => 120,
-				'headers' => array(
-					'Content-Type'  => 'application/json',
-					'Authorization' => 'Bearer ' . $api_key,
-					'HTTP-Referer'  => 'https://flowbie.ca',
-					'X-Title'       => 'Flowbie Content Optimizer Meta (WP REST)',
-				),
+				'headers' => Flowbie_App_Openrouter_Attribution::request_headers( $api_key ),
 				'body'    => wp_json_encode(
 					array(
 						'model'       => $model,

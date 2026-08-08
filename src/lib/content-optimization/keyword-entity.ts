@@ -1,6 +1,7 @@
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { filterAndRankQueriesWithAI, isNonEnglishKeyword } from "@/lib/gsc-query-processor";
 import { stripBracketPlaceholders, stripLeadingP } from "@/lib/gsc-simple-keyword-recommendation";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 /** One row for batched entity keyword generation (Bulk: up to 100 per OpenRouter call). */
 export type EntityKeywordBatchItem = { index: number; pageTitle: string; pageUrl: string };
@@ -77,13 +78,7 @@ export async function generateLocalKeywordsForEntityPagesBatch(
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer":
-          typeof window !== "undefined" ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: researchModel,
         response_format: { type: "json_object" },
@@ -181,12 +176,7 @@ export async function generateLocalKeywordForEntityPage(
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: researchModel,
         messages: [
@@ -275,12 +265,7 @@ export async function selectBestKeywordForEntityPage(
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: researchModel,
         messages: [

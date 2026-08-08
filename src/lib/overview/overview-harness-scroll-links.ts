@@ -1,6 +1,7 @@
 import { callOpenRouterChatCompletion } from "@/lib/competitor-research/competitor-report-openrouter";
 import { parseJsonWithRepair } from "@/lib/json-repair-utility";
 import type { HarnessSectionAnchorEntry } from "@/lib/bulk/harness-section-anchor-ids";
+import { HARNESS_OVERVIEW_ANCHOR_ID } from "@/lib/bulk/harness-section-anchor-ids";
 import { getProductionModel } from "@/lib/optimization-settings-storage";
 
 export type OverviewHarnessScrollLinkBullet = {
@@ -172,6 +173,178 @@ NON-NEGOTIABLE:
 - No http/https URLs in sentenceHtml. # anchors only.
 
 Return JSON: {"bullets":[{"anchorId":"...","bulletLabel":"...","sentenceHtml":"..."}]}`;
+
+export function extractBodyH2AnchorsFromHtml(html: string): HarnessSectionAnchorEntry[] {
+  const lower = html.toLowerCase();
+  let overviewBlockEnd = 0;
+
+  const classIdx = lower.indexOf('class="flo-overview"');
+  if (classIdx < 0) {
+    const altIdx = lower.indexOf("class='flo-overview'");
+    if (altIdx >= 0) {
+      overviewBlockEnd = findFloOverviewBlockEnd(html, lower, altIdx);
+    }
+  } else {
+    overviewBlockEnd = findFloOverviewBlockEnd(html, lower, classIdx);
+  }
+
+  const entries: HarnessSectionAnchorEntry[] = [];
+  let searchFrom = 0;
+  let sectionIndex = 1;
+
+  while (true) {
+    const h2Open = lower.indexOf("<h2", searchFrom);
+    if (h2Open < 0) break;
+    if (overviewBlockEnd > 0 && h2Open < overviewBlockEnd) {
+      searchFrom = h2Open + 3;
+      continue;
+    }
+    const gt = lower.indexOf(">", h2Open);
+    if (gt < 0) break;
+    const openTag = html.slice(h2Open, gt);
+    const idMatch = openTag.match(/\sid\s*=\s*(["'])([^"']+)\1/i);
+    const closeAt = lower.indexOf("</h2>", gt);
+    if (closeAt < 0) break;
+    const inner = html.slice(gt + 1, closeAt).replace(/<[^>]+>/g, "").trim();
+    if (idMatch) {
+      const anchorId = idMatch[2]!.trim();
+      if (anchorId !== HARNESS_OVERVIEW_ANCHOR_ID && anchorId !== "overview") {
+        entries.push({
+          sectionIndex,
+          displayTitle: inner || anchorId,
+          anchorId,
+        });
+        sectionIndex += 1;
+      }
+    }
+    searchFrom = closeAt + 5;
+  }
+
+  return entries;
+}
+
+function findFloOverviewBlockEnd(html: string, lower: string, classIdx: number): number {
+  const divStart = lower.lastIndexOf("<div", classIdx);
+  if (divStart < 0) return 0;
+  let depth = 0;
+  let pos = divStart;
+  while (pos < html.length) {
+    const nextOpen = lower.indexOf("<div", pos);
+    const nextClose = lower.indexOf("</div>", pos);
+    if (nextClose < 0) break;
+    if (nextOpen >= 0 && nextOpen < nextClose) {
+      depth += 1;
+      pos = nextOpen + 4;
+      continue;
+    }
+    depth -= 1;
+    pos = nextClose + 6;
+    if (depth === 0) return pos;
+  }
+  return 0;
+}
+
+function collectOverviewHashHrefs(html: string): string[] {
+  const lower = html.toLowerCase();
+  const ulOpen = lower.indexOf("<ul");
+  if (ulOpen < 0) return [];
+  const ulClose = lower.indexOf("</ul>", ulOpen);
+  if (ulClose < 0) return [];
+  return collectHashHrefs(html.slice(ulOpen, ulClose + 5));
+}
+
+function parseOverviewListItems(html: string): Array<{ bulletLabel: string; sentenceHtml: string }> {
+  const lower = html.toLowerCase();
+  const ulOpen = lower.indexOf("<ul");
+  if (ulOpen < 0) return [];
+  const ulClose = lower.indexOf("</ul>", ulOpen);
+  if (ulClose < 0) return [];
+  const block = html.slice(ulOpen, ulClose + 5);
+  const blockLower = block.toLowerCase();
+  const items: Array<{ bulletLabel: string; sentenceHtml: string }> = [];
+  let searchFrom = 0;
+  while (true) {
+    const idx = blockLower.indexOf("<li", searchFrom);
+    if (idx < 0) break;
+    const openEnd = blockLower.indexOf(">", idx);
+    if (openEnd < 0) break;
+    const closeAt = blockLower.indexOf("</li>", openEnd + 1);
+    if (closeAt < 0) break;
+    const inner = block.slice(openEnd + 1, closeAt).trim();
+    const strongMatch = inner.match(/^<strong[^>]*>([^<]+)<\/strong>\s*:\s*(.*)$/is);
+    if (strongMatch) {
+      items.push({
+        bulletLabel: strongMatch[1]!.trim(),
+        sentenceHtml: strongMatch[2]!.trim(),
+      });
+    } else {
+      items.push({ bulletLabel: "Key point", sentenceHtml: inner });
+    }
+    searchFrom = closeAt + 5;
+  }
+  return items;
+}
+
+function stripOverviewBoilerplatePhrase(sentenceHtml: string): string {
+  return sentenceHtml.replace(/\s+for more\.?\s*$/i, ".").trim();
+}
+
+function reconcileBulletSentenceToAnchor(
+  sentenceHtml: string,
+  anchorId: string,
+  displayTitle: string,
+): string {
+  let sentence = stripOverviewBoilerplatePhrase(sentenceHtml);
+  const anchorPattern = /<a\s+href="#[^"]*"[^>]*>[\s\S]*?<\/a>/i;
+  const linkPhrase = displayTitle.split(/\s+/).slice(0, 3).join(" ").toLowerCase() || "details";
+  const replacement = `<a href="#${anchorId}">${linkPhrase}</a>`;
+  if (anchorPattern.test(sentence)) {
+    return sentence.replace(anchorPattern, replacement);
+  }
+  const trimmed = sentence.replace(/[.\s]+$/, "");
+  return `${trimmed} — see ${replacement}.`;
+}
+
+/** Align Overview scroll-link bullets to body H2 ids without an LLM call. */
+export function reconcileOverviewScrollLinksToBodyH2Ids(html: string): string {
+  const bodyAnchors = extractBodyH2AnchorsFromHtml(html);
+  if (bodyAnchors.length === 0) return html;
+
+  const overviewHrefs = collectOverviewHashHrefs(html);
+  const alreadyAligned =
+    overviewHrefs.length === bodyAnchors.length &&
+    overviewHrefs.every((href, i) => href === bodyAnchors[i]!.anchorId);
+  if (alreadyAligned) return html;
+
+  const headHtml = stripOverviewBulletList(html);
+  const existingItems = parseOverviewListItems(html);
+  const bullets: OverviewHarnessScrollLinkBullet[] = bodyAnchors.map((anchor, i) => {
+    const existing = existingItems[i];
+    const bulletLabel = existing?.bulletLabel?.trim() || anchor.displayTitle.split(/\s+/).slice(0, 4).join(" ");
+    const sentenceHtml = reconcileBulletSentenceToAnchor(
+      existing?.sentenceHtml || anchor.displayTitle,
+      anchor.anchorId,
+      anchor.displayTitle,
+    );
+    return { anchorId: anchor.anchorId, bulletLabel, sentenceHtml };
+  });
+
+  const tailStart = (() => {
+    const lower = html.toLowerCase();
+    const ovEnd = findFloOverviewBlockEnd(html, lower, lower.indexOf("flo-overview"));
+    if (ovEnd > 0) return ovEnd;
+    const firstBodyH2 = lower.indexOf(`id="${bodyAnchors[0]!.anchorId}"`);
+    if (firstBodyH2 >= 0) {
+      const h2Open = lower.lastIndexOf("<h2", firstBodyH2);
+      return h2Open >= 0 ? h2Open : html.length;
+    }
+    return html.length;
+  })();
+
+  const tail = html.slice(tailStart).trimStart();
+  const rebuiltHead = rebuildOverviewWithScrollLinkBullets(headHtml, bullets);
+  return tail ? `${rebuiltHead}\n\n${tail}`.trim() : rebuiltHead;
+}
 
 export async function applyOverviewHarnessScrollLinks(args: {
   html: string;

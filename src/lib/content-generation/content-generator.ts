@@ -4,11 +4,13 @@
  */
 
 import { notify } from "@/lib/app-notifications";
-import { NOTIFY_CONTENT_GENERATED, NOTIFY_GENERATING_CONTENT, NOTIFY_GENERATING_IN_CONTENT_IMAGE, NOTIFY_HTML_READY_TO_UPLOAD, NOTIFY_IMAGE_GENERATED_BUT_MAY_NOT_HAVE_BEEN_IN, NOTIFY_IN_CONTENT_IMAGE_WAS_NOT_PRESERVED_DURIN, notifyFoundXValidImagesWithUrlsAndAltT, notifyImagePreservationFailedXContinuingW, notifyInContentImageGeneratedAndInserted, notifyInContentImageGenerationFailedXCon, notifyPreservedXOriginalImagesInOptimized } from "@/lib/notify-messages";
+import { NOTIFY_CONTENT_GENERATED, NOTIFY_GENERATING_CONTENT, NOTIFY_GENERATING_IN_CONTENT_IMAGE, NOTIFY_HTML_READY_TO_UPLOAD, NOTIFY_IMAGE_GENERATED_BUT_MAY_NOT_HAVE_BEEN_IN, NOTIFY_IN_CONTENT_IMAGE_WAS_NOT_PRESERVED_DURIN, notifyInContentImageGeneratedAndInserted, notifyInContentImageGenerationFailedXCon } from "@/lib/notify-messages";
 import { getMuteOptimizationToasts } from "@/hooks/content-optimization/optimization-toast-mute";
 import { loadApiKey } from "@/lib/api";
 import { markdownToHtml, generateExcerpt } from "@/lib/markdown-to-html";
+import { htmlToMarkdown } from "@/lib/wordpress-converter";
 import { OptimizationFileManager } from "@/lib/optimization-file-manager";
+import { progressWithGeneratedFiles } from "@/hooks/content-optimization/optimization-helpers";
 import {
   generateInContentImage,
   generateInContentImageFromHtml,
@@ -18,17 +20,16 @@ import type { ImageType } from "@/lib/image-section-analyzer";
 import type { WordPressSite } from "@/components/integrations/types";
 import { getProductionModel, getResearchModel } from "@/lib/optimization-settings-storage";
 import { appendMasterInstructionsToSystemPrompt, ensureMasterInstructionsInMemory } from "@/lib/master-instructions-storage";
-import { 
-  extractMediaFromContent, 
-  matchMediaToSections, 
-  extractH2Headings,
-  insertMediaLinkIntoSection 
-} from "@/lib/content-optimization-helpers";
+import { extractMediaFromContent } from "@/lib/content-optimization-helpers";
 import { readACFFieldsAgentically, type AIDrivenACFContext } from "@/lib/content-generation/ai-driven-acf-reader";
-import { ensureAtLeastOneLinkPerSection, ensureLinksEvery200Words, countInternalLinksInMarkdown } from "@/lib/content-generation/ensure-links-per-section";
+import { resolveInternalLinkPlaceholdersInMarkdown } from "@/lib/content-generation/internal-link-placeholders";
+import { countInternalLinksInMarkdown } from "@/lib/content-generation/ensure-links-per-section";
 import type { BulkHarnessSectionPayload, BulkProcessingOptions } from "@/lib/bulk-auto-generate";
 import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
 import type { KeywordData } from "@/lib/keyword-types";
+import { buildFocusedArticlePurpose } from "@/lib/content-generation/article-length-policy";
+import { isGeneratedContentHtml } from "@/lib/content-generation/content-format";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 /**
  * AI-driven function to generate a SEO-optimized meta description
@@ -107,10 +108,7 @@ Your output MUST be 120-150 characters. Count them. This is a SEPARATE META DESC
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: researchModel,
         messages: [
@@ -252,7 +250,7 @@ export interface ContentGeneratorOptions {
     portfolioBlockedHosts?: string[];
   };
   fileManager: OptimizationFileManager;
-  setProgress: (progress: { step: string; progress: number; message?: string }) => void;
+  setProgress: (progress: { step: string; progress: number; message?: string; generatedFiles?: ReturnType<OptimizationFileManager["getFiles"]> }) => void;
   onContentChunk?: (chunk: string) => void;
   shouldOptimizeContent: boolean;
   hasEntityOverride?: boolean; // Manual override: true = force entity mode, false = force no entity, undefined = auto-detect
@@ -266,7 +264,7 @@ export interface ContentGeneratorResult {
   markdownContent: string;
   htmlContent: string;
   excerpt: string;
-  /** Original image/video URLs placed as text links (allowlist for upload sanitizer). */
+  /** Original image/video URLs from the post (upload sanitizer allowlist only). */
   preservedMediaUrls?: string[];
 }
 
@@ -496,7 +494,7 @@ export async function generateOptimizedContent(
       throw new Error('Content generation returned empty content');
     }
 
-    const isHtmlContent = /<(?:h2|p|table)[\s>]/i.test(markdownContent);
+    const isHtmlContent = isGeneratedContentHtml(markdownContent);
     const linkPatternHtml = /<a\s+[^>]*href=["'](https?:\/\/[^"']+)["'][^>]*>/gi;
     const linkPatternMd = /\[([^\]]+)\]\(https?:\/\/[^\)]+\)/g;
     const linkCount = isHtmlContent
@@ -507,27 +505,20 @@ export async function generateOptimizedContent(
     }
 
     if (!isHtmlContent && context.wordPressPosts && context.wordPressPosts.length > 0) {
-      markdownContent = await ensureAtLeastOneLinkPerSection({
-        markdown: markdownContent,
-        wordPressPosts: context.wordPressPosts,
-        currentPageUrl: context.url,
-        siteUrl: site.siteUrl,
-        apiKey: openRouterApiKey,
-        siteId: site.id,
-        setProgress,
+      setProgress({
+        step: "Resolving internal links...",
+        progress: 86,
+        message: "Matching link placeholders to sitemap...",
       });
-      markdownContent = await ensureLinksEvery200Words({
-        markdown: markdownContent,
-        wordPressPosts: context.wordPressPosts,
-        currentPageUrl: context.url,
-        siteUrl: site.siteUrl,
-        apiKey: openRouterApiKey,
+      markdownContent = resolveInternalLinkPlaceholdersInMarkdown(markdownContent, {
         siteId: site.id,
-        setProgress,
+        siteUrl: site.siteUrl,
+        currentPageUrl: context.url,
+        wordPressPosts: context.wordPressPosts,
       });
       const totalLinks = countInternalLinksInMarkdown(markdownContent, context.wordPressPosts, site.siteUrl);
       if (totalLinks === 0) {
-        console.warn('[Content Generator] No internal links in content after ensure steps – upload will continue.');
+        console.warn('[Content Generator] No internal links in content after placeholder resolve – upload will continue.');
       }
     }
 
@@ -548,13 +539,13 @@ export async function generateOptimizedContent(
       if (!getMuteOptimizationToasts()) notify.info(NOTIFY_GENERATING_IN_CONTENT_IMAGE, { duration: 3000 });
 
       // Harness output is HTML. Markdown ![alt](url) insert never becomes <img> when contentIsHtml skips markdownToHtml.
-      const contentLooksHtml = /<(?:h2|p|table)[\s>]/i.test(markdownContent);
+      const contentLooksHtml = isGeneratedContentHtml(markdownContent);
       let insertedSectionHeader = "";
       if (contentLooksHtml) {
         const imageResult = await generateInContentImageFromHtml({
           html: markdownContent,
           flowTitle: blueprintResult.title || existingTitle || primaryKeyword,
-          flowPurpose: blueprintResult.purpose || `Comprehensive guide about ${primaryKeyword}`,
+          flowPurpose: blueprintResult.purpose || buildFocusedArticlePurpose(primaryKeyword),
           imageType: context.inContentImageRequest.imageType,
           site,
           userPrompt: context.inContentImageRequest.userPrompt,
@@ -576,7 +567,7 @@ export async function generateOptimizedContent(
         const imageResult = await generateInContentImage({
           markdownContent,
           flowTitle: blueprintResult.title || existingTitle || primaryKeyword,
-          flowPurpose: blueprintResult.purpose || `Comprehensive guide about ${primaryKeyword}`,
+          flowPurpose: blueprintResult.purpose || buildFocusedArticlePurpose(primaryKeyword),
           imageType: context.inContentImageRequest.imageType,
           site,
           userPrompt: context.inContentImageRequest.userPrompt,
@@ -635,102 +626,21 @@ export async function generateOptimizedContent(
     }
   }
 
-  // === MEDIA LINK PRESERVATION: metadata from original post → text links only ===
-  // 1. OpenRouter extracts real image/video URLs + alt/title/context from existing HTML
-  // 2. OpenRouter picks the best H2 for each item
-  // 3. Insert ONLY an <a href> (never re-embed <img> / iframe / video)
   let preservedMediaUrls: string[] = [];
-  if (context.existingContent && shouldOptimizeContent && markdownContent) {
+  if (context.existingContent && shouldOptimizeContent) {
     try {
-      setProgress({ step: 'Preserving media links...', progress: 87.7, message: 'Reading image/video metadata from original content...' });
-      
-      const originalMedia = await extractMediaFromContent(
-        context.existingContent,
-        openRouterApiKey
-      );
-
-
-      if (originalMedia.length > 0) {
-        console.log(`[Content Generation] Found ${originalMedia.length} media item(s) to place as links`);
-        if (!getMuteOptimizationToasts()) notify.info(notifyFoundXValidImagesWithUrlsAndAltT(originalMedia.length), { duration: 3000 });
-
-        setProgress({ step: 'Preserving media links...', progress: 87.8, message: `Matching ${originalMedia.length} media links to sections...` });
-
-        const sectionHeadings = extractH2Headings(markdownContent);
-        console.log('[Content Generation] Available sections for media link placement:', sectionHeadings);
-
-        const mediaAssignments = await matchMediaToSections(
-          originalMedia,
-          sectionHeadings,
-          ['introduction', 'intro', 'conclusion', 'summary', 'faq', 'frequently asked', 'questions'],
-          openRouterApiKey
-        );
-
-        // If OpenRouter match returns empty, still place each media link in the first usable H2.
-        let assignments = mediaAssignments;
-        if (assignments.length === 0 && originalMedia.length > 0 && sectionHeadings.length > 0) {
-          const excluded = ['introduction', 'intro', 'conclusion', 'summary', 'faq', 'frequently asked', 'questions'];
-          const fallbackSection =
-            sectionHeadings.find((h) => {
-              const lower = h.toLowerCase();
-              return !excluded.some((p) => lower.includes(p));
-            }) || sectionHeadings[0];
-          assignments = originalMedia.map((m) => ({
-            mediaUrl: m.url,
-            linkLabel: m.linkLabel,
-            targetSection: fallbackSection,
-          }));
-        }
-
-
-        if (assignments.length > 0) {
-          setProgress({ step: 'Preserving media links...', progress: 87.9, message: `Inserting ${assignments.length} media link(s)...` });
-          
-          for (const assignment of assignments) {
-            console.log(
-              `[Content Generation] Inserting media link into "${assignment.targetSection}":`,
-              assignment.mediaUrl,
-              `Label: "${assignment.linkLabel}"`
-            );
-
-            markdownContent = insertMediaLinkIntoSection(
-              markdownContent,
-              assignment.targetSection,
-              assignment.mediaUrl,
-              assignment.linkLabel
-            );
-            preservedMediaUrls.push(assignment.mediaUrl);
-          }
-          
-          console.log(`[Content Generation] Inserted ${assignments.length} media link(s)`);
-
-          const markdownFiles = fileManager.getFiles().filter(f => f.name.includes('content') && f.name.endsWith('.md'));
-          if (markdownFiles.length > 0) {
-            const markdownFile = markdownFiles[0];
-            fileManager.removeFile(markdownFile.name);
-            fileManager.addFile(
-              markdownFile.name,
-              markdownContent,
-              'text/markdown'
-            );
-          }
-
-          if (!getMuteOptimizationToasts()) notify.success(notifyPreservedXOriginalImagesInOptimized(assignments.length), { duration: 5000 });
-        } else {
-          console.log('[Content Generation] No media items could be matched to sections');
-        }
-      } else {
-        console.log('[Content Generation] No image/video media found in original content');
+      const originalMedia = await extractMediaFromContent(context.existingContent, openRouterApiKey);
+      preservedMediaUrls = originalMedia.map((m) => m.url).filter(Boolean);
+      if (preservedMediaUrls.length > 0) {
+        console.log(`[Content Generation] ${preservedMediaUrls.length} original media URL(s) on sanitizer allowlist (harness embeds via [IMAGE] prompts)`);
       }
     } catch (error) {
-      console.error('[Content Generation] Error preserving media links:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to preserve media links';
-      if (!getMuteOptimizationToasts()) notify.warning(notifyImagePreservationFailedXContinuingW(errorMessage), { duration: 5000 });
+      console.warn('[Content Generation] Could not read original media URLs for allowlist:', error);
     }
   }
 
   // Use content as-is: optimizer outputs HTML directly. No markdown conversion, no sanitizing.
-  const contentIsHtml = shouldOptimizeContent && /<(?:h2|p|table)[\s>]/i.test(markdownContent);
+  const contentIsHtml = shouldOptimizeContent && isGeneratedContentHtml(markdownContent);
   const htmlContent = shouldOptimizeContent
     ? (contentIsHtml ? markdownContent : markdownToHtml(markdownContent))
     : context.existingContent;
@@ -777,6 +687,20 @@ export async function generateOptimizedContent(
     htmlFileName,
     htmlContent,
     'text/html'
+  );
+
+  const mdFileName = OptimizationFileManager.generateFilename('content', primaryKeyword, 'md');
+  fileManager.addFile(
+    mdFileName,
+    contentIsHtml ? htmlToMarkdown(htmlContent) : markdownContent,
+    'text/markdown'
+  );
+
+  setProgress(
+    progressWithGeneratedFiles(
+      { step: 'Content ready', progress: 88, message: 'HTML and markdown saved for download' },
+      fileManager,
+    ),
   );
 
   return {

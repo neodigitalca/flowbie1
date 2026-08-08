@@ -1,8 +1,9 @@
 import { notify } from "@/lib/app-notifications";
 import { notifyBatchOptimizationCompleteProcessedX, notifyCompletedOptimizationForPostXOfX } from "@/lib/notify-messages";
 import { OptimizationFileManager } from "@/lib/optimization-file-manager";
-import { getStepProgress, mergeOptimizationProgress, updateBulkProgress } from "./optimization-helpers";
+import { mergeOptimizationProgress, updateOptimizationProgress } from "./optimization-helpers";
 import { updateBulkStateForPost } from "./bulk-optimization-update-bulk-state";
+import { stepLabel } from "@/lib/content-optimization/content-optimizer-run-progress";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { HandleOptimizeMultipleContentParams } from "./bulk-optimization-params";
 import type { BulkDoPrefetchArgs } from "./bulk-optimization-do-prefetch";
@@ -11,9 +12,7 @@ import type { BulkGoogleMapsImageWarmupController } from "./bulk-optimization-go
 
 export interface BulkPostLoopParams {
   urls: string[];
-  /** Inclusive start index into `urls` (default 0). */
   rangeStart?: number;
-  /** Exclusive end index into `urls` (default urls.length). */
   rangeEnd?: number;
   skipUrlSet: Set<string>;
   batchKey: string;
@@ -58,6 +57,24 @@ export interface BulkPostLoopParams {
   };
 }
 
+function patchBulkMetaCompletedUrls(
+  setOptimizationProgress: HandleOptimizeMultipleContentParams["setOptimizationProgress"],
+  batchKey: string,
+  completedUrls: number,
+) {
+  setOptimizationProgress((prev: Record<string, any>) => {
+    const batchEntry = prev[batchKey];
+    if (!batchEntry?.bulkMeta) return prev;
+    return {
+      ...prev,
+      [batchKey]: {
+        ...batchEntry,
+        bulkMeta: { ...batchEntry.bulkMeta, completedUrls, prepComplete: true },
+      },
+    };
+  });
+}
+
 export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promise<void> {
   const {
     urls,
@@ -77,7 +94,6 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
     bulkContextRef,
     setBulkOptimizationState,
     setOptimizationProgress,
-    recordGeneratedFilesForUrl,
     serpWarmup,
     googleMapsImageWarmup,
   } = p;
@@ -137,13 +153,7 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
       return prev;
     });
     if (cancelNow) {
-      setOptimizationProgress((prev: any) =>
-        mergeOptimizationProgress(prev, batchKey, {
-          step: "Aborted",
-          progress: 100,
-          message: "Operation aborted by user.",
-        }),
-      );
+      updateOptimizationProgress(setOptimizationProgress, batchKey, "done", 1, "Operation aborted by user.");
       setBulkOptimizationState((prev: any) => {
         const current = prev[batchKey];
         if (!current) return prev;
@@ -151,7 +161,7 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
           ...prev,
           [batchKey]: {
             ...current,
-            currentStep: "Aborted",
+            currentStep: stepLabel("done"),
             warmingUpIndex: null,
             warmingUpIndex2: null,
           },
@@ -161,6 +171,7 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
     }
 
     if (skipUrlSet.has(url)) {
+      patchBulkMetaCompletedUrls(setOptimizationProgress, batchKey, i + 1);
       updateBulkStateForPost(setBulkOptimizationState, batchKey, url, i, i + 1, urls.length, "skipped");
       continue;
     }
@@ -168,7 +179,6 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
     serpWarmup.maintainBuffer(i);
     googleMapsImageWarmup?.maintainBuffer(i);
     void googleMapsImageWarmup?.warmIndex(i);
-    // Never skip research: await SERP fill (or URL-derived keyword + SERP) before optimizing.
     await serpWarmup.ensureReady(i);
 
     if (!prefetchedPendingCache.has(i)) {
@@ -196,48 +206,13 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
     const totalPosts = urls.length;
     bulkContextRef.current = { bulkIndex: i, totalBulkUrls: urls.length, batchKey };
 
+    patchBulkMetaCompletedUrls(setOptimizationProgress, batchKey, i);
     updateBulkStateForPost(setBulkOptimizationState, batchKey, url, i, currentPost, totalPosts, "optimizing");
-
-    setOptimizationProgress((prev: any) =>
-      mergeOptimizationProgress(prev, batchKey, {
-        step: `Optimizing post ${currentPost} of ${totalPosts}...`,
-        progress: Math.round((i / totalPosts) * 100),
-        message: url,
-      }),
-    );
-
-    let progressInterval: ReturnType<typeof setInterval> | undefined;
-    progressInterval = setInterval(() => {
-      setOptimizationProgress((current: any) => {
-        const siteProgress = current[site.id];
-        if (siteProgress) {
-          const stepProgress = getStepProgress(siteProgress.step);
-          updateBulkProgress(
-            setBulkOptimizationState,
-            batchKey,
-            url,
-            siteProgress.step,
-            stepProgress,
-            siteProgress.message,
-            siteProgress.linkCheckResults,
-            Array.isArray(siteProgress.harnessSections)
-              ? {
-                  harnessSections: siteProgress.harnessSections,
-                  harnessPlannedSectionCount: siteProgress.harnessPlannedSectionCount ?? null,
-                }
-              : undefined,
-            i,
-          );
-          recordGeneratedFilesForIndex(i, url);
-        }
-        return current;
-      });
-    }, 500);
+    updateOptimizationProgress(setOptimizationProgress, site.id, "load", 0, url);
 
     try {
       const fullCached = !!prefetchedPendingCache.get(i);
-      const hasManualKeyword = false;
-      if (fullCached && !hasManualKeyword) {
+      if (fullCached) {
         const { pending: cachedPending, primaryKeyword: cachedKeyword } = prefetchedPendingCache.get(i)!;
         if (!bulkContinueOptimizationRef.current) {
           throw new Error("Bulk continue optimization handler is not ready.");
@@ -246,9 +221,7 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
           [site.id]: {
             ...cachedPending,
             ...(wordPressPostsForRun?.length ? { wordPressPosts: wordPressPostsForRun } : {}),
-            ...(wordPressPagesForOfferTable?.length
-              ? { wordPressPagesForOfferTable }
-              : {}),
+            ...(wordPressPagesForOfferTable?.length ? { wordPressPagesForOfferTable } : {}),
             bulkIndex: i,
             totalBulkUrls: urls.length,
             batchKey,
@@ -263,14 +236,22 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
           { query: cachedKeyword, clicks: 0, impressions: 0, ctr: 0, position: 0 },
         );
         recordGeneratedFilesForIndex(i, url);
-        if (progressInterval) clearInterval(progressInterval);
+        const uploadFiles = fileManagersByIndex.get(i)?.getFiles() ?? [];
+        const uploadedToWordPress = uploadFiles.some((f) =>
+          String(f.name || "").includes("wordpress-post-upload"),
+        );
+        if (!uploadedToWordPress) {
+          throw new Error(
+            "WordPress upload did not complete for this post (no wordpress-post-upload artifact).",
+          );
+        }
+        patchBulkMetaCompletedUrls(setOptimizationProgress, batchKey, i + 1);
         updateBulkStateForPost(setBulkOptimizationState, batchKey, url, i, currentPost, totalPosts, "completed");
         if (!muteToasts) notify.success(notifyCompletedOptimizationForPostXOfX(currentPost, totalPosts));
         await new Promise((resolve) => setTimeout(resolve, 100));
         continue;
       }
 
-      if (progressInterval) clearInterval(progressInterval);
       const msg = `Could not run bulk optimization for post ${currentPost}: missing WordPress/ACF prefetch.`;
       console.error(`[Batch Optimization] ${msg}`, url);
       if (!muteToasts) notify.error(msg);
@@ -290,11 +271,6 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
       await new Promise((resolve) => setTimeout(resolve, 100));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
-
-      if (progressInterval) {
-        clearInterval(progressInterval);
-      }
-
       console.error(`[Batch Optimization] Error optimizing post ${currentPost} (${url}):`, error);
       if (!muteToasts) notify.error(`Post ${currentPost} failed: ${errorMessage}`, { duration: 12000 });
       recordBatchFailure(errorMessage);
@@ -313,15 +289,15 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
     }
   }
 
-  setOptimizationProgress((prev: any) =>
-    mergeOptimizationProgress(prev, batchKey, {
-      step: batchFailedCount > 0 ? "Batch finished with errors" : "Batch optimization complete",
-      progress: 100,
-      message:
-        batchFailedCount > 0
-          ? `${batchFailedCount} of ${urls.length} targets failed`
-          : `Successfully processed ${urls.length} posts`,
-    }),
+  updateOptimizationProgress(
+    setOptimizationProgress,
+    batchKey,
+    "done",
+    1,
+    batchFailedCount > 0
+      ? `${batchFailedCount} of ${urls.length} targets failed`
+      : `Successfully processed ${urls.length} posts`,
+    { bulkMeta: { totalUrls: urls.length, completedUrls: urls.length, prepComplete: true } },
   );
 
   serpWarmup.clearWarmingIndices();
@@ -332,7 +308,7 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
       ...prev,
       [batchKey]: {
         ...current,
-        currentStep: "Batch complete",
+        currentStep: stepLabel("done"),
         currentIndex: urls.length,
         warmingUpIndex: null,
         warmingUpIndex2: null,
@@ -344,10 +320,9 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
 
   if (!muteToasts) {
     if (batchFailedCount > 0) {
-      notify.error(
-        `${batchFailedCount} of ${urls.length} targets failed: ${firstBatchFailureMsg}`,
-        { duration: 12000 },
-      );
+      notify.error(`${batchFailedCount} of ${urls.length} targets failed: ${firstBatchFailureMsg}`, {
+        duration: 12000,
+      });
     } else {
       notify.success(notifyBatchOptimizationCompleteProcessedX(urls.length));
     }

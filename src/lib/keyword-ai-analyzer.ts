@@ -6,6 +6,7 @@ import { getResearchModel } from "./optimization-settings-storage";
 import { isNonEnglishKeyword } from "./gsc-query-processor";
 import { readACFFieldsAgentically } from "./content-generation/ai-driven-acf-reader";
 import type { AIDrivenACFContext } from "./content-generation/ai-driven-acf-reader";
+import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 
 /** Gemini 2.5 Flash Lite has a massive context window; use 1M max output so truncation is never an issue. */
 const RESEARCH_MODEL_MAX_TOKENS = 1_000_000;
@@ -189,12 +190,7 @@ Return JSON array of keyword numbers to KEEP: [1, 3, 5]`;
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: model,
         messages: [{ role: "user", content: prompt }],
@@ -233,12 +229,7 @@ async function checkIfServiceKeywordString(
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "https://agent-blueprint-builder.com",
-        "X-Title": "Agent Blueprint Builder",
-      },
+      headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
         model: model,
         messages: [{ role: "user", content: prompt }],

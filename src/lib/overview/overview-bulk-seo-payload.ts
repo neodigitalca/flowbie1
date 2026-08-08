@@ -1,3 +1,4 @@
+import type React from "react";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
 import type { OverviewBinding } from "@/hooks/overview/use-overview-wordpress-binding";
 import type { WordPressSite } from "@/components/integrations/types";
@@ -39,6 +40,63 @@ export type BuildOverviewBulkSeoItemOptions = {
 /** YYYY-MM-DD for ACF `date_modifier` (matches Overview "Update dates" bulk action). */
 export function overviewDateModifierTodayIso(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/** Push only ACF `date_modifier` for one bound post (no title/meta/body). */
+export async function pushOverviewRowDateModifierToAcf(
+  site: WordPressSite,
+  binding: OverviewBinding,
+  dateIso: string,
+): Promise<BulkOverviewSeoResultRow | null> {
+  const trimmed = dateIso.trim();
+  if (!trimmed || !site.username?.trim() || !site.appPassword?.trim()) return null;
+  const item: OverviewBulkSeoApiItem = {
+    postId: binding.postId,
+    postType: binding.subtype,
+    postTypeEndpoint: restCollectionEndpointForSubtype(binding.subtype),
+    acf: { date_modifier: trimmed },
+  };
+  return uploadOverviewSeoApiItemAvoidingBatchV1(site, item);
+}
+
+/** Push ACF `date_modifier` for each URL that resolves to a WordPress post. */
+export async function pushOverviewDateModifiersToAcfForUrls(
+  site: WordPressSite,
+  bindings: Record<string, OverviewBinding | undefined>,
+  rows: OverviewRow[],
+  urls: readonly string[],
+  dateIso: string,
+): Promise<void> {
+  const trimmed = dateIso.trim();
+  if (!trimmed || urls.length === 0 || !site.username?.trim() || !site.appPassword?.trim()) {
+    return;
+  }
+  const keys = new Set(urls.map((url) => normalizePageUrlKey(url)));
+  const seenPostIds = new Set<number>();
+  const uploads: Promise<BulkOverviewSeoResultRow | null>[] = [];
+  for (const row of rows) {
+    if (!keys.has(normalizePageUrlKey(row.url))) continue;
+    const binding = overviewBindingForRow(row, bindings);
+    if (!binding?.postId || seenPostIds.has(binding.postId)) continue;
+    seenPostIds.add(binding.postId);
+    uploads.push(pushOverviewRowDateModifierToAcf(site, binding, trimmed));
+  }
+  await Promise.all(uploads);
+}
+
+/** Sync Overview grid date column after a successful content optimization upload. */
+export function patchOverviewRowsDateModifierForUrls(
+  setRows: React.Dispatch<React.SetStateAction<OverviewRow[]>>,
+  urls: readonly string[],
+  iso = overviewDateModifierTodayIso(),
+): void {
+  if (urls.length === 0) return;
+  const keys = new Set(urls.map((url) => normalizePageUrlKey(url)));
+  setRows((prev) =>
+    prev.map((row) =>
+      keys.has(normalizePageUrlKey(row.url)) ? { ...row, dateModifier: iso } : row,
+    ),
+  );
 }
 
 /** Upload body HTML must already be on the row as `postContentOptimized`. */

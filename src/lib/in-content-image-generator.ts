@@ -20,7 +20,7 @@ import {
 } from "@/lib/image-section-analyzer";
 import { parseMarkdownSections } from "@/lib/section-parser";
 import type { WordPressSite } from "@/components/integrations/types";
-import { getResearchModel } from "@/lib/optimization-settings-storage";
+import { buildFocusedArticlePurpose } from "@/lib/content-generation/article-length-policy";
 import {
   OVERVIEW_AUDIT_FULL_POST_LABEL,
   OVERVIEW_AUDIT_PREAMBLE_LABEL,
@@ -407,7 +407,7 @@ export async function generateInContentImageFromHtml(
   const imageType: ImageType = options.imageType ?? "photo";
   const flowPurpose =
     options.flowPurpose ||
-    `Comprehensive guide about ${options.focusKeyword || options.flowTitle}`;
+    buildFocusedArticlePurpose(options.focusKeyword || options.flowTitle || "this topic");
   const researchModel = options.model || getResearchModel();
   const sections = parseMarkdownSections(markdownProjection);
   const forced = (options.forcedSectionHeader ?? "").trim();

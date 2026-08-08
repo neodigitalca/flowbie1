@@ -45,7 +45,6 @@ export const ContentOptimizerRunPanel: React.FC<{ site: WordPressSite }> = ({ si
           bulkState={bulkState}
           batchKey={batchKey}
           siteProgress={rowProgress}
-          onApproveKeywords={opt.approveBulkKeywordApproval}
           pageTitle={`Content Optimizer - ${site.name}`}
           pageSubtitle="Bulk operation in progress"
           gscPreviewByUrl={gscMap}

@@ -7,7 +7,7 @@ export const BLOG_HARNESS_SUMMARY_AGENT_ID = "ai-overview-summary";
 export const BLOG_HARNESS_SUMMARY_TITLE = "Overview";
 
 /**
- * Fixed first harness section: a Google AI Overview-style block (short answer summary + key points).
+ * Fixed last harness section: Google AI Overview-style block (prose only; scroll links inserted in code).
  * Prompt specifics live in `generateSingleSectionPrompt` (keyed by this agent id).
  */
 export function buildBlogHarnessSummaryAgent(): AgentConfig {
@@ -16,7 +16,7 @@ export function buildBlogHarnessSummaryAgent(): AgentConfig {
     step: 1,
     title: BLOG_HARNESS_SUMMARY_TITLE,
     description:
-      "Google AI Overview opener: 1-2 SEO paragraphs answering the primary keyword, then a MANDATORY <ul> with one <li> per body H2 (N bullets = N IN-PAGE anchors). Each bullet MUST start [BOLD]: <li><strong>Label</strong>: description with exactly one <a href=\"#anchor-id\">2–4 word phrase</a></li> (colon after label — never a comma). Never paragraphs-only.",
+      "Google AI Overview opener: 1-2 SEO lead paragraphs, then contextual scroll-link <ul> (one in-context # link per body H2). Never boilerplate \"see below\".",
     features: [],
     headingLevel: 1,
   };
@@ -44,4 +44,29 @@ export function ensureBlogHarnessSummaryFirst(
   const withoutSummary = agents.filter((a) => !isBlogHarnessSummaryAgent(a));
   const ordered = [buildBlogHarnessSummaryAgent(), ...withoutSummary];
   return ordered.map((agent, index) => ({ ...agent, step: index + 1 }));
+}
+
+/**
+ * Guarantee the AI Overview summary agent is the **last** harness generation step for blog content.
+ * Body H2 sections generate first; Overview prose runs last with known body anchors.
+ * Published HTML still places Overview first when stitching.
+ */
+export function ensureBlogHarnessSummaryLast(
+  agents: AgentConfig[],
+  contentKind?: "press_release",
+): AgentConfig[] {
+  if (contentKind === "press_release") return agents;
+
+  const withoutSummary = agents.filter((a) => !isBlogHarnessSummaryAgent(a));
+  const ordered = [...withoutSummary, buildBlogHarnessSummaryAgent()];
+  return ordered.map((agent, index) => ({ ...agent, step: index + 1 }));
+}
+
+export function splitBlogHarnessBodyAndOverview(agents: AgentConfig[]): {
+  bodyAgents: AgentConfig[];
+  overviewAgent: AgentConfig | undefined;
+} {
+  const overview = agents.find((a) => isBlogHarnessSummaryAgent(a));
+  const bodyAgents = agents.filter((a) => !isBlogHarnessSummaryAgent(a));
+  return { bodyAgents, overviewAgent: overview };
 }

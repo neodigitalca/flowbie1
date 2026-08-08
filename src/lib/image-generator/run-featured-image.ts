@@ -13,9 +13,18 @@ import {
   resolveSelectedSectionObj,
 } from "@/lib/image-generator/image-generator-options";
 import {
+  detectMatureImageRequest,
+  MATURE_CHECKLIST_OVERRIDE,
+} from "@/lib/image-generator/image-content-policy";
+import {
+  manualReferencesToProvenance,
+  stripManualReferenceIds,
+} from "@/lib/image-generator/manual-reference-upload";
+import {
   buildGroundedImagePromptSuffix,
   collectReferenceDataUrls,
   researchGoogleImageReferences,
+  type ImageReferenceResearchResult,
 } from "@/lib/image-reference-research";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 
@@ -107,6 +116,48 @@ async function packageGenerationResult(
   };
 }
 
+function mapReferencesToProvenance(research: ImageReferenceResearchResult) {
+  return {
+    mode: research.mode,
+    queries: research.targets.map((t) => t.query),
+    references: research.references.map((r) => ({
+      imageUrl: r.imageUrl,
+      sourceUrl: r.sourceUrl,
+      query: r.query,
+      kind: r.kind,
+      layer: r.layer,
+      why: r.why,
+      previewDataUrl: r.dataUrl,
+      useFromImage: r.useFromImage,
+      ignoreFromImage: r.ignoreFromImage,
+    })),
+    spatialLayout: research.spatialLayout,
+  };
+}
+
+async function resolveReferenceResearch(
+  options: ImageGeneratorOptions,
+  context: ImageGeneratorRunContext,
+  researchContext: Parameters<typeof researchGoogleImageReferences>[0]["context"],
+  enablePlaceQueryFanOut = false,
+): Promise<ImageReferenceResearchResult> {
+  const manualRefs = stripManualReferenceIds(options.manualReferences ?? []);
+  if (manualRefs.length) {
+    return {
+      mode: "grounded",
+      targets: [],
+      references: manualRefs,
+    };
+  }
+
+  return researchGoogleImageReferences({
+    apiKey: context.apiKey,
+    model: getResearchModel(),
+    context: researchContext,
+    enablePlaceQueryFanOut,
+  });
+}
+
 export async function runFeaturedImage(
   options: ImageGeneratorOptions,
   context: ImageGeneratorRunContext,
@@ -116,6 +167,11 @@ export async function runFeaturedImage(
     options.imageSourceMode,
     options.selectedSection,
   );
+
+  const matureRequested = await detectMatureImageRequest({
+    apiKey: context.apiKey,
+    userPrompt: options.userPrompt,
+  });
 
   if (effectiveMode === "solo") {
     const keyword = options.userPrompt.trim();
@@ -129,20 +185,20 @@ export async function runFeaturedImage(
       };
     }
 
-    const research = await researchGoogleImageReferences({
-      apiKey: context.apiKey,
-      model: getResearchModel(),
-      context: {
+    const research = await resolveReferenceResearch(
+      options,
+      context,
+      {
         title: keyword,
         userPrompt: keyword,
         body: keyword,
       },
-      enablePlaceQueryFanOut: true,
-    });
+      true,
+    );
 
     const hasRefs = research.references.length > 0;
     const prompt =
-      buildSoloImagePrompt(keyword, options, hasRefs) +
+      buildSoloImagePrompt(keyword, options, hasRefs, matureRequested) +
       buildGroundedImagePromptSuffix(research.references, research.spatialLayout);
 
     const result = await generateImage({
@@ -153,22 +209,12 @@ export async function runFeaturedImage(
       referenceImageDataUrls: collectReferenceDataUrls(research.references),
     });
 
-    return packageGenerationResult(result, {
-      mode: research.mode,
-      queries: research.targets.map((t) => t.query),
-      references: research.references.map((r) => ({
-        imageUrl: r.imageUrl,
-        sourceUrl: r.sourceUrl,
-        query: r.query,
-        kind: r.kind,
-        layer: r.layer,
-        why: r.why,
-        previewDataUrl: r.dataUrl,
-        useFromImage: r.useFromImage,
-        ignoreFromImage: r.ignoreFromImage,
-      })),
-      spatialLayout: research.spatialLayout,
-    });
+    const manualOnly = (options.manualReferences?.length ?? 0) > 0;
+    const referenceResearch = manualOnly
+      ? manualReferencesToProvenance(options.manualReferences ?? [])
+      : mapReferencesToProvenance(research);
+
+    return packageGenerationResult(result, referenceResearch);
   }
 
   const selectedSectionObj = resolveSelectedSectionObj(
@@ -197,26 +243,25 @@ export async function runFeaturedImage(
       colorScheme: options.colorScheme,
       colorForeground: options.colorForeground.trim() || undefined,
       colorBackground: options.colorBackground.trim() || undefined,
+      relaxSafetyConstraints: matureRequested,
     },
   );
 
-  const research = await researchGoogleImageReferences({
-    apiKey: context.apiKey,
-    model: getResearchModel(),
-    context: {
-      title: context.flowTitle,
-      purpose: context.flowPurpose,
-      sectionHeader: selectedSectionObj?.header,
-      sectionContent: selectedSectionObj?.content,
-      userPrompt: options.userPrompt,
-      body: effectiveMode === "featured" ? context.finalOutput : selectedSectionObj?.fullText,
-    },
+  const research = await resolveReferenceResearch(options, context, {
+    title: context.flowTitle,
+    purpose: context.flowPurpose,
+    sectionHeader: selectedSectionObj?.header,
+    sectionContent: selectedSectionObj?.content,
+    userPrompt: options.userPrompt,
+    body: effectiveMode === "featured" ? context.finalOutput : selectedSectionObj?.fullText,
   });
 
+  const matureOverride = matureRequested ? MATURE_CHECKLIST_OVERRIDE : "";
   const prompt =
     basePrompt +
     formatChecklistText(checklist) +
     "\n\nFollow the checklist above EXACTLY. Ensure all requirements are met, especially regarding what should and should NOT be included." +
+    matureOverride +
     buildGroundedImagePromptSuffix(research.references);
 
   const result = await generateImage({
@@ -227,17 +272,10 @@ export async function runFeaturedImage(
     referenceImageDataUrls: collectReferenceDataUrls(research.references),
   });
 
-  return packageGenerationResult(result, {
-    mode: research.mode,
-    queries: research.targets.map((t) => t.query),
-    references: research.references.map((r) => ({
-      imageUrl: r.imageUrl,
-      sourceUrl: r.sourceUrl,
-      query: r.query,
-      kind: r.kind,
-      layer: r.layer,
-      why: r.why,
-      previewDataUrl: r.dataUrl,
-    })),
-  });
+  const manualOnly = (options.manualReferences?.length ?? 0) > 0;
+  const referenceResearch = manualOnly
+    ? manualReferencesToProvenance(options.manualReferences ?? [])
+    : mapReferencesToProvenance(research);
+
+  return packageGenerationResult(result, referenceResearch);
 }

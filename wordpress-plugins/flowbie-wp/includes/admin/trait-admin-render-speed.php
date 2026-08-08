@@ -335,6 +335,102 @@ trait Flowbie_Wp_Admin_Trait_Render_Speed {
 			</p>
 		</div>
 		<?php
+		self::render_elementor_site_recovery_panel( $config );
+	}
+
+	/**
+	 * @param array<string, mixed> $config Speed config.
+	 */
+	private static function render_elementor_site_recovery_panel( array $config ): void {
+		if ( ! defined( 'ELEMENTOR_VERSION' ) || ! class_exists( 'Flowbie_Wp_Elementor_Site_Recovery', false ) ) {
+			return;
+		}
+
+		$diag       = Flowbie_Wp_Elementor_Site_Recovery::get_diagnostics();
+		$nocache_url = add_query_arg( 'nocache', '1', home_url( '/' ) );
+		$tab        = self::panel_active_tab( 'general' );
+		?>
+		<div class="flowbie-wp-panel-info-box" role="status">
+			<p><strong><?php esc_html_e( 'Elementor install side effects', 'flowbie-wp' ); ?></strong></p>
+			<ul class="flowbie-wp-panel-info-box__list">
+				<li>
+					<?php
+					echo esc_html(
+						! empty( $diag['elementor_cache_fix_ran'] )
+							? __( 'Silent Elementor migration has run on this site.', 'flowbie-wp' )
+							: __( 'Silent Elementor migration has not run.', 'flowbie-wp' )
+					);
+					?>
+				</li>
+				<li>
+					<?php
+					echo esc_html(
+						! empty( $diag['speed_enabled'] )
+							? __( 'Speed is enabled.', 'flowbie-wp' )
+							: __( 'Speed is disabled.', 'flowbie-wp' )
+					);
+					?>
+				</li>
+				<li>
+					<?php
+					echo esc_html(
+						sprintf(
+							/* translators: %d: document count */
+							__( 'Elementor documents with Flowbie dynamic tags: %d', 'flowbie-wp' ),
+							(int) ( $diag['flowbie_tag_documents'] ?? 0 )
+						)
+					);
+					?>
+				</li>
+				<li>
+					<?php
+					echo esc_html(
+						! empty( $diag['fields_ready'] )
+							? __( 'Fields are configured for tag migration.', 'flowbie-wp' )
+							: __( 'Fields are not configured for tag migration.', 'flowbie-wp' )
+					);
+					?>
+				</li>
+			</ul>
+			<?php if ( ! empty( $diag['flowbie_tag_samples'] ) && is_array( $diag['flowbie_tag_samples'] ) ) : ?>
+				<p><strong><?php esc_html_e( 'Sample templates with Flowbie tags', 'flowbie-wp' ); ?></strong></p>
+				<ul class="flowbie-wp-panel-info-box__list">
+					<?php foreach ( $diag['flowbie_tag_samples'] as $sample ) : ?>
+						<li>
+							<?php
+							echo esc_html(
+								sprintf(
+									'%s (%s, #%d)',
+									(string) ( $sample['title'] ?? '' ),
+									(string) ( $sample['post_type'] ?? '' ),
+									(int) ( $sample['id'] ?? 0 )
+								)
+							);
+							?>
+						</li>
+					<?php endforeach; ?>
+				</ul>
+			<?php endif; ?>
+			<p class="flowbie-field__note">
+				<?php esc_html_e( 'If carousels repeat or logos broke after installing flowbie-wp, disable Speed, run recovery, then test in a private window.', 'flowbie-wp' ); ?>
+				<a href="<?php echo esc_url( $nocache_url ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Open homepage without Speed (?nocache=1)', 'flowbie-wp' ); ?></a>
+			</p>
+			<div class="flowbie-wp-panel-footer__left" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="flowbie-wp-panel-inline-form">
+					<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_RECOVER_ELEMENTOR_SITE ); ?>" />
+					<input type="hidden" name="flowbie_speed_tab" value="<?php echo esc_attr( $tab ); ?>" />
+					<?php wp_nonce_field( self::ACTION_RECOVER_ELEMENTOR_SITE, 'flowbie_wp_recover_elementor_nonce' ); ?>
+					<button type="submit" class="button button-primary"><?php esc_html_e( 'Recover Elementor (disable Speed + revert tags)', 'flowbie-wp' ); ?></button>
+				</form>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="flowbie-wp-panel-inline-form">
+					<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_RUN_ELEMENTOR_MIGRATION ); ?>" />
+					<input type="hidden" name="flowbie_speed_tab" value="<?php echo esc_attr( $tab ); ?>" />
+					<?php wp_nonce_field( self::ACTION_RUN_ELEMENTOR_MIGRATION, 'flowbie_wp_run_elementor_migration_nonce' ); ?>
+					<button type="submit" class="button"><?php esc_html_e( 'Run Elementor tag migration (opt-in)', 'flowbie-wp' ); ?></button>
+				</form>
+			</div>
+		</div>
+		<?php
 	}
 
 	/**
