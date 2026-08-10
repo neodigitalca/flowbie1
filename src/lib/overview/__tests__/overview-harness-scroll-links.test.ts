@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { HarnessSectionAnchorEntry } from "@/lib/bulk/harness-section-anchor-ids";
 import {
   applyOverviewHarnessScrollLinks,
+  applyOverviewHarnessScrollLinksToStitchedHtml,
   rebuildOverviewWithScrollLinkBullets,
   stripOverviewBulletList,
   verifyOverviewHarnessScrollLinks,
@@ -14,6 +15,10 @@ vi.mock("@/lib/competitor-research/competitor-report-openrouter", () => ({
 }));
 
 import { callOpenRouterChatCompletion } from "@/lib/competitor-research/competitor-report-openrouter";
+
+beforeEach(() => {
+  vi.mocked(callOpenRouterChatCompletion).mockReset();
+});
 
 const anchorMap: HarnessSectionAnchorEntry[] = [
   { sectionIndex: 1, displayTitle: "Policy Context", anchorId: "policy-context" },
@@ -152,6 +157,64 @@ describe("applyOverviewHarnessScrollLinks", () => {
         apiKey: "test-key",
       }),
     ).rejects.toThrow(/model returned 1 bullets, expected 2/);
+  });
+});
+
+describe("applyOverviewHarnessScrollLinksToStitchedHtml", () => {
+  it("rebuilds overview bullets and preserves body sections", async () => {
+    vi.mocked(callOpenRouterChatCompletion).mockResolvedValueOnce({
+      content: JSON.stringify({
+        bullets: [
+          {
+            anchorId: "policy-context",
+            bulletLabel: "Policy",
+            sentenceHtml: 'Track <a href="#policy-context">policy shifts</a> in Alberta.',
+          },
+          {
+            anchorId: "financial-impact",
+            bulletLabel: "Finance",
+            sentenceHtml: 'Review <a href="#financial-impact">cost pressures</a> for clinics.',
+          },
+        ],
+      }),
+    });
+
+    const stitched = `<h2>Overview</h2>
+<p>Lead paragraph.</p>
+<ul><li><strong>Old</strong>: stale copy.</li></ul>
+
+<h2 id="policy-context">Policy Context</h2>
+<p>Body one.</p>
+<h2 id="financial-impact">Financial Impact</h2>
+<p>Body two.</p>`;
+
+    const out = await applyOverviewHarnessScrollLinksToStitchedHtml({
+      html: stitched,
+      anchorMap,
+      articleTitle: "Alberta Physician Changes",
+      keyword: "Alberta physician privatization",
+      apiKey: "test-key",
+    });
+
+    expect(out).toContain('href="#policy-context"');
+    expect(out).toContain('href="#financial-impact"');
+    expect(out).not.toContain("stale copy");
+    expect(out).toContain("<h2 id=\"policy-context\">Policy Context</h2>");
+    expect(out).toContain("<h2 id=\"financial-impact\">Financial Impact</h2>");
+    expect(callOpenRouterChatCompletion).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns html unchanged when no overview section exists", async () => {
+    const bodyOnly = `<h2 id="policy-context">Policy Context</h2><p>Body.</p>`;
+    const out = await applyOverviewHarnessScrollLinksToStitchedHtml({
+      html: bodyOnly,
+      anchorMap,
+      articleTitle: "Title",
+      keyword: "kw",
+      apiKey: "test-key",
+    });
+    expect(out).toBe(bodyOnly);
+    expect(callOpenRouterChatCompletion).not.toHaveBeenCalled();
   });
 });
 

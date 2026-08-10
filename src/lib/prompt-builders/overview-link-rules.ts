@@ -65,31 +65,9 @@ function findScrollLinkInLiInner(inner: string): { index: number; length: number
   return { index: aMatch.index, length: aMatch[0].length, linkText: aMatch[2].trim() };
 }
 
-function shortStrongLabel(label: string): string {
-  const words = label.trim().split(/\s+/).filter(Boolean);
-  return words.slice(0, 3).join(" ") || "Topic";
-}
-
-function linkPhraseFromLabel(label: string): string {
-  const words = label.trim().split(/\s+/).filter(Boolean);
-  return words.slice(0, 4).join(" ").toLowerCase() || "this topic";
-}
-
 function extractStrongLabel(inner: string): string | null {
   const m = inner.match(/<strong>([^<]*)<\/strong>/i);
   return m ? m[1].trim() : null;
-}
-
-function buildContextualOverviewLi(anchor: OverviewAnchorTarget, variant: number): string {
-  const label = shortStrongLabel(anchor.label);
-  const phrase = linkPhraseFromLabel(anchor.label);
-  const templates = [
-    `<li><strong>${label}</strong>: This guide walks through <a href="#${anchor.id}">${phrase}</a> in detail.</li>`,
-    `<li><strong>${label}</strong>: Families can review <a href="#${anchor.id}">${phrase}</a> throughout this article.</li>`,
-    `<li><strong>${label}</strong>: Our team explains <a href="#${anchor.id}">${phrase}</a> in practical terms.</li>`,
-    `<li><strong>${label}</strong>: Learn how <a href="#${anchor.id}">${phrase}</a> applies to your situation.</li>`,
-  ];
-  return templates[variant % templates.length];
 }
 
 function findOverviewUlInsertIndex(html: string): number {
@@ -141,14 +119,17 @@ function finalizeOverviewScrollLi(
   index: number,
 ): string {
   if (!existingInner?.trim()) {
-    return buildContextualOverviewLi(anchor, index);
+    throw new Error(
+      `Overview scroll links: missing bullet for anchor #${anchor.id} (index ${index + 1})`,
+    );
   }
 
-  let inner = normalizeBoilerplateLiInner(existingInner.trim());
+  let inner = existingInner.trim();
   if (overviewScrollLinkUsesBoilerplate(inner)) {
-    return buildContextualOverviewLi(anchor, index);
+    throw new Error(`Overview scroll links: boilerplate bullet for anchor #${anchor.id}`);
   }
 
+  inner = normalizeBoilerplateLiInner(inner);
   inner = expandOverviewScrollLinkPlaceholders(inner);
   const label = extractStrongLabel(inner);
   const labelPrefix = label ? `<strong>${label}</strong>: ` : "";
@@ -156,7 +137,7 @@ function finalizeOverviewScrollLi(
 
   const hit = findScrollLinkInLiInner(body);
   if (!hit?.linkText) {
-    return buildContextualOverviewLi(anchor, index);
+    throw new Error(`Overview scroll links: no scroll link in bullet for anchor #${anchor.id}`);
   }
 
   const beforeLink = body.slice(0, hit.index).trimEnd();
@@ -169,8 +150,8 @@ function finalizeOverviewScrollLi(
 }
 
 /**
- * Model writes contextual overview prose and bullets; code always completes scroll-link <ul>.
- * Never throws — missing or malformed lists are repaired in place.
+ * Model writes contextual overview prose and bullets; code completes exact # hrefs on existing bullets.
+ * Throws when bullets are missing or malformed — upload prep uses OpenRouter for bullet copy instead.
  */
 export function completeOverviewScrollLinks(
   html: string,
@@ -226,5 +207,5 @@ export function buildOverviewLinkRulesBlock(opts?: {
 export function buildOverviewScrollLinkExampleLi(anchor: OverviewAnchorTarget): string {
   const words = anchor.label.trim().split(/\s+/).filter(Boolean);
   const phrase = words.slice(0, 3).join(" ").toLowerCase() || "learn more";
-  return `<li><strong>${words.slice(0, 2).join(" ") || "Topic"}</strong>: Families near the area rely on our [[SCROLL:#${anchor.id}|${phrase}]] for routine care.</li>`;
+  return `<li><strong>${words.slice(0, 2).join(" ") || "Topic"}</strong>: See how [[SCROLL:#${anchor.id}|${phrase}]] fits your SEO plan.</li>`;
 }

@@ -2,7 +2,12 @@ import { callOpenRouterChatCompletion } from "@/lib/competitor-research/competit
 import { parseJsonWithRepair } from "@/lib/json-repair-utility";
 import type { HarnessSectionAnchorEntry } from "@/lib/bulk/harness-section-anchor-ids";
 import { HARNESS_OVERVIEW_ANCHOR_ID } from "@/lib/bulk/harness-section-anchor-ids";
+import { stitchHarnessSections } from "@/lib/bulk/bulk-harness-outline";
 import { getProductionModel } from "@/lib/optimization-settings-storage";
+import {
+  extractOverviewSectionHtml,
+  stripLeadingOverviewSection,
+} from "@/lib/overview/overview-blog-overview-prepend";
 
 export type OverviewHarnessScrollLinkBullet = {
   anchorId: string;
@@ -423,4 +428,38 @@ Return JSON with exactly ${anchorMap.length} bullets — one per anchor above, i
     allowWikipediaUrl: args.allowWikipediaUrl,
   });
   return rebuilt;
+}
+
+/** Rebuild Overview scroll-link bullets on a full stitched article (Overview + body). */
+export async function applyOverviewHarnessScrollLinksToStitchedHtml(args: {
+  html: string;
+  anchorMap: HarnessSectionAnchorEntry[];
+  articleTitle: string;
+  keyword: string;
+  apiKey: string;
+  model?: string;
+  signal?: AbortSignal;
+  inPageAnchorBlock?: string;
+  allowWikipediaUrl?: string;
+}): Promise<string> {
+  const { html, anchorMap } = args;
+  if (anchorMap.length === 0) return html;
+
+  const overviewSection = extractOverviewSectionHtml(html);
+  if (!overviewSection) return html;
+
+  const rebuiltOverview = await applyOverviewHarnessScrollLinks({
+    html: overviewSection,
+    anchorMap,
+    articleTitle: args.articleTitle,
+    keyword: args.keyword,
+    apiKey: args.apiKey,
+    model: args.model,
+    signal: args.signal,
+    inPageAnchorBlock: args.inPageAnchorBlock,
+    allowWikipediaUrl: args.allowWikipediaUrl,
+  });
+
+  const bodyOnly = stripLeadingOverviewSection(html);
+  return stitchHarnessSections([rebuiltOverview, bodyOnly]);
 }

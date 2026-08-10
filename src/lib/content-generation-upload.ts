@@ -362,6 +362,9 @@ export async function generateAndUploadContent(
     siteUrl: site.siteUrl,
     currentPageUrl: context.url,
     externalUrlPairs,
+    apiKey: openRouterApiKey,
+    keyword: primaryKeyword,
+    articleTitle: blueprintResult?.title || existingTitle || primaryKeyword,
   });
 
   if (context.wordPressPosts && context.wordPressPosts.length > 0) {

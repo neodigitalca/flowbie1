@@ -1764,6 +1764,10 @@ try {
         siteUrl: firstSite?.siteUrl,
         currentPageUrl: undefined,
         externalUrlPairs: rowExplicitExternalPairs,
+        apiKey: options.openRouterApiKey || loadApiKey(),
+        keyword: bulkPrimaryKwResolved,
+        articleTitle: bulkResolvedPostTitle,
+        model: options.selectedModel,
       });
       const rankMeta = resolveRankMathFromKeywordResearch(keywordData);
       // Prefer CSV meta when filled; then generator meta; then research / body

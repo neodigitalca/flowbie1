@@ -1,14 +1,17 @@
 import type { AgentConfig } from "@/types/agent-config";
 import { markdownToHtml } from "@/lib/markdown-to-html";
 import { buildBulkHarnessOutlineFromAgents } from "@/lib/bulk/bulk-harness-outline";
-import { buildHarnessSectionAnchorMap } from "@/lib/bulk/harness-section-anchor-ids";
-import { splitBlogHarnessBodyAndOverview } from "@/lib/bulk/blog-harness-summary-agent";
-import { injectHarnessH2AnchorIdsForStitchedBlog } from "@/lib/overview/overview-blog-overview-prepend";
 import {
-  anchorsFromHarnessEntries,
-  completeOverviewScrollLinks,
-  expandOverviewScrollLinkPlaceholdersInMarkdown,
-} from "@/lib/prompt-builders/overview-link-rules";
+  buildHarnessSectionAnchorMap,
+  formatHarnessInPageAnchorBlock,
+} from "@/lib/bulk/harness-section-anchor-ids";
+import { splitBlogHarnessBodyAndOverview } from "@/lib/bulk/blog-harness-summary-agent";
+import {
+  extractOverviewSectionHtml,
+  injectHarnessH2AnchorIdsForStitchedBlog,
+} from "@/lib/overview/overview-blog-overview-prepend";
+import { applyOverviewHarnessScrollLinksToStitchedHtml } from "@/lib/overview/overview-harness-scroll-links";
+import { expandOverviewScrollLinkPlaceholdersInMarkdown } from "@/lib/prompt-builders/overview-link-rules";
 import { isGeneratedContentHtml } from "@/lib/content-generation/content-format";
 import {
   resolveInternalLinkPlaceholdersInHtml,
@@ -38,6 +41,11 @@ export type PrepareHarnessContentForUploadArgs = {
   siteUrl?: string;
   currentPageUrl?: string;
   externalUrlPairs?: ExternalLinkPair[];
+  apiKey?: string;
+  keyword?: string;
+  articleTitle?: string;
+  model?: string;
+  signal?: AbortSignal;
 };
 
 /**
@@ -55,6 +63,11 @@ export async function prepareHarnessContentForUpload(
     siteUrl,
     currentPageUrl,
     externalUrlPairs = [],
+    apiKey,
+    keyword,
+    articleTitle,
+    model,
+    signal,
   } = args;
 
   if (!markdownContent?.trim()) return markdownContent;
@@ -83,10 +96,28 @@ export async function prepareHarnessContentForUpload(
     : await markdownToHtml(mdForUpload);
 
   htmlContent = injectHarnessH2AnchorIdsForStitchedBlog(htmlContent, bodyAnchors);
-  htmlContent = completeOverviewScrollLinks(
-    htmlContent,
-    anchorsFromHarnessEntries(bodyAnchors),
-  );
+
+  const overviewSection = extractOverviewSectionHtml(htmlContent);
+  if (bodyAnchors.length > 0 && overviewSection) {
+    const resolvedApiKey = apiKey?.trim();
+    if (!resolvedApiKey) {
+      throw new Error(
+        "Overview scroll links require an OpenRouter API key during harness upload prep.",
+      );
+    }
+    const resolvedKeyword = keyword?.trim() || articleTitle?.trim() || "topic";
+    const resolvedTitle = articleTitle?.trim() || resolvedKeyword;
+    htmlContent = await applyOverviewHarnessScrollLinksToStitchedHtml({
+      html: htmlContent,
+      anchorMap: bodyAnchors,
+      articleTitle: resolvedTitle,
+      keyword: resolvedKeyword,
+      apiKey: resolvedApiKey,
+      model,
+      signal,
+      inPageAnchorBlock: formatHarnessInPageAnchorBlock(bodyAnchors),
+    });
+  }
 
   if (wordPressPosts?.length && siteId && siteUrl) {
     try {

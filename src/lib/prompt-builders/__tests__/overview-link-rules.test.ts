@@ -74,17 +74,16 @@ describe("completeOverviewScrollLinks", () => {
     expect(out).not.toContain("see below");
   });
 
-  it("repairs missing ul without throwing", () => {
+  it("throws when overview ul is missing", () => {
     const html = "<h2>Overview</h2><p>Lead paragraph about dental care.</p>";
-    const out = completeOverviewScrollLinks(html, anchors);
-    expect(out).toContain("<ul>");
-    expect(out).toContain('href="#dental-services"');
-    expect(out).toContain('href="#what-we-offer"');
-    expect(out.match(/<li\b/gi)?.length).toBe(2);
+    expect(() => completeOverviewScrollLinks(html, anchors)).toThrow(/missing bullet/);
   });
 
   it("accepts HarnessSectionAnchorEntry without emitting #undefined", () => {
-    const html = "<h2>Overview</h2><p>Lead.</p>";
+    const html = `<h2>Overview</h2><p>Lead.</p><ul>
+<li><strong>Services</strong>: Explore our [[SCROLL:#dental-services|preventive care]] in this guide.</li>
+<li><strong>Offerings</strong>: Review [[SCROLL:#what-we-offer|routine check-ups]] for families.</li>
+</ul>`;
     const out = completeOverviewScrollLinks(html, [
       { sectionIndex: 1, displayTitle: "Dental Services Offered", anchorId: "dental-services" },
       { sectionIndex: 2, displayTitle: "What We Offer", anchorId: "what-we-offer" },
@@ -93,14 +92,12 @@ describe("completeOverviewScrollLinks", () => {
     expect(out).toContain('href="#dental-services"');
   });
 
-  it("replaces boilerplate see-below bullets with contextual copy", () => {
+  it("throws on boilerplate see-below bullets", () => {
     const html = `<h2>Overview</h2><p>Lead.</p><ul>
 <li><strong>Services</strong>: See <a href="#dental-services">dental services</a> below.</li>
 <li><strong>Offerings</strong>: See <a href="#what-we-offer">what we offer</a> below.</li>
 </ul>`;
-    const out = completeOverviewScrollLinks(html, anchors);
-    expect(out).not.toMatch(/see\s+.+\s+below/i);
-    expect(out).toContain('href="#dental-services"');
+    expect(() => completeOverviewScrollLinks(html, anchors)).toThrow(/boilerplate bullet/);
   });
 
   it("strips duplicate hash links from one overview bullet", () => {
