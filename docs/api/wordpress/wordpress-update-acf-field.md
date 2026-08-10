@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/update-acf-field
 auth: open
-order: 2740
+order: 2760
 ---
 
 POST `/api/wordpress/update-acf-field`.

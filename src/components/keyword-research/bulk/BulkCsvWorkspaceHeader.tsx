@@ -27,6 +27,10 @@ import {
 } from "@/components/keyword-research/bulk/bulk-workspace-header-styles";
 import type { MetaBulkMicroSnapshot } from "@/components/overview/OverviewBulkMicroProgress";
 import type { WordPressPostDestination } from "@/lib/bulk-auto-generate";
+import {
+  BULK_AUTO_GENERATE_TEMPLATE_FILENAME,
+  BULK_AUTO_GENERATE_TEMPLATE_HREF,
+} from "@/lib/bulk/bulk-auto-generate-template-columns";
 import { cn } from "@/lib/utils";
 
 const POST_DESTINATION_SHORT: Record<WordPressPostDestination, string> = {
@@ -143,8 +147,8 @@ export function BulkCsvWorkspaceHeader({
             asChild
           >
             <a
-              href="/bulk-auto-generate-template.csv"
-              download="bulk-auto-generate-template.csv"
+              href={BULK_AUTO_GENERATE_TEMPLATE_HREF}
+              download={BULK_AUTO_GENERATE_TEMPLATE_FILENAME}
               aria-label="Download template CSV"
               title="Download template CSV"
             >

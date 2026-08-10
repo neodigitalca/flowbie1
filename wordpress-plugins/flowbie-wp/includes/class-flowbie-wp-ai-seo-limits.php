@@ -45,7 +45,7 @@ class Flowbie_Wp_Ai_Seo_Limits {
 		$description   = trim( preg_replace( '/\s+/', ' ', $description ) );
 		$focus_keyword = trim( $focus_keyword );
 
-		if ( $description === '' ) {
+		if ( $description === '' || self::is_placeholder_copy( $description ) ) {
 			return '';
 		}
 
@@ -75,5 +75,125 @@ class Flowbie_Wp_Ai_Seo_Limits {
 		}
 
 		return self::clamp_length( $keyword . ' — ' . $desc, self::DESC_MAX );
+	}
+
+	/**
+	 * True when copy is filler, a field label, or ACF placeholder text — not real SEO content.
+	 */
+	public static function is_placeholder_copy( string $value ): bool {
+		$norm = strtolower( trim( preg_replace( '/\s+/', ' ', $value ) ) );
+		if ( $norm === '' ) {
+			return true;
+		}
+
+		$exact = array(
+			'placeholder',
+			'place holder',
+			'tbd',
+			'tba',
+			'todo',
+			'n/a',
+			'na',
+			'none',
+			'null',
+			'undefined',
+			'keyword focus',
+			'focus keyword',
+			'meta description',
+			'seo title',
+			'seo research',
+			'your keyword here',
+			'enter keyword',
+			'enter focus keyword',
+			'add keyword',
+			'add meta',
+			'add meta description',
+			'lorem ipsum',
+			'coming soon',
+			'example keyword',
+			'sample text',
+			'insert content',
+			'[insert content]',
+		);
+		if ( in_array( $norm, $exact, true ) ) {
+			return true;
+		}
+
+		if ( str_starts_with( $norm, '[insert' ) || str_starts_with( $norm, '{{' ) ) {
+			return true;
+		}
+		if ( str_contains( $norm, 'lorem ipsum' ) ) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Derive a focus keyword phrase from the post title or slug when planning omits one.
+	 */
+	public static function infer_focus_keyword_from_post( int $post_id ): string {
+		$post = get_post( $post_id );
+		if ( ! $post instanceof WP_Post ) {
+			return '';
+		}
+
+		$candidates = array(
+			trim( (string) $post->post_title ),
+			trim( str_replace( '-', ' ', (string) $post->post_name ) ),
+		);
+		foreach ( $candidates as $candidate ) {
+			if ( $candidate === '' || self::is_placeholder_copy( $candidate ) ) {
+				continue;
+			}
+			$keyword = strtolower( trim( preg_replace( '/\s+/', ' ', $candidate ) ) );
+			if ( $keyword !== '' && ! self::is_placeholder_copy( $keyword ) ) {
+				return $keyword;
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * True when SEO copy clearly describes the ACF plugin but the post topic is something else.
+	 */
+	public static function meta_copy_drifts_from_post( string $value, int $post_id ): bool {
+		if ( $value === '' || $post_id < 1 ) {
+			return false;
+		}
+
+		$post = get_post( $post_id );
+		if ( ! $post instanceof WP_Post ) {
+			return false;
+		}
+
+		$norm       = strtolower( trim( preg_replace( '/\s+/', ' ', $value ) ) );
+		$title_norm = strtolower( trim( preg_replace( '/\s+/', ' ', (string) $post->post_title ) ) );
+		if ( $norm === '' || $title_norm === '' ) {
+			return false;
+		}
+
+		$title_is_plugin = str_contains( $title_norm, 'acf' )
+			|| str_contains( $title_norm, 'custom field' )
+			|| str_contains( $title_norm, 'wordpress plugin' );
+
+		$plugin_markers = array(
+			'advanced custom fields',
+			'acf plugin',
+			'acf wordpress',
+			'acf is a',
+			'acf (advanced custom fields)',
+			'custom fields plugin',
+			'wordpress plugin that allows you to add custom fields',
+		);
+
+		foreach ( $plugin_markers as $marker ) {
+			if ( str_contains( $norm, $marker ) && ! $title_is_plugin ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 }

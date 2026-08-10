@@ -50,19 +50,16 @@ class Flowbie_Wp_Backend_Assist_Submode {
 			: __( 'This request would change site content. Switch to **Build** mode to make changes.', 'flowbie-wp' );
 
 		return array(
-			'type'              => 'answer',
-			'title'             => __( 'Read-only mode', 'flowbie-wp' ),
-			'body'              => $body . ' ' . sprintf(
+			'type'           => 'answer',
+			'title'          => __( 'Read-only mode', 'flowbie-wp' ),
+			'body'           => $body . ' ' . sprintf(
 				/* translators: %s: tool name */
 				__( 'Detected action: %s.', 'flowbie-wp' ),
 				$tool_label
 			),
-			'links'             => array(),
-			'submode_switch'    => 'build',
-			'suggested_actions' => array(
-				__( 'Switch to Build mode', 'flowbie-wp' ),
-			),
-			'confidence'        => 'high',
+			'links'          => array(),
+			'submode_switch' => 'build',
+			'confidence'     => 'high',
 		);
 	}
 
@@ -119,6 +116,12 @@ class Flowbie_Wp_Backend_Assist_Submode {
 		$intent = isset( $classification['intent'] ) ? $classification['intent'] : 'question';
 		$tool   = isset( $classification['tool'] ) ? sanitize_key( (string) $classification['tool'] ) : '';
 
+		$params     = isset( $classification['params'] ) && is_array( $classification['params'] ) ? $classification['params'] : array();
+		$faq_append = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::try_faq_table_append_response( $message, $history, $params );
+		if ( is_array( $faq_append ) ) {
+			return $faq_append;
+		}
+
 		if ( $intent === 'action' && $tool !== '' && self::is_write_tool( $tool ) ) {
 			return self::blocked_card( 'ask', $tool );
 		}
@@ -143,6 +146,12 @@ class Flowbie_Wp_Backend_Assist_Submode {
 
 		$intent = isset( $classification['intent'] ) ? $classification['intent'] : 'question';
 		$tool   = isset( $classification['tool'] ) ? sanitize_key( (string) $classification['tool'] ) : '';
+
+		$params = isset( $classification['params'] ) && is_array( $classification['params'] ) ? $classification['params'] : array();
+		$faq_append = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::try_faq_table_append_response( $message, $history, $params );
+		if ( is_array( $faq_append ) ) {
+			return $faq_append;
+		}
 
 		if ( $intent !== 'action' || $tool === '' || ! self::is_write_tool( $tool ) ) {
 			return Flowbie_Wp_Backend_Assist_Pipeline::run_from_classification( $classification, $message, $history );

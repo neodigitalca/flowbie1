@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/delete-post
 auth: open
-order: 2240
+order: 2260
 ---
 
 POST `/api/wordpress/delete-post`.

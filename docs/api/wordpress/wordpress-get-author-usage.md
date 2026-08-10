@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/get-author-usage
 auth: open
-order: 2420
+order: 2440
 ---
 
 POST `/api/wordpress/get-author-usage`.

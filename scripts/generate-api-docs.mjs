@@ -722,6 +722,18 @@ function buildManifest() {
         { slug: "getting-started/client-library", title: "Building a client library", order: 40 },
       ],
     },
+    {
+      id: "god-mode",
+      label: "God Mode",
+      items: [
+        { slug: "god-mode/overview", title: "Overview", order: 0 },
+        { slug: "god-mode/feature-index", title: "Feature index", order: 5 },
+        { slug: "god-mode/ask-plan-build", title: "Ask / Plan / Build", order: 10 },
+        { slug: "god-mode/tools", title: "Tools reference", order: 20 },
+        { slug: "god-mode/body-ops", title: "Body operations", order: 30 },
+        { slug: "god-mode/endpoints", title: "Endpoints", order: 40 },
+      ],
+    },
   ];
 
   const apiSections = Object.keys(sections)

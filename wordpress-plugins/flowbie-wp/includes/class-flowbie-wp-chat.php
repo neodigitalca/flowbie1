@@ -28,6 +28,8 @@ class Flowbie_Wp_Chat {
 		add_action( 'wp_head', array( __CLASS__, 'render_mobile_launcher_critical_css' ), 1 );
 		add_action( 'wp_footer', array( __CLASS__, 'maybe_render_widget' ), 1 );
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'maybe_enqueue_assets' ) );
+		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'maybe_enqueue_assets' ) );
+		add_action( 'admin_footer', array( __CLASS__, 'maybe_render_widget' ), 1 );
 		add_action( 'wp_footer', array( __CLASS__, 'render_mobile_launcher_force_css' ), 99999 );
 		add_action( 'save_post', array( __CLASS__, 'on_post_save' ), 10, 0 );
 
@@ -67,6 +69,32 @@ class Flowbie_Wp_Chat {
 			return false;
 		}
 		return true;
+	}
+
+	/**
+	 * Whether the chat sidebar should load on the current screen (frontend or wp-admin).
+	 */
+	public static function should_show_on_current_screen(): bool {
+		if ( ! self::is_enabled() && ! current_user_can( 'manage_options' ) ) {
+			return false;
+		}
+		if ( is_admin() ) {
+			return is_user_logged_in();
+		}
+		return self::should_show_for_visitor();
+	}
+
+	/**
+	 * Whether chat API endpoints (stream, prefetch) may run for this request.
+	 */
+	public static function can_use_chat_api(): bool {
+		if ( ! self::is_enabled() && ! current_user_can( 'manage_options' ) ) {
+			return false;
+		}
+		if ( is_user_logged_in() ) {
+			return true;
+		}
+		return self::should_show_for_visitor();
 	}
 
 	/**
@@ -223,7 +251,7 @@ class Flowbie_Wp_Chat {
 				403
 			);
 		}
-		if ( ! self::should_show_for_visitor() && ! current_user_can( 'manage_options' ) ) {
+		if ( ! self::can_use_chat_api() ) {
 			return new WP_REST_Response(
 				array( 'error' => __( 'Chat is available to logged-in users only.', 'flowbie-wp' ) ),
 				403
@@ -312,12 +340,22 @@ class Flowbie_Wp_Chat {
 	 * Enqueue chat widget assets on the frontend when enabled.
 	 */
 	public static function maybe_enqueue_assets(): void {
-		if ( is_admin() || ! self::should_show_for_visitor() ) {
+		if ( ! self::should_show_on_current_screen() ) {
 			return;
 		}
 
 		$base = plugin_dir_url( FLOWBIE_WP_PLUGIN_FILE ) . 'assets/frontend/';
 		$ver  = FLOWBIE_WP_VERSION;
+		$widget_css = FLOWBIE_WP_PLUGIN_DIR . 'assets/frontend/flowbie-chat-widget.css';
+		$widget_js  = FLOWBIE_WP_PLUGIN_DIR . 'assets/frontend/flowbie-chat-widget.js';
+		if ( is_readable( $widget_css ) ) {
+			$ver .= '.' . (string) filemtime( $widget_css );
+		}
+		$widget_js_ver = FLOWBIE_WP_VERSION;
+		if ( is_readable( $widget_js ) ) {
+			$widget_js_ver .= '.' . (string) filemtime( $widget_js );
+		}
+		$in_admin = is_admin();
 
 		wp_enqueue_style(
 			'flowbie-wp-lato',
@@ -335,15 +373,42 @@ class Flowbie_Wp_Chat {
 
 		Flowbie_Wp_Voice::enqueue_thinking_card_assets();
 
+		$shared_base   = plugin_dir_url( FLOWBIE_WP_PLUGIN_FILE ) . 'assets/shared/';
+		$build_js_path = FLOWBIE_WP_PLUGIN_DIR . 'assets/shared/flowbie-build-harness.js';
+		$build_css_path = FLOWBIE_WP_PLUGIN_DIR . 'assets/shared/flowbie-build-harness.css';
+		$build_ver     = FLOWBIE_WP_VERSION;
+		if ( is_readable( $build_js_path ) ) {
+			$build_ver .= '.' . (string) filemtime( $build_js_path );
+		}
+		if ( ! wp_style_is( 'flowbie-build-harness', 'registered' ) ) {
+			wp_register_style(
+				'flowbie-build-harness',
+				$shared_base . 'flowbie-build-harness.css',
+				array( 'flowbie-chat-widget' ),
+				is_readable( $build_css_path ) ? $build_ver : FLOWBIE_WP_VERSION
+			);
+		}
+		wp_enqueue_style( 'flowbie-build-harness' );
+		if ( ! wp_script_is( 'flowbie-build-harness', 'registered' ) ) {
+			wp_register_script(
+				'flowbie-build-harness',
+				$shared_base . 'flowbie-build-harness.js',
+				array( 'flowbie-thinking-card' ),
+				$build_ver,
+				true
+			);
+		}
+		wp_enqueue_script( 'flowbie-build-harness' );
+
 		if ( class_exists( 'Flowbie_Wp_Forms' ) ) {
 			Flowbie_Wp_Forms::enqueue_frontend_assets();
 		}
 
 		Flowbie_Wp_Search::register_sidebar_assets();
 
-		$mobile = wp_is_mobile();
+		$mobile = ! $in_admin && wp_is_mobile();
+		wp_enqueue_style( 'flowbie-ai-sidebar-shell' );
 		if ( ! $mobile ) {
-			wp_enqueue_style( 'flowbie-ai-sidebar-shell' );
 			wp_enqueue_style( 'flowbie-ai-sidebar-unify' );
 		}
 
@@ -363,6 +428,14 @@ class Flowbie_Wp_Chat {
 
 		wp_add_inline_style( 'flowbie-chat-mobile', self::mobile_launcher_force_css() );
 
+		if ( $in_admin ) {
+			wp_add_inline_style(
+				'flowbie-chat-widget',
+				'body.wp-admin .flowbie-chat-widget{z-index:100000!important}'
+				. 'body.wp-admin .fcw-mobile-launcher{z-index:100000!important}'
+			);
+		}
+
 		$settings       = self::get_settings();
 		$chekkit_enabled = ! isset( $settings['chekkit_enabled'] ) || ! empty( $settings['chekkit_enabled'] );
 		$chekkit_teaser  = $chekkit_enabled && ( ! isset( $settings['chekkit_teaser_enabled'] ) || ! empty( $settings['chekkit_teaser_enabled'] ) );
@@ -371,7 +444,7 @@ class Flowbie_Wp_Chat {
 		}
 
 		$voice_enabled  = ! empty( $settings['voice_enabled'] ) && Flowbie_Wp_OpenRouter::get_api_key() !== '';
-		$widget_deps    = array( 'flowbie-thinking-card', 'flowbie-chat-stream', 'flowbie-chat-prefetch', 'flowbie-chat-debug-log', 'flowbie-display-text', 'flowbie-markdown' );
+		$widget_deps    = array( 'flowbie-thinking-card', 'flowbie-chat-stream', 'flowbie-chat-prefetch', 'flowbie-chat-debug-log', 'flowbie-display-text', 'flowbie-markdown', 'flowbie-build-harness' );
 		if ( class_exists( 'Flowbie_Wp_Forms' ) ) {
 			$widget_deps[] = 'flowbie-forms';
 		}
@@ -388,7 +461,7 @@ class Flowbie_Wp_Chat {
 			'flowbie-chat-widget',
 			$base . 'flowbie-chat-widget.js',
 			$widget_deps,
-			$ver,
+			$widget_js_ver,
 			true
 		);
 
@@ -488,6 +561,10 @@ class Flowbie_Wp_Chat {
 			'canEditContent'         => current_user_can( 'edit_posts' ),
 			'backendStarters'        => is_user_logged_in() ? Flowbie_Wp_Chat_Super_Admin::get_backend_starters() : array(),
 			'backendAssistUrl'       => esc_url_raw( rest_url( self::REST_NAMESPACE . '/backend-assist' ) ),
+			'backendAssistUndoUrl'   => esc_url_raw( rest_url( self::REST_NAMESPACE . '/backend-assist/undo' ) ),
+			'isWpAdmin'              => $in_admin,
+			'defaultAdminMode'       => $in_admin ? 'backend' : 'visitor',
+			'currentUserId'          => is_user_logged_in() ? get_current_user_id() : 0,
 		);
 		if ( is_user_logged_in() && current_user_can( 'edit_posts' ) ) {
 			$config['siteInventoryUrl']    = esc_url_raw( rest_url( self::REST_NAMESPACE . '/chat/site-inventory' ) );
@@ -512,11 +589,11 @@ class Flowbie_Wp_Chat {
 			. 'html,body{overflow-x:hidden!important;max-width:100%!important;width:100%!important;position:relative!important}'
 			. '#flowbie-chat-mobile-launcher[hidden],.fcw-mobile-launcher[hidden],body:has(#flowbie-chat-widget-root.fai-sidebar-root--open) #flowbie-chat-mobile-launcher{display:none!important;visibility:hidden!important;pointer-events:none!important}'
 			. '#flowbie-chat-mobile-launcher,.fcw-mobile-launcher{position:fixed!important;bottom:20px!important;right:16px!important;left:auto!important;width:56px!important;height:56px!important;z-index:999900!important;pointer-events:auto!important;margin:0!important;padding:0!important;border:0!important;border-radius:50%!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;transform:none!important;box-sizing:border-box!important}'
-			. '#flowbie-chat-widget-root[hidden],#flowbie-chat-widget-root.fcw-mobile-root-closed{display:none!important;visibility:hidden!important;position:absolute!important;left:-9999px!important;top:auto!important;width:0!important;height:0!important;max-width:0!important;overflow:hidden!important;pointer-events:none!important;margin:0!important;padding:0!important;border:0!important}'
+			. '#flowbie-chat-widget-root[hidden],#flowbie-chat-widget-root.fcw-mobile-root-closed:not(.fai-sidebar-root--open){display:none!important;visibility:hidden!important;position:absolute!important;left:-9999px!important;top:auto!important;width:0!important;height:0!important;max-width:0!important;overflow:hidden!important;pointer-events:none!important;margin:0!important;padding:0!important;border:0!important}'
 			. '.fai-sidebar-panel[hidden],.fai-sidebar-backdrop[hidden]{display:none!important;visibility:hidden!important;pointer-events:none!important;transform:none!important}'
 			. 'html body #flowbie-chat-widget-root.flowbie-chat-widget:not(.fai-sidebar-root--open){display:none!important;visibility:hidden!important;position:absolute!important;left:-9999px!important;width:0!important;height:0!important;max-width:0!important;overflow:hidden!important;pointer-events:none!important}'
 			. 'html body #flowbie-chat-widget-root.flowbie-chat-widget.fai-sidebar-root--open{position:fixed!important;inset:0!important;width:auto!important;height:auto!important;max-width:none!important;overflow:visible!important;pointer-events:none!important;z-index:999950!important;display:block!important;visibility:visible!important;left:0!important}'
-			. 'html body #flowbie-chat-widget-root.flowbie-chat-widget.fai-sidebar-root--open .fai-sidebar-panel:not([hidden]){display:flex!important;visibility:visible!important;pointer-events:auto!important;z-index:999960!important}'
+			. 'html body #flowbie-chat-widget-root.flowbie-chat-widget.fai-sidebar-root--open .fai-sidebar-panel:not([hidden]){display:flex!important;visibility:visible!important;pointer-events:auto!important;z-index:999960!important;position:fixed!important;inset:0!important;left:0!important;right:0!important;top:0!important;bottom:0!important;width:100%!important;max-width:100vw!important;height:100dvh!important;max-height:100dvh!important;transform:none!important;border:none!important;border-radius:0!important;box-shadow:none!important}'
 			. 'html body #flowbie-chat-widget-root.flowbie-chat-widget.fai-sidebar-root--open .fai-sidebar-backdrop:not([hidden]){pointer-events:auto!important;z-index:999955!important}'
 			. '.fcw-contact-human__overlay:not([hidden]){z-index:999999!important}'
 			. '}';
@@ -537,7 +614,7 @@ class Flowbie_Wp_Chat {
 	 * Immediate mobile overflow guard (runs before CSS).
 	 */
 	public static function render_mobile_guard_script(): void {
-		if ( is_admin() || ! self::should_show_for_visitor() ) {
+		if ( is_admin() || ! self::should_show_on_current_screen() ) {
 			return;
 		}
 		echo "<script id=\"flowbie-chat-mobile-guard\">!function(){try{if(!window.matchMedia||!window.matchMedia('(max-width:767px)').matches)return;var d=document.documentElement,b=document.body;d.style.overflowX='hidden';d.style.maxWidth='100%';d.style.width='100%';if(b){b.style.overflowX='hidden';b.style.maxWidth='100%';b.style.width='100%';}var w=document.getElementById('flowbie-chat-widget-root');if(w){w.style.display='none';w.style.visibility='hidden';w.style.position='absolute';w.style.left='-9999px';w.style.width='0';w.style.height='0';w.style.overflow='hidden';w.classList.add('fcw-mobile-root-closed');}var l=document.getElementById('flowbie-chat-mobile-launcher');if(l){l.style.zIndex='999900';l.style.position='fixed';l.style.right='16px';l.style.bottom='20px';}}catch(e){}}();</script>\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
@@ -547,7 +624,7 @@ class Flowbie_Wp_Chat {
 	 * Critical mobile CSS in head (before stylesheets) so closed panel never widens the page.
 	 */
 	public static function render_mobile_launcher_critical_css(): void {
-		if ( is_admin() || ! self::should_show_for_visitor() ) {
+		if ( is_admin() || ! self::should_show_on_current_screen() ) {
 			return;
 		}
 		echo '<style id="flowbie-chat-mobile-critical">' . self::mobile_launcher_force_css() . '</style>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
@@ -557,7 +634,7 @@ class Flowbie_Wp_Chat {
 	 * Last-resort mobile launcher CSS in footer (after theme styles).
 	 */
 	public static function render_mobile_launcher_force_css(): void {
-		if ( is_admin() || ! self::should_show_for_visitor() ) {
+		if ( is_admin() || ! self::should_show_on_current_screen() ) {
 			return;
 		}
 		echo '<style id="flowbie-chat-mobile-force">' . self::mobile_launcher_force_css() . '</style>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
@@ -567,10 +644,11 @@ class Flowbie_Wp_Chat {
 	 * Render the widget mount point in the footer.
 	 */
 	public static function maybe_render_widget(): void {
-		if ( is_admin() || ! self::should_show_for_visitor() ) {
+		if ( ! self::should_show_on_current_screen() ) {
 			return;
 		}
 
+		$in_admin         = is_admin();
 		$settings         = self::get_settings();
 		$side             = ( isset( $settings['sidebar_side'] ) && 'left' === $settings['sidebar_side'] ) ? 'left' : 'right';
 		$transition       = isset( $settings['sidebar_transition'] ) ? (string) $settings['sidebar_transition'] : 'slide';
@@ -603,7 +681,9 @@ class Flowbie_Wp_Chat {
 			esc_attr( $transition ),
 			esc_attr( $css_vars )
 		);
-		echo '<style id="flowbie-chat-mobile-inline">' . self::mobile_launcher_force_css() . '</style>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		if ( ! $in_admin ) {
+			echo '<style id="flowbie-chat-mobile-inline">' . self::mobile_launcher_force_css() . '</style>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		}
 	}
 
 	/**
@@ -630,7 +710,7 @@ class Flowbie_Wp_Chat {
 			) ) );
 			wp_die();
 		}
-		if ( ! self::should_show_for_visitor() && ! current_user_can( 'manage_options' ) ) {
+		if ( ! self::can_use_chat_api() ) {
 			self::begin_stream_response();
 			self::stream_line( array( 'status' => 'done', 'card' => array(
 				'type' => 'not-found', 'title' => 'Login required', 'body' => 'Chat is available to logged-in users only.', 'confidence' => 'low',
@@ -1437,10 +1517,7 @@ class Flowbie_Wp_Chat {
 	 * Shared enabled / visitor / API-key gates for stream + prefetch.
 	 */
 	private static function passes_chat_access_gates(): bool {
-		if ( ! self::is_enabled() && ! current_user_can( 'manage_options' ) ) {
-			return false;
-		}
-		if ( ! self::should_show_for_visitor() && ! current_user_can( 'manage_options' ) ) {
+		if ( ! self::can_use_chat_api() ) {
 			return false;
 		}
 		if ( Flowbie_Wp_OpenRouter::get_api_key() === '' ) {

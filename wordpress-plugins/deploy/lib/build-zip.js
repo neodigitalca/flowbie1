@@ -1,12 +1,15 @@
 import { readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import AdmZip from "adm-zip";
+import { assertNoSecretsInFiles, isSecretRelPath } from "./secret-excludes.js";
 
 const SKIP_DIRS = new Set(["tests", ".git", "node_modules"]);
 
 function shouldSkip(rel) {
-  if (rel.split("/").some((p) => SKIP_DIRS.has(p))) return true;
-  if (!rel.includes("/") && rel.toLowerCase().endsWith(".md")) return true;
+  const norm = rel.replace(/\\/g, "/");
+  if (norm.split("/").some((p) => SKIP_DIRS.has(p))) return true;
+  if (!norm.includes("/") && norm.toLowerCase().endsWith(".md")) return true;
+  if (isSecretRelPath(norm)) return true;
   return false;
 }
 
@@ -26,6 +29,7 @@ function collectFiles(root, rel = "") {
 
 export function buildPluginZip(pluginDir, zipPath, onProgress) {
   const files = collectFiles(pluginDir);
+  assertNoSecretsInFiles(files, "Plugin zip build");
   const zip = new AdmZip();
 
   for (let i = 0; i < files.length; i++) {

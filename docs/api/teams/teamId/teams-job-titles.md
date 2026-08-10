@@ -2,21 +2,21 @@
 title: "Job Titles"
 slug: teams/teamId/job-titles
 section: Teams
-method: GET
+method: POST
 path: /api/teams/{teamId}/job-titles
 auth: session-team
-order: 1600
+order: 1620
 ---
 
-GET `/api/teams/{teamId}/job-titles`.
+POST `/api/teams/{teamId}/job-titles`.
 
-Reads job titles from the Teams API. Requires a signed-in user who belongs to the team id in the path.
+Runs the job titles action in the Teams API from a JSON request body. Requires a signed-in user who belongs to the team id in the path.
 
 ## Request
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| _(none)_ | — | — | No JSON body for GET requests. |
+| _(optional)_ | object | no | JSON body shape depends on the action. |
 
 ## Response
 
@@ -34,15 +34,17 @@ Reads job titles from the Teams API. Requires a signed-in user who belongs to th
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/teams/{teamId}/job-titles" \
+curl -X POST "https://flowbie.ca/api/teams/{teamId}/job-titles" \
   -H "Content-Type: application/json" \
+  -d '{}'
 ```
 
 ```javascript
 const res = await fetch(`/api/teams/{teamId}/job-titles`, {
-  method: "GET",
+  method: "POST",
   credentials: "include",
   headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({}),
 });
 const data = await res.json();
 ```

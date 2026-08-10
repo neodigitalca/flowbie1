@@ -1,6 +1,7 @@
 import { readdirSync, statSync } from "fs";
 import { join, posix } from "path";
 import SftpClient from "ssh2-sftp-client";
+import { isSecretRelPath } from "./secret-excludes.js";
 
 const REMOTE_ZIP = "./wp-content/plugins/flowbie-wp.zip";
 const PLUGIN_ROOT = "./wp-content/plugins/flowbie-wp";
@@ -9,8 +10,10 @@ const CONCURRENCY = 8;
 const SKIP_DIRS = new Set(["tests", ".git", "node_modules"]);
 
 function shouldSkip(rel) {
-  if (rel.split("/").some((p) => SKIP_DIRS.has(p))) return true;
-  if (!rel.includes("/") && rel.toLowerCase().endsWith(".md")) return true;
+  const norm = rel.replace(/\\/g, "/");
+  if (norm.split("/").some((p) => SKIP_DIRS.has(p))) return true;
+  if (!norm.includes("/") && norm.toLowerCase().endsWith(".md")) return true;
+  if (isSecretRelPath(norm)) return true;
   return false;
 }
 

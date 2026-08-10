@@ -51,24 +51,66 @@ REQUIRED PARAMS:
 - list_posts: no required params. OPTIONAL: "post_type", "count", "status". Sample only (default 10, max 50). NOT for full library audits.
 - get_post REQUIRES at least one of: "post_id" or "title"
 - add_content: needs a target (post_id or title) + content description. OPTIONAL: "mode" ("append" or "replace", default "append")
+- update_post REQUIRES: post_id. OPTIONAL: title (full new post_title), status, excerpt, slug. NOT body HTML.
+- restore_post_revision REQUIRES: post_id. Use for undo/revert after a mistaken body edit.
+
+POST FIELD TARGET (mandatory — pick the correct tool):
+- Change WordPress post title / rename / add pipe | / tweak headline → update_post with post_id only. Omit title in params; planning reads post context and outputs the full new post_title. NOT save_post_meta. NOT add_content.
+- SEO title / meta title / Rank Math title → save_post_meta with seoTitle only. NOT update_post.
+- Focus keyword → save_post_meta with focusKeyword.
+- Meta description → save_post_meta with metaDescription.
+- Date modifier / "set the date today" / update optimization date → save_post_meta with dateModifier set to today (ACF date_modifier field). NOT update_post.
+- Clear / empty / remove an ACF meta field (seo research, focus keyword, meta description, faq, etc.) → save_post_meta. Omit value params; planning clears the named field.
+- Run / build / refresh SEO research brief (DataForSEO + GSC + Semrush merge into ACF seo_research) → run_seo_research_brief with post_id. NOT save_post_meta with LLM text. Requires focus keyword on the post.
+- FAQ schema / JSON-LD / structured FAQ data → save_post_meta with faq field only. NOT add_content. Schema is backend ACF only; never visible in post body.
+- "for acf", "to acf", "acf fields", "keyword for acf", or similar on a post editor means save SEO meta INTO the ACF/Flowbie fields on the CURRENT POST. NOT content about the Advanced Custom Fields plugin. Omit focusKeyword and metaDescription from classifier params; planning writes copy from post context.
+- FAQ table / visible FAQ section in post body → add_content with mode append. HTML table only; no script tags or raw JSON-LD in body.
+- FAQ table AND schema in the same message → intent "action" with tool save_post_meta (compound runner handles both steps in Build mode).
+- Body copy, H2s, paragraphs, tables, sections (new content blocks) → add_content with mode append or replace + content_brief. NEVER the user's raw message as content.
+- In-place body edits on current post (internal links, format changes, bold/emphasis, convert section to table, delete section, strip schema from body, change/rename an H2/H3) → add_content with post_id, mode "ops", empty content. Deterministic body_ops only; do NOT full-body LLM regen.
+- Follow-up edits ("change the intro h2", "rename that heading") use conversation history to target what the assistant just created on this post.
+- Delete/remove/keep section, strip JSON-LD from body, convert prose to table, remove duplicate FAQ blocks → add_content with post_id, mode "ops", empty content.
+- When user asks to delete or remove existing body content, NEVER use add_content append/replace generation.
+- List site posts / inventory only (no write verbs like add/insert/change) → get_site_inventory read-only.
+- Publish / draft / schedule / status → update_post with status.
+- Slug / URL path → update_post with slug.
+- Undo / revert / wrong field / "not the body" / "I said title" → restore_post_revision if undoing a body mistake; update_post if fixing title. NEVER add_content with the correction text.
+- Inspect / show post details → get_post (read-only).
+- Create new post/page → create_post or create_page.
+- Informal copy requests on the current post (title tweaks, action phrases, meta wording) → correct write tool with post_id set, but leave title/seoTitle/metaDescription/content values empty when they require interpretation from the post body. The planning phase reads full post context and generates reader-facing copy.
+
+TITLE DISAMBIGUATION:
+- In wp-admin post editor, "title" means WordPress post_title via update_post unless user says SEO title, meta title, or Rank Math title.
+- Title suffixes, pipe separators, and rewrites are planned from full post context, not literal user jargon.
+
+CORRECTION / UNDO:
+- When user corrects a prior mistake (undo, revert, wrong field, not the body, I meant title), read conversation history. Do NOT treat the correction sentence as post body content.
+- If the last assistant action was add_content on this post, prefer restore_post_revision.
 
 CONTEXT RESOLUTION (VERY IMPORTANT):
 - Assistant messages contain metadata like [post_id=123, title="My Page"]. This identifies the post that was just created or acted on.
 - If the user says "it", "that post", "the page", "this one", "add to it", "add content", "add H2s", etc., resolve using the most recent [post_id=X, title="Y"] from history.
 - When a recent [post_id=X] exists in history, the target IS known. Extract it into params.
 - NEVER return "needs_info" for post_id/title if history contains [post_id=X, title="Y"].
+- NEVER return "needs_info" for post_id when CURRENT POST CONTEXT is present in this prompt; use that post_id in params.
 
 CRITICAL:
 - If the user says "create a page" or "create a post" WITHOUT specifying a title, set intent to "needs_info" and list "title" in "missing".
 - If conversation history shows user previously requested a tool and the CURRENT message provides the missing info (like a title), set intent to "action" and extract the params from the current message.
 - For create_page/create_post, also extract "focus_keyword" if the user mentions a keyword, SEO term, or focus keyword.
-- For add_content: ALWAYS set intent to "action" if the user indicates what to add (e.g. "add H2s", "add content", "write 5 headings") — even if "content" param is empty. The planning phase generates it.
+- For add_content: ALWAYS set intent to "action" if the user indicates what to add (e.g. "add H2s", "add content", "write 5 headings", "add internal links", "bold key terms") — even if "content" param is empty. The planning phase generates it.
+- For add_content with mode "ops": extract link_count when user says "add N internal links". Set post_id from CURRENT POST CONTEXT.
+- For add_content with mode "edit" or "surgical": treat as mode "ops" (legacy alias).
 - For add_content: ALWAYS set intent to "action" if a target post is identifiable from history metadata [post_id=X] — even if user just says "add to it".
 - For add_content: only set "needs_info" if BOTH conditions are true: (1) no target post exists in history AND user doesn't name one, AND (2) user gives zero indication of what to write.
 - COMPOUND CREATE+CONTENT: If the user asks to create a post/page AND specifies body structure (headings, table, sections) in the same message, still set intent "action" with tool create_post or create_page — the plan endpoint will split into a workflow.
 - COMPOUND CREATE+SEO BLOCK: If the user asks to create a page AND apply/compose an SEO block, Elementor section, registry link, or dynamic tag, set intent "action" with create_page — the plan endpoint will use the Elementor SEO block workflow (compose → save → apply).
 - GSC KEYWORDS: For "what keywords", "search console", "GSC data", or keyword research requests, use tool get_gsc_context with post_id when known.
-- SEO BLOCKS: list_seo_blocks, create_seo_block, delete_seo_block (requires block_id), save_seo_block (requires block manifest or block_id), modify_seo_block_slots for slot-level edits, compose_seo_block for full block generation.
+- POST META / SEO FIELDS: For "add/set/update focus keyword", "add meta description", "fix SEO on post", or grading follow-up chips, use save_post_meta with post_id OR title. NOT modify_seo_block_slots.
+- save_post_meta: at least one of post_id or title required. Optional: focusKeyword, metaDescription, seoTitle, faq, seoResearch. If keyword not given but user asks to add one, set intent "action" and omit focusKeyword (planning will infer).
+- NEVER set focusKeyword, metaDescription, seoTitle, or seoResearch to placeholder text, field labels, or filler like "placeholder", "TBD", or "lorem ipsum". Omit those params so planning writes in-context copy from the post.
+- SEO BLOCKS: list_seo_blocks, create_seo_block, delete_seo_block (requires block_id), save_seo_block (requires block manifest or block_id), modify_seo_block_slots for slot-level edits on Agent Hub SEO blocks ONLY, compose_seo_block for full block generation.
+- modify_seo_block_slots: ONLY when user explicitly refers to SEO block slots, Agent Hub block, or Elementor section slots. NOT for post meta or focus keyword on a blog post.
 - apply_seo_block_to_page REQUIRES: post_id and block_id (or resolvable from workflow/history). OPTIONAL: sync_library (default true), include_dynamic_heading (default true), mode (append|replace).
 - For "apply block X to page Y" when both IDs are known, use apply_seo_block_to_page directly with intent "action".
 - CHAT INSIGHTS: For visitor questions, chat logs, knowledge gaps, unanswered topics, or "what are users asking", use get_chat_insights.
@@ -104,6 +146,16 @@ CTX;
 
 		if (
 			is_array( Flowbie_Wp_Backend_Assist_Context::$builder_context )
+			&& ! empty( Flowbie_Wp_Backend_Assist_Context::$builder_context['target_scope'] )
+			&& sanitize_key( (string) Flowbie_Wp_Backend_Assist_Context::$builder_context['target_scope'] ) === 'site'
+		) {
+			$system .= "\nTARGET SCOPE: Site-wide. Do not assume a current post unless the user names one.\n";
+		}
+
+		if (
+			is_array( Flowbie_Wp_Backend_Assist_Context::$builder_context )
+			&& ( empty( Flowbie_Wp_Backend_Assist_Context::$builder_context['target_scope'] )
+				|| sanitize_key( (string) Flowbie_Wp_Backend_Assist_Context::$builder_context['target_scope'] ) !== 'site' )
 			&& ! empty( Flowbie_Wp_Backend_Assist_Context::$builder_context['frontend_page'] )
 			&& is_array( Flowbie_Wp_Backend_Assist_Context::$builder_context['frontend_page'] )
 		) {
@@ -112,17 +164,21 @@ CTX;
 			$fp_title = sanitize_text_field( (string) ( $fp['title'] ?? '' ) );
 			$fp_url   = esc_url_raw( (string) ( $fp['url'] ?? '' ) );
 			$fp_type  = sanitize_text_field( (string) ( $fp['type_label'] ?? 'page' ) );
+			$fp_status = sanitize_key( (string) ( $fp['post_status'] ?? 'publish' ) );
 			if ( $fp_id > 0 ) {
 				$system .= <<<CTX
 
-FRONTEND PAGE CONTEXT (logged-in user is viewing this page in the site chat widget):
+CURRENT POST CONTEXT (user is editing or viewing this post in wp-admin or on the live site):
 post_id: {$fp_id}
 title: {$fp_title}
 url: {$fp_url}
 type: {$fp_type}
+status: {$fp_status}
 
-When the user says "this post", "this page", "on this post", "add content to it", or similar, set post_id to {$fp_id} in params.
-For add_content, get_post, get_gsc_context, or apply_seo_block_to_page targeting the current page, use post_id {$fp_id} and intent "action" when the user clearly refers to this page.
+Draft, scheduled, and future posts are valid targets when the user can edit them.
+Default target for update_post, restore_post_revision, add_content, save_post_meta, get_post, get_gsc_context, apply_seo_block_to_page, focus keyword, meta description, and similar updates is post_id {$fp_id} unless the user names a different post or post ID.
+When the user says "this post", "this page", "on this post", "the page im on", "add content to it", or similar, set post_id to {$fp_id} in params.
+For FAQ table append requests on the current page, use add_content with post_id {$fp_id} and mode append; do not ask which page.
 CTX;
 			}
 		}
@@ -219,6 +275,7 @@ Output ONLY valid JSON:
 
 WORKFLOW TRUE when ANY of these apply:
 - User asks to CREATE a page/post AND also specifies body content (H2/H3 headings, table, intro, FAQ, paragraphs, sections, "content for each", lists, etc.) in the same message.
+- User asks to add FAQ schema AND FAQ table to an existing post in the same message (save_post_meta then add_content append).
 - User asks to CREATE a page AND wants an SEO block, Agent Hub block, Elementor page, registry/dynamic block link, or section blocks/slots on that page.
 - User asks for a multi-part deliverable in one message (e.g. create + write content + keyword, or create page + SEO block + sections).
 - Phrases like "add 5 h2s", "with content", "and a table", "write sections", "SEO block", "apply block to page", "dynamic tag" combined with create → always workflow.
@@ -229,6 +286,7 @@ WORKFLOW FALSE when:
 - User only wants to create a page/post with title/keyword but NO body structure or content instructions.
 - Single SEO block slot edit (modify_seo_block_slots) or save/create/delete block without page creation.
 - Single apply_seo_block_to_page when post_id and block_id are known (no create/compose in same message).
+- Single in-place body edit on one section of an existing post (add/insert/create table in a section, convert section to table, bold/format one section, delete after FAQ table, internal links). One add_content step only — workflow false.
 
 STEP RULES:
 1. First step: create_post or create_page with title, focus_keyword, status, post_type if applicable.
@@ -248,6 +306,13 @@ User: "Create a blog post titled seo near whyte ave, use that as keyword focus, 
 → steps: [
   { "tool": "create_post", "label": "Create blog post SEO Near Whyte Ave", "params": { "title": "SEO Near Whyte Ave", "focus_keyword": "seo near whyte ave" } },
   { "tool": "add_content", "label": "Add 5 H2 sections with copy, lists, and table", "params": { "mode": "replace", "content_brief": "Write 5 H2 sections, each with paragraph content and a bullet list; include one HTML table; focus keyword seo near whyte ave; topic Whyte Ave Edmonton SEO." } }
+]
+
+EXAMPLE (FAQ schema + table on existing post):
+User: "add a faq table and schema and append the table to the end of the post content"
+→ steps: [
+  { "tool": "save_post_meta", "label": "Save FAQ schema to post meta", "params": { "post_id": FROM_CONTEXT } },
+  { "tool": "add_content", "label": "Append FAQ HTML table", "params": { "mode": "append", "content_brief": "Append an HTML FAQ table with question and answer columns only. No JSON-LD or script tags." } }
 ]
 
 EXAMPLE (SEO block + Elementor page workflow):

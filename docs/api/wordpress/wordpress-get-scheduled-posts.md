@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/get-scheduled-posts
 auth: open
-order: 2580
+order: 2600
 ---
 
 POST `/api/wordpress/get-scheduled-posts`.

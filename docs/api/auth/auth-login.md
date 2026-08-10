@@ -29,6 +29,7 @@ Authenticates a user with email and password, sets the flowbie_session cookie, a
 | `username` | varies | See handler response. |
 | `email` | varies | See handler response. |
 | `displayName` | varies | See handler response. |
+| `sessionToken` | varies | See handler response. |
 
 ## Errors
 

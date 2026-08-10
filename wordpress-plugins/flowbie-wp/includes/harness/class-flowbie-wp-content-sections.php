@@ -74,7 +74,7 @@ class Flowbie_Wp_Content_Sections {
 				),
 			);
 		}
-		$parts = preg_split( '#(?=<h2[^>]*>)#i', $html );
+		$parts = preg_split( '#(?=(?:<!--\s*wp:heading[^>]*-->\s*)?<h2[^>]*>)#i', $html );
 		if ( ! is_array( $parts ) ) {
 			return array();
 		}
@@ -100,8 +100,10 @@ class Flowbie_Wp_Content_Sections {
 
 	/**
 	 * Replace one H2 section in full HTML.
+	 *
+	 * @param bool $strict When true, return unchanged HTML if section title is not matched.
 	 */
-	public static function replace_section_html( string $full_html, string $section_title, string $new_section_html ): string {
+	public static function replace_section_html( string $full_html, string $section_title, string $new_section_html, bool $strict = false ): string {
 		$sections = self::split_html_by_h2( $full_html );
 		if ( empty( $sections ) ) {
 			return $new_section_html;
@@ -114,6 +116,9 @@ class Flowbie_Wp_Content_Sections {
 		);
 		$match  = self::fuzzy_match_index( $section_title, $titles );
 		if ( $match < 0 ) {
+			if ( $strict ) {
+				return $full_html;
+			}
 			return trim( $full_html ) . "\n\n" . trim( $new_section_html );
 		}
 		$sections[ $match ]['html'] = trim( $new_section_html );

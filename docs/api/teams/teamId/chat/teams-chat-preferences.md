@@ -5,7 +5,7 @@ section: Teams
 method: PATCH
 path: /api/teams/{teamId}/chat/preferences
 auth: team-rbac-communication
-order: 1510
+order: 1520
 ---
 
 PATCH `/api/teams/{teamId}/chat/preferences`.

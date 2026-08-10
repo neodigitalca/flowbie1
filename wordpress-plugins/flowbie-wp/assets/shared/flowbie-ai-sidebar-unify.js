@@ -206,12 +206,16 @@
     }
 
     var searchLauncher = searchWrap.querySelector('.fai-sidebar-launcher, .fbs__icon-launcher');
+    var mobileLauncher = document.getElementById('flowbie-chat-mobile-launcher');
     if (shell && searchLauncher && typeof shell.registerLauncher === 'function') {
       shell.registerLauncher(searchLauncher, {
         onBeforeOpen: function () {
           setActiveTab('search');
         }
       });
+    }
+    if (shell && mobileLauncher && typeof shell.registerLauncher === 'function') {
+      shell.registerLauncher(mobileLauncher);
     }
 
     activeTab = getStoredTab();

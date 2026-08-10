@@ -30,6 +30,10 @@ wordpress-plugins/flowbie-wp/includes/flowbie-wp-secrets.php
 wordpress-plugins/flowbie-wp/includes/flowbie-wp-gsc-config.php
 wordpress-plugins/flowbie-app/includes/flowbie-app-secrets.php
 
+# Deploy build artifacts (may embed local secrets)
+wordpress-plugins/.deploy/*.zip
+wordpress-plugins/*.zip
+
 # Report date range (AI agents read this; per-user local state)
 REPORT_DATE_RANGE.md
 

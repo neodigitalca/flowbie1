@@ -5,7 +5,7 @@ section: SEO
 method: POST
 path: /api/seo/postal-centroid
 auth: open
-order: 1010
+order: 1020
 ---
 
 POST `/api/seo/postal-centroid`.

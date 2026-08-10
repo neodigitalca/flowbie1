@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-29T16:32:24.643Z",
-  "routeCount": 284,
+  "generatedAt": "2026-08-10T00:36:06.476Z",
+  "routeCount": 286,
   "sections": [
     {
       "id": "getting-started",
@@ -30,6 +30,42 @@
         {
           "slug": "getting-started/client-library",
           "title": "Building a client library",
+          "order": 40
+        }
+      ]
+    },
+    {
+      "id": "god-mode",
+      "label": "God Mode",
+      "items": [
+        {
+          "slug": "god-mode/overview",
+          "title": "Overview",
+          "order": 0
+        },
+        {
+          "slug": "god-mode/feature-index",
+          "title": "Feature index",
+          "order": 5
+        },
+        {
+          "slug": "god-mode/ask-plan-build",
+          "title": "Ask / Plan / Build",
+          "order": 10
+        },
+        {
+          "slug": "god-mode/tools",
+          "title": "Tools reference",
+          "order": 20
+        },
+        {
+          "slug": "god-mode/body-ops",
+          "title": "Body operations",
+          "order": 30
+        },
+        {
+          "slug": "god-mode/endpoints",
+          "title": "Endpoints",
           "order": 40
         }
       ]
@@ -943,12 +979,20 @@
           "order": 20
         },
         {
+          "slug": "seo/fetch-external-sitemap",
+          "title": "Fetch External Sitemap",
+          "method": "POST",
+          "path": "/api/seo/fetch-external-sitemap",
+          "auth": "open",
+          "order": 30
+        },
+        {
           "slug": "seo/local-business-address",
           "title": "Local Business Address",
           "method": "POST",
           "path": "/api/seo/local-business-address",
           "auth": "open",
-          "order": 30
+          "order": 40
         },
         {
           "slug": "seo/postal-centroid",
@@ -956,7 +1000,7 @@
           "method": "POST",
           "path": "/api/seo/postal-centroid",
           "auth": "open",
-          "order": 40
+          "order": 50
         }
       ]
     },
@@ -1448,12 +1492,20 @@
           "order": 570
         },
         {
+          "slug": "teams/teamId/job-titles",
+          "title": "Job Titles",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/job-titles",
+          "auth": "session-team",
+          "order": 580
+        },
+        {
           "slug": "teams/teamId/mail-test",
           "title": "Mail Test",
           "method": "POST",
           "path": "/api/teams/{teamId}/mail-test",
           "auth": "session-team",
-          "order": 580
+          "order": 590
         },
         {
           "slug": "teams/teamId/members",
@@ -1461,7 +1513,7 @@
           "method": "GET",
           "path": "/api/teams/{teamId}/members",
           "auth": "session-team",
-          "order": 590
+          "order": 600
         },
         {
           "slug": "teams/teamId/members",
@@ -1469,7 +1521,7 @@
           "method": "POST",
           "path": "/api/teams/{teamId}/members",
           "auth": "session-team",
-          "order": 600
+          "order": 610
         },
         {
           "slug": "teams/teamId/members/(id)",
@@ -1477,7 +1529,7 @@
           "method": "DELETE",
           "path": "/api/teams/{teamId}/members/({id})",
           "auth": "session-team",
-          "order": 610
+          "order": 620
         },
         {
           "slug": "teams/teamId/members/(id)",
@@ -1485,7 +1537,7 @@
           "method": "GET",
           "path": "/api/teams/{teamId}/members/({id})",
           "auth": "session-team",
-          "order": 620
+          "order": 630
         },
         {
           "slug": "teams/teamId/members/(id)",
@@ -1493,7 +1545,7 @@
           "method": "PATCH",
           "path": "/api/teams/{teamId}/members/({id})",
           "auth": "session-team",
-          "order": 630
+          "order": 640
         },
         {
           "slug": "teams/teamId/members/(id)",
@@ -1501,7 +1553,7 @@
           "method": "POST",
           "path": "/api/teams/{teamId}/members/({id})",
           "auth": "session-team",
-          "order": 640
+          "order": 650
         },
         {
           "slug": "teams/teamId/switch",
@@ -1509,7 +1561,7 @@
           "method": "POST",
           "path": "/api/teams/{teamId}/switch",
           "auth": "session-team",
-          "order": 650
+          "order": 660
         },
         {
           "slug": "teams/teamId/tasks/my",
@@ -1517,7 +1569,7 @@
           "method": "GET",
           "path": "/api/teams/{teamId}/tasks/my",
           "auth": "session-team",
-          "order": 660
+          "order": 670
         },
         {
           "slug": "teams/teamId/tasks/projects",
@@ -1525,7 +1577,7 @@
           "method": "GET",
           "path": "/api/teams/{teamId}/tasks/projects",
           "auth": "session-team",
-          "order": 670
+          "order": 680
         },
         {
           "slug": "teams/teamId/tasks/projects",
@@ -1533,7 +1585,7 @@
           "method": "POST",
           "path": "/api/teams/{teamId}/tasks/projects",
           "auth": "session-team",
-          "order": 680
+          "order": 690
         },
         {
           "slug": "teams/teamId/tasks/projects/(id)",
@@ -1541,7 +1593,7 @@
           "method": "DELETE",
           "path": "/api/teams/{teamId}/tasks/projects/({id})",
           "auth": "session-team",
-          "order": 690
+          "order": 700
         },
         {
           "slug": "teams/teamId/tasks/projects/(id)",
@@ -1549,7 +1601,7 @@
           "method": "GET",
           "path": "/api/teams/{teamId}/tasks/projects/({id})",
           "auth": "session-team",
-          "order": 700
+          "order": 710
         },
         {
           "slug": "teams/teamId/tasks/projects/(id)",
@@ -1557,7 +1609,7 @@
           "method": "PATCH",
           "path": "/api/teams/{teamId}/tasks/projects/({id})",
           "auth": "session-team",
-          "order": 710
+          "order": 720
         },
         {
           "slug": "teams/teamId/tasks/projects/(id)",
@@ -1565,7 +1617,7 @@
           "method": "POST",
           "path": "/api/teams/{teamId}/tasks/projects/({id})",
           "auth": "session-team",
-          "order": 720
+          "order": 730
         },
         {
           "slug": "teams/teamId/tasks/projects/(id)/files",
@@ -1573,20 +1625,12 @@
           "method": "GET",
           "path": "/api/teams/{teamId}/tasks/projects/({id})/files",
           "auth": "session-team",
-          "order": 730
-        },
-        {
-          "slug": "teams/teamId/tasks/projects/(id)/sections",
-          "title": "Sections",
-          "method": "DELETE",
-          "path": "/api/teams/{teamId}/tasks/projects/({id})/sections",
-          "auth": "session-team",
           "order": 740
         },
         {
           "slug": "teams/teamId/tasks/projects/(id)/sections",
           "title": "Sections",
-          "method": "GET",
+          "method": "DELETE",
           "path": "/api/teams/{teamId}/tasks/projects/({id})/sections",
           "auth": "session-team",
           "order": 750
@@ -1594,7 +1638,7 @@
         {
           "slug": "teams/teamId/tasks/projects/(id)/sections",
           "title": "Sections",
-          "method": "PATCH",
+          "method": "GET",
           "path": "/api/teams/{teamId}/tasks/projects/({id})/sections",
           "auth": "session-team",
           "order": 760
@@ -1602,10 +1646,18 @@
         {
           "slug": "teams/teamId/tasks/projects/(id)/sections",
           "title": "Sections",
-          "method": "POST",
+          "method": "PATCH",
           "path": "/api/teams/{teamId}/tasks/projects/({id})/sections",
           "auth": "session-team",
           "order": 770
+        },
+        {
+          "slug": "teams/teamId/tasks/projects/(id)/sections",
+          "title": "Sections",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/tasks/projects/({id})/sections",
+          "auth": "session-team",
+          "order": 780
         },
         {
           "slug": "teams/teamId/tasks/projects/(id)/sections/(id)",
@@ -1613,7 +1665,7 @@
           "method": "DELETE",
           "path": "/api/teams/{teamId}/tasks/projects/({id})/sections/({id})",
           "auth": "session-team",
-          "order": 780
+          "order": 790
         },
         {
           "slug": "teams/teamId/tasks/projects/(id)/sections/(id)",
@@ -1621,7 +1673,7 @@
           "method": "GET",
           "path": "/api/teams/{teamId}/tasks/projects/({id})/sections/({id})",
           "auth": "session-team",
-          "order": 790
+          "order": 800
         },
         {
           "slug": "teams/teamId/tasks/projects/(id)/sections/(id)",
@@ -1629,7 +1681,7 @@
           "method": "PATCH",
           "path": "/api/teams/{teamId}/tasks/projects/({id})/sections/({id})",
           "auth": "session-team",
-          "order": 800
+          "order": 810
         },
         {
           "slug": "teams/teamId/tasks/projects/(id)/sections/(id)",
@@ -1637,20 +1689,12 @@
           "method": "POST",
           "path": "/api/teams/{teamId}/tasks/projects/({id})/sections/({id})",
           "auth": "session-team",
-          "order": 810
-        },
-        {
-          "slug": "teams/teamId/tasks/projects/(id)/tasks",
-          "title": "Tasks",
-          "method": "DELETE",
-          "path": "/api/teams/{teamId}/tasks/projects/({id})/tasks",
-          "auth": "session-team",
           "order": 820
         },
         {
           "slug": "teams/teamId/tasks/projects/(id)/tasks",
           "title": "Tasks",
-          "method": "GET",
+          "method": "DELETE",
           "path": "/api/teams/{teamId}/tasks/projects/({id})/tasks",
           "auth": "session-team",
           "order": 830
@@ -1658,7 +1702,7 @@
         {
           "slug": "teams/teamId/tasks/projects/(id)/tasks",
           "title": "Tasks",
-          "method": "PATCH",
+          "method": "GET",
           "path": "/api/teams/{teamId}/tasks/projects/({id})/tasks",
           "auth": "session-team",
           "order": 840
@@ -1666,10 +1710,18 @@
         {
           "slug": "teams/teamId/tasks/projects/(id)/tasks",
           "title": "Tasks",
-          "method": "POST",
+          "method": "PATCH",
           "path": "/api/teams/{teamId}/tasks/projects/({id})/tasks",
           "auth": "session-team",
           "order": 850
+        },
+        {
+          "slug": "teams/teamId/tasks/projects/(id)/tasks",
+          "title": "Tasks",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/tasks/projects/({id})/tasks",
+          "auth": "session-team",
+          "order": 860
         },
         {
           "slug": "teams/teamId/tasks/search",
@@ -1677,7 +1729,7 @@
           "method": "GET",
           "path": "/api/teams/{teamId}/tasks/search",
           "auth": "session-team",
-          "order": 860
+          "order": 870
         },
         {
           "slug": "teams/teamId/tasks/tags",
@@ -1685,7 +1737,7 @@
           "method": "GET",
           "path": "/api/teams/{teamId}/tasks/tags",
           "auth": "session-team",
-          "order": 870
+          "order": 880
         },
         {
           "slug": "teams/teamId/tasks/tags",
@@ -1693,7 +1745,7 @@
           "method": "POST",
           "path": "/api/teams/{teamId}/tasks/tags",
           "auth": "session-team",
-          "order": 880
+          "order": 890
         },
         {
           "slug": "teams/teamId/tasks/tasks/(id)",
@@ -1701,7 +1753,7 @@
           "method": "DELETE",
           "path": "/api/teams/{teamId}/tasks/tasks/({id})",
           "auth": "session-team",
-          "order": 890
+          "order": 900
         },
         {
           "slug": "teams/teamId/tasks/tasks/(id)",
@@ -1709,7 +1761,7 @@
           "method": "GET",
           "path": "/api/teams/{teamId}/tasks/tasks/({id})",
           "auth": "session-team",
-          "order": 900
+          "order": 910
         },
         {
           "slug": "teams/teamId/tasks/tasks/(id)",
@@ -1717,7 +1769,7 @@
           "method": "PATCH",
           "path": "/api/teams/{teamId}/tasks/tasks/({id})",
           "auth": "session-team",
-          "order": 910
+          "order": 920
         },
         {
           "slug": "teams/teamId/tasks/tasks/(id)",
@@ -1725,7 +1777,7 @@
           "method": "POST",
           "path": "/api/teams/{teamId}/tasks/tasks/({id})",
           "auth": "session-team",
-          "order": 920
+          "order": 930
         },
         {
           "slug": "teams/teamId/tasks/tasks/(id)/files",
@@ -1733,7 +1785,7 @@
           "method": "POST",
           "path": "/api/teams/{teamId}/tasks/tasks/({id})/files",
           "auth": "session-team",
-          "order": 930
+          "order": 940
         },
         {
           "slug": "teams/teamId/tasks/tasks/(id)/files/(id)",
@@ -1741,20 +1793,12 @@
           "method": "GET",
           "path": "/api/teams/{teamId}/tasks/tasks/({id})/files/({id})",
           "auth": "session-team",
-          "order": 940
-        },
-        {
-          "slug": "teams/teamId/tasks/tasks/(id)/notes",
-          "title": "Notes",
-          "method": "DELETE",
-          "path": "/api/teams/{teamId}/tasks/tasks/({id})/notes",
-          "auth": "session-team",
           "order": 950
         },
         {
           "slug": "teams/teamId/tasks/tasks/(id)/notes",
           "title": "Notes",
-          "method": "GET",
+          "method": "DELETE",
           "path": "/api/teams/{teamId}/tasks/tasks/({id})/notes",
           "auth": "session-team",
           "order": 960
@@ -1762,7 +1806,7 @@
         {
           "slug": "teams/teamId/tasks/tasks/(id)/notes",
           "title": "Notes",
-          "method": "PATCH",
+          "method": "GET",
           "path": "/api/teams/{teamId}/tasks/tasks/({id})/notes",
           "auth": "session-team",
           "order": 970
@@ -1770,10 +1814,18 @@
         {
           "slug": "teams/teamId/tasks/tasks/(id)/notes",
           "title": "Notes",
-          "method": "POST",
+          "method": "PATCH",
           "path": "/api/teams/{teamId}/tasks/tasks/({id})/notes",
           "auth": "session-team",
           "order": 980
+        },
+        {
+          "slug": "teams/teamId/tasks/tasks/(id)/notes",
+          "title": "Notes",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/tasks/tasks/({id})/notes",
+          "auth": "session-team",
+          "order": 990
         },
         {
           "slug": "teams/teamId/tasks/tasks/(id)/subtasks",
@@ -1781,20 +1833,12 @@
           "method": "DELETE",
           "path": "/api/teams/{teamId}/tasks/tasks/({id})/subtasks",
           "auth": "session-team",
-          "order": 990
-        },
-        {
-          "slug": "teams/teamId/tasks/tasks/(id)/subtasks",
-          "title": "Subtasks",
-          "method": "GET",
-          "path": "/api/teams/{teamId}/tasks/tasks/({id})/subtasks",
-          "auth": "session-team",
           "order": 1000
         },
         {
           "slug": "teams/teamId/tasks/tasks/(id)/subtasks",
           "title": "Subtasks",
-          "method": "PATCH",
+          "method": "GET",
           "path": "/api/teams/{teamId}/tasks/tasks/({id})/subtasks",
           "auth": "session-team",
           "order": 1010
@@ -1802,26 +1846,34 @@
         {
           "slug": "teams/teamId/tasks/tasks/(id)/subtasks",
           "title": "Subtasks",
-          "method": "POST",
+          "method": "PATCH",
           "path": "/api/teams/{teamId}/tasks/tasks/({id})/subtasks",
           "auth": "session-team",
           "order": 1020
         },
         {
-          "slug": "teams/teamId/tasks/templates",
-          "title": "Templates",
-          "method": "GET",
-          "path": "/api/teams/{teamId}/tasks/templates",
+          "slug": "teams/teamId/tasks/tasks/(id)/subtasks",
+          "title": "Subtasks",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/tasks/tasks/({id})/subtasks",
           "auth": "session-team",
           "order": 1030
         },
         {
           "slug": "teams/teamId/tasks/templates",
           "title": "Templates",
-          "method": "POST",
+          "method": "GET",
           "path": "/api/teams/{teamId}/tasks/templates",
           "auth": "session-team",
           "order": 1040
+        },
+        {
+          "slug": "teams/teamId/tasks/templates",
+          "title": "Templates",
+          "method": "POST",
+          "path": "/api/teams/{teamId}/tasks/templates",
+          "auth": "session-team",
+          "order": 1050
         },
         {
           "slug": "teams/teamId/workspace",
@@ -1829,7 +1881,7 @@
           "method": "GET",
           "path": "/api/teams/{teamId}/workspace",
           "auth": "session-team",
-          "order": 1050
+          "order": 1060
         },
         {
           "slug": "teams/teamId/workspace",
@@ -1837,7 +1889,7 @@
           "method": "POST",
           "path": "/api/teams/{teamId}/workspace",
           "auth": "session-team",
-          "order": 1060
+          "order": 1070
         },
         {
           "slug": "teams/invites/accept",
@@ -1845,7 +1897,7 @@
           "method": "GET",
           "path": "/api/teams/invites/accept",
           "auth": "public",
-          "order": 1070
+          "order": 1080
         }
       ]
     },

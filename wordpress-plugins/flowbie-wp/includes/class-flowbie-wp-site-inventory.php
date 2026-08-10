@@ -207,6 +207,42 @@ class Flowbie_Wp_Site_Inventory {
 	}
 
 	/**
+	 * Find a cached inventory row by title (exact match, then partial).
+	 *
+	 * @return array<string, mixed>|null
+	 */
+	public static function find_item_by_title( string $title, string $post_type = 'any' ): ?array {
+		$title = trim( $title );
+		if ( $title === '' ) {
+			return null;
+		}
+
+		self::warm( true );
+		$filters = array( 'include_drafts' => true );
+		if ( $post_type !== 'any' ) {
+			$filters['post_type'] = sanitize_key( $post_type );
+		}
+		$items  = self::get_items( $filters );
+		$needle = strtolower( $title );
+		$partial = null;
+
+		foreach ( $items as $item ) {
+			$item_title = strtolower( trim( (string) ( $item['title'] ?? '' ) ) );
+			if ( $item_title === $needle ) {
+				return $item;
+			}
+			if (
+				null === $partial
+				&& ( strpos( $item_title, $needle ) !== false || strpos( $needle, $item_title ) !== false )
+			) {
+				$partial = $item;
+			}
+		}
+
+		return $partial;
+	}
+
+	/**
 	 * Coverage snapshot for analytics tools.
 	 *
 	 * @return array<int, array{type:string,title:string,url:string,focus_keyword:string}>

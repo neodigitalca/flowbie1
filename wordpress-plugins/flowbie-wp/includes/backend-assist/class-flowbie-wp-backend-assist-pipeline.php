@@ -10,12 +10,175 @@ defined( 'ABSPATH' ) || exit;
 class Flowbie_Wp_Backend_Assist_Pipeline {
 
 	public static function run_pipeline( string $message, array $history ): array {
+		$context_card = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::try_execute_contextual_write( $message, $history );
+		if ( is_array( $context_card ) ) {
+			return $context_card;
+		}
+
+		$cached_card = self::try_execute_cached_plan( $message, $history );
+		if ( is_array( $cached_card ) ) {
+			return $cached_card;
+		}
+
 		$classification = Flowbie_Wp_Backend_Assist_Pipeline_Classify::phase_classify( $message, $history );
 		if ( is_wp_error( $classification ) ) {
 			return Flowbie_Wp_Backend_Assist_Cards::error_card( $classification->get_error_message() );
 		}
 
 		return self::run_from_classification( $classification, $message, $history );
+	}
+
+	/**
+	 * Execute a write tool and return an enriched action card.
+	 *
+	 * @param array<string, mixed> $params
+	 * @return array<string, mixed>
+	 */
+	public static function execute_write_tool( string $message, array $history, string $tool, array $params ): array {
+		$tool = sanitize_key( $tool );
+		if ( $tool === '' || ! isset( Flowbie_Wp_Backend_Assist_Context::$tool_registry[ $tool ] ) ) {
+			return Flowbie_Wp_Backend_Assist_Cards::error_card( __( 'Could not run this action.', 'flowbie-wp' ) );
+		}
+
+		$prepared    = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::prepare_tool_params( $message, $history, $tool, $params );
+		$tool        = $prepared['tool'];
+		$params      = $prepared['params'];
+		$exec_result = self::stamp_build_execution(
+			Flowbie_Wp_Backend_Assist_Pipeline_Phases::phase_execute( $tool, $params )
+		);
+		$truthful_tools = array(
+			'update_post',
+			'add_content',
+			'save_post_meta',
+			'run_seo_research_brief',
+			'restore_post_revision',
+			'compose_seo_block',
+			'modify_seo_block_slots',
+		);
+		if ( ! empty( $exec_result['success'] ) && in_array( $tool, $truthful_tools, true ) ) {
+			return Flowbie_Wp_Backend_Assist_Cards::enrich_card(
+				Flowbie_Wp_Backend_Assist_Cards::action_card( $exec_result, $tool ),
+				$tool,
+				$exec_result
+			);
+		}
+
+		$answer = Flowbie_Wp_Backend_Assist_Pipeline_Phases::phase_reason_action( $message, $history, $tool, $params, $exec_result );
+		if ( is_wp_error( $answer ) ) {
+			return Flowbie_Wp_Backend_Assist_Cards::enrich_card(
+				Flowbie_Wp_Backend_Assist_Cards::action_card( $exec_result, $tool ),
+				$tool,
+				$exec_result
+			);
+		}
+		$card = Flowbie_Wp_Backend_Assist_Pipeline_Phases::phase_format( $answer, 'action' );
+		if ( is_wp_error( $card ) ) {
+			return Flowbie_Wp_Backend_Assist_Cards::enrich_card(
+				Flowbie_Wp_Backend_Assist_Cards::action_card( $exec_result, $tool ),
+				$tool,
+				$exec_result
+			);
+		}
+		$card['action_result'] = $exec_result;
+		return Flowbie_Wp_Backend_Assist_Cards::enrich_card( $card, $tool, $exec_result );
+	}
+
+	/**
+	 * Mark that phase_execute ran in this Build request (harness gating).
+	 *
+	 * @param array<string, mixed> $exec_result
+	 * @return array<string, mixed>
+	 */
+	private static function stamp_build_execution( array $exec_result ): array {
+		$exec_result['build_executed']    = true;
+		$exec_result['build_executed_at'] = gmdate( 'c' );
+		return $exec_result;
+	}
+
+	/**
+	 * Build mode: run a cached Plan preview without re-classifying.
+	 *
+	 * @param array<int, array<string, mixed>> $history
+	 * @return array<string, mixed>|null
+	 */
+	public static function try_execute_cached_plan( string $message, array $history ): ?array {
+		$post_id = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::resolve_effective_post_id( array() );
+		$cached  = $post_id > 0 ? Flowbie_Wp_Backend_Assist_Plan_Cache::load( $message, $post_id ) : null;
+		if ( ! is_array( $cached ) || empty( $cached['tool'] ) ) {
+			return null;
+		}
+
+		if ( $post_id < 1 && ! empty( $cached['post_id'] ) ) {
+			$post_id = absint( $cached['post_id'] );
+		}
+		if ( $post_id < 1 ) {
+			return null;
+		}
+
+		$cached_tool = sanitize_key( (string) $cached['tool'] );
+		$tool        = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::resolve_write_tool_for_message( $message, $cached_tool );
+		$params      = isset( $cached['params'] ) && is_array( $cached['params'] ) ? $cached['params'] : array();
+		if ( $tool !== $cached_tool ) {
+			$params = array( 'post_id' => $post_id );
+		} elseif ( empty( $params['post_id'] ) ) {
+			$params['post_id'] = $post_id;
+		}
+		if ( $tool === 'save_post_meta' ) {
+			unset( $params['content'], $params['mode'] );
+		}
+
+		if ( ! empty( $params['faq_compound'] ) ) {
+			$result = Flowbie_Wp_Backend_Assist_Subagent_Registry::run_agents(
+				$message,
+				$history,
+				$params,
+				array( 'faq_schema', 'body_faq_table' )
+			);
+			$card = empty( $result['success'] )
+				? Flowbie_Wp_Backend_Assist_Cards::error_card( (string) ( $result['error'] ?? __( 'FAQ update failed.', 'flowbie-wp' ) ) )
+				: Flowbie_Wp_Backend_Assist_Cards::enrich_card(
+					Flowbie_Wp_Backend_Assist_Cards::action_card( $result, 'faq_compound' ),
+					'faq_compound',
+					$result
+				);
+			if ( ! empty( $card['type'] ) && sanitize_key( (string) $card['type'] ) === 'action' && ! empty( $card['action_result']['success'] ) ) {
+				Flowbie_Wp_Backend_Assist_Plan_Cache::clear( $message, $post_id );
+			}
+			return $card;
+		}
+
+		if ( ! empty( $params['meta_compound'] ) ) {
+			$card = Flowbie_Wp_Backend_Assist_Meta_Compound::run( $message, $history, $params );
+			if ( ! empty( $card['type'] ) && sanitize_key( (string) $card['type'] ) === 'action' && ! empty( $card['action_result']['success'] ) ) {
+				Flowbie_Wp_Backend_Assist_Plan_Cache::clear( $message, $post_id );
+			}
+			return $card;
+		}
+
+		if ( ! empty( $params['agents'] ) && is_array( $params['agents'] ) ) {
+			$result = Flowbie_Wp_Backend_Assist_Subagent_Registry::run_agents( $message, $history, $params, $params['agents'] );
+			$tool   = in_array( 'body_full_post', $params['agents'], true ) || self::agents_are_body_only( $params['agents'] )
+				? 'add_content'
+				: 'save_post_meta';
+			$card = empty( $result['success'] )
+				? Flowbie_Wp_Backend_Assist_Cards::error_card( (string) ( $result['error'] ?? __( 'Build execution failed.', 'flowbie-wp' ) ) )
+				: Flowbie_Wp_Backend_Assist_Cards::enrich_card(
+					Flowbie_Wp_Backend_Assist_Cards::action_card( $result, $tool ),
+					$tool,
+					$result
+				);
+			if ( ! empty( $card['type'] ) && sanitize_key( (string) $card['type'] ) === 'action' && ! empty( $card['action_result']['success'] ) ) {
+				Flowbie_Wp_Backend_Assist_Plan_Cache::clear( $message, $post_id );
+			}
+			return $card;
+		}
+
+		$card = self::execute_write_tool( $message, $history, $tool, $params );
+		if ( ! empty( $card['type'] ) && sanitize_key( (string) $card['type'] ) === 'action' && ! empty( $card['action_result']['success'] ) ) {
+			Flowbie_Wp_Backend_Assist_Plan_Cache::clear( $message, $post_id );
+		}
+
+		return $card;
 	}
 
 	/**
@@ -28,29 +191,49 @@ class Flowbie_Wp_Backend_Assist_Pipeline {
 		$tool   = isset( $classification['tool'] ) ? $classification['tool'] : '';
 		$params = isset( $classification['params'] ) && is_array( $classification['params'] ) ? $classification['params'] : array();
 
+		$faq_append = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::try_faq_table_append_response( $message, $history, $params );
+		if ( is_array( $faq_append ) ) {
+			return $faq_append;
+		}
+
 		if ( $intent === 'needs_info' && $tool !== '' ) {
 			$missing = isset( $classification['missing'] ) && is_array( $classification['missing'] ) ? $classification['missing'] : array();
 			return Flowbie_Wp_Backend_Assist_Cards::needs_info_card( $tool, $missing );
 		}
 
+		if ( $intent === 'action' && Flowbie_Wp_Backend_Assist_Meta_Compound::message_requests_meta_compound( $message ) ) {
+			return Flowbie_Wp_Backend_Assist_Meta_Compound::run( $message, $history, $params );
+		}
+
+		if ( $intent === 'action' && Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::message_requests_faq_compound( $message ) ) {
+			$result = Flowbie_Wp_Backend_Assist_Subagent_Registry::run_agents(
+				$message,
+				$history,
+				$params,
+				array( 'faq_schema', 'body_faq_table' )
+			);
+			if ( empty( $result['success'] ) ) {
+				return Flowbie_Wp_Backend_Assist_Cards::error_card( (string) ( $result['error'] ?? __( 'FAQ update failed.', 'flowbie-wp' ) ) );
+			}
+			return Flowbie_Wp_Backend_Assist_Cards::enrich_card(
+				Flowbie_Wp_Backend_Assist_Cards::action_card( $result, 'faq_compound' ),
+				'faq_compound',
+				$result
+			);
+		}
+
+		if (
+			$intent === 'action'
+			&& Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::message_requests_body_schema_cleanup( $message )
+			&& Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::message_requests_faq_schema( $message )
+			&& ! Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::message_requests_faq_table( $message )
+		) {
+			return self::run_body_schema_cleanup( $message, $history, $params );
+		}
+
 		if ( $intent === 'action' && $tool !== '' && isset( Flowbie_Wp_Backend_Assist_Context::$tool_registry[ $tool ] ) ) {
-			$prepared    = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::prepare_tool_params( $message, $history, $tool, $params );
-			$tool        = $prepared['tool'];
-			$params      = $prepared['params'];
-			$exec_result = Flowbie_Wp_Backend_Assist_Pipeline_Phases::phase_execute( $tool, $params );
-			if ( ! empty( $exec_result['success'] ) && in_array( $tool, array( 'compose_seo_block', 'modify_seo_block_slots' ), true ) ) {
-				return Flowbie_Wp_Backend_Assist_Cards::action_card( $exec_result, $tool );
-			}
-			$answer      = Flowbie_Wp_Backend_Assist_Pipeline_Phases::phase_reason_action( $message, $history, $tool, $params, $exec_result );
-			if ( is_wp_error( $answer ) ) {
-				return Flowbie_Wp_Backend_Assist_Cards::action_card( $exec_result, $tool );
-			}
-			$card = Flowbie_Wp_Backend_Assist_Pipeline_Phases::phase_format( $answer, 'action' );
-			if ( is_wp_error( $card ) ) {
-				return Flowbie_Wp_Backend_Assist_Cards::action_card( $exec_result, $tool );
-			}
-			$card['action_result'] = $exec_result;
-			return $card;
+			$tool = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::resolve_write_tool_for_message( $message, $tool );
+			return self::execute_write_tool( $message, $history, $tool, $params );
 		}
 
 		$answer = Flowbie_Wp_Backend_Assist_Pipeline_Phases::phase_reason_question( $message, $history );
@@ -60,16 +243,18 @@ class Flowbie_Wp_Backend_Assist_Pipeline {
 
 		$card = Flowbie_Wp_Backend_Assist_Pipeline_Phases::phase_format( $answer, 'answer' );
 		if ( is_wp_error( $card ) ) {
-			return array(
-				'type'       => 'answer',
-				'title'      => __( 'Here\'s what I found', 'flowbie-wp' ),
-				'body'       => $answer,
-				'links'      => array(),
-				'confidence' => 'medium',
+			return Flowbie_Wp_Backend_Assist_Cards::enrich_card(
+				array(
+					'type'       => 'answer',
+					'title'      => __( 'Here\'s what I found', 'flowbie-wp' ),
+					'body'       => $answer,
+					'links'      => array(),
+					'confidence' => 'medium',
+				)
 			);
 		}
 
-		return $card;
+		return Flowbie_Wp_Backend_Assist_Cards::enrich_card( $card );
 	}
 	public static function run_plan( string $message, array $history ): array {
 		$decomposed = Flowbie_Wp_Backend_Assist_Pipeline_Classify::phase_decompose_workflow( $message, $history );
@@ -104,6 +289,38 @@ class Flowbie_Wp_Backend_Assist_Pipeline {
 	 * @return array<string, mixed>
 	 */
 	public static function run_plan_preview( string $message, array $history, array $classification ): array {
+		$params = isset( $classification['params'] ) && is_array( $classification['params'] ) ? $classification['params'] : array();
+		$faq_append = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::try_faq_table_append_response( $message, $history, $params );
+		if ( is_array( $faq_append ) ) {
+			$faq_post_id = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::resolve_effective_post_id( $params );
+			return Flowbie_Wp_Backend_Assist_Cards::enrich_plan_card( $faq_append, $faq_post_id, 'add_content' );
+		}
+
+		$tool    = isset( $classification['tool'] ) ? sanitize_key( (string) $classification['tool'] ) : '';
+		$params  = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::resolve_plan_action_params( $message, $history, $classification, true );
+		$tool    = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::resolve_write_tool_for_message( $message, $tool );
+		if ( Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::message_requests_date_modifier( $message ) ) {
+			$tool = 'save_post_meta';
+		}
+		if ( Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::message_clear_meta_field_hub_key( $message ) !== '' ) {
+			$tool = 'save_post_meta';
+		}
+		if ( Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::message_requests_seo_research_brief( $message ) ) {
+			$tool = 'run_seo_research_brief';
+		}
+		$post_id = isset( $params['post_id'] ) ? absint( $params['post_id'] ) : 0;
+
+		if (
+			$tool === 'add_content'
+			&& $post_id > 0
+			&& Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::should_use_body_ops( $message, $post_id, $params )
+		) {
+			$preview = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::build_body_ops_plan_preview( $message, $history, $classification );
+			if ( ! is_wp_error( $preview ) ) {
+				return $preview;
+			}
+		}
+
 		$decomposed = Flowbie_Wp_Backend_Assist_Pipeline_Classify::phase_decompose_workflow( $message, $history );
 		if ( is_wp_error( $decomposed ) ) {
 			return Flowbie_Wp_Backend_Assist_Cards::error_card( $decomposed->get_error_message() );
@@ -132,49 +349,117 @@ class Flowbie_Wp_Backend_Assist_Pipeline {
 				$steps[ $i ]['status'] = 'pending';
 			}
 
-			return array(
-				'type'              => 'plan',
-				'workflow'          => true,
-				'workflow_id'       => $workflow_id,
-				'title'             => $title,
-				'body'              => __( 'Review this plan. Switch to Build to run it.', 'flowbie-wp' ),
-				'steps'             => $steps,
-				'workflow_complete' => false,
-				'links'             => array(),
-				'submode_switch'    => 'build',
-				'suggested_actions' => array(
-					__( 'Switch to Build mode', 'flowbie-wp' ),
+			$body = Flowbie_Wp_Backend_Assist_Plan_Preview::build_body(
+				$message,
+				$history,
+				array(
+					'tool'     => $tool,
+					'params'   => $params,
+					'workflow' => $decomposed,
+					'steps'    => $steps,
+				)
+			);
+
+			return Flowbie_Wp_Backend_Assist_Cards::enrich_plan_card(
+				array(
+					'type'              => 'plan',
+					'workflow'          => true,
+					'workflow_id'       => $workflow_id,
+					'title'             => $title,
+					'body'              => $body,
+					'steps'             => $steps,
+					'workflow_complete' => false,
+					'links'             => array(),
+					'submode_switch'    => 'build',
+					'confidence'        => 'high',
 				),
-				'confidence'        => 'high',
+				Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::resolve_effective_post_id( $params ),
+				$tool,
+				$message
 			);
 		}
 
-		$tool   = isset( $classification['tool'] ) ? sanitize_key( (string) $classification['tool'] ) : '';
-		$params = isset( $classification['params'] ) && is_array( $classification['params'] ) ? $classification['params'] : array();
 		$label  = self::plan_step_label( $tool, $params, $message );
-
-		return array(
-			'type'              => 'plan',
-			'workflow'          => false,
-			'title'             => __( 'Proposed plan', 'flowbie-wp' ),
-			'body'              => __( 'Review this plan. Switch to Build to run it.', 'flowbie-wp' ),
-			'steps'             => array(
-				array(
-					'label'      => $label,
-					'status'     => 'pending',
-					'tool'       => $tool,
-					'executable' => true,
-					'visible'    => true,
+		$body   = Flowbie_Wp_Backend_Assist_Plan_Preview::build_body(
+			$message,
+			$history,
+			array(
+				'tool'   => $tool,
+				'params' => $params,
+				'steps'  => array(
+					array(
+						'label' => $label,
+					),
 				),
-			),
-			'workflow_complete' => false,
-			'links'             => array(),
-			'submode_switch'    => 'build',
-			'suggested_actions' => array(
-				__( 'Switch to Build mode', 'flowbie-wp' ),
-			),
-			'confidence'        => 'high',
+			)
 		);
+
+		self::cache_plan_for_build( $message, $tool, $params );
+
+		return Flowbie_Wp_Backend_Assist_Cards::enrich_plan_card(
+			array(
+				'type'              => 'plan',
+				'workflow'          => false,
+				'title'             => __( 'Proposed plan', 'flowbie-wp' ),
+				'body'              => $body,
+				'steps'             => array(
+					array(
+						'label'      => $label,
+						'status'     => 'pending',
+						'tool'       => $tool,
+						'executable' => true,
+						'visible'    => true,
+					),
+				),
+				'workflow_complete' => false,
+				'links'             => array(),
+				'submode_switch'    => 'build',
+				'confidence'        => 'high',
+				'planned_tool'      => $tool,
+			),
+			Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::resolve_effective_post_id( $params ),
+			$tool,
+			$message
+		);
+	}
+
+	private static function cache_plan_for_build( string $message, string $tool, array $params ): void {
+		$post_id = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::resolve_effective_post_id( $params );
+		if ( $post_id < 1 || $tool === '' ) {
+			return;
+		}
+
+		if ( Flowbie_Wp_Backend_Assist_Meta_Compound::message_requests_meta_compound( $message ) ) {
+			$params = Flowbie_Wp_Backend_Assist_Meta_Compound::plan_cache_params( $params, $message );
+		} elseif ( Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::message_requests_faq_compound( $message ) ) {
+			$params = Flowbie_Wp_Backend_Assist_Subagent_Registry::plan_cache_params( $message, $params );
+		}
+
+		Flowbie_Wp_Backend_Assist_Plan_Cache::save(
+			$message,
+			$post_id,
+			array(
+				'tool'   => sanitize_key( $tool ),
+				'params' => $params,
+			)
+		);
+	}
+
+	/**
+	 * @param array<int, string> $agents
+	 */
+	private static function agents_are_body_only( array $agents ): bool {
+		$catalog = Flowbie_Wp_Backend_Assist_Subagent_Registry::agent_catalog();
+		foreach ( $agents as $agent_id ) {
+			$id = sanitize_key( (string) $agent_id );
+			if ( ! isset( $catalog[ $id ] ) ) {
+				continue;
+			}
+			if ( $catalog[ $id ]['harness'] !== 'wysiwyg' ) {
+				return false;
+			}
+		}
+		return $agents !== array();
 	}
 
 	/**
@@ -205,5 +490,132 @@ class Flowbie_Wp_Backend_Assist_Pipeline {
 			return ucwords( str_replace( '_', ' ', $tool ) ) . ': ' . mb_substr( $trimmed, 0, 80 );
 		}
 		return ucwords( str_replace( '_', ' ', $tool ) );
+	}
+
+	/**
+	 * FAQ schema (ACF) + visible FAQ table in one Build-mode request.
+	 *
+	 * @param array<string, mixed>           $params
+	 * @param array<int, array<string, mixed>> $history
+	 * @return array<string, mixed>
+	 */
+	private static function run_faq_compound( string $message, array $history, array $params ): array {
+		$meta_prep = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::prepare_tool_params( $message, $history, 'save_post_meta', $params );
+		$post_id   = isset( $meta_prep['params']['post_id'] ) ? absint( $meta_prep['params']['post_id'] ) : 0;
+
+		if ( $post_id < 1 ) {
+			return Flowbie_Wp_Backend_Assist_Cards::error_card( __( 'Could not resolve post for FAQ update.', 'flowbie-wp' ) );
+		}
+
+		$entries = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::generate_faq_qa_pairs( $post_id, $message, $history );
+		if ( is_wp_error( $entries ) ) {
+			return Flowbie_Wp_Backend_Assist_Cards::error_card( $entries->get_error_message() );
+		}
+
+		$schema_json = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::faq_entries_to_schema_json( $entries );
+		$table_html  = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::faq_entries_to_table_html( $entries );
+
+		$meta_params = array_merge(
+			is_array( $meta_prep['params'] ) ? $meta_prep['params'] : array(),
+			array(
+				'post_id' => $post_id,
+				'faq'     => $schema_json,
+			)
+		);
+		$meta_result = Flowbie_Wp_Backend_Assist_Pipeline_Phases::phase_execute( 'save_post_meta', $meta_params );
+
+		$content_params = array(
+			'post_id' => $post_id,
+			'mode'    => 'append',
+			'content' => $table_html,
+		);
+		$content_result = Flowbie_Wp_Backend_Assist_Pipeline_Phases::phase_execute( 'add_content', $content_params );
+
+		$combined = array(
+			'success'        => ! empty( $meta_result['success'] ) && ! empty( $content_result['success'] ),
+			'faq_compound'   => true,
+			'post_id'        => $post_id,
+			'title'          => $content_result['title'] ?? $meta_result['title'] ?? '',
+			'edit_url'       => $content_result['edit_url'] ?? $meta_result['edit_url'] ?? '',
+			'view_url'       => $content_result['view_url'] ?? $meta_result['view_url'] ?? '',
+			'word_count'     => $content_result['word_count'] ?? null,
+			'meta_result'    => $meta_result,
+			'content_result' => $content_result,
+			'saved'          => $meta_result['saved'] ?? array(),
+		);
+
+		if ( ! $combined['success'] ) {
+			$error = $content_result['error'] ?? $meta_result['error'] ?? __( 'FAQ update failed.', 'flowbie-wp' );
+			$combined['error'] = $error;
+		}
+
+		return Flowbie_Wp_Backend_Assist_Cards::enrich_card(
+			Flowbie_Wp_Backend_Assist_Cards::action_card( $combined, 'faq_compound' ),
+			'faq_compound',
+			$combined
+		);
+	}
+
+	/**
+	 * Strip JSON-LD from post body and save FAQ schema to ACF meta.
+	 *
+	 * @param array<string, mixed>           $params
+	 * @param array<int, array<string, mixed>> $history
+	 * @return array<string, mixed>
+	 */
+	private static function run_body_schema_cleanup( string $message, array $history, array $params ): array {
+		$content_prep = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::prepare_tool_params( $message, $history, 'add_content', $params );
+		$post_id      = isset( $content_prep['params']['post_id'] ) ? absint( $content_prep['params']['post_id'] ) : 0;
+
+		if ( $post_id < 1 ) {
+			return Flowbie_Wp_Backend_Assist_Cards::error_card( __( 'Could not resolve post for body schema cleanup.', 'flowbie-wp' ) );
+		}
+
+		$content_result = Flowbie_Wp_Backend_Assist_Pipeline_Phases::phase_execute( 'add_content', $content_prep['params'] );
+
+		$entries = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::generate_faq_qa_pairs( $post_id, $message, $history );
+		if ( is_wp_error( $entries ) ) {
+			if ( ! empty( $content_result['success'] ) ) {
+				return Flowbie_Wp_Backend_Assist_Cards::enrich_card(
+					Flowbie_Wp_Backend_Assist_Cards::action_card( $content_result, 'add_content' ),
+					'add_content',
+					$content_result
+				);
+			}
+			return Flowbie_Wp_Backend_Assist_Cards::error_card( $entries->get_error_message() );
+		}
+
+		$schema_json = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::faq_entries_to_schema_json( $entries );
+		$meta_prep   = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::prepare_tool_params( $message, $history, 'save_post_meta', array_merge( $params, array( 'post_id' => $post_id ) ) );
+		$meta_params = array_merge(
+			is_array( $meta_prep['params'] ) ? $meta_prep['params'] : array(),
+			array(
+				'post_id' => $post_id,
+				'faq'     => $schema_json,
+			)
+		);
+		$meta_result = Flowbie_Wp_Backend_Assist_Pipeline_Phases::phase_execute( 'save_post_meta', $meta_params );
+
+		$combined = array(
+			'success'          => ! empty( $content_result['success'] ) && ! empty( $meta_result['success'] ),
+			'body_schema_cleanup' => true,
+			'post_id'          => $post_id,
+			'title'            => $content_result['title'] ?? $meta_result['title'] ?? '',
+			'edit_url'         => $content_result['edit_url'] ?? $meta_result['edit_url'] ?? '',
+			'view_url'         => $content_result['view_url'] ?? $meta_result['view_url'] ?? '',
+			'word_count'       => $content_result['word_count'] ?? null,
+			'surgical_summary' => $content_result['ops_summary'] ?? $content_result['surgical_summary'] ?? __( 'stripped JSON-LD from body', 'flowbie-wp' ),
+			'saved'            => $meta_result['saved'] ?? array(),
+		);
+
+		if ( ! $combined['success'] ) {
+			$combined['error'] = $content_result['error'] ?? $meta_result['error'] ?? __( 'Body schema cleanup failed.', 'flowbie-wp' );
+		}
+
+		return Flowbie_Wp_Backend_Assist_Cards::enrich_card(
+			Flowbie_Wp_Backend_Assist_Cards::action_card( $combined, 'body_schema_cleanup' ),
+			'body_schema_cleanup',
+			$combined
+		);
 	}
 }

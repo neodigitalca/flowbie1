@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/workspace
 auth: session-team
-order: 2090
+order: 2110
 ---
 
 POST `/api/teams/{teamId}/workspace`.

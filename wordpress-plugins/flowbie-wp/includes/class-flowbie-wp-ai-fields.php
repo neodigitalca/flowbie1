@@ -18,6 +18,7 @@ class Flowbie_Wp_Ai_Fields {
 		'seo_research',
 		'faq',
 		'page_url',
+		'date_modifier',
 	);
 
 	/**
@@ -31,6 +32,7 @@ class Flowbie_Wp_Ai_Fields {
 			'seo_research'  => __( 'SEO research', 'flowbie-wp' ),
 			'faq'           => __( 'FAQ', 'flowbie-wp' ),
 			'page_url'      => __( 'Page URL', 'flowbie-wp' ),
+			'date_modifier' => __( 'Date modifier', 'flowbie-wp' ),
 		);
 	}
 

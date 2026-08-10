@@ -9,7 +9,41 @@ defined( 'ABSPATH' ) || exit;
 
 class Flowbie_Wp_Backend_Assist_Pipeline_Phases {
 
-	public static function phase_plan( string $message, array $history, string $tool, array $params ): array {
+	/**
+	 * Shared God Mode voice: light, scannable, minimal markdown.
+	 */
+	private static function god_mode_copy_style_rules(): string {
+		return <<<'STYLE'
+
+GOD MODE COPY STYLE (mandatory):
+- Be concise. Fewer words beat long reports. No filler intros or recap paragraphs.
+- Emphasis: **bold** only. Never wrap titles, keywords, or phrases in quotation marks.
+- No italics, blockquotes, ALL CAPS headers, or decorative punctuation.
+- Lists: flat numbered (1. 2. 3.) or simple bullets. One level only. No nested sub-bullets.
+- Section labels: **Label:** then content. Skip boilerplate headers like Key Observations or Next Steps unless the user asked for a formal report.
+- Post and page titles: plain text (How To Measure Blinds), never quoted.
+- URLs: real https links from tool RESULT or inventory only. Never example.com or # placeholders.
+- When citing posts, include the real URL inline or as a markdown link.
+STYLE;
+	}
+
+	/**
+	 * Strip markdown noise from card title/body after format phase.
+	 *
+	 * @param array<string, mixed> $card
+	 * @return array<string, mixed>
+	 */
+	private static function normalize_card_copy( array $card ): array {
+		if ( isset( $card['title'] ) ) {
+			$title = (string) $card['title'];
+			$title = preg_replace( '/\*+/', '', $title );
+			$title = trim( $title, " \t\n\r\0\x0B\"'" );
+			$card['title'] = $title;
+		}
+		return $card;
+	}
+
+	public static function phase_plan( string $message, array $history, string $tool, array $params, array $options = array() ): array {
 		$site_name         = get_bloginfo( 'name' );
 		$tool_descriptions = Flowbie_Wp_Backend_Assist_Registry::get_tool_descriptions();
 
@@ -21,29 +55,53 @@ class Flowbie_Wp_Backend_Assist_Pipeline_Phases {
 
 		$params_json = wp_json_encode( $params, JSON_UNESCAPED_SLASHES );
 
+		$post_id             = isset( $params['post_id'] ) ? absint( $params['post_id'] ) : 0;
+		$post_context_block  = '';
 		$focus_keyword_context = '';
-		$post_id = isset( $params['post_id'] ) ? absint( $params['post_id'] ) : 0;
-		$fk      = '';
+		$fk                  = '';
 		if ( $post_id > 0 ) {
-			$fk = get_post_meta( $post_id, '_flowbie_focus_keyword', true );
+			$post_context_block = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::build_post_context_for_plan( $post_id );
+			$fk                 = get_post_meta( $post_id, '_flowbie_focus_keyword', true );
 		}
 		if ( $fk === '' && ! empty( $params['focus_keyword'] ) ) {
 			$fk = sanitize_text_field( $params['focus_keyword'] );
 		}
-		if ( $fk !== '' ) {
+		if ( $fk !== '' && $post_context_block === '' ) {
 			$focus_keyword_context = "FOCUS KEYWORD for this post: \"{$fk}\" — use this topic to guide content generation.\n";
 		}
 		if ( $post_id > 0 ) {
 			$gsc_block = Flowbie_Wp_Gsc_Prompt::for_post( $post_id, $fk );
 			if ( $gsc_block !== '' ) {
-				$focus_keyword_context .= "Use these Search Console queries naturally in copy (do not keyword-stuff):\n{$gsc_block}\n";
-			} elseif ( ! Flowbie_Wp_Gsc_Prompt::is_available() ) {
-				$focus_keyword_context .= "GSC unavailable — optimize for the focus keyword only.\n";
+				$post_context_block .= "Search Console queries (use naturally, do not keyword-stuff):\n{$gsc_block}\n";
 			}
-			$existing = get_post( $post_id );
-			if ( $existing && trim( $existing->post_content ) !== '' ) {
-				$focus_keyword_context .= "EXISTING CONTENT on page:\n" . wp_strip_all_tags( $existing->post_content ) . "\n";
-			}
+		}
+
+		$interpretation_rules = '';
+		if ( $post_context_block !== '' ) {
+			$interpretation_rules = <<<'INTERP'
+
+POST CONTEXT INTERPRETATION (mandatory when POST CONTEXT is present):
+- Read the POST CONTEXT block before finalizing params.
+- Interpret informal or marketing language from user intent plus post topic, not as literal text to paste into titles, meta, or body.
+- Never output bare acronyms or internal field names (CTA, SEO, H1, FAQ, etc.) as user-facing copy unless the user explicitly quotes that exact string.
+- Never paste the user's instruction sentence (or fragments like "pipeline character with a cta") into post_title, seoTitle, metaDescription, or body HTML.
+- For update_post title edits: output the complete new post_title. Pipe suffixes must be short reader-facing phrases derived from the post content and site voice.
+- For save_post_meta: seoTitle, metaDescription, and focusKeyword must be reader-facing copy grounded in the post.
+- NEVER output placeholder, filler, or field-label text (e.g. "placeholder", "keyword focus", "TBD", "lorem ipsum") for seoTitle, metaDescription, focusKeyword, faq, or seoResearch. Infer real in-context copy from POST CONTEXT instead.
+- When the user says "for acf", "to acf", or "acf fields", they mean the ACF SEO meta fields on THIS post (keyword focus, meta description), NOT a page about the Advanced Custom Fields plugin. Topic always comes from post_title and body_excerpt.
+- For add_content: HTML must align with existing sections and the user's intent.
+- For add_content with mode "ops": treat the user message as a WYSIWYG edit brief. Set mode "ops", leave content empty, set link_count when user specifies a number. Do not paste URLs into params.
+- For add_content with mode "edit" or "surgical": same as mode "ops".
+
+INTERP;
+		}
+
+		$meta_constraints_block = '';
+		if ( $tool === 'save_post_meta' ) {
+			$constraints = isset( $options['meta_constraints'] ) && is_array( $options['meta_constraints'] )
+				? $options['meta_constraints']
+				: Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::extract_meta_copy_constraints( $message );
+			$meta_constraints_block = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::meta_copy_constraints_prompt_block( $constraints, $message );
 		}
 
 		$system = <<<PROMPT
@@ -58,7 +116,7 @@ CONVERSATION HISTORY:
 
 USER MESSAGE: {$message}
 
-{$focus_keyword_context}
+{$post_context_block}{$interpretation_rules}{$focus_keyword_context}{$meta_constraints_block}
 AVAILABLE TOOLS:
 {$tool_descriptions}
 
@@ -68,12 +126,20 @@ RULES:
 3. USE THE FOCUS KEYWORD: If a focus keyword is provided above, write content that is topically relevant, SEO-friendly, and centered on that keyword/topic.
 4. USE GSC QUERIES: When Search Console query data is present, weave relevant queries naturally into headings and body copy.
 4. CONTENT FORMAT: Generate well-structured semantic HTML. Use <h2>, <h3>, <p>, <ul>/<li> tags as appropriate. Write informative, useful paragraphs (2-4 sentences each).
-5. If the user says "add paragraphs to each section" or "add content to each H2", generate a <p> paragraph under each existing <h2> on the page. Use the EXISTING CONTENT above to see what headings exist.
+5. If the user says "add paragraphs to each section" or "add content to each H2", generate a <p> paragraph under each existing <h2> on the page. Use the POST CONTEXT body_excerpt to see what headings exist.
 6. If a post_id or title is missing but identifiable from history, fill it in.
-7. NEVER return empty "content" param. If the user wants content added, you MUST write it.
-8. If "content_brief" is provided but "content" is empty, generate full HTML from the brief into "content".
-9. Use mode "replace" when populating a newly created empty post or when replacing the full body. Use "append" only when adding to non-empty existing content without replacing it.
-10. For tables use HTML <table>, <thead>, <tbody>, <tr>, <th>, <td>.
+7. For add_content with mode "ops": leave content empty; the server plans body_ops and applies them on existing HTML. Set link_count when the user requests internal links.
+8. For other add_content: NEVER return empty "content" param when generating new sections. If the user wants content added, you MUST write it.
+9. If "content_brief" is provided but "content" is empty (and mode is not ops), generate full HTML from the brief into "content".
+10. Use mode "replace" when populating a newly created empty post or when replacing the full body. Use "append" only when adding to non-empty existing content without replacing it. Use mode "ops" for in-place WYSIWYG edits to existing HTML.
+11. For tables use HTML <table>, <thead>, <tbody>, <tr>, <th>, <td>.
+12. For tool "save_post_meta": infer focusKeyword from post title and GSC when missing. Use lowercase phrase style (e.g. "window covering blog ideas"). Include at least focusKeyword when user asks to add a focus keyword. Never save placeholder or field-label text.
+13. For tool "update_post": set "title" to the FULL new WordPress post_title. Use current post_title from POST CONTEXT. Apply the user's edit using reader-facing copy from the post. Do NOT update post body.
+14. For tool "add_content": NEVER set "content" to the user's raw message when they are giving instructions, corrections, field names, or undo requests.
+15. For tool "restore_post_revision": only post_id is required. Use when user undoes a mistaken body edit.
+16. For tool "save_post_meta" with faq: set "faq" to FAQPage JSON string only (plain JSON or script-wrapped JSON-LD for the ACF field). Never put FAQ schema in add_content.content.
+17. For tool "add_content": never put FAQ schema, JSON-LD, or FAQPage objects in HTML body content.
+18. For tool "save_post_meta" on meta refresh: you MUST output both seoTitle and metaDescription with new reader-facing copy. Do not set focusKeyword unless the user explicitly asked for keyword work. When USER FORMATTING REQUIREMENTS are present, both seoTitle and metaDescription must satisfy every rule.
 
 OUTPUT only valid JSON:
 {
@@ -158,7 +224,14 @@ RULES:
 - If successful, confirm what was created/done and provide the relevant URL(s).
 - If failed, explain why clearly and suggest a fix.
 - Include any edit or view links from the result.
+- Use ONLY fields present in RESULT. Do not claim a title changed unless changed_fields includes title or the result title differs from previous_title.
+- For update_post: report the new title from RESULT.title only.
+- For add_content: report word_count from RESULT; do not claim title or SEO meta changed.
+- For save_post_meta: list saved fields from RESULT.saved only.
+- For restore_post_revision: confirm body was reverted; do not invent changes.
 PROMPT;
+
+		$system .= self::god_mode_copy_style_rules();
 
 		if ( ! $workflow_complete ) {
 			$system .= "\n- Suggest 2-3 logical next actions only when the user's original request may still be incomplete.";
@@ -182,6 +255,7 @@ CONTENT GAP ANALYSIS RULES (mandatory):
 - If a chat topic matches an existing post (e.g. Hunter Douglas vs Alta), skip it and cite the existing URL instead of suggesting a new post.
 - Every idea must be net-new relative to existing_blogs. Prefer gaps where chat shows demand but no matching blog exists.
 - Lead with what the site already covers, then list only genuine gaps.
+- Format: numbered list of 10 ideas. One line each. **Idea title** then a short why in plain text. No sub-bullets.
 GAP;
 		}
 
@@ -196,6 +270,28 @@ POST LIBRARY SEO GRADING RULES (mandatory):
 - Use site_top_queries only for optional recommendations, not to change per-post grades.
 - Do not claim analysis is incomplete when total matches the library size.
 GRADE;
+		}
+
+		if ( $tool === 'save_post_meta' ) {
+			$system .= <<<'META'
+
+SAVE POST META RULES (mandatory):
+- Confirm which fields were saved using RESULT saved[] and values.
+- Include edit_url and view_url from RESULT as links.
+- Never give manual Yoast or Rank Math click-path instructions when the tool succeeded.
+- If focusKeyword was inferred, state the keyword chosen and why.
+- Saved meta must be in-context SEO copy, never placeholder or field-label filler.
+META;
+		}
+
+		if ( in_array( $tool, array( 'create_post', 'create_page', 'add_content', 'save_post_meta' ), true ) ) {
+			$system .= <<<'CREATE'
+
+NEW OR UPDATED CONTENT RULES (mandatory):
+- Always include edit_url and view_url from RESULT in links and in the body as markdown links.
+- State the exact title and post_id from RESULT.
+- For drafts, lead with the edit link. For published content, lead with the public view URL.
+CREATE;
 		}
 
 		return Flowbie_Wp_Backend_Assist_Ai::call_openrouter( Flowbie_Wp_Backend_Assist_Context::REASON_MODEL, $system, $message, 1536, 0.4 );
@@ -214,6 +310,15 @@ GRADE;
 			? "- You can analyze visitor chat logs, site search, Overseer engagement, and GSC data using the analytics tools.\n- Summarize knowledge gaps and suggest content or KB updates when relevant.\n"
 			: "- Analytics tools (chat logs, search logs, Overseer) require site admin access.\n";
 
+		$build_note = '';
+		if (
+			is_array( Flowbie_Wp_Backend_Assist_Context::$builder_context )
+			&& ! empty( Flowbie_Wp_Backend_Assist_Context::$builder_context['admin_submode'] )
+			&& sanitize_key( (string) Flowbie_Wp_Backend_Assist_Context::$builder_context['admin_submode'] ) === 'build'
+		) {
+			$build_note = "- Build mode is active. Never claim you are read-only. If the user wants a site change, tell them to ask you to do it and you will execute it.\n";
+		}
+
 		$system = <<<PROMPT
 You are "Flow Assist", the backend technical specialist for "{$site_name}".
 You help WordPress administrators with backend operations, content management, and technical questions.
@@ -230,8 +335,10 @@ RULES:
 - If the user wants to perform an action, tell them they can ask you to do it directly.
 - Mention available capabilities: create pages, create posts, list content.
 - God Mode uses Ask / Plan / Build submodes in the composer. You cannot switch modes yourself; the user uses the mode pill or the Switch to Build chip on blocked cards.
-{$analytics_note}- Suggest relevant follow-up actions.
+{$build_note}{$analytics_note}- Suggest relevant follow-up actions.
 PROMPT;
+
+		$system .= self::god_mode_copy_style_rules();
 
 		$inventory_block = self::builder_inventory_prompt_block();
 		if ( $inventory_block !== '' ) {
@@ -249,8 +356,8 @@ PROMPT;
 Convert this assistant answer into ONLY valid JSON:
 {
   "type": "{$card_type}",
-  "title": "short bold summary",
-  "body": "full answer with markdown",
+  "title": "short plain summary",
+  "body": "answer with light markdown",
   "links": [{"label": "text", "url": "https://...", "icon": "page|post|external|edit"}],
   "cta": {"label": "button text", "url": "https://..."},
   "suggested_actions": ["Create another page", "View all drafts", "Edit this post"],
@@ -258,11 +365,16 @@ Convert this assistant answer into ONLY valid JSON:
 }
 
 Rules:
-- "links" should contain every URL from the answer.
-- Use exact https URLs from the answer or tool RESULT. Never use "#" or placeholder links.
+- "title": plain text only. No markdown, no quotes, under 12 words.
+- For type "answer" with no tool execution in the input: never use past-tense completion titles (Added, Updated, Created, Inserted). Use Suggested, Recommended, or Here are instead. State clearly when nothing was written to the post yet.
+- "body": keep the answer short. Use **bold** for labels only. No quoted phrases. Flat lists only.
+- "links" should contain every real URL from the answer. Never example.com or "#".
+- Use exact https URLs from the answer or tool RESULT.
 {$suggested_rules}
 - Output ONLY the JSON object.
 PROMPT;
+
+		$system .= self::god_mode_copy_style_rules();
 
 		$result = Flowbie_Wp_Backend_Assist_Ai::call_openrouter( Flowbie_Wp_Backend_Assist_Context::FAST_MODEL, $system, $answer, 1536, 0.1 );
 		if ( is_wp_error( $result ) ) {
@@ -277,7 +389,7 @@ PROMPT;
 		$parsed['type']       = isset( $parsed['type'] ) ? $parsed['type'] : $card_type;
 		$parsed['confidence'] = isset( $parsed['confidence'] ) ? $parsed['confidence'] : 'medium';
 
-		return $parsed;
+		return self::normalize_card_copy( $parsed );
 	}
 
 	/**
@@ -299,5 +411,122 @@ PROMPT;
 		}
 
 		return implode( "\n\n", $blocks );
+	}
+
+	/**
+	 * Plan-mode narrative (no deliverables — approach only).
+	 *
+	 * @param array<int, array<string, mixed>> $history
+	 * @param array<string, mixed>             $context From Plan_Preview::build_context()
+	 * @return array<string, mixed>|null
+	 */
+	public static function phase_plan_narrative( string $message, array $history, array $context ) {
+		$site_name         = get_bloginfo( 'name' );
+		$tool              = isset( $context['tool'] ) ? sanitize_key( (string) $context['tool'] ) : '';
+		$params            = isset( $context['params'] ) && is_array( $context['params'] ) ? $context['params'] : array();
+		$params_json       = wp_json_encode( $params, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+		$post_context      = isset( $context['post_context'] ) ? (string) $context['post_context'] : '';
+		$task_labels_json  = wp_json_encode( $context['task_labels'] ?? array(), JSON_UNESCAPED_UNICODE );
+		$op_summaries_json = wp_json_encode( $context['op_summaries'] ?? array(), JSON_UNESCAPED_UNICODE );
+		$workflow_title    = trim( (string) ( $context['workflow_title'] ?? '' ) );
+		$intent_line       = trim( (string) ( $context['intent_restatement'] ?? '' ) );
+		$meta_constraints  = isset( $context['meta_constraints'] ) && is_array( $context['meta_constraints'] )
+			? $context['meta_constraints']
+			: array();
+		$meta_fields_json  = wp_json_encode( $context['meta_fields_requested'] ?? array(), JSON_UNESCAPED_UNICODE );
+		$meta_format_block = Flowbie_Wp_Backend_Assist_Pipeline_Content_Prep::meta_copy_constraints_prompt_block( $meta_constraints, $message );
+
+		$history_text = '';
+		foreach ( array_slice( $history, -6 ) as $entry ) {
+			$role          = isset( $entry['role'] ) ? ucfirst( (string) $entry['role'] ) : 'User';
+			$content       = isset( $entry['content'] ) ? (string) $entry['content'] : '';
+			$history_text .= "{$role}: {$content}\n";
+		}
+
+		$system = <<<PROMPT
+You are a WordPress backend planning assistant for "{$site_name}" in **Plan mode**.
+
+The user will review your plan and switch to Build to execute. You must describe HOW the work will be done, not produce the final deliverable.
+
+OUTPUT ONLY valid JSON:
+{
+  "goal": "One sentence outcome (max ~30 words).",
+  "plan_description": "50-200 words explaining approach: tools, data sources, target post/sections, ops strategy, verification. Semantic reasoning only.",
+  "tasks": ["Imperative step 1", "Step 2", "..."],
+  "unchanged": ["What stays untouched, if relevant"]
+}
+
+MANDATORY RULES:
+- NEVER output final HTML, heading copy, meta descriptions, FAQ Q&A, JSON-LD, seo titles, focus keyword phrases, or example sentences meant for the live post.
+- NEVER paste or invent the user's deliverable text. Describe what Build will generate, not the generated text.
+- Tasks must align with tool "{$tool}" and the checklist labels when provided.
+- plan_description must be 50-200 words.
+- If ambiguous, state assumptions in plan_description without inventing copy.
+- For body ops paths, reference section targeting and op types, not rewritten prose.
+- For workflows, explain step order and dependencies without slot HTML or section drafts.
+
+CLASSIFIED TOOL: {$tool}
+RESOLVED PARAMS (sanitized, no body copy): {$params_json}
+CHECKLIST LABELS: {$task_labels_json}
+BODY OP SUMMARIES: {$op_summaries_json}
+WORKFLOW TITLE: {$workflow_title}
+INTENT RESTATEMENT: {$intent_line}
+META FIELDS REQUESTED: {$meta_fields_json}
+{$meta_format_block}
+{$post_context}
+PROMPT;
+
+		$user = trim( $history_text ) !== ''
+			? "CONVERSATION:\n{$history_text}\nUSER REQUEST:\n{$message}"
+			: "USER REQUEST:\n{$message}";
+
+		$result = Flowbie_Wp_Backend_Assist_Ai::call_openrouter(
+			Flowbie_Wp_Backend_Assist_Context::REASON_MODEL,
+			$system,
+			$user,
+			1024,
+			0.2
+		);
+		if ( is_wp_error( $result ) ) {
+			return null;
+		}
+
+		$parsed = Flowbie_Wp_Backend_Assist_Ai::parse_json_response( $result );
+		if ( ! is_array( $parsed ) ) {
+			return null;
+		}
+
+		$goal = trim( (string) ( $parsed['goal'] ?? '' ) );
+		$plan = trim( (string) ( $parsed['plan_description'] ?? '' ) );
+		if ( $goal === '' || $plan === '' ) {
+			return null;
+		}
+
+		$tasks = array();
+		if ( ! empty( $parsed['tasks'] ) && is_array( $parsed['tasks'] ) ) {
+			foreach ( $parsed['tasks'] as $task ) {
+				$label = trim( (string) $task );
+				if ( $label !== '' ) {
+					$tasks[] = $label;
+				}
+			}
+		}
+
+		$unchanged = array();
+		if ( ! empty( $parsed['unchanged'] ) && is_array( $parsed['unchanged'] ) ) {
+			foreach ( $parsed['unchanged'] as $row ) {
+				$label = trim( (string) $row );
+				if ( $label !== '' ) {
+					$unchanged[] = $label;
+				}
+			}
+		}
+
+		return array(
+			'goal'             => $goal,
+			'plan_description' => $plan,
+			'tasks'            => $tasks,
+			'unchanged'        => $unchanged,
+		);
 	}
 }

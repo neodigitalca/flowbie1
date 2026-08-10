@@ -39,6 +39,7 @@ trait Flowbie_Wp_Admin_Trait_Render_Backend_Assist {
 			array(
 				'baseUrl'            => esc_url_raw( rest_url( 'flowbie/v1/backend-assist' ) ),
 				'stepUrl'            => esc_url_raw( rest_url( 'flowbie/v1/backend-assist/step' ) ),
+				'undoUrl'            => esc_url_raw( rest_url( 'flowbie/v1/backend-assist/undo' ) ),
 				'workflowStatusBase' => esc_url_raw( rest_url( 'flowbie/v1/backend-assist/workflow' ) ),
 				'sessionsUrl'        => esc_url_raw( rest_url( 'flowbie/v1/backend-assist/sessions' ) ),
 				'chatAjaxUrl'        => admin_url( 'admin-ajax.php' ),
@@ -214,6 +215,7 @@ trait Flowbie_Wp_Admin_Trait_Render_Backend_Assist {
 			.fba-card-links{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
 			.fba-pill{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);font-size:1rem;text-decoration:none;color:#e5e7eb;transition:all .15s}
 			.fba-pill:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff;text-decoration:none}
+			.fba-pill[aria-disabled='true']{opacity:.5;pointer-events:none}
 			.fba-card-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)}
 			.fba-action-chip{padding:5px 14px;border-radius:16px;border:1px solid rgba(255,255,255,.1);background:transparent;color:rgba(255,255,255,.85);font-size:1rem;cursor:pointer;transition:all .15s;font-family:inherit}
 			.fba-action-chip:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.2);color:#fff}

@@ -42,6 +42,27 @@
 		this.root.classList.add('flowbie-wp-ai-root');
 		if (this.isSidebarLayout()) this.root.classList.add('flowbie-wp-ai-root--sidebar');
 		this.renderLoading();
+		if (!this._metaSavedHandler) {
+			this._metaSavedHandler = function (evt) {
+				var detail = (evt && evt.detail) || {};
+				if (detail.postId && detail.postId !== self.postId) return;
+				if (!detail.values) return;
+				S.syncDraftFromValues(self, detail.values);
+				if (window.FlowbieAiSnippet) {
+					if (detail.values.seoTitle) {
+						window.FlowbieAiSnippet.updateMetaInput(self, 'seoTitle');
+						window.FlowbieAiSnippet.updateAllSnippets(self);
+					}
+					if (detail.values.metaDescription) {
+						window.FlowbieAiSnippet.updateMetaInput(self, 'metaDescription');
+						S.syncEditorMeta('excerpt', detail.values.metaDescription);
+						S.syncDomField('excerpt', detail.values.metaDescription);
+					}
+				}
+				self.refreshUI();
+			};
+			window.addEventListener('flowbie:meta-saved', this._metaSavedHandler);
+		}
 		return this.fetchStatus().then(function () {
 			self.initDraftFromStatus();
 			self.bindEditorSubscribe();
@@ -61,6 +82,10 @@
 
 	FlowbieAiController.prototype.destroy = function () {
 		if (window.FlowbieAiModal) window.FlowbieAiModal.close(this, true);
+		if (this._metaSavedHandler) {
+			window.removeEventListener('flowbie:meta-saved', this._metaSavedHandler);
+			this._metaSavedHandler = null;
+		}
 		if (this._editorUnsubscribe) {
 			this._editorUnsubscribe();
 			this._editorUnsubscribe = null;

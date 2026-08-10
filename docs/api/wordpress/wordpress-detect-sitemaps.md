@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/detect-sitemaps
 auth: open
-order: 2260
+order: 2280
 ---
 
 POST `/api/wordpress/detect-sitemaps`.

@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/get-acf-fields-batch
 auth: open
-order: 2360
+order: 2380
 ---
 
 POST `/api/wordpress/get-acf-fields-batch`.

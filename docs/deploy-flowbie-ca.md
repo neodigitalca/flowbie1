@@ -22,31 +22,84 @@ The plugin serves `/api/*` on the same domain (auth, teams, manager settings, GS
 
 Run all commands from **repo root** (`B:\Flowbie One`).
 
+### One-time hook setup
+
+Enable the repo pre-commit guard (blocks secrets and deploy zips):
+
+```bash
+git config core.hooksPath .githooks
+```
+
+On Windows you can also run:
+
+```powershell
+.\scripts\setup-git-hooks.ps1
+```
+
+Manual check anytime: `npm run check:no-secrets` (same rules as the hook).
+
+---
+
+## Credential rotation (after any leak)
+
+If deploy zips or secret files were ever pushed to GitHub, rotate **all** of these before using the new repo:
+
+| Service | What to rotate | Where production values live |
+|---|---|---|
+| Google Cloud (`flowbie-483717`) | GMB OAuth client secret | Server `flowbie-app-secrets.php` or wp-config |
+| OpenRouter | API key | `flowbie-wp/.env` (local deploy only) or wp-config |
+| DataForSEO | login + password | same |
+| AgentMail | API key + inbox | same |
+| Semrush | API key | same |
+| Chekkit | webhook URL | same |
+| Flowbie app | `FLOWBIE_APP_SESSION_SECRET`, `FLOWBIE_APP_SETUP_KEY` | server secrets file |
+| GSC | service account JSON (if in `flowbie-wp-gsc-config.php`) | server-side config |
+
+Deploy scripts **never upload** secret files to production; server-side credentials stay on the server.
+
 ---
 
 ## Git backup (required before every deploy)
 
 **Always** commit and push to GitHub before any deploy command. Do not deploy from uncommitted local-only changes.
 
-Backup remote: **https://github.com/neodigitalca/Flowbie1.git**
+Backup remote: your private GitHub repo (replace URL below).
 
 From repo root:
 
 ```bash
 git status
-git add -A
+git add src/ wordpress-plugins/flowbie-app/ wordpress-plugins/flowbie-wp/ docs/ scripts/ package.json package-lock.json
+git reset -- wordpress-plugins/.deploy/*.zip wordpress-plugins/*.zip
 git commit -m "Deploy: <short summary of what is shipping>"
 git push origin main
 ```
 
-If `origin` is not set to Flowbie1 yet:
+Or, if using `git add -A`, always unstage deploy artifacts before commit:
 
 ```bash
-git remote add origin https://github.com/neodigitalca/Flowbie1.git
-git push -u origin main
+git add -A
+git reset -- wordpress-plugins/.deploy/*.zip wordpress-plugins/*.zip
+git commit -m "Deploy: <short summary of what is shipping>"
+git push origin main
 ```
 
+### Never commit
+
+- Deploy zips: `wordpress-plugins/.deploy/*.zip`, `wordpress-plugins/*.zip`
+- Secret files: `*-secrets.php`, `.env`, `flowbie-wpengine.config.json`
+- Customer SFTP CSV: `wordpress-plugins/Customer List/SFTP Users_Clients List.csv`
+- Credential JSON: `*-credentials*.json`
+
+Zips under `.deploy/` are ephemeral SFTP upload artifacts. Build them locally during deploy; do not add them to Git.
+
 Deploy only after the push succeeds. The live build should always match a commit on GitHub.
+
+### New GitHub repo checklist
+
+1. Use a **private** repo unless you have a specific reason to stay public.
+2. Enable **Secret scanning** and **Push protection** (Settings → Code security).
+3. Run `git config core.hooksPath .githooks` on every machine that commits.
 
 ---
 
@@ -185,7 +238,7 @@ Do **not** use `deploy:flowbie-plugin` for the headless Flowbie One app; use `de
 
 ## Agent checklist
 
-1. **Git backup:** commit and push to https://github.com/neodigitalca/Flowbie1.git
+1. **Git backup:** commit and push (exclude deploy zips; hooks enabled via `core.hooksPath`)
 2. `npm run build:flowbie-ca` (if frontend changed)
 3. `npm run deploy:flowbie-ca` (or plugin-only script if PHP-only)
 4. `npm run smoke:flowbie-ca`

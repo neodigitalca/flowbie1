@@ -312,37 +312,7 @@ class Flowbie_Wp_Backend_Assist_Workflow {
 			$card['suggested_actions'] = self::optional_post_workflow_actions( $final_result );
 		}
 
-		if ( empty( $card['links'] ) && ! empty( $final_result['success'] ) ) {
-			if ( ! empty( $final_result['elementor_edit_url'] ) ) {
-				$card['links'][] = array(
-					'label' => __( 'Edit in Elementor', 'flowbie-wp' ),
-					'url'   => $final_result['elementor_edit_url'],
-					'icon'  => 'edit',
-				);
-			} elseif ( ! empty( $final_result['edit_url'] ) ) {
-				$card['links'][] = array(
-					'label' => __( 'Edit', 'flowbie-wp' ),
-					'url'   => $final_result['edit_url'],
-					'icon'  => 'edit',
-				);
-			}
-			if ( ! empty( $final_result['block_edit_url'] ) ) {
-				$card['links'][] = array(
-					'label' => __( 'Edit SEO block', 'flowbie-wp' ),
-					'url'   => $final_result['block_edit_url'],
-					'icon'  => 'post',
-				);
-			}
-			if ( ! empty( $final_result['view_url'] ) ) {
-				$card['links'][] = array(
-					'label' => __( 'View', 'flowbie-wp' ),
-					'url'   => $final_result['view_url'],
-					'icon'  => 'page',
-				);
-			}
-		}
-
-		return $card;
+		return Flowbie_Wp_Backend_Assist_Cards::enrich_card( $card, 'workflow', $final_result );
 	}
 	public static function optional_post_workflow_actions( array $result ): array {
 		$actions = array();

@@ -135,7 +135,7 @@
 		});
 		row.appendChild(textarea);
 		if (field === 'seo_research') {
-			row.appendChild(el('p', 'flowbie-wp-ai-seo-research-hint', str('seoResearchBriefHint', 'Brief includes DataForSEO SERP, Semrush, and GSC (last 28 days).')));
+			row.appendChild(el('p', 'flowbie-wp-ai-seo-research-hint', str('seoResearchBriefHint', 'Brief includes DataForSEO SERP and Semrush (called directly from this site, no Flow API URL).')));
 		}
 		return row;
 	}

@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/parse-sitemap
 auth: open
-order: 2660
+order: 2680
 ---
 
 POST `/api/wordpress/parse-sitemap`.

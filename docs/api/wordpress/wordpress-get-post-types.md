@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/get-post-types
 auth: open
-order: 2500
+order: 2520
 ---
 
 POST `/api/wordpress/get-post-types`.

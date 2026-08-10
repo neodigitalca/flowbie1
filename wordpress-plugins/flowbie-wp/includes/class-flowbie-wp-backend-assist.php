@@ -43,10 +43,18 @@ class Flowbie_Wp_Backend_Assist {
 		require_once $dir . 'class-flowbie-wp-backend-assist-workflow-builder.php';
 		require_once $dir . 'class-flowbie-wp-backend-assist-workflow.php';
 		require_once $dir . 'class-flowbie-wp-backend-assist-pipeline-classify.php';
+		require_once $dir . 'class-flowbie-wp-backend-assist-body-ops.php';
+		require_once $dir . 'class-flowbie-wp-backend-assist-subagent-aiseo.php';
+		require_once $dir . 'class-flowbie-wp-backend-assist-subagent-wysiwyg.php';
+		require_once $dir . 'class-flowbie-wp-backend-assist-subagent-registry.php';
+		require_once $dir . 'class-flowbie-wp-backend-assist-meta-compound.php';
+		require_once $dir . 'class-flowbie-wp-backend-assist-plan-cache.php';
 		require_once $dir . 'class-flowbie-wp-backend-assist-pipeline-content-prep.php';
 		require_once $dir . 'class-flowbie-wp-backend-assist-pipeline-phases.php';
+		require_once $dir . 'class-flowbie-wp-backend-assist-plan-preview.php';
 		require_once $dir . 'class-flowbie-wp-backend-assist-pipeline.php';
 		require_once $dir . 'class-flowbie-wp-backend-assist-submode.php';
+		require_once $dir . 'class-flowbie-wp-backend-assist-build-harness.php';
 		require_once $dir . 'class-flowbie-wp-backend-assist-rest.php';
 		require_once $dir . 'class-flowbie-wp-backend-assist-sessions.php';
 	}
@@ -69,6 +77,10 @@ class Flowbie_Wp_Backend_Assist {
 
 	public static function rest_step_handle( WP_REST_Request $request ): WP_REST_Response {
 		return Flowbie_Wp_Backend_Assist_Rest::rest_step_handle( $request );
+	}
+
+	public static function rest_undo_handle( WP_REST_Request $request ): WP_REST_Response {
+		return Flowbie_Wp_Backend_Assist_Rest::rest_undo_handle( $request );
 	}
 
 	public static function rest_workflow_status( WP_REST_Request $request ): WP_REST_Response {
@@ -117,6 +129,22 @@ class Flowbie_Wp_Backend_Assist {
 
 	public static function tool_get_gsc_context( array $params ): array {
 		return Flowbie_Wp_Backend_Assist_Tools_Wp::tool_get_gsc_context( $params );
+	}
+
+	public static function tool_save_post_meta( array $params ): array {
+		return Flowbie_Wp_Backend_Assist_Tools_Wp::tool_save_post_meta( $params );
+	}
+
+	public static function tool_run_seo_research_brief( array $params ): array {
+		return Flowbie_Wp_Backend_Assist_Tools_Wp::tool_run_seo_research_brief( $params );
+	}
+
+	public static function tool_update_post( array $params ): array {
+		return Flowbie_Wp_Backend_Assist_Tools_Wp::tool_update_post( $params );
+	}
+
+	public static function tool_restore_post_revision( array $params ): array {
+		return Flowbie_Wp_Backend_Assist_Tools_Wp::tool_restore_post_revision( $params );
 	}
 
 	public static function tool_modify_seo_block_slots( array $params ): array {

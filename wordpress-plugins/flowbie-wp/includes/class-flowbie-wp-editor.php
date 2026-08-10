@@ -177,6 +177,10 @@ class Flowbie_Wp_Editor {
 			'flowbie-ai-toolbar.js',
 			array( 'flowbie-wp-ai-shared', 'wp-data' )
 		);
+		$seo_research_hint = __( 'Brief includes DataForSEO SERP and Semrush (called directly from this site, no Flow API URL).', 'flowbie-wp' );
+		if ( class_exists( 'Flowbie_Wp_Gsc_Prompt', false ) && Flowbie_Wp_Gsc_Prompt::is_available() ) {
+			$seo_research_hint = __( 'Brief includes DataForSEO SERP, Semrush, and GSC page queries (called directly from this site, no Flow API URL).', 'flowbie-wp' );
+		}
 		wp_localize_script(
 			'flowbie-wp-ai-shared',
 			'flowbieWpAi',
@@ -240,7 +244,7 @@ class Flowbie_Wp_Editor {
 					'runSeoResearchDone'        => __( 'SEO research brief ready.', 'flowbie-wp' ),
 					'runSeoResearchFailed'      => __( 'SEO research failed.', 'flowbie-wp' ),
 					'runSeoResearchUnavailable' => __( 'SEO research credentials are missing from this plugin build.', 'flowbie-wp' ),
-					'seoResearchBriefHint'      => __( 'Brief includes DataForSEO SERP and Semrush (called directly from this site — no Flow API URL).', 'flowbie-wp' ),
+					'seoResearchBriefHint'      => $seo_research_hint,
 					'faqWandNeedResearch'       => __( 'Run SEO research first or paste a research brief.', 'flowbie-wp' ),
 					'faqWandRunning'            => __( 'Generating FAQs from research…', 'flowbie-wp' ),
 					'faqWandSeeding'            => __( 'Creating FAQ pairs…', 'flowbie-wp' ),

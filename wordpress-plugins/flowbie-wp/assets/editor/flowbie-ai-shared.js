@@ -232,6 +232,8 @@
 			}).then(function (body) {
 				ctrl.seoResearchLoading = false;
 				ctrl.draft.seoResearch = body.seoResearch || '';
+				ctrl.saved.seoResearch = body.seoResearch || '';
+				S().syncDomField('seo_research', ctrl.draft.seoResearch);
 				if (ctrl.refreshUI) ctrl.refreshUI();
 				return body;
 			}).catch(function (err) {

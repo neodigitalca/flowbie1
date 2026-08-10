@@ -2,6 +2,7 @@
 	var cfg=window.flowbieBackendAssist||{};
 	var baseUrl=cfg.baseUrl||'';
 	var stepUrl=cfg.stepUrl||'';
+	var undoUrl=cfg.undoUrl||'';
 	var workflowStatusBase=cfg.workflowStatusBase||'';
 	var sessionsUrl=cfg.sessionsUrl||'';
 	var chatAjaxUrl=cfg.chatAjaxUrl||'';
@@ -585,11 +586,30 @@
 	function populateCardLinksAndActions(c,card,shell){
 		var oldLinks=c.querySelectorAll('.fba-card-links,.fba-card-actions');
 		for(var i=0;i<oldLinks.length;i++){removeEl(oldLinks[i]);}
-		if(card.links&&card.links.length){
+		var links=card.links&&card.links.length?card.links.slice():[];
+		if(card.undo&&card.undo.post_id){
+			links.push({label:card.undo.label||'Undo',icon:'edit',action:'undo',post_id:card.undo.post_id,url:'#'});
+		}
+		if(links.length){
 			var lw=document.createElement('div');lw.className='fba-card-links';
-			card.links.forEach(function(link){
+			links.forEach(function(link){
+				if(link.action==='undo'&&link.post_id){
+					if(!undoUrl)return;
+					var ua=document.createElement('a');
+					ua.className='fba-pill';
+					ua.href='#';
+					ua.textContent=link.label||'Undo';
+					ua.addEventListener('click',function(e){
+						e.preventDefault();
+						runCardUndo(link.post_id,card,shell,c,ua);
+					});
+					lw.appendChild(ua);
+					return;
+				}
+				if(!link.url||link.url==='#')return;
 				var a=document.createElement('a');a.className='fba-pill';a.href=link.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=link.label;lw.appendChild(a);
-			});c.appendChild(lw);
+			});
+			if(lw.childNodes.length){c.appendChild(lw);}
 		}
 		if(card.cta&&card.cta.url){
 			var lw2=document.createElement('div');lw2.className='fba-card-links';
@@ -604,6 +624,29 @@
 				chip.addEventListener('click',function(){input.value=action;send();});
 				aw.appendChild(chip);
 			});c.appendChild(aw);
+		}
+	}
+
+	async function runCardUndo(postId,card,shell,cardRoot,undoEl){
+		if(loading||!postId||!undoUrl)return;
+		if(undoEl){undoEl.setAttribute('aria-disabled','true');}
+		try{
+			var res=await postJson(undoUrl,{post_id:postId});
+			if(!res.ok||!res.data){
+				if(undoEl){undoEl.removeAttribute('aria-disabled');}
+				return;
+			}
+			var updated=res.data;
+			if(shell&&shell.titleEl){shell.titleEl.innerHTML=renderMd(updated.title||'');}
+			if(shell&&shell.bodyEl){
+				if(updated.body){shell.bodyEl.innerHTML=renderMd(updated.body);shell.bodyEl.style.display='';}
+				else{shell.bodyEl.style.display='none';}
+			}
+			if(shell&&shell.badgeEl){fbaApplyCardBadge(shell.badgeEl,updated.type||'action');}
+			populateCardLinksAndActions(cardRoot,updated,shell);
+			finishAssistantCard(updated);
+		}catch(_){
+			if(undoEl){undoEl.removeAttribute('aria-disabled');}
 		}
 	}
 

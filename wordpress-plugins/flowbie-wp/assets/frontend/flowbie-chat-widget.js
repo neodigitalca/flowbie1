@@ -24,6 +24,7 @@
   var CAN_BACKEND_MODE = cfg.canBackendMode === true;
   var SITE_INVENTORY_URL = cfg.siteInventoryUrl || '';
   var SITE_INVENTORY_CSV_URL = cfg.siteInventoryCsvUrl || '';
+  var BACKEND_ASSIST_UNDO_URL = cfg.backendAssistUndoUrl || '';
   var siteInventoryCount = 0;
   var SHOW_CHAT_BODY = SIDEBAR_LAYOUT.indexOf('chat') !== -1 || SIDEBAR_LAYOUT.length === 0;
   var sidebarShell = null;
@@ -98,10 +99,13 @@
   var SVG_ICON_PAGE = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 1h5.5L13 4.5V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/><polyline points="9 1 9 5 13 5"/></svg>';
   var SVG_ICON_POST = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="1"/><line x1="5" y1="5" x2="11" y2="5"/><line x1="5" y1="8" x2="11" y2="8"/><line x1="5" y1="11" x2="8" y2="11"/></svg>';
   var SVG_ICON_EXT = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 9v4a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h4"/><polyline points="8 2 14 2 14 8"/><line x1="14" y1="2" x2="7" y2="9"/></svg>';
+  var SVG_ICON_EDIT = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z"/></svg>';
+  var SVG_ICON_PREVIEW = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/></svg>';
   var SVG_CHAT_LAUNCHER = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
   var SVG_PHONE_LAUNCHER = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M17 1H7C5.9 1 5 1.9 5 3v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-2-2-2zm-5 20c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm5-4H7V4h10v13z"/></svg>';
   var SVG_AI_SPARK = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/><path d="M19 13l.75 2.25L22 16l-2.25.75L19 19l-.75-2.25L16 16l2.25-.75L19 13z"/></svg>';
   var SVG_MORE = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="12" cy="19" r="1.75"/></svg>';
+  var SVG_DOWNLOAD = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M5 21h14"/></svg>';
   var STARTERS = Array.isArray(cfg.conversationStarters) ? cfg.conversationStarters : [];
   var BACKEND_STARTERS = Array.isArray(cfg.backendStarters) ? cfg.backendStarters : [];
   var VISITOR_GREETING_LINE = cfg.greetingLine || 'Hello';
@@ -111,6 +115,8 @@
   var ADMIN_SUBMODE_LABELS = { ask: 'Ask', plan: 'Plan', build: 'Build' };
   var adminSubmode = 'ask';
   var adminSubmodeBtn = null;
+  var adminTargetScope = 'page';
+  var scopeToggleWrap = null;
   var pendingBuildRerun = null;
 
   function normalizeSubmodeSwitchTopic(text) {
@@ -130,22 +136,137 @@
     return '';
   }
 
-  function rememberBuildRerunFromCard(card) {
-    if (!card || !card.submode_switch || card.submode_switch !== 'build') return;
+  var AGENT_STEP_LABELS = {
+    seo_title: 'Generate SEO title',
+    meta_description: 'Generate meta description',
+    focus_keyword: 'Generate focus keyword',
+    faq_schema: 'Generate FAQ schema',
+    body_heading: 'Rewrite heading',
+    body_section: 'Rewrite section',
+    body_intro: 'Rewrite intro',
+    body_faq_table: 'Build FAQ table',
+    body_full_post: 'Rewrite post body',
+    body_table: 'Build table',
+    body_list: 'Format list',
+    body_internal_links: 'Add internal links'
+  };
+
+  function messageRequestsMetaCompound(msg) {
+    var lower = String(msg || '').toLowerCase();
+    if (!lower) return false;
+    return /\b(refresh|update|rewrite|regenerate|redo|new|change)\b/.test(lower)
+      && /\b(meta|seo title|meta title|meta description|seo description)\b/.test(lower);
+  }
+
+  function resolveAgentIdsForMessage(msg) {
+    var lower = String(msg || '').toLowerCase();
+    if (!lower) return [];
+    if (messageRequestsMetaCompound(msg)) {
+      return ['seo_title', 'meta_description'];
+    }
+    if (/\bfaq\b/.test(lower) && /\b(schema|table)\b/.test(lower)) {
+      return ['faq_schema', 'body_faq_table'];
+    }
+    if (/\bfocus keyword\b/.test(lower) && /\b(meta|title|description)\b/.test(lower)) {
+      return ['focus_keyword', 'seo_title', 'meta_description'];
+    }
+    if (/\bfocus keyword\b/.test(lower)) {
+      return ['focus_keyword'];
+    }
+    if (/\b(intro|h2|heading)\b/.test(lower) && /\b(change|rewrite|update|shorten|rename)\b/.test(lower)) {
+      return ['body_heading', 'body_section'];
+    }
+    if (/\bconvert\b.*\btable\b/.test(lower)) {
+      return ['body_table'];
+    }
+    return [];
+  }
+
+  function thinkingStepsFromAgentIds(agentIds) {
+    var steps = (agentIds || []).map(function (id) {
+      return { label: AGENT_STEP_LABELS[id] || id.replace(/_/g, ' '), status: 'pending' };
+    });
+    if (steps.length) {
+      steps.push({ label: 'Upload to post', status: 'pending' });
+      steps[0].status = 'running';
+    }
+    return steps.length ? steps : null;
+  }
+
+  function resolveBuildThinkingSteps(msg) {
+    return thinkingStepsFromAgentIds(resolveAgentIdsForMessage(msg));
+  }
+
+  function dispatchMetaSavedEvent(card) {
+    if (!card) return;
+    var exec = card.action_result;
+    if (!exec && card.details_drawer) {
+      var drawer = card.details_drawer;
+      var summary = drawer.result_summary || {};
+      var row = drawer.target_row || {};
+      var values = {};
+      if (summary.seo_title) values.seoTitle = summary.seo_title;
+      if (summary.meta_description) values.metaDescription = summary.meta_description;
+      if (values.seoTitle || values.metaDescription) {
+        exec = {
+          success: (drawer.status_message || '').toLowerCase().indexOf('complete') >= 0,
+          post_id: row.post_id || 0,
+          saved: summary.saved_fields ? String(summary.saved_fields).split(',').map(function (s) { return s.trim(); }) : [],
+          values: values
+        };
+      }
+    }
+    if (!exec || !exec.success || !exec.values) return;
+    var saved = exec.saved || [];
+    var hasMeta = saved.indexOf('title') >= 0 || saved.indexOf('excerpt') >= 0
+      || !!exec.values.seoTitle || !!exec.values.metaDescription;
+    if (!hasMeta) return;
+    try {
+      window.dispatchEvent(new CustomEvent('flowbie:meta-saved', {
+        detail: {
+          postId: exec.post_id || 0,
+          values: exec.values,
+          seoTitleOnly: saved.indexOf('title') >= 0 && saved.indexOf('excerpt') >= 0
+        }
+      }));
+    } catch (_) {}
+  }
+
+  function resolveBuildMessage(card, skipPending) {
+    if (card && card.build_message) {
+      var fromCard = String(card.build_message).trim();
+      if (fromCard && !normalizeSubmodeSwitchTopic(fromCard)) {
+        return fromCard;
+      }
+    }
+    if (!skipPending && pendingBuildRerun) {
+      return pendingBuildRerun;
+    }
     var last = lastUserMessageFromHistory();
     if (last && !normalizeSubmodeSwitchTopic(last)) {
-      pendingBuildRerun = last;
+      return last;
+    }
+    return '';
+  }
+
+  function rememberBuildRerunFromCard(card) {
+    if (!card || !card.submode_switch || card.submode_switch !== 'build') return;
+    var msg = resolveBuildMessage(card, true);
+    if (msg) {
+      pendingBuildRerun = msg;
     }
   }
 
-  function handleSubmodeSwitch(mode) {
+  function handleSubmodeSwitch(mode, explicitMessage, options) {
+    options = options || {};
     if (ADMIN_SUBMODES.indexOf(mode) < 0) return;
     setAdminSubmode(mode);
-    if (mode === 'build' && pendingBuildRerun && isBackendMode() && !isLoading) {
-      var msg = pendingBuildRerun;
-      pendingBuildRerun = null;
-      sendMessage(msg, 'submode_rerun', { skipUserBubble: true });
-    }
+    if (mode !== 'build' || !isBackendMode()) return;
+    var msg = explicitMessage || pendingBuildRerun;
+    if (!msg || normalizeSubmodeSwitchTopic(msg)) return;
+    pendingBuildRerun = null;
+    if (isLoading && !options.fromPlanCta) return;
+    sendMessage(msg, 'submode_rerun', { skipUserBubble: true });
   }
 
   function loadAdminMode() {
@@ -154,8 +275,12 @@
       var stored = sessionStorage.getItem('flowbie_chat_admin_mode');
       if (stored === 'backend' || stored === 'visitor') {
         adminMode = stored;
+        return;
       }
     } catch (_) {}
+    if (cfg.isWpAdmin && cfg.defaultAdminMode === 'backend') {
+      adminMode = 'backend';
+    }
   }
 
   function saveAdminMode(mode) {
@@ -181,6 +306,15 @@
     if (!isBackendMode()) {
       return VISITOR_GREETING_SUB;
     }
+    if (adminTargetScope === 'site') {
+      if (adminSubmode === 'plan') {
+        return 'Site mode: plan changes across the full site inventory.';
+      }
+      if (adminSubmode === 'build') {
+        return 'Site mode: build against the full site, not the current page.';
+      }
+      return 'Site mode: full-site inventory and analytics.';
+    }
     if (adminSubmode === 'plan') {
       return 'Plan mode: review proposed changes before building.';
     }
@@ -192,6 +326,35 @@
 
   function getAdminModeForApi() {
     return isBackendMode() ? 'backend' : 'visitor';
+  }
+
+  function loadAdminTargetScope() {
+    if (!CAN_BACKEND_MODE) return;
+    try {
+      var stored = sessionStorage.getItem('flowbie_chat_target_scope');
+      if (stored === 'page' || stored === 'site') {
+        adminTargetScope = stored;
+      }
+    } catch (_) {}
+  }
+
+  function saveAdminTargetScope(scope) {
+    adminTargetScope = scope === 'site' ? 'site' : 'page';
+    try {
+      sessionStorage.setItem('flowbie_chat_target_scope', adminTargetScope);
+    } catch (_) {}
+  }
+
+  function getTargetScopeForApi() {
+    return isBackendMode() ? adminTargetScope : 'page';
+  }
+
+  function getEffectivePostIdForApi() {
+    if (!isBackendMode() || adminTargetScope === 'site') {
+      return 0;
+    }
+    var pageCtx = cfg.pageContext || {};
+    return pageCtx.postId || 0;
   }
 
   function loadAdminSubmode() {
@@ -216,6 +379,30 @@
 
   function getAdminSubmodeForApi() {
     return isBackendMode() ? adminSubmode : '';
+  }
+
+  function updateTargetScopeUi() {
+    if (!scopeToggleWrap) return;
+    scopeToggleWrap.hidden = !isBackendMode();
+    scopeToggleWrap.style.display = isBackendMode() ? '' : 'none';
+    var btns = scopeToggleWrap.querySelectorAll('.fcw-scope-btn');
+    for (var i = 0; i < btns.length; i++) {
+      var on = btns[i].getAttribute('data-scope') === adminTargetScope;
+      btns[i].classList.toggle('fcw-scope-btn--active', on);
+      btns[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+  }
+
+  function setAdminTargetScope(scope) {
+    saveAdminTargetScope(scope);
+    updateTargetScopeUi();
+    refreshEmptyState();
+    if (window.FlowbieChatPrefetch) {
+      FlowbieChatPrefetch.refreshOptions(prefetchOptions());
+      if (scope === 'page' && cfg.pageContext) {
+        FlowbieChatPrefetch.warmPageContext(cfg.pageContext, prefetchOptions());
+      }
+    }
   }
 
   function updateAdminSubmodeUi() {
@@ -251,6 +438,7 @@
 
   loadAdminMode();
   loadAdminSubmode();
+  loadAdminTargetScope();
 
   var GREETING_LINE = getGreetingLine();
   var GREETING_SUB = getGreetingSubline();
@@ -258,6 +446,10 @@
 
   function uiOn(key) {
     return UI[key] !== false;
+  }
+
+  function showSourcePills() {
+    return uiOn('source_pills') || isBackendMode();
   }
 
   function getChatSessionId() {
@@ -270,13 +462,36 @@
     return id;
   }
 
+  var GODMODE_HISTORY_MAX = 20;
+  var VISITOR_HISTORY_MAX = 10;
+
+  function useGodModeHistoryStorage() {
+    return !!(cfg.isWpAdmin && isBackendMode());
+  }
+
+  function godModeHistoryStorageKey() {
+    var uid = cfg.currentUserId ? String(cfg.currentUserId) : '0';
+    return 'flowbie_godmode_chat_' + uid;
+  }
+
   function historyStorageKey() {
+    if (useGodModeHistoryStorage()) {
+      return godModeHistoryStorageKey();
+    }
     return 'flowbie_chat_history_' + getChatSessionId();
+  }
+
+  function historyStorage() {
+    return useGodModeHistoryStorage() ? localStorage : sessionStorage;
+  }
+
+  function historyMaxTurns() {
+    return useGodModeHistoryStorage() ? GODMODE_HISTORY_MAX : VISITOR_HISTORY_MAX;
   }
 
   function loadHistory() {
     try {
-      var raw = sessionStorage.getItem(historyStorageKey());
+      var raw = historyStorage().getItem(historyStorageKey());
       if (raw) {
         var parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
@@ -288,22 +503,63 @@
 
   function saveHistory() {
     try {
-      sessionStorage.setItem(historyStorageKey(), JSON.stringify(history.slice(-10)));
+      historyStorage().setItem(historyStorageKey(), JSON.stringify(history.slice(-historyMaxTurns())));
     } catch (_) {}
+  }
+
+  function snapshotCardForHistory(card) {
+    if (!card || typeof card !== 'object') return null;
+    var snap = {
+      type: card.type ? String(card.type).slice(0, 40) : '',
+      title: card.title ? String(card.title).slice(0, 120) : '',
+      body: card.body ? String(card.body).slice(0, 400) : '',
+      confidence: card.confidence ? String(card.confidence).slice(0, 20) : '',
+      cta: card.cta || null,
+      submode_switch: card.submode_switch || '',
+      links: Array.isArray(card.links) ? card.links.slice(0, 6) : undefined,
+      relatedTopics: Array.isArray(card.relatedTopics) ? card.relatedTopics.slice(0, 8) : undefined
+    };
+    if (card.action_result && card.action_result.post_id) {
+      snap.action_result = {
+        post_id: card.action_result.post_id,
+        title: card.action_result.title ? String(card.action_result.title).slice(0, 120) : ''
+      };
+    }
+    if (card.details_drawer) {
+      snap.details_drawer = card.details_drawer;
+    }
+    if (card.harness_sections) {
+      snap.harness_sections = card.harness_sections;
+    }
+    if (card.harness_progress) {
+      snap.harness_progress = card.harness_progress;
+    }
+    if (card.build_message) {
+      snap.build_message = String(card.build_message).slice(0, 400);
+    }
+    return snap;
+  }
+
+  function assistantSummaryFromCard(card) {
+    var summary = card.title || (card.body ? String(card.body).slice(0, 160) : '');
+    if (card.action_result && card.action_result.post_id) {
+      summary += ' [post_id=' + card.action_result.post_id +
+        ', title="' + (card.action_result.title || '') + '"]';
+    }
+    return summary;
   }
 
   function pushHistoryTurn(role, content, card) {
     var turn = { role: role, content: content || '' };
     if (role === 'assistant' && card) {
-      var summary = card.title || (card.body ? String(card.body).slice(0, 160) : '');
-      turn.content = summary;
-      turn.card = {
-        title: card.title ? String(card.title).slice(0, 120) : '',
-        body: card.body ? String(card.body).slice(0, 200) : '',
-        cta: card.cta,
-        links: Array.isArray(card.links) ? card.links.slice(0, 4) : undefined,
-        relatedTopics: Array.isArray(card.relatedTopics) ? card.relatedTopics.slice(0, 5) : undefined
-      };
+      turn.content = assistantSummaryFromCard(card);
+      turn.card = snapshotCardForHistory(card);
+      if (card.action_result && card.action_result.post_id) {
+        turn.action_result = {
+          post_id: card.action_result.post_id,
+          title: card.action_result.title ? String(card.action_result.title).slice(0, 120) : ''
+        };
+      }
     }
     history.push(turn);
     saveHistory();
@@ -579,9 +835,11 @@
   if (window.FlowbieChatDebugLog && CAN_COPY_LOG) {
     FlowbieChatDebugLog.createSession({
       sessionId: getChatSessionId(),
-      source: 'frontend',
+      source: cfg.isWpAdmin ? 'wp-admin' : 'frontend',
       pageUrl: window.location.href || '',
-      siteName: cfg.siteName || ''
+      siteName: cfg.siteName || '',
+      godModePersist: useGodModeHistoryStorage(),
+      persistUserId: cfg.currentUserId || 0
     });
   }
 
@@ -627,11 +885,15 @@
     if (hasSubmodeSwitch) {
       var switchLabel = 'Switch to ' + (ADMIN_SUBMODE_LABELS[card.submode_switch] || 'Build') + ' mode';
       var switchBtn = el('button', {
-        className: 'fcw-cta-btn fcw-cta-btn--submode',
+        className: 'fcw-cta-btn fcw-cta-btn--submode fcw-cta-btn--submode-' + card.submode_switch,
         type: 'button'
       });
       switchBtn.textContent = switchLabel;
       switchBtn.addEventListener('click', function () {
+        if (card.submode_switch === 'build') {
+          handleSubmodeSwitch('build', resolveBuildMessage(card), { fromPlanCta: true });
+          return;
+        }
         handleSubmodeSwitch(card.submode_switch);
       });
       ctaWrap.appendChild(switchBtn);
@@ -694,21 +956,42 @@
   };
 
   function syncRootShellState(panelOpen) {
+    var keepOpen = !!(panelOpen || isOpen);
     var hideClasses = '';
     Object.keys(hideMap).forEach(function (k) {
+      if (isBackendMode() && (k === 'source_pills' || k === 'cta_buttons')) {
+        return;
+      }
       if (!uiOn(k)) hideClasses += ' ' + hideMap[k];
     });
-    if (isMobileViewport() && !panelOpen) {
+    if (isMobileViewport() && !keepOpen) {
       root.className = ('flowbie-chat-widget flowbie-chat--standalone-launcher' + hideClasses).trim();
       lockMobileRootClosed();
       return;
     }
-    root.className = (
+    var nextClass = (
       'flowbie-chat-widget flowbie-chat--sidebar flowbie-chat--standalone-launcher fai-sidebar-root fai-sidebar-root--' +
       SIDEBAR_SIDE + ' fai-sidebar-root--transition-' + SIDEBAR_TRANSITION + hideClasses
     ).trim();
+    if (keepOpen) {
+      nextClass += ' fai-sidebar-root--open';
+    }
+    if (isBackendMode()) {
+      nextClass += ' fcw--super-admin-mode';
+    }
+    root.className = nextClass;
+    if (!keepOpen) {
+      root.classList.remove('fai-sidebar-root--open');
+    }
     if (cfg.cssVars) {
-      root.setAttribute('style', cfg.cssVars);
+      if (isMobileViewport() && keepOpen) {
+        root.setAttribute(
+          'style',
+          cfg.cssVars + ';display:block!important;visibility:visible!important;position:fixed!important;inset:0!important;left:0!important;right:0!important;top:0!important;bottom:0!important;width:100%!important;height:100%!important;max-width:none!important;overflow:visible!important;z-index:999950!important;pointer-events:none!important'
+        );
+      } else if (!isMobileViewport() || keepOpen) {
+        root.setAttribute('style', cfg.cssVars);
+      }
     }
   }
 
@@ -742,13 +1025,13 @@
 
   var closeBtn = el('button', {
     type: 'button',
-    className: 'fai-sidebar-close fai-sidebar-menu-trigger',
+    className: 'fai-sidebar-close fcw-toolbar-icon-btn',
     'aria-label': 'Close chat',
     innerHTML: SIDEBAR_SIDE === 'left' ? SVG_DISMISS_LEFT : SVG_DISMISS_RIGHT
   });
   var clearBtn = el('button', {
     type: 'button',
-    className: 'fai-sidebar-clear fcw-header__clear fcw-toolbar-hidden',
+    className: 'fcw-toolbar-icon-btn',
     'aria-label': 'Clear chat',
     innerHTML: SVG_TRASH
   });
@@ -756,43 +1039,23 @@
   if (CAN_COPY_LOG) {
     copyLogBtn = el('button', {
       type: 'button',
-      className: 'fai-sidebar-clear fcw-header__clear fcw-toolbar-hidden',
+      className: 'fcw-toolbar-icon-btn',
       'aria-label': 'Copy log',
       innerHTML: SVG_CLIPBOARD
     });
   }
-  var menuBtn = el('button', {
-    type: 'button',
-    className: 'fai-sidebar-menu-trigger',
-    'aria-label': 'More actions',
-    'aria-expanded': 'false',
-    'aria-haspopup': 'true',
-    innerHTML: SVG_MORE
-  });
-  var menuPanel = el('div', { className: 'fai-sidebar-menu-panel', hidden: '', role: 'menu' });
-  var menuCopy = null;
-  if (CAN_COPY_LOG) {
-    menuCopy = el('button', { type: 'button', className: 'fai-sidebar-menu-item', role: 'menuitem' });
-    menuCopy.textContent = 'Copy log';
-  }
-  var menuClear = el('button', { type: 'button', className: 'fai-sidebar-menu-item', role: 'menuitem' });
-  menuClear.textContent = 'Clear chat';
-  var menuInventoryDownload = null;
+  var inventoryBtn = null;
   if (SITE_INVENTORY_CSV_URL) {
-    menuInventoryDownload = el('a', {
-      className: 'fai-sidebar-menu-item fcw-inventory-download',
-      role: 'menuitem',
+    inventoryBtn = el('a', {
+      className: 'fcw-toolbar-icon-btn fcw-inventory-download',
+      role: 'button',
+      'aria-label': 'Download site cache CSV',
       href: SITE_INVENTORY_CSV_URL + (SITE_INVENTORY_CSV_URL.indexOf('?') >= 0 ? '&' : '?') + '_wpnonce=' + encodeURIComponent(cfg.nonce || ''),
-      download: ''
+      download: '',
+      innerHTML: SVG_DOWNLOAD
     });
-    menuInventoryDownload.textContent = 'Download site cache CSV';
   }
-  if (menuCopy) menuPanel.appendChild(menuCopy);
-  if (menuInventoryDownload) menuPanel.appendChild(menuInventoryDownload);
-  menuPanel.appendChild(menuClear);
-  var menuWrap = el('div', { className: 'fai-sidebar-toolbar-menu' });
-  menuWrap.appendChild(menuBtn);
-  menuWrap.appendChild(menuPanel);
+  var toolbarLeading = el('div', { className: 'fcw-toolbar-leading' });
   var toolbarActions = el('div', { className: 'fai-sidebar-toolbar-actions' });
   var modeToggleWrap = null;
   var startersWrapEl = null;
@@ -834,10 +1097,14 @@
     saveAdminMode(mode);
     refreshEmptyState();
     updateAdminSubmodeUi();
+    updateTargetScopeUi();
+    syncRootShellState(root.classList.contains('fai-sidebar-root--open'));
     if (mode === 'backend') {
       warmSiteInventory();
     }
     if (modeToggleWrap) {
+      modeToggleWrap.classList.toggle('fcw-mode-toggle--visitor', adminMode === 'visitor');
+      modeToggleWrap.classList.toggle('fcw-mode-toggle--backend', adminMode === 'backend');
       var btns = modeToggleWrap.querySelectorAll('.fcw-mode-btn');
       for (var i = 0; i < btns.length; i++) {
         var on = btns[i].getAttribute('data-mode') === adminMode;
@@ -869,8 +1136,48 @@
     backendModeBtn.textContent = 'God Mode';
     modeToggleWrap.appendChild(visitorModeBtn);
     modeToggleWrap.appendChild(backendModeBtn);
-    visitorModeBtn.addEventListener('click', function () { setAdminMode('visitor'); });
-    backendModeBtn.addEventListener('click', function () { setAdminMode('backend'); });
+    visitorModeBtn.addEventListener('click', function (evt) {
+      evt.preventDefault();
+      evt.stopPropagation();
+      setAdminMode('visitor');
+    });
+    backendModeBtn.addEventListener('click', function (evt) {
+      evt.preventDefault();
+      evt.stopPropagation();
+      setAdminMode('backend');
+    });
+
+    scopeToggleWrap = el('div', {
+      className: 'fcw-scope-toggle',
+      role: 'group',
+      'aria-label': 'Target context'
+    });
+    var pageScopeBtn = el('button', {
+      type: 'button',
+      className: 'fcw-scope-btn fcw-scope-btn--active',
+      'data-scope': 'page',
+      'aria-pressed': 'true'
+    });
+    pageScopeBtn.textContent = 'Page';
+    var siteScopeBtn = el('button', {
+      type: 'button',
+      className: 'fcw-scope-btn',
+      'data-scope': 'site',
+      'aria-pressed': 'false'
+    });
+    siteScopeBtn.textContent = 'Site';
+    scopeToggleWrap.appendChild(pageScopeBtn);
+    scopeToggleWrap.appendChild(siteScopeBtn);
+    pageScopeBtn.addEventListener('click', function (evt) {
+      evt.preventDefault();
+      evt.stopPropagation();
+      setAdminTargetScope('page');
+    });
+    siteScopeBtn.addEventListener('click', function (evt) {
+      evt.preventDefault();
+      evt.stopPropagation();
+      setAdminTargetScope('site');
+    });
   }
 
   function inventoryMenuLabel(count) {
@@ -882,11 +1189,13 @@
   }
 
   function updateInventoryMenuUi() {
-    if (!menuInventoryDownload) return;
+    if (!inventoryBtn) return;
     var show = isBackendMode();
-    menuInventoryDownload.hidden = !show;
-    menuInventoryDownload.style.display = show ? '' : 'none';
-    menuInventoryDownload.textContent = inventoryMenuLabel(siteInventoryCount);
+    inventoryBtn.hidden = !show;
+    inventoryBtn.style.display = show ? '' : 'none';
+    var label = inventoryMenuLabel(siteInventoryCount);
+    inventoryBtn.setAttribute('aria-label', label);
+    inventoryBtn.title = label;
   }
 
   function warmSiteInventory() {
@@ -909,10 +1218,37 @@
     warmSiteInventory();
   }
 
+  if (CAN_BACKEND_MODE) {
+    adminSubmodeBtn = el('button', {
+      type: 'button',
+      className: 'fcw-admin-submode fcw-admin-submode--ask',
+      hidden: ''
+    });
+    adminSubmodeBtn.appendChild(el('span', { className: 'fcw-admin-submode__dot', 'aria-hidden': 'true' }));
+    var submodeLabelEl = el('span', { className: 'fcw-admin-submode__label' });
+    submodeLabelEl.textContent = 'Ask';
+    adminSubmodeBtn.appendChild(submodeLabelEl);
+    adminSubmodeBtn.addEventListener('click', function () {
+      cycleAdminSubmode();
+    });
+  }
+
+  if (modeToggleWrap) {
+    toolbarLeading.appendChild(modeToggleWrap);
+  }
+  if (scopeToggleWrap) {
+    toolbarLeading.appendChild(scopeToggleWrap);
+    updateTargetScopeUi();
+  }
+  if (inventoryBtn) toolbarActions.appendChild(inventoryBtn);
+  if (copyLogBtn) toolbarActions.appendChild(copyLogBtn);
+  toolbarActions.appendChild(clearBtn);
   toolbarActions.appendChild(closeBtn);
-  toolbarActions.appendChild(menuWrap);
   var contactHuman = SHOW_CONTACT_HUMAN ? buildContactHumanModule() : null;
   var toolbar = el('div', { className: 'fai-sidebar-panel__toolbar' });
+  if (toolbarLeading.childNodes.length) {
+    toolbar.appendChild(toolbarLeading);
+  }
   toolbar.appendChild(toolbarActions);
 
   var emptyEl = null;
@@ -984,37 +1320,18 @@
   });
 
   composerShell.appendChild(textarea);
-  if (CAN_BACKEND_MODE) {
-    adminSubmodeBtn = el('button', {
-      type: 'button',
-      className: 'fcw-admin-submode fcw-admin-submode--ask',
-      hidden: ''
-    });
-    adminSubmodeBtn.appendChild(el('span', { className: 'fcw-admin-submode__dot', 'aria-hidden': 'true' }));
-    var submodeLabelEl = el('span', { className: 'fcw-admin-submode__label' });
-    submodeLabelEl.textContent = 'Ask';
-    adminSubmodeBtn.appendChild(submodeLabelEl);
-    adminSubmodeBtn.addEventListener('click', function () {
-      cycleAdminSubmode();
-    });
+  if (adminSubmodeBtn) {
+    composerActions.appendChild(adminSubmodeBtn);
   }
   if (contactHuman) {
     composerActions.classList.add('fcw-composer-actions--with-human');
     composerActions.appendChild(contactHuman.toolbarBtn);
-  }
-  if (adminSubmodeBtn) {
-    composerActions.appendChild(adminSubmodeBtn);
   }
   composerActions.appendChild(sendBtn);
   composerShell.appendChild(composerActions);
   inputRow.appendChild(composerShell);
 
   var panelBody = el('div', { className: 'fai-sidebar-panel__body' });
-  if (modeToggleWrap) {
-    var adminModeBar = el('div', { className: 'fcw-admin-mode-bar' });
-    adminModeBar.appendChild(modeToggleWrap);
-    panelBody.appendChild(adminModeBar);
-  }
   if (SHOW_SIDEBAR_HEADING) {
     var headingEl = el('h2', { className: 'fai-sidebar-heading fcw-sidebar-heading' });
     headingEl.textContent = cfg.sidebarHeading;
@@ -1030,10 +1347,6 @@
   panelBody.appendChild(chatMain);
   panel.appendChild(toolbar);
   panel.appendChild(panelBody);
-  var toolbarHidden = el('div', { className: 'fcw-toolbar-hidden' });
-  if (copyLogBtn) toolbarHidden.appendChild(copyLogBtn);
-  toolbarHidden.appendChild(clearBtn);
-  panel.appendChild(toolbarHidden);
   panel.setAttribute('role', 'complementary');
   panel.setAttribute('aria-label', ASSISTANT);
   panel.setAttribute('hidden', '');
@@ -1086,40 +1399,6 @@
       }
     });
   }
-
-  function closeToolbarMenu() {
-    menuPanel.hidden = true;
-    menuBtn.setAttribute('aria-expanded', 'false');
-  }
-
-  function toggleToolbarMenu() {
-    var open = menuPanel.hidden;
-    menuPanel.hidden = !open;
-    menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
-  }
-
-  menuBtn.addEventListener('click', function (evt) {
-    evt.stopPropagation();
-    toggleToolbarMenu();
-  });
-
-  if (menuCopy) {
-    menuCopy.addEventListener('click', function () {
-      if (copyLogBtn) copyLogBtn.click();
-      closeToolbarMenu();
-    });
-  }
-
-  menuClear.addEventListener('click', function () {
-    clearChat();
-    closeToolbarMenu();
-  });
-
-  document.addEventListener('click', function (evt) {
-    if (!menuWrap.contains(evt.target)) {
-      closeToolbarMenu();
-    }
-  });
 
   // ── Events ────────────────────────────────────────────────────
 
@@ -1188,6 +1467,7 @@
   }
 
   function appendPlanCard(card) {
+    rememberBuildRerunFromCard(card);
     var shell = fcwAppendWorkflowCard(card);
     fcwSetWorkflowCardActive(shell, false);
     if (shell.badgeEl && typeof fcwApplyCardBadge === 'function') {
@@ -1334,11 +1614,13 @@
     badgeEl.textContent = fcwTypeBadgeLabel(t);
   }
 
-  function appendTopicChips(cardEl, topics) {
+  function appendTopicChips(cardEl, topics, card) {
     if (!uiOn('suggestion_chips') || !cardEl || !topics || !topics.length) return;
     if (cardEl.querySelector('.fcw-card__topics')) return;
+    var hasSubmodeCta = !!(card && card.submode_switch && ADMIN_SUBMODES.indexOf(card.submode_switch) >= 0);
     var topicsWrap = el('div', { className: 'fcw-card__topics' });
     topics.forEach(function (topic) {
+      if (hasSubmodeCta && normalizeSubmodeSwitchTopic(topic)) return;
       var chip = el('button', { className: 'fcw-topic-chip', type: 'button' });
       chip.textContent = topic;
       chip.addEventListener('click', function () {
@@ -1351,6 +1633,7 @@
       });
       topicsWrap.appendChild(chip);
     });
+    if (!topicsWrap.childNodes.length) return;
     cardEl.appendChild(topicsWrap);
   }
 
@@ -1360,7 +1643,11 @@
     var cards = messages.querySelectorAll('.fcw-card');
     if (!cards.length) return;
     var cardEl = cards[cards.length - 1];
-    appendTopicChips(cardEl, topics);
+    var cardData = null;
+    if (history.length && history[history.length - 1].role === 'assistant') {
+      cardData = history[history.length - 1].card || null;
+    }
+    appendTopicChips(cardEl, topics, cardData);
     if (history.length && history[history.length - 1].role === 'assistant') {
       var last = history[history.length - 1];
       if (!last.card) last.card = {};
@@ -1369,6 +1656,190 @@
     prefetchFollowUpChips({ relatedTopics: topics });
     var msgRow = cardEl.closest('.fcw-msg');
     scrollDown(msgRow || null);
+  }
+
+  function fcwAppendCardLinkPills(cardEl, card, shell) {
+    var links = card.links && card.links.length ? card.links.slice() : [];
+    if (card.undo && card.undo.post_id) {
+      links.push({
+        label: card.undo.label || 'Undo',
+        icon: 'edit',
+        action: 'undo',
+        post_id: card.undo.post_id,
+        url: '#'
+      });
+    }
+    if (!showSourcePills() || !links.length || !cardEl) return;
+    var linksWrap = el('div', { className: 'fcw-card__links' });
+    links.forEach(function (link) {
+      fcwAppendOneLinkPill(linksWrap, link, card, shell, cardEl);
+    });
+    if (linksWrap.childNodes.length) {
+      cardEl.appendChild(linksWrap);
+    }
+  }
+
+  function fcwAppendOneLinkPill(linksWrap, link, card, shell, cardEl) {
+    if (!link) return;
+    if (link.action === 'undo' && link.post_id) {
+      if (!BACKEND_ASSIST_UNDO_URL) return;
+      var undoEl = el('a', { className: 'fcw-link-pill', href: '#' });
+      var undoIcon = linkIcon(link.icon || 'edit');
+      if (undoIcon) {
+        undoEl.appendChild(el('span', { className: 'fcw-link-pill__icon', innerHTML: undoIcon }));
+      }
+      var undoLbl = el('span');
+      undoLbl.textContent = link.label || 'Undo';
+      undoEl.appendChild(undoLbl);
+      undoEl.addEventListener('click', function (e) {
+        e.preventDefault();
+        runFcwCardUndo(link.post_id, card, shell || { cardEl: cardEl }, undoEl);
+      });
+      linksWrap.appendChild(undoEl);
+      return;
+    }
+    if (!link.url || link.url === '#') return;
+    var a = el('a', { className: 'fcw-link-pill', href: link.url });
+    var icon = linkIcon(link.icon);
+    if (icon) {
+      a.appendChild(el('span', { className: 'fcw-link-pill__icon', innerHTML: icon }));
+    }
+    var lbl = el('span');
+    lbl.textContent = link.label;
+    a.appendChild(lbl);
+    bindAcceptClick(a, card, 'source', link.label);
+    linksWrap.appendChild(a);
+  }
+
+  function runFcwCardUndo(postId, card, shell, undoEl) {
+    if (isLoading || !postId || !BACKEND_ASSIST_UNDO_URL) return;
+    var cardEl = shell && shell.cardEl ? shell.cardEl : null;
+    if (undoEl) undoEl.setAttribute('aria-disabled', 'true');
+    fetch(BACKEND_ASSIST_UNDO_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-WP-Nonce': cfg.nonce || ''
+      },
+      body: JSON.stringify({ post_id: postId })
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok || !data) {
+          if (undoEl) undoEl.removeAttribute('aria-disabled');
+          return;
+        }
+        var updated = data;
+        if (window.FlowbieDisplayText && typeof window.FlowbieDisplayText.decodeCard === 'function') {
+          updated = window.FlowbieDisplayText.decodeCard(updated);
+        }
+        if (shell && shell.titleEl) {
+          shell.titleEl.innerHTML = renderMarkdown(updated.title || '');
+        } else if (cardEl) {
+          var titleNode = cardEl.querySelector('.fcw-card__title');
+          if (titleNode) titleNode.innerHTML = renderMarkdown(updated.title || '');
+        }
+        if (shell && shell.bodyEl) {
+          if (updated.body) {
+            shell.bodyEl.innerHTML = renderMarkdown(updated.body);
+            shell.bodyEl.style.display = '';
+          } else {
+            shell.bodyEl.style.display = 'none';
+          }
+        } else if (cardEl && updated.body) {
+          var bodyNode = cardEl.querySelector('.fcw-card__body');
+          if (!bodyNode) {
+            bodyNode = el('div', { className: 'fcw-card__body' });
+            var titleRow = cardEl.querySelector('.fcw-card__title-row');
+            if (titleRow) {
+              cardEl.insertBefore(bodyNode, titleRow.nextSibling);
+            } else {
+              cardEl.appendChild(bodyNode);
+            }
+          }
+          bodyNode.innerHTML = renderMarkdown(updated.body);
+          bodyNode.style.display = '';
+        }
+        if (shell && shell.badgeEl && updated.type) {
+          fcwApplyCardBadge(shell.badgeEl, updated.type);
+        }
+        fcwPopulateCardExtras(shell || { cardEl: cardEl }, updated);
+        pushHistoryTurn('assistant', updated.title || (updated.body ? String(updated.body).slice(0, 160) : ''), updated);
+      });
+    }).catch(function () {
+      if (undoEl) undoEl.removeAttribute('aria-disabled');
+    });
+  }
+
+  function fcwRenderDetailsDrawerInCard(cardEl, card) {
+    if (!cardEl || !card || !card.details_drawer || !window.FlowbieBuildHarness) {
+      return false;
+    }
+    cardEl.classList.add('fcw-card--build-harness');
+    var existing = cardEl.querySelector('.fcw-card__body--details-drawer');
+    if (existing && existing.parentNode) {
+      existing.parentNode.removeChild(existing);
+    }
+    var body = el('div', { className: 'fcw-card__body fcw-card__body--details-drawer' });
+    window.FlowbieBuildHarness.renderDetailsDrawer(card.details_drawer, body);
+    if (card.details_drawer.progress && window.FlowbieBuildHarness.setProgress) {
+      var p = card.details_drawer.progress;
+      window.FlowbieBuildHarness.setProgress(p.completed || 0, p.total || 3, 'Build complete');
+    }
+    cardEl.appendChild(body);
+    return true;
+  }
+
+  function fcwFinalizeBuildActionCard(shell, card, host) {
+    if (!shell || !card) return;
+    if (!card.details_drawer || !window.FlowbieBuildHarness) {
+      if (shell.cardEl) {
+        shell.cardEl.classList.remove('fcw-card--build-running');
+      }
+      if (window.FlowbieThinkingCard) {
+        FlowbieThinkingCard.finalizeToCard(shell, card, host);
+      }
+      return;
+    }
+    if (host.setWorkflowCardActive) {
+      host.setWorkflowCardActive(shell, false);
+    }
+    if (shell.cardEl) {
+      shell.cardEl.classList.remove('fcw-card--build-running');
+    }
+    if (shell.stepsList && shell.stepsList.parentNode) {
+      shell.stepsList.parentNode.removeChild(shell.stepsList);
+      shell.stepsList = null;
+    }
+    var t = card.type || 'action';
+    if (shell.badgeEl && typeof host.applyCardBadge === 'function') {
+      host.applyCardBadge(shell.badgeEl, t);
+    }
+    if (shell.titleEl) {
+      shell.titleEl.innerHTML = renderMarkdown(card.title || '');
+    }
+    if (shell.bodyEl) {
+      shell.bodyEl.innerHTML = '';
+      shell.bodyEl.style.display = '';
+      if (card.details_drawer && window.FlowbieBuildHarness) {
+        if (shell.cardEl) {
+          shell.cardEl.classList.add('fcw-card--build-harness');
+        }
+        shell.bodyEl.className = 'fcw-card__body fcw-card__body--details-drawer';
+        window.FlowbieBuildHarness.renderDetailsDrawer(card.details_drawer, shell.bodyEl);
+      } else if (card.body) {
+        shell.bodyEl.className = 'fcw-card__body';
+        shell.bodyEl.innerHTML = renderMarkdown(card.body);
+      } else {
+        shell.bodyEl.style.display = 'none';
+      }
+    }
+    if (typeof host.populateCardExtras === 'function') {
+      host.populateCardExtras(shell, card);
+    }
+    if (typeof host.scrollDown === 'function') {
+      host.scrollDown(shell.root);
+    }
+    dispatchMetaSavedEvent(card);
   }
 
   function fcwPopulateCardExtras(shell, card) {
@@ -1383,19 +1854,12 @@
       conf.textContent = confMap[card.confidence] || confMap.medium;
       cardEl.appendChild(conf);
     }
-    if (uiOn('source_pills') && card.links && card.links.length) {
-      var linksWrap = el('div', { className: 'fcw-card__links' });
-      card.links.forEach(function (link) {
-        var a = el('a', { className: 'fcw-link-pill', href: link.url });
-        a.textContent = link.label;
-        bindAcceptClick(a, card, 'source', link.label);
-        linksWrap.appendChild(a);
-      });
-      cardEl.appendChild(linksWrap);
+    if (showSourcePills()) {
+      fcwAppendCardLinkPills(cardEl, card, shell);
     }
     appendCardCtas(cardEl, card);
     if (uiOn('suggestion_chips') && card.relatedTopics && card.relatedTopics.length) {
-      appendTopicChips(cardEl, card.relatedTopics);
+      appendTopicChips(cardEl, card.relatedTopics, card);
     }
   }
 
@@ -1448,10 +1912,21 @@
             shell.bodyEl.style.display = 'none';
           }
         }
+        if (shell.stepsList.parentNode) {
+          shell.stepsList.parentNode.removeChild(shell.stepsList);
+        }
+        shell.stepsList = fcwBuildStepsList(card.steps || []);
+        shell.cardEl.appendChild(shell.stepsList);
         fcwPopulateCardExtras(shell, card);
       } else {
         appendPlanCard(card);
       }
+      done();
+      prefetchFollowUpChips(card);
+      return Promise.resolve();
+    }
+    if (shell && card.details_drawer && window.FlowbieBuildHarness) {
+      fcwFinalizeBuildActionCard(shell, card, host);
       done();
       prefetchFollowUpChips(card);
       return Promise.resolve();
@@ -1582,8 +2057,14 @@
     mountShellNodes();
     syncRootShellState(true);
     root.classList.add('fai-sidebar-root--open');
-    if (backdrop) backdrop.removeAttribute('hidden');
-    if (panel) panel.removeAttribute('hidden');
+    if (backdrop) {
+      backdrop.removeAttribute('hidden');
+      backdrop.classList.add('fai-sidebar-backdrop--visible');
+    }
+    if (panel) {
+      panel.removeAttribute('hidden');
+      panel.classList.add('fai-sidebar-panel--visible');
+    }
     var launcher = getStandaloneLauncher();
     if (launcher) launcher.setAttribute('aria-expanded', 'true');
     onSidebarOpen();
@@ -1591,8 +2072,14 @@
 
   function closeStandalonePanel() {
     root.classList.remove('fai-sidebar-root--open');
-    if (backdrop) backdrop.setAttribute('hidden', '');
-    if (panel) panel.setAttribute('hidden', '');
+    if (backdrop) {
+      backdrop.setAttribute('hidden', '');
+      backdrop.classList.remove('fai-sidebar-backdrop--visible');
+    }
+    if (panel) {
+      panel.setAttribute('hidden', '');
+      panel.classList.remove('fai-sidebar-panel--visible');
+    }
     onSidebarClose();
     teardownShellIfMobile();
   }
@@ -1601,6 +2088,10 @@
     showMobileRootForPanel();
     mountShellNodes();
     syncRootShellState(true);
+    if (isMobileViewport()) {
+      openStandalonePanel();
+      return;
+    }
     if (sidebarShell && typeof sidebarShell.toggle === 'function') {
       sidebarShell.toggle(true);
       return;
@@ -1641,6 +2132,9 @@
   }
 
   function ensureStandaloneShell() {
+    if (isMobileViewport()) {
+      return null;
+    }
     if (sidebarShell) {
       return sidebarShell;
     }
@@ -1651,7 +2145,7 @@
       return null;
     }
     mountShellNodes();
-    syncRootShellState(true);
+    syncRootShellState(isOpen);
     sidebarShell = window.FlowbieAiSidebarShell.init(root, {
       backdrop: backdrop,
       panel: panel,
@@ -1689,6 +2183,11 @@
       removeStandaloneLauncher();
       bindShellCallbacks(shell);
       sidebarShell = shell;
+      var mobileLauncher = document.getElementById('flowbie-chat-mobile-launcher');
+      if (mobileLauncher && typeof shell.registerLauncher === 'function' && !mobileLauncher._fcwUnifiedBound) {
+        mobileLauncher._fcwUnifiedBound = true;
+        shell.registerLauncher(mobileLauncher);
+      }
       return;
     }
     bindStandaloneLauncher();
@@ -1883,6 +2382,12 @@
     };
   }
 
+  window.FlowbieChatMountShell = function () {
+    showMobileRootForPanel();
+    mountShellNodes();
+    syncRootShellState(true);
+  };
+
   bindUnifiedShell();
   if (!isMobileViewport()) {
     root.hidden = false;
@@ -1895,6 +2400,9 @@
     lockMobileRootClosed();
   }
   applyLauncherChrome();
+  if (!isOpen) {
+    setLauncherVisible(true);
+  }
   chekkitTeaser = initChekkitTeaser();
   if (window.matchMedia) {
     window.matchMedia('(max-width:767px)').addEventListener('change', function () {
@@ -1971,8 +2479,9 @@
       source: 'frontend',
       adminMode: getAdminModeForApi(),
       adminSubmode: getAdminSubmodeForApi(),
+      targetScope: getTargetScopeForApi(),
       pageUrl: window.location.href || pageCtx.url || '',
-      postId: pageCtx.postId || 0,
+      postId: getEffectivePostIdForApi(),
       pageTitle: typeof document !== 'undefined' ? document.title || '' : '',
       pageContextKey: pageContextKey,
       isLoading: function () { return isLoading; }
@@ -1981,7 +2490,7 @@
 
   if (window.FlowbieChatPrefetch) {
     FlowbieChatPrefetch.bindComposer(textarea, prefetchOptions());
-    if (cfg.pageContext) {
+    if (cfg.pageContext && getTargetScopeForApi() !== 'site') {
       FlowbieChatPrefetch.warmPageContext(cfg.pageContext, prefetchOptions());
     }
     if (STARTERS.length && uiOn('suggestion_chips') && !isBackendMode()) {
@@ -1992,6 +2501,49 @@
   function sendMessage(text, inputOrigin, options) {
     options = options || {};
     inputOrigin = inputOrigin || 'typed';
+
+    if (
+      isBackendMode()
+      && getAdminSubmodeForApi() === 'build'
+      && window.FlowbieBuildHarness
+      && cfg.backendAssistUrl
+    ) {
+      isLoading = true;
+      sendBtn.disabled = true;
+      if (window.FlowbieVoice) {
+        FlowbieVoice.updateSendMicVisibility(textarea, sendBtn);
+      }
+      if (window.FlowbieBuildHarness.mountProgress) {
+        FlowbieBuildHarness.mountProgress(root);
+      }
+      FlowbieBuildHarness.runBuild({
+        message: text,
+        history: historyForApi(),
+        cfg: cfg,
+        root: root,
+        thinkingSteps: resolveBuildThinkingSteps(text),
+        pageUrl: window.location.href || (cfg.pageContext && cfg.pageContext.url) || '',
+        postId: getEffectivePostIdForApi(),
+        targetScope: getTargetScopeForApi(),
+        pageContextKey: window.FlowbieChatPrefetch && typeof window.FlowbieChatPrefetch.getPageContextKey === 'function'
+          ? FlowbieChatPrefetch.getPageContextKey()
+          : '',
+        host: fcwThinkingHost(),
+        presentCard: presentCard,
+        onDone: function () {
+          isLoading = false;
+          sendBtn.disabled = false;
+          if (window.FlowbieVoice) {
+            FlowbieVoice.updateSendMicVisibility(textarea, sendBtn);
+          }
+          if (window.FlowbieChatPrefetch) {
+            FlowbieChatPrefetch.refreshOptions(prefetchOptions());
+          }
+        }
+      });
+      return;
+    }
+
     isLoading = true;
     sendBtn.disabled = true;
     if (window.FlowbieVoice) {
@@ -2094,8 +2646,9 @@
         source: 'frontend',
         admin_mode: getAdminModeForApi(),
         admin_submode: getAdminSubmodeForApi(),
+        target_scope: getTargetScopeForApi(),
         page_url: window.location.href || (cfg.pageContext && cfg.pageContext.url) || '',
-        post_id: cfg.pageContext && cfg.pageContext.postId ? cfg.pageContext.postId : 0,
+        post_id: getEffectivePostIdForApi(),
         page_title: typeof document !== 'undefined' ? document.title || '' : '',
         page_context_key: window.FlowbieChatPrefetch && typeof window.FlowbieChatPrefetch.getPageContextKey === 'function'
           ? FlowbieChatPrefetch.getPageContextKey()
@@ -2199,7 +2752,7 @@
     titleRow.appendChild(title);
     cardEl.appendChild(titleRow);
 
-    if (card.body) {
+    if (!fcwRenderDetailsDrawerInCard(cardEl, card) && card.body) {
       var body = el('div', { className: 'fcw-card__body' });
       body.innerHTML = renderMarkdown(card.body);
       cardEl.appendChild(body);
@@ -2218,31 +2771,14 @@
       cardEl.appendChild(conf);
     }
 
-    if (uiOn('source_pills') && card.links && card.links.length) {
-      var linksWrap = el('div', { className: 'fcw-card__links' });
-      card.links.forEach(function (link) {
-        var a = el('a', {
-          className: 'fcw-link-pill',
-          href: link.url
-        });
-        var icon = linkIcon(link.icon);
-        if (icon) {
-          var iconSpan = el('span', { className: 'fcw-link-pill__icon', innerHTML: icon });
-          a.appendChild(iconSpan);
-        }
-        var lbl = el('span', {});
-        lbl.textContent = link.label;
-        a.appendChild(lbl);
-        bindAcceptClick(a, card, 'source', link.label);
-        linksWrap.appendChild(a);
-      });
-      cardEl.appendChild(linksWrap);
+    if (showSourcePills()) {
+      fcwAppendCardLinkPills(cardEl, card, null);
     }
 
     appendCardCtas(cardEl, card);
 
     if (uiOn('suggestion_chips') && card.relatedTopics && card.relatedTopics.length) {
-      appendTopicChips(cardEl, card.relatedTopics);
+      appendTopicChips(cardEl, card.relatedTopics, card);
     }
 
     row.appendChild(cardEl);
@@ -2310,12 +2846,18 @@
     }
     var s = esc(text);
     s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2">$1</a>');
+    s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    s = s.replace(/<(https?:\/\/[^>]+)>/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+    s = s.replace(/(^|[\s(])((https?:\/\/[^\s<)]+))/g, function (match, prefix, url) {
+      return prefix + '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
+    });
     s = s.replace(/\n/g, '<br>');
     return s;
   }
 
   function linkIcon(type) {
+    if (type === 'edit') return SVG_ICON_EDIT;
+    if (type === 'preview') return SVG_ICON_PREVIEW;
     if (type === 'post') return SVG_ICON_POST;
     if (type === 'page') return SVG_ICON_PAGE;
     if (type === 'external') return SVG_ICON_EXT;
@@ -2327,4 +2869,59 @@
     ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
   }
   textarea.addEventListener('input', function () { autoResize(textarea); });
+
+  function cardFromStoredTurn(turn) {
+    if (!turn) {
+      return { title: '', body: '' };
+    }
+    if (!turn.card) {
+      return { title: turn.content || '', body: '' };
+    }
+    var card = {
+      type: turn.card.type || '',
+      title: turn.card.title || turn.content || '',
+      body: turn.card.body || '',
+      confidence: turn.card.confidence || '',
+      cta: turn.card.cta || null,
+      submode_switch: turn.card.submode_switch || '',
+      links: turn.card.links || [],
+      relatedTopics: turn.card.relatedTopics || []
+    };
+    if (turn.action_result && turn.action_result.post_id) {
+      card.action_result = turn.action_result;
+    } else if (turn.card.action_result && turn.card.action_result.post_id) {
+      card.action_result = turn.card.action_result;
+    }
+    if (turn.card.details_drawer) {
+      card.details_drawer = turn.card.details_drawer;
+    }
+    if (turn.card.harness_sections) {
+      card.harness_sections = turn.card.harness_sections;
+    }
+    if (turn.card.harness_progress) {
+      card.harness_progress = turn.card.harness_progress;
+    }
+    if (turn.card.build_message) {
+      card.build_message = turn.card.build_message;
+    }
+    return card;
+  }
+
+  function restoreHistoryToUi() {
+    if (!history.length || !messages) return;
+    hideEmpty();
+    history.forEach(function (turn) {
+      if (!turn || !turn.role) return;
+      if (turn.role === 'user') {
+        appendUserBubble(turn.content || '');
+        return;
+      }
+      if (turn.role === 'assistant') {
+        appendCard(cardFromStoredTurn(turn));
+      }
+    });
+    scrollDown();
+  }
+
+  restoreHistoryToUi();
 })();

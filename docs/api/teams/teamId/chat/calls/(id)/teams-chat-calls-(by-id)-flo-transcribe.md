@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/chat/calls/({id})/flo-transcribe
 auth: team-rbac-communication
-order: 1130
+order: 1140
 ---
 
 POST `/api/teams/{teamId}/chat/calls/({id})/flo-transcribe`.

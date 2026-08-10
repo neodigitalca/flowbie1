@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/get-optimization-activity-counts
 auth: open
-order: 2440
+order: 2460
 ---
 
 POST `/api/wordpress/get-optimization-activity-counts`.

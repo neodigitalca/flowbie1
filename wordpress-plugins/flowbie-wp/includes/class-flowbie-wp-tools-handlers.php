@@ -196,7 +196,14 @@ class Flowbie_Wp_Tools_Handlers {
 		if ( is_wp_error( $rs ) ) {
 			return $rs;
 		}
-		return array( 'ok' => true, 'post_id' => $post_id );
+		$post = get_post( $post_id );
+		return array(
+			'ok'       => true,
+			'post_id'  => $post_id,
+			'title'    => $post instanceof WP_Post ? $post->post_title : '',
+			'edit_url' => get_edit_post_link( $post_id, 'raw' ),
+			'view_url' => get_permalink( $post_id ),
+		);
 	}
 
 	/**

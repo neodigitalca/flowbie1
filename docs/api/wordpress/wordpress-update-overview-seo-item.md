@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/update-overview-seo-item
 auth: open
-order: 2780
+order: 2800
 ---
 
 POST `/api/wordpress/update-overview-seo-item`.

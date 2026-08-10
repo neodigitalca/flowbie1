@@ -5,7 +5,7 @@ section: Site Scraper
 method: POST
 path: /api/site-scraper/cancel
 auth: open
-order: 1020
+order: 1030
 ---
 
 POST `/api/site-scraper/cancel`.

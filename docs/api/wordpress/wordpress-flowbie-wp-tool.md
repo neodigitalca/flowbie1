@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/flowbie-wp-tool
 auth: open
-order: 2300
+order: 2320
 ---
 
 POST `/api/wordpress/flowbie-wp-tool`.

@@ -23,7 +23,7 @@ class Flowbie_Wp_Ai_Apply {
 		}
 
 		$value = trim( $value );
-		if ( $value === '' ) {
+		if ( $value === '' || Flowbie_Wp_Ai_Seo_Limits::is_placeholder_copy( $value ) ) {
 			return new WP_Error( 'flowbie_empty', __( 'Value is empty.', 'flowbie-wp' ) );
 		}
 
@@ -68,9 +68,10 @@ class Flowbie_Wp_Ai_Apply {
 	 * Save meta hub fields without counting as an optimization.
 	 *
 	 * @param array<string,string> $fields
+	 * @param array<string, mixed> $options
 	 * @return array<string,mixed>|WP_Error
 	 */
-	public static function save_meta( int $post_id, array $fields ) {
+	public static function save_meta( int $post_id, array $fields, array $options = array() ) {
 		$post = get_post( $post_id );
 		if ( ! $post instanceof WP_Post ) {
 			return new WP_Error( 'flowbie_post', __( 'Post not found.', 'flowbie-wp' ) );
@@ -86,7 +87,10 @@ class Flowbie_Wp_Ai_Apply {
 			'seoResearch'     => 'seo_research',
 			'faq'             => 'faq',
 			'pageUrl'         => 'page_url',
+			'dateModifier'    => 'date_modifier',
 		);
+
+		$seo_title_only = ! empty( $options['seo_title_only'] );
 
 		$saved = array();
 		foreach ( $map as $key => $field ) {
@@ -95,6 +99,17 @@ class Flowbie_Wp_Ai_Apply {
 			}
 			$value = trim( (string) $fields[ $key ] );
 			if ( $value === '' ) {
+				if ( ! Flowbie_Wp_Ai_Fields::is_allowed( $field ) ) {
+					continue;
+				}
+				$written = self::write_field( $post_id, $field, '' );
+				if ( is_wp_error( $written ) ) {
+					return $written;
+				}
+				$saved = array_merge( $saved, $written );
+				continue;
+			}
+			if ( Flowbie_Wp_Ai_Seo_Limits::is_placeholder_copy( $value ) ) {
 				continue;
 			}
 			if ( $field === 'title' ) {
@@ -106,7 +121,11 @@ class Flowbie_Wp_Ai_Apply {
 			if ( ! Flowbie_Wp_Ai_Fields::is_allowed( $field ) ) {
 				continue;
 			}
-			$written = self::write_field( $post_id, $field, $value );
+			if ( $field === 'title' && $seo_title_only ) {
+				$written = self::write_seo_title_only( $post_id, $value );
+			} else {
+				$written = self::write_field( $post_id, $field, $value );
+			}
 			if ( is_wp_error( $written ) ) {
 				return $written;
 			}
@@ -148,6 +167,9 @@ class Flowbie_Wp_Ai_Apply {
 			case 'page_url':
 				self::write_acf_or_meta( $post_id, 'page_url', $value );
 				return array( 'page_url' );
+			case 'date_modifier':
+				self::write_date_modifier( $post_id, $value );
+				return array( 'date_modifier' );
 			default:
 				return new WP_Error( 'flowbie_field', __( 'Invalid field.', 'flowbie-wp' ) );
 		}
@@ -161,6 +183,14 @@ class Flowbie_Wp_Ai_Apply {
 			)
 		);
 		update_post_meta( $post_id, 'rank_math_title', $value );
+	}
+
+	/**
+	 * @return array<int,string>
+	 */
+	public static function write_seo_title_only( int $post_id, string $value ): array {
+		update_post_meta( $post_id, 'rank_math_title', $value );
+		return array( 'title' );
 	}
 
 	public static function write_excerpt( int $post_id, string $value ): void {
@@ -186,10 +216,18 @@ class Flowbie_Wp_Ai_Apply {
 	}
 
 	public static function stamp_date_modifier( int $post_id ): void {
-		$today = gmdate( 'Y-m-d' );
-		if ( function_exists( 'update_field' ) ) {
-			update_field( 'date_modifier', $today, $post_id );
+		self::write_date_modifier( $post_id, gmdate( 'Y-m-d' ) );
+	}
+
+	public static function write_date_modifier( int $post_id, string $value ): void {
+		$value = trim( $value );
+		if ( $value === '' ) {
+			return;
 		}
-		update_post_meta( $post_id, 'date_modifier', $today );
+		if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $value ) ) {
+			$ts = strtotime( $value );
+			$value = $ts ? gmdate( 'Y-m-d', $ts ) : gmdate( 'Y-m-d' );
+		}
+		self::write_acf_or_meta( $post_id, 'date_modifier', $value );
 	}
 }

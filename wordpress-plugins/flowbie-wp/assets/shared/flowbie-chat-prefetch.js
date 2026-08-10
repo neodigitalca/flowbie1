@@ -104,12 +104,16 @@
 
   function pageContextPayload(options) {
     options = options || {};
-    return {
+    var payload = {
       page_url: options.pageUrl || '',
-      post_id: options.postId || 0,
+      post_id: options.postId != null ? options.postId : 0,
       page_title: options.pageTitle || '',
       page_context_key: options.pageContextKey || pageContextKey || ''
     };
+    if (options.targetScope) {
+      payload.target_scope = options.targetScope;
+    }
+    return payload;
   }
 
   function normalizeRetrievalQuery(query) {
@@ -543,10 +547,13 @@
     if (!pageContext || !options || !options.ajaxUrl || !options.streamNonce) {
       return;
     }
+    if (options.targetScope === 'site') {
+      return;
+    }
     var url = options.ajaxUrl + '?action=flowbie_chat_page_context&_nonce=' + encodeURIComponent(options.streamNonce);
     var payload = {
       page_url: pageContext.url || options.pageUrl || (typeof window !== 'undefined' ? window.location.href : ''),
-      post_id: pageContext.postId || options.postId || 0,
+      post_id: options.postId != null ? options.postId : (pageContext.postId || 0),
       page_title: options.pageTitle || (typeof document !== 'undefined' ? document.title : '') || pageContext.title || '',
       session_id: options.sessionId || '',
       source: options.source || 'frontend'

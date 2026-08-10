@@ -5,7 +5,7 @@ section: Teams
 method: PATCH
 path: /api/teams/{teamId}
 auth: session-team
-order: 1080
+order: 1090
 ---
 
 PATCH `/api/teams/{teamId}`.

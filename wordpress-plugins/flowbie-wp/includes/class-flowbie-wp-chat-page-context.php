@@ -95,6 +95,14 @@ class Flowbie_Wp_Chat_Page_Context {
 		if ( $key !== '' ) {
 			$stored = get_transient( self::TRANSIENT_PREFIX . $key );
 			if ( is_array( $stored ) && ! empty( $stored ) ) {
+				if ( empty( $stored['post_id'] ) ) {
+					$site_index = Flowbie_Wp_Chat_Rag::get_site_index( $settings );
+					$resolved   = self::resolve_post_id( $page_url, $post_id, $site_index, $page_title );
+					if ( $resolved > 0 ) {
+						$stored = self::resolve_from_request( $page_url, $resolved, $page_title, $settings, true );
+						set_transient( self::TRANSIENT_PREFIX . $key, $stored, self::TTL );
+					}
+				}
 				return $stored;
 			}
 		}
@@ -113,9 +121,9 @@ class Flowbie_Wp_Chat_Page_Context {
 	 */
 	public static function resolve_from_request( string $page_url, int $post_id, string $page_title, array $settings, bool $enrich = false ): array {
 		$site_index       = Flowbie_Wp_Chat_Rag::get_site_index( $settings );
-		$resolved_post_id = self::resolve_post_id( $page_url, $post_id, $site_index );
-		$url              = esc_url_raw( trim( $page_url ) );
 		$title            = sanitize_text_field( $page_title );
+		$resolved_post_id = self::resolve_post_id( $page_url, $post_id, $site_index, $title );
+		$url              = esc_url_raw( trim( $page_url ) );
 		$type_label       = '';
 		$item             = null;
 
@@ -157,7 +165,7 @@ class Flowbie_Wp_Chat_Page_Context {
 	/**
 	 * @param array<int,array<string,mixed>> $site_index
 	 */
-	public static function resolve_post_id( string $page_url, int $post_id, array $site_index ): int {
+	public static function resolve_post_id( string $page_url, int $post_id, array $site_index, string $page_title = '' ): int {
 		if ( $post_id > 0 && self::post_id_accessible( $post_id ) ) {
 			return $post_id;
 		}
@@ -183,19 +191,34 @@ class Flowbie_Wp_Chat_Page_Context {
 			}
 		}
 
+		$page_title = sanitize_text_field( trim( $page_title ) );
+		if ( $page_title !== '' ) {
+			Flowbie_Wp_Site_Inventory::warm( true );
+			$item = Flowbie_Wp_Site_Inventory::find_item_by_title( $page_title );
+			if ( is_array( $item ) && ! empty( $item['id'] ) ) {
+				$match_id = (int) $item['id'];
+				if ( self::post_id_accessible( $match_id ) ) {
+					return $match_id;
+				}
+			}
+		}
+
 		return 0;
 	}
 
-	private static function post_id_from_url( string $page_url ): int {
+	public static function post_id_from_url( string $page_url ): int {
 		$query = wp_parse_url( $page_url, PHP_URL_QUERY );
 		if ( ! is_string( $query ) || $query === '' ) {
 			return 0;
 		}
 		parse_str( $query, $args );
-		if ( empty( $args['p'] ) ) {
-			return 0;
+		if ( ! empty( $args['p'] ) ) {
+			return absint( $args['p'] );
 		}
-		return absint( $args['p'] );
+		if ( ! empty( $args['post'] ) ) {
+			return absint( $args['post'] );
+		}
+		return 0;
 	}
 
 	private static function post_id_accessible( int $post_id ): bool {
@@ -326,6 +349,9 @@ class Flowbie_Wp_Chat_Page_Context {
 			'what is this page',
 			'the page i am on',
 			"the page i'm on",
+			'the page im on',
+			'page im on',
+			"page i'm on",
 			'this one',
 		);
 	}

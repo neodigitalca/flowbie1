@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/invites/({id})/resend
 auth: session-team
-order: 1580
+order: 1590
 ---
 
 POST `/api/teams/{teamId}/invites/({id})/resend`.

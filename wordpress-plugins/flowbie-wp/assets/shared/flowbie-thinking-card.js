@@ -35,7 +35,9 @@
 
   function createThinkingCard(host, opts) {
     opts = opts || {};
-    var steps = opts.stream ? streamSteps() : defaultQaSteps();
+    var steps = opts.steps && opts.steps.length
+      ? opts.steps
+      : (opts.stream ? streamSteps() : defaultQaSteps());
     var card = {
       type: 'workflow',
       title: opts.title || 'Working on it…',

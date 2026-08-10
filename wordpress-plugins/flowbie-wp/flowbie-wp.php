@@ -3,7 +3,7 @@
  * Plugin Name:       Flowbie WP
  * Plugin URI:        https://github.com/flowbie/flowbie
  * Description:       Flowbie AI tools for WordPress — chat, search, SEO, and editor wands.
-	 * Version:           0.9.49
+	 * Version:           0.9.124
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            Flowbie
@@ -16,7 +16,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FLOWBIE_WP_VERSION', '0.9.68' );
+define( 'FLOWBIE_WP_VERSION', '0.9.124' );
 define( 'FLOWBIE_WP_PLUGIN_FILE', __FILE__ );
 define( 'FLOWBIE_WP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 

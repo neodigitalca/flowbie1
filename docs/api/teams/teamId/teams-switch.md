@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/switch
 auth: session-team
-order: 1680
+order: 1700
 ---
 
 POST `/api/teams/{teamId}/switch`.

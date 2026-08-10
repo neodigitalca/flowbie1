@@ -123,11 +123,21 @@ class Flowbie_Wp_Chat_Super_Admin {
 	 * @param array<string, mixed> $card Backend Assist card.
 	 * @return array<string, mixed>
 	 */
+	public static function map_card_for_frontend_public( array $card ): array {
+		return self::map_card_for_frontend( $card );
+	}
+
+	/**
+	 * @param array<string, mixed> $card Backend Assist card.
+	 * @return array<string, mixed>
+	 */
 	private static function map_card_for_frontend( array $card ): array {
 		$type = isset( $card['type'] ) ? sanitize_key( (string) $card['type'] ) : 'answer';
 		if ( $type === 'error' ) {
 			$type = 'not-found';
 		}
+
+		$card = Flowbie_Wp_Backend_Assist_Cards::enrich_card( $card );
 
 		$mapped = array(
 			'type'       => $type,
@@ -137,7 +147,11 @@ class Flowbie_Wp_Chat_Super_Admin {
 			'confidence' => isset( $card['confidence'] ) ? (string) $card['confidence'] : 'medium',
 		);
 
-		if ( ! empty( $card['suggested_actions'] ) && is_array( $card['suggested_actions'] ) ) {
+		if (
+			empty( $card['submode_switch'] )
+			&& ! empty( $card['suggested_actions'] )
+			&& is_array( $card['suggested_actions'] )
+		) {
 			$topics = array();
 			foreach ( $card['suggested_actions'] as $action ) {
 				$label = is_string( $action ) ? trim( $action ) : '';
@@ -165,8 +179,107 @@ class Flowbie_Wp_Chat_Super_Admin {
 		if ( ! empty( $card['submode_switch'] ) ) {
 			$mapped['submode_switch'] = Flowbie_Wp_Backend_Assist_Submode::normalize_submode( (string) $card['submode_switch'] );
 		}
+		if ( ! empty( $card['build_message'] ) ) {
+			$mapped['build_message'] = sanitize_textarea_field( (string) $card['build_message'] );
+		}
+		if ( ! empty( $card['plan_intent'] ) ) {
+			$mapped['plan_intent'] = sanitize_key( (string) $card['plan_intent'] );
+		}
+		if ( ! empty( $card['planned_tool'] ) ) {
+			$mapped['planned_tool'] = sanitize_key( (string) $card['planned_tool'] );
+		}
+		if ( ! empty( $card['planned_ops'] ) && is_array( $card['planned_ops'] ) ) {
+			$mapped['planned_ops'] = $card['planned_ops'];
+		}
+		if ( ! empty( $card['details_drawer'] ) && is_array( $card['details_drawer'] ) ) {
+			$mapped['details_drawer'] = $card['details_drawer'];
+		}
+		if ( ! empty( $card['harness_sections'] ) && is_array( $card['harness_sections'] ) ) {
+			$mapped['harness_sections'] = $card['harness_sections'];
+		}
+		if ( ! empty( $card['harness_progress'] ) && is_array( $card['harness_progress'] ) ) {
+			$mapped['harness_progress'] = $card['harness_progress'];
+		}
+		if ( ! empty( $card['action_result'] ) && is_array( $card['action_result'] ) ) {
+			$mapped['action_result'] = self::sanitize_action_result_for_frontend( $card['action_result'] );
+		}
+
+		if (
+			! empty( $card['cta'] )
+			&& is_array( $card['cta'] )
+			&& ! empty( $card['cta']['url'] )
+		) {
+			$mapped['cta'] = array(
+				'label' => isset( $card['cta']['label'] ) ? (string) $card['cta']['label'] : '',
+				'url'   => (string) $card['cta']['url'],
+			);
+		}
+
+		if (
+			! empty( $card['undo'] )
+			&& is_array( $card['undo'] )
+			&& ! empty( $card['undo']['post_id'] )
+			&& empty( array_filter( $mapped['links'], static function ( $link ) {
+				return is_array( $link ) && ( $link['action'] ?? '' ) === 'undo';
+			} ) )
+		) {
+			$mapped['links'][] = Flowbie_Wp_Backend_Assist_Cards::undo_link_for_post(
+				absint( $card['undo']['post_id'] )
+			);
+		}
 
 		return $mapped;
+	}
+
+	/**
+	 * Keep action_result on Build cards so the editor can sync saved meta.
+	 *
+	 * @param array<string, mixed> $exec
+	 * @return array<string, mixed>
+	 */
+	private static function sanitize_action_result_for_frontend( array $exec ): array {
+		$out = array(
+			'success'        => ! empty( $exec['success'] ),
+			'post_id'        => isset( $exec['post_id'] ) ? absint( $exec['post_id'] ) : 0,
+			'build_executed' => ! empty( $exec['build_executed'] ),
+		);
+
+		if ( ! empty( $exec['saved'] ) && is_array( $exec['saved'] ) ) {
+			$out['saved'] = array_values( array_map( 'strval', $exec['saved'] ) );
+		}
+
+		if ( ! empty( $exec['values'] ) && is_array( $exec['values'] ) ) {
+			$values = array();
+			foreach ( array( 'seoTitle', 'metaDescription', 'focusKeyword', 'seoResearch', 'faq', 'pageUrl' ) as $key ) {
+				if ( ! isset( $exec['values'][ $key ] ) ) {
+					continue;
+				}
+				$raw = trim( (string) $exec['values'][ $key ] );
+				if ( $raw !== '' ) {
+					$values[ $key ] = $raw;
+				}
+			}
+			if ( $values !== array() ) {
+				$out['values'] = $values;
+			}
+		}
+
+		if ( ! empty( $exec['meta_compound'] ) ) {
+			$out['meta_compound'] = true;
+		}
+
+		return $out;
+	}
+
+	/**
+	 * @param array<string, mixed>|null $body Stream request body.
+	 */
+	public static function parse_target_scope_from_body( ?array $body ): string {
+		if ( ! is_array( $body ) || ! isset( $body['target_scope'] ) ) {
+			return 'page';
+		}
+		$scope = sanitize_key( (string) $body['target_scope'] );
+		return $scope === 'site' ? 'site' : 'page';
 	}
 
 	/**
@@ -177,6 +290,10 @@ class Flowbie_Wp_Chat_Super_Admin {
 			return 'ask';
 		}
 		return Flowbie_Wp_Backend_Assist_Submode::normalize_submode( (string) $body['admin_submode'] );
+	}
+
+	public static function build_builder_context_from_request( ?array $body, string $submode = 'ask' ): ?array {
+		return self::builder_context_from_body( $body, $submode );
 	}
 
 	/**
@@ -191,6 +308,7 @@ class Flowbie_Wp_Chat_Super_Admin {
 
 		$ctx = array(
 			'admin_submode' => Flowbie_Wp_Backend_Assist_Submode::normalize_submode( $submode ),
+			'target_scope'  => self::parse_target_scope_from_body( $body ),
 		);
 
 		Flowbie_Wp_Site_Inventory::warm( true );
@@ -205,31 +323,65 @@ class Flowbie_Wp_Chat_Super_Admin {
 		}
 		$ctx['site_inventory_count'] = (int) ( $inventory_meta['count'] ?? 0 );
 
-		$settings   = Flowbie_Wp_Chat::get_settings();
-		$page_url   = isset( $body['page_url'] ) ? esc_url_raw( wp_unslash( (string) $body['page_url'] ) ) : '';
-		$post_id    = isset( $body['post_id'] ) ? (int) $body['post_id'] : 0;
-		$page_title = isset( $body['page_title'] ) ? sanitize_text_field( wp_unslash( (string) $body['page_title'] ) ) : '';
-		$key        = isset( $body['page_context_key'] ) ? sanitize_text_field( wp_unslash( (string) $body['page_context_key'] ) ) : '';
+		if ( $ctx['target_scope'] === 'site' ) {
+			return $ctx;
+		}
+
+		$settings     = Flowbie_Wp_Chat::get_settings();
+		$raw_page_url = isset( $body['page_url'] ) ? trim( wp_unslash( (string) $body['page_url'] ) ) : '';
+		$page_url     = $raw_page_url !== '' ? esc_url_raw( $raw_page_url ) : '';
+		$post_id      = isset( $body['post_id'] ) ? (int) $body['post_id'] : 0;
+		$page_title   = isset( $body['page_title'] ) ? sanitize_text_field( wp_unslash( (string) $body['page_title'] ) ) : '';
+		$key          = isset( $body['page_context_key'] ) ? sanitize_text_field( wp_unslash( (string) $body['page_context_key'] ) ) : '';
+
+		if ( $post_id < 1 && $raw_page_url !== '' ) {
+			$from_url = Flowbie_Wp_Chat_Page_Context::post_id_from_url( $raw_page_url );
+			if ( $from_url > 0 ) {
+				$post_id = $from_url;
+			}
+		}
 
 		if ( $page_url === '' && $post_id < 1 && $key === '' ) {
 			return $ctx;
 		}
 
 		$page_context = Flowbie_Wp_Chat_Page_Context::load( $key, $page_url, $post_id, $page_title, $settings );
-		if ( ! is_array( $page_context ) || empty( $page_context['post_id'] ) ) {
+		$post_id_resolved = is_array( $page_context ) ? absint( $page_context['post_id'] ?? 0 ) : 0;
+		if ( $post_id_resolved < 1 ) {
+			$site_index       = Flowbie_Wp_Chat_Rag::get_site_index( $settings );
+			$post_id_resolved = Flowbie_Wp_Chat_Page_Context::resolve_post_id( $page_url, $post_id, $site_index, $page_title );
+			if ( $post_id_resolved > 0 ) {
+				$page_context = Flowbie_Wp_Chat_Page_Context::resolve_from_request( $page_url, $post_id_resolved, $page_title, $settings, true );
+			}
+		}
+
+		if ( $post_id_resolved < 1 || ! current_user_can( 'edit_post', $post_id_resolved ) ) {
 			return $ctx;
 		}
 
 		$ctx['frontend_page'] = array(
-			'post_id'    => (int) $page_context['post_id'],
-			'title'      => (string) ( $page_context['title'] ?? '' ),
-			'url'        => (string) ( $page_context['url'] ?? '' ),
-			'type_label' => (string) ( $page_context['type_label'] ?? '' ),
+			'post_id'    => $post_id_resolved,
+			'title'      => is_array( $page_context ) ? (string) ( $page_context['title'] ?? $page_title ) : $page_title,
+			'url'        => is_array( $page_context ) ? (string) ( $page_context['url'] ?? $page_url ) : $page_url,
+			'type_label' => is_array( $page_context ) ? (string) ( $page_context['type_label'] ?? '' ) : '',
 		);
 
-		$prompt = Flowbie_Wp_Chat_Page_Context::format_for_prompt( $page_context );
-		if ( $prompt !== '' ) {
-			$ctx['page_context'] = $prompt;
+		$post = get_post( $post_id_resolved );
+		if ( $post instanceof WP_Post ) {
+			$ctx['frontend_page']['post_status'] = (string) $post->post_status;
+			if ( $ctx['frontend_page']['title'] === '' ) {
+				$ctx['frontend_page']['title'] = get_the_title( $post );
+			}
+			if ( $ctx['frontend_page']['type_label'] === '' ) {
+				$ctx['frontend_page']['type_label'] = Flowbie_Wp_Chat_Page_Context::type_label_for_post( $post );
+			}
+		}
+
+		if ( is_array( $page_context ) ) {
+			$prompt = Flowbie_Wp_Chat_Page_Context::format_for_prompt( $page_context );
+			if ( $prompt !== '' ) {
+				$ctx['page_context'] = $prompt;
+			}
 		}
 
 		return $ctx;

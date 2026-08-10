@@ -5,7 +5,7 @@ section: Teams
 method: GET
 path: /api/teams/{teamId}/chat/channels/({id})/files/({id})
 auth: team-rbac-communication
-order: 1310
+order: 1320
 ---
 
 GET `/api/teams/{teamId}/chat/channels/({id})/files/({id})`.

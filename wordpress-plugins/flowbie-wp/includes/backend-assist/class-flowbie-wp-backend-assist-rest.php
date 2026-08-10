@@ -50,6 +50,12 @@ class Flowbie_Wp_Backend_Assist_Rest {
 			),
 		) );
 
+		register_rest_route( Flowbie_Wp_Backend_Assist_Context::REST_NAMESPACE, '/backend-assist/undo', array(
+			'methods'             => 'POST',
+			'callback'            => array( 'Flowbie_Wp_Backend_Assist', 'rest_undo_handle' ),
+			'permission_callback' => $admin_perm,
+		) );
+
 		register_rest_route( Flowbie_Wp_Backend_Assist_Context::REST_NAMESPACE, '/backend-assist/sessions/(?P<id>[a-zA-Z0-9_-]+)', array(
 			array(
 				'methods'             => 'GET',
@@ -85,15 +91,25 @@ class Flowbie_Wp_Backend_Assist_Rest {
 		}
 
 		$builder_ctx = isset( $body['builder_context'] ) && is_array( $body['builder_context'] ) ? $body['builder_context'] : null;
+		if ( null === $builder_ctx && class_exists( 'Flowbie_Wp_Chat_Super_Admin' ) ) {
+			$submode       = isset( $body['admin_submode'] ) ? sanitize_key( (string) $body['admin_submode'] ) : ( $mode !== '' ? $mode : 'ask' );
+			$builder_ctx   = Flowbie_Wp_Chat_Super_Admin::build_builder_context_from_request( is_array( $body ) ? $body : null, $submode );
+		}
 		Flowbie_Wp_Backend_Assist_Context::$builder_context = $builder_ctx;
 
 		if ( $mode === 'plan' ) {
 			$card = Flowbie_Wp_Backend_Assist_Pipeline::run_plan( $message, $history );
+		} elseif ( $mode === 'build' ) {
+			$card = Flowbie_Wp_Backend_Assist_Build_Harness::run_build( $message, $history );
 		} else {
 			$card = Flowbie_Wp_Backend_Assist_Pipeline::run_pipeline( $message, $history );
 		}
 
 		Flowbie_Wp_Backend_Assist_Context::$builder_context = null;
+
+		if ( class_exists( 'Flowbie_Wp_Chat_Super_Admin' ) && is_array( $card ) ) {
+			$card = Flowbie_Wp_Chat_Super_Admin::map_card_for_frontend_public( $card );
+		}
 
 		return new WP_REST_Response( $card, 200 );
 	}
@@ -158,5 +174,37 @@ class Flowbie_Wp_Backend_Assist_Rest {
 			),
 			200
 		);
+	}
+
+	public static function rest_undo_handle( WP_REST_Request $request ): WP_REST_Response {
+		$body    = $request->get_json_params();
+		$post_id = isset( $body['post_id'] ) ? absint( $body['post_id'] ) : 0;
+
+		if ( $post_id < 1 ) {
+			return new WP_REST_Response(
+				array( 'error' => __( 'post_id is required.', 'flowbie-wp' ) ),
+				400
+			);
+		}
+
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			return new WP_REST_Response(
+				array( 'error' => __( 'You do not have permission to edit this post.', 'flowbie-wp' ) ),
+				403
+			);
+		}
+
+		$result = Flowbie_Wp_Backend_Assist::tool_restore_post_revision( array( 'post_id' => $post_id ) );
+		if ( empty( $result['success'] ) ) {
+			return new WP_REST_Response(
+				array( 'error' => isset( $result['error'] ) ? (string) $result['error'] : __( 'Undo failed.', 'flowbie-wp' ) ),
+				400
+			);
+		}
+
+		$card = Flowbie_Wp_Backend_Assist_Cards::action_card( $result, 'restore_post_revision' );
+		$card = Flowbie_Wp_Backend_Assist_Cards::enrich_card( $card, 'restore_post_revision', $result );
+
+		return new WP_REST_Response( $card, 200 );
 	}
 }

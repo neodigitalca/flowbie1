@@ -27,6 +27,47 @@
     return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
+  function isMobileViewport() {
+    return window.matchMedia && window.matchMedia('(max-width:767px)').matches;
+  }
+
+  function revealChatMobileRoot(root) {
+    if (!root || root.id !== 'flowbie-chat-widget-root' || !isMobileViewport()) {
+      return;
+    }
+    if (typeof window.FlowbieChatMountShell === 'function') {
+      window.FlowbieChatMountShell();
+    }
+    root.hidden = false;
+    root.removeAttribute('aria-hidden');
+    root.classList.remove('fcw-mobile-root-closed');
+    root.style.cssText = 'display:block!important;visibility:visible!important;position:fixed!important;inset:0!important;left:0!important;right:0!important;top:0!important;bottom:0!important;width:100%!important;height:100%!important;max-width:none!important;overflow:visible!important;z-index:999950!important;pointer-events:none!important';
+  }
+
+  function hideChatMobileRoot(root) {
+    if (!root || root.id !== 'flowbie-chat-widget-root' || !isMobileViewport()) {
+      return;
+    }
+    root.hidden = true;
+    root.setAttribute('aria-hidden', 'true');
+    root.classList.add('fcw-mobile-root-closed');
+    root.style.cssText = 'display:none!important;visibility:hidden!important;position:absolute!important;left:-9999px!important;top:auto!important;width:0!important;height:0!important;max-width:0!important;overflow:hidden!important;pointer-events:none!important;margin:0!important;padding:0!important;border:0!important';
+  }
+
+  function applyMobileFullscreenPanel(panel) {
+    if (!panel || !isMobileViewport()) {
+      return;
+    }
+    panel.classList.add('fai-sidebar-panel--mobile-fullscreen');
+  }
+
+  function clearMobileFullscreenPanel(panel) {
+    if (!panel) {
+      return;
+    }
+    panel.classList.remove('fai-sidebar-panel--mobile-fullscreen');
+  }
+
   function getFocusable(panel) {
     if (!panel) return [];
     return Array.prototype.slice.call(
@@ -123,6 +164,9 @@
   FlowbieAiSidebarShell.prototype.open = function () {
     if (this.isOpen) return;
     this.isOpen = true;
+    if (isMobileViewport()) {
+      revealChatMobileRoot(this.root);
+    }
     this.root.classList.add(this.openClass);
     if (!this.isModal) {
       this.root.classList.add('fai-sidebar-root--open');
@@ -134,6 +178,7 @@
     if (this.panel) {
       this.panel.removeAttribute('hidden');
       this.panel.classList.add('fai-sidebar-panel--visible');
+      applyMobileFullscreenPanel(this.panel);
     }
     lockPageScroll();
     document.addEventListener('keydown', this.onKeyDown);
@@ -159,12 +204,16 @@
     if (this.panel) {
       this.panel.setAttribute('hidden', '');
       this.panel.classList.remove('fai-sidebar-panel--visible');
+      clearMobileFullscreenPanel(this.panel);
     }
     unlockPageScroll();
     document.removeEventListener('keydown', this.onKeyDown);
     this.setLauncherExpanded(false);
     if (typeof this.opts.onClose === 'function') {
       this.opts.onClose();
+    }
+    if (isMobileViewport()) {
+      hideChatMobileRoot(this.root);
     }
     if (this.launcher) {
       this.launcher.focus();

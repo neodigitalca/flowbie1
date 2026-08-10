@@ -16,24 +16,40 @@
     };
   }
 
+  function useGodModePersist() {
+    return !!(session && session.godModePersist);
+  }
+
   function storageKey() {
+    if (useGodModePersist()) {
+      var uid = session.persistUserId ? String(session.persistUserId) : '0';
+      return 'flowbie_godmode_debug_log_' + uid;
+    }
     return session && session.sessionId
       ? 'flowbie_chat_debug_log_' + session.sessionId
       : '';
+  }
+
+  function activeStorage() {
+    return useGodModePersist() ? localStorage : sessionStorage;
   }
 
   function persist() {
     var key = storageKey();
     if (!key) return;
     try {
-      sessionStorage.setItem(key, JSON.stringify(turns));
+      activeStorage().setItem(key, JSON.stringify(turns));
     } catch (_) {}
   }
 
   function loadStored(sessionId) {
-    if (!sessionId) return;
+    var key = storageKey();
+    if (!key) return;
     try {
-      var raw = sessionStorage.getItem('flowbie_chat_debug_log_' + sessionId);
+      var raw = activeStorage().getItem(key);
+      if (!raw && !useGodModePersist() && sessionId) {
+        raw = sessionStorage.getItem('flowbie_chat_debug_log_' + sessionId);
+      }
       if (!raw) return;
       var parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
@@ -71,7 +87,9 @@
       sessionId: options.sessionId || '',
       source: options.source || 'frontend',
       pageUrl: options.pageUrl || '',
-      siteName: options.siteName || ''
+      siteName: options.siteName || '',
+      godModePersist: !!options.godModePersist,
+      persistUserId: options.persistUserId || 0
     };
     pendingStreamEvents = [];
     loadStored(session.sessionId);
@@ -173,7 +191,7 @@
     var key = storageKey();
     if (key) {
       try {
-        sessionStorage.removeItem(key);
+        activeStorage().removeItem(key);
       } catch (_) {}
     }
   }

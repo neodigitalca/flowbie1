@@ -48,6 +48,30 @@ class Flowbie_Wp_Backend_Assist_Registry {
 		);
 
 		self::register_tool(
+			'save_post_meta',
+			array( 'Flowbie_Wp_Backend_Assist', 'tool_save_post_meta' ),
+			'Save SEO meta on an existing post or page: focusKeyword, metaDescription, seoTitle, faq, seoResearch, dateModifier (ACF date_modifier). Clear a field with clear/empty/remove phrasing. Requires post_id or title.'
+		);
+
+		self::register_tool(
+			'run_seo_research_brief',
+			array( 'Flowbie_Wp_Backend_Assist', 'tool_run_seo_research_brief' ),
+			'Build SeoContentBriefV1 JSON from DataForSEO SERP + GSC page queries + Semrush and auto-save to ACF seo_research. Requires post_id and focus keyword on the post.'
+		);
+
+		self::register_tool(
+			'update_post',
+			array( 'Flowbie_Wp_Backend_Assist', 'tool_update_post' ),
+			'Update WordPress post fields on an existing post or page: title (post_title), status, excerpt, slug. NOT body HTML. NOT SEO meta. Requires post_id.'
+		);
+
+		self::register_tool(
+			'restore_post_revision',
+			array( 'Flowbie_Wp_Backend_Assist', 'tool_restore_post_revision' ),
+			'Undo the last agent body edit on a post by restoring the pre-edit snapshot. Requires post_id.'
+		);
+
+		self::register_tool(
 			'modify_seo_block_slots',
 			array( 'Flowbie_Wp_Backend_Assist', 'tool_modify_seo_block_slots' ),
 			'Add, remove, or update individual slots (H2, paragraph, CTA, list, image) in an SEO block manifest'

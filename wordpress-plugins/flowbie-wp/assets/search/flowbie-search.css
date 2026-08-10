@@ -1927,9 +1927,17 @@
 
 @media (max-width: 767px) {
 	.fai-sidebar-panel:not(.fbs-modal-panel),
-	.fai-sidebar-panel--portaled.fai-sidebar-panel--visible {
-		width: 100%;
-		max-width: 100vw;
+	.fai-sidebar-panel--portaled.fai-sidebar-panel--visible,
+	.fai-sidebar-panel--mobile-fullscreen {
+		left: 0 !important;
+		right: 0 !important;
+		width: 100% !important;
+		max-width: 100vw !important;
+		height: 100dvh !important;
+		max-height: 100dvh !important;
+		transform: none !important;
+		border-radius: 0 !important;
+		box-shadow: none !important;
 	}
 
 	.fai-sidebar-panel:not(.fbs-modal-panel) .fai-sidebar-panel__body,

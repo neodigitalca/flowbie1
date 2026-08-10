@@ -9,6 +9,10 @@ import { WordPressPostingConfig } from './WordPressPostingConfig';
 import type { ScheduleOccupancy } from '@/lib/bulk-schedule-gap';
 import type { ScheduleFrequency } from '@/lib/wordpress-scheduler';
 import type { BulkSitemapMode } from '@/lib/bulk/bulk-sitemap-mode';
+import {
+  BULK_AUTO_GENERATE_TEMPLATE_FILENAME,
+  BULK_AUTO_GENERATE_TEMPLATE_HREF,
+} from '@/lib/bulk/bulk-auto-generate-template-columns';
 
 interface SiteConfig {
   sitemapType: BulkSitemapMode;
@@ -129,8 +133,8 @@ export function CSVUploadSection({
       <div className="space-y-2">
         <div className="flex items-center justify-end">
           <a
-            href="/bulk-auto-generate-template.csv"
-            download="bulk-auto-generate-template.csv"
+            href={BULK_AUTO_GENERATE_TEMPLATE_HREF}
+            download={BULK_AUTO_GENERATE_TEMPLATE_FILENAME}
             className="text-xs text-primary hover:underline"
           >
             Download Template
