@@ -76,9 +76,10 @@ describe("gscSiteTotalsMomComparisonCsv", () => {
   };
 
   it("includes header and percent change for clicks", () => {
-    const csv = gscSiteTotalsMomComparisonCsv(primary, compare);
+    const csv = gscSiteTotalsMomComparisonCsv(primary, compare, 420, 380);
     expect(csv).toContain("Metric,Mar 2026,Feb 2026,% change vs prior");
     expect(csv).toContain("Total clicks,110,100,+10.0%");
+    expect(csv).toContain("Search queries,420,380,+10.5%");
     expect(csv).toContain("Mar 2026");
     expect(csv).toContain("Feb 2026");
   });
@@ -87,12 +88,14 @@ describe("gscSiteTotalsMomComparisonCsv", () => {
     const csv = gscSiteTotalsMomComparisonCsv(
       { ...primary, clicks: 5 },
       { ...compare, clicks: 0 },
+      100,
+      90,
     );
     expect(csv).toMatch(/Total clicks,5,0, - /);
   });
 
   it("handles one missing aggregate", () => {
-    const csv = gscSiteTotalsMomComparisonCsv(primary, null);
+    const csv = gscSiteTotalsMomComparisonCsv(primary, null, 200, 180);
     expect(csv).toContain("Metric,Mar 2026,Period B,% change vs prior");
     expect(csv).toContain("Total clicks,110, - , - ");
   });

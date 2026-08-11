@@ -346,6 +346,8 @@ export function gscSiteTotalsPctChangeVsPrior(primary: number, compare: number):
 export function gscSiteTotalsMomComparisonCsv(
   aggregatePrimary: GscSiteTotalsPreviousMonth | null,
   aggregateCompare: GscSiteTotalsPreviousMonth | null,
+  queryCountPrimary: number,
+  queryCountCompare: number,
 ): string {
   const colA =
     aggregatePrimary != null
@@ -376,6 +378,9 @@ export function gscSiteTotalsMomComparisonCsv(
   );
   lines.push(
     `Total impressions,${dash(p?.impressions)},${dash(c?.impressions)},${pctCell(p?.impressions, c?.impressions)}`,
+  );
+  lines.push(
+    `Search queries,${queryCountPrimary},${queryCountCompare},${gscSiteTotalsPctChangeVsPrior(queryCountPrimary, queryCountCompare)}`,
   );
   lines.push(
     `Average CTR,${p ? formatCtr(p.ctr) : " - "},${c ? formatCtr(c.ctr) : " - "},${pctCell(p?.ctr, c?.ctr)}`,
@@ -581,7 +586,7 @@ export async function fetchGscQueriesRawForReporting(
   const aggC = data.aggregateCompare ?? null;
   files.push({
     name: "Site-totals-MoM.csv",
-    content: gscSiteTotalsMomComparisonCsv(aggP, aggC),
+    content: gscSiteTotalsMomComparisonCsv(aggP, aggC, queries.length, compareQueries.length),
   });
 
   const sm = data.sitemaps;

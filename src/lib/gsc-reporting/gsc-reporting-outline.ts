@@ -52,7 +52,7 @@ Schema (strict):
 
 Each section "kind" MUST be one of: executive_summary, search_performance_period, key_performance_insights, sap_local_seo, content_performance.
 
-**Do not** output the section kind **growth_metrics**. Site-wide period KPIs (clicks, impressions, CTR, position) belong **only** in **search_performance_period**; a separate growth section repeats the same numbers.
+**Do not** output the section kind **growth_metrics**. Site-wide period KPIs (clicks, impressions, search queries, CTR, position) belong **only** in **search_performance_period**; a separate growth section repeats the same numbers.
 
 Rules for sections (critical):
 - sections defines the **order** of ## headings in the final organic SEO report. Include **in order**. For each kind use **exactly** this **h2Title** string (blog-style **Title Case**). **Do not** put month names, years, or date ranges in **h2Title** - comparison periods belong in table bodies and CSV headers only.
@@ -67,6 +67,7 @@ Rules for sections (critical):
 
 Data rules (same as manual GSC summary):
 - Numbers in executiveSummary, metrics, evidence must come from the CSV text.
+- **Site-totals-MoM.csv** includes **Search queries** (total query count per period) as a standard site-wide KPI alongside clicks, impressions, CTR, and position.
 - **Formatting:** Do **not** wrap queries, keywords, page titles, or brands in \`"\` or \`'\` in **executiveSummary**, **topOpportunities** labels, **why**, or **metrics**. Use plain text only (downstream prose uses **bold** for emphasis, not quotes).
 - **executiveSummary** must be **factual synthesis** with numbers from the CSV only; keep it **thematic** (segments, demand patterns, branded vs non-brand) so downstream **### Key Insights** can stay **broad**, not a query-by-query inventory. Do **not** output prioritized action lists, "next steps", "priority" framing, or tactical blocks naming query themes as to-do items. Do **not** prescribe implementation checklists; keep interpretation concise. The report section **Executive Summary** will add a separate \`### Key Insights\` bullet list in the final markdown; this JSON field is a compact narrative hint only.
 - topOpportunities: at most 12 rows; rank by business impact and merge near-duplicates; evidence lines verbatim from CSV.
