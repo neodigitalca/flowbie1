@@ -26,7 +26,8 @@
 .agent-runs-root button.agent-runs-launcher {
   position: fixed;
   top: 50%;
-  left: 0;
+  right: 64px;
+  left: auto;
   transform: translateY(-50%);
   z-index: calc(var(--fai-sidebar-z-index) + 1);
   width: auto;
@@ -47,7 +48,12 @@
   justify-content: center;
   pointer-events: auto;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
-  border-right: 3px solid transparent;
+  border-left: 3px solid transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  line-height: 1;
+  font-family: "Lato", ui-sans-serif, system-ui, sans-serif;
+  font-size: 1rem;
   transition:
     transform 200ms ease,
     box-shadow 160ms ease,
@@ -56,12 +62,16 @@
 
 .agent-runs-root button.agent-runs-launcher:hover,
 .agent-runs-root button.agent-runs-launcher:focus-visible {
-  transform: translateY(-50%) translateX(6px);
-  border-right-color: hsl(var(--primary));
+  transform: translateY(-50%) translateX(-6px);
+  border-left-color: hsl(var(--primary));
   box-shadow:
     0 0 18px hsl(var(--primary) / 0.65),
     0 0 36px hsl(var(--primary) / 0.35),
     inset 0 0 28px hsl(var(--primary) / 0.14);
+}
+
+.agent-runs-root button.agent-runs-launcher:focus-visible {
+  outline: none;
 }
 
 .agent-runs-root.fai-sidebar-root--open button.agent-runs-launcher {
@@ -69,23 +79,46 @@
   pointer-events: none;
 }
 
-.agent-runs-panel {
+.agent-runs-root .fai-sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  border: none;
+  padding: 0;
+  cursor: default;
+}
+
+.agent-runs-root .fai-sidebar-backdrop--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.agent-runs-panel.fai-sidebar-panel {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  width: var(--fai-sidebar-width);
+  max-width: 100vw;
   background: var(--agent-runs-surface);
   color: hsl(var(--foreground));
+  transform: translateX(-100%);
+  transition: transform 280ms ease;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 8px 0 32px rgba(0, 0, 0, 0.4);
 }
 
-@media (min-width: 768px) {
-  .agent-runs-root.fai-sidebar-root--left .fai-sidebar-panel {
-    transform: translateX(calc(-1 * var(--fai-sidebar-width)));
-    transition: transform var(--fai-sidebar-transition-ms, 280ms) ease;
-  }
-
-  .agent-runs-root.fai-sidebar-root--open.fai-sidebar-root--left .fai-sidebar-panel {
-    transform: translateX(0);
-  }
+.agent-runs-panel.fai-sidebar-panel--open {
+  transform: translateX(0);
 }
 
-.agent-runs-root--resizing .fai-sidebar-panel {
+.agent-runs-root--resizing .agent-runs-panel.fai-sidebar-panel {
   transition: none;
 }
 
@@ -94,27 +127,83 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: 6px;
-  cursor: ew-resize;
   z-index: 2;
+  width: 6px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.agent-runs-panel-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: hsl(240 4% 22%);
+  transition:
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.agent-runs-panel-resize-handle:hover::after,
+.agent-runs-panel-resize-handle:focus-visible::after {
+  background: hsl(var(--primary));
+  box-shadow: 0 0 12px hsl(var(--primary) / 0.55);
+}
+
+.agent-runs-panel-resize-handle:focus-visible {
+  outline: none;
 }
 
 .agent-runs-panel-close-tab {
   position: absolute;
   top: 50%;
   right: 0;
-  transform: translate(100%, -50%);
   z-index: 3;
-  width: 28px;
-  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #000;
-  color: #fff;
+  width: 36px;
+  min-height: 72px;
+  padding: 12px 8px;
+  margin: 0;
   border: none;
+  border-radius: 0;
+  background-color: #000;
+  color: #fff;
   cursor: pointer;
+  transform: translate(100%, -50%);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+  border-left: 3px solid transparent;
+  appearance: none;
+  -webkit-appearance: none;
   pointer-events: auto;
+  transition:
+    transform 200ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.agent-runs-panel-close-tab:hover,
+.agent-runs-panel-close-tab:focus-visible {
+  transform: translate(calc(100% - 6px), -50%);
+  color: hsl(var(--primary));
+  border-left-color: hsl(var(--primary));
+  box-shadow:
+    0 0 18px hsl(var(--primary) / 0.65),
+    0 0 36px hsl(var(--primary) / 0.35),
+    inset 0 0 28px hsl(var(--primary) / 0.14);
+}
+
+.agent-runs-panel-close-tab:focus-visible {
+  outline: none;
 }
 
 .agent-runs-panel-header {
@@ -230,4 +319,23 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  pointer-events: none;
+}
+
+@media (max-width: 767px) {
+  .agent-runs-panel.fai-sidebar-panel {
+    width: 100vw;
+  }
+
+  .agent-runs-panel-resize-handle {
+    display: none;
+  }
+
+  .agent-runs-root button.agent-runs-launcher {
+    right: 56px;
+    min-width: 48px;
+    max-width: 52px;
+    min-height: 72px;
+    padding: 10px 8px 12px;
+  }
 }
