@@ -1,6 +1,6 @@
 import { Target } from "lucide-react";
 import { UnifiedWorkspaceChrome } from "@/components/shared/UnifiedWorkspaceChrome";
-import { WorkspacePill } from "@/components/shared/WorkspacePill";
+import { PpcPlatformPills } from "@/components/ppc/PpcPlatformPills";
 import { OverviewGridPagination } from "@/components/overview/OverviewGridPagination";
 import { OverviewContentSortControls } from "@/components/overview/overview-tab/OverviewContentSortControls";
 import { CONTENT_PAGINATION_SLOT_CLASS } from "@/components/overview/overview-tab/OverviewContentChromeReserve";
@@ -13,9 +13,10 @@ import type { PpcGoogleWorkspaceController } from "@/hooks/ppc/use-ppc-google-wo
 
 export type GoogleAdsWorkspaceHeaderProps = {
   ctrl: PpcGoogleWorkspaceController;
+  onPlatformChange: (tab: "ppc-google" | "ppc-meta") => void;
 };
 
-export function GoogleAdsWorkspaceHeader({ ctrl }: GoogleAdsWorkspaceHeaderProps) {
+export function GoogleAdsWorkspaceHeader({ ctrl, onPlatformChange }: GoogleAdsWorkspaceHeaderProps) {
   const canOpenDetails = googleAdsDetailsCanOpen(
     ctrl.generateProgress,
     ctrl.isGenerating,
@@ -27,9 +28,11 @@ export function GoogleAdsWorkspaceHeader({ ctrl }: GoogleAdsWorkspaceHeaderProps
       icon={Target}
       title="PPC"
       titleRowMenu={
-        <div className="flex min-w-0 flex-nowrap items-center gap-1" role="group" aria-label="PPC platform">
-          <WorkspacePill label="Google" active square />
-        </div>
+        <PpcPlatformPills
+          active="ppc-google"
+          disabled={ctrl.workspaceBusy}
+          onSelect={onPlatformChange}
+        />
       }
       titleRowEnd={
         <OverviewContentSortControls

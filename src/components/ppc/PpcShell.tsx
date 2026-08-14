@@ -17,9 +17,10 @@ export interface PpcShellProps {
   temperature: number;
   maxTokens: number;
   topP: number;
+  onPlatformChange: (tab: "ppc-google" | "ppc-meta") => void;
 }
 
-export const PpcShell: React.FC<PpcShellProps> = ({ apiKey, selectedModel }) => {
+export const PpcShell: React.FC<PpcShellProps> = ({ apiKey, selectedModel, onPlatformChange }) => {
   const { sites } = useWordPressSites();
   const { activeWordPressSiteId, setActiveWordPressSiteId } = useWordPressOptimization();
   const [platform] = useState<PpcPlatformId>(() => readStoredPpcPlatform());
@@ -61,7 +62,12 @@ export const PpcShell: React.FC<PpcShellProps> = ({ apiKey, selectedModel }) => 
   if (platform === "google") {
     return (
       <div className={PPC_SHELL_FRAME_CLASS}>
-        <GoogleAdsCampaignWorkspace site={site} apiKey={apiKey} selectedModel={selectedModel} />
+        <GoogleAdsCampaignWorkspace
+          site={site}
+          apiKey={apiKey}
+          selectedModel={selectedModel}
+          onPlatformChange={onPlatformChange}
+        />
       </div>
     );
   }

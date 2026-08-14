@@ -9,6 +9,7 @@ export const PPC_ROW_END_RAIL_CLASS = cn(
 );
 
 export type GoogleAdsRowEndRailProps = {
+  leading?: ReactNode;
   generate?: ReactNode;
   onDelete?: () => void;
   deleteDisabled?: boolean;
@@ -21,6 +22,7 @@ function IconSlot({ children }: { children?: ReactNode }) {
 }
 
 export function GoogleAdsRowEndRail({
+  leading,
   generate,
   onDelete,
   deleteDisabled = false,
@@ -29,6 +31,7 @@ export function GoogleAdsRowEndRail({
 }: GoogleAdsRowEndRailProps) {
   return (
     <div className={PPC_ROW_END_RAIL_CLASS}>
+      <IconSlot>{leading}</IconSlot>
       <IconSlot>{generate}</IconSlot>
       <IconSlot>
         {onDelete ? (

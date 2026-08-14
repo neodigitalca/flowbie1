@@ -204,6 +204,12 @@ export const MANAGER_NAV_SECTIONS: ManagerNavSection[] = [
         description: "Search campaigns from WordPress pages and GSC queries",
         icon: Crosshair,
       },
+      {
+        value: "ppc-meta",
+        label: "Meta",
+        description: "Feed ads from WordPress page copy and Neo Digital creative",
+        icon: Megaphone,
+      },
     ],
   },
 ];

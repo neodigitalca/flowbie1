@@ -91,6 +91,7 @@ const VALID_MANAGER_TABS = new Set([
   "gbp-post",
   "vertical-benchmarks",
   "ppc-google",
+  "ppc-meta",
   "api",
   /** Legacy tab ids (hash / stored); normalized to `generator` at runtime */
   "blog-generator",

@@ -16,19 +16,21 @@ export type GoogleAdsCampaignWorkspaceProps = {
   site: WordPressSite;
   apiKey: string;
   selectedModel: string;
+  onPlatformChange: (tab: "ppc-google" | "ppc-meta") => void;
 };
 
 export function GoogleAdsCampaignWorkspace({
   site,
   apiKey,
   selectedModel,
+  onPlatformChange,
 }: GoogleAdsCampaignWorkspaceProps) {
   const ctrl = usePpcGoogleWorkspace({ site, apiKey, selectedModel });
 
   return (
     <div className={CONTENT_OPTIMIZER_WORKSPACE_SHELL_CLASS}>
       <div className={SEO_WORKSPACE_HEADER_CLASS}>
-        <GoogleAdsWorkspaceHeader ctrl={ctrl} />
+        <GoogleAdsWorkspaceHeader ctrl={ctrl} onPlatformChange={onPlatformChange} />
       </div>
       <div className={cn(SEO_WORKSPACE_BODY_SCROLL_CLASS, CONTENT_OPTIMIZER_BODY_INSET_CLASS, "flex flex-col")}>
         <GoogleAdsCampaignsSection ctrl={ctrl} />

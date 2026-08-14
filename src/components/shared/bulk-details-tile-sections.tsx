@@ -36,7 +36,14 @@ const PIPELINE_HARNESS_TITLES = new Set<string>([
   ...CONTENT_PREP_POST_SECTION_TITLES,
 ]);
 
-function filterPipelineHarnessSections(sections: BulkHarnessSectionUi[]): BulkHarnessSectionUi[] {
+function filterPipelineHarnessSections(
+  sections: BulkHarnessSectionUi[],
+  pipelineSectionTitles?: readonly string[],
+): BulkHarnessSectionUi[] {
+  if (pipelineSectionTitles?.length) {
+    const allowed = new Set(pipelineSectionTitles);
+    return sections.filter((section) => allowed.has(section.title));
+  }
   return sections.filter((s) => PIPELINE_HARNESS_TITLES.has(s.title));
 }
 
@@ -51,7 +58,26 @@ export const DETAILS_DRAWER_PIPELINE_TITLE = CONTENT_PREP_POST_SECTION_TITLES[0]
 function resolveDetailsPipelineSections(
   persisted: BulkHarnessSectionUi[] | undefined,
   live: BulkHarnessSectionUi[] | undefined,
+  pipelineSectionTitles?: readonly string[],
 ): BulkHarnessSectionUi[] {
+  if (pipelineSectionTitles?.length) {
+    const statusByTitle = new Map<string, BulkHarnessSectionUi>();
+    for (const section of [...(persisted ?? []), ...(live ?? [])]) {
+      const title = section.title?.trim();
+      if (title) statusByTitle.set(title, section);
+    }
+    return pipelineSectionTitles.map((title, sectionIndex) => {
+      const patch = statusByTitle.get(title);
+      return (
+        patch ?? {
+          sectionIndex,
+          title,
+          status: "waiting" as const,
+        }
+      );
+    });
+  }
+
   const waiting = buildWaitingPostHarnessSections().filter(
     (section) => section.title === DETAILS_DRAWER_PIPELINE_TITLE,
   );
@@ -202,6 +228,7 @@ export function BulkDetailsTileSections({
   serpBriefDownload,
   statusMessage,
   progressLabel,
+  pipelineSectionTitles,
 }: {
   harnessSections: BulkHarnessSectionUi[];
   files: BulkDetailsDownloadable[];
@@ -212,13 +239,16 @@ export function BulkDetailsTileSections({
   statusMessage?: string | null;
   /** Active-row batch counter (e.g. 20/115), inline before file count. */
   progressLabel?: string | null;
+  pipelineSectionTitles?: readonly string[];
 }) {
   const [filesOpen, setFilesOpen] = useState(false);
-  const pipelineSections = (
-    harnessSections.length
-      ? filterPipelineHarnessSections(harnessSections)
-      : buildWaitingPostHarnessSections()
-  ).filter((section) => section.title === DETAILS_DRAWER_PIPELINE_TITLE);
+  const pipelineSections = pipelineSectionTitles?.length
+    ? resolveDetailsPipelineSections(harnessSections, harnessSections, pipelineSectionTitles)
+    : (
+        harnessSections.length
+          ? filterPipelineHarnessSections(harnessSections)
+          : buildWaitingPostHarnessSections()
+      ).filter((section) => section.title === DETAILS_DRAWER_PIPELINE_TITLE);
   const pipelineDownloadables = buildPipelineSectionDownloadables(
     pipelineSections,
     files,
@@ -351,6 +381,7 @@ export type BulkDetailsDrawerStackProps = {
   prepSections?: BulkHarnessSectionUi[] | null;
   prepOpen?: boolean;
   onPrepOpenChange?: (open: boolean) => void;
+  prepAccordionTitle?: string;
   pagination?: ReactNode;
   /** Receives stripe index after live/prep/pagination stripes for row numbering. */
   children: (stripeBase: number) => ReactNode;
@@ -362,6 +393,7 @@ export function BulkDetailsDrawerStack({
   prepSections,
   prepOpen = true,
   onPrepOpenChange,
+  prepAccordionTitle = "Sitemap prep",
   pagination,
   children,
 }: BulkDetailsDrawerStackProps) {
@@ -385,6 +417,7 @@ export function BulkDetailsDrawerStack({
           stripeIndex={prepStripeIndex!}
           open={prepOpen}
           onOpenChange={onPrepOpenChange ?? (() => {})}
+          title={prepAccordionTitle}
         />
       ) : null}
       {pagination}
@@ -398,11 +431,13 @@ export function BulkDetailsPrepAccordion({
   stripeIndex,
   open,
   onOpenChange,
+  title = "Sitemap prep",
 }: {
   sections: BulkHarnessSectionUi[];
   stripeIndex: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  title?: string;
 }) {
   return (
     <MetaAccordionStripeRow stripeIndex={stripeIndex}>
@@ -410,7 +445,7 @@ export function BulkDetailsPrepAccordion({
         <CollapsibleTrigger asChild>
           <button type="button" className={cn(META_TRIGGER_FLAT, "w-full font-semibold")}>
             <MapIcon className="h-4 w-4 shrink-0" aria-hidden />
-            <span className="min-w-0 flex-1 truncate text-left">Sitemap prep</span>
+            <span className="min-w-0 flex-1 truncate text-left">{title}</span>
             <div className={cn(META_FIELD_END_RAIL, "pointer-events-auto shrink-0")}>
               <span
                 className={cn(

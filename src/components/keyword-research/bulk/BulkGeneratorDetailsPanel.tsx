@@ -82,6 +82,8 @@ export type BulkGeneratorDetailsPanelProps = {
   publishDateLabelByIndex?: Record<number, string>;
   draftOnly?: boolean;
   directionsSiteName?: string;
+  prepAccordionTitle?: string;
+  pipelineSectionTitles?: string[];
 };
 
 export function bulkGeneratorDetailsCanOpen(

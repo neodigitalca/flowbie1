@@ -11,6 +11,7 @@ import { TasksTabContent } from "@/components/manager/tasks/TasksTabContent";
 import { UsersTabContent } from "@/components/manager/UsersTabContent";
 import { CommunicationTabContent } from "@/components/manager/CommunicationTabContent";
 import { PpcTabContent } from "@/components/ppc/PpcTabContent";
+import { MetaAdsCampaignWorkspace } from "@/components/ppc/meta/MetaAdsCampaignWorkspace";
 import { GbpPostShell } from "@/components/gbp-post/GbpPostShell";
 import { ResearchWorkspaceShell } from "@/components/research/ResearchWorkspaceShell";
 import { SitemapOptimizerResearchTab } from "@/components/research/sitemap-optimizer/SitemapOptimizerResearchTab";
@@ -345,6 +346,23 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
             temperature={temperature}
             maxTokens={maxTokens}
             topP={topP}
+            onPlatformChange={onManagerTabChange}
+          />
+        </TabsContent>
+
+        <TabsContent
+          value="ppc-meta"
+          className={cn(
+            embeddedTabPanelTopClass,
+            "data-[state=inactive]:hidden",
+            embeddedTabPanelStretch,
+            embedded && "overflow-hidden",
+          )}
+        >
+          <MetaAdsCampaignWorkspace
+            apiKey={apiKey}
+            selectedModel={selectedModel}
+            onPlatformChange={onManagerTabChange}
           />
         </TabsContent>
 

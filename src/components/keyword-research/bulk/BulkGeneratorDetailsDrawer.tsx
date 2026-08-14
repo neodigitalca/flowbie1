@@ -51,6 +51,8 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
     siteKwHostedLink,
     publishDateLabelByIndex,
     draftOnly,
+    prepAccordionTitle,
+    pipelineSectionTitles,
   } = props;
 
   const [expandedRows, setExpandedRows] = useState<Set<number>>(() => new Set());
@@ -132,6 +134,7 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
       prepSections={prepSections}
       prepOpen={detailsPrepOpen}
       onPrepOpenChange={setDetailsPrepOpen}
+      prepAccordionTitle={prepAccordionTitle}
     >
       {(stripeBase) => {
         let rowStripeBase = stripeBase;
@@ -165,6 +168,7 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
               const rowHarnessSectionsList = resolveDetailsPipelineSections(
                 persistedHarness,
                 liveHarness,
+                pipelineSectionTitles,
               );
               const panelId = `bulk-generator-details-row-${index}`;
               const toggleRow = () => setRowExpanded(index, !isExpanded);
@@ -194,7 +198,9 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
                       />
                       {isExpanded || activeStatus || activeProgressLabel ? (
                         <BulkDetailsTileSections
-                          harnessSections={rowHarnessSectionsList}
+                          harnessSections={
+                            pipelineSectionTitles?.length ? [] : rowHarnessSectionsList
+                          }
                           files={rowFilesToDownloadables(rowFiles)}
                           onDownloadFile={handleDownloadFile}
                           onDownloadAll={handleDownloadAll}
