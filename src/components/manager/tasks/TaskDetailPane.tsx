@@ -9,9 +9,10 @@ import { TaskTagPicker } from "@/components/manager/tasks/TaskTagPicker";
 import { TaskSubtaskList } from "@/components/manager/tasks/TaskSubtaskList";
 import { TaskCommentComposer } from "@/components/manager/tasks/TaskCommentComposer";
 import { TaskFileUpload } from "@/components/manager/tasks/TaskFileUpload";
-import type { TaskFile, TaskNote, TaskTag, TeamTask, TaskStatus } from "@/lib/tasks-types";
-import { TASK_STATUS_LABELS, TASK_STATUSES } from "@/lib/tasks-types";
+import type { TaskFile, TaskNote, TaskTag, TeamTask, TaskStatus, TaskRecurrenceRule } from "@/lib/tasks-types";
+import { TASK_RECURRENCE_LABELS, TASK_RECURRENCE_RULES, TASK_STATUS_LABELS, TASK_STATUSES } from "@/lib/tasks-types";
 import type { TeamMember } from "@/lib/teams-types";
+import type { WordPressSiteOption } from "@/components/manager/tasks/NewTaskDialog";
 
 const FIELD_CLASS = `${DASHBOARD_SETTINGS_FIELD_CLASS} w-full text-base`;
 
@@ -22,6 +23,7 @@ export type TaskDetailPaneProps = {
   subtasks: TeamTask[];
   tags: TaskTag[];
   members: TeamMember[];
+  siteOptions: WordPressSiteOption[];
   memberNames: Map<number, string>;
   teamId: number | null;
   saving: boolean;
@@ -36,12 +38,17 @@ export type TaskDetailPaneProps = {
     assigneeIds?: number[];
     dueDate?: string;
     tagIds?: string[];
+    wordpressSiteId?: string | null;
+    recurrenceRule?: TaskRecurrenceRule;
   }) => void;
+  mentionMembers: TeamMember[];
   onAddNote: (body: string, mentionUserIds: number[]) => void;
   onUploadFile: (file: File) => void;
   onAddSubtask: (title: string) => void;
   onToggleSubtask: (taskId: number, status: TaskStatus) => void;
   onDelete: () => void;
+  onExecuteWithAgent?: () => void;
+  executeWithAgentDisabledReason?: string | null;
 };
 
 function NoteBody({ body }: { body: string }) {
@@ -68,7 +75,9 @@ export function TaskDetailPane({
   subtasks,
   tags,
   members,
+  siteOptions,
   memberNames,
+  mentionMembers,
   teamId,
   saving,
   uploading,
@@ -80,6 +89,8 @@ export function TaskDetailPane({
   onAddSubtask,
   onToggleSubtask,
   onDelete,
+  onExecuteWithAgent,
+  executeWithAgentDisabledReason,
 }: TaskDetailPaneProps): React.ReactElement | null {
   const [localTitle, setLocalTitle] = useState("");
   const [localKeyword, setLocalKeyword] = useState("");
@@ -105,15 +116,29 @@ export function TaskDetailPane({
 
   return (
     <aside className="flex h-full min-h-0 w-80 shrink-0 flex-col bg-zinc-950">
-      <div className="flex shrink-0 items-center justify-between px-3 py-2">
-        <Button
-          type="button"
-          className="h-10 text-base"
-          disabled={saving || task.status === "done"}
-          onClick={onMarkDone}
-        >
-          Mark done
-        </Button>
+      <div className="flex shrink-0 items-center justify-between gap-2 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            className="h-10 text-base"
+            disabled={saving || task.status === "done"}
+            onClick={onMarkDone}
+          >
+            Mark done
+          </Button>
+          {onExecuteWithAgent || executeWithAgentDisabledReason ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-10 text-base"
+              disabled={saving || Boolean(executeWithAgentDisabledReason)}
+              title={executeWithAgentDisabledReason ?? undefined}
+              onClick={onExecuteWithAgent}
+            >
+              Execute with agent
+            </Button>
+          ) : null}
+        </div>
         <Button type="button" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground" onClick={onClose}>
           <X className="h-4 w-4" />
         </Button>
@@ -171,6 +196,39 @@ export function TaskDetailPane({
             disabled={saving}
           />
         </div>
+        <div className="flex flex-col gap-2">
+          <label className="text-base text-muted-foreground">Recurrence</label>
+          <select
+            value={task.recurrenceRule ?? "none"}
+            onChange={(e) => onUpdate({ recurrenceRule: e.target.value as TaskRecurrenceRule })}
+            className={`${FIELD_CLASS} h-12 px-3`}
+            disabled={saving}
+          >
+            {TASK_RECURRENCE_RULES.map((rule) => (
+              <option key={rule} value={rule}>
+                {TASK_RECURRENCE_LABELS[rule]}
+              </option>
+            ))}
+          </select>
+        </div>
+        {siteOptions.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            <label className="text-base text-muted-foreground">Client</label>
+            <select
+              value={task.wordpressSiteId ?? ""}
+              onChange={(e) => onUpdate({ wordpressSiteId: e.target.value || null })}
+              className={`${FIELD_CLASS} h-12 px-3`}
+              disabled={saving}
+            >
+              <option value="">No client</option>
+              {siteOptions.map((site) => (
+                <option key={site.id} value={site.id}>
+                  {site.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
         <TaskAssigneePicker
           members={members}
           assigneeIds={task.assigneeIds}
@@ -197,7 +255,7 @@ export function TaskDetailPane({
               ))}
             </ul>
           )}
-          <TaskCommentComposer members={members} disabled={saving} onSubmit={onAddNote} />
+          <TaskCommentComposer members={mentionMembers} disabled={saving} onSubmit={onAddNote} />
         </div>
         {teamId ? (
           <TaskFileUpload teamId={teamId} taskId={task.id} files={files} uploading={uploading} onUpload={onUploadFile} />

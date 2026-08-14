@@ -9,19 +9,19 @@ import { IntegrationsTab } from "@/components/IntegrationsTab";
 import { ChatTabContent } from "@/components/chat/ChatTabContent";
 import { TasksTabContent } from "@/components/manager/tasks/TasksTabContent";
 import { UsersTabContent } from "@/components/manager/UsersTabContent";
-import { CommunicationTabContent } from "@/components/manager/CommunicationTabContent";
+import { SupportTabContent } from "@/components/manager/support/SupportTabContent";
 import { PpcTabContent } from "@/components/ppc/PpcTabContent";
 import { MetaAdsCampaignWorkspace } from "@/components/ppc/meta/MetaAdsCampaignWorkspace";
 import { GbpPostShell } from "@/components/gbp-post/GbpPostShell";
-import { ResearchWorkspaceShell } from "@/components/research/ResearchWorkspaceShell";
+import { ContentCreatorCampaignWorkspace } from "@/components/social/content-creator/ContentCreatorCampaignWorkspace";
+import { SocialCreatorCampaignWorkspace } from "@/components/social/creator/SocialCreatorCampaignWorkspace";
 import { SitemapOptimizerResearchTab } from "@/components/research/sitemap-optimizer/SitemapOptimizerResearchTab";
-import { ReportingTab } from "@/components/research/reporting/ReportingTab";
 import { VerticalBenchmarkShell } from "@/components/vertical-benchmark/VerticalBenchmarkShell";
-import { GridLocalShell } from "@/components/grid-local/GridLocalShell";
 import { ApiDocsTabContent } from "@/components/api-docs/ApiDocsTabContent";
-import { saveDataForSEOApiKey, loadAgentMailApiKey, saveAgentMailApiKey } from "@/lib/api";
+import { saveDataForSEOApiKey } from "@/lib/api";
 import type { ManagerSettingsClusterId } from "@/components/manager/manager-settings-cluster";
 import type { GeneratorFreeFlowBindings } from "@/components/generator/generator-free-flow-bindings";
+import type { AssistNavigateTarget } from "@/lib/pulse-assist/types";
 import { cn } from "@/lib/utils";
 import { ManagerMegaMenuNav } from "@/components/manager/ManagerMegaMenuNav";
 import { ManagerTopBarDisplayConsole } from "@/components/manager/ManagerTopBarDisplayConsole";
@@ -29,6 +29,9 @@ import { ManagerSeedWorkspaceProvider } from "@/contexts/manager-seed-workspace-
 import {
   MANAGER_TOP_BAR_CLASS,
 } from "@/components/manager/manager-top-bar-nav-styles";
+import { PulseAssistContextProvider } from "@/contexts/pulse-assist-context";
+import { PulseAssistRoot } from "@/components/pulse-assist/PulseAssistRoot";
+import { AgentRunsShell } from "@/components/agent-runs/AgentRunsShell";
 
 export interface ManagerWorkspaceProps {
   variant: "embedded" | "overlay";
@@ -69,6 +72,8 @@ export interface ManagerWorkspaceProps {
   onManagerDashboardClusterChange: (id: ManagerSettingsClusterId) => void;
   /** Integrations: open Generator → Entity with site + entity sitemap prefilled. */
   onNavigateToSapGenerator?: (site: WordPressSite, sitemapUrl: string) => void;
+  /** Pulse Assist in-app navigation (pulse:nav/... links). */
+  onAssistNavigate?: (target: AssistNavigateTarget) => void;
 }
 
 export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
@@ -101,6 +106,7 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
   managerDashboardCluster,
   onManagerDashboardClusterChange,
   onNavigateToSapGenerator,
+  onAssistNavigate,
 }) => {
   const [dataForSEOApiKey, setDataForSEOApiKey] = useState<string>(() => {
     try {
@@ -109,8 +115,6 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
       return "";
     }
   });
-  const [agentMailApiKey, setAgentMailApiKey] = useState<string>(() => loadAgentMailApiKey());
-
   const embedded = variant === "embedded";
   const chatFullBleed = embedded && (managerTab === "chat" || managerTab === "tasks" || managerTab === "api");
   /** Radix tabpanel must participate in flex-1 chain when embedded; parent-only selectors are unreliable. */
@@ -146,7 +150,7 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
         {embedded && showResetToolbar ? (
           <>
             <div
-              data-flowbie-manager-sticky-nav
+              data-neo-pulse-manager-sticky-nav
               className={cn(
                 "sticky top-0 z-50 flex w-full shrink-0 flex-col pt-2.5 pb-2.5 text-foreground shadow-none md:pt-3 md:pb-3",
                 MANAGER_TOP_BAR_CLASS,
@@ -281,19 +285,16 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
           <IntegrationsTab onNavigateToSapGenerator={onNavigateToSapGenerator} />
         </TabsContent>
 
-        <TabsContent
-          value="communication"
-          className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}
-        >
-          <CommunicationTabContent />
-        </TabsContent>
-
         <TabsContent value="chat" className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}>
           <ChatTabContent />
         </TabsContent>
 
         <TabsContent value="tasks" className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}>
           <TasksTabContent />
+        </TabsContent>
+
+        <TabsContent value="support" className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}>
+          <SupportTabContent />
         </TabsContent>
 
         <TabsContent value="users" className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}>
@@ -315,9 +316,6 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
             dataForSEOApiKey={dataForSEOApiKey}
             setDataForSEOApiKey={setDataForSEOApiKey}
             saveDataForSEOApiKeyToStorage={saveDataForSEOApiKey}
-            agentMailApiKey={agentMailApiKey}
-            setAgentMailApiKey={setAgentMailApiKey}
-            saveAgentMailApiKeyToStorage={saveAgentMailApiKey}
             selectedModel={selectedModel}
             setSelectedModel={setSelectedModel}
             temperature={temperature}
@@ -370,14 +368,39 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
           value="gbp-post"
           className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}
         >
-          <GbpPostShell />
+          <GbpPostShell onPlatformChange={onManagerTabChange} />
         </TabsContent>
 
         <TabsContent
-          value="gsc-reporting"
-          className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}
+          value="content-calendar"
+          className={cn(
+            embeddedTabPanelTopClass,
+            "data-[state=inactive]:hidden",
+            embeddedTabPanelStretch,
+            embedded && "overflow-hidden",
+          )}
         >
-          <ReportingTab />
+          <ContentCreatorCampaignWorkspace
+            apiKey={apiKey}
+            selectedModel={selectedModel}
+            onPlatformChange={onManagerTabChange}
+          />
+        </TabsContent>
+
+        <TabsContent
+          value="social-creator"
+          className={cn(
+            embeddedTabPanelTopClass,
+            "data-[state=inactive]:hidden",
+            embeddedTabPanelStretch,
+            embedded && "overflow-hidden",
+          )}
+        >
+          <SocialCreatorCampaignWorkspace
+            apiKey={apiKey}
+            selectedModel={selectedModel}
+            onPlatformChange={onManagerTabChange}
+          />
         </TabsContent>
 
         <TabsContent
@@ -394,16 +417,6 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
           <VerticalBenchmarkShell openRouterApiKey={apiKey} />
         </TabsContent>
 
-        <TabsContent
-          value="grid-local"
-          className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}
-        >
-          <GridLocalShell />
-        </TabsContent>
-
-        <TabsContent value="research" className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}>
-          <ResearchWorkspaceShell />
-        </TabsContent>
 
         <TabsContent value="api" className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}>
           <ApiDocsTabContent />
@@ -418,15 +431,29 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
 
   if (variant === "overlay") {
     return (
-      <div className="absolute inset-0 z-50 bg-black/90 backdrop-blur-sm p-4 md:p-8 overflow-y-auto">
-        {inner}
-      </div>
+      <AgentRunsShell>
+        <PulseAssistContextProvider
+          managerTab={managerTab}
+          managerDashboardCluster={managerDashboardCluster}
+          onAssistNavigate={onAssistNavigate}
+        >
+          <div className="absolute inset-0 z-50 bg-black/90 backdrop-blur-sm p-4 md:p-8 overflow-y-auto">
+            {inner}
+          </div>
+          <PulseAssistRoot />
+        </PulseAssistContextProvider>
+      </AgentRunsShell>
     );
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
-      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">{inner}</div>
-    </div>
+    <AgentRunsShell>
+      <PulseAssistContextProvider managerTab={managerTab} onAssistNavigate={onAssistNavigate}>
+        <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
+          <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">{inner}</div>
+        </div>
+        <PulseAssistRoot />
+      </PulseAssistContextProvider>
+    </AgentRunsShell>
   );
 };

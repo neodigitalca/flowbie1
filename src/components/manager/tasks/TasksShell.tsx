@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeam } from "@/contexts/TeamContext";
+import { usePulseAssistContext } from "@/contexts/pulse-assist-context";
+import { useAgentRunsContext } from "@/contexts/agent-runs-context";
+import { taskCanExecuteWithAgent } from "@/lib/agent-runs-types";
 import { TasksNavSidebar } from "@/components/manager/tasks/TasksNavSidebar";
 import { TasksContextHeader } from "@/components/manager/tasks/TasksContextHeader";
 import { TasksFilterToolbar } from "@/components/manager/tasks/TasksFilterToolbar";
@@ -10,8 +13,11 @@ import { TasksCalendarView } from "@/components/manager/tasks/TasksCalendarView"
 import { TasksFilesView } from "@/components/manager/tasks/TasksFilesView";
 import { TaskDetailPane } from "@/components/manager/tasks/TaskDetailPane";
 import { NewProjectDialog } from "@/components/manager/tasks/NewProjectDialog";
-import { NewTaskDialog } from "@/components/manager/tasks/NewTaskDialog";
+import { TemplateManagerDialog } from "@/components/manager/tasks/TemplateManagerDialog";
+import { NewTaskDialog, type TaskFormPayload } from "@/components/manager/tasks/NewTaskDialog";
 import { AddSectionDialog } from "@/components/manager/tasks/AddSectionDialog";
+import { useWordPressSites } from "@/hooks/use-wordpress-sites";
+import { useActiveWordPressSite } from "@/contexts/active-wordpress-site-context";
 import {
   addTaskNote,
   createProjectSection,
@@ -29,6 +35,7 @@ import {
   fetchTaskProjects,
   fetchTaskTags,
   fetchTaskTemplates,
+  saveTemplateFromProject,
   updateProjectSection,
   updateTask,
   updateTaskProject,
@@ -53,6 +60,10 @@ import type {
 export function TasksShell(): React.ReactElement {
   const { user } = useAuth();
   const { activeTeam, members } = useTeam();
+  const { setTasksBridge } = usePulseAssistContext();
+  const { startRunFromTask } = useAgentRunsContext();
+  const { sites: wpSites } = useWordPressSites();
+  const { activeWordPressSiteId } = useActiveWordPressSite();
   const teamId = activeTeam?.id ?? null;
   const userId = user?.id ?? 0;
 
@@ -78,9 +89,11 @@ export function TasksShell(): React.ReactElement {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [sectionDialogOpen, setSectionDialogOpen] = useState(false);
   const [creatingSection, setCreatingSection] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
   const [editingProject, setEditingProject] = useState<TaskProject | null>(null);
   const [editingSection, setEditingSection] = useState<TaskSection | null>(null);
   const [editingTask, setEditingTask] = useState<TeamTask | null>(null);
@@ -89,6 +102,14 @@ export function TasksShell(): React.ReactElement {
   const pendingPatchRef = useRef<Record<string, unknown>>({});
 
   const humanMembers = useMemo(() => members.filter((m) => !m.isBot), [members]);
+
+  const siteOptions = useMemo(
+    () =>
+      wpSites
+        .filter((s) => s.enabled !== false)
+        .map((s) => ({ id: s.id, name: s.name.trim() || s.siteUrl })),
+    [wpSites],
+  );
 
   const memberNames = useMemo(() => {
     const map = new Map<number, string>();
@@ -102,6 +123,13 @@ export function TasksShell(): React.ReactElement {
     () => projects.find((p) => p.id === activeProjectId) ?? null,
     [projects, activeProjectId],
   );
+
+  useEffect(() => {
+    setTasksBridge({
+      activeProjectId,
+      activeProjectTitle: activeProject?.title?.trim() || null,
+    });
+  }, [activeProject?.title, activeProjectId, setTasksBridge]);
 
   const contextTitle = navMode === "my" ? "My Tasks" : (activeProject?.title ?? "Project");
 
@@ -274,6 +302,23 @@ export function TasksShell(): React.ReactElement {
     [teamId],
   );
 
+  const handleSaveTemplate = useCallback(async () => {
+    if (!teamId || activeProjectId == null || !activeProject?.title?.trim()) return;
+    setSavingTemplate(true);
+    try {
+      const result = await saveTemplateFromProject(teamId, {
+        projectId: activeProjectId,
+        name: activeProject.title.trim(),
+        keyword: activeProject.keyword?.trim() || undefined,
+      });
+      if (result.ok && result.templates) {
+        setTemplates(result.templates);
+      }
+    } finally {
+      setSavingTemplate(false);
+    }
+  }, [activeProject?.keyword, activeProject?.title, activeProjectId, teamId]);
+
   const handleDeleteProject = useCallback(
     async (projectId: number) => {
       if (!teamId) return;
@@ -293,7 +338,7 @@ export function TasksShell(): React.ReactElement {
   );
 
   const handleCreateTask = useCallback(
-    async (payload: { keyword: string; title: string; projectId: number }) => {
+    async (payload: TaskFormPayload & { projectId: number }) => {
       if (!teamId || payload.projectId <= 0) return false;
 
       let sectionId = 0;
@@ -304,11 +349,24 @@ export function TasksShell(): React.ReactElement {
         sectionId = sectionList[0]?.id ?? 0;
       }
 
+      const assigneeIds =
+        payload.assigneeIds && payload.assigneeIds.length > 0
+          ? payload.assigneeIds
+          : userId > 0
+            ? [userId]
+            : [];
+
       const result = await createProjectTask(teamId, payload.projectId, {
         keyword: payload.keyword,
         title: payload.title,
+        description: payload.description,
+        status: payload.status,
+        dueDate: payload.dueDate,
+        recurrenceRule: payload.recurrenceRule,
+        assigneeIds,
+        wordpressSiteId: payload.wordpressSiteId,
+        tagIds: payload.tagIds,
         sectionId,
-        assigneeIds: userId > 0 ? [userId] : [],
       });
       if (result.ok && result.task) {
         if (navMode === "my") {
@@ -450,7 +508,7 @@ export function TasksShell(): React.ReactElement {
   );
 
   const handleUpdateTask = useCallback(
-    async (taskId: number, payload: { keyword: string; title: string }) => {
+    async (taskId: number, payload: TaskFormPayload) => {
       if (!teamId) return false;
       const result = await updateTask(teamId, taskId, payload);
       if (result.ok && result.task) {
@@ -527,8 +585,10 @@ export function TasksShell(): React.ReactElement {
         sections={sections}
         tasks={displayTasks}
         tags={tags}
+        filterMode={filterMode}
         selectedTaskId={selectedTaskId}
         memberNames={memberNames}
+        siteOptions={siteOptions}
         myTasksMode={navMode === "my"}
         onSelectTask={setSelectedTaskId}
         onStatusChange={(id, status) => void handleStatusChange(id, status)}
@@ -570,6 +630,7 @@ export function TasksShell(): React.ReactElement {
           setEditingProject(null);
           setProjectDialogOpen(true);
         }}
+        onOpenTemplates={() => setTemplateDialogOpen(true)}
         onEditProject={(project) => {
           setEditingProject(project);
           setProjectDialogOpen(true);
@@ -600,6 +661,9 @@ export function TasksShell(): React.ReactElement {
             setSectionDialogOpen(true);
           }}
           showAddSection={navMode === "project" && viewMode === "list" && !sectionDialogOpen && !creatingSection}
+          showSaveTemplate={navMode === "project" && activeProjectId != null}
+          saveTemplateDisabled={savingTemplate || tasks.length === 0}
+          onSaveTemplate={() => void handleSaveTemplate()}
         />
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {mainView}
@@ -610,7 +674,9 @@ export function TasksShell(): React.ReactElement {
               files={selectedFiles}
               subtasks={selectedSubtasks}
               tags={tags}
-              members={humanMembers}
+              members={members}
+              mentionMembers={humanMembers}
+              siteOptions={siteOptions}
               memberNames={memberNames}
               teamId={teamId}
               saving={saving}
@@ -623,6 +689,19 @@ export function TasksShell(): React.ReactElement {
               onAddSubtask={(title) => void handleAddSubtask(title)}
               onToggleSubtask={(id, status) => void handleStatusChange(id, status)}
               onDelete={() => void handleDeleteTask()}
+              onExecuteWithAgent={
+                selectedTask.executionKind
+                  ? () => {
+                      if (!taskCanExecuteWithAgent(selectedTask)) return;
+                      void startRunFromTask(selectedTask);
+                    }
+                  : undefined
+              }
+              executeWithAgentDisabledReason={
+                selectedTask.executionKind && !taskCanExecuteWithAgent(selectedTask)
+                  ? "Add executionPayload.targetUrl on the task to run with an agent."
+                  : null
+              }
             />
           ) : null}
         </div>
@@ -634,9 +713,20 @@ export function TasksShell(): React.ReactElement {
           if (!open) setEditingProject(null);
         }}
         templates={templates}
+        sites={siteOptions}
+        defaultSiteId={activeWordPressSiteId}
         editProject={editingProject}
         onCreate={handleCreateProject}
         onUpdate={handleUpdateProject}
+      />
+      <TemplateManagerDialog
+        open={templateDialogOpen}
+        onOpenChange={setTemplateDialogOpen}
+        teamId={teamId}
+        templates={templates}
+        activeProjectId={navMode === "project" ? activeProjectId : null}
+        activeProjectTitle={activeProject?.title ?? null}
+        onTemplatesChange={setTemplates}
       />
       <NewTaskDialog
         open={taskDialogOpen}
@@ -647,6 +737,10 @@ export function TasksShell(): React.ReactElement {
         projects={projects}
         defaultProjectId={navMode === "project" ? activeProjectId : null}
         editTask={editingTask}
+        members={members}
+        siteOptions={siteOptions}
+        tags={tags}
+        defaultClientId={activeWordPressSiteId}
         onCreate={handleCreateTask}
         onUpdate={handleUpdateTask}
       />
