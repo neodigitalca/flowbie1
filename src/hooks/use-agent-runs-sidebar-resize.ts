@@ -12,7 +12,7 @@ type DragState = {
   startWidth: number;
 };
 
-/** Left sidebar: drag handle on right edge; width grows when pointer moves right. */
+/** Right sidebar: drag handle on left edge; width grows when pointer moves left. */
 export function useAgentRunsSidebarResize(enabled: boolean) {
   const [width, setWidth] = useState(() => readAgentRunsSidebarWidth());
   const [isResizing, setIsResizing] = useState(false);
@@ -64,27 +64,32 @@ export function useAgentRunsSidebarResize(enabled: boolean) {
     [enabled, isMobile, width],
   );
 
-  const onPointerMove = useCallback(
+  const onPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    setWidth(clampAgentRunsSidebarWidth(drag.startWidth + (drag.startX - event.clientX)));
+  }, []);
+
+  const onPointerUp = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       const drag = dragRef.current;
       if (!drag) return;
-      const delta = event.clientX - drag.startX;
-      finishResize(drag.startWidth + delta);
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      finishResize(drag.startWidth + (drag.startX - event.clientX));
     },
     [finishResize],
   );
 
-  const onPointerUp = useCallback(
+  const onPointerCancel = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (!dragRef.current) return;
       const drag = dragRef.current;
-      const delta = event.clientX - drag.startX;
-      finishResize(drag.startWidth + delta);
-      try {
+      if (!drag) return;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId);
-      } catch {
-        /* ignore */
       }
+      finishResize(drag.startWidth + (drag.startX - event.clientX));
     },
     [finishResize],
   );
@@ -97,6 +102,7 @@ export function useAgentRunsSidebarResize(enabled: boolean) {
       onPointerDown,
       onPointerMove,
       onPointerUp,
+      onPointerCancel,
     },
   };
 }

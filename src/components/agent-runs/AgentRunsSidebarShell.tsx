@@ -1,8 +1,9 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
-import { ChevronLeft } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAgentRunsSidebarResize } from "@/hooks/use-agent-runs-sidebar-resize";
 import { RUNNING_AGENTS_LABEL } from "./AgentRunsBrandTitle";
+import { AgentRunsLauncherBrand } from "./AgentRunsLauncherBrand";
 import { AgentRunsSidebarResizeHandle } from "./AgentRunsSidebarResizeHandle";
 import "./agent-runs-theme.css";
 
@@ -36,7 +37,7 @@ export function AgentRunsSidebarShell({ open, onOpenChange, children }: AgentRun
   return (
     <div
       className={cn(
-        "fai-sidebar-root fai-sidebar-root--left agent-runs-root",
+        "fai-sidebar-root fai-sidebar-root--right agent-runs-root",
         open && "fai-sidebar-root--open",
         isResizing && "agent-runs-root--resizing",
       )}
@@ -51,7 +52,7 @@ export function AgentRunsSidebarShell({ open, onOpenChange, children }: AgentRun
         aria-expanded={open}
         aria-controls="agent-runs-panel"
       >
-        <span className="agent-runs-launcher-label">{RUNNING_AGENTS_LABEL}</span>
+        <AgentRunsLauncherBrand />
       </button>
 
       <button
@@ -77,7 +78,7 @@ export function AgentRunsSidebarShell({ open, onOpenChange, children }: AgentRun
             onClick={() => onOpenChange(false)}
             aria-label="Close sidebar"
           >
-            <ChevronLeft className="h-5 w-5" aria-hidden />
+            <ChevronRight className="h-5 w-5" aria-hidden />
           </button>
         ) : null}
         {open && !isMobile ? <AgentRunsSidebarResizeHandle {...handleProps} /> : null}
