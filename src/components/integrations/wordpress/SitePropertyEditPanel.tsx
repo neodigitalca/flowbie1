@@ -6,12 +6,14 @@ import { fetchWordPressSitesMirror } from "../storage";
 import { wordPressSiteHostKey } from "@/lib/wordpress-site-host-key";
 import { SitePropertyFormFields, type SitePropertyFormFieldsProps } from "./SitePropertyFormFields";
 import { WP_PANEL_SECTION_SHELL } from "./wordpress-panel-chrome";
+import type { PropertySettingsSubSectionId } from "./property-settings-types";
 
 export type SitePropertyEditPanelProps = SitePropertyFormFieldsProps & {
-  /** Row context (saved site); form state should match this while editing. */
   site: WordPressSite;
   editingSite: WordPressSite | null;
   onSave: () => void;
+  hideSave?: boolean;
+  settingsSubSectionId?: PropertySettingsSubSectionId;
 };
 
 function findServerRow(site: WordPressSite, rows: WordPressSite[]): WordPressSite | undefined {
@@ -26,6 +28,9 @@ export const SitePropertyEditPanel: React.FC<SitePropertyEditPanelProps> = ({
   site,
   editingSite,
   onSave,
+  hideSave = false,
+  settingsSubSectionId,
+  layout,
   formGbpLocationId,
   formGa4PropertyId,
   onFormGbpLocationIdChange,
@@ -35,6 +40,7 @@ export const SitePropertyEditPanel: React.FC<SitePropertyEditPanelProps> = ({
 }) => {
   const formReady = editingSite?.id === site.id;
   const hydrateKeyRef = useRef<string | null>(null);
+  const isModalFlat = layout === "modalFlat";
 
   useEffect(() => {
     if (!formReady) {
@@ -89,16 +95,19 @@ export const SitePropertyEditPanel: React.FC<SitePropertyEditPanelProps> = ({
   return (
     <div
       className={cn(
-        WP_PANEL_SECTION_SHELL,
-        "flex w-full min-w-0 shrink-0 flex-col gap-3",
+        !isModalFlat && WP_PANEL_SECTION_SHELL,
+        "flex w-full min-w-0 shrink-0 flex-col",
+        isModalFlat ? "gap-1" : "gap-3",
       )}
     >
       {!formReady ? (
-        <p className="shrink-0 text-sm text-muted-foreground">Loading form…</p>
+        <p className="shrink-0 text-base text-muted-foreground">Loading form…</p>
       ) : (
-        <div className="flex shrink-0 flex-col gap-3">
+        <div className={cn("flex shrink-0 flex-col", isModalFlat ? "gap-1" : "gap-3")}>
           <SitePropertyFormFields
             {...formProps}
+            layout={layout}
+            settingsSubSectionId={settingsSubSectionId}
             formGbpLocationId={formGbpLocationId}
             formGa4PropertyId={formGa4PropertyId}
             onFormGbpLocationIdChange={onFormGbpLocationIdChange}
@@ -106,19 +115,21 @@ export const SitePropertyEditPanel: React.FC<SitePropertyEditPanelProps> = ({
             onPatchSite={onPatchSite}
             persistedGbpLocationId={persistedGbp}
             persistedGa4PropertyId={persistedGa4}
-            chrome="light"
+            chrome={isModalFlat ? "dark" : "light"}
             className="py-0"
           />
-          <div className="shrink-0 border-t border-border/60 pt-3">
-            <Button
-              type="button"
-              variant="default"
-              onClick={onSave}
-              className="h-10 min-h-10 px-4 text-base font-semibold shadow-none"
-            >
-              Save Property
-            </Button>
-          </div>
+          {!hideSave ? (
+            <div className="shrink-0 border-t border-border/60 pt-3">
+              <Button
+                type="button"
+                variant="default"
+                onClick={onSave}
+                className="h-10 min-h-10 px-4 text-base font-semibold shadow-none"
+              >
+                Save Property
+              </Button>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

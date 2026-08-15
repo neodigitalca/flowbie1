@@ -1,9 +1,8 @@
-import React, { useEffect, useRef, useState } from "react";
+import React from "react";
 import { FileText, MapPin, PiggyBank, Sparkles } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { CompactWordPressTile } from "./CompactWordPressTile";
-import { WordPressSiteCard } from "./WordPressSiteCard";
 import { WordPressCardHeader } from "./WordPressCardHeader";
 import { WordPressCardStatus } from "./WordPressCardStatus";
 import type { WordPressSite } from "../types";
@@ -14,10 +13,7 @@ import { optimizationPeriodCapForPackage } from "@/lib/wordpress-optimization-pa
 import type { WordPressPropertyRowDisplay } from "@/lib/wordpress-properties-row-display";
 import {
   PROPERTIES_EMPTY,
-  PROPERTIES_EXPANDED_TITLE_BAND,
   PROPERTIES_LIST_STACK,
-  propertiesExpandedShellClass,
-  propertiesExpandedSummaryRowClass,
   propertiesRowOuterClass,
 } from "./wordpress-properties-surfaces";
 import { isEntitySitemapDisabled } from "@/lib/entity-endpoint-extractor";
@@ -37,15 +33,6 @@ function nextEditorialPeriodTooltipText(isoExclusiveEnd: string): string {
 
 function siteHasWpCredentials(site: WordPressSite): boolean {
   return Boolean(site.siteUrl?.trim() && site.username?.trim() && site.appPassword?.trim());
-}
-
-function canOpenPropertyPanel(site: WordPressSite): boolean {
-  return (
-    site.connectionStatus === "success" ||
-    site.connectionStatus === "failed" ||
-    site.connectionStatus === "testing" ||
-    site.connectionStatus === undefined
-  );
 }
 
 /** Before the hook fills state, keep the tile skeleton in a loading state. */
@@ -424,8 +411,7 @@ interface WordPressSiteListProps {
   filteredSites: WordPressSite[];
   siteSearchQuery: string;
   onSearchChange: (query: string) => void;
-  expandedSiteId: string | null;
-  onToggleExpandedSite: (siteId: string) => void;
+  onOpenProfile: (site: WordPressSite) => void;
   isTesting: string | null;
   isDetecting: string | null;
   isFetchingScheduled: string | null;
@@ -461,8 +447,6 @@ interface WordPressSiteListProps {
   postBankPendingBySiteId?: Record<string, number | undefined>;
   /** Optional pending SAP / entity bank row counts keyed by site id (Properties list). */
   sapBankPendingBySiteId?: Record<string, number | undefined>;
-  /** Inline edit form for the expanded property panel (Site settings tab). */
-  embeddedSiteEditPanel?: (site: WordPressSite) => React.ReactNode;
 }
 
 export const WordPressSiteList: React.FC<WordPressSiteListProps> = ({
@@ -470,8 +454,7 @@ export const WordPressSiteList: React.FC<WordPressSiteListProps> = ({
   filteredSites,
   siteSearchQuery,
   onSearchChange,
-  expandedSiteId,
-  onToggleExpandedSite,
+  onOpenProfile,
   isTesting,
   isDetecting,
   isFetchingScheduled,
@@ -504,28 +487,7 @@ export const WordPressSiteList: React.FC<WordPressSiteListProps> = ({
   propertyRowDisplay = "compact",
   postBankPendingBySiteId,
   sapBankPendingBySiteId,
-  embeddedSiteEditPanel,
 }) => {
-  const [closingExpandedSiteId, setClosingExpandedSiteId] = useState<string | null>(null);
-  const prevExpandedSiteIdRef = useRef<string | null>(expandedSiteId);
-  const CLOSE_MS = 520;
-
-  useEffect(() => {
-    const prevExpanded = prevExpandedSiteIdRef.current;
-    if (prevExpanded !== expandedSiteId) {
-      if (prevExpanded && expandedSiteId === null) {
-        setClosingExpandedSiteId(prevExpanded);
-        prevExpandedSiteIdRef.current = expandedSiteId;
-        const t = window.setTimeout(() => setClosingExpandedSiteId(null), CLOSE_MS);
-        return () => window.clearTimeout(t);
-      }
-      setClosingExpandedSiteId(null);
-      prevExpandedSiteIdRef.current = expandedSiteId;
-    }
-  }, [expandedSiteId]);
-
-  const prevExpandedSiteId = prevExpandedSiteIdRef.current;
-
   const renderPropertyRowTrailingControls = (site: WordPressSite) => {
     const compact = propertyRowDisplay === "compact";
     const mw = propertyMetricCellWidths(propertyRowDisplay);
@@ -578,85 +540,6 @@ export const WordPressSiteList: React.FC<WordPressSiteListProps> = ({
     );
   };
 
-  const renderMergedExpandedCard = (site: WordPressSite, neonActive: boolean, index: number) => {
-    return (
-      <div
-        className={cn(
-          propertiesExpandedShellClass(neonActive, index),
-          "flex max-h-[min(92vh,72rem)] min-h-0 flex-col overflow-hidden",
-        )}
-      >
-        <div
-          className={cn(
-            PROPERTIES_EXPANDED_TITLE_BAND,
-            propertiesExpandedSummaryRowClass(propertyRowDisplay),
-            "shrink-0 cursor-pointer",
-          )}
-          onClick={(e) => {
-            if ((e.target as HTMLElement).closest("button, a, [role='combobox']")) return;
-            onToggleExpandedSite(site.id);
-          }}
-        >
-          <div className="flex min-h-0 min-w-0 flex-1 items-center">
-            <CompactWordPressTile
-              variant="menu"
-              site={site}
-              isTesting={isTesting === site.id}
-              isExpanded={neonActive}
-              onToggle={() => onToggleExpandedSite(site.id)}
-              onTest={() => onTest(site)}
-              onToggleEnabled={() => onToggleEnabled(site)}
-              propertyRowDisplay={propertyRowDisplay}
-              onApplyDisplayNameFromGmb={
-                onPatchSite ? (name) => onPatchSite(site.id, { name }) : undefined
-              }
-            />
-          </div>
-
-          {renderPropertyRowTrailingControls(site)}
-        </div>
-
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-0">
-          <WordPressSiteCard
-            embedded
-            site={site}
-            showSiteInfoInHeader={false}
-            hideHeader={true}
-            hideStatus={true}
-            isTesting={isTesting === site.id}
-            isDetecting={isDetecting === site.id}
-            isFetchingScheduled={isFetchingScheduled === site.id}
-            isScrapingSitemap={isScrapingSitemap}
-            isIndexingSitemap={isIndexingSitemap}
-            isGeneratingEntities={isGeneratingEntities}
-            onExtractNAPAndGraph={() => onExtractNAPAndGraph(site)}
-            isExtractingNAPAndGraph={isExtractingNAPAndGraph[site.id] || false}
-            onTest={() => onTest(site)}
-            onDetect={() => onDetect(site)}
-            onEdit={() => onEdit(site)}
-            onDelete={() => onDelete(site.id)}
-            onToggle={() => onToggleEnabled(site)}
-            onScrapeChildSitemap={(url) => onScrapeChildSitemap(site, url)}
-            onIndexSitemap={(url) => onIndexSitemap(site, url)}
-            onEntityGeneration={
-              onEntityGeneration ? (sitemapUrl) => onEntityGeneration(site, sitemapUrl) : undefined
-            }
-            onSetEntitySitemap={(sitemapUrl) => onSetEntitySitemap(site, sitemapUrl)}
-            onToggleChildSitemapDisabled={(childSitemapUrl) =>
-              onToggleChildSitemapDisabled(site, childSitemapUrl)
-            }
-            onAppendManualChildSitemap={(url) => onAppendManualChildSitemap(site, url)}
-            isLoadingCalendar={isLoadingCalendar}
-            onLoadCalendarPosts={(sitemapUrl) => onLoadCalendarPosts(site, sitemapUrl)}
-            getScrapingKey={getScrapingKey}
-            onPatchSite={onPatchSite}
-            embeddedSiteEditPanel={embeddedSiteEditPanel?.(site)}
-          />
-        </div>
-      </div>
-    );
-  };
-
   if (sites.length === 0) {
     return (
       <div className="mt-0 flex min-h-0 flex-1 flex-col">
@@ -679,80 +562,57 @@ export const WordPressSiteList: React.FC<WordPressSiteListProps> = ({
           </p>
         </div>
       ) : (
-        <div className="flowbie-manager-tab-scroll flex min-h-0 flex-1 flex-col overflow-x-auto overflow-y-auto">
+        <div className="neo-pulse-manager-tab-scroll flex min-h-0 flex-1 flex-col overflow-x-auto overflow-y-auto">
         <div className={PROPERTIES_LIST_STACK}>
           {filteredSites.map((site, index) => {
-            const isOpen = expandedSiteId === site.id;
-            const closingGrace =
-              expandedSiteId === null &&
-              (closingExpandedSiteId === site.id ||
-                (prevExpandedSiteId != null &&
-                  prevExpandedSiteId === site.id &&
-                  prevExpandedSiteId !== expandedSiteId));
-            const showMerged = isOpen || closingGrace;
-            const neonActive = showMerged;
-            const canOpen = canOpenPropertyPanel(site);
             const rowSelected = selectedSiteIds?.has(site.id) ?? false;
 
             return (
               <div key={site.id} className="min-w-0 w-full">
-                {!showMerged ? (
-                  <div
-                    className={propertiesRowOuterClass(
-                      propertyRowDisplay,
-                      index,
-                      rowSelected,
-                      canOpen,
-                    )}
-                  >
-                    {onSiteSelectedChange ? (
-                      <div className="flex shrink-0 items-center justify-center pl-0.5">
-                        <Checkbox
-                          checked={rowSelected}
-                          onCheckedChange={(c) => onSiteSelectedChange(site.id, c === true)}
-                          className="border-zinc-500/60 data-[state=checked]:border-zinc-500 data-[state=checked]:bg-zinc-800 data-[state=checked]:text-zinc-400"
-                          aria-label={`Select ${site.name}`}
-                        />
-                      </div>
-                    ) : null}
-                    <div
-                      className={cn(
-                        "flex min-h-0 min-w-0 flex-1 items-center border-0 bg-transparent px-0 py-0",
-                        canOpen && "cursor-pointer",
-                      )}
-                      onClick={(e) => {
-                        if (!canOpen) return;
-                        if ((e.target as HTMLElement).closest("button, a, [role='combobox']")) return;
-                        onToggleExpandedSite(site.id);
-                      }}
-                    >
-                      <CompactWordPressTile
-                        variant="listRow"
-                        site={site}
-                        isTesting={isTesting === site.id}
-                        isExpanded={false}
-                        onToggle={() => onToggleExpandedSite(site.id)}
-                        onTest={() => onTest(site)}
-                        onToggleEnabled={() => onToggleEnabled(site)}
-                        propertyRowDisplay={propertyRowDisplay}
-                        listRowBlackActionChrome
-                        onApplyDisplayNameFromGmb={
-                          onPatchSite ? (name) => onPatchSite(site.id, { name }) : undefined
-                        }
+                <div
+                  className={propertiesRowOuterClass(
+                    propertyRowDisplay,
+                    index,
+                    rowSelected,
+                    true,
+                  )}
+                >
+                  {onSiteSelectedChange ? (
+                    <div className="flex shrink-0 items-center justify-center pl-0.5">
+                      <Checkbox
+                        checked={rowSelected}
+                        onCheckedChange={(c) => onSiteSelectedChange(site.id, c === true)}
+                        className="border-zinc-500/60 data-[state=checked]:border-zinc-500 data-[state=checked]:bg-zinc-800 data-[state=checked]:text-zinc-400"
+                        aria-label={`Select ${site.name}`}
                       />
                     </div>
-                    <div
-                      className={cn(
-                        "flex min-w-0 shrink-0 items-center",
-                        propertyRowDisplay === "compact" ? "gap-2 sm:gap-2" : "gap-3 sm:gap-4",
-                      )}
-                    >
-                      {renderPropertyRowTrailingControls(site)}
-                    </div>
+                  ) : null}
+                  <div className="flex min-h-0 min-w-0 flex-1 items-center border-0 bg-transparent px-0 py-0">
+                    <CompactWordPressTile
+                      variant="listRow"
+                      site={site}
+                      isTesting={isTesting === site.id}
+                      isExpanded={false}
+                      onToggle={() => onOpenProfile(site)}
+                      onTest={() => onTest(site)}
+                      onToggleEnabled={() => onToggleEnabled(site)}
+                      propertyRowDisplay={propertyRowDisplay}
+                      listRowBlackActionChrome
+                      onOpenProfile={() => onOpenProfile(site)}
+                      onApplyDisplayNameFromGmb={
+                        onPatchSite ? (name) => onPatchSite(site.id, { name }) : undefined
+                      }
+                    />
                   </div>
-                ) : (
-                  renderMergedExpandedCard(site, neonActive, index)
-                )}
+                  <div
+                    className={cn(
+                      "flex min-w-0 shrink-0 items-center",
+                      propertyRowDisplay === "compact" ? "gap-2 sm:gap-2" : "gap-3 sm:gap-4",
+                    )}
+                  >
+                    {renderPropertyRowTrailingControls(site)}
+                  </div>
+                </div>
               </div>
             );
           })}

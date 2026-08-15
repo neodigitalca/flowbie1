@@ -10,6 +10,9 @@ import { useWordPressSites } from "@/hooks/use-wordpress-sites";
 import { WordPressSiteList } from "./wordpress/WordPressSiteList";
 import { WordPressDialogs } from "./wordpress/WordPressDialogs";
 import { SitePropertyEditPanel } from "./wordpress/SitePropertyEditPanel";
+import { PropertyProfileDialog } from "./wordpress/PropertyProfileDialog";
+import type { WordPressSiteAdminSectionId } from "./wordpress/WordPressSiteAdminLayout";
+import type { PropertySettingsSubSectionId } from "./wordpress/property-settings-types";
 import { BulkImportClientsDialog } from "./wordpress/BulkImportClientsDialog";
 import { useQuarterEditorialCounts } from "@/hooks/use-quarter-editorial-counts";
 import { useOptimizationActivityCounts } from "@/hooks/use-optimization-activity-counts";
@@ -223,10 +226,13 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
   const [isExtractingNAPAndGraph, setIsExtractingNAPAndGraph] = useState<Record<string, boolean>>({});
   
   /**
-   * Expanded Properties detail panel (any saved site; failed connections can open to fix credentials).
-   * Not tied to the top-bar site toggle (header picks enabled sites; tile is connected-only).
+   * Centered property profile modal (replaces inline accordion expand).
    */
-  const [expandedSiteId, setExpandedSiteId] = useState<string | null>(null);
+  const [profileSiteId, setProfileSiteId] = useState<string | null>(null);
+  const [profileSectionId, setProfileSectionId] =
+    useState<WordPressSiteAdminSectionId>("overview");
+  const [settingsSubSectionId, setSettingsSubSectionId] =
+    useState<PropertySettingsSubSectionId>("profile");
   
   // Site search filter state
   const [siteSearchQuery, setSiteSearchQuery] = useState<string>('');
@@ -262,27 +268,6 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
     });
   }, []);
 
-  const toggleExpandedSite = useCallback((siteId: string) => {
-    setExpandedSiteId((prev) => {
-      if (prev === siteId) {
-        return null;
-      }
-      void mergeServerGbpLocationIdsIntoLocalSites().then((merged) => {
-        if (merged) reloadSitesFromStorage();
-      });
-      return sites.some((s) => s.id === siteId) ? siteId : prev;
-    });
-  }, [sites, reloadSitesFromStorage]);
-
-  /** Close the expanded panel only if the site was removed (e.g. deleted). */
-  useEffect(() => {
-    if (!expandedSiteId) return;
-    const site = sites.find((s) => s.id === expandedSiteId);
-    if (!site) {
-      setExpandedSiteId(null);
-    }
-  }, [sites, expandedSiteId]);
-
   const populateFormFromSite = useCallback(
     (site: WordPressSite) => {
       const formData = handleEditSiteInit(site);
@@ -302,27 +287,59 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
     [handleEditSiteInit],
   );
 
-  const lastExpandedSyncedRef = useRef<string | null>(null);
+  const openProfile = useCallback(
+    (siteId: string, sectionId?: WordPressSiteAdminSectionId) => {
+      const site = sites.find((s) => s.id === siteId);
+      if (!site) return;
+      void mergeServerGbpLocationIdsIntoLocalSites().then((merged) => {
+        if (merged) reloadSitesFromStorage();
+      });
+      populateFormFromSite(site);
+      setProfileSiteId(siteId);
+      setProfileSectionId(sectionId ?? "overview");
+      setSettingsSubSectionId("profile");
+    },
+    [sites, reloadSitesFromStorage, populateFormFromSite],
+  );
+
+  const closeProfile = useCallback(() => {
+    setProfileSiteId(null);
+  }, []);
+
+  /** Close profile modal when the site was removed (e.g. deleted). */
+  useEffect(() => {
+    if (!profileSiteId) return;
+    const site = sites.find((s) => s.id === profileSiteId);
+    if (!site) {
+      setProfileSiteId(null);
+    }
+  }, [sites, profileSiteId]);
+
+  const lastProfileSyncedRef = useRef<string | null>(null);
   useLayoutEffect(() => {
-    if (!expandedSiteId) {
-      lastExpandedSyncedRef.current = null;
+    if (!profileSiteId) {
+      lastProfileSyncedRef.current = null;
       return;
     }
-    const site = sites.find((s) => s.id === expandedSiteId);
+    const site = sites.find((s) => s.id === profileSiteId);
     if (!site) return;
-    const syncKey = `${expandedSiteId}:${site.gbpLocationId ?? ""}:${site.ga4PropertyId ?? ""}`;
-    if (lastExpandedSyncedRef.current === syncKey) return;
-    lastExpandedSyncedRef.current = syncKey;
+    const syncKey = `${profileSiteId}:${site.gbpLocationId ?? ""}:${site.ga4PropertyId ?? ""}`;
+    if (lastProfileSyncedRef.current === syncKey) return;
+    lastProfileSyncedRef.current = syncKey;
     populateFormFromSite(site);
-  }, [expandedSiteId, sites, populateFormFromSite]);
+  }, [profileSiteId, sites, populateFormFromSite]);
 
   /** Keep GBP field in sync when the site row gains an id (save or server hydrate) without clobbering in-progress edits. */
   useEffect(() => {
-    if (!expandedSiteId) return;
-    const gbp = sites.find((s) => s.id === expandedSiteId)?.gbpLocationId?.trim();
+    if (!profileSiteId) return;
+    const gbp = sites.find((s) => s.id === profileSiteId)?.gbpLocationId?.trim();
     if (!gbp) return;
     setFormGbpLocationId((prev) => (prev.trim() ? prev : gbp));
-  }, [expandedSiteId, sites]);
+  }, [profileSiteId, sites]);
+
+  const profileSite = profileSiteId
+    ? sites.find((s) => s.id === profileSiteId) ?? null
+    : null;
 
   const handleAddSite = useCallback(() => {
     const formData = handleAddSiteInit();
@@ -352,7 +369,7 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
   const handleSaveSiteClick = useCallback(() => {
     const activeEdit =
       editingSite ??
-      (expandedSiteId ? sites.find((s) => s.id === expandedSiteId) ?? null : null);
+      (profileSiteId ? sites.find((s) => s.id === profileSiteId) ?? null : null);
     const liveEdit = activeEdit
       ? sites.find((s) => s.id === activeEdit.id) ?? activeEdit
       : null;
@@ -378,14 +395,14 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
     );
     if (saved) {
       setIsDialogOpen(false);
-      setExpandedSiteId(saved.id);
+      setProfileSiteId(saved.id);
       setEditingSite(saved);
       const gbp = saved.gbpLocationId?.trim() ?? gbpForSave;
       setFormGbpLocationId(gbp);
       if (saved.ga4PropertyId?.trim()) {
         setFormGa4PropertyId(saved.ga4PropertyId.trim());
       }
-      lastExpandedSyncedRef.current = `${saved.id}:${gbp}:${saved.ga4PropertyId ?? ""}`;
+      lastProfileSyncedRef.current = `${saved.id}:${gbp}:${saved.ga4PropertyId ?? ""}`;
       if (!activeEdit) {
         void (async () => {
           const r = await applyGbpPropertyWand(saved, {
@@ -408,10 +425,46 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
     formOptimizationPackage,
     formBenchmarkCustomTag,
     editingSite,
-    expandedSiteId,
+    profileSiteId,
     sites,
     handleSaveSite,
   ]);
+
+  const profileSettingsPanel = profileSite ? (
+    <SitePropertyEditPanel
+      site={profileSite}
+      editingSite={editingSite}
+      layout="modalFlat"
+      settingsSubSectionId={settingsSubSectionId}
+      hideSave
+      formName={formName}
+      formSiteUrl={formSiteUrl}
+      formProductionSiteUrl={formProductionSiteUrl}
+      formUsername={formUsername}
+      formAppPassword={formAppPassword}
+      formGa4PropertyId={formGa4PropertyId}
+      formGbpLocationId={formGbpLocationId}
+      formSemrushSiteAuditProjectId={formSemrushSiteAuditProjectId}
+      formEditorialCountsPeriodStartYmd={formEditorialCountsPeriodStartYmd}
+      formOptimizationPackage={formOptimizationPackage}
+      formBenchmarkCustomTag={formBenchmarkCustomTag}
+      onFormNameChange={setFormName}
+      onFormSiteUrlChange={setFormSiteUrl}
+      onFormProductionSiteUrlChange={setFormProductionSiteUrl}
+      onFormUsernameChange={setFormUsername}
+      onFormAppPasswordChange={setFormAppPassword}
+      onFormGa4PropertyIdChange={setFormGa4PropertyId}
+      onFormGbpLocationIdChange={setFormGbpLocationId}
+      onFormSemrushSiteAuditProjectIdChange={setFormSemrushSiteAuditProjectId}
+      onFormEditorialCountsPeriodStartYmdChange={setFormEditorialCountsPeriodStartYmd}
+      onFormOptimizationPackageChange={setFormOptimizationPackage}
+      onFormBenchmarkCustomTagChange={setFormBenchmarkCustomTag}
+      onPatchSite={handlePatchSite}
+      patchSiteId={profileSite.id}
+      semrushActionsDisabled={profileSite.enabled === false}
+      onSave={handleSaveSiteClick}
+    />
+  ) : null;
 
   const performSaveToSupabase = useCallback(
     async (options?: { silent?: boolean }): Promise<boolean> => {
@@ -487,7 +540,7 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `flowbie-wordpress-sites-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `neo-pulse-wordpress-sites-${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -688,8 +741,7 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
         filteredSites={filteredSites}
         siteSearchQuery={siteSearchQuery}
         onSearchChange={setSiteSearchQuery}
-        expandedSiteId={expandedSiteId}
-        onToggleExpandedSite={toggleExpandedSite}
+        onOpenProfile={(site) => openProfile(site.id)}
         isTesting={isTesting}
         isDetecting={isDetecting}
         isFetchingScheduled={isFetchingScheduled}
@@ -722,43 +774,66 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
         quarterStatsBySite={quarterStatsBySite}
         optimizationStatsBySite={optimizationStatsBySite}
         propertyRowDisplay="compact"
-        embeddedSiteEditPanel={(rowSite) => {
-          const liveSite = sites.find((s) => s.id === rowSite.id) ?? rowSite;
-          return (
-          <SitePropertyEditPanel
-            site={liveSite}
-            editingSite={editingSite}
-            formName={formName}
-            formSiteUrl={formSiteUrl}
-            formProductionSiteUrl={formProductionSiteUrl}
-            formUsername={formUsername}
-            formAppPassword={formAppPassword}
-            formGa4PropertyId={formGa4PropertyId}
-            formGbpLocationId={formGbpLocationId}
-            formSemrushSiteAuditProjectId={formSemrushSiteAuditProjectId}
-            formEditorialCountsPeriodStartYmd={formEditorialCountsPeriodStartYmd}
-            formOptimizationPackage={formOptimizationPackage}
-            formBenchmarkCustomTag={formBenchmarkCustomTag}
-            onFormNameChange={setFormName}
-            onFormSiteUrlChange={setFormSiteUrl}
-            onFormProductionSiteUrlChange={setFormProductionSiteUrl}
-            onFormUsernameChange={setFormUsername}
-            onFormAppPasswordChange={setFormAppPassword}
-            onFormGa4PropertyIdChange={setFormGa4PropertyId}
-            onFormGbpLocationIdChange={setFormGbpLocationId}
-            onFormSemrushSiteAuditProjectIdChange={setFormSemrushSiteAuditProjectId}
-            onFormEditorialCountsPeriodStartYmdChange={setFormEditorialCountsPeriodStartYmd}
-            onFormOptimizationPackageChange={setFormOptimizationPackage}
-            onFormBenchmarkCustomTagChange={setFormBenchmarkCustomTag}
-            onPatchSite={handlePatchSite}
-            patchSiteId={liveSite.id}
-            semrushActionsDisabled={liveSite.enabled === false}
-            onSave={handleSaveSiteClick}
-          />
-          );
-        }}
       />
       </div>
+
+      <PropertyProfileDialog
+        open={profileSiteId != null}
+        onOpenChange={(open) => {
+          if (!open) closeProfile();
+        }}
+        site={profileSite}
+        activeSectionId={profileSectionId}
+        onActiveSectionChange={setProfileSectionId}
+        settingsSubSectionId={settingsSubSectionId}
+        onSettingsSubSectionChange={setSettingsSubSectionId}
+        siteSettingsPanel={profileSettingsPanel}
+        isTesting={profileSite != null && isTesting === profileSite.id}
+        isDetecting={profileSite != null && isDetecting === profileSite.id}
+        isFetchingScheduled={profileSite != null && isFetchingScheduled === profileSite.id}
+        isScrapingSitemap={isScrapingSitemap}
+        isGeneratingEntities={isGeneratingEntities}
+        isIndexingSitemap={isIndexingSitemap}
+        isLoadingCalendar={isLoadingCalendar}
+        isExtractingNAPAndGraph={
+          profileSite != null && Boolean(isExtractingNAPAndGraph[profileSite.id])
+        }
+        onTest={() => {
+          if (profileSite) handleTestConnection(profileSite);
+        }}
+        onDetect={() => {
+          if (profileSite) handleDetectSitemaps(profileSite);
+        }}
+        onScrapeChildSitemap={(url) => {
+          if (profileSite) handleScrapeChildSitemap(profileSite, url);
+        }}
+        onEntityGeneration={
+          onEntityGeneration && profileSite
+            ? (sitemapUrl) => onEntityGeneration(profileSite, sitemapUrl)
+            : undefined
+        }
+        onSetEntitySitemap={(sitemapUrl) => {
+          if (profileSite) handleSetEntitySitemap(profileSite, sitemapUrl);
+        }}
+        onToggleChildSitemapDisabled={(childSitemapUrl) => {
+          if (profileSite) handleToggleChildSitemapDisabled(profileSite, childSitemapUrl);
+        }}
+        onAppendManualChildSitemap={(url) => {
+          if (profileSite) handleAppendManualChildSitemap(profileSite, url);
+        }}
+        onIndexSitemap={(url) => {
+          if (profileSite) handleIndexSitemap(profileSite, url);
+        }}
+        onLoadCalendarPosts={(sitemapUrl) => {
+          if (profileSite) handleLoadCalendarPosts(profileSite, sitemapUrl);
+        }}
+        onExtractNAPAndGraph={() => {
+          if (profileSite) void handleExtractNAPAndLinkGraph(profileSite);
+        }}
+        getScrapingKey={getScrapingKey}
+        onPatchSite={handlePatchSite}
+        onSaveProperty={handleSaveSiteClick}
+      />
 
       {/* Bulk Import Clients Dialog */}
       <BulkImportClientsDialog

@@ -1,7 +1,3 @@
-import {
-  UNIFIED_TITLE_BAND_CLASS,
-  UNIFIED_TOOLBAR_CLASS,
-} from "@/components/shared/UnifiedWorkspaceChrome";
 import { cn } from "@/lib/utils";
 import type { WordPressPropertyRowDisplay } from "@/lib/wordpress-properties-row-display";
 
@@ -23,17 +19,6 @@ export const PROPERTIES_LIST_STACK = "flex flex-col gap-0";
  */
 export const PROPERTIES_ROW_OUTER_BASE = cn(
   "flex min-h-[4.5rem] w-full min-w-0 items-stretch gap-3 rounded-none border-0 px-2 py-2 shadow-none transition-colors sm:gap-4 sm:px-3",
-);
-
-/** Expanded property title band (matches unified dashboard title band). */
-export const PROPERTIES_EXPANDED_TITLE_BAND = UNIFIED_TITLE_BAND_CLASS;
-
-/** Expanded property section toolbar (matches unified dashboard toolbar band). */
-export const PROPERTIES_EXPANDED_TOOLBAR_BAND = UNIFIED_TOOLBAR_CLASS;
-
-/** Expanded property summary bar (same vertical rhythm as list rows). */
-export const PROPERTIES_EXPANDED_SUMMARY_ROW = cn(
-  "flex min-h-[4.5rem] w-full min-w-0 items-stretch gap-3 border-0 bg-transparent px-2 py-2 sm:gap-4 sm:px-3",
 );
 
 /** Alternating stripe matching SEO manager dropdown rows. */
@@ -61,24 +46,6 @@ export function propertiesRowOuterClass(
     propertiesRowStripeClass(index, rowSelected, canHover),
     display === "compact" &&
       "min-h-[3.25rem] gap-2 py-1 sm:min-h-[3.5rem] sm:gap-3 sm:px-2.5",
-  );
-}
-
-/** Expanded summary bar aligned with row density (visual only). */
-export function propertiesExpandedSummaryRowClass(display: WordPressPropertyRowDisplay): string {
-  return cn(
-    PROPERTIES_EXPANDED_SUMMARY_ROW,
-    display === "compact" &&
-      "min-h-[3.25rem] gap-2 py-1 sm:min-h-[3.5rem] sm:gap-3 sm:px-2.5",
-  );
-}
-
-/** Expanded property panel outer chrome: borderless, striped like list rows. */
-export function propertiesExpandedShellClass(isOpen: boolean, index: number): string {
-  return cn(
-    "min-w-0 w-full overflow-hidden rounded-none border-0 px-0 py-0 shadow-none transition-colors duration-300",
-    !isOpen && (index % 2 === 0 ? "bg-zinc-950" : "bg-zinc-900/55"),
-    isOpen && "bg-black",
   );
 }
 

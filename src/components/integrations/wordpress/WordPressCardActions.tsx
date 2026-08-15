@@ -21,6 +21,12 @@ import { getGMBPullDateRanges } from "@/lib/gmb-date-helpers";
 import { loadApiKey } from "@/lib/api";
 import { resolveRecommendedAuthor } from "@/lib/wordpress-api/author-resolver";
 import { cn } from "@/lib/utils";
+import {
+  TASK_FORM_FLAT_CONTROL_CLASS,
+  TaskFormFlatGrid,
+  TaskFormPlaceholderCell,
+  TaskFormSideSection,
+} from "@/components/manager/tasks/TaskFormLayout";
 
 interface ACFTestResult {
   success: boolean;
@@ -41,6 +47,7 @@ interface WordPressCardActionsProps {
   onPatchSite?: (siteId: string, patch: Partial<WordPressSite>) => void;
   /** Embedded property panel on black: white labels, flat section chrome. */
   tone?: "card" | "propertyBlack";
+  layout?: "default" | "modalFlat";
 }
 
 export const WordPressCardActions: React.FC<WordPressCardActionsProps> = ({
@@ -53,8 +60,10 @@ export const WordPressCardActions: React.FC<WordPressCardActionsProps> = ({
   onExtractNAPAndGraph,
   onPatchSite,
   tone = "card",
+  layout = "default",
 }) => {
   const isPropertyBlack = tone === "propertyBlack";
+  const isModalFlat = layout === "modalFlat";
   const isDisabled = site.enabled === false;
   const [isTestingACF, setIsTestingACF] = useState(false);
   const [isTestingGA, setIsTestingGA] = useState(false);
@@ -393,6 +402,163 @@ ${footnote}`;
     (isPropertyBlack ? "gap-0 sm:gap-x-0.5 sm:gap-y-0" : "gap-0.5 sm:gap-x-1 sm:gap-y-0.5");
 
   const actionGridScroll = actionGrid;
+
+  type ConnectionAction = {
+    key: string;
+    label: string;
+    icon: React.ReactNode;
+    onClick: () => void;
+    disabled: boolean;
+    className?: string;
+    title?: string;
+  };
+
+  const connectionActions: ConnectionAction[] = [
+    {
+      key: "test",
+      label: isTesting ? "Testing Connection…" : "Test Connection",
+      icon: isTesting ? <Loader2 className="animate-spin" /> : <TestTube />,
+      onClick: onTest,
+      disabled: isTesting || isDisabled,
+    },
+    {
+      key: "acf",
+      label: isTestingACF
+        ? "Testing ACF REST…"
+        : acfTestResult?.success
+          ? "ACF REST OK"
+          : acfTestResult?.success === false
+            ? "ACF REST Failed"
+            : "Test ACF REST",
+      icon: isTestingACF ? (
+        <Loader2 className="animate-spin" />
+      ) : acfTestResult?.success ? (
+        <CheckCircle2 className="text-green-500" />
+      ) : acfTestResult?.success === false ? (
+        <XCircle className="text-red-500" />
+      ) : (
+        <Database />
+      ),
+      onClick: handleTestACFRest,
+      disabled: isTestingACF || isDisabled,
+      className: cn(
+        acfTestResult?.success && "bg-green-500/12 hover:bg-green-500/18",
+        acfTestResult?.success === false && "bg-red-500/10 hover:bg-red-500/16",
+      ),
+      title: "Test ACF REST API and set date_modifier to today on the first sitemap post",
+    },
+    {
+      key: "gmb",
+      label: isTestingGMB ? "Testing GMB Connection…" : "Test GMB Connection",
+      icon: isTestingGMB ? <Loader2 className="animate-spin" /> : <Building2 />,
+      onClick: handleTestGMB,
+      disabled: isTestingGMB || isDisabled,
+      title: "Test Google Business Profile connection (connect in Settings first)",
+    },
+    {
+      key: "ga",
+      label: isTestingGA ? "Testing GA…" : "Test GA",
+      icon: isTestingGA ? <Loader2 className="animate-spin" /> : <BarChart3 />,
+      onClick: handleTestGA,
+      disabled: isTestingGA || isDisabled,
+      title: "Test Google Analytics 4 connection (uses GA4 Property ID from Settings)",
+    },
+    ...(onExtractNAPAndGraph
+      ? [
+          {
+            key: "nap",
+            label: isExtractingNAPAndGraph ? "Extracting NAP & Graph…" : "Extract NAP & Graph",
+            icon: isExtractingNAPAndGraph ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <Network />
+            ),
+            onClick: onExtractNAPAndGraph,
+            disabled: isExtractingNAPAndGraph || isDisabled,
+          } satisfies ConnectionAction,
+        ]
+      : []),
+    {
+      key: "sitemaps",
+      label: isDetecting ? "Detecting Sitemaps…" : "Detect Sitemaps",
+      icon: isDetecting ? <Loader2 className="animate-spin" /> : <Map />,
+      onClick: onDetect,
+      disabled: isDetecting || isDisabled,
+    },
+    {
+      key: "gmb-stats",
+      label: isPullingGMBStats ? "Pulling GMB Stats…" : "Pull GMB Stats To KB",
+      icon: isPullingGMBStats ? <Loader2 className="animate-spin" /> : <Download />,
+      onClick: handlePullGMBStats,
+      disabled: isPullingGMBStats || isDisabled,
+      title: "Pull GMB stats (this month vs last month) into Knowledge Base",
+    },
+  ];
+
+  if (isModalFlat) {
+    return (
+      <div className="flex min-h-0 w-full max-w-full flex-col gap-1">
+        <TaskFormSideSection title="Connections">
+          <TaskFormFlatGrid className="grid-cols-2">
+            {connectionActions.map((action) => (
+              <TaskFormPlaceholderCell key={action.key}>
+                <button
+                  type="button"
+                  onClick={action.onClick}
+                  disabled={action.disabled}
+                  title={action.title}
+                  className={cn(
+                    "flex h-9 w-full items-center gap-2 px-2 text-left text-base text-white hover:bg-white/[0.08]",
+                    TASK_FORM_FLAT_CONTROL_CLASS,
+                    action.className,
+                    action.disabled && "cursor-not-allowed opacity-70",
+                  )}
+                >
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center [&>svg]:h-4 [&>svg]:w-4">
+                    {action.icon}
+                  </span>
+                  <span className="min-w-0 truncate">{action.label}</span>
+                </button>
+              </TaskFormPlaceholderCell>
+            ))}
+          </TaskFormFlatGrid>
+        </TaskFormSideSection>
+
+        {acfTestResult ? (
+          <div
+            className={cn(
+              "rounded-none p-3 text-base",
+              acfTestResult.success ? "bg-green-500/12" : "bg-red-500/12",
+            )}
+          >
+            {acfTestResult.success ? (
+              <div className="space-y-1.5">
+                <div className="font-medium text-white">
+                  <CheckCircle2 className="mr-1 inline h-4 w-4" aria-hidden />
+                  ACF REST API Configured Correctly
+                </div>
+                {acfTestResult.dateModifierSet && acfTestResult.postId ? (
+                  <div className="text-base text-green-400">
+                    Set date_modifier on post {acfTestResult.postId}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="font-medium text-red-400">
+                  <XCircle className="mr-1 inline h-4 w-4" aria-hidden />
+                  ACF REST API Not Configured
+                </div>
+                {acfTestResult.error ? (
+                  <div className="text-base text-red-300/80">{acfTestResult.error}</div>
+                ) : null}
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className={cn("mt-2 flex min-h-0 w-full max-w-full flex-col", isPropertyBlack ? "gap-1.5" : "gap-2")}>

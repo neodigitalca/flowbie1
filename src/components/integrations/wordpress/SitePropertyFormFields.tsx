@@ -12,13 +12,20 @@ import type { WordPressSite } from "../types";
 import { matchSemrushProjectForSite } from "@/lib/wordpress-api/semrush";
 import { isOptimizationPackageTier } from "@/lib/wordpress-optimization-package";
 import { buildUnifiedContentBankProvisioningSqlBlock } from "@/lib/unified-content-bank-api";
-import { normalizeGbpLocationIdInput } from "@/lib/gbp-post/normalize-gbp-location-id";
+import { persistGbpLocationIdInput } from "@/lib/gbp-post/normalize-gbp-location-id";
 import {
   WP_PANEL_INSET_BAND,
   WP_PANEL_LIST_GAP,
   WP_PANEL_ROW_TILE,
   WP_PANEL_TOOLBAR_BTN,
 } from "./wordpress-panel-chrome";
+import {
+  TASK_FORM_FLAT_CONTROL_CLASS,
+  TaskFormFlatGrid,
+  TaskFormPlaceholderCell,
+  TaskFormSideSection,
+} from "@/components/manager/tasks/TaskFormLayout";
+import type { PropertySettingsSubSectionId } from "./property-settings-types";
 
 export type SitePropertyFormChrome = "dark" | "light";
 
@@ -41,7 +48,7 @@ function SitePropertyInput({
   ...props
 }: React.ComponentProps<typeof Input> & { chrome: SitePropertyFormChrome }) {
   return (
-    <Input variant="flowbieBlack" className={cn(fieldClassName(chrome), className)} {...props} />
+    <Input variant="neoPulseBlack" className={cn(fieldClassName(chrome), className)} {...props} />
   );
 }
 
@@ -194,6 +201,8 @@ export interface SitePropertyFormFieldsProps {
   semrushActionsDisabled?: boolean;
   /** Extra classes on the root form element (e.g. compact vs dialog spacing). */
   className?: string;
+  layout?: "accordion" | "modalFlat";
+  settingsSubSectionId?: PropertySettingsSubSectionId;
 }
 
 export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
@@ -226,6 +235,8 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
   patchSiteId,
   semrushActionsDisabled = false,
   className = "",
+  layout = "accordion",
+  settingsSubSectionId = "profile",
 }) => {
   const hc = helpClass(chrome);
   const sh = strongHelpClass(chrome);
@@ -314,6 +325,324 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
     }
   }, [patchSiteId]);
 
+  if (layout === "modalFlat") {
+    const flatInputClass = TASK_FORM_FLAT_CONTROL_CLASS;
+
+    const profileSection = (
+      <TaskFormSideSection title="Profile">
+        <TaskFormFlatGrid className="grid-cols-2">
+          <TaskFormPlaceholderCell>
+            <Input
+              value={formName}
+              onChange={(e) => onFormNameChange(e.target.value)}
+              placeholder="Site name"
+              aria-label="Site name"
+              autoComplete="off"
+              className={flatInputClass}
+            />
+          </TaskFormPlaceholderCell>
+          <TaskFormPlaceholderCell>
+            <Input
+              value={formBenchmarkCustomTag}
+              onChange={(e) => onFormBenchmarkCustomTagChange(e.target.value)}
+              onBlur={() => {
+                if (onPatchSite && patchSiteId) {
+                  onPatchSite(patchSiteId, {
+                    benchmarkCustomTag: formBenchmarkCustomTag.trim() || undefined,
+                  });
+                }
+              }}
+              placeholder="Benchmark category tag"
+              aria-label="Benchmark category tag"
+              maxLength={80}
+              className={flatInputClass}
+            />
+          </TaskFormPlaceholderCell>
+        </TaskFormFlatGrid>
+      </TaskFormSideSection>
+    );
+
+    const accessSection = (
+      <TaskFormSideSection title="Access">
+        <TaskFormFlatGrid className="grid-cols-2">
+          <TaskFormPlaceholderCell>
+            <Input
+              value={formSiteUrl}
+              onChange={(e) => onFormSiteUrlChange(e.target.value)}
+              placeholder="Site URL (WordPress / REST)"
+              aria-label="Site URL"
+              autoComplete="off"
+              className={flatInputClass}
+            />
+          </TaskFormPlaceholderCell>
+          <TaskFormPlaceholderCell>
+            <Input
+              value={formProductionSiteUrl}
+              onChange={(e) => onFormProductionSiteUrlChange(e.target.value)}
+              placeholder="Production URL (optional)"
+              aria-label="Production URL"
+              autoComplete="off"
+              className={flatInputClass}
+            />
+          </TaskFormPlaceholderCell>
+          <TaskFormPlaceholderCell>
+            <Input
+              value={formUsername}
+              onChange={(e) => onFormUsernameChange(e.target.value)}
+              placeholder="Username"
+              aria-label="Username"
+              autoComplete="off"
+              className={flatInputClass}
+            />
+          </TaskFormPlaceholderCell>
+          <TaskFormPlaceholderCell>
+            <Input
+              type="password"
+              value={formAppPassword}
+              onChange={(e) => onFormAppPasswordChange(e.target.value)}
+              placeholder="Application password"
+              aria-label="Application password"
+              autoComplete="off"
+              data-1p-ignore
+              data-lpignore="true"
+              className={flatInputClass}
+            />
+          </TaskFormPlaceholderCell>
+        </TaskFormFlatGrid>
+      </TaskFormSideSection>
+    );
+
+    const integrationsSection = (
+      <TaskFormSideSection title="Integrations">
+        <TaskFormFlatGrid className="grid-cols-2">
+          <TaskFormPlaceholderCell>
+            <Input
+              value={ga4FieldValue}
+              onChange={(e) => onFormGa4PropertyIdChange(e.target.value)}
+              onFocus={() => {
+                if (!formGa4PropertyId.trim() && persistedGa4PropertyId.trim()) {
+                  onFormGa4PropertyIdChange(persistedGa4PropertyId.trim());
+                }
+              }}
+              placeholder="GA4 Property ID"
+              aria-label="GA4 Property ID"
+              className={flatInputClass}
+            />
+          </TaskFormPlaceholderCell>
+          <TaskFormPlaceholderCell>
+            <Input
+              value={gbpFieldValue}
+              onChange={(e) => onFormGbpLocationIdChange(e.target.value)}
+              onFocus={() => {
+                if (!formGbpLocationId.trim() && persistedGbpLocationId.trim()) {
+                  onFormGbpLocationIdChange(persistedGbpLocationId.trim());
+                }
+              }}
+              onBlur={() => {
+                const persisted = persistGbpLocationIdInput(
+                  formGbpLocationId || persistedGbpLocationId,
+                );
+                if (persisted && persisted !== formGbpLocationId) {
+                  onFormGbpLocationIdChange(persisted);
+                }
+              }}
+              placeholder="GBP Location ID"
+              aria-label="GBP Location ID"
+              className={flatInputClass}
+            />
+          </TaskFormPlaceholderCell>
+          <TaskFormPlaceholderCell className="sm:col-span-2">
+            <Input
+              value={formSemrushSiteAuditProjectId}
+              onChange={(e) => onFormSemrushSiteAuditProjectIdChange(e.target.value)}
+              placeholder="Semrush Site Audit Project ID"
+              aria-label="Semrush Site Audit Project ID"
+              className={flatInputClass}
+            />
+          </TaskFormPlaceholderCell>
+        </TaskFormFlatGrid>
+        <div className="mt-1 flex flex-wrap items-center gap-2 px-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="default"
+            className={cn(
+              "h-9 border-0 bg-[#000] text-base text-white hover:bg-[#000] hover:text-white",
+              TASK_FORM_FLAT_CONTROL_CLASS,
+            )}
+            disabled={semrushBusy || !formSiteUrl.trim()}
+            onClick={() => void handleMatchSemrushProject()}
+          >
+            {semrushMatching ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Matching...
+              </>
+            ) : (
+              "Match project from Semrush"
+            )}
+          </Button>
+          {canPatchSemrush ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="default"
+              className="h-9 border-0 bg-[#000] text-base text-white hover:bg-[#000] hover:text-white"
+              disabled={semrushBusy}
+              onClick={handlePushSemrushId}
+            >
+              Save project ID now
+            </Button>
+          ) : null}
+        </div>
+      </TaskFormSideSection>
+    );
+
+    const editorialSection = (
+      <TaskFormSideSection title="Editorial">
+        <TaskFormFlatGrid className="grid-cols-2">
+          <TaskFormPlaceholderCell>
+            <Input
+              type="date"
+              value={formEditorialCountsPeriodStartYmd}
+              onChange={(e) => onFormEditorialCountsPeriodStartYmdChange(e.target.value)}
+              aria-label="Editorial counts period start"
+              className={flatInputClass}
+            />
+          </TaskFormPlaceholderCell>
+        </TaskFormFlatGrid>
+        <div className="mt-2 flex flex-col gap-3 px-1">
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor="opt-period-limit-enabled-modal" className="text-base text-white">
+              Optimization period limit
+            </Label>
+            <Switch
+              id="opt-period-limit-enabled-modal"
+              checked={Boolean(
+                formOptimizationPackage?.trim() &&
+                  isOptimizationPackageTier(formOptimizationPackage.trim()),
+              )}
+              onCheckedChange={(checked) => {
+                if (!checked) {
+                  onFormOptimizationPackageChange("");
+                  if (onPatchSite && patchSiteId) {
+                    onPatchSite(patchSiteId, { optimizationPackage: undefined });
+                  }
+                  return;
+                }
+                const tier =
+                  formOptimizationPackage?.trim() &&
+                  isOptimizationPackageTier(formOptimizationPackage.trim())
+                    ? formOptimizationPackage.trim()
+                    : "basic";
+                onFormOptimizationPackageChange(tier);
+                if (onPatchSite && patchSiteId) {
+                  onPatchSite(patchSiteId, {
+                    optimizationPackage: tier as WordPressSite["optimizationPackage"],
+                  });
+                }
+              }}
+            />
+          </div>
+          {formOptimizationPackage?.trim() &&
+          isOptimizationPackageTier(formOptimizationPackage.trim()) ? (
+            <RadioGroup
+              value={formOptimizationPackage}
+              onValueChange={(tier) => {
+                onFormOptimizationPackageChange(tier);
+                if (onPatchSite && patchSiteId && isOptimizationPackageTier(tier)) {
+                  onPatchSite(patchSiteId, {
+                    optimizationPackage: tier as WordPressSite["optimizationPackage"],
+                  });
+                }
+              }}
+              className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-x-4"
+            >
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="basic" id="opt-pkg-basic-modal" />
+                <Label htmlFor="opt-pkg-basic-modal" className="text-base text-white">
+                  Basic (50)
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="pro" id="opt-pkg-pro-modal" />
+                <Label htmlFor="opt-pkg-pro-modal" className="text-base text-white">
+                  Pro (100)
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="plus" id="opt-pkg-plus-modal" />
+                <Label htmlFor="opt-pkg-plus-modal" className="text-base text-white">
+                  Plus (200)
+                </Label>
+              </div>
+            </RadioGroup>
+          ) : null}
+        </div>
+      </TaskFormSideSection>
+    );
+
+    const provisioningSection = (
+      <TaskFormSideSection title="Provisioning">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-base text-muted-foreground">
+              Copy the Supabase content bank SQL script for this property.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 shrink-0 border-0 bg-[#000] text-base text-white hover:bg-[#000] hover:text-white"
+              disabled={!patchSiteId}
+              onClick={() => void handleCopyUnifiedContentBankSql()}
+            >
+              <Copy className="h-4 w-4 shrink-0" aria-hidden />
+              Copy SQL
+            </Button>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 space-y-1">
+              <p className="text-base font-semibold text-white">WordPress plugin site ID</p>
+              {patchSiteId ? (
+                <p className="break-all font-mono text-base text-white">{patchSiteId}</p>
+              ) : (
+                <p className="text-base text-muted-foreground">Save the property first.</p>
+              )}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 shrink-0 border-0 bg-[#000] text-base text-white hover:bg-[#000] hover:text-white"
+              disabled={!patchSiteId}
+              onClick={() => void handleCopySiteId()}
+            >
+              <Copy className="h-4 w-4 shrink-0" aria-hidden />
+              Copy site ID
+            </Button>
+          </div>
+        </div>
+      </TaskFormSideSection>
+    );
+
+    const modalSections: Record<PropertySettingsSubSectionId, React.ReactNode> = {
+      profile: profileSection,
+      access: accessSection,
+      integrations: integrationsSection,
+      editorial: editorialSection,
+      provisioning: provisioningSection,
+    };
+
+    return (
+      <form
+        className={cn("flex flex-col gap-1 py-0 font-sans text-base", className)}
+        autoComplete="off"
+        onSubmit={(e) => e.preventDefault()}
+      >
+        {modalSections[settingsSubSectionId]}
+      </form>
+    );
+  }
+
   return (
     <form
       className={cn("flex flex-col gap-0 py-1 font-sans text-base", className)}
@@ -329,7 +658,7 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
           <SitePropertyInput
             chrome={chrome}
             id="benchmarkCustomTag"
-            name="flowbie_benchmark_custom_tag"
+            name="neo-pulse_benchmark_custom_tag"
             value={formBenchmarkCustomTag}
             onChange={(e) => onFormBenchmarkCustomTagChange(e.target.value)}
             onBlur={() => {
@@ -358,7 +687,7 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
                 <SitePropertyInput
                   chrome={chrome}
                   id="name"
-                  name="flowbie_property_label"
+                  name="neo-pulse_property_label"
                   value={formName}
                   onChange={(e) => onFormNameChange(e.target.value)}
                   placeholder="My WordPress Site"
@@ -377,7 +706,7 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
                 <SitePropertyInput
                   chrome={chrome}
                   id="username"
-                  name="flowbie_wp_api_username"
+                  name="neo_pulse_wp_api_username"
                   value={formUsername}
                   onChange={(e) => onFormUsernameChange(e.target.value)}
                   placeholder="admin"
@@ -397,7 +726,7 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
                 <SitePropertyInput
                   chrome={chrome}
                   id="siteUrl"
-                  name="flowbie_property_site_url"
+                  name="neo-pulse_property_site_url"
                   value={formSiteUrl}
                   onChange={(e) => onFormSiteUrlChange(e.target.value)}
                   placeholder="https://staging-or-wp.example.com"
@@ -416,7 +745,7 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
                 <SitePropertyInput
                   chrome={chrome}
                   id="productionSiteUrl"
-                  name="flowbie_property_production_url"
+                  name="neo-pulse_property_production_url"
                   value={formProductionSiteUrl}
                   onChange={(e) => onFormProductionSiteUrlChange(e.target.value)}
                   placeholder="https://www.client.com"
@@ -439,7 +768,7 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
                 <SitePropertyInput
                   chrome={chrome}
                   id="appPassword"
-                  name="flowbie_wp_api_application_token"
+                  name="neo_pulse_wp_api_application_token"
                   type="password"
                   value={formAppPassword}
                   onChange={(e) => onFormAppPasswordChange(e.target.value)}
@@ -508,9 +837,11 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
                     }
                   }}
                   onBlur={() => {
-                    const normalized = normalizeGbpLocationIdInput(formGbpLocationId || persistedGbpLocationId);
-                    if (normalized && normalized !== formGbpLocationId) {
-                      onFormGbpLocationIdChange(normalized);
+                    const persisted = persistGbpLocationIdInput(
+                      formGbpLocationId || persistedGbpLocationId,
+                    );
+                    if (persisted && persisted !== formGbpLocationId) {
+                      onFormGbpLocationIdChange(persisted);
                     }
                   }}
                   placeholder="Paste full business.google.com profile URL or Advanced settings → Copy ID"
@@ -518,8 +849,8 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
               }
               help={
                 <p className={hc}>
-                  Paste the full profile URL (Flowbie reads <code className="rounded bg-muted px-1">fid=</code> and{" "}
-                  <code className="rounded bg-muted px-1">/n/...</code> ids), or use{" "}
+                  Paste the full profile URL (NEO Pulse uses <code className="rounded bg-muted px-1">fid=</code> when present, then{" "}
+                  <code className="rounded bg-muted px-1">/n/...</code>), or use{" "}
                   <strong className={sh}>
                     Advanced settings → Copy ID
                   </strong>
@@ -748,7 +1079,7 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
                   </h4>
                   <p className={cn("max-w-none", hc)}>
                     Generates one paste-ready script for the SQL editor: required DDL, a PostgREST schema reload, and{" "}
-                    <code className={inlineCodeClass(chrome)}>flowbie_ensure_content_bank</code> so this property gets
+                    <code className={inlineCodeClass(chrome)}>neo-pulse_ensure_content_bank</code> so this property gets
                     a per-site table named <code className={inlineCodeClass(chrome)}>{"content_bank_<site>"}</code>.
                   </p>
                 </div>
@@ -790,7 +1121,7 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
                         Run in Supabase SQL editor
                       </p>
                       <p className={hc}>
-                        Paste into the project database you use for Flowbie, execute, then verify the new table exists.
+                        Paste into the project database you use for NEO Pulse, execute, then verify the new table exists.
                       </p>
                     </div>
                   </li>
@@ -837,7 +1168,7 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
           <AccordionContent className={accordionContentClass(chrome)}>
             <div className="flex flex-col gap-4 pt-0.5">
               <p className={hc}>
-                On the client site, open <strong className={sh}>Flowbie WP → Settings</strong>, paste this site ID, and
+                On the client site, open <strong className={sh}>NEO Pulse WP → Settings</strong>, paste this site ID, and
                 click Connect.
               </p>
               <div
@@ -853,7 +1184,7 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
                   </p>
                   <p className={hc}>
                     {patchSiteId
-                      ? "Copy into Flowbie WP → Settings on the client site."
+                      ? "Copy into NEO Pulse WP → Settings on the client site."
                       : "Save the property first to lock in a site ID."}
                   </p>
                   {patchSiteId ? (

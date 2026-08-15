@@ -38,6 +38,8 @@ interface CompactWordPressTileProps {
   hideCopyUrl?: boolean;
   /** Site title opens `site.siteUrl` in a new tab instead of plain text. */
   linkTitleToSite?: boolean;
+  /** Opens the property profile modal (Properties list). */
+  onOpenProfile?: () => void;
 }
 
 function copySiteUrlButton(
@@ -86,7 +88,7 @@ function menuInnerSummary(
   copyControlTone: CopyControlTone,
   gmbDisplayNameWand: React.ReactNode,
   listRowBlackChrome: boolean,
-  options?: { hideCopyUrl?: boolean; linkTitleToSite?: boolean },
+  options?: { hideCopyUrl?: boolean; linkTitleToSite?: boolean; onOpenProfile?: () => void },
 ) {
   const compact = rowDisplay === "compact";
   const displayName = wordpressSiteDisplayName(site);
@@ -125,6 +127,22 @@ function menuInnerSummary(
           {displayName}
         </h3>
       )}
+      {options?.onOpenProfile ? (
+        <button
+          type="button"
+          aria-label={`Open profile for ${displayName}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            options.onOpenProfile?.();
+          }}
+          className={cn(
+            "inline-flex shrink-0 items-center justify-center rounded-none bg-[#000] px-2.5 text-base font-medium text-white hover:bg-[#000] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35",
+            compact ? "h-8 min-h-8" : "h-9 min-h-9",
+          )}
+        >
+          Open profile
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -143,6 +161,7 @@ export const CompactWordPressTile: React.FC<CompactWordPressTileProps> = ({
   listRowBlackActionChrome = false,
   hideCopyUrl = false,
   linkTitleToSite = false,
+  onOpenProfile,
 }) => {
   const [isResolvingGmbDisplayName, setIsResolvingGmbDisplayName] = useState(false);
 
@@ -264,7 +283,7 @@ export const CompactWordPressTile: React.FC<CompactWordPressTileProps> = ({
     <div className={cn("shrink-0", rowCompact ? "h-7 w-7" : "h-8 w-8")} aria-hidden />
   );
 
-  const listRowSummaryOptions = { hideCopyUrl, linkTitleToSite };
+  const listRowSummaryOptions = { hideCopyUrl, linkTitleToSite, onOpenProfile };
 
   const content = (
     <div
