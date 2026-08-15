@@ -34,7 +34,10 @@ import {
   TaskFormPlaceholderCell,
   TaskFormSideSection,
 } from "@/components/manager/tasks/TaskFormLayout";
-import type { PropertySettingsSubSectionId } from "./property-settings-types";
+import {
+  PROPERTY_SETTINGS_SUB_SECTIONS,
+  type PropertySettingsSubSectionId,
+} from "./property-settings-types";
 
 export type SitePropertyFormChrome = "dark" | "light";
 
@@ -643,11 +646,24 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
 
     return (
       <form
-        className={cn("flex flex-col gap-1 py-0 font-sans text-base", className)}
+        className={cn("flex min-h-0 flex-1 flex-col gap-1 py-0 font-sans text-base", className)}
         autoComplete="off"
         onSubmit={(e) => e.preventDefault()}
       >
-        {modalSections[settingsSubSectionId]}
+        <div className="grid min-h-0 w-full min-w-0">
+          {PROPERTY_SETTINGS_SUB_SECTIONS.map(({ id }) => (
+            <div
+              key={id}
+              className={cn(
+                "col-start-1 row-start-1 min-w-0",
+                settingsSubSectionId === id ? "visible" : "invisible pointer-events-none",
+              )}
+              aria-hidden={settingsSubSectionId !== id}
+            >
+              {modalSections[id]}
+            </div>
+          ))}
+        </div>
       </form>
     );
   }

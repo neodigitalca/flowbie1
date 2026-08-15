@@ -193,6 +193,7 @@ export function buildWordPressPropertySections(
       content: (
         <SitemapSection
           site={site}
+          layout={isModal ? "modalFlat" : "default"}
           isScrapingSitemap={isScrapingSitemap}
           isGeneratingEntities={isGeneratingEntities}
           isIndexingSitemap={isIndexingSitemap}

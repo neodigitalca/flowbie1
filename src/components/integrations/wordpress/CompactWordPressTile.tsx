@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { XCircle, Loader2, Copy, Power, Wand2 } from "lucide-react";
+import { XCircle, Loader2, Copy, Power, Wand2, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { notify, notifyHeaderError } from "@/lib/app-notifications";
 import { loadApiKey } from "@/lib/api";
@@ -111,6 +111,23 @@ function menuInnerSummary(
     >
       {!options?.hideCopyUrl ? copySiteUrlButton(site, compact, copyControlTone, listRowBlackChrome) : null}
       {gmbDisplayNameWand}
+      {options?.onOpenProfile ? (
+        <button
+          type="button"
+          aria-label={`Open profile for ${displayName}`}
+          title="Open profile"
+          onClick={(e) => {
+            e.stopPropagation();
+            options.onOpenProfile?.();
+          }}
+          className={cn(
+            "inline-flex shrink-0 items-center justify-center text-[#77AA00] hover:text-[#77AA00]/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#77AA00]/45",
+            compact ? "h-8 w-8" : "h-9 w-9",
+          )}
+        >
+          <UserCircle className={cn("shrink-0", compact ? "h-5 w-5" : "h-6 w-6")} aria-hidden />
+        </button>
+      ) : null}
       {options?.linkTitleToSite && siteHref ? (
         <a
           href={siteHref}
@@ -127,22 +144,6 @@ function menuInnerSummary(
           {displayName}
         </h3>
       )}
-      {options?.onOpenProfile ? (
-        <button
-          type="button"
-          aria-label={`Open profile for ${displayName}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            options.onOpenProfile?.();
-          }}
-          className={cn(
-            "inline-flex shrink-0 items-center justify-center rounded-none bg-[#000] px-2.5 text-base font-medium text-white hover:bg-[#000] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35",
-            compact ? "h-8 min-h-8" : "h-9 min-h-9",
-          )}
-        >
-          Open profile
-        </button>
-      ) : null}
     </div>
   );
 }

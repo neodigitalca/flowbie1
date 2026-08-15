@@ -52,8 +52,57 @@ const smFieldWell = cn(
   "placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
 );
 
+type SitemapSectionLayout = "default" | "modalFlat";
+
+function sitemapSectionChrome(layout: SitemapSectionLayout) {
+  if (layout === "modalFlat") {
+    return {
+      sectionShell: "space-y-2",
+      emptyShell: "flex flex-col items-center justify-center gap-3 py-10 text-center",
+      muted: "text-base text-white/70",
+      fieldWell:
+        "h-10 min-h-10 min-w-0 flex-1 rounded-none border-0 bg-black text-base text-white shadow-none placeholder:text-white/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35 focus-visible:ring-offset-0 focus-visible:ring-offset-black",
+      btnRow:
+        "h-10 min-h-10 shrink-0 gap-1 rounded-none border-0 bg-black px-3 text-base text-white shadow-none hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35",
+      rowTile:
+        "rounded-none border-0 bg-black px-3 py-2 text-base text-white shadow-none transition-colors",
+      rowTileEntity: "bg-[#77AA00]/10 font-semibold text-white",
+      urlText: "text-white",
+      menuContent: "rounded-none border-0 bg-black text-white shadow-lg",
+      menuItem:
+        "cursor-pointer rounded-none text-base text-white focus:bg-white/10 focus:text-white",
+      menuSep: "bg-white/10",
+      badgeEntity: "h-9 shrink-0 rounded-none border-0 bg-black px-2 text-base text-[#77AA00]",
+      badgeMuted: "h-9 shrink-0 rounded-none border-0 bg-black px-2 text-base text-white/70",
+      badgeSecondary: "h-9 shrink-0 rounded-none border-0 bg-black px-2 text-base text-white/80",
+      toolbarBtn: cn(
+        "h-10 min-h-10 shrink-0 gap-1 rounded-none border-0 bg-black px-4 text-base text-white shadow-none",
+        "hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35",
+      ),
+    };
+  }
+  return {
+    sectionShell: cn(WP_PANEL_SECTION_SHELL, "space-y-2"),
+    emptyShell: cn(WP_PANEL_SECTION_SHELL, "flex flex-col items-center justify-center gap-3 py-10 text-center"),
+    muted: WP_PANEL_MUTED,
+    fieldWell: smFieldWell,
+    btnRow: smBtnRow,
+    rowTile: WP_PANEL_ROW_TILE,
+    rowTileEntity: "bg-muted font-semibold text-foreground",
+    urlText: "text-foreground",
+    menuContent: smMenuContent,
+    menuItem: smMenuItem,
+    menuSep: smMenuSep,
+    badgeEntity: "h-9 shrink-0 rounded-md border-0 bg-secondary px-2 text-base text-foreground",
+    badgeMuted: "h-9 shrink-0 rounded-md border-0 bg-muted px-2 text-base text-muted-foreground",
+    badgeSecondary: "h-9 shrink-0 rounded-md border-0 bg-secondary px-2 text-base text-muted-foreground",
+    toolbarBtn: cn(WP_PANEL_TOOLBAR_BTN, "px-4"),
+  };
+}
+
 interface SitemapSectionProps {
   site: WordPressSite;
+  layout?: SitemapSectionLayout;
   isScrapingSitemap: Record<string, boolean>;
   isGeneratingEntities?: Record<string, boolean>;
   isIndexingSitemap?: Record<string, boolean>;
@@ -73,6 +122,7 @@ interface SitemapSectionProps {
 
 export const SitemapSection: React.FC<SitemapSectionProps> = ({
   site,
+  layout = "default",
   isScrapingSitemap,
   isGeneratingEntities = {},
   isIndexingSitemap = {},
@@ -88,6 +138,7 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
   isRefreshingSitemaps = false,
   onAppendManualChildSitemap,
 }) => {
+  const chrome = sitemapSectionChrome(layout);
   const [openCalendars, setOpenCalendars] = useState<Record<string, boolean>>({});
   const [openPackGenerator, setOpenPackGenerator] = useState<Record<string, boolean>>({});
   const [manualSitemapUrl, setManualSitemapUrl] = useState("");
@@ -110,19 +161,14 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
 
   if (!site.sitemaps) {
     return (
-      <div
-        className={cn(
-          WP_PANEL_SECTION_SHELL,
-          "flex flex-col items-center justify-center gap-3 py-10 text-center",
-        )}
-      >
-        <p className={WP_PANEL_MUTED}>No sitemaps detected for this property yet.</p>
+      <div className={chrome.emptyShell}>
+        <p className={chrome.muted}>No sitemaps detected for this property yet.</p>
         {onRefreshSitemaps ? (
           <Button
             type="button"
             variant="ghost"
             disabled={site.enabled === false || isRefreshingSitemaps}
-            className={cn(WP_PANEL_TOOLBAR_BTN, "px-4")}
+            className={chrome.toolbarBtn}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -147,7 +193,7 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
   );
 
   return (
-    <div className={cn(WP_PANEL_SECTION_SHELL, "space-y-2")}>
+    <div className={chrome.sectionShell}>
       {site.sitemaps.type === "index" && site.sitemaps.childSitemaps && (
         <div className="space-y-2">
           {(onAppendManualChildSitemap || onRefreshSitemaps) && (
@@ -165,14 +211,14 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                     }}
                     placeholder="https://example.com/custom-sitemap.xml"
                     disabled={site.enabled === false}
-                    className={smFieldWell}
+                    className={chrome.fieldWell}
                   />
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     disabled={site.enabled === false}
-                    className={cn(smBtnRow, "h-10 min-h-10 px-3")}
+                    className={cn(chrome.btnRow, "h-10 min-h-10 px-3")}
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -191,7 +237,7 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                   disabled={site.enabled === false || isRefreshingSitemaps}
                   title={mainSitemapUrl}
                   aria-label="Redetect sitemaps"
-                  className={cn(smBtnRow, "h-10 min-h-10 w-10 shrink-0 p-0")}
+                  className={cn(chrome.btnRow, "h-10 min-h-10 w-10 shrink-0 p-0")}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -238,15 +284,15 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                 <div
                   key={idx}
                   className={cn(
-                    WP_PANEL_ROW_TILE,
+                    chrome.rowTile,
                     "flex flex-wrap items-center gap-2 py-2.5 pr-1",
-                    site.entitySitemapUrl === url &&
-                      cn("bg-muted font-semibold text-foreground")
+                    site.entitySitemapUrl === url && chrome.rowTileEntity,
                   )}
                 >
                     <span
                       className={cn(
-                        "min-w-0 flex-1 truncate text-base text-foreground",
+                        "min-w-0 flex-1 truncate text-base",
+                        chrome.urlText,
                         site.entitySitemapUrl !== url && "font-normal",
                       )}
                     >
@@ -255,7 +301,7 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                     {site.entitySitemapUrl === url && (
                       <Badge
                         variant="secondary"
-                        className="h-9 shrink-0 rounded-md border-0 bg-secondary px-2 text-base text-foreground"
+                        className={chrome.badgeEntity}
                       >
                         <Tag className="mr-1 h-4 w-4" />
                         Entity
@@ -264,7 +310,7 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                     {rowDisabled && (
                       <Badge
                         variant="secondary"
-                        className="h-9 shrink-0 rounded-md border-0 bg-muted px-2 text-base text-muted-foreground"
+                        className={chrome.badgeMuted}
                       >
                         Excluded
                       </Badge>
@@ -272,7 +318,7 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                     {futureCount > 0 && (
                       <Badge
                         variant="secondary"
-                        className="h-9 shrink-0 rounded-md border-0 bg-secondary px-2 text-base text-muted-foreground"
+                        className={chrome.badgeSecondary}
                       >
                         {futureCount} Future
                       </Badge>
@@ -283,7 +329,7 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                           variant="ghost"
                           size="sm"
                           disabled={isScraping || site.enabled === false}
-                          className={cn(smBtnRow, "h-10 min-h-10 shrink-0 gap-1.5 px-3")}
+                          className={cn(chrome.btnRow, "h-10 min-h-10 shrink-0 gap-1.5 px-3")}
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -306,7 +352,7 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                       <DropdownMenuContent
                         align="end"
                         onClick={(e) => e.stopPropagation()}
-                        className={smMenuContent}
+                        className={chrome.menuContent}
                       >
                         {onToggleChildSitemapDisabled && !isEntityRow ? (
                           <>
@@ -317,7 +363,7 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                                 onToggleChildSitemapDisabled(url);
                               }}
                               disabled={site.enabled === false}
-                              className={smMenuItem}
+                              className={chrome.menuItem}
                             >
                               {rowDisabled ? (
                                 <>
@@ -331,7 +377,7 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                                 </>
                               )}
                             </DropdownMenuItem>
-                            <DropdownMenuSeparator className={smMenuSep} />
+                            <DropdownMenuSeparator className={chrome.menuSep} />
                           </>
                         ) : null}
                         <DropdownMenuItem
@@ -341,7 +387,7 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                             onScrapeChildSitemap(url);
                           }}
                           disabled={isScraping || site.enabled === false || rowDisabled}
-                          className={smMenuItem}
+                          className={chrome.menuItem}
                         >
                           {isScraping ? (
                             <>
@@ -365,7 +411,7 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                             disabled={
                               isIndexing || isScraping || site.enabled === false || rowDisabled
                             }
-                            className={smMenuItem}
+                            className={chrome.menuItem}
                           >
                             {isIndexing ? (
                               <>
@@ -387,14 +433,14 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                             setOpenPackGenerator(prev => ({ ...prev, [url]: true }));
                           }}
                           disabled={site.enabled === false || rowDisabled}
-                          className={smMenuItem}
+                          className={chrome.menuItem}
                         >
                           <FileSpreadsheet className="h-4 w-4 mr-2" />
                           Generate {packName}
                         </DropdownMenuItem>
                         {onSetEntitySitemap ? (
                           <>
-                            <DropdownMenuSeparator className={smMenuSep} />
+                            <DropdownMenuSeparator className={chrome.menuSep} />
                             <DropdownMenuItem
                               onClick={(e) => {
                                 e.preventDefault();
@@ -402,7 +448,7 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                                 onSetEntitySitemap(url);
                               }}
                               disabled={site.enabled === false || rowDisabled}
-                              className={smMenuItem}
+                              className={chrome.menuItem}
                             >
                               {site.entitySitemapUrl === url ? (
                                 <>
@@ -427,7 +473,7 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                                   onEntityGeneration(entitySitemapUrl);
                                 }}
                                 disabled={isGenerating || site.enabled === false || rowDisabled}
-                                className={smMenuItem}
+                                className={chrome.menuItem}
                               >
                                 {isGenerating ? (
                                   <>
@@ -446,7 +492,7 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                         ) : null}
                         {(onLoadCalendarPosts || openCalendars[url]) && (
                           <>
-                            <DropdownMenuSeparator className={smMenuSep} />
+                            <DropdownMenuSeparator className={chrome.menuSep} />
                             <DropdownMenuItem
                               onClick={async (e) => {
                                 e.preventDefault();
@@ -464,7 +510,7 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                                 }
                               }}
                               disabled={isLoading || site.enabled === false || rowDisabled}
-                              className={smMenuItem}
+                              className={chrome.menuItem}
                             >
                               {isLoading ? (
                                 <>
@@ -518,7 +564,7 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                             />
                           </div>
                         ) : (
-                          <div className={cn("p-4 text-center text-base", WP_PANEL_MUTED)}>
+                          <div className={cn("p-4 text-center text-base", chrome.muted)}>
                             No post metadata available. Loading...
                           </div>
                         )}
@@ -548,14 +594,14 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                     }}
                     placeholder="https://example.com/page/"
                     disabled={site.enabled === false}
-                    className={smFieldWell}
+                    className={chrome.fieldWell}
                   />
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     disabled={site.enabled === false}
-                    className={cn(smBtnRow, "h-10 min-h-10 px-3")}
+                    className={cn(chrome.btnRow, "h-10 min-h-10 px-3")}
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -574,7 +620,7 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                   disabled={site.enabled === false || isRefreshingSitemaps}
                   title={mainSitemapUrl}
                   aria-label="Redetect sitemaps"
-                  className={cn(smBtnRow, "h-10 min-h-10 w-10 shrink-0 p-0")}
+                  className={cn(chrome.btnRow, "h-10 min-h-10 w-10 shrink-0 p-0")}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -592,12 +638,12 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
           )}
           <div className={WP_PANEL_LIST_GAP}>
             {site.sitemaps.urls.slice(0, 10).map((url, idx) => (
-              <div key={idx} className={cn(WP_PANEL_ROW_TILE, "truncate px-3 py-2")}>
+              <div key={idx} className={cn(chrome.rowTile, "truncate px-3 py-2")}>
                 {url}
               </div>
             ))}
             {site.sitemaps.urls.length > 10 && (
-              <div className={cn("rounded-md px-3 py-2 text-base", WP_PANEL_MUTED)}>
+              <div className={cn("rounded-none px-3 py-2 text-base", chrome.muted)}>
                 +{site.sitemaps.urls.length - 10} more
               </div>
             )}

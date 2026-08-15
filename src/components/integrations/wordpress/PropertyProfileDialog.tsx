@@ -22,6 +22,9 @@ import {
   type PropertySettingsSubSectionId,
 } from "./property-settings-types";
 
+/** Fixed viewport height so main/settings nav never resizes the shell. */
+const PROPERTY_PROFILE_DIALOG_CLASS = cn(TASK_PROJECT_DIALOG_CLASS, "h-[85vh] min-h-0 max-h-[85vh]");
+
 export type PropertyProfileDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -148,7 +151,7 @@ export function PropertyProfileDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={TASK_PROJECT_DIALOG_CLASS}>
+      <DialogContent className={PROPERTY_PROFILE_DIALOG_CLASS}>
         <DialogHeader className="shrink-0 space-y-0 pb-1">
           <DialogTitle className="text-base font-semibold text-white">
             {site ? wordpressSiteDisplayName(site) : "Property profile"}
@@ -166,11 +169,11 @@ export function PropertyProfileDialog({
           />
         </nav>
 
-        <div
-          className="flex h-11 min-h-[2.75rem] shrink-0 items-center gap-1 bg-black px-3 py-2"
-          aria-label="Settings sections"
-        >
-          {isSettings ? (
+        {isSettings ? (
+          <nav
+            className="flex h-11 min-h-[2.75rem] shrink-0 items-center gap-1 bg-black px-3 py-2"
+            aria-label="Settings sections"
+          >
             <WordPressPropertySectionPills
               sections={PROPERTY_SETTINGS_SUB_SECTIONS}
               activeSectionId={settingsSubSectionId}
@@ -178,11 +181,11 @@ export function PropertyProfileDialog({
                 onSettingsSubSectionChange(id as PropertySettingsSubSectionId)
               }
             />
-          ) : null}
-        </div>
+          </nav>
+        ) : null}
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 py-1">
             {activeSection?.content}
           </div>
         </div>
