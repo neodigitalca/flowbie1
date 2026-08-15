@@ -8,6 +8,15 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Loader2, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { notify } from "@/lib/app-notifications";
+import {
+  NOTIFY_CLIPBOARD_UNAVAILABLE,
+  NOTIFY_COPIED,
+  NOTIFY_SAVE_THE_PROPERTY_FIRST_SO_IT_HAS_A_STAB,
+  NOTIFY_SAVE_THE_PROPERTY_FIRST_SO_IT_HAS_A_STAB_2,
+  NOTIFY_SET_SITE_URL_WORDPRESS_REST_FIRST_THEN_T,
+  NOTIFY_SITE_ID_COPIED,
+  notifyMatchedSemrushProjectXXX,
+} from "@/lib/notify-messages";
 import type { WordPressSite } from "../types";
 import { matchSemrushProjectForSite } from "@/lib/wordpress-api/semrush";
 import { isOptimizationPackageTier } from "@/lib/wordpress-optimization-package";
