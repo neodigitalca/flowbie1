@@ -3,8 +3,6 @@ import { FileText, MapPin, PiggyBank, Sparkles } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { CompactWordPressTile } from "./CompactWordPressTile";
-import { WordPressCardHeader } from "./WordPressCardHeader";
-import { WordPressCardStatus } from "./WordPressCardStatus";
 import type { WordPressSite } from "../types";
 import { getEditorialCountsRange, parseQuarterLabelToQuarterYear } from "@/lib/quarter-bounds";
 import type { OptimizationActivityTileStats, QuarterEditorialTileStats } from "@/lib/wordpress-api/types";
@@ -521,21 +519,6 @@ export const WordPressSiteList: React.FC<WordPressSiteListProps> = ({
           rowDisplay={propertyRowDisplay}
         />
       </div>
-      <WordPressCardHeader
-        site={site}
-        onEdit={() => onEdit(site)}
-        onDelete={() => onDelete(site.id)}
-        showSiteInfo={false}
-        variant="menuRow"
-        showEditButton={false}
-      />
-      <WordPressCardStatus
-        site={site}
-        isTesting={isTesting === site.id}
-        onToggle={() => onToggleEnabled(site)}
-        variant="menuRow"
-        hideInlineLabels
-      />
     </div>
     );
   };
@@ -599,6 +582,7 @@ export const WordPressSiteList: React.FC<WordPressSiteListProps> = ({
                       propertyRowDisplay={propertyRowDisplay}
                       listRowBlackActionChrome
                       onOpenProfile={() => onOpenProfile(site)}
+                      onDelete={() => onDelete(site.id)}
                       onApplyDisplayNameFromGmb={
                         onPatchSite ? (name) => onPatchSite(site.id, { name }) : undefined
                       }

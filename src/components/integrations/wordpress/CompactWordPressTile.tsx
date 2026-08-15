@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { XCircle, Loader2, Copy, Power, Wand2, UserCircle } from "lucide-react";
+import { XCircle, Loader2, Copy, Power, Wand2, UserCircle, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { notify, notifyHeaderError } from "@/lib/app-notifications";
 import { loadApiKey } from "@/lib/api";
@@ -8,7 +8,7 @@ import { applyGbpPropertyWand } from "@/lib/wordpress-site-display-name-from-dfs
 import { wordpressSiteDisplayName } from "@/lib/wordpress-site-display-name";
 import { type WordPressSite } from "../types";
 import type { WordPressPropertyRowDisplay } from "@/lib/wordpress-properties-row-display";
-import { getCyberpunkCardClasses, getCyberpunkTextClasses, getPropertyListRowBlackIconButtonClass } from "./cyberpunk-theme";
+import { getCyberpunkCardClasses, getCyberpunkTextClasses, getPropertyListRowBlackIconButtonClass, getPropertyListRowIconButtonHoverGlowClass } from "./cyberpunk-theme";
 
 type CopyControlTone = "default" | "white";
 
@@ -40,6 +40,8 @@ interface CompactWordPressTileProps {
   linkTitleToSite?: boolean;
   /** Opens the property profile modal (Properties list). */
   onOpenProfile?: () => void;
+  /** List row: delete property (trash icon beside profile). */
+  onDelete?: () => void;
 }
 
 function copySiteUrlButton(
@@ -81,6 +83,70 @@ function copySiteUrlButton(
   );
 }
 
+function listRowDeleteButton(onDelete: () => void) {
+  return (
+    <button
+      type="button"
+      aria-label="Delete property"
+      title="Delete property"
+      onClick={(e) => {
+        e.stopPropagation();
+        onDelete();
+      }}
+      className={cn(
+        getPropertyListRowBlackIconButtonClass(true),
+        getPropertyListRowIconButtonHoverGlowClass("destructive"),
+        "text-red-300 [&_svg]:!text-red-300",
+      )}
+    >
+      <Trash2 className="h-4 w-4 shrink-0" aria-hidden />
+    </button>
+  );
+}
+
+function listRowPowerButton(site: WordPressSite, isTesting: boolean, onToggle: () => void) {
+  const isEnabled = site.enabled !== false;
+  const statusText =
+    isTesting ? "Testing..."
+    : site.connectionStatus === "success" ? "Connected"
+    : site.connectionStatus === "failed" ? "Failed"
+    : "Not tested";
+  const switchAriaLabel = `${statusText}. ${isEnabled ? "Enabled for API calls" : "Disabled"}.`;
+  const powerClass = cn(
+    getPropertyListRowBlackIconButtonClass(true),
+    isEnabled && !isTesting
+      ? cn(
+          "!bg-[#84bd00] text-black [&_svg]:!text-black hover:!bg-[#84bd00]",
+          getPropertyListRowIconButtonHoverGlowClass("powerOn"),
+        )
+      : !isTesting &&
+          cn(
+            "text-white [&_svg]:!text-white hover:!bg-[#000]",
+            getPropertyListRowIconButtonHoverGlowClass("powerOff"),
+          ),
+  );
+
+  return (
+    <button
+      type="button"
+      disabled={isTesting}
+      title={statusText}
+      aria-label={switchAriaLabel}
+      className={cn(powerClass, isTesting && "cursor-not-allowed opacity-70")}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!isTesting) onToggle();
+      }}
+    >
+      {isTesting ? (
+        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-white" aria-hidden />
+      ) : (
+        <Power className="h-4 w-4 shrink-0" aria-hidden />
+      )}
+    </button>
+  );
+}
+
 /** Single row: copy URL, optional GBP name wand, title. Quarter counts live in the toolbar strip by the gap dropdown. */
 function menuInnerSummary(
   site: WordPressSite,
@@ -88,7 +154,14 @@ function menuInnerSummary(
   copyControlTone: CopyControlTone,
   gmbDisplayNameWand: React.ReactNode,
   listRowBlackChrome: boolean,
-  options?: { hideCopyUrl?: boolean; linkTitleToSite?: boolean; onOpenProfile?: () => void },
+  options?: {
+    hideCopyUrl?: boolean;
+    linkTitleToSite?: boolean;
+    onOpenProfile?: () => void;
+    onDelete?: () => void;
+    onToggleEnabled?: () => void;
+    isTesting?: boolean;
+  },
 ) {
   const compact = rowDisplay === "compact";
   const displayName = wordpressSiteDisplayName(site);
@@ -128,6 +201,10 @@ function menuInnerSummary(
           <UserCircle className={cn("shrink-0", compact ? "h-5 w-5" : "h-6 w-6")} aria-hidden />
         </button>
       ) : null}
+      {options?.onDelete ? listRowDeleteButton(options.onDelete) : null}
+      {options?.onToggleEnabled
+        ? listRowPowerButton(site, Boolean(options.isTesting), options.onToggleEnabled)
+        : null}
       {options?.linkTitleToSite && siteHref ? (
         <a
           href={siteHref}
@@ -163,6 +240,7 @@ export const CompactWordPressTile: React.FC<CompactWordPressTileProps> = ({
   hideCopyUrl = false,
   linkTitleToSite = false,
   onOpenProfile,
+  onDelete,
 }) => {
   const [isResolvingGmbDisplayName, setIsResolvingGmbDisplayName] = useState(false);
 
@@ -284,7 +362,14 @@ export const CompactWordPressTile: React.FC<CompactWordPressTileProps> = ({
     <div className={cn("shrink-0", rowCompact ? "h-7 w-7" : "h-8 w-8")} aria-hidden />
   );
 
-  const listRowSummaryOptions = { hideCopyUrl, linkTitleToSite, onOpenProfile };
+  const listRowSummaryOptions = {
+    hideCopyUrl,
+    linkTitleToSite,
+    onOpenProfile,
+    onDelete: variant === "listRow" ? onDelete : undefined,
+    onToggleEnabled: variant === "listRow" ? onToggleEnabled : undefined,
+    isTesting: variant === "listRow" ? isTesting : undefined,
+  };
 
   const content = (
     <div
