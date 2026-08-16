@@ -7,6 +7,8 @@
 
 import { isFaqStyleHeadingTitle } from "@/lib/content-generation/faq-heading-policy";
 
+export { isFaqStyleHeadingTitle } from "@/lib/content-generation/faq-heading-policy";
+
 /** Single banned words (any use in titles, body, meta, FAQ, rationale). */
 export const GLOBAL_FORBIDDEN_WORDS = [
   "delve",
