@@ -5,7 +5,7 @@
 
 export type WordPressPropertyRowDisplay = "standard" | "compact";
 
-const STORAGE_KEY = "flowbie_wp_property_row_display";
+const STORAGE_KEY = "neo_pulse_wp_property_row_display";
 
 export function readWordPressPropertyRowDisplay(): WordPressPropertyRowDisplay {
   try {

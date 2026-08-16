@@ -80,7 +80,7 @@ export function TeamWorkspacePanel() {
       <div className={DASHBOARD_SETTINGS_GROUP_CLASS}>
         <div className="space-y-2">
           <p className="font-semibold text-white">Agency workspace</p>
-          <p className="text-base text-white">Shared workspace for your agency. Settings sync to flowbie.ca.</p>
+          <p className="text-base text-white">Shared workspace for your agency. Settings sync to neodigital.ca.</p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <Input
@@ -103,7 +103,7 @@ export function TeamWorkspacePanel() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-2">
           <p className="font-semibold text-white">Agency workspace</p>
-          <p className="text-base text-white">Shared workspace for your agency. Settings sync to flowbie.ca.</p>
+          <p className="text-base text-white">Shared workspace for your agency. Settings sync to neodigital.ca.</p>
           {activeTeam ? (
             <p className="text-base text-white">Active: {activeTeam.name}</p>
           ) : null}

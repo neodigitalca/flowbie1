@@ -7,10 +7,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { FloAvatar } from "@/components/chat/FloAvatar";
+import { NeoPulseAvatar } from "@/components/chat/NeoPulseAvatar";
 import { ChatVideoTile } from "@/components/chat/calls/ChatVideoTile";
 import type { ChatCallPhase, ChatCallTranscriptLine } from "@/lib/chat-call-types";
-import { FLO_DISPLAY_NAME } from "@/lib/chat-flo";
+import { NEO_PULSE_BOT_DISPLAY_NAME } from "@/lib/chat-neo-pulse";
 
 export type ChatCallModalProps = {
   open: boolean;
@@ -39,9 +39,9 @@ function FloTranscriptPanel({ lines }: { lines: ChatCallTranscriptLine[] }): Rea
   return (
     <div className="flex min-h-[280px] flex-1 flex-col gap-3 overflow-hidden rounded-md bg-zinc-900 p-4">
       <div className="flex items-center gap-3">
-        <FloAvatar className="h-12 w-12" />
+        <NeoPulseAvatar className="h-12 w-12" />
         <div>
-          <p className="text-base font-semibold text-white">{FLO_DISPLAY_NAME}</p>
+          <p className="text-base font-semibold text-white">{NEO_PULSE_BOT_DISPLAY_NAME}</p>
           <p className="text-base text-white/60">Voice chat via transcription</p>
         </div>
       </div>

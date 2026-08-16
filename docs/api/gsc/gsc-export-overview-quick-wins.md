@@ -5,7 +5,7 @@ section: Google Search Console
 method: POST
 path: /api/gsc/export-overview-quick-wins
 auth: open
-order: 340
+order: 330
 ---
 
 POST `/api/gsc/export-overview-quick-wins`.
@@ -34,7 +34,7 @@ Runs the export overview quick wins action in the Google Search Console API from
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/gsc/export-overview-quick-wins" \
+curl -X POST "https://neodigital.ca/api/gsc/export-overview-quick-wins" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

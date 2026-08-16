@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/get-author-usage
 auth: open
-order: 2440
+order: 2390
 ---
 
 POST `/api/wordpress/get-author-usage`.
@@ -34,7 +34,7 @@ Runs the get author usage action in the WordPress API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/get-author-usage" \
+curl -X POST "https://neodigital.ca/api/wordpress/get-author-usage" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

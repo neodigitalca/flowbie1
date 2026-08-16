@@ -35,7 +35,7 @@ export function AiModelsSettingsContent({
 
       <div className={DASHBOARD_SETTINGS_GROUP_CLASS}>
         <p className="font-semibold text-white">Generation defaults</p>
-        <p className="text-base text-white">Default model and sampling for AI features across Flowbie.</p>
+        <p className="text-base text-white">Default model and sampling for AI features across NEO Pulse.</p>
         <LLMSettingsTabContent
           selectedModel={selectedModel}
           onModelChange={setSelectedModel}

@@ -40,7 +40,7 @@ function normalizeSiteUrlKey(siteUrl: string): string {
 
 /**
  * Hostnames / registrable domains for every saved WordPress site except the one being optimized,
- * so Semrush reference URLs never point at another Flowbie client.
+ * so Semrush reference URLs never point at another NEO Pulse client.
  */
 export function buildPortfolioBlockedHosts(
   sites: WordPressSite[],

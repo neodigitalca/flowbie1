@@ -34,7 +34,7 @@ Runs the pick blog post action in the Google Business Profile API from a JSON re
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/gmb/pick-blog-post" \
+curl -X POST "https://neodigital.ca/api/gmb/pick-blog-post" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

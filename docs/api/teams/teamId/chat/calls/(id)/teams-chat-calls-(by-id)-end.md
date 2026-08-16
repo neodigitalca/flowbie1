@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/chat/calls/({id})/end
 auth: team-rbac-communication
-order: 1130
+order: 1120
 ---
 
 POST `/api/teams/{teamId}/chat/calls/({id})/end`.
@@ -34,7 +34,7 @@ Runs the end action in the Teams API from a JSON request body. Requires a signed
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/chat/calls/({id})/end" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/chat/calls/({id})/end" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

@@ -119,6 +119,23 @@ describe("buildOverviewBulkSeoItem semrushScope", () => {
       acf: {},
     });
   });
+
+  it("meta scope includes date_modifier when forWordPressUpload", () => {
+    const row: OverviewRow = {
+      url: "https://example.com/a",
+      title: "Title",
+      metaDescription: "Old meta",
+      aiTitle: "",
+      aiMeta: "New excerpt",
+      status: "idle",
+    };
+    const binding: OverviewBinding = { postId: 1, subtype: "post" };
+    const item = buildOverviewBulkSeoItem(row, binding, {
+      semrushScope: "meta",
+      forWordPressUpload: true,
+    });
+    expect(item?.acf.date_modifier).toBe(overviewDateModifierTodayIso());
+  });
 });
 
 describe("buildOverviewBulkSeoItem forWordPressUpload", () => {

@@ -5,7 +5,7 @@ section: Semrush
 method: GET
 path: /api/semrush/overview-json/{filename}
 auth: open
-order: 960
+order: 950
 ---
 
 GET `/api/semrush/overview-json/{filename}`.
@@ -34,7 +34,7 @@ Fetches a single overview json item from the Semrush API.
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/semrush/overview-json/{filename}" \
+curl -X GET "https://neodigital.ca/api/semrush/overview-json/{filename}" \
   -H "Content-Type: application/json" \
 ```
 

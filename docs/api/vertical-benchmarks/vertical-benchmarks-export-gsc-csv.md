@@ -5,7 +5,7 @@ section: Vertical Benchmarks
 method: POST
 path: /api/vertical-benchmarks/export-gsc-csv
 auth: open
-order: 2140
+order: 2130
 ---
 
 POST `/api/vertical-benchmarks/export-gsc-csv`.
@@ -41,7 +41,7 @@ Builds a Google Search Console CSV export for vertical benchmark reporting acros
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/vertical-benchmarks/export-gsc-csv" \
+curl -X POST "https://neodigital.ca/api/vertical-benchmarks/export-gsc-csv" \
   -H "Content-Type: application/json" \
   -d '{   "apiKey": "..." }'
 ```

@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { WorkspaceNestedInput } from "@/components/seo/WorkspaceNestedField";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { BacklinkingWorkspaceHeader } from "@/components/research/backlinking/BacklinkingWorkspaceHeader";
+import type { GeneratorWorkspaceChromeBindings } from "@/components/blog-generator/generator-workspace-chrome-bindings";
+import { WORKSPACE_DETAILS_DIM_OVERLAY_CLASS } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import {
   SEO_WORKSPACE_BODY_SCROLL_CLASS,
   SEO_WORKSPACE_HEADER_CLASS,
@@ -63,7 +65,12 @@ function businessLabelForGmb(site: WordPressSite): string {
   }
 }
 
-export function BacklinkingResearchTab() {
+export type BacklinkingResearchTabProps = {
+  generatorChrome: GeneratorWorkspaceChromeBindings;
+};
+
+export function BacklinkingResearchTab({ generatorChrome }: BacklinkingResearchTabProps) {
+  const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false);
   const {
     mode: workspaceMode,
     tempSeedUrl,
@@ -461,7 +468,7 @@ export function BacklinkingResearchTab() {
   return (
     <div className={SEO_WORKSPACE_SHELL_CLASS}>
       {workspaceMode === "connected" && (!site || !site.siteUrl?.trim()) ? (
-        <div className="flowbie-zone-tile--data px-2 py-3 text-base leading-normal text-muted-foreground">
+        <div className="neo-pulse-zone-tile--data px-2 py-3 text-base leading-normal text-muted-foreground">
           {!site
             ? "Connect a WordPress site and select it in the header, or switch to Temp seed."
             : "This site has no URL saved."}
@@ -470,6 +477,8 @@ export function BacklinkingResearchTab() {
         <>
           <div className={SEO_WORKSPACE_HEADER_CLASS}>
             <BacklinkingWorkspaceHeader
+              {...generatorChrome}
+              onDetailsOpenChange={setDetailsDrawerOpen}
               busy={busy}
               loadingHint={loadingHint}
               canOpenDetails={canOpenDetails}
@@ -490,7 +499,10 @@ export function BacklinkingResearchTab() {
             />
           </div>
 
-          <div className={cn(SEO_WORKSPACE_BODY_SCROLL_CLASS, "space-y-2")}>
+          <div className={cn(SEO_WORKSPACE_BODY_SCROLL_CLASS, "relative space-y-2")}>
+            {detailsDrawerOpen ? (
+              <div className={WORKSPACE_DETAILS_DIM_OVERLAY_CLASS} aria-hidden />
+            ) : null}
             <div className="rounded-lg border border-border/50 bg-black/25 px-2.5 py-2 sm:px-3 sm:py-2.5">
               <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                 <WorkspaceNestedInput
@@ -561,7 +573,7 @@ export function BacklinkingResearchTab() {
             ) : null}
 
             {!busy && tileRows && tileRows.length > 0 ? (
-              <div className="flowbie-zone-tile--analysis mt-2 space-y-3 px-2 py-2 sm:px-3">
+              <div className="neo-pulse-zone-tile--analysis mt-2 space-y-3 px-2 py-2 sm:px-3">
                 <div className="mb-1 flex flex-wrap items-center gap-2 py-1">
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -611,7 +623,7 @@ export function BacklinkingResearchTab() {
                   <div
                     key={`${t.url}-${i}`}
                     className={cn(
-                      "flowbie-zone-row flowbie-zone-row--analysis flex w-full min-w-0 max-w-full flex-col gap-2 pt-2 pb-2 text-base text-white",
+                      "neo-pulse-zone-row neo-pulse-zone-row--analysis flex w-full min-w-0 max-w-full flex-col gap-2 pt-2 pb-2 text-base text-white",
                     )}
                   >
                     <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">

@@ -3,14 +3,15 @@ import { markdownToHtml } from "@/lib/markdown-to-html";
 import { buildBulkHarnessOutlineFromAgents } from "@/lib/bulk/bulk-harness-outline";
 import {
   buildHarnessSectionAnchorMap,
-  formatHarnessInPageAnchorBlock,
 } from "@/lib/bulk/harness-section-anchor-ids";
 import { splitBlogHarnessBodyAndOverview } from "@/lib/bulk/blog-harness-summary-agent";
+import { stitchHarnessSections } from "@/lib/bulk/bulk-harness-outline";
 import {
   extractOverviewSectionHtml,
   injectHarnessH2AnchorIdsForStitchedBlog,
+  stripLeadingOverviewSection,
 } from "@/lib/overview/overview-blog-overview-prepend";
-import { applyOverviewHarnessScrollLinksToStitchedHtml } from "@/lib/overview/overview-harness-scroll-links";
+import { completeOverviewScrollLinks } from "@/lib/prompt-builders/overview-link-rules";
 import { expandOverviewScrollLinkPlaceholdersInMarkdown } from "@/lib/prompt-builders/overview-link-rules";
 import { isGeneratedContentHtml } from "@/lib/content-generation/content-format";
 import {
@@ -63,11 +64,6 @@ export async function prepareHarnessContentForUpload(
     siteUrl,
     currentPageUrl,
     externalUrlPairs = [],
-    apiKey,
-    keyword,
-    articleTitle,
-    model,
-    signal,
   } = args;
 
   if (!markdownContent?.trim()) return markdownContent;
@@ -99,24 +95,8 @@ export async function prepareHarnessContentForUpload(
 
   const overviewSection = extractOverviewSectionHtml(htmlContent);
   if (bodyAnchors.length > 0 && overviewSection) {
-    const resolvedApiKey = apiKey?.trim();
-    if (!resolvedApiKey) {
-      throw new Error(
-        "Overview scroll links require an OpenRouter API key during harness upload prep.",
-      );
-    }
-    const resolvedKeyword = keyword?.trim() || articleTitle?.trim() || "topic";
-    const resolvedTitle = articleTitle?.trim() || resolvedKeyword;
-    htmlContent = await applyOverviewHarnessScrollLinksToStitchedHtml({
-      html: htmlContent,
-      anchorMap: bodyAnchors,
-      articleTitle: resolvedTitle,
-      keyword: resolvedKeyword,
-      apiKey: resolvedApiKey,
-      model,
-      signal,
-      inPageAnchorBlock: formatHarnessInPageAnchorBlock(bodyAnchors),
-    });
+    const fixedOverview = completeOverviewScrollLinks(overviewSection, bodyAnchors);
+    htmlContent = stitchHarnessSections([fixedOverview, stripLeadingOverviewSection(htmlContent)]);
   }
 
   if (wordPressPosts?.length && siteId && siteUrl) {

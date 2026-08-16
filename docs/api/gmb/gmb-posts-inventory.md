@@ -34,7 +34,7 @@ Runs the posts inventory action in the Google Business Profile API from a JSON r
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/gmb/posts-inventory" \
+curl -X POST "https://neodigital.ca/api/gmb/posts-inventory" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

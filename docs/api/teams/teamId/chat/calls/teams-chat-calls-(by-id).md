@@ -5,7 +5,7 @@ section: Teams
 method: GET
 path: /api/teams/{teamId}/chat/calls/({id})
 auth: team-rbac-communication
-order: 1100
+order: 1090
 ---
 
 GET `/api/teams/{teamId}/chat/calls/({id})`.
@@ -34,7 +34,7 @@ Fetches a single calls item from the Teams API. Requires a signed-in team member
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/teams/{teamId}/chat/calls/({id})" \
+curl -X GET "https://neodigital.ca/api/teams/{teamId}/chat/calls/({id})" \
   -H "Content-Type: application/json" \
 ```
 

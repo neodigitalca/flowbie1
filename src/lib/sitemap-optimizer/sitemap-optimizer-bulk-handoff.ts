@@ -1,5 +1,5 @@
-export const SITEMAP_OPTIMIZER_BULK_CSV_SEED_KEY = "flowbie-sitemap-optimizer-bulk-csv-seed";
-export const ENTITY_BULK_CSV_AUTO_RUN_KEY = "flowbie-entity-bulk-csv-auto-run";
+export const SITEMAP_OPTIMIZER_BULK_CSV_SEED_KEY = "neo-pulse-sitemap-optimizer-bulk-csv-seed";
+export const ENTITY_BULK_CSV_AUTO_RUN_KEY = "neo-pulse-entity-bulk-csv-auto-run";
 
 export function writeSitemapOptimizerBulkCsvSeed(csv: string): void {
   try {

@@ -13,7 +13,7 @@ import {
   warmEntitySiteCache,
 } from "@/lib/local-analysis/entity-site-warm-cache";
 
-export const ACTIVE_WP_SITE_STORAGE_KEY = "flowbie-active-wp-site-id";
+export const ACTIVE_WP_SITE_STORAGE_KEY = "neo-pulse-active-wp-site-id";
 
 type ActiveWordPressSiteContextValue = {
   activeWordPressSiteId: string | null;

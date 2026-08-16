@@ -5,7 +5,7 @@ section: DataForSEO MCP
 method: POST
 path: /api/mcp/DataForSEO_serp_google_ai_mode
 auth: open
-order: 800
+order: 790
 ---
 
 POST `/api/mcp/DataForSEO_serp_google_ai_mode`.
@@ -34,7 +34,7 @@ Runs the dataforseo_serp_google_ai_mode action in the DataForSEO MCP API from a 
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/mcp/DataForSEO_serp_google_ai_mode" \
+curl -X POST "https://neodigital.ca/api/mcp/DataForSEO_serp_google_ai_mode" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

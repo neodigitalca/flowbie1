@@ -1264,6 +1264,8 @@ export async function researchGoogleImageReferences(params: {
   requireReferences?: boolean;
   /** Photos to keep per target (Solo uses several for the same subject). Default 1. */
   maxReferencesPerTarget?: number;
+  /** Cap grounded targets (default IMAGE_REF_MAX_TARGETS). Meta ads pass 5. */
+  maxTargets?: number;
   /** Solo: fan out subject + place into Google Images queries. */
   enablePlaceQueryFanOut?: boolean;
 }): Promise<ImageReferenceResearchResult> {
@@ -1271,6 +1273,7 @@ export async function researchGoogleImageReferences(params: {
   if (!apiKey) throw new Error("OpenRouter API key not found");
   const model = params.model || getResearchModel();
   const soloIntentPlan = Boolean(params.enablePlaceQueryFanOut);
+  const maxTargets = params.maxTargets ?? IMAGE_REF_MAX_TARGETS;
 
   let classification: ImageGroundingClassification;
   if (params.forcedTargets?.length) {
@@ -1281,7 +1284,7 @@ export async function researchGoogleImageReferences(params: {
     }));
     classification = {
       mode: "grounded",
-      targets: soloIntentPlan ? mapped : mapped.slice(0, IMAGE_REF_MAX_TARGETS),
+      targets: soloIntentPlan ? mapped : mapped.slice(0, maxTargets),
     };
   } else if (soloIntentPlan) {
     const plan = await planImageEvidenceNeeds({
@@ -1313,7 +1316,7 @@ export async function researchGoogleImageReferences(params: {
 
   const targets = soloIntentPlan
     ? classification.targets
-    : classification.targets.slice(0, IMAGE_REF_MAX_TARGETS);
+    : classification.targets.slice(0, maxTargets);
 
   const settled = await Promise.all(
     targets.map(async (target) => {

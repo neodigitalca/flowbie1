@@ -3,7 +3,7 @@ export type ResearchSectionId =
   | "research-citation"
   | "research-backlinking";
 
-export const RESEARCH_SECTION_STORAGE_KEY = "flowbie-research-section";
+export const RESEARCH_SECTION_STORAGE_KEY = "neo-pulse-research-section";
 
 const ALL_RESEARCH_SECTIONS = new Set<string>([
   "research-proposal",

@@ -75,6 +75,7 @@
   --chat-muted: 240 4% 46%;
   --chat-border: 240 6% 90%;
   --chat-row-hover: 240 5% 98%;
+  --chat-accent-pill-bg: 240 6% 10%;
 }
 
 .chat-zone[data-zone-theme="dark"] {
@@ -88,6 +89,7 @@
   --chat-row-hover: 240 5% 14%;
   --chat-heading-text: 0 0% 100%;
   --chat-section-label-text: 0 0% 92%;
+  --chat-accent-pill-bg: 240 4% 18%;
 }
 
 .chat-zone[data-zone-theme="midnight"] {
@@ -101,6 +103,7 @@
   --chat-row-hover: 217 33% 12%;
   --chat-heading-text: 0 0% 100%;
   --chat-section-label-text: 0 0% 92%;
+  --chat-accent-pill-bg: 217 33% 18%;
 }
 
 .chat-zone[data-zone-theme="high-contrast"] {
@@ -114,6 +117,7 @@
   --chat-row-hover: 0 0% 12%;
   --chat-heading-text: 0 0% 100%;
   --chat-section-label-text: 0 0% 92%;
+  --chat-accent-pill-bg: 0 0% 12%;
 }
 
 .chat-zone[data-zone-theme="brand"] {
@@ -125,6 +129,27 @@
   --chat-muted: 84 15% 35%;
   --chat-border: 84 20% 85%;
   --chat-row-hover: 84 25% 92%;
+  --chat-accent-pill-bg: 240 6% 10%;
+}
+
+.chat-zone[data-zone-theme="slack"] {
+  --chat-bg: 220 9% 11%;
+  --chat-sidebar-bg: 300 61% 13%;
+  --chat-bar-bg: 220 9% 11%;
+  --chat-composer-bg: 220 7% 15%;
+  --chat-text: 0 0% 100%;
+  --chat-muted: 220 5% 65%;
+  --chat-border: 300 30% 22%;
+  --chat-row-hover: 300 45% 20%;
+  --chat-heading-text: 0 0% 100%;
+  --chat-section-label-text: 220 5% 75%;
+  --chat-accent-pill-bg: 204 70% 35%;
+  --chat-row-active-bg: 204 70% 35%;
+}
+
+.chat-themed[data-heading-theme="slack"] {
+  --chat-heading-text: 0 0% 100%;
+  --chat-section-label-text: 220 5% 75%;
 }
 
 .chat-themed {
@@ -178,6 +203,14 @@
 
 .chat-themed .chat-accent-text {
   color: hsl(var(--chat-accent));
+}
+
+.chat-themed .chat-accent-pill {
+  background-color: hsl(var(--chat-accent-pill-bg, 240 6% 10%));
+  color: hsl(var(--chat-accent));
+  border-radius: 0.25rem;
+  padding: 0 0.25rem;
+  font-weight: 600;
 }
 
 .chat-themed .chat-unread-badge {
@@ -311,4 +344,43 @@
 
 .chat-zone-right {
   flex-shrink: 0;
+}
+
+.chat-themed[data-chat-layout="minimal"] .chat-accent-pill {
+  background-color: hsl(204 70% 35%);
+  color: hsl(0 0% 100%);
+}
+
+.chat-themed[data-chat-layout="minimal"] .chat-row-active {
+  background-color: hsl(204 70% 35%);
+  color: hsl(0 0% 100%);
+}
+
+.chat-themed[data-chat-layout="minimal"] .chat-row-active .chat-text-muted,
+.chat-themed[data-chat-layout="minimal"] .chat-row-active .chat-text-primary {
+  color: hsl(0 0% 100%);
+}
+
+.chat-themed[data-chat-layout="minimal"] .chat-minimal-row-active {
+  background-color: hsl(204 70% 35%);
+  color: hsl(0 0% 100%);
+}
+
+.chat-themed[data-chat-layout="minimal"] .chat-minimal-channel-tab-active {
+  color: hsl(0 0% 100%);
+  box-shadow: inset 0 -2px 0 0 hsl(0 0% 100%);
+}
+
+.chat-themed[data-chat-layout="minimal"] .chat-minimal-channel-tab-idle {
+  color: hsl(var(--chat-muted));
+}
+
+.chat-themed[data-chat-layout="minimal"] .chat-composer-box {
+  border-color: hsl(var(--chat-border));
+  background-color: hsl(var(--chat-composer-bg));
+}
+
+.chat-themed[data-chat-layout="minimal"] .chat-huddle-badge {
+  background-color: hsl(204 70% 35% / 0.25);
+  color: hsl(204 80% 75%);
 }

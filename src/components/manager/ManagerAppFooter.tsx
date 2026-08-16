@@ -1,4 +1,4 @@
-import { FlowbieAppBrand } from "@/components/manager/FlowbieAppBrand";
+import { NeoPulseAppBrand } from "@/components/manager/NeoPulseAppBrand";
 import { writeStoredManagerSettingsCluster } from "@/components/manager/manager-settings-cluster";
 import {
   MANAGER_NAV_TRIGGER_ACTIVE,
@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 /** In-app shortcuts; inner wrapper adds horizontal gutter so the footer never sits flush to the column edge. */
 const FOOTER_APP_LINKS: { value: string; label: string }[] = [
   { value: "integrations", label: "Integrations" },
-  { value: "communication", label: "Communication" },
   { value: "chat", label: "Chat" },
   { value: "dashboard", label: "Dashboard" },
   { value: "generator", label: "Generator" },
@@ -47,7 +46,7 @@ export function ManagerAppFooter({ currentTab, onTabChange, onDashboardBrandClic
     <footer className="relative mt-0 w-full shrink-0 overflow-hidden bg-black" role="contentinfo">
       <div className="flex w-full min-w-0 flex-nowrap items-center gap-4 px-5 py-2.5 md:px-6 md:py-3">
         <div className="flex shrink-0 items-center">
-          <FlowbieAppBrand variant="default" onClick={handleBrandClick} />
+          <NeoPulseAppBrand variant="default" onClick={handleBrandClick} />
         </div>
 
         <nav
@@ -74,7 +73,7 @@ export function ManagerAppFooter({ currentTab, onTabChange, onDashboardBrandClic
         </nav>
 
         <div className="flex shrink-0 items-center gap-4 text-base text-muted-foreground">
-          <span className="hidden whitespace-nowrap sm:inline">© {year} Flowbie</span>
+          <span className="hidden whitespace-nowrap sm:inline">© {year} NEO Pulse</span>
         </div>
       </div>
 

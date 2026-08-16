@@ -1,0 +1,9 @@
+{
+  "keyword": "content-optimizer-meta",
+  "name": "Meta + extra text",
+  "executionKind": "content_optimizer_meta",
+  "description": "Update title, meta description, and SEO extra text only.",
+  "defaults": {
+    "executionPayload": { "updateMode": "update" }
+  }
+}

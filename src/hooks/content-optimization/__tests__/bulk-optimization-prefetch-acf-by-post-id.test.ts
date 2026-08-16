@@ -64,7 +64,7 @@ describe("prefetchBulkAcfFieldsByPostIdForUrls", () => {
     expect(getACFFieldsForPostsBatch.mock.calls[1][1]).toHaveLength(1);
   });
 
-  it("stores flowbie_fields from fullPost when batch fields object is empty", async () => {
+  it("stores neo_pulse_fields from fullPost when batch fields object is empty", async () => {
     getACFFieldsForPostsBatch.mockResolvedValue({
       results: [
         {
@@ -73,7 +73,7 @@ describe("prefetchBulkAcfFieldsByPostIdForUrls", () => {
           fields: {},
           fullPost: {
             id: 1,
-            flowbie_fields: { keyword_focus: "blinds", seo_research: "brief" },
+            neo_pulse_fields: { keyword_focus: "blinds", seo_research: "brief" },
           },
         },
       ],

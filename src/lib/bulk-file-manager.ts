@@ -232,7 +232,7 @@ export class BulkFileManager {
       const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
       const link = document.createElement('a');
       link.href = url;
-      link.download = `flowbie-bulk-run-content-${stamp}.csv`;
+      link.download = `neo-pulse-bulk-run-content-${stamp}.csv`;
       link.style.display = 'none';
       document.body.appendChild(link);
       link.click();

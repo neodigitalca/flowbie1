@@ -163,7 +163,7 @@ export function useOverviewTabResearchPipelines({
       }
       if (isProductionBackendMisconfigured()) {
         notify.error(
-          "Backend API URL is not configured for production. On Render, set VITE_MCP_API_BASE on the static frontend service (e.g. https://your-api.onrender.com/api/mcp) and redeploy flowbieonefront-end.",
+          "Backend API URL is not configured for production. On Render, set VITE_MCP_API_BASE on the static frontend service (e.g. https://your-api.onrender.com/api/mcp) and redeploy neo-pulseonefront-end.",
           { duration: 14000 },
         );
         return;

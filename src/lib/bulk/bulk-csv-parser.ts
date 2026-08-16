@@ -58,6 +58,8 @@ export interface CSVRow {
   sitemap_type?: "post" | "entity";
   /** Entity ad group key (Generator list grouping). */
   entity_group_id?: string;
+  /** Main city or parent area for MapPin header when row `entity` is a sub-neighbourhood. */
+  ad_group_label?: string;
   /** First row in an entity ad group vs additional keywords. */
   entity_group_role?: "seed" | "member";
 }

@@ -5,14 +5,14 @@ section: Getting started
 order: 0
 ---
 
-Flowbie exposes a Node-compatible HTTP API at **`/api/*`** on the same origin as the web app (for example `https://flowbie.ca/api/...`).
+NEO Pulse exposes a Node-compatible HTTP API at **`/api/*`** on the same origin as the web app (for example `https://neodigital.ca/api/...`).
 
 ## Quick start
 
 Use this sequence to connect a script or integration from zero:
 
 1. **First deploy (no users yet)** — `POST /api/auth/setup-admin` with owner email, password, and agency name. Installs DB tables and creates the owner team. See [Setup Admin](../auth/setup-admin) or use `POST /api/auth/bootstrap` when the user table is completely empty.
-2. **Sign in** — `POST /api/auth/login` with `{ "email", "password" }`. The server sets the `flowbie_session` cookie.
+2. **Sign in** — `POST /api/auth/login` with `{ "email", "password" }`. The server sets the `neo_pulse_session` cookie.
 3. **Verify session** — `GET /api/auth/me` returns the user, team list, active team, and permissions.
 4. **Switch agency** — `POST /api/teams/{teamId}/switch` when the user belongs to multiple teams.
 5. **Call a namespace** — WordPress, GSC, Teams chat, etc. Pick a section in the sidebar (start with [Authentication overview](../auth/overview) or [Teams overview](../teams/overview)).
@@ -23,10 +23,10 @@ Browser clients must send `credentials: "include"` on every `fetch`. Server-side
 
 | Environment | Base |
 | --- | --- |
-| Production | `https://flowbie.ca/api` |
-| Local dev (Vite proxy) | `/api` (proxied to flowbie.ca) |
+| Production | `https://neodigital.ca/api` |
+| Local dev (Vite proxy) | `/api` (proxied to neodigital.ca) |
 
-All paths in this reference are relative to `/api`. Example: `POST /api/auth/login` means `POST https://flowbie.ca/api/auth/login`.
+All paths in this reference are relative to `/api`. Example: `POST /api/auth/login` means `POST https://neodigital.ca/api/auth/login`.
 
 ## Request format
 

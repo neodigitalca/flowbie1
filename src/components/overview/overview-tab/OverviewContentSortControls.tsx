@@ -11,6 +11,8 @@ export type OverviewContentSortControlsProps = {
   setSortDir: Dispatch<SetStateAction<"asc" | "desc">>;
   disabled?: boolean;
   showSortLabel?: boolean;
+  titleSortLabel?: string;
+  showDateSort?: boolean;
 };
 
 export function OverviewContentSortControls({
@@ -20,6 +22,8 @@ export function OverviewContentSortControls({
   setSortDir,
   disabled = false,
   showSortLabel = true,
+  titleSortLabel = "Title",
+  showDateSort = true,
 }: OverviewContentSortControlsProps) {
   return (
     <div
@@ -48,7 +52,7 @@ export function OverviewContentSortControls({
           }
         }}
       >
-        Title{" "}
+        {titleSortLabel}{" "}
         <span className="inline-flex text-foreground" aria-hidden>
           {sortColumn === "title" ? (
             sortDir === "asc" ? (
@@ -61,6 +65,7 @@ export function OverviewContentSortControls({
           )}
         </span>
       </Button>
+      {showDateSort ? (
       <Button
         type="button"
         variant="ghost"
@@ -92,6 +97,7 @@ export function OverviewContentSortControls({
           )}
         </span>
       </Button>
+      ) : null}
     </div>
   );
 }

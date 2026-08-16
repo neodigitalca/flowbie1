@@ -118,7 +118,7 @@ export function PressReleaseRowCompact(props: PressReleaseRowCompactProps) {
           onCancel={() => {}}
           onClear={onClear}
           runLabel="Generate"
-          groupClassName="flex shrink-0 flex-nowrap items-center gap-2"
+          className="flex shrink-0 flex-nowrap items-center gap-2"
         />
       </div>
 

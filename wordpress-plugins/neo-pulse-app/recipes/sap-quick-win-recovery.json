@@ -1,0 +1,110 @@
+{
+  "keyword": "sap-quick-win-recovery",
+  "name": "SAP Quick Win Recovery",
+  "description": "Meta-only fix when entity pages leave positions 4–10.",
+  "notes": [
+    "Polls Google Search Console every 24 hours.",
+    "Scope: entity/service-area pages (SAP bucket).",
+    "Runs when the url left positions 4–10 (where small ranking gains are easiest).",
+    "Updates title and meta description only (faster and cheaper than a full rewrite).",
+    "Same URL waits 72 hours before it can run again."
+  ],
+  "category": "local-seo",
+  "verticals": [
+    "local-seo",
+    "home-services"
+  ],
+  "tags": [
+    "gsc",
+    "sap",
+    "meta",
+    "quick-win"
+  ],
+  "prerequisites": [
+    "gsc",
+    "wordpress",
+    "entity-sitemap"
+  ],
+  "filters": {
+    "executionKinds": [
+      "content_optimizer_meta"
+    ],
+    "targetBuckets": [
+      "sap"
+    ],
+    "triggerSignals": [
+      "quick_win_slipped"
+    ],
+    "actionCount": 1
+  },
+  "defaultTasks": [
+    {
+      "keyword": "sap-quick-win",
+      "title": "Meta optimize SAP pages on quick win slip",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "sap",
+        "updateMode": "update"
+      },
+      "scheduleMode": "trigger",
+      "recurrenceRule": "none",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "quick_win_slipped",
+            "operator": "gte",
+            "value": 0,
+            "minImpressions": 30
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    }
+  ],
+  "isAutomation": true,
+  "kind": "template",
+  "triggerBlock": {
+    "keyword": "gsc-quick-win-slipped",
+    "kind": "gsc",
+    "source": "gsc",
+    "targetBucket": "sap",
+    "triggerConfig": {
+      "sources": [
+        "gsc"
+      ],
+      "match": "any",
+      "conditions": [
+        {
+          "signal": "quick_win_slipped",
+          "operator": "gte",
+          "value": 0,
+          "minImpressions": 30
+        }
+      ],
+      "lookbackDays": 28,
+      "compareDays": 28,
+      "pollHours": 24,
+      "cooldownHours": 72,
+      "maxUrls": 5
+    }
+  },
+  "actionBlock": {
+    "keyword": "content-optimizer-meta",
+    "executionKind": "content_optimizer_meta",
+    "executionPayload": {
+      "targetBucket": "sap",
+      "updateMode": "update"
+    },
+    "title": "Meta optimize SAP pages on quick win slip"
+  }
+}

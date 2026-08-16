@@ -37,15 +37,15 @@ export const WordPressCardStatus: React.FC<WordPressCardStatusProps> = ({
   const getFieldsBackendLabel = () => {
     const cap = site.capabilities;
     if (!cap || site.connectionStatus !== "success") return null;
-    if (cap.hasFlowbieWp) {
-      const ver = cap.flowbieWpVersion ? ` ${cap.flowbieWpVersion}` : "";
-      if (cap.fieldsBackend === "flowbie_fields") {
-        return `Flowbie WP${ver} · Flowbie Fields`;
+    if (cap.hasNeoPulseWp) {
+      const ver = cap.neoPulseWpVersion ? ` ${cap.neoPulseWpVersion}` : "";
+      if (cap.fieldsBackend === "neo_pulse_fields") {
+        return `NEO Pulse WP${ver} · NEO Pulse Fields`;
       }
-      return `Flowbie WP${ver}`;
+      return `NEO Pulse WP${ver}`;
     }
     if (cap.fieldsBackend === "acf_native") return "ACF Pro";
-    if (cap.fieldsBackend === "flowbie_fields") return "Flowbie Fields";
+    if (cap.fieldsBackend === "neo_pulse_fields") return "NEO Pulse Fields";
     return null;
   };
 

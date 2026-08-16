@@ -1,11 +1,11 @@
 export const WORDPRESS_SITES_STORAGE_KEY = 'wordpress_sites';
 export const KB_FILES_STORAGE_KEY = 'kb_files';
 
-/** Detected WordPress / Flowbie WP capabilities from POST /test-connection. */
+/** Detected WordPress / NEO Pulse WP capabilities from POST /test-connection. */
 export interface WordPressSiteCapabilities {
-  hasFlowbieWp: boolean;
-  flowbieWpVersion?: string;
-  fieldsBackend: 'acf_native' | 'flowbie_fields' | 'none';
+  hasNeoPulseWp: boolean;
+  neoPulseWpVersion?: string;
+  fieldsBackend: 'acf_native' | 'neo_pulse_fields' | 'none';
   acfRestObjectPresent: boolean;
 }
 
@@ -23,7 +23,7 @@ export interface WordPressSite {
   connectedAt: number;
   lastTested?: number;
   connectionStatus?: 'testing' | 'success' | 'failed';
-  /** Flowbie WP plugin + fields backend detected at last connection test. */
+  /** NEO Pulse WP plugin + fields backend detected at last connection test. */
   capabilities?: WordPressSiteCapabilities;
   enabled?: boolean;
   sitemaps?: {
@@ -87,7 +87,7 @@ export interface WordPressSite {
 
   /** @deprecated Use per-sitemap exclusions (`sitemaps.disabledChildSitemapUrls`) instead. */
   sitemapsEnabledForProperty?: boolean;
-  /** Supabase plugin token for Flowbie WP direct connect (from cloud save). */
+  /** Supabase plugin token for NEO Pulse WP direct connect (from cloud save). */
   pluginAccessToken?: string;
   /** When false, no Slack posts for this property (global Slack must also be enabled). Default true when unset. */
   slackEnabledForProperty?: boolean;
@@ -102,8 +102,16 @@ export interface WordPressSite {
   /** Last Test Slack result for this site. */
   slackConnectionStatus?: 'not_configured' | 'ok' | 'error';
   slackLastTestAt?: number;
-  /** Legacy persisted flag; Flowbie always enables Supabase Post Bank for properties. */
+  /** Legacy persisted flag; NEO Pulse always enables Supabase Post Bank for properties. */
   postBankEnabled?: boolean;
+  /** WP Engine SFTP credentials (from Customer List CSV push). */
+  wpEngineHost?: string;
+  wpEnginePort?: number;
+  wpEngineUsername?: string;
+  wpEnginePassword?: string;
+  /** CSV domain key (Website Link column). */
+  wpEngineDomain?: string;
+  wpEngineIsStaging?: boolean;
 }
 
 /** Bulk / keyword flows: `siteUrl` is the WordPress connection base; optional production URL for display. */

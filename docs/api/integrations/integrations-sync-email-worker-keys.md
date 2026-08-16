@@ -5,7 +5,7 @@ section: Integrations
 method: POST
 path: /api/integrations/sync-email-worker-keys
 auth: open
-order: 550
+order: 540
 ---
 
 POST `/api/integrations/sync-email-worker-keys`.
@@ -34,7 +34,7 @@ Runs the sync email worker keys action in the Integrations API from a JSON reque
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/integrations/sync-email-worker-keys" \
+curl -X POST "https://neodigital.ca/api/integrations/sync-email-worker-keys" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

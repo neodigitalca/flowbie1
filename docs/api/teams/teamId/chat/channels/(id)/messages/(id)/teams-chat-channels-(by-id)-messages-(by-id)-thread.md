@@ -5,7 +5,7 @@ section: Teams
 method: GET
 path: /api/teams/{teamId}/chat/channels/({id})/messages/({id})/thread
 auth: team-rbac-communication
-order: 1380
+order: 1370
 ---
 
 GET `/api/teams/{teamId}/chat/channels/({id})/messages/({id})/thread`.
@@ -34,7 +34,7 @@ Reads thread from the Teams API. Requires a signed-in team member with communica
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/teams/{teamId}/chat/channels/({id})/messages/({id})/thread" \
+curl -X GET "https://neodigital.ca/api/teams/{teamId}/chat/channels/({id})/messages/({id})/thread" \
   -H "Content-Type: application/json" \
 ```
 

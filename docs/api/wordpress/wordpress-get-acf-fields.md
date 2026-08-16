@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/get-acf-fields
 auth: open
-order: 2360
+order: 2310
 ---
 
 POST `/api/wordpress/get-acf-fields`.
@@ -34,7 +34,7 @@ Runs the get acf fields action in the WordPress API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/get-acf-fields" \
+curl -X POST "https://neodigital.ca/api/wordpress/get-acf-fields" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

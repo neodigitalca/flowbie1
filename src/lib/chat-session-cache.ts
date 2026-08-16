@@ -19,7 +19,7 @@ const memory = new Map<number, ChatSessionSnapshot>();
 const listeners = new Set<(teamId: number) => void>();
 
 function cacheKey(teamId: number): string {
-  return `flowbie-chat-session-${teamId}`;
+  return `neo-pulse-chat-session-${teamId}`;
 }
 
 function normalizeSnapshot(raw: Partial<ChatSessionSnapshot> | null): ChatSessionSnapshot | null {

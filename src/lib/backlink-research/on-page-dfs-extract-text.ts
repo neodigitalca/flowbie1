@@ -17,7 +17,7 @@ function extractTextFromContent(content: unknown): string {
     if (typeof o.value === "string" || typeof o.value === "number") return String(o.value);
     const texts = Object.values(o)
       .map((val) => extractTextFromContent(val))
-      .filter((t) => t.trim().length > 0);
+      .filter((t) => typeof t === "string" && t.trim().length > 0);
     return texts.join(" ");
   }
   return "";

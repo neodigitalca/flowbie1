@@ -282,8 +282,7 @@ export function buildContentOptimizerBulkGeneratorDetailsProps(
     status,
     harnessSections: liveHarnessSections(input),
     harnessByRow: buildHarnessByRow(input.bulkState),
-    batchPrepHarnessSections: (input.bulkState.batchPrepHarnessSections ??
-      []) as BulkHarnessSectionUi[],
+    batchPrepHarnessSections: [],
     harnessPlannedSectionCount: harnessPlannedSectionCount(input),
     currentRow,
     totalRows: urls.length,

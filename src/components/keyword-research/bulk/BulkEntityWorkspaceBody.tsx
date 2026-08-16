@@ -3,6 +3,7 @@ import { SapEntityAdGroupList } from "@/components/keyword-research/bulk/SapEnti
 
 export type BulkEntityWorkspaceBodyProps = {
   hasGeneratedSapRows: boolean;
+  entityPreloadMode?: boolean;
   generatedRows: CSVRow[];
   selectedRowIndices: Set<number>;
   setSelectedRowIndices: (indices: Set<number> | ((prev: Set<number>) => Set<number>)) => void;
@@ -17,7 +18,8 @@ export type BulkEntityWorkspaceBodyProps = {
 
 /** Entity SAP list — AdGroup layout for preload slots and post-Clusters rows. */
 export function BulkEntityWorkspaceBody({
-  hasGeneratedSapRows: _hasGeneratedSapRows,
+  hasGeneratedSapRows,
+  entityPreloadMode = !hasGeneratedSapRows,
   generatedRows,
   selectedRowIndices,
   setSelectedRowIndices,
@@ -31,6 +33,7 @@ export function BulkEntityWorkspaceBody({
   return (
     <SapEntityAdGroupList
       generatedRows={generatedRows}
+      entityPreloadMode={entityPreloadMode}
       selectedRowIndices={selectedRowIndices}
       setSelectedRowIndices={setSelectedRowIndices}
       isGenerating={isGenerating}

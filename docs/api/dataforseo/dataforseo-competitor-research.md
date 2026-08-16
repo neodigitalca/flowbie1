@@ -37,7 +37,7 @@ Runs the competitor research action in the DataForSEO API from a JSON request bo
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/dataforseo/competitor-research" \
+curl -X POST "https://neodigital.ca/api/dataforseo/competitor-research" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

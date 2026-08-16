@@ -1,11 +1,11 @@
-import { FLOWBIE_PRODUCT_URL } from "@/lib/ppc/flowbie-meta-marketing-context";
+import { NEO_PULSE_PRODUCT_URL } from "@/lib/ppc/neo-pulse-meta-marketing-context";
 import type { MetaAdTypographyStyle } from "@/lib/ppc/meta-ad-typography-styles";
 import type { PpcWpPageContext } from "@/lib/ppc/google-ads-types";
 import type { MetaAdImageReferenceSummary } from "@/lib/ppc/meta-ad-image-reference-types";
 import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
 import type { MetaAdCta } from "@/lib/ppc/meta-ads-field-limits";
 
-export type MetaAdContextSource = "flowbie_app" | "custom";
+export type MetaAdContextSource = "neo-pulse_app" | "custom";
 
 export type MetaAdPlacement = "feed_1x1" | "feed_4x5" | "story_9x16";
 
@@ -47,7 +47,7 @@ export type MetaAdColorPalette = {
   primary?: string;
 };
 
-export type MetaAdColorThemeId = "flowbie-dark" | "flowbie-light" | "neon-contrast";
+export type MetaAdColorThemeId = "neo-pulse-dark" | "neo-pulse-light" | "neon-contrast";
 
 export type MetaAdVisualToolThemeId =
   | "openrouter"
@@ -57,6 +57,14 @@ export type MetaAdVisualToolThemeId =
   | "icon-graphic"
   | "photo-hero"
   | "map-local";
+
+export type MetaAdDeviceScreenLayout =
+  | "elementor_editor"
+  | "wordpress_admin"
+  | "published_homepage"
+  | "published_service_page"
+  | "neo_pulse_dashboard"
+  | "none";
 
 export type MetaAdCreativeBrief = {
   strategyStatement: string;
@@ -69,6 +77,7 @@ export type MetaAdCreativeBrief = {
   useMapOverlay: boolean;
   creativeStyle: MetaAdCreativeStyle;
   visualToolPalette: MetaAdVisualToolPalette;
+  deviceScreenLayout?: MetaAdDeviceScreenLayout;
   referenceAdPattern?: string;
 };
 
@@ -187,12 +196,12 @@ export function createIdleMetaAdRow(): MetaAdRow {
 }
 
 export function resolveMetaRowContextSource(row: Pick<MetaAdRow, "contextSource">): MetaAdContextSource {
-  return row.contextSource === "flowbie_app" ? "flowbie_app" : "custom";
+  return row.contextSource === "neo-pulse_app" ? "neo-pulse_app" : "custom";
 }
 
 export function resolveMetaRowContextUrl(row: Pick<MetaAdRow, "contextSource" | "contextUrl">): string {
-  if (resolveMetaRowContextSource(row) === "flowbie_app") {
-    return FLOWBIE_PRODUCT_URL;
+  if (resolveMetaRowContextSource(row) === "neo-pulse_app") {
+    return NEO_PULSE_PRODUCT_URL;
   }
   return row.contextUrl?.trim() ?? "";
 }

@@ -1,4 +1,9 @@
 import type { GscReportingOutlineResult, GscReportingSectionPlan } from "@/lib/gsc-reporting/gsc-reporting-types";
+import {
+  COMPARE_SIGNALS_LEXICON,
+  searchPerformanceH2ForCompareKind,
+  type GscCompareKind,
+} from "@/lib/gsc-reporting/gsc-reporting-compare-signals";
 
 /** All GFM pipe tables: short metric headers so columns stay scannable (charts + tables). */
 const TABLE_HEADER_ABBREV =
@@ -107,7 +112,7 @@ const CLUSTER_TABLE_ONLY_LAYOUT =
   "CLUSTER LAYOUT (mandatory): Do **not** use bullet lists (`-`, `*`) or numbered lists (`1.`). Optional: at most **one** short intro sentence (no list). Then use **only** GFM pipe tables - up to **3** compact tables: (1) **Cluster metrics** - columns **Metric | Value** (metric names in first column may be short phrases; rows e.g. Total Clk, Total Imp, CTR, Pos) from RETRIEVED DATA. (2) **Example queries or pages** - headers **Example | Imp | Clk | Pos** (abbreviated; omit columns if unsupported); ≤5 example rows, plain text or **bold** for emphasis in cells (**no** quote wrapping around queries or titles); **sort** pages by Clk ↓ then Imp ↓, queries by Imp ↓ then Clk ↓; **omit** rows with 0 Imp **and** 0 Clk. (3) **Takeaways** - columns **Topic | Insight** (1–3 rows: opportunity, relevance, or implication).";
 
 function baseWithExec(): string {
-  return `ROLE: SEO strategist writing for a **time-poor executive**. OUTPUT: Markdown only (no HTML). **Brevity beats completeness.** ${GROUNDING_RULE_WITH_OUTLINE} **Tables:** every number from RETRIEVED DATA (and **OUTLINE_GROUNDING** when present); **no** placeholders; **skip** bad rows. **Do not invent** metrics. First line = exact H2 from user message. No H1. ${EXEC_RULES}`;
+  return `ROLE: SEO strategist writing for a **time-poor executive**. OUTPUT: Markdown only (no HTML). **Brevity beats completeness.** ${GROUNDING_RULE_WITH_OUTLINE} ${COMPARE_SIGNALS_LEXICON} **Tables:** every number from RETRIEVED DATA (and **OUTLINE_GROUNDING** when present); **no** placeholders; **skip** bad rows. **Do not invent** metrics. First line = exact H2 from user message. No H1. ${EXEC_RULES}`;
 }
 
 /** Executive Summary ### Key Insights: strategic themes, not a query-by-query inventory. */
@@ -191,16 +196,26 @@ export function buildUserMessageForSection(args: {
   return parts.join("\n");
 }
 
-export function getGscReportingSectionSystemPrompt(kind: GscReportingSectionPlan["kind"]): string {
+export function getGscReportingSectionSystemPrompt(
+  kind: GscReportingSectionPlan["kind"],
+  compareKind: GscCompareKind = "mom",
+): string {
   const base = baseWithExec();
+  const searchPerformanceH2 = searchPerformanceH2ForCompareKind(compareKind);
+  const periodCompareWording =
+    compareKind === "yoy"
+      ? "year over year"
+      : compareKind === "custom"
+        ? "period over period"
+        : "month over month";
 
   switch (kind) {
     case "executive_summary":
-      return `${base} ${DIRECTIONAL_LANGUAGE} ${EXEC_KEY_INSIGHTS_BREADTH} SECTION: Executive Summary - **No** site-wide KPI table here (that lives **only** in **Search Performance Compared Month Over Month**). **Output shape (mandatory order):** (1) **One** short explainer paragraph: period story in plain language; **bold** 1–2 key phrases; **defer** exact MoM % and table figures to **Search Performance Compared Month Over Month**. (2) Blank line, then heading **exactly** \`### Key Insights\` (H3 only; **no** other subheadings). (3) **4–5** bullets: each \`- **Label:**\` scannable insight; bullets with numbers must trace to **OUTLINE_GROUNDING** (if present) or **RETRIEVED DATA**. **No** pipe tables; **no** priority/next-step lists.`;
+      return `${base} ${DIRECTIONAL_LANGUAGE} ${EXEC_KEY_INSIGHTS_BREADTH} SECTION: Executive Summary - **No** site-wide KPI table here (that lives **only** in **${searchPerformanceH2}**). **Output shape (mandatory order):** (1) **One** short explainer paragraph: period story in plain language; **bold** 1–2 key phrases; **defer** exact compare **%** and table figures to **${searchPerformanceH2}**. Obey **COMPARE_SIGNALS** when present. (2) Blank line, then heading **exactly** \`### Key Insights\` (H3 only; **no** other subheadings). (3) **4–5** bullets: each \`- **Label:**\` scannable insight; bullets with numbers must trace to **OUTLINE_GROUNDING** (if present) or **RETRIEVED DATA**. **No** pipe tables; **no** priority/next-step lists.`;
     case "search_performance_period":
-      return `${base} ${POSITION_LEXICON} SECTION: Search performance MoM - **This section owns the canonical KPI table** (totals / current vs prior period). **Lead with** that one summary table including **Search queries** as a fixed row, then at most **2–3** short sentences including the **average position** gloss above. **Do not** put month or date ranges in the H2 - the **Target H2** is fixed. **Table:** mirror CSV values and order; **header row uses abbreviations** (**Clk**, **Imp**, **Queries**, **CTR**, **Pos**, **Δ%** - not long month labels in headers). ${TABLE_RULE} Do not repeat this table elsewhere.`;
+      return `${base} ${POSITION_LEXICON} SECTION: Search performance ${periodCompareWording} - **This section owns the canonical KPI table** (totals / current vs prior period). **Lead with** that one summary table including **Search queries** as a fixed row, then at most **2–3** short sentences including the **average position** gloss and **COMPARE_SIGNALS** interpretation when present. **Do not** put month or date ranges in the H2 - the **Target H2** is fixed. **Do not** say "month over month" when compareKind in **COMPARE_SIGNALS** is **yoy**. **Table:** mirror CSV values and order; **header row uses abbreviations** (**Clk**, **Imp**, **Queries**, **CTR**, **Pos**, **Δ%** - not long month labels in headers). ${TABLE_RULE} Do not repeat this table elsewhere.`;
     case "key_performance_insights":
-      return `${base} ${KEY_INSIGHTS_DIVISION} SECTION: Key performance insights - **No** \`###\` / \`####\` subheadings (only the single **Target H2**); **do not** add titles like **Top Performing Query Themes** above a table. **Narrative-first:** **2–4 short paragraphs** or **≤5 bullets** with **bold** lead phrases (wins, risks, opportunities). **Forbidden:** URL-level MoM grids (no duplicate of Search Performance Compared Month Over Month). **If** you include a **theme or query-category** table: **exactly this order:** **Theme | Clk | Clk Δ% | Imp | Imp Δ%** (optional **Pos | Pos Δ%**); **abbreviated headers**; **≤7 columns**; **≤6 data rows**; **never** paste **Clicks (month A)**, **Clicks (month B)**, **Clicks Δ%** triplets; **never** emit a table with headers only and **no** data rows. **Forbidden:** headings or bullets framed as **Next steps**, **Priority next steps**, **Recommended actions**, or SEO task backlogs. **Separate columns** per metric (**never** one **Direction** cell with multiple stats). ${TABLE_RULE}`;
+      return `${base} ${KEY_INSIGHTS_DIVISION} SECTION: Key performance insights - **No** \`###\` / \`####\` subheadings (only the single **Target H2**); **do not** add titles like **Top Performing Query Themes** above a table. **Narrative-first:** **2–4 short paragraphs** or **≤5 bullets** with **bold** lead phrases (wins, risks, opportunities). Obey **COMPARE_SIGNALS** when present. **Forbidden:** URL-level compare grids (no duplicate of **${searchPerformanceH2}**). **If** you include a **theme or query-category** table: **exactly this order:** **Theme | Clk | Clk Δ% | Imp | Imp Δ%** (optional **Pos | Pos Δ%**); **abbreviated headers**; **≤7 columns**; **≤6 data rows**; **never** paste **Clicks (month A)**, **Clicks (month B)**, **Clicks Δ%** triplets; **never** emit a table with headers only and **no** data rows. **Forbidden:** headings or bullets framed as **Next steps**, **Priority next steps**, **Recommended actions**, or SEO task backlogs. **Separate columns** per metric (**never** one **Direction** cell with multiple stats). ${TABLE_RULE}`;
     case "sap_local_seo":
       return `${base} ${SAP_CONTENT_NO_REDUNDANCY_CORE} ${SAP_RETRIEVED_ENTITY_BLOCKS} ${SAP_ENTITY_SITEMAP_LAYOUT} ${SAP_CONTENT_APPEND} ${SAP_LOCAL_TABLE_MIN} SECTION: SAP & local SEO - **Entity sitemap performance** only: **one** **Page**-first table (**≤6** entity URLs), prose aligned with that scope.`;
     case "content_performance":

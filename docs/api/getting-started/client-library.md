@@ -5,14 +5,14 @@ section: Getting started
 order: 40
 ---
 
-This guide helps you wrap the Flowbie API in a reusable client (TypeScript, Python, etc.).
+This guide helps you wrap the NEO Pulse API in a reusable client (TypeScript, Python, etc.).
 
-## FlowbieClient (TypeScript)
+## NEO PulseClient (TypeScript)
 
 ```typescript
-const BASE = "https://flowbie.ca/api";
+const BASE = "https://neodigital.ca/api";
 
-export class FlowbieClient {
+export class NEO PulseClient {
   constructor(private base = BASE) {}
 
   private async request<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
@@ -66,8 +66,8 @@ Each article in this reference lists method, path, auth, request fields, and err
 
 ## Open vs session routes
 
-Product routes (`gsc`, `wordpress`, `dataforseo`, etc.) are **open** on the server: credentials live in Flowbie server config, not in your client headers. Team routes require the session cookie.
+Product routes (`gsc`, `wordpress`, `dataforseo`, etc.) are **open** on the server: credentials live in NEO Pulse server config, not in your client headers. Team routes require the session cookie.
 
 ## Markdown source
 
-All articles live under `docs/api/` in the Flowbie One repository. Regenerate endpoint scaffolds with `npm run docs:api:generate`.
+All articles live under `docs/api/` in the NEO Pulse One repository. Regenerate endpoint scaffolds with `npm run docs:api:generate`.

@@ -35,7 +35,7 @@ Runs the manual domain action in the DataForSEO API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/dataforseo/competitor-research/manual-domain" \
+curl -X POST "https://neodigital.ca/api/dataforseo/competitor-research/manual-domain" \
   -H "Content-Type: application/json" \
   -d '{   "domain": "..." }'
 ```

@@ -34,7 +34,7 @@ Runs a bulk bulk operation from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/bulk/abort-dataforseo" \
+curl -X POST "https://neodigital.ca/api/bulk/abort-dataforseo" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

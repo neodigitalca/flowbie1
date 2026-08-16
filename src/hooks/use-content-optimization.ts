@@ -235,5 +235,6 @@ export function useContentOptimization() {
     continueOptimizationWithKeyword,
     setOptimizationFileManagers,
     clearOptimization,
+    continueOptimizationRef,
   };
 }

@@ -5,7 +5,7 @@ section: Overview
 method: POST
 path: /api/overview/optimize-meta-ai
 auth: open
-order: 860
+order: 850
 ---
 
 POST `/api/overview/optimize-meta-ai`.
@@ -34,7 +34,7 @@ Runs the optimize meta ai action in the Overview API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/overview/optimize-meta-ai" \
+curl -X POST "https://neodigital.ca/api/overview/optimize-meta-ai" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

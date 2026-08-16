@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   SEO_WORKSPACE_BODY_SCROLL_CLASS,
   SEO_WORKSPACE_HEADER_CLASS,
@@ -14,6 +14,7 @@ import {
 import { useOverviewTabController } from "@/hooks/overview/use-overview-tab-controller";
 import { useOverviewTabShellDerived } from "@/hooks/overview/use-overview-tab-shell-derived";
 import { cn } from "@/lib/utils";
+import { usePulseAssistOverviewBridge } from "@/hooks/use-pulse-assist-overview-bridge";
 
 export function OverviewTabContent(props: OverviewTabContentProps) {
   const ctrl = useOverviewTabController(props);
@@ -23,6 +24,19 @@ export function OverviewTabContent(props: OverviewTabContentProps) {
     : undefined;
   const { site } = ctrl;
   const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false);
+
+  const expandedPageTitle = useMemo(() => {
+    if (!ctrl.expandedPageUrl) return null;
+    const row = ctrl.displayRows.find((r) => r.url === ctrl.expandedPageUrl);
+    return row?.title || ctrl.wpTitlesByUrl[ctrl.expandedPageUrl] || null;
+  }, [ctrl.displayRows, ctrl.expandedPageUrl, ctrl.wpTitlesByUrl]);
+
+  usePulseAssistOverviewBridge({
+    site,
+    sitemapSource: ctrl.sitemapSource,
+    expandedPageUrl: ctrl.expandedPageUrl,
+    expandedPageTitle,
+  });
 
   return (
     <div className={CONTENT_OPTIMIZER_WORKSPACE_SHELL_CLASS}>

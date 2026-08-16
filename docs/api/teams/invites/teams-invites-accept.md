@@ -5,7 +5,7 @@ section: Teams
 method: GET
 path: /api/teams/invites/accept
 auth: public
-order: 2120
+order: 2110
 ---
 
 GET `/api/teams/invites/accept`.
@@ -34,7 +34,7 @@ Reads accept from the Teams API. No existing session is required.
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/teams/invites/accept" \
+curl -X GET "https://neodigital.ca/api/teams/invites/accept" \
   -H "Content-Type: application/json" \
 ```
 

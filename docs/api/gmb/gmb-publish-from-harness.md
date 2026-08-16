@@ -34,7 +34,7 @@ Runs the publish from harness action in the Google Business Profile API from a J
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/gmb/publish-from-harness" \
+curl -X POST "https://neodigital.ca/api/gmb/publish-from-harness" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

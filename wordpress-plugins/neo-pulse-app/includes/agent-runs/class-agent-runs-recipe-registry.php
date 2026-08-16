@@ -19,6 +19,14 @@ class Neo_Pulse_App_Agent_Runs_Recipe_Registry {
 			'title'       => 'Content optimization batch',
 			'managerTabs' => array( 'content-optimizer' ),
 		),
+		'gsc_reporting'             => array(
+			'title'       => 'GSC reporting',
+			'managerTabs' => array( 'generator' ),
+		),
+		'post_creator'              => array(
+			'title'       => 'Post creator',
+			'managerTabs' => array( 'generator' ),
+		),
 	);
 
 	public static function is_valid( string $recipe_key ): bool {

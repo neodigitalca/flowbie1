@@ -5,7 +5,7 @@ section: SEO
 method: POST
 path: /api/seo/enrich-location-page-addresses
 auth: open
-order: 990
+order: 980
 ---
 
 POST `/api/seo/enrich-location-page-addresses`.
@@ -36,7 +36,7 @@ Runs the enrich location page addresses action in the SEO API from a JSON reques
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/seo/enrich-location-page-addresses" \
+curl -X POST "https://neodigital.ca/api/seo/enrich-location-page-addresses" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

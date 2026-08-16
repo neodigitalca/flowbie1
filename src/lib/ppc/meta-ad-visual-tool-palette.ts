@@ -146,11 +146,20 @@ export function visualToolPaletteMarkdown(brief: MetaAdCreativeBrief): string {
   ).join("\n");
 }
 
+export const META_ICON_CLUSTER_RULES = `icon_cluster rules:
+- When icon_cluster degree is above zero, use at most 2 to 3 distinct icons in one small cluster.
+- Never repeat the same icon motif (for example, not four bar-chart icons).
+- Degree controls cluster size and prominence, not icon count.
+- Pick icons from the post topic and page context, not generic SEO clip art.`;
+
+export const META_ICON_CLUSTER_NO_CHARTS_WITH_DEVICE = `When device_screen is active, do not add chart, graph, or growth-arrow icons. The device screen carries the results message.`;
+
 export const META_VISUAL_TOOL_PALETTE_PROMPT = `Visual tool palette (each tool has degree 0.0 to 1.0):
 - degree 0 = tool off for this run
 - degree above 0 = tool is active; higher values are more prominent (0.2 = subtle, 0.8 = dominant)
 Tools: typography, icon_cluster, accent_shapes, city_skyline, device_screen, people, map_overlay, gradient_panel, photo_focal
-Vary degree values each generate. No tool is mandatory.`;
+Vary degree values each generate. No tool is mandatory.
+${META_ICON_CLUSTER_RULES}`;
 
 export const META_VISUAL_TOOL_OUTPUT_SCHEMA = {
   typography: { degree: "0.0-1.0" },
@@ -164,5 +173,6 @@ export const META_VISUAL_TOOL_OUTPUT_SCHEMA = {
   photo_focal: { degree: "0.0-1.0" },
 };
 
+/** @deprecated Use META_DEVICE_SCREEN_NO_READABLE_TEXT_RULE from meta-ad-device-screen-layout.ts */
 export const META_DEVICE_SCREEN_ABSTRACT_RULE =
-  "Device screens: abstract UI only. Use color blocks, bars, circles, and geometric shapes. No readable text, logos, brand marks, or UI labels on the device screen.";
+  "Device screens: realistic WordPress or page-builder layout mockup. Gray placeholder bars only. No readable text, logos, or abstract chart dashboards.";

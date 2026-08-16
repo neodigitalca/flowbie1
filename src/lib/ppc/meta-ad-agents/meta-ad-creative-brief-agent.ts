@@ -3,9 +3,11 @@ import { appendMasterInstructionsToSystemPrompt, ensureMasterInstructionsInMemor
 import {
   buildMetaCreativeBriefSystemPrompt,
   buildMetaCreativeBriefUserPayload,
+  META_CREATIVE_BRIEF_CONTEXT_MODE_PROMPT,
   parseMetaCreativeBrief,
+  type MetaCreativeBriefVisualToolMode,
 } from "@/lib/ppc/meta-ad-creative-brief";
-import { appendFlowbieMetaMarketingContext } from "@/lib/ppc/flowbie-meta-marketing-context";
+import { appendNeoPulseMetaMarketingContext } from "@/lib/ppc/neo-pulse-meta-marketing-context";
 import { appendMetaInstagramBestPractices } from "@/lib/ppc/load-meta-ad-instagram-best-practices";
 import { callMetaAdJsonCompletion } from "@/lib/ppc/meta-ad-openrouter-json";
 import type {
@@ -32,6 +34,7 @@ export async function runMetaAdCreativeBriefAgent(options: {
   localityRegion?: string;
   colorPalette?: MetaAdColorPalette;
   visualToolPalette?: MetaAdVisualToolPalette;
+  visualToolMode?: MetaCreativeBriefVisualToolMode;
   siteName?: string;
   signal?: AbortSignal;
 }): Promise<MetaAdCreativeBrief> {
@@ -42,9 +45,15 @@ export async function runMetaAdCreativeBriefAgent(options: {
 
   const system = appendMasterInstructionsToSystemPrompt(
     appendMetaInstagramBestPractices(
-      appendFlowbieMetaMarketingContext(buildMetaCreativeBriefSystemPrompt(options.siteName), options.teamName, {
-        contextSource: options.contextSource,
-      }),
+      appendNeoPulseMetaMarketingContext(
+        `${buildMetaCreativeBriefSystemPrompt(options.siteName)}${
+          options.visualToolMode === "context" ? `\n\n${META_CREATIVE_BRIEF_CONTEXT_MODE_PROMPT}` : ""
+        }`,
+        options.teamName,
+        {
+          contextSource: options.contextSource,
+        },
+      ),
     ),
     options.siteId ?? null,
   );
@@ -58,6 +67,7 @@ export async function runMetaAdCreativeBriefAgent(options: {
     localityRegion: options.localityRegion,
     colorPalette: options.colorPalette,
     visualToolPalette: options.visualToolPalette,
+    visualToolMode: options.visualToolMode,
   });
 
   const parsed = await callMetaAdJsonCompletion({

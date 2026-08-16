@@ -34,7 +34,7 @@ Runs the test action in the Google Analytics API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/ga/test" \
+curl -X POST "https://neodigital.ca/api/ga/test" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

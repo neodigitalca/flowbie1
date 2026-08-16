@@ -7,12 +7,12 @@ export type MetaAdColorTheme = {
   palette: MetaAdColorPalette;
 };
 
-export const META_AD_COLOR_THEME_DEFAULT_ID: MetaAdColorThemeId = "flowbie-dark";
+export const META_AD_COLOR_THEME_DEFAULT_ID: MetaAdColorThemeId = "neo-pulse-dark";
 
 export const META_AD_COLOR_THEMES: MetaAdColorTheme[] = [
   {
-    id: "flowbie-dark",
-    label: "Flowbie dark",
+    id: "neo-pulse-dark",
+    label: "NEO Pulse dark",
     palette: {
       background: "#02050a",
       accent: "#84bc00",
@@ -20,8 +20,8 @@ export const META_AD_COLOR_THEMES: MetaAdColorTheme[] = [
     },
   },
   {
-    id: "flowbie-light",
-    label: "Flowbie light",
+    id: "neo-pulse-light",
+    label: "NEO Pulse light",
     palette: {
       background: "#f8f8f8",
       accent: "#84bc00",

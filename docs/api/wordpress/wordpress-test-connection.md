@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/test-connection
 auth: open
-order: 2740
+order: 2730
 ---
 
 POST `/api/wordpress/test-connection`.
@@ -34,7 +34,7 @@ Runs the test connection action in the WordPress API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/test-connection" \
+curl -X POST "https://neodigital.ca/api/wordpress/test-connection" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

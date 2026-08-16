@@ -12,6 +12,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 
+const SECTION_HEADER_GRID =
+  "grid w-full grid-cols-[2rem_minmax(12rem,1fr)_minmax(6rem,auto)_minmax(5rem,auto)_minmax(11rem,auto)_minmax(5rem,auto)_4rem_5rem] items-center gap-x-3";
+
 export type TaskSectionHeaderProps = {
   sectionId: number;
   title: string;
@@ -30,12 +33,18 @@ export function TaskSectionHeader({
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   return (
-    <div className="mb-2 flex items-center gap-2">
-      <h3 className="min-w-0 flex-1 text-base font-semibold text-white">{title}</h3>
+    <div className={cn(SECTION_HEADER_GRID, "mb-2 px-3")}>
+      <span aria-hidden />
+      <h3 className="min-w-0 text-base font-semibold text-white">{title}</h3>
       {taskCount > 0 ? (
         <span className="shrink-0 text-base text-muted-foreground">{taskCount}</span>
-      ) : null}
-      <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+      ) : (
+        <span />
+      )}
+      <span />
+      <span />
+      <span />
+      <div className="col-span-2 flex shrink-0 items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
         <button
           type="button"
           aria-label={`Edit ${title}`}

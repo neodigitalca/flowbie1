@@ -1,6 +1,12 @@
 import React from "react";
 import { Loader2 } from "lucide-react";
-import { Textarea } from "@/components/ui/textarea";
+import {
+  GbpPreviewImage,
+  GbpPreviewLearnMore,
+  GbpPreviewLinkedBlog,
+  GbpPreviewLoadingSkeleton,
+  GbpPreviewPostCopy,
+} from "@/components/gbp-post/gbp-post-preview-blocks";
 import { cn } from "@/lib/utils";
 
 export type GbpPublishPreview = {
@@ -22,12 +28,6 @@ export type GbpPublishPreview = {
   } | null;
 };
 
-const GBP_TEXTAREA_SURFACE =
-  "min-h-[5rem] resize-y rounded-none border-0 bg-zinc-900 text-base text-foreground shadow-inner shadow-black/40 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-0";
-
-const SKELETON_LINE = "h-4 rounded-none bg-zinc-900";
-const PLACEHOLDER_LINE = "h-4 rounded-none bg-zinc-900";
-
 interface GbpPostPublishPreviewProps {
   preview?: GbpPublishPreview | null;
   loading?: boolean;
@@ -36,101 +36,34 @@ interface GbpPostPublishPreviewProps {
   className?: string;
 }
 
-function PreviewLoadingSkeleton() {
-  return (
-    <div className="space-y-2">
-      <div className={cn(GBP_TEXTAREA_SURFACE, "min-h-[5rem] animate-pulse bg-zinc-900")} />
-      <div className="space-y-1.5">
-        <div className={cn(SKELETON_LINE, "w-24")} />
-        <div className={cn(SKELETON_LINE, "w-full max-w-md")} />
-      </div>
-      <div className="space-y-1.5">
-        <div className={cn(SKELETON_LINE, "w-20")} />
-        <div className={cn(SKELETON_LINE, "w-full max-w-sm")} />
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="h-16 w-16 shrink-0 rounded-none bg-zinc-900 animate-pulse" />
-        <div className={cn(SKELETON_LINE, "w-28")} />
-      </div>
-    </div>
-  );
-}
-
-function PreviewEmptyShell() {
-  return (
-    <>
-      <Textarea readOnly value="" aria-label="Post copy preview" className={GBP_TEXTAREA_SURFACE} rows={4} />
-
-      <div className="space-y-1.5">
-        <p className="text-muted-foreground">Linked blog</p>
-        <div className={cn(PLACEHOLDER_LINE, "w-full max-w-md")} aria-hidden />
-        <div className={cn(PLACEHOLDER_LINE, "w-2/3 max-w-sm")} aria-hidden />
-      </div>
-
-      <div className="space-y-1.5">
-        <p className="text-muted-foreground">Learn more</p>
-        <div className={cn(PLACEHOLDER_LINE, "w-full max-w-sm")} aria-hidden />
-      </div>
-
-      <div className="flex items-start gap-2">
-        <div className="h-16 w-16 shrink-0 rounded-none bg-zinc-900" aria-hidden />
-        <div className={cn(PLACEHOLDER_LINE, "mt-1 w-28")} aria-hidden />
-      </div>
-    </>
-  );
-}
-
 function PreviewFilledContent({ preview }: { preview: GbpPublishPreview }) {
-  const imageUrl = preview.media?.sourceUrl?.trim();
   const blogTitle = preview.linkedBlog?.blogPostTitle?.trim();
   const blogUrl = preview.linkedBlog?.blogPostUrl?.trim();
   const ctaUrl = preview.moneyPageUrl?.trim();
+  const imageUrl = preview.media?.sourceUrl?.trim();
 
   return (
     <>
-      <Textarea readOnly value={preview.summary} className={GBP_TEXTAREA_SURFACE} rows={4} />
+      <GbpPreviewPostCopy preview={preview} />
 
       {blogTitle || blogUrl ? (
         <div className="space-y-0.5">
           <p className="text-muted-foreground">Linked blog</p>
-          {blogTitle ? <p className="font-medium text-foreground">{blogTitle}</p> : null}
-          {blogUrl ? (
-            <a
-              href={blogUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block truncate text-primary underline-offset-4 hover:underline"
-            >
-              {blogUrl}
-            </a>
-          ) : null}
+          <GbpPreviewLinkedBlog preview={preview} />
         </div>
       ) : null}
 
       {ctaUrl ? (
         <div className="space-y-0.5">
           <p className="text-muted-foreground">Learn more</p>
-          <a
-            href={ctaUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block truncate text-primary underline-offset-4 hover:underline"
-          >
-            {ctaUrl}
-          </a>
+          <GbpPreviewLearnMore preview={preview} />
         </div>
       ) : null}
 
       {imageUrl ? (
-        <div className="flex items-start gap-2">
-          <img
-            src={imageUrl}
-            alt={preview.media?.title?.trim() || "GBP post image"}
-            className="h-16 w-16 shrink-0 rounded-none object-cover"
-          />
-          <p className="min-w-0 truncate text-muted-foreground">
-            {preview.media?.title?.trim() || "Site image"}
-          </p>
+        <div className="space-y-0.5">
+          <p className="text-muted-foreground">Image</p>
+          <GbpPreviewImage preview={preview} />
         </div>
       ) : null}
     </>
@@ -144,11 +77,11 @@ export const GbpPostPublishPreview: React.FC<GbpPostPublishPreviewProps> = ({
   className,
 }) => {
   const body = loading ? (
-    <PreviewLoadingSkeleton />
+    <GbpPreviewLoadingSkeleton />
   ) : preview ? (
     <PreviewFilledContent preview={preview} />
   ) : embedded ? (
-    <PreviewEmptyShell />
+    <GbpPreviewPostCopy preview={null} empty />
   ) : (
     <p className="text-muted-foreground">Run a post to generate a preview.</p>
   );

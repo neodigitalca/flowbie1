@@ -5,7 +5,7 @@ section: Teams
 method: PATCH
 path: /api/teams/{teamId}/chat/channels/({id})
 auth: team-rbac-communication
-order: 1280
+order: 1270
 ---
 
 PATCH `/api/teams/{teamId}/chat/channels/({id})`.
@@ -34,7 +34,7 @@ Updates channels item through the Teams API. Requires a signed-in team member wi
 ## Example
 
 ```bash
-curl -X PATCH "https://flowbie.ca/api/teams/{teamId}/chat/channels/({id})" \
+curl -X PATCH "https://neodigital.ca/api/teams/{teamId}/chat/channels/({id})" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

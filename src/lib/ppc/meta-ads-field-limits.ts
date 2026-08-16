@@ -63,7 +63,7 @@ export function metaAdPlacementLabel(placement: "feed_1x1" | "feed_4x5" | "story
 }
 
 function storageKey(siteId: string): string {
-  return `flowbie-ppc-meta-generate-config:${siteId}`;
+  return `neo-pulse-ppc-meta-generate-config:${siteId}`;
 }
 
 export function createDefaultMetaGenerateConfig(): MetaGenerateConfig {

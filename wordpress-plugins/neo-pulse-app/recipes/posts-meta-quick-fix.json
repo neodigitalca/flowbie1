@@ -1,0 +1,108 @@
+{
+  "keyword": "posts-meta-quick-fix",
+  "name": "Posts Meta Quick Fix",
+  "description": "Meta-only fixes on posts when click-through rate slips.",
+  "notes": [
+    "Polls Google Search Console every 24 hours.",
+    "Scope: blog posts (Posts bucket).",
+    "Runs when click-through rate fell at least 10% vs the prior 28 days (similar visibility, fewer clicks), with at least 80 impressions.",
+    "Updates title and meta only (does not rewrite post body).",
+    "Same URL waits 72 hours before it can run again."
+  ],
+  "category": "maintenance",
+  "verticals": [
+    "editorial",
+    "general"
+  ],
+  "tags": [
+    "gsc",
+    "posts",
+    "meta"
+  ],
+  "prerequisites": [
+    "gsc",
+    "wordpress"
+  ],
+  "filters": {
+    "executionKinds": [
+      "content_optimizer_meta"
+    ],
+    "targetBuckets": [
+      "posts"
+    ],
+    "triggerSignals": [
+      "ctr_drop"
+    ],
+    "actionCount": 1
+  },
+  "defaultTasks": [
+    {
+      "keyword": "posts-meta",
+      "title": "Meta optimize posts on CTR drop",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "posts",
+        "updateMode": "update"
+      },
+      "scheduleMode": "trigger",
+      "recurrenceRule": "none",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "ctr_drop",
+            "operator": "gte",
+            "value": 10,
+            "minImpressions": 80
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    }
+  ],
+  "isAutomation": true,
+  "kind": "template",
+  "triggerBlock": {
+    "keyword": "gsc-ctr-drop",
+    "kind": "gsc",
+    "source": "gsc",
+    "targetBucket": "posts",
+    "triggerConfig": {
+      "sources": [
+        "gsc"
+      ],
+      "match": "any",
+      "conditions": [
+        {
+          "signal": "ctr_drop",
+          "operator": "gte",
+          "value": 10,
+          "minImpressions": 80
+        }
+      ],
+      "lookbackDays": 28,
+      "compareDays": 28,
+      "pollHours": 24,
+      "cooldownHours": 72,
+      "maxUrls": 5
+    }
+  },
+  "actionBlock": {
+    "keyword": "content-optimizer-meta",
+    "executionKind": "content_optimizer_meta",
+    "executionPayload": {
+      "targetBucket": "posts",
+      "updateMode": "update"
+    },
+    "title": "Meta optimize posts on CTR drop"
+  }
+}

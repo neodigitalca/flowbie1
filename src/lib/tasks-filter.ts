@@ -1,4 +1,6 @@
 import type { TeamTask, TasksFilterMode, TasksSortMode } from "@/lib/tasks-types";
+import { isNeoPulseBotMember } from "@/lib/chat-neo-pulse";
+import type { TeamMember } from "@/lib/teams-types";
 
 export function filterTasks(tasks: TeamTask[], mode: TasksFilterMode): TeamTask[] {
   if (mode === "all") return tasks;
@@ -44,9 +46,35 @@ export function formatDueDateShort(iso: string): string {
   return date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
+export { formatDueDateTimeShort } from "@/lib/edmonton-time";
+
 export function memberInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
   return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
+}
+
+export function taskHasPulseAssignee(
+  task: { assigneeIds?: number[] },
+  members: TeamMember[],
+): boolean {
+  return (task.assigneeIds ?? []).some((userId) => {
+    const member = members.find((m) => m.userId === userId);
+    return member != null && isNeoPulseBotMember(member);
+  });
+}
+
+export function assigneeBadgeLabel(userId: number, members: TeamMember[]): string | null {
+  const member = members.find((m) => m.userId === userId);
+  if (!member) return null;
+  if (isNeoPulseBotMember(member)) return "PULSE";
+  const name = member.displayName || member.email || "";
+  if (!name.trim()) return null;
+  return memberInitials(name);
+}
+
+export function assigneeBadgeIsPulse(userId: number, members: TeamMember[]): boolean {
+  const member = members.find((m) => m.userId === userId);
+  return member != null && isNeoPulseBotMember(member);
 }

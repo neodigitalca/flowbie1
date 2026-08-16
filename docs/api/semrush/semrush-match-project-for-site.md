@@ -5,7 +5,7 @@ section: Semrush
 method: POST
 path: /api/semrush/match-project-for-site
 auth: open
-order: 950
+order: 940
 ---
 
 POST `/api/semrush/match-project-for-site`.
@@ -34,7 +34,7 @@ Runs the match project for site action in the Semrush API from a JSON request bo
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/semrush/match-project-for-site" \
+curl -X POST "https://neodigital.ca/api/semrush/match-project-for-site" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

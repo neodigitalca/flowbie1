@@ -5,7 +5,7 @@ section: DataForSEO MCP
 method: POST
 path: /api/mcp/DataForSEO_serp_organic_live_advanced
 auth: open
-order: 830
+order: 820
 ---
 
 POST `/api/mcp/DataForSEO_serp_organic_live_advanced`.
@@ -34,7 +34,7 @@ Runs the dataforseo_serp_organic_live_advanced action in the DataForSEO MCP API 
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/mcp/DataForSEO_serp_organic_live_advanced" \
+curl -X POST "https://neodigital.ca/api/mcp/DataForSEO_serp_organic_live_advanced" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

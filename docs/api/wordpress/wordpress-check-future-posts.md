@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/check-future-posts
 auth: open
-order: 2220
+order: 2210
 ---
 
 POST `/api/wordpress/check-future-posts`.
@@ -34,7 +34,7 @@ Runs the check future posts action in the WordPress API from a JSON request body
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/check-future-posts" \
+curl -X POST "https://neodigital.ca/api/wordpress/check-future-posts" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

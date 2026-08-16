@@ -39,7 +39,7 @@ export function ChatAttachmentChip({
     <a
       href={downloadUrl}
       download={attachment.fileName}
-      className="mt-2 inline-flex max-w-full items-center gap-2 rounded-lg bg-zinc-100 px-3 py-2 hover:bg-zinc-200/80"
+      className="chat-attachment-chip mt-2 inline-flex max-w-full items-center gap-2 rounded-lg bg-zinc-100 px-3 py-2 hover:bg-zinc-200/80"
     >
       <FileText className="h-5 w-5 shrink-0 text-primary" aria-hidden />
       <span className="min-w-0">

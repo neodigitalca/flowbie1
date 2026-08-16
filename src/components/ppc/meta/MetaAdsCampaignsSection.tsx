@@ -32,7 +32,7 @@ export function MetaAdsCampaignsSection({ ctrl }: MetaAdsCampaignsSectionProps) 
   const placeholderCount = paginatedGridRows.length - realRowCount;
 
   const renderAdRow = (row: PpcMetaWorkspaceController["ads"][number], stripeIndex: number) => {
-    const panelId = `flowbie-ppc-meta-ad-${row.id || stripeIndex}`;
+    const panelId = `neo-pulse-ppc-meta-ad-${row.id || stripeIndex}`;
     const isExpanded = ctrl.expandedAdId === row.id;
     const deleteDisabled = ctrl.isGenerating || row.status === "generating";
     const nameReadOnly = row.status === "generating";

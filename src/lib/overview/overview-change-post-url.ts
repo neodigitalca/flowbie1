@@ -144,7 +144,7 @@ export async function applyOverviewRowSlugChangeToWordPress(
   if (!result.ok) {
     const err = (result.error || "").trim();
     const unchanged =
-      /unchanged|same as the current slug/i.test(err) || /flowbie_unchanged_slug/i.test(err);
+      /unchanged|same as the current slug/i.test(err) || /neo-pulse_unchanged_slug/i.test(err);
     if (unchanged) {
       const live = await fetchLivePermalink(site, binding);
       if (overviewSuggestedUrlLiveOnWordPress(live ?? undefined, plan.newUrl)) {

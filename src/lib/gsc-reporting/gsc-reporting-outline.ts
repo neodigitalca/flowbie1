@@ -10,6 +10,10 @@ import {
   type GscManualAiPayload,
 } from "@/lib/gsc-manual-ai-aggregate";
 import type { GscReportingOutlineResult, GscReportingSectionKind, GscReportingSectionPlan } from "@/lib/gsc-reporting/gsc-reporting-types";
+import {
+  searchPerformanceH2ForCompareKind,
+  type GscCompareKind,
+} from "@/lib/gsc-reporting/gsc-reporting-compare-signals";
 
 /** Blog-style Title Case H2s; no calendar ranges in headings (periods stay in tables / CSV). */
 const CANONICAL_H2_BY_KIND: Partial<Record<GscReportingSectionKind, string>> = {
@@ -21,9 +25,16 @@ const CANONICAL_H2_BY_KIND: Partial<Record<GscReportingSectionKind, string>> = {
 };
 
 /** Overwrite model-provided h2Title for standard sections so titles stay consistent. Cluster sections keep their titles. */
-export function applyCanonicalGscSectionTitles(sections: GscReportingSectionPlan[]): GscReportingSectionPlan[] {
+export function applyCanonicalGscSectionTitles(
+  sections: GscReportingSectionPlan[],
+  compareKind: GscCompareKind = "mom",
+): GscReportingSectionPlan[] {
+  const searchPerformanceH2 = searchPerformanceH2ForCompareKind(compareKind);
   return sections.map((s) => {
     if (s.kind === "cluster") return s;
+    if (s.kind === "search_performance_period") {
+      return { ...s, h2Title: searchPerformanceH2 };
+    }
     const h2 = CANONICAL_H2_BY_KIND[s.kind];
     return h2 ? { ...s, h2Title: h2 } : s;
   });
@@ -68,6 +79,8 @@ Rules for sections (critical):
 Data rules (same as manual GSC summary):
 - Numbers in executiveSummary, metrics, evidence must come from the CSV text.
 - **Site-totals-MoM.csv** includes **Search queries** (total query count per period) as a standard site-wide KPI alongside clicks, impressions, CTR, and position.
+- When **Site-totals-compare-signals.txt** is present, **executiveSummary** must align with \`primaryPattern\` and \`interpretation\` from that block. **Never** describe **query_footprint_expansion** months as overall search visibility decline.
+- **Cross-metric rule (any period compare):** Do **not** infer visibility loss from average position alone when **Search queries** and **Total impressions** both rose vs the prior period.
 - **Formatting:** Do **not** wrap queries, keywords, page titles, or brands in \`"\` or \`'\` in **executiveSummary**, **topOpportunities** labels, **why**, or **metrics**. Use plain text only (downstream prose uses **bold** for emphasis, not quotes).
 - **executiveSummary** must be **factual synthesis** with numbers from the CSV only; keep it **thematic** (segments, demand patterns, branded vs non-brand) so downstream **### Key Insights** can stay **broad**, not a query-by-query inventory. Do **not** output prioritized action lists, "next steps", "priority" framing, or tactical blocks naming query themes as to-do items. Do **not** prescribe implementation checklists; keep interpretation concise. The report section **Executive Summary** will add a separate \`### Key Insights\` bullet list in the final markdown; this JSON field is a compact narrative hint only.
 - topOpportunities: at most 12 rows; rank by business impact and merge near-duplicates; evidence lines verbatim from CSV.
@@ -90,9 +103,13 @@ function normalizeSectionKind(raw: string): GscReportingSectionKind | null {
   return null;
 }
 
-export function defaultSectionsFromPayload(p: GscManualAiPayload): GscReportingSectionPlan[] {
+export function defaultSectionsFromPayload(
+  p: GscManualAiPayload,
+  compareKind: GscCompareKind = "mom",
+): GscReportingSectionPlan[] {
   void p;
-  return applyCanonicalGscSectionTitles([
+  return applyCanonicalGscSectionTitles(
+    [
     {
       id: "executive_summary",
       h2Title: "",
@@ -123,7 +140,9 @@ export function defaultSectionsFromPayload(p: GscManualAiPayload): GscReportingS
       kind: "content_performance",
       ragQuery: "pages urls sitemap post blog product location local service-area landing impressions clicks position",
     },
-  ]);
+  ],
+    compareKind,
+  );
 }
 
 /** Cluster sections are not generated in the main report; clusters live in a separate raw file. */
@@ -163,23 +182,26 @@ function parseSections(raw: unknown): GscReportingSectionPlan[] | null {
   return out.length > 0 ? out : null;
 }
 
-export function parseGscReportingOutlineJson(raw: string): GscReportingOutlineResult {
+export function parseGscReportingOutlineJson(
+  raw: string,
+  compareKind: GscCompareKind = "mom",
+): GscReportingOutlineResult {
   const base = parseAndValidateGscManualAiJson(raw);
   let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse(extractJsonObjectFromModelText(raw)) as Record<string, unknown>;
   } catch {
-    return { ...base, clusters: [], sections: defaultSectionsFromPayload(base) };
+    return { ...base, clusters: [], sections: defaultSectionsFromPayload(base, compareKind) };
   }
   const parsedSections = parseSections(parsed.sections);
   let sections: GscReportingSectionPlan[];
   if (parsedSections && parsedSections.length > 0) {
     const noClusters = stripClusterSections(parsedSections);
-    sections = noClusters.length > 0 ? noClusters : defaultSectionsFromPayload(base);
+    sections = noClusters.length > 0 ? noClusters : defaultSectionsFromPayload(base, compareKind);
   } else {
-    sections = defaultSectionsFromPayload(base);
+    sections = defaultSectionsFromPayload(base, compareKind);
   }
-  sections = applyCanonicalGscSectionTitles(sections);
+  sections = applyCanonicalGscSectionTitles(sections, compareKind);
   return {
     ...base,
     clusters: [],
@@ -193,6 +215,7 @@ export async function runGscReportingOutline(args: {
   siteName: string;
   siteUrl: string;
   files: { name: string; content: string }[];
+  compareKind?: GscCompareKind;
   signal?: AbortSignal;
 }): Promise<{
   outline: GscReportingOutlineResult;
@@ -200,6 +223,7 @@ export async function runGscReportingOutline(args: {
   filenames: string[];
   outlineRequestBodyJson: string;
 }> {
+  const compareKind = args.compareKind ?? "mom";
   const { text, truncated, filenames } = bundleGscManualFilesForPrompt(args.files);
   const userMessage = `Site: ${args.siteName} (${args.siteUrl})
 
@@ -224,6 +248,6 @@ ${text}`;
     signal: args.signal,
   });
 
-  const outline = parseGscReportingOutlineJson(content);
+  const outline = parseGscReportingOutlineJson(content, compareKind);
   return { outline, truncatedInput: truncated, filenames, outlineRequestBodyJson };
 }

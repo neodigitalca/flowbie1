@@ -34,7 +34,7 @@ Runs the generate action in the Entity Maps API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/entity-maps-image/generate" \
+curl -X POST "https://neodigital.ca/api/entity-maps-image/generate" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

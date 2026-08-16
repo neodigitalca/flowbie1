@@ -42,6 +42,8 @@ export type ChatRichEditorProps = {
   showAiToolbar?: boolean;
   submitOnEnter?: boolean;
   allowEmptySubmit?: boolean;
+  compactToolbar?: boolean;
+  toolbarStart?: React.ReactNode;
 };
 
 function ToolbarButton({
@@ -85,6 +87,8 @@ export const ChatRichEditor = forwardRef<ChatRichEditorHandle, ChatRichEditorPro
     showAiToolbar = true,
     submitOnEnter = true,
     allowEmptySubmit = false,
+    compactToolbar = false,
+    toolbarStart,
   },
   ref,
 ) {
@@ -171,64 +175,76 @@ export const ChatRichEditor = forwardRef<ChatRichEditorHandle, ChatRichEditorPro
 
   return (
     <div className={cn(CHAT_EDITOR_ROOT_CLASS, className)}>
-      <div className={CHAT_EDITOR_TOOLBAR_CLASS}>
-        <ToolbarButton
-          label="Bold"
-          active={editor.isActive("bold")}
-          onClick={() => editor.chain().focus().toggleBold().run()}
-        >
-          <Bold className="h-4 w-4" />
-        </ToolbarButton>
-        <ToolbarButton
-          label="Italic"
-          active={editor.isActive("italic")}
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-        >
-          <Italic className="h-4 w-4" />
-        </ToolbarButton>
-        <ToolbarButton
-          label="Strikethrough"
-          active={editor.isActive("strike")}
-          onClick={() => editor.chain().focus().toggleStrike().run()}
-        >
-          <Strikethrough className="h-4 w-4" />
-        </ToolbarButton>
-        <ToolbarButton
-          label="Code"
-          active={editor.isActive("code")}
-          onClick={() => editor.chain().focus().toggleCode().run()}
-        >
-          <Code className="h-4 w-4" />
-        </ToolbarButton>
-        <ToolbarButton
-          label="Bullet list"
-          active={editor.isActive("bulletList")}
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-        >
-          <List className="h-4 w-4" />
-        </ToolbarButton>
-        <ToolbarButton
-          label="Ordered list"
-          active={editor.isActive("orderedList")}
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-        >
-          <ListOrdered className="h-4 w-4" />
-        </ToolbarButton>
-        <ToolbarButton
-          label="Quote"
-          active={editor.isActive("blockquote")}
-          onClick={() => editor.chain().focus().toggleBlockquote().run()}
-        >
-          <Quote className="h-4 w-4" />
-        </ToolbarButton>
-        <ToolbarButton label="Link" active={editor.isActive("link")} onClick={addLink}>
-          <LinkIcon className="h-4 w-4" />
-        </ToolbarButton>
+      <div className={cn(CHAT_EDITOR_TOOLBAR_CLASS, compactToolbar && "chat-editor-toolbar--compact")}>
+        <div className={cn(compactToolbar && "chat-editor-format-row flex min-w-0 flex-1 items-center")}>
+          {toolbarStart}
+          <ToolbarButton
+            label="Bold"
+            active={editor.isActive("bold")}
+            onClick={() => editor.chain().focus().toggleBold().run()}
+          >
+            <Bold className="h-4 w-4" />
+          </ToolbarButton>
+          <ToolbarButton
+            label="Italic"
+            active={editor.isActive("italic")}
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+          >
+            <Italic className="h-4 w-4" />
+          </ToolbarButton>
+          <ToolbarButton
+            label="Strikethrough"
+            active={editor.isActive("strike")}
+            onClick={() => editor.chain().focus().toggleStrike().run()}
+          >
+            <Strikethrough className="h-4 w-4" />
+          </ToolbarButton>
+          <ToolbarButton
+            label="Code"
+            active={editor.isActive("code")}
+            onClick={() => editor.chain().focus().toggleCode().run()}
+          >
+            <Code className="h-4 w-4" />
+          </ToolbarButton>
+          <ToolbarButton
+            label="Bullet list"
+            active={editor.isActive("bulletList")}
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+          >
+            <List className="h-4 w-4" />
+          </ToolbarButton>
+          <ToolbarButton
+            label="Ordered list"
+            active={editor.isActive("orderedList")}
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          >
+            <ListOrdered className="h-4 w-4" />
+          </ToolbarButton>
+          <ToolbarButton
+            label="Quote"
+            active={editor.isActive("blockquote")}
+            onClick={() => editor.chain().focus().toggleBlockquote().run()}
+          >
+            <Quote className="h-4 w-4" />
+          </ToolbarButton>
+          <ToolbarButton label="Link" active={editor.isActive("link")} onClick={addLink}>
+            <LinkIcon className="h-4 w-4" />
+          </ToolbarButton>
+        </div>
         {showAiToolbar ? (
-          <>
-            <span className="mx-1 h-5 w-px shrink-0 bg-[hsl(var(--chat-border))]" aria-hidden />
-            <ChatAiToolbar editorRef={aiHandleRef} disabled={disabled} onHtmlChange={onChange} inline />
-          </>
+          compactToolbar ? (
+            <ChatAiToolbar
+              editorRef={aiHandleRef}
+              disabled={disabled}
+              onHtmlChange={onChange}
+              inline
+              variant="spark-dropdown"
+            />
+          ) : (
+            <div className="chat-editor-ai-row flex shrink-0 items-center gap-0.5">
+              <ChatAiToolbar editorRef={aiHandleRef} disabled={disabled} onHtmlChange={onChange} inline />
+            </div>
+          )
         ) : null}
       </div>
       <EditorContent editor={editor} />

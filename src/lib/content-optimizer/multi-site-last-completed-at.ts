@@ -2,7 +2,7 @@ import type { WordPressSite } from "@/components/integrations/types";
 import type { MultiSiteUrlSource } from "@/lib/content-optimizer/multi-site-source-urls";
 import { resolveSitemapSyncedAtIsoForMode } from "@/lib/content-optimizer/multi-site-sitemap-synced-at";
 
-const STORAGE_KEY = "flowbie-multi-site-last-sitemap-optimize";
+const STORAGE_KEY = "neo-pulse-multi-site-last-sitemap-optimize";
 
 function isValidCompletedIso(iso: string | undefined): boolean {
   if (!iso?.trim()) return false;
@@ -129,7 +129,7 @@ export function persistMultiSiteLastCompleted(
   return next;
 }
 
-const MANUAL_ROW_DATE_STORAGE_KEY = "flowbie-multi-site-manual-row-date";
+const MANUAL_ROW_DATE_STORAGE_KEY = "neo-pulse-multi-site-manual-row-date";
 
 export type MultiSiteManualRowDateBySite = Record<string, Partial<Record<MultiSiteUrlSource, string>>>;
 

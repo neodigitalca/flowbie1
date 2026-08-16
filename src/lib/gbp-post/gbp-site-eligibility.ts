@@ -27,3 +27,11 @@ export function isGbpPostSiteEligible(site: WordPressSite): boolean {
 export function filterGbpPostEligibleSites(sites: WordPressSite[]): WordPressSite[] {
   return filterSitesWithGbpLocation(sites);
 }
+
+/** Bulk run: skip reason, or null when the site can post. */
+export function gbpPostBulkSkipReason(site: WordPressSite): string | null {
+  if (!site.username?.trim() || !site.appPassword?.trim()) {
+    return "WordPress credentials missing";
+  }
+  return null;
+}

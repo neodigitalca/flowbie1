@@ -76,6 +76,8 @@ import { notify } from "@/lib/app-notifications";
 import { NOTIFY_ANALYZE_DONE, NOTIFY_CLIENT_MEETING_SCRIPT_IS_NOT_READY_YET, NOTIFY_COULD_NOT_COPY, NOTIFY_DOWNLOADED_CLIENT_MEETING_SCRIPT_MD, NOTIFY_DOWNLOADED_STRATEGY_MD, NOTIFY_ENTER_A_SEED_SITE_URL_FIRST, NOTIFY_ENTER_A_SEED_SITE_URL_HTTPS_EXAMPLE_COM, NOTIFY_ENTITY_SAP_CSV_IS_NOT_READY_YET, NOTIFY_GENERATE_A_PROPOSAL_FIRST, NOTIFY_GRID_CSV_DOWNLOADED, NOTIFY_GRID_IMPORT_DONE, NOTIFY_LOCAL_ANALYSIS_DID_NOT_RETURN_COMPETITOR, NOTIFY_NO_NEW_COMPETITORS_FROM_GRID, NOTIFY_POSTS_CSV_IS_NOT_READY_YET, NOTIFY_PROPOSAL_COPIED, NOTIFY_PROPOSAL_INCOMPLETE_BLOG_ROWS_SAVED, NOTIFY_PROPOSAL_INCOMPLETE_SAP_AND_BLOG_ROWS_SA, NOTIFY_PROPOSAL_INCOMPLETE_SAP_ROWS_SAVED, NOTIFY_RUN_ANALYZE_FIRST_OR_IMPORT_A_GRID_CSV, NOTIFY_SELECT_AT_LEAST_ONE_COMPETITOR, NOTIFY_SELECT_A_CONNECTED_SITE_WITH_A_URL, NOTIFY_STRATEGY_MARKDOWN_IS_NOT_READY_YET, notifyAddedXCompetitorSFromGridCsv, notifyAddedXCompetitorSFromGridCsvUpdat, notifyFileTooLargeMaxXMb, notifyGridCsvSapScanX, notifyGridSkipX, notifyGridXXNoWebsite, notifyGridXXX, notifyGscX2, notifyPresenterTalkScriptFailedX, notifyResearchXX, notifySiteAuditFinishedWithXPartialError, notifySiteAuditSkippedX, notifySiteAuditSkippedX2, notifyUpdatedXCompetitorSFromGridCsvWer } from "@/lib/notify-messages";
 import { CompetitorSiteGrid } from "@/components/research/competitor/CompetitorSiteGrid";
 import { ProposalWorkspaceHeader } from "@/components/research/proposal/ProposalWorkspaceHeader";
+import type { GeneratorWorkspaceChromeBindings } from "@/components/blog-generator/generator-workspace-chrome-bindings";
+import { WORKSPACE_DETAILS_DIM_OVERLAY_CLASS } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import {
   SEO_WORKSPACE_BODY_SCROLL_CLASS,
   SEO_WORKSPACE_HEADER_CLASS,
@@ -168,7 +170,12 @@ function buildCombinedProposalMarkdown(args: {
   ].join("");
 }
 
-export function ProposalResearchTab() {
+export type ProposalResearchTabProps = {
+  generatorChrome: GeneratorWorkspaceChromeBindings;
+};
+
+export function ProposalResearchTab({ generatorChrome }: ProposalResearchTabProps) {
+  const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false);
   const { sites } = useWordPressSites();
   const {
     mode: workspaceMode,
@@ -1526,7 +1533,7 @@ export function ProposalResearchTab() {
   return (
     <div className={cn(SEO_WORKSPACE_SHELL_CLASS, SEO_WORKSPACE_TYPO_CLASS)}>
       {workspaceMode === "connected" && (!site || !site.siteUrl?.trim()) ? (
-        <div className="flowbie-zone-tile--data px-2 py-3 text-base leading-normal text-muted-foreground">
+        <div className="neo-pulse-zone-tile--data px-2 py-3 text-base leading-normal text-muted-foreground">
           {!site
             ? "Connect a WordPress site and select it in the header, or switch to Temp seed."
             : "This site has no URL saved."}
@@ -1535,6 +1542,8 @@ export function ProposalResearchTab() {
         <>
           <div className={SEO_WORKSPACE_HEADER_CLASS}>
             <ProposalWorkspaceHeader
+              {...generatorChrome}
+              onDetailsOpenChange={setDetailsDrawerOpen}
               busy={busy}
               phase={phase}
               proposalSubphase={proposalSubphase}
@@ -1580,7 +1589,10 @@ export function ProposalResearchTab() {
             />
           </div>
 
-          <div className={cn(SEO_WORKSPACE_BODY_SCROLL_CLASS, "space-y-2")}>
+          <div className={cn(SEO_WORKSPACE_BODY_SCROLL_CLASS, "relative space-y-2")}>
+            {detailsDrawerOpen ? (
+              <div className={WORKSPACE_DETAILS_DIM_OVERLAY_CLASS} aria-hidden />
+            ) : null}
             <div className="flex flex-col gap-2.5">
                 <WorkspaceNestedTextarea
                   id="proposal-strategist-guidance"
@@ -1728,7 +1740,7 @@ export function ProposalResearchTab() {
           />
 
           {combinedMd?.trim() || lastPostsBulkRows?.length || lastSapScheduleRows?.length ? (
-            <div className="flowbie-zone-tile--analysis mt-2 space-y-2 px-2 py-2 sm:px-3">
+            <div className="neo-pulse-zone-tile--analysis mt-2 space-y-2 px-2 py-2 sm:px-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="min-h-[1rem] text-base font-semibold uppercase leading-normal tracking-wide text-muted-foreground">
@@ -1859,7 +1871,7 @@ export function ProposalResearchTab() {
           ) : null}
 
           {blueprintArtifacts.length > 0 ? (
-            <div className="flowbie-zone-tile--analysis mt-2 space-y-3 px-2 py-2 sm:px-3">
+            <div className="neo-pulse-zone-tile--analysis mt-2 space-y-3 px-2 py-2 sm:px-3">
               <div className="min-h-[1rem] text-base font-semibold uppercase leading-normal tracking-wide text-muted-foreground">
                 Outputs
               </div>
@@ -1913,7 +1925,7 @@ export function ProposalResearchTab() {
           ) : null}
 
           {combinedMd?.trim() ? (
-            <div className="flowbie-zone-tile--analysis mt-2 space-y-2 px-2 py-2 sm:px-3">
+            <div className="neo-pulse-zone-tile--analysis mt-2 space-y-2 px-2 py-2 sm:px-3">
               <div className="min-h-[1rem] text-base font-semibold uppercase leading-normal tracking-wide text-muted-foreground">
                 Proposal preview
               </div>

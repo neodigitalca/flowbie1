@@ -5,7 +5,7 @@ section: Site Scraper
 method: POST
 path: /api/site-scraper/cancel
 auth: open
-order: 1030
+order: 1020
 ---
 
 POST `/api/site-scraper/cancel`.
@@ -34,7 +34,7 @@ Runs the cancel action in the Site Scraper API from a JSON request body. On succ
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/site-scraper/cancel" \
+curl -X POST "https://neodigital.ca/api/site-scraper/cancel" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

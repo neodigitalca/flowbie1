@@ -66,12 +66,12 @@ describe("meta-ad-visual-tool-themes", () => {
 
     const siteId = "test-site-visual-tools";
     sessionStorage.setItem(
-      `flowbie-ppc-meta-generate-config:${siteId}`,
+      `neo-pulse-ppc-meta-generate-config:${siteId}`,
       JSON.stringify({
         adCount: 2,
         placement: "feed_4x5",
         includeImage: true,
-        colorThemeId: "flowbie-dark",
+        colorThemeId: "neo-pulse-dark",
         visualToolThemeId: "map-local",
       }),
     );

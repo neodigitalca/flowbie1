@@ -1,6 +1,6 @@
 import type { SitemapOptimizerWorkspaceMode } from "@/lib/sitemap-optimizer/types";
 
-export const SITEMAP_OPTIMIZER_SECTION_STORAGE_KEY = "flowbie-sitemap-optimizer-section";
+export const SITEMAP_OPTIMIZER_SECTION_STORAGE_KEY = "neo-pulse-sitemap-optimizer-section";
 
 export function readStoredSitemapOptimizerSection(): SitemapOptimizerWorkspaceMode {
   try {

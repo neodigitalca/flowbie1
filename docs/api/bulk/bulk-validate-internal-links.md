@@ -34,7 +34,7 @@ Runs a bulk bulk operation from a JSON request body. Streams progress as NDJSON 
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/bulk/validate-internal-links" \
+curl -X POST "https://neodigital.ca/api/bulk/validate-internal-links" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

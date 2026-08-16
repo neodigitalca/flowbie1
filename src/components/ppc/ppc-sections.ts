@@ -1,6 +1,6 @@
 export type PpcPlatformId = "google";
 
-export const PPC_PLATFORM_STORAGE_KEY = "flowbie-ppc-platform";
+export const PPC_PLATFORM_STORAGE_KEY = "neo-pulse-ppc-platform";
 
 export function readStoredPpcPlatform(): PpcPlatformId {
   try {

@@ -6,7 +6,6 @@ import {
   LOCAL_ANALYSIS_SAP_MIN,
   LOCAL_ANALYSIS_SUGGEST_MAX_DISTINCT_TARGETS,
   LOCAL_ANALYSIS_SUGGEST_SAP_MIN_PER_TARGET,
-  LOCAL_ANALYSIS_TOTAL_SAP_CAP,
 } from "@/lib/local-analysis-target-constants";
 import {
   flattenClustersToRoughRows,
@@ -209,7 +208,7 @@ const MAX_POSTS_IN_PROMPT = 120;
 const MAX_SEED_RANKED_KEYWORDS_IN_JSON = 45;
 
 export function localAnalysisInventoryStorageKey(siteId: string): string {
-  return `flowbie.local-analysis.site-inventory.${siteId}`;
+  return `neo-pulse.local-analysis.site-inventory.${siteId}`;
 }
 
 export type SuggestKeywordTargetsFromInventoryOptions = {
@@ -263,8 +262,8 @@ export async function suggestKeywordTargetsFromInventory(
   totalSapPages: number,
   options?: SuggestKeywordTargetsFromInventoryOptions
 ): Promise<SuggestedKeywordTarget[]> {
-  if (totalSapPages < LOCAL_ANALYSIS_SAP_MIN || totalSapPages > LOCAL_ANALYSIS_TOTAL_SAP_CAP) {
-    throw new Error(`Total must be between ${LOCAL_ANALYSIS_SAP_MIN} and ${LOCAL_ANALYSIS_TOTAL_SAP_CAP}.`);
+  if (totalSapPages < LOCAL_ANALYSIS_SAP_MIN) {
+    throw new Error(`Total must be at least ${LOCAL_ANALYSIS_SAP_MIN}.`);
   }
   const apiKey = options?.apiKey ?? loadApiKey();
   if (typeof apiKey !== "string" || apiKey.length === 0) {

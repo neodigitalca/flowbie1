@@ -47,12 +47,12 @@ describe("meta-ads-field-limits", () => {
 
     const siteId = "test-meta-config-migrate";
     sessionStorage.setItem(
-      `flowbie-ppc-meta-generate-config:${siteId}`,
+      `neo-pulse-ppc-meta-generate-config:${siteId}`,
       JSON.stringify({
         adCount: 3,
         placement: "feed_1x1",
         includeImage: true,
-        colorThemeId: "flowbie-light",
+        colorThemeId: "neo-pulse-light",
         visualToolThemeId: "device-vignette",
       }),
     );

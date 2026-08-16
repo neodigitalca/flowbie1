@@ -112,7 +112,7 @@ export function ChatPreferencesProvider({ children }: { children: React.ReactNod
     (id: ChatBuiltinPresetId | string) => {
       setDraft((current) => {
         const builtin = ["minimal", "balanced", "all", "focus"].includes(id)
-          ? applyBuiltinPreset(current, id as ChatBuiltinPresetId)
+          ? applyBuiltinPreset(current, id as ChatBuiltinPresetId | "slack")
           : (() => {
               const saved = current.savedPresets.find((p) => p.id === id);
               if (!saved) return current;

@@ -33,7 +33,7 @@ export interface ACFDiscoveryResult {
   success: boolean;
   fieldGroups: ACFFieldGroup[];
   fields: ACFFieldDefinition[];
-  method: 'acf_rest_api' | 'sample_scan' | 'flowbie_fields_export' | null;
+  method: 'acf_rest_api' | 'sample_scan' | 'neo_pulse_fields_export' | null;
   error?: string;
 }
 

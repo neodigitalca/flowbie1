@@ -34,7 +34,7 @@ Runs the process schedule queue action in the Google Business Profile API from a
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/gmb/process-schedule-queue" \
+curl -X POST "https://neodigital.ca/api/gmb/process-schedule-queue" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

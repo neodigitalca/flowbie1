@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/mail-test
 auth: session-team
-order: 1630
+order: 1620
 ---
 
 POST `/api/teams/{teamId}/mail-test`.
@@ -34,7 +34,7 @@ Runs the mail test action in the Teams API from a JSON request body. Requires a 
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/mail-test" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/mail-test" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

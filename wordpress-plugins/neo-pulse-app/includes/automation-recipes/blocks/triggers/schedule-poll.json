@@ -1,0 +1,19 @@
+{
+  "keyword": "schedule-poll",
+  "name": "Interval poll",
+  "kind": "poll",
+  "description": "Scan target bucket on a fixed poll interval without GSC signals.",
+  "defaults": {
+    "pollHours": 24,
+    "triggerConfig": {
+      "sources": ["schedule"],
+      "match": "any",
+      "conditions": [],
+      "lookbackDays": 28,
+      "compareDays": 28,
+      "pollHours": 24,
+      "cooldownHours": 72,
+      "maxUrls": 5
+    }
+  }
+}

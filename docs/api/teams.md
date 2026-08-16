@@ -5,12 +5,12 @@ section: Teams
 method: POST
 path: /api/teams
 auth: session
-order: 1060
+order: 1050
 ---
 
 POST `/api/teams`.
 
-Runs the teams action in the Teams API from a JSON request body. Requires a signed-in user with a valid flowbie_session cookie.
+Runs the teams action in the Teams API from a JSON request body. Requires a signed-in user with a valid neo_pulse_session cookie.
 
 ## Request
 
@@ -34,7 +34,7 @@ Runs the teams action in the Teams API from a JSON request body. Requires a sign
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams" \
+curl -X POST "https://neodigital.ca/api/teams" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

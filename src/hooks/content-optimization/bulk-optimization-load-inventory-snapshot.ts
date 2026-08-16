@@ -170,9 +170,33 @@ export async function ensureBulkOptimizerInventoryForRun(
     getMergedBulkInventorySessionSnapshot(site.id) ??
     (preferredSource ? getBulkInventorySessionSnapshot(site.id, preferredSource) : null);
 
-  if (cached && snapshotHasInventoryEntries(cached)) {
+  if (cached && snapshotHasInventoryEntries(cached) && bulkSnapshotCoversUrls(cached, site, urls)) {
     onProgress?.("Using WordPress inventory from this session (no re-fetch).");
     return cached;
+  }
+
+  if (preferredSource) {
+    onProgress?.(`Loading ${preferredSource} inventory…`);
+    const fetched = await fetchOverviewInventoryForSource(site, preferredSource, {
+      includeContent: false,
+      includeRawAcf: false,
+    });
+    if (fetched.error?.trim() && !fetched.rows.length) {
+      throw new Error(fetched.error.trim());
+    }
+    if (!fetched.rows.length) {
+      throw new Error(`No URLs found in ${preferredSource} inventory.`);
+    }
+    const snapshot = buildOverviewInventorySnapshotFromRows(fetched.rows, site.siteUrl);
+    setBulkInventorySessionSnapshot(site.id, preferredSource, snapshot);
+    onProgress?.("Using WordPress inventory from live fetch.");
+    return snapshot;
+  }
+
+  onProgress?.("Loading posts and pages inventory…");
+  const linked = await ensurePostsPagesInventoryForLinking(site, onProgress);
+  if (snapshotHasInventoryEntries(linked)) {
+    return linked;
   }
 
   throw new Error(

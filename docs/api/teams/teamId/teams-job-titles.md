@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/job-titles
 auth: session-team
-order: 1620
+order: 1610
 ---
 
 POST `/api/teams/{teamId}/job-titles`.
@@ -34,7 +34,7 @@ Runs the job titles action in the Teams API from a JSON request body. Requires a
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/job-titles" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/job-titles" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

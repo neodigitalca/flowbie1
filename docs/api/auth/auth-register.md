@@ -38,7 +38,7 @@ Creates a user account from an invite token and signs the user in. No existing s
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/auth/register" \
+curl -X POST "https://neodigital.ca/api/auth/register" \
   -H "Content-Type: application/json" \
   -d '{   "inviteToken": "invite-token",   "email": "you@example.com",   "password": "your-password" }'
 ```

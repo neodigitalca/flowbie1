@@ -17,7 +17,8 @@ import {
   type GbpPostsInventoryHostedLink,
   type GbpInventoryRow,
 } from "@/lib/gbp-post/gbp-posts-inventory";
-import { notify, notifyHeaderError } from "@/lib/app-notifications";
+import { readGbpApiError } from "@/lib/gbp-post/gbp-api-error";
+import { notifyHeaderError } from "@/lib/app-notifications";
 import { NOTIFY_GBP_POST_FAILED } from "@/lib/notify-messages";
 import type { GbpPublishPreview } from "@/components/gbp-post/GbpPostPublishPreview";
 import type { GbpSchedulerSectionState } from "@/lib/gbp-post/gbp-schedule-plan";
@@ -33,6 +34,7 @@ export type GbpSitePostBatchResult = {
   published: number;
   queued: number;
   failed: number;
+  lastError?: string;
   lastPreview: GbpPublishPreview | null;
   resolvedTopic: string;
   inventoryHosted: GbpPostsInventoryHostedLink | null;
@@ -76,6 +78,7 @@ function previewFromApi(
 export type RunGbpSitePostBatchParams = {
   site: WordPressSite;
   keyword: string;
+  landingPageUrl?: string;
   scheduler: GbpSchedulerSectionState;
   openRouterApiKey: string;
   totalPosts: number;
@@ -98,6 +101,61 @@ export async function runGbpSitePostBatch(
   const {
     site,
     keyword,
+    landingPageUrl,
+    scheduler,
+    openRouterApiKey,
+    totalPosts,
+    onStatus,
+    onHarnessSection,
+    onResolvedTopic,
+    onPreview,
+    onSlotIndex,
+    notifyOnSlotFailure = true,
+    sitemapSource,
+  } = params;
+
+  const emptyResult: GbpSitePostBatchResult = {
+    published: 0,
+    queued: 0,
+    failed: 0,
+    lastPreview: null,
+    resolvedTopic: "",
+    inventoryHosted: null,
+  };
+
+  try {
+    return await runGbpSitePostBatchInner({
+      site,
+      keyword,
+      landingPageUrl,
+      scheduler,
+      openRouterApiKey,
+      totalPosts,
+      onStatus,
+      onHarnessSection,
+      onResolvedTopic,
+      onPreview,
+      onSlotIndex,
+      notifyOnSlotFailure,
+      sitemapSource,
+    });
+  } catch (e) {
+    const errMsg = e instanceof Error ? e.message : "GBP post failed";
+    onStatus?.(errMsg);
+    if (notifyOnSlotFailure) {
+      notifyHeaderError(NOTIFY_GBP_POST_FAILED, errMsg);
+    }
+    return { ...emptyResult, failed: 1, lastError: errMsg };
+  }
+}
+
+async function runGbpSitePostBatchInner(
+  params: RunGbpSitePostBatchParams,
+): Promise<GbpSitePostBatchResult> {
+  const {
+    site,
+    keyword,
+    landingPageUrl,
     scheduler,
     openRouterApiKey,
     totalPosts,
@@ -115,7 +173,7 @@ export async function runGbpSitePostBatch(
   const isBulk = totalPosts > 1;
 
   onStatus?.(`Loading GBP posts for ${site.name}…`);
-  const inventory = await fetchGbpPostsInventory(gbpLocationId);
+  const inventory = await fetchGbpPostsInventory(gbpLocationId, site.name, site.siteUrl);
   const inventoryHosted = createGbpPostsInventoryHostedLink({
     siteName: site.name,
     gbpLocationId,
@@ -129,28 +187,27 @@ export async function runGbpSitePostBatch(
   let published = 0;
   let queued = 0;
   let failed = 0;
+  let lastError: string | undefined;
   let lastPreview: GbpPublishPreview | null = null;
   let resolvedTopic = "";
 
   for (let slot = 0; slot < totalPosts; slot += 1) {
     onSlotIndex?.(slot);
     onStatus?.(
-      isBulk
-        ? `GBP post ${slot + 1} of ${totalPosts}…`
-        : keyword.trim()
-          ? "Resolving topic…"
-          : "Choosing topic from site…",
+      isBulk ? `GBP post ${slot + 1} of ${totalPosts}…` : `Topic: ${keyword.trim() || site.name}`,
     );
 
     const { topic, blogPost } = await runGbpPostCardPipeline({
       site,
       keyword: keyword.trim() || undefined,
+      landingPageUrl: landingPageUrl?.trim() || undefined,
       openRouterApiKey,
       sitemapSource,
       excludeBlogUrls: usedBlogUrls,
       excludeGbpCtaUrls: inventory.excludeCtaUrls,
       existingGbpPosts: inventory.posts as GbpInventoryRow[],
       onHarnessSection,
+      onStatus,
     });
     usedBlogUrls.push(blogPost.blogPostUrl);
     resolvedTopic = topic;
@@ -188,10 +245,13 @@ export async function runGbpSitePostBatch(
     const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
     if (!response.ok || !data.success) {
       failed += 1;
-      const errMsg =
-        (typeof data.error === "string" ? data.error : null) ??
-        response.statusText ??
-        `Failed GBP post ${slot + 1} of ${totalPosts}`;
+      const errMsg = readGbpApiError(
+        data,
+        response,
+        `Failed GBP post ${slot + 1} of ${totalPosts}`,
+      );
+      lastError = errMsg;
+      onStatus?.(errMsg);
       if (notifyOnSlotFailure) {
         notifyHeaderError(NOTIFY_GBP_POST_FAILED, errMsg);
       }
@@ -264,6 +324,7 @@ export async function runGbpSitePostBatch(
     published,
     queued,
     failed,
+    lastError,
     lastPreview,
     resolvedTopic,
     inventoryHosted,

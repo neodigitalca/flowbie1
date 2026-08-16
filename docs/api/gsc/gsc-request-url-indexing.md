@@ -5,7 +5,7 @@ section: Google Search Console
 method: POST
 path: /api/gsc/request-url-indexing
 auth: open
-order: 470
+order: 460
 ---
 
 POST `/api/gsc/request-url-indexing`.
@@ -34,7 +34,7 @@ Runs the request url indexing action in the Google Search Console API from a JSO
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/gsc/request-url-indexing" \
+curl -X POST "https://neodigital.ca/api/gsc/request-url-indexing" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

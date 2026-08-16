@@ -3,6 +3,8 @@ import { ExternalLink, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CitationWorkspaceHeader } from "@/components/research/citation/CitationWorkspaceHeader";
+import type { GeneratorWorkspaceChromeBindings } from "@/components/blog-generator/generator-workspace-chrome-bindings";
+import { WORKSPACE_DETAILS_DIM_OVERLAY_CLASS } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import {
   SEO_WORKSPACE_BODY_SCROLL_CLASS,
   SEO_WORKSPACE_HEADER_CLASS,
@@ -105,7 +107,12 @@ function listingBizTitle(listing: BusinessListingItem | null): string {
   return a || b;
 }
 
-export function CitationResearchTab() {
+export type CitationResearchTabProps = {
+  generatorChrome: GeneratorWorkspaceChromeBindings;
+};
+
+export function CitationResearchTab({ generatorChrome }: CitationResearchTabProps) {
+  const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false);
   const { mode: workspaceMode, tempSeedUrl, connectedSite: site } = useManagerSeedWorkspace();
 
   const effectiveSite = useMemo((): WordPressSite => {
@@ -254,7 +261,7 @@ export function CitationResearchTab() {
   return (
     <div className={SEO_WORKSPACE_SHELL_CLASS}>
       {workspaceMode === "connected" && (!site || !site.siteUrl?.trim()) ? (
-        <div className="flowbie-zone-tile--data px-2 py-3 text-base leading-normal text-muted-foreground">
+        <div className="neo-pulse-zone-tile--data px-2 py-3 text-base leading-normal text-muted-foreground">
           {!site
             ? "Connect a WordPress site and select it in the header, or switch to Temp seed."
             : "This site has no URL saved."}
@@ -263,6 +270,8 @@ export function CitationResearchTab() {
         <>
           <div className={SEO_WORKSPACE_HEADER_CLASS}>
             <CitationWorkspaceHeader
+              {...generatorChrome}
+              onDetailsOpenChange={setDetailsDrawerOpen}
               busy={loading}
               canOpenDetails={canOpenDetails}
               toolbarProps={{
@@ -283,7 +292,10 @@ export function CitationResearchTab() {
             />
           </div>
 
-          <div className={cn(SEO_WORKSPACE_BODY_SCROLL_CLASS, "space-y-2")}>
+          <div className={cn(SEO_WORKSPACE_BODY_SCROLL_CLASS, "relative space-y-2")}>
+            {detailsDrawerOpen ? (
+              <div className={WORKSPACE_DETAILS_DIM_OVERLAY_CLASS} aria-hidden />
+            ) : null}
             {loading ? (
               <div className="flex items-center justify-center gap-2 rounded-lg border border-border/40 bg-black/15 px-4 py-8 text-base text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden />

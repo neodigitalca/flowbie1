@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/get-published-posts
 auth: open
-order: 2560
+order: 2510
 ---
 
 POST `/api/wordpress/get-published-posts`.
@@ -34,7 +34,7 @@ Runs the get published posts action in the WordPress API from a JSON request bod
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/get-published-posts" \
+curl -X POST "https://neodigital.ca/api/wordpress/get-published-posts" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

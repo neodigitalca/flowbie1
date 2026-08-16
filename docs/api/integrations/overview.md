@@ -5,7 +5,7 @@ section: Integrations
 order: 5
 ---
 
-The **integrations** namespace and related **manager-*** routes configure Flowbie server-side credentials and WordPress properties.
+The **integrations** namespace and related **manager-*** routes configure NEO Pulse server-side credentials and WordPress properties.
 
 ## Manager routes
 
@@ -14,7 +14,7 @@ The **integrations** namespace and related **manager-*** routes configure Flowbi
 | `/api/manager-cloud-settings/*` | OpenRouter, DataForSEO, AgentMail keys stored for the workspace |
 | `/api/manager-wordpress-properties/*` | CRUD for connected WordPress sites |
 
-These routes use the logged-in session and tie settings to the Flowbie install.
+These routes use the logged-in session and tie settings to the NEO Pulse install.
 
 ## Product integrations
 

@@ -1,8 +1,15 @@
-import type { AgentRun, AgentRunRecipeKey, AgentRunResult } from "@/lib/agent-runs-types";
+import type { AgentRun, AgentRunRecipeKey, AgentRunResult, AgentRunResumePoint } from "@/lib/agent-runs-types";
 
 export type AgentRunHarnessContext = {
-  onStep?: (label: string, status?: "pending" | "running" | "done" | "error") => Promise<void>;
+  onStep?: (
+    label: string,
+    status?: "pending" | "running" | "done" | "error",
+    resumePayload?: Record<string, unknown>,
+    stepKey?: string,
+  ) => Promise<void>;
   isCancelled?: () => Promise<boolean>;
+  resumePoint?: AgentRunResumePoint | null;
+  isResume?: boolean;
 };
 
 export type AgentRunHarnessHandler = (

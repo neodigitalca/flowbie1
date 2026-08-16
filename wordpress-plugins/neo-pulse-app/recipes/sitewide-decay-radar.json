@@ -1,0 +1,162 @@
+{
+  "keyword": "sitewide-decay-radar",
+  "name": "Sitewide Decay Radar",
+  "description": "Full AISEO on posts and entity pages when impressions rise but clicks fall.",
+  "notes": [
+    "Polls Google Search Console every 24 hours.",
+    "Scope: blog posts and entity/service-area pages (Posts + SAP buckets). Static pages are not in scope.",
+    "Runs when impressions rose vs the prior 28 days and click-through rate fell (google shows the page more often, but fewer searchers click).",
+    "NEO Pulse rewrites matched posts and entity URLs, capped at 3 per bucket per cycle.",
+    "Same URL waits 72 hours before it can run again."
+  ],
+  "category": "reactive",
+  "verticals": [
+    "general"
+  ],
+  "tags": [
+    "gsc",
+    "posts",
+    "sap",
+    "decay",
+    "multi"
+  ],
+  "prerequisites": [
+    "gsc",
+    "wordpress"
+  ],
+  "filters": {
+    "executionKinds": [
+      "content_optimizer"
+    ],
+    "targetBuckets": [
+      "posts",
+      "sap"
+    ],
+    "triggerSignals": [
+      "impressions_up_ctr_down"
+    ],
+    "actionCount": 2
+  },
+  "defaultTasks": [
+    {
+      "keyword": "sitewide-decay-posts",
+      "title": "Full AISEO on posts on intent decay",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "targetBucket": "posts",
+        "updateMode": "update"
+      },
+      "scheduleMode": "trigger",
+      "recurrenceRule": "none",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "all",
+        "conditions": [
+          {
+            "signal": "impressions_up_ctr_down",
+            "operator": "gte",
+            "value": 0,
+            "minImpressions": 100
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 3
+      }
+    },
+    {
+      "keyword": "sitewide-decay-sap",
+      "title": "Full AISEO on entity pages on intent decay",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "targetBucket": "sap",
+        "updateMode": "update"
+      },
+      "scheduleMode": "trigger",
+      "recurrenceRule": "none",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "all",
+        "conditions": [
+          {
+            "signal": "impressions_up_ctr_down",
+            "operator": "gte",
+            "value": 0,
+            "minImpressions": 100
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 3
+      }
+    }
+  ],
+  "isAutomation": true,
+  "kind": "template",
+  "triggerBlock": {
+    "keyword": "gsc-impressions-ctr-decay",
+    "kind": "gsc",
+    "source": "gsc",
+    "targetBucket": "posts",
+    "triggerConfig": {
+      "sources": [
+        "gsc"
+      ],
+      "match": "all",
+      "conditions": [
+        {
+          "signal": "impressions_up_ctr_down",
+          "operator": "gte",
+          "value": 0,
+          "minImpressions": 100
+        }
+      ],
+      "lookbackDays": 28,
+      "compareDays": 28,
+      "pollHours": 24,
+      "cooldownHours": 72,
+      "maxUrls": 3
+    }
+  },
+  "actionBlock": {
+    "keyword": "content-optimizer-full",
+    "executionKind": "content_optimizer",
+    "executionPayload": {
+      "targetBucket": "posts",
+      "updateMode": "update"
+    },
+    "title": "Full AISEO on posts on intent decay"
+  },
+  "actionBlocks": [
+    {
+      "keyword": "content-optimizer-full",
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "targetBucket": "posts",
+        "updateMode": "update"
+      },
+      "title": "Full AISEO on posts on intent decay"
+    },
+    {
+      "keyword": "content-optimizer-full",
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "targetBucket": "sap",
+        "updateMode": "update"
+      },
+      "title": "Full AISEO on entity pages on intent decay"
+    }
+  ]
+}

@@ -11,6 +11,9 @@ export const CONTENT_PREP_ENTITY_SAP_BATCH_SECTION_TITLES = [
   "Entity sitemap",
 ] as const;
 
+/** Entity generator Details prep: full GSC keyword export (hosted link below buckets). */
+export const ENTITY_SAP_GSC_PREP_SECTION_TITLE = "GSC keywords" as const;
+
 export function resolveContentPrepBatchSectionTitles(isEntitySapRun: boolean): readonly string[] {
   return isEntitySapRun ? CONTENT_PREP_ENTITY_SAP_BATCH_SECTION_TITLES : CONTENT_PREP_BATCH_SECTION_TITLES;
 }
@@ -20,6 +23,40 @@ export const CONTENT_PREP_POST_SECTION_TITLES = [
   "SERP research brief",
   "Blueprint and content",
 ] as const;
+
+/** Entity Clusters pipeline: keywords, titles, meta in Details drawer. */
+export const ENTITY_CLUSTER_PIPELINE_TITLES = [
+  "Keywords from GSC",
+  "SAP titles",
+  "Meta descriptions",
+] as const;
+
+export type BulkHarnessSectionStatus = HarnessSectionListItem["status"];
+
+export function buildEntityClusterLiveHarnessSections(
+  phase: string,
+): HarnessSectionListItem[] {
+  const p = phase.trim().toLowerCase();
+  let activeIndex = 0;
+  if (p.includes("writing meta")) activeIndex = 2;
+  else if (p.includes("writing titles")) activeIndex = 1;
+  else if (p.includes("assigning") && p.includes("keyword")) activeIndex = 0;
+  else if (p.includes("inventory") || p.includes("cache") || p.includes("gsc")) {
+    return [];
+  }
+
+  return ENTITY_CLUSTER_PIPELINE_TITLES.map((title, sectionIndex) => ({
+    sectionIndex,
+    title,
+    status:
+      sectionIndex < activeIndex
+        ? ("done" as BulkHarnessSectionStatus)
+        : sectionIndex === activeIndex
+          ? ("generating" as BulkHarnessSectionStatus)
+          : ("waiting" as BulkHarnessSectionStatus),
+    ...(sectionIndex === activeIndex && phase.trim() ? { markdown: phase.trim() } : {}),
+  }));
+}
 
 export const CONTENT_PREP_BATCH_HARNESS_TOTAL_SECTIONS = CONTENT_PREP_BATCH_SECTION_TITLES.length;
 export const CONTENT_PREP_ENTITY_SAP_BATCH_HARNESS_TOTAL_SECTIONS =

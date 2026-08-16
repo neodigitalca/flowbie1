@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/list-media
 auth: open
-order: 2660
+order: 2610
 ---
 
 POST `/api/wordpress/list-media`.
@@ -34,7 +34,7 @@ Runs the list media action in the WordPress API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/list-media" \
+curl -X POST "https://neodigital.ca/api/wordpress/list-media" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

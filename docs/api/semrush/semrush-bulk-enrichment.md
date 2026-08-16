@@ -5,7 +5,7 @@ section: Semrush
 method: POST
 path: /api/semrush/bulk-enrichment
 auth: open
-order: 920
+order: 910
 ---
 
 POST `/api/semrush/bulk-enrichment`.
@@ -37,7 +37,7 @@ Runs a bulk semrush operation from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/semrush/bulk-enrichment" \
+curl -X POST "https://neodigital.ca/api/semrush/bulk-enrichment" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

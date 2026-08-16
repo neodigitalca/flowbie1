@@ -5,7 +5,7 @@ section: DataForSEO MCP
 method: POST
 path: /api/mcp/DataForSEO_dataforseo_labs_google_competitors_domain
 auth: open
-order: 710
+order: 700
 ---
 
 POST `/api/mcp/DataForSEO_dataforseo_labs_google_competitors_domain`.
@@ -34,7 +34,7 @@ Runs the dataforseo_dataforseo_labs_google_competitors_domain action in the Data
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/mcp/DataForSEO_dataforseo_labs_google_competitors_domain" \
+curl -X POST "https://neodigital.ca/api/mcp/DataForSEO_dataforseo_labs_google_competitors_domain" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

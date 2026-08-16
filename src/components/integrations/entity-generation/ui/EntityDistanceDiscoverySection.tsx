@@ -418,7 +418,7 @@ export const EntityDistanceDiscoverySection: React.FC<EntityDistanceDiscoverySec
                       value={manualRadiusAddress}
                       onChange={(e) => setManualRadiusAddress(e.target.value)}
                       placeholder="Street, city, region"
-                      variant="flowbieBlack"
+                      variant="neoPulseBlack"
                       className="text-base text-[hsl(var(--semantic-data-foreground)/0.92)]"
                     />
                   </div>

@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/chat/calls/({id})/leave
 auth: team-rbac-communication
-order: 1160
+order: 1150
 ---
 
 POST `/api/teams/{teamId}/chat/calls/({id})/leave`.
@@ -34,7 +34,7 @@ Runs the leave action in the Teams API from a JSON request body. Requires a sign
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/chat/calls/({id})/leave" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/chat/calls/({id})/leave" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

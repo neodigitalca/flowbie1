@@ -6,7 +6,7 @@ export const DASHBOARD_SECTION_ORDER: readonly ManagerSettingsClusterId[] = [
   "master-rules",
   "ai-generation",
   "google",
-  "email-agent-admin",
+  "wp-engine",
 ] as const;
 
 export const DASHBOARD_SECTION_LABELS: Record<ManagerSettingsClusterId, string> = {
@@ -15,5 +15,5 @@ export const DASHBOARD_SECTION_LABELS: Record<ManagerSettingsClusterId, string> 
   "master-rules": "Master Rules",
   "ai-generation": "AI & Models",
   google: "Google",
-  "email-agent-admin": "Email",
+  "wp-engine": "WP Engine",
 };

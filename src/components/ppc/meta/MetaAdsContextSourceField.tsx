@@ -12,8 +12,8 @@ const META_CONTEXT_OPTIONS: Array<{
   hint: string;
 }> = [
   {
-    value: "flowbie_app",
-    label: "FlowbieONE app",
+    value: "neo-pulse_app",
+    label: "NEO Pulse app",
     hint: "Built-in marketing context",
   },
   {
@@ -86,7 +86,7 @@ export function MetaAdsContextSourceField({
         >
           <input
             ref={inputRef}
-            value={isCustom ? (contextUrl ?? "") : "FlowbieONE app"}
+            value={isCustom ? (contextUrl ?? "") : "NEO Pulse app"}
             readOnly={!isCustom || disabled}
             disabled={disabled}
             placeholder={isCustom ? "Context URL" : undefined}

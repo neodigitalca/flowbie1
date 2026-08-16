@@ -36,7 +36,7 @@ export function dashboardClusterToArea(cluster: string): TeamPermissionArea | nu
     "master-rules": "master-rules",
     "ai-generation": "ai-generation",
     google: "google",
-    "email-agent-admin": "email-agent-admin",
+    "wp-engine": "properties",
   };
   return map[cluster] ?? null;
 }
@@ -49,9 +49,9 @@ export function managerTabToArea(tab: string): TeamPermissionArea | null {
     generator: "generator",
     "gsc-report": "gsc-report",
     sitemap: "sitemap",
-    communication: "communication",
     chat: "communication",
     users: "teams",
+    support: "teams",
   };
   return map[tab] ?? null;
 }

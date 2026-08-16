@@ -5,7 +5,7 @@ section: Manager Cloud Settings
 method: GET
 path: /api/manager-cloud-settings/load
 auth: open
-order: 620
+order: 610
 ---
 
 GET `/api/manager-cloud-settings/load`.
@@ -34,7 +34,7 @@ Reads load from the Manager Cloud Settings API.
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/manager-cloud-settings/load" \
+curl -X GET "https://neodigital.ca/api/manager-cloud-settings/load" \
   -H "Content-Type: application/json" \
 ```
 

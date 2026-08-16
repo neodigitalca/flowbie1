@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/create-post
 auth: open
-order: 2240
+order: 2230
 ---
 
 POST `/api/wordpress/create-post`.
@@ -34,7 +34,7 @@ Runs the create post action in the WordPress API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/create-post" \
+curl -X POST "https://neodigital.ca/api/wordpress/create-post" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

@@ -14,13 +14,21 @@ import {
 import { chatRootDataAttrs, chatZoneProps, zoneThemeStyle } from "@/lib/chat-theme-palettes";
 
 describe("chat-preferences-presets", () => {
-  it("applies minimal preset with compact density and muted notifications", () => {
-    const base = defaultChatPreferences("Test User");
+  it("minimal preset uses minimal layout and aubergine zone themes", () => {
+    const base = defaultChatPreferences();
     const next = applyBuiltinPreset(base, "minimal");
     expect(next.activePresetId).toBe("minimal");
-    expect(next.appearance.density).toBe("compact");
-    expect(next.notifications.soundEnabled).toBe(false);
-    expect(next.notifications.threads).toBe(false);
+    expect(next.appearance.layoutMode).toBe("minimal");
+    expect(next.appearance.zoneThemes).toEqual({ left: "slack", main: "slack", right: "slack" });
+    expect(next.appearance.headingTheme).toBe("slack");
+    expect(next.appearance.starredChannelIds).toEqual([]);
+  });
+
+  it("migrates legacy slack preset id to minimal", () => {
+    const base = defaultChatPreferences();
+    const next = applyBuiltinPreset(base, "slack");
+    expect(next.activePresetId).toBe("minimal");
+    expect(next.appearance.layoutMode).toBe("minimal");
   });
 
   it("returns balanced as default built-in preset", () => {
@@ -34,7 +42,7 @@ describe("chat-preferences-presets", () => {
     const base = defaultChatPreferences();
     const next = applyBuiltinPreset(base, "focus");
     expect(next.appearance.zoneThemes).toEqual({ left: "dark", main: "midnight", right: "dark" });
-    expect(next.appearance.headingTheme).toBe("brand");
+    expect(next.appearance.headingTheme).toBe("dark");
   });
 
   it("mergeChatPreferences deep-merges sidebar sections and zone themes", () => {
@@ -87,10 +95,11 @@ describe("chat notification matchers", () => {
 });
 
 describe("chat-theme-palettes", () => {
-  it("chatRootDataAttrs exposes heading and accent only", () => {
+  it("chatRootDataAttrs exposes layout and theme attrs", () => {
     const attrs = chatRootDataAttrs(defaultChatPreferences().appearance);
     expect(attrs["data-heading-theme"]).toBe("light");
     expect(attrs["data-chat-accent"]).toBe("brand");
+    expect(attrs["data-chat-layout"]).toBe("default");
     expect(attrs["data-chat-theme"]).toBeUndefined();
   });
 

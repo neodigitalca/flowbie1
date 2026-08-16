@@ -94,9 +94,9 @@ export function OverviewContentAuditSectionsPanel({
 
       {isProcessing ? (
         <div className="space-y-1.5">
-          <div className="flowbie-competitor-progress-track rounded-sm">
+          <div className="neo-pulse-competitor-progress-track rounded-sm">
             <div
-              className="flowbie-competitor-progress-fill h-2 rounded-sm transition-[width] duration-300 ease-out"
+              className="neo-pulse-competitor-progress-fill h-2 rounded-sm transition-[width] duration-300 ease-out"
               style={{ width: `${pct}%` }}
               role="progressbar"
               aria-valuenow={pct}

@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/chat/messages/({id})
 auth: team-rbac-communication
-order: 1500
+order: 1490
 ---
 
 POST `/api/teams/{teamId}/chat/messages/({id})`.
@@ -34,7 +34,7 @@ Runs the messages item action in the Teams API from a JSON request body. Require
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/chat/messages/({id})" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/chat/messages/({id})" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

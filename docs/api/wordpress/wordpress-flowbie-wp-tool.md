@@ -1,16 +1,16 @@
 ---
-title: "Flowbie Wp Tool"
-slug: wordpress/flowbie-wp-tool
+title: "NEO Pulse Wp Tool"
+slug: wordpress/neo-pulse-wp-tool
 section: WordPress
 method: POST
-path: /api/wordpress/flowbie-wp-tool
+path: /api/wordpress/neo-pulse-wp-tool
 auth: open
 order: 2320
 ---
 
-POST `/api/wordpress/flowbie-wp-tool`.
+POST `/api/wordpress/neo-pulse-wp-tool`.
 
-Runs the flowbie wp tool action in the WordPress API from a JSON request body.
+Runs the neo-pulse wp tool action in the WordPress API from a JSON request body.
 
 ## Request
 
@@ -34,13 +34,13 @@ Runs the flowbie wp tool action in the WordPress API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/flowbie-wp-tool" \
+curl -X POST "https://neodigital.ca/api/wordpress/neo-pulse-wp-tool" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
 
 ```javascript
-const res = await fetch(`/api/wordpress/flowbie-wp-tool`, {
+const res = await fetch(`/api/wordpress/neo-pulse-wp-tool`, {
   method: "POST",
   credentials: "include",
   headers: { "Content-Type": "application/json" },

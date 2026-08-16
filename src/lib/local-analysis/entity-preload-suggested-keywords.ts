@@ -14,7 +14,6 @@ import {
 } from "@/lib/local-dominator-csv";
 import {
   allocatePagesAcrossNeighbourhoodPicks,
-  isCityLevelOnlyEntity,
   pickNeighbourhoodEntitiesForCluster,
   type NeighbourhoodPick,
 } from "@/lib/local-analysis/entity-grid-location-wiki-agent";
@@ -44,6 +43,27 @@ import { stampPreloadRowsWithUniqueEntityWikipedia } from "@/lib/local-analysis/
 
 function normalizeKwKey(s: string): string {
   return s.trim().toLowerCase();
+}
+
+/** True when entity is metro/city-only (not a neighbourhood AdGroup). */
+export function isCityLevelOnlyEntity(
+  entity: string,
+  cityLabel: string | null | undefined,
+): boolean {
+  const norm = normalizeEntityHintCommaLabel(entity);
+  if (!norm) return true;
+  const parts = norm.split(",").map((s) => s.trim()).filter(Boolean);
+  if (parts.length === 0) return true;
+  const city = normalizeEntityHintCommaLabel(cityLabel ?? "");
+  if (!city) {
+    return parts.length <= 2;
+  }
+  const cityParts = city.split(",").map((s) => s.trim()).filter(Boolean);
+  const cityName = (cityParts[0] ?? "").toLowerCase();
+  const first = (parts[0] ?? "").toLowerCase();
+  if (norm.toLowerCase() === city.toLowerCase()) return true;
+  if (first === cityName && parts.length <= Math.max(cityParts.length, 2)) return true;
+  return false;
 }
 
 /** Street / NAP address lines are not place entities for AdGroups. */
@@ -249,9 +269,9 @@ export function assignUniqueKeywordsPerAdGroup(
   for (const section of workSections) {
     const usedInGroup = new Set<string>();
     const places = [...placeCorpus, section.entity].filter(Boolean);
-    const before = section.rowIndices.map((idx) => next[idx]?.keyword ?? "");
     for (const idx of section.rowIndices) {
-      const service = stripAllPlaceTokensFromKeyword(next[idx]?.keyword ?? "", places);
+      const existingKeyword = next[idx]?.keyword?.trim() ?? "";
+      const service = stripAllPlaceTokensFromKeyword(existingKeyword, places);
       const key = service ? normalizeKwKey(service) : "";
       if (service && key && !usedInGroup.has(key)) {
         usedInGroup.add(key);
@@ -261,7 +281,7 @@ export function assignUniqueKeywordsPerAdGroup(
             ? composeServiceKeywordWithAdGroupEntity(service, section.entity)
             : service.toLowerCase(),
         };
-      } else {
+      } else if (!existingKeyword) {
         next[idx] = { ...next[idx]!, keyword: "" };
       }
     }
@@ -379,6 +399,9 @@ export async function refreshEntityPreloadSlotKeywords(
   options?: RefreshEntityPreloadOptions,
 ): Promise<CSVRow[]> {
   if (rows.length === 0) return rows;
+  if (rows.every((r) => r.entity?.trim() && r.keyword?.trim())) {
+    return rows;
+  }
   const companyName = (options?.businessName?.trim() || site.name?.trim() || "").trim();
   const apiKey = options?.apiKey?.trim() || "";
   const model = options?.model?.trim() || "";
@@ -390,6 +413,16 @@ export async function refreshEntityPreloadSlotKeywords(
   }));
 
   const wantsNeighbourhoods = entityTypeFocusWantsNeighbourhoods(options?.entityTypeFocus);
+  const parsedGrid = gridCsvText ? parseLocalDominatorCsv(gridCsvText) : null;
+  const gridCityLabel =
+    parsedGrid && !parsedGrid.error && parsedGrid.rows.length > 0
+      ? buildCityLocationBucketsFromRows(parsedGrid.rows)[0]?.placeLabel.trim()
+      : "";
+  const cityContext =
+    gridCityLabel ||
+    normalizeEntityHintCommaLabel(options?.suggestFocusLocation ?? "") ||
+    getPrimaryCityStateLabel(site)?.trim() ||
+    "";
 
   if (wantsNeighbourhoods && gridCsvText && apiKey) {
     const entitiesByRow = await loadNeighbourhoodPreloadEntitiesByRow({
@@ -400,19 +433,18 @@ export async function refreshEntityPreloadSlotKeywords(
     });
     next = next.map((row, i) => {
       const nh = entitiesByRow[i]?.trim();
-      if (nh && !isBadPreloadEntityLabel(nh) && !isCityLevelOnlyEntity(nh, null)) {
+      if (nh && !isBadPreloadEntityLabel(nh) && !isCityLevelOnlyEntity(nh, cityContext)) {
         return { ...row, entity: nh };
       }
-      // Neighbourhoods mode: never keep a city-level leftover on this slot.
       const prior = row.entity?.trim();
       if (
         prior &&
         !isBadPreloadEntityLabel(prior) &&
-        !isCityLevelOnlyEntity(prior, null)
+        !isCityLevelOnlyEntity(prior, cityContext)
       ) {
         return { ...row, entity: prior };
       }
-      return { ...row, entity: undefined };
+      return row;
     });
   }
 

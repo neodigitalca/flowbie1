@@ -3,7 +3,7 @@ import { ScrollText } from "lucide-react";
 import { MasterInstructionsSection } from "@/components/integrations/wordpress/MasterInstructionsSection";
 import { useAuth } from "@/contexts/AuthContext";
 import { WORDPRESS_SITES_STORAGE_KEY, type WordPressSite } from "@/components/integrations/types";
-import { FLOWBIE_MASTER_RULES_PRESET_SITE_ID_KEY } from "@/lib/open-master-rules-settings";
+import { NEO_PULSE_MASTER_RULES_PRESET_SITE_ID_KEY } from "@/lib/open-master-rules-settings";
 import { DASHBOARD_SETTINGS_PANEL_CLASS } from "@/components/manager/dashboard/dashboard-panel-styles";
 
 function readSitesFromStorage(): WordPressSite[] {
@@ -38,13 +38,13 @@ export function ManagerMasterRulesSettingsContent() {
   useEffect(() => {
     let preset = "";
     try {
-      preset = sessionStorage.getItem(FLOWBIE_MASTER_RULES_PRESET_SITE_ID_KEY) ?? "";
+      preset = sessionStorage.getItem(NEO_PULSE_MASTER_RULES_PRESET_SITE_ID_KEY) ?? "";
     } catch {
       preset = "";
     }
     if (preset) {
       try {
-        sessionStorage.removeItem(FLOWBIE_MASTER_RULES_PRESET_SITE_ID_KEY);
+        sessionStorage.removeItem(NEO_PULSE_MASTER_RULES_PRESET_SITE_ID_KEY);
       } catch {
         /* ignore */
       }

@@ -9,6 +9,7 @@ import type { HandleOptimizeMultipleContentParams } from "./bulk-optimization-pa
 import type { BulkDoPrefetchArgs } from "./bulk-optimization-do-prefetch";
 import type { BulkSerpWarmupController } from "./bulk-optimization-serp-warmup";
 import type { BulkGoogleMapsImageWarmupController } from "./bulk-optimization-google-maps-image-warmup";
+import { isAgentRunBatchKey } from "@/lib/agent-runs/agent-run-batch-key";
 
 export interface BulkPostLoopParams {
   urls: string[];
@@ -48,6 +49,7 @@ export interface BulkPostLoopParams {
   setBulkOptimizationState: HandleOptimizeMultipleContentParams["setBulkOptimizationState"];
   setOptimizationProgress: HandleOptimizeMultipleContentParams["setOptimizationProgress"];
   recordGeneratedFilesForUrl: (siteId: string, url: string) => void;
+  onBulkUrlComplete?: HandleOptimizeMultipleContentParams["onBulkUrlComplete"];
   serpWarmup: BulkSerpWarmupController;
   googleMapsImageWarmup?: BulkGoogleMapsImageWarmupController | null;
   prefetchArgs: Omit<BulkDoPrefetchArgs, "prefetchedAcfFieldsCache" | "prefetchedPendingCache" | "setBulkOptimizationState"> & {
@@ -94,6 +96,7 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
     bulkContextRef,
     setBulkOptimizationState,
     setOptimizationProgress,
+    onBulkUrlComplete,
     serpWarmup,
     googleMapsImageWarmup,
   } = p;
@@ -208,7 +211,9 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
 
     patchBulkMetaCompletedUrls(setOptimizationProgress, batchKey, i);
     updateBulkStateForPost(setBulkOptimizationState, batchKey, url, i, currentPost, totalPosts, "optimizing");
-    updateOptimizationProgress(setOptimizationProgress, site.id, "load", 0, url);
+    if (!isAgentRunBatchKey(batchKey)) {
+      updateOptimizationProgress(setOptimizationProgress, site.id, "load", 0, url);
+    }
 
     try {
       const fullCached = !!prefetchedPendingCache.get(i);
@@ -247,6 +252,7 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
         }
         patchBulkMetaCompletedUrls(setOptimizationProgress, batchKey, i + 1);
         updateBulkStateForPost(setBulkOptimizationState, batchKey, url, i, currentPost, totalPosts, "completed");
+        await onBulkUrlComplete?.({ url, index: i, total: totalPosts, uploaded: true });
         if (!muteToasts) notify.success(notifyCompletedOptimizationForPostXOfX(currentPost, totalPosts));
         await new Promise((resolve) => setTimeout(resolve, 100));
         continue;

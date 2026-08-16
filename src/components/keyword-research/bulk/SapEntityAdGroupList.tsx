@@ -11,6 +11,7 @@ import {
 } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import {
   buildEntityAdGroupSections,
+  sapBaseKeywordDisplay,
 } from "@/lib/local-analysis/sap-entity-ad-groups";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +25,8 @@ export type SapEntityAdGroupListProps = {
   directionsSiteName?: string;
   emptyRowPadCount?: number;
   showBusySpinner?: boolean;
+  /** Pre-Clusters: show Entity Location + Entity Keyword instead of Title + Keyword. */
+  entityPreloadMode?: boolean;
 };
 
 export function SapEntityAdGroupList({
@@ -36,6 +39,7 @@ export function SapEntityAdGroupList({
   directionsSiteName,
   emptyRowPadCount = BULK_GENERATOR_EMPTY_ROW_COUNT,
   showBusySpinner = true,
+  entityPreloadMode = false,
 }: SapEntityAdGroupListProps) {
   const [expandedIndices, setExpandedIndices] = useState<Set<number>>(new Set());
   const sections = useMemo(() => buildEntityAdGroupSections(generatedRows), [generatedRows]);
@@ -171,6 +175,8 @@ export function SapEntityAdGroupList({
                       isProcessing={isProcessing}
                       busy={showBusySpinner && isGenerating}
                       showDirections={false}
+                      entityPreloadMode={entityPreloadMode}
+                      keywordDisplay={entityPreloadMode ? sapBaseKeywordDisplay(row) : undefined}
                       onToggleSelect={() => toggleSelected(rowIndex)}
                       onToggleExpand={() => toggleExpanded(rowIndex)}
                       onRowChange={(patch) => onRowChange(rowIndex, patch)}
@@ -199,6 +205,8 @@ export function SapEntityAdGroupList({
                   isProcessing={isProcessing}
                   busy={showBusySpinner && isGenerating}
                   showDirections={false}
+                  entityPreloadMode={entityPreloadMode}
+                  keywordDisplay={entityPreloadMode ? sapBaseKeywordDisplay(row) : undefined}
                   onToggleSelect={() => toggleSelected(rowIndex)}
                   onToggleExpand={() => toggleExpanded(rowIndex)}
                   onRowChange={(patch) => onRowChange(rowIndex, patch)}

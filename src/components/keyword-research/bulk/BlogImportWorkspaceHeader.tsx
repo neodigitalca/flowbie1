@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from "react";
-import { Download, Loader2, TrendingUp, Upload } from "lucide-react";
+import { Download, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -10,20 +10,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { BlogGeneratorWorkspaceChrome } from "@/components/blog-generator/BlogGeneratorWorkspaceChrome";
+import { GeneratorToolbarFrame } from "@/components/blog-generator/GeneratorToolbarFrame";
 import {
-  GENERATOR_WORKSPACE_TITLE,
-  type BlogGeneratorSectionId,
-} from "@/components/blog-generator/blog-generator-sections";
-import {
-  BulkGeneratorDetailsDrawer,
-} from "@/components/keyword-research/bulk/BulkGeneratorDetailsDrawer";
+  GENERATOR_FIELD_KEYWORD,
+  GENERATOR_FIELD_TITLE,
+  GENERATOR_SELECT,
+  GENERATOR_TOOLBAR_SLOT_RESERVE,
+} from "@/components/blog-generator/generator-toolbar-theme";
+import type { BlogGeneratorSectionId } from "@/components/blog-generator/blog-generator-sections";
+import { BulkGeneratorDetailsDrawer } from "@/components/keyword-research/bulk/BulkGeneratorDetailsDrawer";
 import type { BulkGeneratorDetailsPanelProps } from "@/components/keyword-research/bulk/BulkGeneratorDetailsPanel";
 import { BulkGeneratorRunActions } from "@/components/keyword-research/bulk/BulkGeneratorRunActions";
 import {
-  BULK_HEADER_FIELD,
   BULK_HEADER_ICON_RUN_BTN,
   BULK_HEADER_ICON_TOOL_BTN,
-  BULK_HEADER_SELECT_TRIGGER,
   BULK_HEADER_UPLOAD_READY_BTN,
 } from "@/components/keyword-research/bulk/bulk-workspace-header-styles";
 import type { MetaBulkMicroSnapshot } from "@/components/overview/OverviewBulkMicroProgress";
@@ -102,11 +102,27 @@ export function BlogImportWorkspaceHeader({
   onDetailsOpenChange,
 }: BlogImportWorkspaceHeaderProps) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const showEntity = featuredImageMode === "google-maps";
+
+  const entitySlot = (
+    <div className={cn(GENERATOR_FIELD_KEYWORD, !showEntity && GENERATOR_TOOLBAR_SLOT_RESERVE)}>
+      <Input
+        type="text"
+        placeholder="Entity"
+        value={entity}
+        onChange={(e) => onEntityChange(e.target.value)}
+        className={cn(GENERATOR_FIELD_KEYWORD, !showEntity && "pointer-events-none invisible")}
+        disabled={workspaceBusy || !showEntity}
+        autoComplete="off"
+        aria-label="Entity for Google Maps"
+        aria-hidden={!showEntity}
+        tabIndex={showEntity ? 0 : -1}
+      />
+    </div>
+  );
 
   return (
     <BlogGeneratorWorkspaceChrome
-      icon={TrendingUp}
-      title={GENERATOR_WORKSPACE_TITLE}
       activeSection={activeSection}
       onSectionChange={onSectionChange}
       sectionSwitchDisabled={isProcessing}
@@ -118,135 +134,127 @@ export function BlogImportWorkspaceHeader({
       detailsPanelId="blog-import-details-panel"
       onDetailsOpenChange={onDetailsOpenChange}
       toolbar={
-        <div className="flex w-full min-w-0 flex-nowrap items-center gap-1">
-          <input
-            ref={fileRef}
-            type="file"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0] ?? null;
-              onPickFile(file);
-              e.target.value = "";
-            }}
-          />
-          <Button
-            type="button"
-            variant={importedFileName ? "default" : "ghost"}
-            size="sm"
-            className={
-              importedFileName ? BULK_HEADER_ICON_RUN_BTN : BULK_HEADER_ICON_TOOL_BTN
-            }
-            disabled={isParsing || isProcessing}
-            onClick={() => fileRef.current?.click()}
-            aria-label={importedFileName ? `Uploaded: ${importedFileName}` : "Upload blog file"}
-            title={importedFileName ?? "Choose blog file"}
-          >
-            {isParsing ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-            ) : (
-              <Upload className="h-4 w-4 shrink-0" aria-hidden />
-            )}
-          </Button>
-          <Input
-            type="text"
-            placeholder="Keyword"
-            value={focusKeyword}
-            onChange={(e) => onFocusKeywordChange(e.target.value)}
-            className={cn(BULK_HEADER_FIELD, "min-w-0 flex-1 text-base")}
-            disabled={workspaceBusy}
-            autoComplete="off"
-            aria-label="Focus keyword"
-          />
-          <Input
-            type="text"
-            placeholder="Title override"
-            value={titleOverride}
-            onChange={(e) => onTitleOverrideChange(e.target.value)}
-            className={cn(BULK_HEADER_FIELD, "min-w-0 flex-1 text-base")}
-            disabled={workspaceBusy}
-            autoComplete="off"
-            aria-label="Title override"
-          />
-          <Select
-            value={featuredImageMode}
-            onValueChange={(v) => onFeaturedImageModeChange(v as BlogImportFeaturedImage)}
-            disabled={workspaceBusy}
-          >
-            <SelectTrigger
-              className={cn(BULK_HEADER_SELECT_TRIGGER, "w-[9rem] shrink-0")}
-              aria-label="Featured image"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent position="popper">
-              <SelectItem className="text-base" value="y">
-                AI image
-              </SelectItem>
-              <SelectItem className="text-base" value="google-maps">
-                Google Maps
-              </SelectItem>
-              <SelectItem className="text-base" value="n">
-                None
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          {featuredImageMode === "google-maps" ? (
-            <Input
-              type="text"
-              placeholder="Entity"
-              value={entity}
-              onChange={(e) => onEntityChange(e.target.value)}
-              className={cn(BULK_HEADER_FIELD, "w-[9rem] shrink-0 text-base")}
-              disabled={workspaceBusy}
-              autoComplete="off"
-              aria-label="Entity for Google Maps"
+        <GeneratorToolbarFrame
+          primary={
+            <>
+              <input
+                ref={fileRef}
+                type="file"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  onPickFile(file);
+                  e.target.value = "";
+                }}
+              />
+              <Button
+                type="button"
+                variant={importedFileName ? "default" : "ghost"}
+                size="sm"
+                className={
+                  importedFileName ? BULK_HEADER_ICON_RUN_BTN : BULK_HEADER_ICON_TOOL_BTN
+                }
+                disabled={isParsing || isProcessing}
+                onClick={() => fileRef.current?.click()}
+                aria-label={importedFileName ? `Uploaded: ${importedFileName}` : "Upload blog file"}
+                title={importedFileName ?? "Choose blog file"}
+              >
+                {isParsing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                ) : (
+                  <Upload className="h-4 w-4 shrink-0" aria-hidden />
+                )}
+              </Button>
+              <Input
+                type="text"
+                placeholder="Keyword"
+                value={focusKeyword}
+                onChange={(e) => onFocusKeywordChange(e.target.value)}
+                className={GENERATOR_FIELD_KEYWORD}
+                disabled={workspaceBusy}
+                autoComplete="off"
+                aria-label="Focus keyword"
+              />
+              <Input
+                type="text"
+                placeholder="Title override"
+                value={titleOverride}
+                onChange={(e) => onTitleOverrideChange(e.target.value)}
+                className={GENERATOR_FIELD_TITLE}
+                disabled={workspaceBusy}
+                autoComplete="off"
+                aria-label="Title override"
+              />
+            </>
+          }
+          options={
+            <>
+              <Select
+                value={featuredImageMode}
+                onValueChange={(v) => onFeaturedImageModeChange(v as BlogImportFeaturedImage)}
+                disabled={workspaceBusy}
+              >
+                <SelectTrigger className={GENERATOR_SELECT} aria-label="Featured image">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectItem className="text-base" value="y">
+                    AI image
+                  </SelectItem>
+                  <SelectItem className="text-base" value="google-maps">
+                    Google Maps
+                  </SelectItem>
+                  <SelectItem className="text-base" value="n">
+                    None
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              {entitySlot}
+              <Select
+                value={postDestination}
+                onValueChange={(v) => onPostDestinationChange(v as WordPressPostDestination)}
+                disabled={workspaceBusy}
+              >
+                <SelectTrigger className={GENERATOR_SELECT} aria-label="Export destination">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  {postDestinationChoices.map((choice) => (
+                    <SelectItem key={choice} className="text-base" value={choice}>
+                      {POST_DESTINATION_SHORT[choice]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          }
+          actions={
+            <BulkGeneratorRunActions
+              isProcessing={isProcessing}
+              canRun={canRun}
+              workspaceBusy={workspaceBusy}
+              onRun={onRun}
+              onCancel={onCancel}
+              onClear={onClear}
+              trailing={
+                canDownloadBlog && onDownloadBlog ? (
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    className={cn(BULK_HEADER_UPLOAD_READY_BTN, "h-8 shrink-0 gap-1.5")}
+                    onClick={onDownloadBlog}
+                    aria-label="Download blog"
+                    title="Download blog"
+                  >
+                    <Download className="h-4 w-4 shrink-0" aria-hidden />
+                    Download blog
+                  </Button>
+                ) : null
+              }
             />
-          ) : null}
-          <Select
-            value={postDestination}
-            onValueChange={(v) => onPostDestinationChange(v as WordPressPostDestination)}
-            disabled={workspaceBusy}
-          >
-            <SelectTrigger
-              className={cn(BULK_HEADER_SELECT_TRIGGER, "w-[9.5rem] shrink-0")}
-              aria-label="Export destination"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent position="popper">
-              {postDestinationChoices.map((choice) => (
-                <SelectItem key={choice} className="text-base" value={choice}>
-                  {POST_DESTINATION_SHORT[choice]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <BulkGeneratorRunActions
-            isProcessing={isProcessing}
-            canRun={canRun}
-            workspaceBusy={workspaceBusy}
-            onRun={onRun}
-            onCancel={onCancel}
-            onClear={onClear}
-            groupClassName="contents"
-            trailing={
-              canDownloadBlog && onDownloadBlog ? (
-                <Button
-                  type="button"
-                  variant="default"
-                  size="sm"
-                  className={cn(BULK_HEADER_UPLOAD_READY_BTN, "h-8 shrink-0 gap-1.5")}
-                  onClick={onDownloadBlog}
-                  aria-label="Download blog"
-                  title="Download blog"
-                >
-                  <Download className="h-4 w-4 shrink-0" aria-hidden />
-                  Download blog
-                </Button>
-              ) : null
-            }
-          />
-        </div>
+          }
+        />
       }
       detailsPanel={<BulkGeneratorDetailsDrawer {...detailsProps} />}
     />

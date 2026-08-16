@@ -35,30 +35,38 @@ function baseSite(id: string, name: string): WordPressSite {
   };
 }
 
+const okResult = {
+  published: 1,
+  queued: 0,
+  failed: 0,
+  lastPreview: null,
+  resolvedTopic: "topic",
+  inventoryHosted: null,
+};
+
 describe("runGbpMultiSiteBatch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("runs all sites in parallel", async () => {
+  it("runs sites sequentially A–Z", async () => {
     const sites = [baseSite("a", "Alpha"), baseSite("b", "Beta"), baseSite("c", "Gamma")];
     const startOrder: string[] = [];
-    const resolveFns: Array<() => void> = [];
-
-    vi.mocked(runGbpSitePostBatch).mockImplementation(async ({ site }) => {
-      startOrder.push(site.id);
-      await new Promise<void>((resolve) => {
-        resolveFns.push(resolve);
-      });
-      return {
-        published: 1,
-        queued: 0,
-        failed: 0,
-        lastPreview: null,
-        resolvedTopic: "topic",
-        inventoryHosted: null,
-      };
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
     });
+
+    vi.mocked(runGbpSitePostBatch)
+      .mockImplementationOnce(async ({ site }) => {
+        startOrder.push(site.id);
+        await firstGate;
+        return okResult;
+      })
+      .mockImplementation(async ({ site }) => {
+        startOrder.push(site.id);
+        return okResult;
+      });
 
     const batchPromise = runGbpMultiSiteBatch({
       sites,
@@ -67,66 +75,45 @@ describe("runGbpMultiSiteBatch", () => {
       sitemapSource: "pages",
     });
 
-    await vi.waitFor(() => expect(startOrder).toHaveLength(3));
-    expect(startOrder).toEqual(["a", "b", "c"]);
-
-    for (const resolve of resolveFns) resolve();
+    await vi.waitFor(() => expect(startOrder).toEqual(["a"]));
+    releaseFirst();
     const result = await batchPromise;
 
+    expect(startOrder).toEqual(["a", "b", "c"]);
     expect(result.propertiesAttempted).toBe(3);
     expect(result.published).toBe(3);
     expect(result.failed).toBe(0);
     expect(runGbpSitePostBatch).toHaveBeenCalledTimes(3);
   });
 
-  it("calls onPropertyStart for each site before work completes", async () => {
+  it("calls onPropertyStart once per site before that site completes", async () => {
     const sites = [baseSite("a", "Alpha"), baseSite("b", "Beta")];
     const propertyStarts: string[] = [];
-    let releaseBatch!: () => void;
-    const gate = new Promise<void>((resolve) => {
-      releaseBatch = resolve;
+
+    vi.mocked(runGbpSitePostBatch).mockImplementation(async ({ site }) => {
+      propertyStarts.push(`run-${site.id}`);
+      return okResult;
     });
 
-    vi.mocked(runGbpSitePostBatch).mockImplementation(async () => {
-      await gate;
-      return {
-        published: 1,
-        queued: 0,
-        failed: 0,
-        lastPreview: null,
-        resolvedTopic: "",
-        inventoryHosted: null,
-      };
-    });
-
-    const batchPromise = runGbpMultiSiteBatch({
+    await runGbpMultiSiteBatch({
       sites,
       scheduler: testScheduler,
       openRouterApiKey: "test-key",
       sitemapSource: "pages",
       onPropertyStart: (site) => {
-        propertyStarts.push(site.id);
+        propertyStarts.push(`start-${site.id}`);
       },
     });
 
-    await vi.waitFor(() => expect(propertyStarts).toEqual(["a", "b"]));
-    releaseBatch();
-    await batchPromise;
+    expect(propertyStarts).toEqual(["start-a", "run-a", "start-b", "run-b"]);
   });
 
-  it("isolates failures with Promise.allSettled", async () => {
+  it("isolates failures and continues to the next site", async () => {
     const sites = [baseSite("a", "Alpha"), baseSite("b", "Beta")];
 
     vi.mocked(runGbpSitePostBatch)
-      .mockResolvedValueOnce({
-        published: 1,
-        queued: 0,
-        failed: 0,
-        lastPreview: null,
-        resolvedTopic: "",
-        inventoryHosted: null,
-      })
-      .mockRejectedValueOnce(new Error("publish failed"));
+      .mockRejectedValueOnce(new Error("publish failed"))
+      .mockResolvedValueOnce(okResult);
 
     const result = await runGbpMultiSiteBatch({
       sites,
@@ -138,5 +125,6 @@ describe("runGbpMultiSiteBatch", () => {
     expect(result.published).toBe(1);
     expect(result.failed).toBe(1);
     expect(result.propertiesAttempted).toBe(2);
+    expect(runGbpSitePostBatch).toHaveBeenCalledTimes(2);
   });
 });

@@ -6,8 +6,10 @@ import { FloatingLabelInput } from "@/components/ui/floating-label-input";
 import { useAuth } from "@/contexts/AuthContext";
 import { loadDeviceAuth } from "@/lib/auth-device";
 import { AUTH_DISABLED } from "@/lib/auth-disabled";
-import { FloBrandMark } from "@/components/manager/FloBrandMark";
 import { Lock, User, LogIn } from "lucide-react";
+import {
+  NEO_PULSE_BRAND_LOCKUP_SRC,
+} from "@/lib/neo-pulse-branding-assets";
 
 export default function Login() {
   const { user, loading, login } = useAuth();
@@ -61,7 +63,7 @@ export default function Login() {
     );
   }
 
-  if (typeof window !== "undefined" && window.__FLOWBIE_WP_LOGGED_IN__) {
+  if (typeof window !== "undefined" && window.__NEO_PULSE_WP_LOGGED_IN__) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-pulse text-muted-foreground">Loading…</div>
@@ -71,12 +73,13 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="flowbie-panel-neon w-full max-w-sm space-y-8 p-8">
-        <div className="flex flex-col items-center gap-2 text-center">
-          <div className="flex items-center gap-3">
-            <FloBrandMark size={44} />
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">FLO</h1>
-          </div>
+      <div className="neo-pulse-panel-neon w-full max-w-sm space-y-8 p-8">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <img
+            src={NEO_PULSE_BRAND_LOCKUP_SRC}
+            alt="NEO Pulse"
+            className="h-10 w-auto"
+          />
           <p className="text-muted-foreground">Sign in to continue</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-dashboard">

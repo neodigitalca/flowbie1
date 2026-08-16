@@ -1,4 +1,4 @@
-export type MetaAdImageReferenceSource = "dataforseo" | "flowbie-marketing";
+export type MetaAdImageReferenceSource = "dataforseo" | "neo-pulse-marketing";
 
 export type MetaAdImageReferenceRole =
   | "layout"
@@ -7,7 +7,7 @@ export type MetaAdImageReferenceRole =
   | "prop"
   | "scene"
   | "map"
-  | "flowbie-marketing";
+  | "neo-pulse-marketing";
 
 export type MetaAdImageReferenceSummary = {
   id: string;
@@ -25,8 +25,8 @@ export type MetaAdImageReferenceSummary = {
 
 export function metaReferenceRoleLabel(role: MetaAdImageReferenceRole): string {
   switch (role) {
-    case "flowbie-marketing":
-      return "Flowbie marketing";
+    case "neo-pulse-marketing":
+      return "NEO Pulse marketing";
     case "niche-subject":
       return "Niche subject";
     case "device":

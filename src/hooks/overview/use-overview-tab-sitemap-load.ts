@@ -31,7 +31,7 @@ import {
   getSitePrefetchUrlsForSource,
   getSitePrefetchOverviewRowsForSource,
   ensureEntitySiteWarmInventory,
-  FLOWBIE_SITE_DATA_REFRESHED_EVENT,
+  NEO_PULSE_SITE_DATA_REFRESHED_EVENT,
 } from "@/lib/local-analysis/entity-site-warm-cache";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { OverviewBinding } from "@/hooks/overview/use-overview-wordpress-binding";
@@ -401,8 +401,8 @@ export function useOverviewTabSitemapLoad({
       if (!activeSite?.id || !detail?.siteId || detail.siteId !== activeSite.id) return;
       void handleLoadSitemap({ force: true, silent: false, applyToUi: true });
     };
-    window.addEventListener(FLOWBIE_SITE_DATA_REFRESHED_EVENT, onSiteDataRefreshed);
-    return () => window.removeEventListener(FLOWBIE_SITE_DATA_REFRESHED_EVENT, onSiteDataRefreshed);
+    window.addEventListener(NEO_PULSE_SITE_DATA_REFRESHED_EVENT, onSiteDataRefreshed);
+    return () => window.removeEventListener(NEO_PULSE_SITE_DATA_REFRESHED_EVENT, onSiteDataRefreshed);
   }, [handleLoadSitemap]);
 
   useEffect(() => {

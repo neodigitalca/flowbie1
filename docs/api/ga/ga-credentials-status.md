@@ -34,7 +34,7 @@ Reads credentials status from the Google Analytics API.
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/ga/credentials-status" \
+curl -X GET "https://neodigital.ca/api/ga/credentials-status" \
   -H "Content-Type: application/json" \
 ```
 

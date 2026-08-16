@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/bulk-update-overview-seo
 auth: open
-order: 2180
+order: 2170
 ---
 
 POST `/api/wordpress/bulk-update-overview-seo`.
@@ -34,7 +34,7 @@ Runs a bulk wordpress operation from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/bulk-update-overview-seo" \
+curl -X POST "https://neodigital.ca/api/wordpress/bulk-update-overview-seo" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

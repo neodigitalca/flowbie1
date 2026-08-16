@@ -5,7 +5,7 @@ section: Vertical Benchmarks
 method: GET
 path: /api/vertical-benchmarks/taxonomy
 auth: open
-order: 2150
+order: 2140
 ---
 
 GET `/api/vertical-benchmarks/taxonomy`.
@@ -35,7 +35,7 @@ Classifies managed WordPress sites into vertical benchmark client tags using tax
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/vertical-benchmarks/taxonomy" \
+curl -X GET "https://neodigital.ca/api/vertical-benchmarks/taxonomy" \
   -H "Content-Type: application/json" \
 ```
 

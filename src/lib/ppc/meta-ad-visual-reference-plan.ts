@@ -52,7 +52,7 @@ function defaultAcceptanceForKind(
       : "Must support the brief visual concept. No people or faces.";
   }
   if (kind === "device") {
-    return "Must show accurate current-model hardware with correct proportions. Device screen uses abstract color blocks and geometric shapes only, no readable text or logos.";
+    return "Must show accurate current-model hardware with correct proportions. Device screen shows realistic WordPress or page-builder layout mockup with gray placeholder bars only, no readable text or logos.";
   }
   if (kind === "map") {
     return "Must show Google Maps or local search UI suitable as a designed overlay when brief allows.";
@@ -199,12 +199,12 @@ export function buildMetaVisualReferencePlanSystemPrompt(options?: {
 }): string {
   const brief = options?.creativeBrief;
   const isDesignedGraphic = !brief || brief.creativeStyle !== "photo_hero";
-  const isFlowbieProduct =
-    options?.contextSource === "flowbie_app" || options?.creativeMode === "product_saas";
-  const flowbieRules = isFlowbieProduct
+  const isNeoPulseProduct =
+    options?.contextSource === "neo-pulse_app" || options?.creativeMode === "product_saas";
+  const neoPulseRules = isNeoPulseProduct
     ? `
 
-FlowbieONE product ad rules (critical):
+NEO Pulse product ad rules (critical):
 - Plan reference searches for tools in creativeBrief.visualToolPalette where degree > 0.
 - Read programBrief in the user payload for reference ad patterns.
 - Map element only when map_overlay.degree > 0 or creativeBrief.useMapOverlay is true.`
@@ -248,7 +248,7 @@ Query rules (critical):
 - Example icon_cluster query: "SEO search icons flat design"
 - For device elements, googleImageQuery MUST include currentYear from the user payload.
 
-Each element needs a clear acceptanceBrief stating what must be visible in the picked reference.${flowbieRules}`;
+Each element needs a clear acceptanceBrief stating what must be visible in the picked reference.${neoPulseRules}`;
 }
 
 export function buildMetaVisualReferencePlanUserPayload(options: {

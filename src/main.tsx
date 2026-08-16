@@ -1,11 +1,17 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import "@/components/pulse-assist/pulse-assist-theme.css";
+import { migrateAllLegacyNeoPulseStorageKeys } from "@/lib/neo-pulse-storage-migrate";
 
-void import("@/components/integrations/storage").then(({ getStoredSites }) =>
-  import("@/lib/local-analysis/entity-site-warm-cache").then(({ bootstrapEntitySiteWarmOnAppLoad }) => {
-    bootstrapEntitySiteWarmOnAppLoad(getStoredSites());
-  }),
+migrateAllLegacyNeoPulseStorageKeys();
+
+void import("@/components/integrations/storage").then(({ hydrateLocalAppStateFromServerIfEmpty, getStoredSites }) =>
+  hydrateLocalAppStateFromServerIfEmpty().then(() =>
+    import("@/lib/local-analysis/entity-site-warm-cache").then(({ bootstrapEntitySiteWarmOnAppLoad }) => {
+      bootstrapEntitySiteWarmOnAppLoad(getStoredSites());
+    }),
+  ),
 );
 
 const rootElement = document.getElementById("root");

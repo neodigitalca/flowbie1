@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/parse-sitemap
 auth: open
-order: 2680
+order: 2670
 ---
 
 POST `/api/wordpress/parse-sitemap`.
@@ -34,7 +34,7 @@ Runs the parse sitemap action in the WordPress API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/parse-sitemap" \
+curl -X POST "https://neodigital.ca/api/wordpress/parse-sitemap" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

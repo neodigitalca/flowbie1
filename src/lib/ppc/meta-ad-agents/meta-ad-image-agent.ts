@@ -4,6 +4,10 @@ import {
   buildMetaImagePrompt,
   buildMetaImagePromptDescription,
 } from "@/lib/ppc/meta-ad-prompt-builder";
+import {
+  mergeMandatoryMetaImageTextChecklist,
+  prepareCreativeBriefForImageGeneration,
+} from "@/lib/ppc/meta-ad-image-on-image-text";
 import type { MetaInstagramReferenceResult } from "@/lib/ppc/meta-ad-agents/meta-ad-instagram-reference-agent";
 import type {
   MetaAdBlueprint,
@@ -43,6 +47,7 @@ export async function runMetaAdImageAgent(options: {
   localityCity?: string;
   siteName?: string;
   typographyStyle?: MetaAdTypographyStyle;
+  pageContext?: string;
 }): Promise<RunMetaAdImageResult> {
   if (!options.apiKey?.trim()) {
     throw new Error("OpenRouter API key is missing. Set it in Settings first.");
@@ -59,8 +64,11 @@ export async function runMetaAdImageAgent(options: {
     throw new Error("Image reference result with visual plan elements is required.");
   }
 
+  const imageBrief = prepareCreativeBriefForImageGeneration(options.creativeBrief);
+  const checklist = mergeMandatoryMetaImageTextChecklist(options.checklist, imageBrief);
+
   const promptDescription = buildMetaImagePromptDescription({
-    creativeBrief: options.creativeBrief,
+    creativeBrief: imageBrief,
     focusKeyword: options.focusKeyword,
     placement: options.placement,
     allowPeopleInImage: options.allowPeopleInImage,
@@ -69,13 +77,14 @@ export async function runMetaAdImageAgent(options: {
     localityCity: options.localityCity,
     typographyStyle: options.typographyStyle,
     colorPalette: options.colorPalette,
+    pageContext: options.pageContext,
   });
 
   const prompt = buildMetaImagePrompt({
-    creativeBrief: options.creativeBrief,
+    creativeBrief: imageBrief,
     goal: options.goal,
     focusKeyword: options.focusKeyword,
-    checklist: options.checklist,
+    checklist,
     placement: options.placement,
     referencePromptSuffix: reference.promptSuffix,
     allowPeopleInImage: options.allowPeopleInImage,
@@ -85,6 +94,7 @@ export async function runMetaAdImageAgent(options: {
     siteName: options.siteName,
     typographyStyle: options.typographyStyle,
     colorPalette: options.colorPalette,
+    pageContext: options.pageContext,
   });
 
   const aspectRatio = metaPlacementToImageAspectRatio(options.placement);

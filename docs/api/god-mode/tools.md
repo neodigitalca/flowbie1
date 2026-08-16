@@ -7,7 +7,7 @@ order: 20
 
 <!-- manual -->
 
-Backend Assist registers tools in `class-flowbie-wp-backend-assist-registry.php`. The classifier picks a tool; content prep may reroute before execution.
+Backend Assist registers tools in `class-neo-pulse-wp-backend-assist-registry.php`. The classifier picks a tool; content prep may reroute before execution.
 
 ## Read-only tools (Ask-safe)
 
@@ -41,7 +41,7 @@ Backend Assist registers tools in `class-flowbie-wp-backend-assist-registry.php`
 | `create_seo_block` | New draft SEO block | |
 | `delete_seo_block` | Delete block | block_id |
 | `save_seo_block` | Persist block manifest | block_id or manifest |
-| `apply_seo_block_to_page` | Insert Elementor flowbie_seo_section widget | post_id, block_id |
+| `apply_seo_block_to_page` | Insert Elementor neo-pulse_seo_section widget | post_id, block_id |
 
 ## save_post_meta field map
 
@@ -99,4 +99,4 @@ Before execution, these message patterns force a specific tool regardless of cla
 - FAQ schema-only (no table) → `save_post_meta`
 - Undo / correction after body edit → `restore_post_revision`
 
-Source: `class-flowbie-wp-backend-assist-pipeline-content-prep.php`
+Source: `class-neo-pulse-wp-backend-assist-pipeline-content-prep.php`

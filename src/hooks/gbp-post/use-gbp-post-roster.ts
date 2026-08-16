@@ -7,6 +7,7 @@ export function useGbpPostRoster(allSites: WordPressSite[]) {
   const { activeWordPressSiteId } = useWordPressOptimization();
   const [selectedSiteIds, setSelectedSiteIds] = useState<Set<string>>(() => new Set());
   const [topicBySiteId, setTopicBySiteId] = useState<Record<string, string>>({});
+  const [landingPageUrlBySiteId, setLandingPageUrlBySiteId] = useState<Record<string, string>>({});
 
   const sitesKey = useMemo(
     () =>
@@ -62,9 +63,18 @@ export function useGbpPostRoster(allSites: WordPressSite[]) {
     setTopicBySiteId((prev) => ({ ...prev, [siteId]: topic }));
   }, []);
 
+  const setLandingPageUrlForSite = useCallback((siteId: string, url: string) => {
+    setLandingPageUrlBySiteId((prev) => ({ ...prev, [siteId]: url }));
+  }, []);
+
   const topicForSite = useCallback(
     (siteId: string) => topicBySiteId[siteId] ?? "",
     [topicBySiteId],
+  );
+
+  const landingPageForSite = useCallback(
+    (siteId: string) => landingPageUrlBySiteId[siteId] ?? "",
+    [landingPageUrlBySiteId],
   );
 
   return {
@@ -73,8 +83,12 @@ export function useGbpPostRoster(allSites: WordPressSite[]) {
     selectedSiteIdList,
     selectedSites,
     topicBySiteId,
+    landingPageUrlBySiteId,
     setTopicForSite,
+    setLandingPageUrlForSite,
+    setLandingPageUrlBySiteId,
     topicForSite,
+    landingPageForSite,
     loadAllClients,
     selectNoClients,
     toggleSiteSelected,

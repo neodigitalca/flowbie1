@@ -5,7 +5,7 @@ section: Images
 method: POST
 path: /api/images/prepare-local-image
 auth: open
-order: 530
+order: 520
 ---
 
 POST `/api/images/prepare-local-image`.
@@ -34,7 +34,7 @@ Runs the prepare local image action in the Images API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/images/prepare-local-image" \
+curl -X POST "https://neodigital.ca/api/images/prepare-local-image" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

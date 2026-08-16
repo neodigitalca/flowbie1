@@ -1,7 +1,7 @@
 import type { PpcCampaignRow } from "@/lib/ppc/google-ads-types";
 
 function cacheKey(siteId: string): string {
-  return `flowbie-ppc-google-campaigns-v1:${siteId}`;
+  return `neo-pulse-ppc-google-campaigns-v1:${siteId}`;
 }
 
 const memoryBySiteId = new Map<string, PpcCampaignRow[]>();

@@ -5,7 +5,7 @@ section: DataForSEO MCP
 method: POST
 path: /api/mcp/DataForSEO_on_page_content_parsing
 auth: open
-order: 770
+order: 760
 ---
 
 POST `/api/mcp/DataForSEO_on_page_content_parsing`.
@@ -34,7 +34,7 @@ Runs the dataforseo_on_page_content_parsing action in the DataForSEO MCP API fro
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/mcp/DataForSEO_on_page_content_parsing" \
+curl -X POST "https://neodigital.ca/api/mcp/DataForSEO_on_page_content_parsing" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

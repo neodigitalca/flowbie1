@@ -7,7 +7,7 @@ order: 5
 
 <!-- manual -->
 
-Exhaustive checklist of Flowbie Chat **God Mode** capabilities (Backend Assist). Use this page to review coverage. See linked pages for detail.
+Exhaustive checklist of NEO Pulse Chat **God Mode** capabilities (Backend Assist). Use this page to review coverage. See linked pages for detail.
 
 ## A. Access and mode switching
 
@@ -15,7 +15,7 @@ Exhaustive checklist of Flowbie Chat **God Mode** capabilities (Backend Assist).
 2. **God Mode toggle** — toolbar Visitor / God Mode buttons
 3. **Login gate** — God Mode only when `canBackendMode` (`is_user_logged_in()`)
 4. **Default God Mode in wp-admin** — `defaultAdminMode: backend`
-5. **Mode persistence** — `sessionStorage` key `flowbie_chat_admin_mode`
+5. **Mode persistence** — `sessionStorage` key `neo_pulse_chat_admin_mode`
 6. **Root CSS state** — `fcw--super-admin-mode` on widget root
 
 ## B. Ask / Plan / Build submodes
@@ -25,7 +25,7 @@ Exhaustive checklist of Flowbie Chat **God Mode** capabilities (Backend Assist).
 9. **Build** — full Backend Assist pipeline execution
 10. **Submode pill UI** — composer chip cycles Ask → Plan → Build
 11. **Shift+Tab shortcut** — cycle submodes
-12. **Submode persistence** — `sessionStorage` key `flowbie_chat_admin_submode`
+12. **Submode persistence** — `sessionStorage` key `neo_pulse_chat_admin_submode`
 13. **Submode-specific greeting sublines** — empty-state copy changes per submode
 14. **Stream status labels** — Analyzing… / Planning… / Working…
 15. **Submode switch CTAs** — Switch to Build/Plan/Ask mode chips on cards
@@ -43,8 +43,8 @@ Exhaustive checklist of Flowbie Chat **God Mode** capabilities (Backend Assist).
 20. **Site inventory CSV download** — toolbar link, includes drafts
 21. **Site inventory warm on entry** — cache preloaded via REST
 22. **Copy debug log** — logged-in users (`canCopyLog`)
-23. **God Mode chat history persist** — `localStorage` `flowbie_godmode_chat_{userId}`, max 20 turns (WP Admin + God Mode)
-24. **Debug log persist** — `localStorage` `flowbie_godmode_debug_log_{userId}`
+23. **God Mode chat history persist** — `localStorage` `neo-pulse_godmode_chat_{userId}`, max 20 turns (WP Admin + God Mode)
+24. **Debug log persist** — `localStorage` `neo-pulse_godmode_debug_log_{userId}`
 25. **Source pills shown** even when UI setting hides them in Visitor mode
 26. **CTA buttons not suppressed** in God Mode
 27. **Prefetch disabled** in God Mode (suggestions/chips)
@@ -119,7 +119,7 @@ Exhaustive checklist of Flowbie Chat **God Mode** capabilities (Backend Assist).
 | 72 | `create_seo_block` | New draft SEO block |
 | 73 | `delete_seo_block` | Delete block by id |
 | 74 | `save_seo_block` | Persist block manifest |
-| 75 | `apply_seo_block_to_page` | Insert Elementor flowbie_seo_section widget on page |
+| 75 | `apply_seo_block_to_page` | Insert Elementor neo-pulse_seo_section widget on page |
 
 ## H. Compound / special runners (Build only)
 
@@ -170,13 +170,13 @@ Exhaustive checklist of Flowbie Chat **God Mode** capabilities (Backend Assist).
 
 ## K. Endpoints and integration
 
-114. **Primary stream** — `POST admin-ajax.php?action=flowbie_chat_stream` with `admin_mode: backend`, `admin_submode`, `target_scope`, `message`, `history`, page context fields  
-115. **`POST /flowbie/v1/backend-assist`** — direct pipeline (OpenRouter required)  
-116. **`POST /flowbie/v1/backend-assist/step`** — workflow step execution  
-117. **`GET /flowbie/v1/backend-assist/workflow/{id}/status`** — workflow status  
-118. **`POST /flowbie/v1/backend-assist/undo`** — card undo  
-119. **`GET/POST/DELETE /flowbie/v1/backend-assist/sessions`** — session persistence API  
-120. **`GET /flowbie/v1/chat/site-inventory`** — inventory warm + CSV export  
+114. **Primary stream** — `POST admin-ajax.php?action=neo_pulse_chat_stream` with `admin_mode: backend`, `admin_submode`, `target_scope`, `message`, `history`, page context fields  
+115. **`POST /neo-pulse/v1/backend-assist`** — direct pipeline (OpenRouter required)  
+116. **`POST /neo-pulse/v1/backend-assist/step`** — workflow step execution  
+117. **`GET /neo-pulse/v1/backend-assist/workflow/{id}/status`** — workflow status  
+118. **`POST /neo-pulse/v1/backend-assist/undo`** — card undo  
+119. **`GET/POST/DELETE /neo-pulse/v1/backend-assist/sessions`** — session persistence API  
+120. **`GET /neo-pulse/v1/chat/site-inventory`** — inventory warm + CSV export  
 121. **MCP wrappers** — `wp_assist_chat`, `wp_assist_workflow_status`, `wp_assist_workflow_step`  
 
 ## L. Permissions

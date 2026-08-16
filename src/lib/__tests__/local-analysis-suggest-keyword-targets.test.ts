@@ -3,7 +3,6 @@ import {
   repairSapPageAllocation,
   repairSapPageAllocationWeighted,
 } from "../local-analysis-suggest-keyword-targets";
-import { LOCAL_ANALYSIS_TOTAL_SAP_CAP } from "../local-analysis-target-constants";
 
 describe("repairSapPageAllocation", () => {
   it("distributes total across rows with min/max bounds", () => {
@@ -46,10 +45,26 @@ describe("repairSapPageAllocation", () => {
     expect(out.reduce((s, r) => s + r.sapPages, 0)).toBe(2);
   });
 
-  it("rejects totals outside global cap", () => {
-    expect(() =>
-      repairSapPageAllocation([{ keyword: "x", sapPages: 1 }], LOCAL_ANALYSIS_TOTAL_SAP_CAP + 1, 1, 50)
-    ).toThrow();
+  it("accepts totals above the former 200 cap", () => {
+    const out = repairSapPageAllocation(
+      [{ keyword: "x", sapPages: 1 }],
+      250,
+      1,
+      50,
+    );
+    expect(out.reduce((s, r) => s + r.sapPages, 0)).toBe(250);
+  });
+
+  it("allocates when total is below per-target min (e.g. budget 1, min 3)", () => {
+    const out = repairSapPageAllocationWeighted(
+      [{ keyword: "blinds", sapPages: 3 }],
+      [10],
+      1,
+      3,
+      50,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0]!.sapPages).toBe(1);
   });
 });
 

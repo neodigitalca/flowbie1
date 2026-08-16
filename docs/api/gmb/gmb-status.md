@@ -34,7 +34,7 @@ Reads status from the Google Business Profile API.
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/gmb/status" \
+curl -X GET "https://neodigital.ca/api/gmb/status" \
   -H "Content-Type: application/json" \
 ```
 

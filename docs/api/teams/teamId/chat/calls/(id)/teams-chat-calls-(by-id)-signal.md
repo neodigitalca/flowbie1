@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/chat/calls/({id})/signal
 auth: team-rbac-communication
-order: 1170
+order: 1160
 ---
 
 POST `/api/teams/{teamId}/chat/calls/({id})/signal`.
@@ -34,7 +34,7 @@ Runs the signal action in the Teams API from a JSON request body. Requires a sig
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/chat/calls/({id})/signal" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/chat/calls/({id})/signal" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

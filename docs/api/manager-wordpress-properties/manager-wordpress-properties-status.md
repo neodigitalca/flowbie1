@@ -5,7 +5,7 @@ section: Manager WordPress Properties
 method: GET
 path: /api/manager-wordpress-properties/status
 auth: open
-order: 670
+order: 660
 ---
 
 GET `/api/manager-wordpress-properties/status`.
@@ -34,7 +34,7 @@ File-backed manager settings (replaces Supabase cloud settings).
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/manager-wordpress-properties/status" \
+curl -X GET "https://neodigital.ca/api/manager-wordpress-properties/status" \
   -H "Content-Type: application/json" \
 ```
 

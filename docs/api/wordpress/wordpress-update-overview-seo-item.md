@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/update-overview-seo-item
 auth: open
-order: 2800
+order: 2790
 ---
 
 POST `/api/wordpress/update-overview-seo-item`.
@@ -34,7 +34,7 @@ Runs the update overview seo item action in the WordPress API from a JSON reques
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/update-overview-seo-item" \
+curl -X POST "https://neodigital.ca/api/wordpress/update-overview-seo-item" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

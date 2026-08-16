@@ -261,26 +261,12 @@ export function useChatPoll({ teamId, activeChannelId, enabled }: UseChatPollOpt
   useEffect(() => {
     if (!enabled || !teamId) return;
     void refreshChannels();
-    const id = window.setInterval(() => void refreshChannels(), POLL_MS);
-    return () => window.clearInterval(id);
   }, [enabled, teamId, refreshChannels]);
 
   useEffect(() => {
     if (!teamId || !activeChannelId) return;
     void loadInitialMessages(activeChannelId);
   }, [teamId, activeChannelId, loadInitialMessages]);
-
-  useEffect(() => {
-    if (!enabled || !teamId || !activeChannelId) return;
-    const id = window.setInterval(() => void pollMessages(), POLL_MS);
-    return () => window.clearInterval(id);
-  }, [enabled, teamId, activeChannelId, pollMessages]);
-
-  useEffect(() => {
-    if (!enabled || !teamId || !activeChannelId) return;
-    const id = window.setInterval(() => void pollBackgroundChannels(), POLL_MS);
-    return () => window.clearInterval(id);
-  }, [enabled, teamId, activeChannelId, pollBackgroundChannels]);
 
   const sendMessage = useCallback(
     async (bodyHtml: string, attachmentAssetIds: number[] = [], parentMessageId?: number) => {

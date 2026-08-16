@@ -5,7 +5,7 @@ section: Teams
 method: GET
 path: /api/teams/{teamId}/tasks/tasks/({id})/files/({id})
 auth: session-team
-order: 1990
+order: 1980
 ---
 
 GET `/api/teams/{teamId}/tasks/tasks/({id})/files/({id})`.
@@ -34,7 +34,7 @@ Fetches a single files item from the Teams API. Requires a signed-in user who be
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/teams/{teamId}/tasks/tasks/({id})/files/({id})" \
+curl -X GET "https://neodigital.ca/api/teams/{teamId}/tasks/tasks/({id})/files/({id})" \
   -H "Content-Type: application/json" \
 ```
 

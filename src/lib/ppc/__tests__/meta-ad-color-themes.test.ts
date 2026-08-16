@@ -8,13 +8,13 @@ import {
 import { createDefaultMetaGenerateConfig, readMetaGenerateConfig } from "@/lib/ppc/meta-ads-field-limits";
 
 describe("meta-ad-color-themes", () => {
-  it("defaults to flowbie dark palette", () => {
-    expect(META_AD_COLOR_THEME_DEFAULT_ID).toBe("flowbie-dark");
+  it("defaults to neo-pulse dark palette", () => {
+    expect(META_AD_COLOR_THEME_DEFAULT_ID).toBe("neo-pulse-dark");
     expect(createDefaultMetaGenerateConfig().defaultColorPalette.background).toBe("#02050a");
   });
 
   it("resolves unknown theme ids to default", () => {
-    expect(resolveMetaAdColorThemeId("invalid")).toBe("flowbie-dark");
+    expect(resolveMetaAdColorThemeId("invalid")).toBe("neo-pulse-dark");
   });
 
   it("uses row palette when set, otherwise default palette", () => {
@@ -45,15 +45,15 @@ describe("meta-ad-color-themes", () => {
 
     const siteId = "test-site-theme";
     sessionStorage.setItem(
-      `flowbie-ppc-meta-generate-config:${siteId}`,
+      `neo-pulse-ppc-meta-generate-config:${siteId}`,
       JSON.stringify({ adCount: 2, placement: "feed_4x5", includeImage: true, colorThemeId: "neon-contrast" }),
     );
     expect(readMetaGenerateConfig(siteId).defaultColorPalette.background).toBe("#000000");
     vi.unstubAllGlobals();
   });
 
-  it("returns flowbie dark palette hex values", () => {
-    const palette = getMetaAdColorThemePalette("flowbie-dark");
+  it("returns neo-pulse dark palette hex values", () => {
+    const palette = getMetaAdColorThemePalette("neo-pulse-dark");
     expect(palette.background).toBe("#02050a");
     expect(palette.accent).toBe("#84bc00");
     expect(palette.primary).toBe("#ffffff");

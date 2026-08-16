@@ -43,7 +43,7 @@ Install tables and create or update owner account + agency team. No existing ses
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/auth/setup-admin" \
+curl -X POST "https://neodigital.ca/api/auth/setup-admin" \
   -H "Content-Type: application/json" \
   -d '{   "email": "you@example.com",   "password": "your-password" }'
 ```

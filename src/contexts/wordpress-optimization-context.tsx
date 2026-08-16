@@ -23,6 +23,10 @@ import {
 } from "@/contexts/active-wordpress-site-context";
 import { getOptimizationSettings, saveOptimizationSettings } from "@/lib/optimization-settings-storage";
 import { getOptimizationHistory, clearOptimizationHistory } from "@/lib/optimization-history-storage";
+import {
+  registerAgentRunOptimizationBridge,
+  unregisterAgentRunOptimizationBridge,
+} from "@/lib/agent-runs/agent-run-optimization-bridge";
 import type { OptimizationOptions } from "@/hooks/use-optimization-options";
 
 export type WordPressOptimizationContextValue = ReturnType<typeof useContentOptimization> &
@@ -214,6 +218,25 @@ export function WordPressOptimizationProvider({ children }: { children: ReactNod
   const optimization = useContentOptimization();
   const keyword = useKeywordSelection();
   const { activeWordPressSiteId, setActiveWordPressSiteId } = useActiveWordPressSite();
+
+  useEffect(() => {
+    registerAgentRunOptimizationBridge({
+      setIsOptimizingContent: optimization.setIsOptimizingContent,
+      setOptimizationProgress: optimization.setOptimizationProgress,
+      setBulkOptimizationState: optimization.setBulkOptimizationState,
+      setOptimizationFileManagers: optimization.setOptimizationFileManagers,
+      optimizationFileManagers: optimization.optimizationFileManagers,
+      continueOptimizationRef: optimization.continueOptimizationRef,
+    });
+    return () => unregisterAgentRunOptimizationBridge();
+  }, [
+    optimization.continueOptimizationRef,
+    optimization.optimizationFileManagers,
+    optimization.setBulkOptimizationState,
+    optimization.setIsOptimizingContent,
+    optimization.setOptimizationFileManagers,
+    optimization.setOptimizationProgress,
+  ]);
 
   const [integrationSites, setIntegrationSites] = useState<WordPressSite[]>([]);
   const registerIntegrationSites = useCallback((sites: WordPressSite[]) => {

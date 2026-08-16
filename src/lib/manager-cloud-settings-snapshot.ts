@@ -2,19 +2,17 @@ import { MANAGER_SETTINGS_CLUSTER_KEY } from "@/components/manager/manager-setti
 import { WORDPRESS_SITES_STORAGE_KEY, KB_FILES_STORAGE_KEY } from "@/components/integrations/types";
 
 /** Persisted so cloud restore + reload can hydrate Index LLM state. */
-export const FLOWBIE_LLM_MODEL_KEY = "flowbie-llm-selected-model";
-export const FLOWBIE_LLM_TEMPERATURE_KEY = "flowbie-llm-temperature";
-export const FLOWBIE_LLM_MAX_TOKENS_KEY = "flowbie-llm-max-tokens";
-export const FLOWBIE_LLM_TOP_P_KEY = "flowbie-llm-top-p";
+export const NEO_PULSE_LLM_MODEL_KEY = "neo-pulse-llm-selected-model";
+export const NEO_PULSE_LLM_TEMPERATURE_KEY = "neo-pulse-llm-temperature";
+export const NEO_PULSE_LLM_MAX_TOKENS_KEY = "neo-pulse-llm-max-tokens";
+export const NEO_PULSE_LLM_TOP_P_KEY = "neo-pulse-llm-top-p";
 
-const MANAGER_TAB_STORAGE_KEY = "flowbie-manager-tab";
+const MANAGER_TAB_STORAGE_KEY = "neo-pulse-manager-tab";
 const STORED_BLUEPRINTS_KEY = "stored-blueprints";
 
 const EXACT_LOCAL_KEYS = [
   "openrouter-api-key",
   "dataforseo-api-key",
-  "agentmail-api-key",
-  "agentmail-general-email",
   "slack-bot-token",
   "slack-global-settings",
   WORDPRESS_SITES_STORAGE_KEY,
@@ -25,10 +23,10 @@ const EXACT_LOCAL_KEYS = [
   "global_research_model",
   "primaryColor",
   STORED_BLUEPRINTS_KEY,
-  FLOWBIE_LLM_MODEL_KEY,
-  FLOWBIE_LLM_TEMPERATURE_KEY,
-  FLOWBIE_LLM_MAX_TOKENS_KEY,
-  FLOWBIE_LLM_TOP_P_KEY,
+  NEO_PULSE_LLM_MODEL_KEY,
+  NEO_PULSE_LLM_TEMPERATURE_KEY,
+  NEO_PULSE_LLM_MAX_TOKENS_KEY,
+  NEO_PULSE_LLM_TOP_P_KEY,
 ] as const;
 
 const PREFIX_KEYS = ["optimization_settings_", "optimization_mode_"] as const;
@@ -81,10 +79,10 @@ export function collectManagerCloudSettingsSnapshot(
   for (const [k, v] of Object.entries(keyOverrides)) {
     if (typeof v === "string") keys[k] = v;
   }
-  keys[FLOWBIE_LLM_MODEL_KEY] = llm.selectedModel;
-  keys[FLOWBIE_LLM_TEMPERATURE_KEY] = String(llm.temperature);
-  keys[FLOWBIE_LLM_MAX_TOKENS_KEY] = String(llm.maxTokens);
-  keys[FLOWBIE_LLM_TOP_P_KEY] = String(llm.topP);
+  keys[NEO_PULSE_LLM_MODEL_KEY] = llm.selectedModel;
+  keys[NEO_PULSE_LLM_TEMPERATURE_KEY] = String(llm.temperature);
+  keys[NEO_PULSE_LLM_MAX_TOKENS_KEY] = String(llm.maxTokens);
+  keys[NEO_PULSE_LLM_TOP_P_KEY] = String(llm.topP);
   return {
     version: 1,
     collectedAt: new Date().toISOString(),
@@ -108,6 +106,14 @@ export function applyManagerCloudSnapshotToLocalStorage(snapshot: unknown): { ke
   try {
     for (const [k, v] of Object.entries(keys)) {
       if (typeof v !== "string") continue;
+      if (k === WORDPRESS_SITES_STORAGE_KEY) {
+        try {
+          const parsed = JSON.parse(v) as unknown;
+          if (Array.isArray(parsed) && parsed.length === 0) continue;
+        } catch {
+          continue;
+        }
+      }
       localStorage.setItem(k, v);
       n++;
     }
@@ -124,7 +130,7 @@ export function applyManagerCloudSnapshotToLocalStorage(snapshot: unknown): { ke
 
 export function readStoredLlmModelForIndex(defaultModel: string): string {
   try {
-    const t = localStorage.getItem(FLOWBIE_LLM_MODEL_KEY)?.trim();
+    const t = localStorage.getItem(NEO_PULSE_LLM_MODEL_KEY)?.trim();
     if (t) return t;
   } catch {
     /* ignore */

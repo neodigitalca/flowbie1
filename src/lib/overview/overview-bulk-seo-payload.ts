@@ -182,7 +182,9 @@ export function buildOverviewBulkSeoItem(
       postType: binding.subtype,
       postTypeEndpoint: restEndpoint,
       postExcerpt: em,
-      acf: {},
+      acf: options?.forWordPressUpload
+        ? { date_modifier: overviewDateModifierTodayIso() }
+        : {},
     };
   }
 
@@ -195,7 +197,9 @@ export function buildOverviewBulkSeoItem(
       postType: binding.subtype,
       postTypeEndpoint: restEndpoint,
       postTitle: et,
-      acf: {},
+      acf: options?.forWordPressUpload
+        ? { date_modifier: overviewDateModifierTodayIso() }
+        : {},
     };
   }
 
@@ -311,7 +315,11 @@ export async function uploadOverviewSeoApiItemAvoidingBatchV1(
         link: updateRes.link,
       };
     }
-    const acf = item.acf && typeof item.acf === "object" ? item.acf : {};
+    const acf: Record<string, string> =
+      item.acf && typeof item.acf === "object" ? { ...item.acf } : {};
+    if (!String(acf.date_modifier ?? "").trim()) {
+      acf.date_modifier = overviewDateModifierTodayIso();
+    }
     const hasAcf = Object.keys(acf).some((k) => String(acf[k] ?? "").trim());
     if (!hasAcf) {
       return { postId: item.postId, ok: true, method: "update_post", link: updateRes.link };

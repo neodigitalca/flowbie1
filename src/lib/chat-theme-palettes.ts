@@ -75,6 +75,18 @@ export const CHAT_THEME_PALETTES: Record<ChatThemeId, ChatThemeTokens> = {
     headingText: "84 40% 18%",
     sectionLabelText: "84 25% 28%",
   },
+  slack: {
+    bg: "220 9% 11%",
+    sidebarBg: "300 61% 13%",
+    barBg: "220 9% 11%",
+    composerBg: "220 7% 15%",
+    text: "0 0% 100%",
+    muted: "220 5% 65%",
+    border: "300 30% 22%",
+    rowHover: "300 45% 20%",
+    headingText: "0 0% 100%",
+    sectionLabelText: "220 5% 75%",
+  },
 };
 
 const ACCENT_TOKENS: Record<ChatAccentPreset, { accent: string; accentSoft: string }> = {
@@ -122,6 +134,7 @@ export function chatRootDataAttrs(appearance: ChatAppearancePrefs): Record<strin
     "data-chat-density": appearance.density,
     "data-chat-font": appearance.fontScale,
     "data-heading-theme": appearance.headingTheme,
+    "data-chat-layout": appearance.layoutMode,
   };
 }
 

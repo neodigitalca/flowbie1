@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from "react";
 import type { CSSProperties } from "react";
 import { Headphones, Mic, MicOff, Monitor, MonitorOff, Video, VideoOff, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { FloAvatar } from "@/components/chat/FloAvatar";
+import { NeoPulseAvatar } from "@/components/chat/NeoPulseAvatar";
 import { ChatVideoTile } from "@/components/chat/calls/ChatVideoTile";
 import {
   CHAT_HEADING_TEXT,
@@ -12,7 +12,7 @@ import {
   CHAT_TEXT_PRIMARY,
 } from "@/components/chat/chat-theme";
 import type { ChatThemeId } from "@/lib/chat-preferences-types";
-import { FLO_DISPLAY_NAME } from "@/lib/chat-flo";
+import { NEO_PULSE_BOT_DISPLAY_NAME } from "@/lib/chat-neo-pulse";
 import { useMicAudioLevel } from "@/hooks/use-mic-audio-level";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
@@ -128,7 +128,7 @@ function ParticipantChip({
         )}
       >
         {participant.isFlo ? (
-          <FloAvatar className="h-full w-full rounded-md" />
+          <NeoPulseAvatar className="h-full w-full rounded-md" />
         ) : participant.avatarUrl ? (
           <img src={participant.avatarUrl} alt="" className="h-full w-full object-cover" />
         ) : (
@@ -218,9 +218,9 @@ export function ChatHuddleSidebar({
         />
 
         <div className={cn("flex items-center gap-2 rounded-md px-3 py-2", CHAT_SURFACE_ELEVATED_CLASS)}>
-          <FloAvatar className="h-10 w-10 shrink-0 rounded-md" />
+          <NeoPulseAvatar className="h-10 w-10 shrink-0 rounded-md" />
           <div className="min-w-0">
-            <p className={cn("text-base font-semibold", CHAT_TEXT_PRIMARY)}>{FLO_DISPLAY_NAME}</p>
+            <p className={cn("text-base font-semibold", CHAT_TEXT_PRIMARY)}>{NEO_PULSE_BOT_DISPLAY_NAME}</p>
             <p className={cn("text-base", CHAT_TEXT_MUTED)}>In this huddle</p>
           </div>
         </div>

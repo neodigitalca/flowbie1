@@ -7,7 +7,7 @@ import {
 } from "@/lib/ppc/google-ads-types";
 
 function storageKey(siteId: string): string {
-  return `flowbie-ppc-generate-config-v2:${siteId}`;
+  return `neo-pulse-ppc-generate-config-v2:${siteId}`;
 }
 
 export function createDefaultPpcGenerateConfig(): PpcGenerateConfig {

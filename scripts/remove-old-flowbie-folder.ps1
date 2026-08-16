@@ -1,5 +1,5 @@
-# Run after closing Cursor/workspace on B:\USE THIS\Flowbie
-$old = "B:\USE THIS\Flowbie"
+# Run after closing Cursor/workspace on B:\USE THIS\NEO Pulse
+$old = "B:\USE THIS\NEO Pulse"
 if (-not (Test-Path $old)) {
   Write-Host "Already removed: $old"
   exit 0

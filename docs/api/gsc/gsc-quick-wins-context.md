@@ -5,7 +5,7 @@ section: Google Search Console
 method: POST
 path: /api/gsc/quick-wins-context
 auth: open
-order: 440
+order: 430
 ---
 
 POST `/api/gsc/quick-wins-context`.
@@ -34,7 +34,7 @@ Runs the quick wins context action in the Google Search Console API from a JSON 
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/gsc/quick-wins-context" \
+curl -X POST "https://neodigital.ca/api/gsc/quick-wins-context" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

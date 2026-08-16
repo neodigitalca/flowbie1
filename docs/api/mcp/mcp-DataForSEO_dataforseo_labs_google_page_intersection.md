@@ -5,7 +5,7 @@ section: DataForSEO MCP
 method: POST
 path: /api/mcp/DataForSEO_dataforseo_labs_google_page_intersection
 auth: open
-order: 740
+order: 730
 ---
 
 POST `/api/mcp/DataForSEO_dataforseo_labs_google_page_intersection`.
@@ -34,7 +34,7 @@ Runs the dataforseo_dataforseo_labs_google_page_intersection action in the DataF
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/mcp/DataForSEO_dataforseo_labs_google_page_intersection" \
+curl -X POST "https://neodigital.ca/api/mcp/DataForSEO_dataforseo_labs_google_page_intersection" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

@@ -34,7 +34,7 @@ Runs the seed ranked keywords action in the DataForSEO API from a JSON request b
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/dataforseo/seed-ranked-keywords" \
+curl -X POST "https://neodigital.ca/api/dataforseo/seed-ranked-keywords" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

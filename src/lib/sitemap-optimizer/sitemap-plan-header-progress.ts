@@ -1,4 +1,5 @@
 import type { MetaBulkMicroSnapshot } from "@/components/overview/OverviewBulkMicroProgress";
+import type { BlogImportHeaderProgress } from "@/lib/bulk/blog-import-header-progress";
 import {
   sitemapApproveOverallPct,
   type SitemapApproveProgressView,
@@ -17,6 +18,20 @@ export type SitemapPlanHeaderProgress = {
   total: number;
   progressPct?: number;
 };
+
+export function sitemapPlanHeaderProgressToBlogImport(
+  progress: SitemapPlanHeaderProgress | null | undefined,
+  isProcessing: boolean,
+): BlogImportHeaderProgress | null {
+  if (!progress?.phase?.trim()) return null;
+  return {
+    phase: progress.phase.trim(),
+    completed: Math.max(0, progress.completed),
+    total: Math.max(1, progress.total),
+    progressPct: progress.progressPct,
+    harnessActive: isProcessing,
+  };
+}
 
 export function sitemapPlanHeaderProgressFromState(args: {
   rankMathImportRunning: boolean;

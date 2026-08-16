@@ -5,7 +5,7 @@ section: WordPress
 order: 5
 ---
 
-The **wordpress** namespace talks to WordPress sites configured in Flowbie Integrations.
+The **wordpress** namespace talks to WordPress sites configured in NEO Pulse Integrations.
 
 ## Prerequisites
 
@@ -21,6 +21,6 @@ The **wordpress** namespace talks to WordPress sites configured in Flowbie Integ
 | SEO meta | `wordpress/update-overview-seo-item`, `wordpress/bulk-update-overview-seo` |
 | Media | `wordpress/upload-media`, `wordpress/list-media` |
 
-Routes are **open** on the server: Flowbie holds WordPress credentials; your client sends JSON action payloads, not WP application passwords directly.
+Routes are **open** on the server: NEO Pulse holds WordPress credentials; your client sends JSON action payloads, not WP application passwords directly.
 
 See [Integrations overview](../integrations/overview) for how properties are stored.

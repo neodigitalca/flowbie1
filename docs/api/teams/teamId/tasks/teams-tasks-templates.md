@@ -5,12 +5,57 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/tasks/templates
 auth: session-team
-order: 2090
+order: 2080
 ---
 
 POST `/api/teams/{teamId}/tasks/templates`.
 
-Runs the templates action in the Teams API from a JSON request body. Requires a signed-in user who belongs to the team id in the path.
+Bulk replace all team templates. Requires `{ "templates": [...] }`.
+
+## Upsert one template
+
+POST `/api/teams/{teamId}/tasks/templates/upsert`
+
+```json
+{
+  "template": {
+    "keyword": "monthly-seo",
+    "name": "Monthly SEO",
+    "defaultTasks": [
+      { "keyword": "audit", "title": "Monthly SEO Audit", "status": "todo", "clientSiteId": null }
+    ]
+  }
+}
+```
+
+## Delete template
+
+DELETE `/api/teams/{teamId}/tasks/templates/{keyword}`
+
+## Save from project
+
+POST `/api/teams/{teamId}/tasks/templates/from-project`
+
+```json
+{ "projectId": 12, "name": "Monthly SEO", "keyword": "monthly-seo" }
+```
+
+## Create project with template + clients
+
+POST `/api/teams/{teamId}/tasks/projects`
+
+```json
+{
+  "title": "Monthly Tasks",
+  "wordpressSiteId": "site-id",
+  "wordpressSites": [{ "id": "site-id", "name": "Advance Blinds" }],
+  "defaultTasks": [
+    { "keyword": "audit", "title": "Monthly SEO Audit", "clientSiteId": "site-id" }
+  ]
+}
+```
+
+Task titles support `{client}` substitution or append `" — ClientName"` when a client is assigned.
 
 ## Request
 
@@ -34,7 +79,7 @@ Runs the templates action in the Teams API from a JSON request body. Requires a 
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/tasks/templates" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/tasks/templates" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

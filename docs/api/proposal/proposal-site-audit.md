@@ -5,7 +5,7 @@ section: Proposal
 method: POST
 path: /api/proposal/site-audit
 auth: open
-order: 890
+order: 880
 ---
 
 POST `/api/proposal/site-audit`.
@@ -34,7 +34,7 @@ Runs the site audit action in the Proposal API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/proposal/site-audit" \
+curl -X POST "https://neodigital.ca/api/proposal/site-audit" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

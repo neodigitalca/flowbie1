@@ -1,0 +1,108 @@
+{
+  "keyword": "pages-intent-decay",
+  "name": "Pages Intent Decay",
+  "description": "Meta and extra text on static pages when Google shows them more but fewer people click.",
+  "notes": [
+    "Polls Google Search Console every 24 hours.",
+    "Scope: static pages only (Pages bucket).",
+    "Runs when impressions rose vs the prior 28 days and click-through rate fell (google shows the page more often, but fewer searchers click).",
+    "Updates title, meta description, and SEO extra text. Page body content is not rewritten.",
+    "Same URL waits 72 hours before it can run again."
+  ],
+  "category": "reactive",
+  "verticals": [
+    "general"
+  ],
+  "tags": [
+    "gsc",
+    "pages",
+    "decay",
+    "meta"
+  ],
+  "prerequisites": [
+    "gsc",
+    "wordpress"
+  ],
+  "filters": {
+    "executionKinds": [
+      "content_optimizer_meta"
+    ],
+    "targetBuckets": [
+      "pages"
+    ],
+    "triggerSignals": [
+      "impressions_up_ctr_down"
+    ],
+    "actionCount": 1
+  },
+  "defaultTasks": [
+    {
+      "keyword": "pages-intent-decay",
+      "title": "Meta + extra text on pages on intent decay signal",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "pages",
+        "updateMode": "update"
+      },
+      "scheduleMode": "trigger",
+      "recurrenceRule": "none",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "all",
+        "conditions": [
+          {
+            "signal": "impressions_up_ctr_down",
+            "operator": "gte",
+            "value": 0,
+            "minImpressions": 100
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    }
+  ],
+  "isAutomation": true,
+  "kind": "template",
+  "triggerBlock": {
+    "keyword": "gsc-impressions-ctr-decay",
+    "kind": "gsc",
+    "source": "gsc",
+    "targetBucket": "pages",
+    "triggerConfig": {
+      "sources": [
+        "gsc"
+      ],
+      "match": "all",
+      "conditions": [
+        {
+          "signal": "impressions_up_ctr_down",
+          "operator": "gte",
+          "value": 0,
+          "minImpressions": 100
+        }
+      ],
+      "lookbackDays": 28,
+      "compareDays": 28,
+      "pollHours": 24,
+      "cooldownHours": 72,
+      "maxUrls": 5
+    }
+  },
+  "actionBlock": {
+    "keyword": "content-optimizer-meta",
+    "executionKind": "content_optimizer_meta",
+    "executionPayload": {
+      "targetBucket": "pages",
+      "updateMode": "update"
+    },
+    "title": "Meta + extra text on pages on intent decay signal"
+  }
+}

@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { FloAvatar } from "@/components/chat/FloAvatar";
+import { NeoPulseAvatar } from "@/components/chat/NeoPulseAvatar";
 import type { ActiveHuddleSummary } from "@/lib/chat-call-types";
 
 export type ChatFloHuddleJoinPopupProps = {
@@ -36,10 +36,10 @@ export function ChatFloHuddleJoinPopup({
         </DialogHeader>
         <div className="flex flex-col gap-4">
           <p className="text-base text-white/70">
-            {count} {count === 1 ? "person is" : "people are"} in a huddle with FLO.
+            {count} {count === 1 ? "person is" : "people are"} in a huddle with NEO Pulse.
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <FloAvatar className="h-10 w-10" />
+            <NeoPulseAvatar className="h-10 w-10" />
             {participantNames.slice(0, 6).map((name) => (
               <span key={name} className="rounded-full bg-zinc-800 px-3 py-1 text-base text-white">
                 {name}

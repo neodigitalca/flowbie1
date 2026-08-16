@@ -5,7 +5,7 @@ section: Images
 method: POST
 path: /api/images/fetch-data-url
 auth: open
-order: 520
+order: 510
 ---
 
 POST `/api/images/fetch-data-url`.
@@ -34,7 +34,7 @@ Runs the fetch data url action in the Images API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/images/fetch-data-url" \
+curl -X POST "https://neodigital.ca/api/images/fetch-data-url" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

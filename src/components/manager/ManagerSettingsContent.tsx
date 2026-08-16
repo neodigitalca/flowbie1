@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AiModelsSettingsContent } from "@/components/manager/AiModelsSettingsContent";
 import { ApiKeysSettingsContent } from "@/components/manager/ApiKeysSettingsContent";
 import { GoogleServicesSettingsContent } from "@/components/manager/GoogleServicesSettingsContent";
-import { EmailAgentAdminSettingsContent } from "@/components/manager/EmailAgentAdminSettingsContent";
+import { WpEngineSettingsContent } from "@/components/manager/WpEngineSettingsContent";
 import { ManagerMasterRulesSettingsContent } from "@/components/manager/ManagerMasterRulesSettingsContent";
 import { IntegrationsTab } from "@/components/IntegrationsTab";
 import { PropertiesDashboardChromeProvider } from "@/components/manager/dashboard/PropertiesDashboardChromeContext";
@@ -22,9 +22,6 @@ export interface ManagerSettingsContentProps {
   dataForSEOApiKey: string;
   setDataForSEOApiKey: (key: string) => void;
   saveDataForSEOApiKeyToStorage: (key: string) => void;
-  agentMailApiKey: string;
-  setAgentMailApiKey: (key: string) => void;
-  saveAgentMailApiKeyToStorage: (key: string) => void;
   selectedModel: string;
   setSelectedModel: (model: string) => void;
   temperature: number;
@@ -44,9 +41,6 @@ export function ManagerSettingsContent({
   dataForSEOApiKey,
   setDataForSEOApiKey,
   saveDataForSEOApiKeyToStorage,
-  agentMailApiKey,
-  setAgentMailApiKey,
-  saveAgentMailApiKeyToStorage,
   selectedModel,
   setSelectedModel,
   temperature,
@@ -105,14 +99,6 @@ export function ManagerSettingsContent({
     [setDataForSEOApiKey, saveDataForSEOApiKeyToStorage],
   );
 
-  const handleAgentMailSave = useCallback(
-    (key: string) => {
-      setAgentMailApiKey(key);
-      saveAgentMailApiKeyToStorage(key);
-    },
-    [setAgentMailApiKey, saveAgentMailApiKeyToStorage],
-  );
-
   const sections = [
     {
       id: "properties" as const,
@@ -128,8 +114,6 @@ export function ManagerSettingsContent({
           dataForSEOApiKey={dataForSEOApiKey}
           setDataForSEOApiKey={setDataForSEOApiKey}
           saveDataForSEOApiKey={handleDataForSEOSave}
-          agentMailApiKey={agentMailApiKey}
-          saveAgentMailApiKey={handleAgentMailSave}
           selectedModel={selectedModel}
           temperature={temperature}
           maxTokens={maxTokens}
@@ -161,8 +145,8 @@ export function ManagerSettingsContent({
       content: <GoogleServicesSettingsContent />,
     },
     {
-      id: "email-agent-admin" as const,
-      content: <EmailAgentAdminSettingsContent />,
+      id: "wp-engine" as const,
+      content: <WpEngineSettingsContent />,
     },
   ];
 

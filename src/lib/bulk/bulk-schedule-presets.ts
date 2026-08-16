@@ -8,7 +8,7 @@ import {
   type BulkScheduleStartPreset,
 } from "@/lib/bulk/bulk-schedule-summary";
 
-const STORAGE_KEY = "flowbie_bulk_schedule_named_presets_v1";
+const STORAGE_KEY = "neo-pulse_bulk_schedule_named_presets_v1";
 
 export type BulkNamedSchedulePresetValues = {
   scheduleFrequency: ScheduleFrequency;

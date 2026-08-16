@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/discover-acf-field-groups
 auth: open
-order: 2300
+order: 2290
 ---
 
 POST `/api/wordpress/discover-acf-field-groups`.
@@ -34,7 +34,7 @@ Runs the discover acf field groups action in the WordPress API from a JSON reque
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/discover-acf-field-groups" \
+curl -X POST "https://neodigital.ca/api/wordpress/discover-acf-field-groups" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

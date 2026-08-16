@@ -5,7 +5,7 @@ section: Google Search Console
 method: POST
 path: /api/gsc/fetch-historical-stats
 auth: open
-order: 360
+order: 350
 ---
 
 POST `/api/gsc/fetch-historical-stats`.
@@ -34,7 +34,7 @@ Runs the fetch historical stats action in the Google Search Console API from a J
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/gsc/fetch-historical-stats" \
+curl -X POST "https://neodigital.ca/api/gsc/fetch-historical-stats" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

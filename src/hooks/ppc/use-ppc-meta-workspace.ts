@@ -55,12 +55,12 @@ import {
 } from "@/lib/ppc/meta-ad-visual-tool-palette";
 import { resolveMetaTypographyStyle } from "@/lib/ppc/meta-ad-typography-styles";
 import {
-  appendFlowbieMetaStaticPages,
-  getFlowbieMetaPickerPages,
-  isFlowbieMetaStaticLandingUrl,
+  appendNeoPulseMetaStaticPages,
+  getNeoPulseMetaPickerPages,
+  isNeoPulseMetaStaticLandingUrl,
   isNeoDigitalAgencyTeam,
   metaRowHasGenerateInput,
-} from "@/lib/ppc/flowbie-meta-marketing-context";
+} from "@/lib/ppc/neo-pulse-meta-marketing-context";
 import { runPpcMetaAdGenerate } from "@/lib/ppc/run-ppc-meta-ad-generate";
 import { runPpcMetaAdGenerateBatch } from "@/lib/ppc/run-ppc-meta-ad-generate-batch";
 import { parseMetaKeywordTemplateCsv } from "@/lib/ppc/meta-ads-keyword-template";
@@ -135,8 +135,8 @@ export function usePpcMetaWorkspace({ site, apiKey, selectedModel }: UsePpcMetaW
     setGenerateConfig(config);
   }, [site.id, syncRowsToCount]);
 
-  const mergeFlowbieLandingPages = useCallback(
-    (pages: PpcWpPageContext[]): PpcWpPageContext[] => appendFlowbieMetaStaticPages(pages, teamName),
+  const mergeNeoPulseLandingPages = useCallback(
+    (pages: PpcWpPageContext[]): PpcWpPageContext[] => appendNeoPulseMetaStaticPages(pages, teamName),
     [teamName],
   );
 
@@ -149,7 +149,7 @@ export function usePpcMetaWorkspace({ site, apiKey, selectedModel }: UsePpcMetaW
     setPageBucketHostedLink(null);
 
     if (isNeoDigitalAgencyTeam(teamName)) {
-      setWpPages(getFlowbieMetaPickerPages());
+      setWpPages(getNeoPulseMetaPickerPages());
       setWpPagesLoading(false);
       return () => {
         cancelled = true;
@@ -159,7 +159,7 @@ export function usePpcMetaWorkspace({ site, apiKey, selectedModel }: UsePpcMetaW
     loadPpcPageBucketContext(site)
       .then((pages) => {
         if (cancelled) return;
-        const merged = mergeFlowbieLandingPages(pages);
+        const merged = mergeNeoPulseLandingPages(pages);
         setWpPages(merged);
         const link = createPpcPageBucketHostedLink(site.siteUrl, merged);
         pageBucketLinkRef.current = link.href;
@@ -177,7 +177,7 @@ export function usePpcMetaWorkspace({ site, apiKey, selectedModel }: UsePpcMetaW
       revokePpcPageBucketHostedLink(pageBucketLinkRef.current);
       pageBucketLinkRef.current = null;
     };
-  }, [mergeFlowbieLandingPages, site.id, site.siteUrl, site.username, site.appPassword, teamName]);
+  }, [mergeNeoPulseLandingPages, site.id, site.siteUrl, site.username, site.appPassword, teamName]);
 
   useEffect(() => {
     writeMetaGenerateConfig(site.id, generateConfig);
@@ -292,12 +292,12 @@ export function usePpcMetaWorkspace({ site, apiKey, selectedModel }: UsePpcMetaW
   const loadWpPagesForPicker = useCallback(async () => {
     if (wpPagesLoading) return;
     const hasClientBucket =
-      wpPages.some((page) => !isFlowbieMetaStaticLandingUrl(page.url)) && wpPages.length > 0;
+      wpPages.some((page) => !isNeoPulseMetaStaticLandingUrl(page.url)) && wpPages.length > 0;
     if (hasClientBucket) return;
 
     setWpPagesLoading(true);
     try {
-      const pages = mergeFlowbieLandingPages(await loadPpcPageBucketContext(site));
+      const pages = mergeNeoPulseLandingPages(await loadPpcPageBucketContext(site));
       setWpPages(pages);
       revokePpcPageBucketHostedLink(pageBucketLinkRef.current);
       const link = createPpcPageBucketHostedLink(site.siteUrl, pages);
@@ -305,14 +305,14 @@ export function usePpcMetaWorkspace({ site, apiKey, selectedModel }: UsePpcMetaW
       setPageBucketHostedLink(link);
     } catch {
       if (isNeoDigitalAgencyTeam(teamName)) {
-        setWpPages(getFlowbieMetaPickerPages());
+        setWpPages(getNeoPulseMetaPickerPages());
       } else {
         setWpPages([]);
       }
     } finally {
       setWpPagesLoading(false);
     }
-  }, [mergeFlowbieLandingPages, site, teamName, wpPages, wpPagesLoading]);
+  }, [mergeNeoPulseLandingPages, site, teamName, wpPages, wpPagesLoading]);
 
   const applyGeneratedResult = useCallback(
     (rowId: string, sourceRow: MetaAdRow, result: Awaited<ReturnType<typeof runPpcMetaAdGenerate>>) => {
@@ -370,7 +370,7 @@ export function usePpcMetaWorkspace({ site, apiKey, selectedModel }: UsePpcMetaW
             ? {
                 ...row,
                 status: "error" as const,
-                errorMessage: "Add a focus keyword, context URL, or FlowbieONE app context before generating.",
+                errorMessage: "Add a focus keyword, context URL, or NEO Pulse app context before generating.",
               }
             : row,
         ),
@@ -486,7 +486,7 @@ export function usePpcMetaWorkspace({ site, apiKey, selectedModel }: UsePpcMetaW
       if (!metaRowHasGenerateInput(sourceRow)) {
         updateAd(rowId, {
           status: "error",
-          errorMessage: "Add a focus keyword, context URL, or FlowbieONE app context before generating.",
+          errorMessage: "Add a focus keyword, context URL, or NEO Pulse app context before generating.",
         });
         return;
       }

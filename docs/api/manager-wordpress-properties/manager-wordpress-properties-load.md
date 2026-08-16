@@ -5,7 +5,7 @@ section: Manager WordPress Properties
 method: GET
 path: /api/manager-wordpress-properties/load
 auth: open
-order: 650
+order: 640
 ---
 
 GET `/api/manager-wordpress-properties/load`.
@@ -34,7 +34,7 @@ Reads load from the Manager WordPress Properties API.
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/manager-wordpress-properties/load" \
+curl -X GET "https://neodigital.ca/api/manager-wordpress-properties/load" \
   -H "Content-Type: application/json" \
 ```
 

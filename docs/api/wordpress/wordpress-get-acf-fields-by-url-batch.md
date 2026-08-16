@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/get-acf-fields-by-url-batch
 auth: open
-order: 2420
+order: 2370
 ---
 
 POST `/api/wordpress/get-acf-fields-by-url-batch`.
@@ -34,7 +34,7 @@ Runs the get acf fields by url batch action in the WordPress API from a JSON req
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/get-acf-fields-by-url-batch" \
+curl -X POST "https://neodigital.ca/api/wordpress/get-acf-fields-by-url-batch" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

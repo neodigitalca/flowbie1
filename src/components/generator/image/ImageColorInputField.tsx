@@ -6,6 +6,7 @@ import { HexColorPicker } from "react-colorful";
 import { cn } from "@/lib/utils";
 import {
   META_VISUAL_COLOR_CELL_GRID_CLASS,
+  META_VISUAL_COLOR_HEX_CLASS,
   META_VISUAL_CONTROL_SURFACE_CLASS,
   META_VISUAL_FIELD_COL,
   META_VISUAL_LABEL_COL,
@@ -68,12 +69,21 @@ export function ImageColorInputField({
         <Button
           variant="ghost"
           className={cn(
-            "h-8 min-w-0 flex-1 justify-start rounded-none border-0 px-2 text-left text-base font-normal tabular-nums",
+            layout === "cell" || layout === "input"
+              ? META_VISUAL_COLOR_HEX_CLASS
+              : "h-8 min-w-0 w-full justify-start rounded-none border-0 px-2 text-left text-base font-normal tabular-nums",
             META_VISUAL_CONTROL_SURFACE_CLASS,
           )}
           disabled={disabled}
         >
-          <span className="truncate">{displayText}</span>
+          <span className="flex min-w-0 items-center gap-2">
+            <span
+              aria-hidden
+              className="h-4 w-4 shrink-0 rounded-sm ring-1 ring-zinc-400/40"
+              style={{ backgroundColor: displayValue }}
+            />
+            <span className="truncate">{displayText}</span>
+          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -120,7 +130,7 @@ export function ImageColorInputField({
     return (
       <div className={META_VISUAL_COLOR_CELL_GRID_CLASS}>
         <span className={META_VISUAL_TOOL_LABEL_CLASS}>{label}</span>
-        {picker}
+        <div className="flex min-w-0 justify-end">{picker}</div>
       </div>
     );
   }

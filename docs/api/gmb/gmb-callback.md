@@ -34,7 +34,7 @@ Reads callback from the Google Business Profile API.
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/gmb/callback" \
+curl -X GET "https://neodigital.ca/api/gmb/callback" \
   -H "Content-Type: application/json" \
 ```
 

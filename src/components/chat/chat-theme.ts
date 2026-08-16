@@ -16,8 +16,9 @@ export const CHAT_CHIP_CLASS = "chat-chip rounded-lg";
 export const CHAT_ICON_BTN_CLASS = "chat-icon-btn";
 export const CHAT_EDITOR_ROOT_CLASS = "chat-editor-root flex flex-col";
 export const CHAT_EDITOR_TOOLBAR_CLASS = "chat-editor-toolbar flex min-w-0 flex-nowrap items-center gap-0.5 overflow-x-auto border-b px-2 py-1";
+export const CHAT_ACCENT_PILL_CLASS = "chat-accent-pill";
 export const CHAT_EDITOR_CONTENT_CLASS =
-  "chat-editor-content min-h-[6rem] max-h-64 overflow-y-auto px-3 py-2 text-base outline-none [&_p]:mb-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:text-[hsl(var(--chat-accent))] [&_a]:underline";
+  "chat-editor-content min-h-[6rem] max-h-64 overflow-y-auto px-3 py-2 text-base outline-none [&_p]:mb-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:text-[hsl(var(--chat-accent))] [&_a]:underline [&_[data-type=mention]]:chat-accent-pill";
 export const CHAT_MESSAGE_PROSE_CLASS =
   "chat-message-prose prose max-w-none text-base leading-relaxed [&_p]:text-inherit [&_span]:text-inherit [&_div]:text-inherit [&_li]:text-inherit [&_code]:rounded [&_code]:px-1 [&_blockquote]:border-l-2 [&_blockquote]:pl-3";
 export const CHAT_RIGHT_RAIL_THEMED_CLASS =

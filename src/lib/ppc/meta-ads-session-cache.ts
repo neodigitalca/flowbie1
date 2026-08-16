@@ -1,7 +1,7 @@
 import type { MetaAdRow } from "@/lib/ppc/meta-ads-types";
 
 function cacheKey(siteId: string): string {
-  return `flowbie-ppc-meta-ads-v3:${siteId}`;
+  return `neo-pulse-ppc-meta-ads-v3:${siteId}`;
 }
 
 const memoryBySiteId = new Map<string, MetaAdRow[]>();

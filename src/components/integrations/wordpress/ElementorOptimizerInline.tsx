@@ -130,7 +130,7 @@ export const ElementorOptimizerInline: React.FC<ElementorOptimizerInlineProps> =
 
   return (
     <>
-      <div className="flowbie-panel-neon space-y-2 p-3 sm:p-4">
+      <div className="neo-pulse-panel-neon space-y-2 p-3 sm:p-4">
         <div className="text-base font-semibold text-primary">
           Elementor Page Optimizer
         </div>

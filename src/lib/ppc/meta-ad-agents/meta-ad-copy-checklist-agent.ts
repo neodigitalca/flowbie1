@@ -6,7 +6,7 @@ import {
   buildMetaPageContextBlock,
   parseMetaChecklistItems,
 } from "@/lib/ppc/meta-ad-prompt-builder";
-import { appendFlowbieMetaMarketingContext } from "@/lib/ppc/flowbie-meta-marketing-context";
+import { appendNeoPulseMetaMarketingContext } from "@/lib/ppc/neo-pulse-meta-marketing-context";
 import { appendMetaInstagramBestPractices } from "@/lib/ppc/load-meta-ad-instagram-best-practices";
 import { callMetaAdJsonCompletion } from "@/lib/ppc/meta-ad-openrouter-json";
 import type {
@@ -52,7 +52,7 @@ export async function runMetaAdCopyChecklistAgent(options: {
 
   const system = appendMasterInstructionsToSystemPrompt(
     appendMetaInstagramBestPractices(
-      appendFlowbieMetaMarketingContext(buildMetaCopyChecklistSystemPrompt(options.siteName), options.teamName, {
+      appendNeoPulseMetaMarketingContext(buildMetaCopyChecklistSystemPrompt(options.siteName), options.teamName, {
         contextSource: options.contextSource,
       }),
     ),

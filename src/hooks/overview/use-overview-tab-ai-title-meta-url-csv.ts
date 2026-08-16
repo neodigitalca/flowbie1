@@ -418,7 +418,7 @@ export function useOverviewTabAiTitleMetaUrlCsv({
       const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = objectUrl;
-      a.download = `flowbie-meta-optimizer-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `neo-pulse-meta-optimizer-${new Date().toISOString().slice(0, 10)}.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();

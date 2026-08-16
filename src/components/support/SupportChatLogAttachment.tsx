@@ -1,0 +1,40 @@
+import { Paperclip } from "lucide-react";
+
+type SupportChatLogAttachmentProps = {
+  chatLog?: Record<string, unknown> | null;
+  fileName?: string;
+  sizeLabel?: string;
+};
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  return `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+export function supportChatLogFileName(ticketId?: number): string {
+  return ticketId ? `ticket-${ticketId}-chat-log.json` : "pulse-assist-chat-log.json";
+}
+
+export function supportChatLogByteSize(chatLog: Record<string, unknown> | null): number {
+  if (!chatLog) return 0;
+  return new Blob([JSON.stringify(chatLog, null, 2)]).size;
+}
+
+export function SupportChatLogAttachment({
+  chatLog = null,
+  fileName = "pulse-assist-chat-log.json",
+  sizeLabel,
+}: SupportChatLogAttachmentProps) {
+  const bytes = chatLog ? supportChatLogByteSize(chatLog) : 0;
+  const size = sizeLabel ?? (bytes > 0 ? formatBytes(bytes) : "JSON attachment");
+
+  return (
+    <div className="flex items-center gap-3 bg-zinc-900/70 px-3 py-3">
+      <Paperclip className="h-5 w-5 shrink-0 text-primary" aria-hidden />
+      <div className="min-w-0">
+        <p className="truncate text-base font-medium text-foreground">{fileName}</p>
+        <p className="text-base text-muted-foreground">{size} · JSON attachment</p>
+      </div>
+    </div>
+  );
+}

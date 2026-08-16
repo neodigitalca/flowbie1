@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/detect-sitemaps
 auth: open
-order: 2280
+order: 2270
 ---
 
 POST `/api/wordpress/detect-sitemaps`.
@@ -34,7 +34,7 @@ Runs the detect sitemaps action in the WordPress API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/detect-sitemaps" \
+curl -X POST "https://neodigital.ca/api/wordpress/detect-sitemaps" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

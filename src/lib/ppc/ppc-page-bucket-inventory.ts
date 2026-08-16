@@ -1,5 +1,9 @@
 import type { WordPressSite } from "@/components/integrations/types";
-import { decodeInventoryTitleText, inventoryUrlForRow } from "@/lib/bulk/inventory-json-slim";
+import {
+  decodeInventoryTitleText,
+  inventoryFieldString,
+  inventoryUrlForRow,
+} from "@/lib/bulk/inventory-json-slim";
 import { fetchOverviewInventoryForSource } from "@/lib/overview/overview-parallel-inventory-fetch";
 import type { PpcWpPageContext } from "@/lib/ppc/google-ads-types";
 import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
@@ -11,9 +15,10 @@ export type PpcPageBucketHostedLink = {
   rowCount: number;
 };
 
-function hostSlugForInventoryFile(siteUrl: string): string {
+function hostSlugForInventoryFile(siteUrl: unknown): string {
   try {
-    const raw = siteUrl.trim();
+    const raw = typeof siteUrl === "string" ? siteUrl : "";
+    if (!raw) return "site";
     const withProto = raw.startsWith("http") ? raw : `https://${raw}`;
     const u = new URL(withProto);
     return u.hostname.replace(/[^a-zA-Z0-9.-]+/g, "-").slice(0, 80) || "site";
@@ -23,23 +28,29 @@ function hostSlugForInventoryFile(siteUrl: string): string {
 }
 
 export function mapOverviewRowToPpcWpPageContext(row: {
-  url?: string;
-  slug?: string;
-  fields?: { title?: string; excerpt?: string; meta?: string; keyword?: string };
+  url?: unknown;
+  slug?: unknown;
+  fields?: { title?: unknown; excerpt?: unknown; meta?: unknown; keyword?: unknown };
 }): PpcWpPageContext | null {
   const url = inventoryUrlForRow(row);
   if (!url) return null;
+  const title =
+    inventoryFieldString(row.fields?.title) ||
+    inventoryFieldString(row.slug) ||
+    url;
   return {
     url,
-    title: decodeInventoryTitleText(row.fields?.title?.trim() || row.slug || url),
-    excerpt: row.fields?.excerpt?.trim() || "",
-    metaDescription: row.fields?.meta?.trim() || "",
-    keyword: row.fields?.keyword?.trim() || "",
+    title: decodeInventoryTitleText(title),
+    excerpt: inventoryFieldString(row.fields?.excerpt),
+    metaDescription: inventoryFieldString(row.fields?.meta),
+    keyword: inventoryFieldString(row.fields?.keyword),
   };
 }
 
 export async function loadPpcPageBucketContext(site: WordPressSite): Promise<PpcWpPageContext[]> {
-  if (!site.username?.trim() || !site.appPassword?.trim()) {
+  const username = typeof site.username === "string" ? site.username : "";
+  const appPassword = typeof site.appPassword === "string" ? site.appPassword : "";
+  if (!username || !appPassword) {
     throw new Error("WordPress credentials are required to load page bucket inventory.");
   }
 

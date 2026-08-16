@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/get-post-types
 auth: open
-order: 2520
+order: 2470
 ---
 
 POST `/api/wordpress/get-post-types`.
@@ -34,7 +34,7 @@ Runs the get post types action in the WordPress API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/get-post-types" \
+curl -X POST "https://neodigital.ca/api/wordpress/get-post-types" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

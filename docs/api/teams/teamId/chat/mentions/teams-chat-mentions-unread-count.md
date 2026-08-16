@@ -5,7 +5,7 @@ section: Teams
 method: GET
 path: /api/teams/{teamId}/chat/mentions/unread-count
 auth: team-rbac-communication
-order: 1460
+order: 1450
 ---
 
 GET `/api/teams/{teamId}/chat/mentions/unread-count`.
@@ -34,7 +34,7 @@ Reads unread count from the Teams API. Requires a signed-in team member with com
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/teams/{teamId}/chat/mentions/unread-count" \
+curl -X GET "https://neodigital.ca/api/teams/{teamId}/chat/mentions/unread-count" \
   -H "Content-Type: application/json" \
 ```
 

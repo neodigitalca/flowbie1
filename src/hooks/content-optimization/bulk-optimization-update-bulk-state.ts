@@ -24,12 +24,19 @@ export function updateBulkStateForPost(
           ? current.currentStepProgress?.message?.trim() || undefined
           : status;
 
+    const shouldAdvance = status === "completed" && index + 1 < totalPosts;
+    const nextIndex = shouldAdvance ? index + 1 : index;
+    const nextUrl =
+      shouldAdvance && Array.isArray(current.urls) && current.urls[index + 1]
+        ? current.urls[index + 1]
+        : url;
+
     return {
       ...prev,
       [batchKey]: {
         ...current,
-        currentIndex: index,
-        currentUrl: url,
+        currentIndex: nextIndex,
+        currentUrl: nextUrl,
         currentStep: message || stepLabel(stepId),
         currentStepProgress: {
           stepId,

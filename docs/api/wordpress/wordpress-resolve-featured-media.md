@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/resolve-featured-media
 auth: open
-order: 2700
+order: 2690
 ---
 
 POST `/api/wordpress/resolve-featured-media`.
@@ -34,7 +34,7 @@ Runs the resolve featured media action in the WordPress API from a JSON request 
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/resolve-featured-media" \
+curl -X POST "https://neodigital.ca/api/wordpress/resolve-featured-media" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

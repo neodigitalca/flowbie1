@@ -5,7 +5,7 @@ section: DataForSEO MCP
 method: GET
 path: /api/mcp/DataForSEO_serp_dump_download/{filename}
 auth: open
-order: 790
+order: 780
 ---
 
 GET `/api/mcp/DataForSEO_serp_dump_download/{filename}`.
@@ -34,7 +34,7 @@ Fetches a single dataforseo_serp_dump_download item from the DataForSEO MCP API.
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/mcp/DataForSEO_serp_dump_download/{filename}" \
+curl -X GET "https://neodigital.ca/api/mcp/DataForSEO_serp_dump_download/{filename}" \
   -H "Content-Type: application/json" \
 ```
 

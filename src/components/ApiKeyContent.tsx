@@ -8,7 +8,6 @@ import {
   NOTIFY_API_KEY_SAVED_AND_UPDATED_FOR_CURRENT_SE,
 } from "@/lib/notify-messages";
 import { DASHBOARD_SETTINGS_FIELD_CLASS } from "@/components/manager/dashboard/dashboard-panel-styles";
-import { loadAgentMailApiKey, syncEmailWorkerKeysToServer } from "@/lib/api";
 import { syncOpenRouterToSupabaseProperties } from "@/lib/manager-wordpress-properties-api";
 
 interface ApiKeyContentProps {
@@ -30,19 +29,11 @@ export const ApiKeyContent: React.FC<ApiKeyContentProps> = ({
     if (localApiKey.trim()) {
       saveKeyInLocalStorage(localApiKey.trim());
       setApiKey(localApiKey.trim());
-      void syncEmailWorkerKeysToServer({
-        openRouterApiKey: localApiKey.trim(),
-        agentmailApiKey: loadAgentMailApiKey().trim(),
-      });
       void syncOpenRouterToSupabaseProperties({ openRouterApiKey: localApiKey.trim() });
       notify.success(NOTIFY_API_KEY_SAVED_AND_UPDATED_FOR_CURRENT_SE);
     } else {
       saveKeyInLocalStorage("");
       setApiKey("");
-      void syncEmailWorkerKeysToServer({
-        openRouterApiKey: "",
-        agentmailApiKey: loadAgentMailApiKey().trim(),
-      });
       void syncOpenRouterToSupabaseProperties({ openRouterApiKey: "" });
       notify.warning(NOTIFY_API_KEY_CLEARED_AI_GENERATION_IS_DISABLE);
     }

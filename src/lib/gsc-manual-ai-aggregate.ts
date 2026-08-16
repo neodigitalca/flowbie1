@@ -68,6 +68,7 @@ Rules - preserve concrete data (this is critical):
 - topOpportunities: at most ${GSC_MANUAL_MAX_TOP_ROWS} rows. Rank by business impact (growth, high impressions + low clicks/CTR, position opportunity, URL priority).
 - clusters: at most ${GSC_MANUAL_MAX_CLUSTERS} clusters. Each cluster: at most ${GSC_MANUAL_MAX_EXAMPLES_PER_CLUSTER} example queries or full page URLs in "examples". **aggregate** may summarize but should reference real magnitudes from the data when stating scale.
 - You still **must not** paste the entire sheet - but you **must not** strip away precision: synthesis + exact figures, not vague ranges.
+- **Cross-metric period compare:** When site totals show **Search queries** up AND **Total impressions** up AND **average position** worsened (higher number), interpret as **query footprint expansion** (new/long-tail terms diluting the site-wide average), **not** overall search visibility decline. When **Site-totals-compare-signals.txt** is present, obey \`primaryPattern\` and \`interpretation\`.
 
 Respond with valid JSON only.`;
 

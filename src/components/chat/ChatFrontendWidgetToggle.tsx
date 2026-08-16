@@ -4,10 +4,10 @@ import { Button } from "@/components/ui/button";
 import { getStoredSites } from "@/components/integrations/storage";
 import type { WordPressSite } from "@/components/integrations/types";
 import { CHAT_ICON_BTN_CLASS } from "@/components/chat/chat-theme";
-import { executeFlowbieWpTool } from "@/lib/wordpress-api/flowbie-wp-tools";
+import { executeNeoPulseWpTool } from "@/lib/wordpress-api/neo-pulse-wp-tools";
 import { cn } from "@/lib/utils";
 
-const ACTIVE_WP_SITE_STORAGE_KEY = "flowbie-active-wp-site-id";
+const ACTIVE_WP_SITE_STORAGE_KEY = "neo-pulse-active-wp-site-id";
 
 function resolveActiveWordPressSite(): WordPressSite | null {
   const sites = getStoredSites().filter(
@@ -46,7 +46,7 @@ export function ChatFrontendWidgetToggle({ disabled = false }: ChatFrontendWidge
     }
     setLoading(true);
     try {
-      const result = await executeFlowbieWpTool(site, "wp_chat_settings_get");
+      const result = await executeNeoPulseWpTool(site, "wp_chat_settings_get");
       const enabled = result.enabled === true;
       const loggedInOnly = result.logged_in_only === true;
       setActive(enabled && loggedInOnly);
@@ -66,7 +66,7 @@ export function ChatFrontendWidgetToggle({ disabled = false }: ChatFrontendWidge
     const next = !active;
     setSaving(true);
     try {
-      await executeFlowbieWpTool(site, "wp_chat_settings_update", {
+      await executeNeoPulseWpTool(site, "wp_chat_settings_update", {
         enabled: next,
         logged_in_only: next,
       });

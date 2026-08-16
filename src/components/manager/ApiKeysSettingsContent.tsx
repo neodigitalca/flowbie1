@@ -1,9 +1,8 @@
 import { Key } from "lucide-react";
 import { ApiKeyContent } from "@/components/ApiKeyContent";
 import { DataForSEOApiKeyContent } from "@/components/DataForSEOApiKeyContent";
-import { AgentMailApiKeyContent } from "@/components/AgentMailApiKeyContent";
 import { PostBankDashboardCard } from "@/components/manager/PostBankDashboardCard";
-import { FLOWBIE_CA_DEPLOY } from "@/lib/flowbie-ca-deploy";
+import { NEO_PULSE_CA_DEPLOY } from "@/lib/neo-pulse-deploy";
 import { ManagerCloudSettingsCard } from "@/components/manager/ManagerCloudSettingsCard";
 import {
   DASHBOARD_SETTINGS_GROUP_CLASS,
@@ -17,8 +16,6 @@ export type ApiKeysSettingsContentProps = {
   dataForSEOApiKey: string;
   setDataForSEOApiKey: (key: string) => void;
   saveDataForSEOApiKey: (key: string) => void;
-  agentMailApiKey: string;
-  saveAgentMailApiKey: (key: string) => void;
   selectedModel: string;
   temperature: number;
   maxTokens: number;
@@ -32,8 +29,6 @@ export function ApiKeysSettingsContent({
   dataForSEOApiKey,
   setDataForSEOApiKey,
   saveDataForSEOApiKey,
-  agentMailApiKey,
-  saveAgentMailApiKey,
   selectedModel,
   temperature,
   maxTokens,
@@ -49,7 +44,6 @@ export function ApiKeysSettingsContent({
       <ManagerCloudSettingsCard
         apiKey={apiKey}
         dataForSEOApiKey={dataForSEOApiKey}
-        agentMailApiKey={agentMailApiKey}
         selectedModel={selectedModel}
         temperature={temperature}
         maxTokens={maxTokens}
@@ -65,11 +59,10 @@ export function ApiKeysSettingsContent({
             setApiKey={setDataForSEOApiKey}
             saveApiKey={saveDataForSEOApiKey}
           />
-          <AgentMailApiKeyContent apiKey={agentMailApiKey} saveApiKey={saveAgentMailApiKey} />
         </div>
       </div>
 
-      {!FLOWBIE_CA_DEPLOY ? <PostBankDashboardCard /> : null}
+      {!NEO_PULSE_CA_DEPLOY ? <PostBankDashboardCard /> : null}
     </div>
   );
 }

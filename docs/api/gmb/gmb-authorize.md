@@ -34,7 +34,7 @@ Reads authorize from the Google Business Profile API.
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/gmb/authorize" \
+curl -X GET "https://neodigital.ca/api/gmb/authorize" \
   -H "Content-Type: application/json" \
 ```
 

@@ -2,7 +2,7 @@ import { extractDataForSeoSerpBrief } from "@/lib/overview-seo-content-brief";
 import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
 import { mcp_DataForSEO_serp_organic_live_advanced } from "@/lib/mcp-tools";
 
-/** Same URL shape as Overview / bulk SERP helper ([bulk-optimization-missing-seo-research.ts](b:/USE THIS/Flowbie/src/hooks/content-optimization/bulk-optimization-missing-seo-research.ts)). */
+/** Same URL shape as Overview / bulk SERP helper ([bulk-optimization-missing-seo-research.ts](b:/USE THIS/NEO Pulse/src/hooks/content-optimization/bulk-optimization-missing-seo-research.ts)). */
 function serpDumpFilenameUrl(filename: string): string {
   const base = (BACKEND_API_BASE || "").replace(/\/$/, "");
   if (base) return `${base}/api/dataforseo/serp-dump/${encodeURIComponent(filename)}`;
@@ -56,7 +56,7 @@ function targetSiteHostNorm(siteUrl: string): string {
 
 /**
  * First organic result URL that is not on the connected site (hosts compared without leading `www.`).
- * Uses the same organic extraction as [extractDataForSeoSerpBrief](b:/USE THIS/Flowbie/src/lib/overview-seo-content-brief.ts).
+ * Uses the same organic extraction as [extractDataForSeoSerpBrief](b:/USE THIS/NEO Pulse/src/lib/overview-seo-content-brief.ts).
  */
 export function pickFirstExternalOrganicUrl(serpRoot: unknown, siteUrl?: string | null): string | null {
   const list = pickExternalOrganicResults(serpRoot, siteUrl, 1);

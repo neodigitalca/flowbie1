@@ -1,4 +1,4 @@
-import { LOCAL_ANALYSIS_SAP_MIN, LOCAL_ANALYSIS_TOTAL_SAP_CAP } from "@/lib/local-analysis-target-constants";
+import { LOCAL_ANALYSIS_SAP_MIN } from "@/lib/local-analysis-target-constants";
 import type { ClusterRole } from "@/lib/local-analysis-keyword-cluster";
 
 export interface SuggestedKeywordTarget {
@@ -49,9 +49,10 @@ export function repairSapPageAllocation(
   min: number,
   max: number
 ): SuggestedKeywordTarget[] {
-  if (total < min || total > LOCAL_ANALYSIS_TOTAL_SAP_CAP) {
-    throw new Error(`Total must be between ${min} and ${LOCAL_ANALYSIS_TOTAL_SAP_CAP}.`);
+  if (total < LOCAL_ANALYSIS_SAP_MIN) {
+    throw new Error(`Total must be at least ${LOCAL_ANALYSIS_SAP_MIN}.`);
   }
+  const floor = Math.min(min, total);
 
   let cleaned = rows.map(normalizeSapRowInput).filter((r) => r.keyword.length > 0);
 
@@ -59,16 +60,16 @@ export function repairSapPageAllocation(
     throw new Error("No valid keywords in suggestion.");
   }
 
-  while (cleaned.length > 1 && cleaned.length * min > total) {
+  while (cleaned.length > 1 && cleaned.length * floor > total) {
     cleaned = cleaned.slice(0, -1);
   }
 
-  if (cleaned.length * min > total) {
+  if (cleaned.length * floor > total) {
     const one = cleaned[0]!;
     return [
       {
         keyword: one.keyword,
-        sapPages: Math.min(max, Math.max(min, total)),
+        sapPages: Math.min(max, Math.max(floor, total)),
         ...(one.entityHint ? { entityHint: one.entityHint } : {}),
         ...(one.clusterId ? { clusterId: one.clusterId } : {}),
         ...(one.clusterRole ? { clusterRole: one.clusterRole } : {}),
@@ -93,8 +94,8 @@ export function repairSapPageAllocation(
   }
 
   const n = out.length;
-  const pages = Array.from({ length: n }, () => min);
-  let rem = total - n * min;
+  const pages = Array.from({ length: n }, () => floor);
+  let rem = total - n * floor;
   let guard = 0;
   while (rem > 0 && guard < total * n + 20) {
     guard++;
@@ -159,9 +160,10 @@ export function repairSapPageAllocationWeighted(
   min: number,
   max: number
 ): SuggestedKeywordTarget[] {
-  if (total < min || total > LOCAL_ANALYSIS_TOTAL_SAP_CAP) {
-    throw new Error(`Total must be between ${min} and ${LOCAL_ANALYSIS_TOTAL_SAP_CAP}.`);
+  if (total < LOCAL_ANALYSIS_SAP_MIN) {
+    throw new Error(`Total must be at least ${LOCAL_ANALYSIS_SAP_MIN}.`);
   }
+  const floor = Math.min(min, total);
 
   let cleaned = rows.map(normalizeSapRowInput).filter((r) => r.keyword.length > 0);
 
@@ -175,17 +177,17 @@ export function repairSapPageAllocationWeighted(
   });
   while (w.length < cleaned.length) w.push(1);
 
-  while (cleaned.length > 1 && cleaned.length * min > total) {
+  while (cleaned.length > 1 && cleaned.length * floor > total) {
     cleaned = cleaned.slice(0, -1);
     w = w.slice(0, cleaned.length);
   }
 
-  if (cleaned.length * min > total) {
+  if (cleaned.length * floor > total) {
     const one = cleaned[0]!;
     return [
       {
         keyword: one.keyword,
-        sapPages: Math.min(max, Math.max(min, total)),
+        sapPages: Math.min(max, Math.max(floor, total)),
         ...(one.entityHint ? { entityHint: one.entityHint } : {}),
         ...(one.clusterId ? { clusterId: one.clusterId } : {}),
         ...(one.clusterRole ? { clusterRole: one.clusterRole } : {}),
@@ -199,7 +201,7 @@ export function repairSapPageAllocationWeighted(
     const ref = out[out.length - 1]!;
     out.push({
       keyword: ref.keyword,
-      sapPages: min,
+      sapPages: floor,
       ...(ref.entityHint ? { entityHint: ref.entityHint } : {}),
       ...(ref.clusterId ? { clusterId: ref.clusterId } : {}),
       ...(ref.clusterRole ? { clusterRole: ref.clusterRole } : {}),
@@ -216,8 +218,8 @@ export function repairSapPageAllocationWeighted(
     return repairSapPageAllocation(out, total, min, max);
   }
 
-  const pages = Array.from({ length: n }, () => min);
-  let rem = total - n * min;
+  const pages = Array.from({ length: n }, () => floor);
+  let rem = total - n * floor;
   const extras = distributeRemainderByWeights(wOut, rem);
   for (let i = 0; i < n; i++) {
     pages[i]! += extras[i]!;

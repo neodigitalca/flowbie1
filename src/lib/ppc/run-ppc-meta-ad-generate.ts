@@ -7,10 +7,10 @@ import {
   buildMetaGscQueriesMarkdown,
   buildMetaUnifiedContextBlock,
   loadMetaContextResearch,
-  loadMetaFlowbieAppContextResearch,
+  loadMetaNeoPulseAppContextResearch,
   metaContextResearchToLandingPage,
   metaContextUrlsMatch,
-  metaFlowbieAppLandingPage,
+  metaNeoPulseAppLandingPage,
   type MetaContextResearch,
 } from "@/lib/ppc/meta-ad-context-assembler";
 import { applyUserVisualToolPaletteToBrief } from "@/lib/ppc/meta-ad-creative-brief";
@@ -63,9 +63,9 @@ import {
 } from "@/lib/ppc/meta-ads-types";
 import type { MetaAdImageReferenceSummary } from "@/lib/ppc/meta-ad-image-reference-types";
 import {
-  isFlowbieProductLandingUrl,
-} from "@/lib/ppc/flowbie-meta-marketing-context";
-import { getFlowbieMetaProgramBrief } from "@/lib/ppc/load-flowbie-meta-program-brief";
+  isNeoPulseProductLandingUrl,
+} from "@/lib/ppc/neo-pulse-meta-marketing-context";
+import { getNeoPulseMetaProgramBrief } from "@/lib/ppc/load-neo-pulse-meta-program-brief";
 
 export type RunPpcMetaAdGenerateResult = {
   goal: MetaAdInstagramGoal;
@@ -161,7 +161,7 @@ function publishMergedResearchSections(
 }
 
 function resolveContextSource(source: MetaAdContextSource | undefined): MetaAdContextSource {
-  return source === "flowbie_app" ? "flowbie_app" : "custom";
+  return source === "neo-pulse_app" ? "neo-pulse_app" : "custom";
 }
 
 function publishPartialUpdate(
@@ -207,14 +207,14 @@ export async function runPpcMetaAdGenerate(
   const researchModel = getResearchModel(site.id);
   const imageModel = getImageModel(site.id);
   const resolvedContextSource = resolveContextSource(contextSource);
-  const isFlowbieAppContext = resolvedContextSource === "flowbie_app";
+  const isNeoPulseAppContext = resolvedContextSource === "neo-pulse_app";
   const customContextUrl = contextUrl?.trim() ?? "";
-  const hasCustomContextUrl = !isFlowbieAppContext && /^https?:\/\//i.test(customContextUrl);
+  const hasCustomContextUrl = !isNeoPulseAppContext && /^https?:\/\//i.test(customContextUrl);
   const resolvedLandingUrl = landingPageUrl?.trim() || "";
   const hasLandingUrl = /^https?:\/\//i.test(resolvedLandingUrl);
   const needsLandingResearch =
     hasLandingUrl &&
-    (isFlowbieAppContext ||
+    (isNeoPulseAppContext ||
       !hasCustomContextUrl ||
       !metaContextUrlsMatch(customContextUrl, resolvedLandingUrl));
   const needsContextResearch = hasCustomContextUrl;
@@ -225,7 +225,7 @@ export async function runPpcMetaAdGenerate(
   let progress = createInitialMetaGenerateProgress({
     includePrefetch: true,
     includeLoadContext:
-      needsContextResearch || needsLandingResearch || hasLandingUrl || isFlowbieAppContext,
+      needsContextResearch || needsLandingResearch || hasLandingUrl || isNeoPulseAppContext,
     includeImageSteps: includeImage,
   });
   onProgress(progress);
@@ -258,12 +258,12 @@ export async function runPpcMetaAdGenerate(
   let landingResearch: MetaContextResearch | null = null;
   let gscPage: PpcGscPageContext | undefined;
 
-  if (isFlowbieAppContext) {
-    contextResearch = loadMetaFlowbieAppContextResearch();
+  if (isNeoPulseAppContext) {
+    contextResearch = loadMetaNeoPulseAppContextResearch();
     researchSections = upsertMetaResearchSection(
       researchSections,
       createMetaResearchSection(
-        META_RESEARCH_SECTION_IDS.flowbieAppContext,
+        META_RESEARCH_SECTION_IDS.neoPulseAppContext,
         "done",
         contextResearch.markdown,
       ),
@@ -337,8 +337,8 @@ export async function runPpcMetaAdGenerate(
   let landingPage: PpcWpPageContext | undefined;
   if (landingResearch) {
     landingPage = metaContextResearchToLandingPage(landingResearch, resolvedKeyword);
-  } else if (isFlowbieAppContext) {
-    landingPage = metaFlowbieAppLandingPage(resolvedKeyword);
+  } else if (isNeoPulseAppContext) {
+    landingPage = metaNeoPulseAppLandingPage(resolvedKeyword);
   } else if (contextResearch) {
     landingPage = metaContextResearchToLandingPage(contextResearch, resolvedKeyword);
   }
@@ -349,11 +349,11 @@ export async function runPpcMetaAdGenerate(
     site.siteUrl?.trim() ||
     "";
 
-  if (!finalUrl.trim() && !resolvedKeyword && !isFlowbieAppContext) {
+  if (!finalUrl.trim() && !resolvedKeyword && !isNeoPulseAppContext) {
     throw new Error("Add a focus keyword or landing page URL before generating.");
   }
-  if (!isFlowbieAppContext && !hasCustomContextUrl && !resolvedKeyword) {
-    throw new Error("Add a focus keyword, FlowbieONE app context, or custom context URL before generating.");
+  if (!isNeoPulseAppContext && !hasCustomContextUrl && !resolvedKeyword) {
+    throw new Error("Add a focus keyword, NEO Pulse app context, or custom context URL before generating.");
   }
 
   const locality = resolveMetaAdLocalityContext({
@@ -499,7 +499,7 @@ export async function runPpcMetaAdGenerate(
       placement: config.placement,
       focusKeyword: resolvedKeyword,
       contextSource: resolvedContextSource,
-      programBrief: isFlowbieAppContext ? getFlowbieMetaProgramBrief() : undefined,
+      programBrief: isNeoPulseAppContext ? getNeoPulseMetaProgramBrief() : undefined,
       localityCity: locality.hasLocality ? locality.city : undefined,
       signal,
     }),
@@ -587,6 +587,7 @@ export async function runPpcMetaAdGenerate(
       localityCity: locality.hasLocality ? locality.city : undefined,
       siteName: resolvedSiteName,
       typographyStyle: resolvedTypographyStyle,
+      pageContext,
       signal,
     }),
   );

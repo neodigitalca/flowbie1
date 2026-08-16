@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/get-site-post-inventory
 auth: open
-order: 2640
+order: 2590
 ---
 
 POST `/api/wordpress/get-site-post-inventory`.
@@ -34,7 +34,7 @@ Runs the get site post inventory action in the WordPress API from a JSON request
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/get-site-post-inventory" \
+curl -X POST "https://neodigital.ca/api/wordpress/get-site-post-inventory" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

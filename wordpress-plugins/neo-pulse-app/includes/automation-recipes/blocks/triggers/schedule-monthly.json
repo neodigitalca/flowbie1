@@ -1,0 +1,11 @@
+{
+  "keyword": "schedule-monthly",
+  "name": "Monthly schedule",
+  "kind": "calendar",
+  "description": "Run on the same day each month at a set time (Edmonton).",
+  "defaults": {
+    "frequency": "monthly",
+    "startDate": "2026-09-01",
+    "time": "09:00"
+  }
+}

@@ -6,8 +6,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AUTH_DISABLED } from "@/lib/auth-disabled";
 import { registerWithInvite, validateInviteToken } from "@/lib/teams-api";
 import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
-import { FloBrandMark } from "@/components/manager/FloBrandMark";
 import { Lock, Mail, User, UserPlus } from "lucide-react";
+import {
+  NEO_PULSE_BRAND_LOCKUP_SRC,
+} from "@/lib/neo-pulse-branding-assets";
 
 async function bootstrapAccount(payload: {
   email: string;
@@ -96,12 +98,13 @@ export default function Register() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="flowbie-panel-neon w-full max-w-sm space-y-8 p-8">
-        <div className="flex flex-col items-center gap-2 text-center">
-          <div className="flex items-center gap-3">
-            <FloBrandMark size={44} />
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">FLO</h1>
-          </div>
+      <div className="neo-pulse-panel-neon w-full max-w-sm space-y-8 p-8">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <img
+            src={NEO_PULSE_BRAND_LOCKUP_SRC}
+            alt="NEO Pulse"
+            className="h-10 w-auto"
+          />
           <p className="text-muted-foreground">
             {inviteTeam ? `Join ${inviteTeam}` : "Create your account"}
           </p>

@@ -50,7 +50,7 @@ export function buildChatEditorExtensions(
     Placeholder.configure({ placeholder }),
     Mention.configure({
       HTMLAttributes: {
-        class: "rounded bg-primary/15 px-1 text-primary",
+        class: "chat-accent-pill",
       },
       suggestion: {
         items: ({ query }) => {

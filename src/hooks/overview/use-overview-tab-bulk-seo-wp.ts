@@ -112,7 +112,7 @@ export function useOverviewTabBulkSeoWp({
       const csv = buildOverviewWordPressExportCsv(exportRows, merged);
       triggerOverviewCsvDownload(
         csv,
-        `flowbie-overview-export-${hostKey}-${new Date().toISOString().slice(0, 10)}.csv`,
+        `neo-pulse-overview-export-${hostKey}-${new Date().toISOString().slice(0, 10)}.csv`,
       );
 
       notify.success(NOTIFY_CSV_DOWNLOADED, { duration: 8000 });

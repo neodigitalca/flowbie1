@@ -6,7 +6,7 @@ import type { OptimizationActivityTileStats } from "@/lib/wordpress-api/types";
 import { OPTIMIZATION_TILE_COUNTS_ENABLED } from "@/lib/wordpress-optimization-tile-counts";
 import { optimizationPeriodCapForPackage } from "@/lib/wordpress-optimization-package";
 
-const CACHE_PREFIX = "flowbie-optimization-activity:v2";
+const CACHE_PREFIX = "neo-pulse-optimization-activity:v2";
 
 type CachedPayload = {
   totalOptimized: number;

@@ -1,5 +1,5 @@
 /**
- * Browser calls to Flowbie post bank API (session cookie, proxied in dev).
+ * Browser calls to NEO Pulse post bank API (session cookie, proxied in dev).
  */
 
 const POST_BANK_API_BASE =

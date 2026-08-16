@@ -222,7 +222,7 @@ export function SitemapPlanToolbar(props: SitemapPlanToolbarProps) {
     {props.showResultToolbar && !props.isGridFlow && props.mergeGroupCount > 0 && props.siteReady ? (
       <Button
         type="button"
-        className={cn("flowbie-btn-semantic-publish h-8 shrink-0 gap-1.5 px-2.5 text-base shadow-none")}
+        className={cn("neo-pulse-btn-semantic-publish h-8 shrink-0 gap-1.5 px-2.5 text-base shadow-none")}
         disabled={props.approving}
         aria-label="Approve plan"
         title="Approve plan"

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import { resolveEntityDetailsCurrentRow } from "@/lib/local-analysis/entity-details-current-row";
 import type { LocalAnalysisHeaderProgress } from "@/lib/local-analysis/header-progress";
 
@@ -38,13 +38,23 @@ describe("resolveEntityDetailsCurrentRow", () => {
     expect(resolveEntityDetailsCurrentRow(progress, true, 5)).toBe(2);
   });
 
-  it("returns -1 during batch phases", () => {
+  it("returns row 0 during inventory load", () => {
     const progress: LocalAnalysisHeaderProgress = {
       kind: "suggest",
       phase: "Loading site inventory and GSC cache",
       completed: 0,
       total: 5,
     };
-    expect(resolveEntityDetailsCurrentRow(progress, true, 5)).toBe(-1);
+    expect(resolveEntityDetailsCurrentRow(progress, true, 5)).toBe(0);
+  });
+
+  it("uses completed count during keyword hydrate", () => {
+    const progress: LocalAnalysisHeaderProgress = {
+      kind: "suggest",
+      phase: "Assigning unique keywords from GSC",
+      completed: 1,
+      total: 3,
+    };
+    expect(resolveEntityDetailsCurrentRow(progress, true, 3)).toBe(1);
   });
 });

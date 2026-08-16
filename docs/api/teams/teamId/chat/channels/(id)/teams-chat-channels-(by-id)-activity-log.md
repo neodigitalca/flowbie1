@@ -5,7 +5,7 @@ section: Teams
 method: GET
 path: /api/teams/{teamId}/chat/channels/({id})/activity-log
 auth: team-rbac-communication
-order: 1290
+order: 1280
 ---
 
 GET `/api/teams/{teamId}/chat/channels/({id})/activity-log`.
@@ -34,7 +34,7 @@ Reads activity log from the Teams API. Requires a signed-in team member with com
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/teams/{teamId}/chat/channels/({id})/activity-log" \
+curl -X GET "https://neodigital.ca/api/teams/{teamId}/chat/channels/({id})/activity-log" \
   -H "Content-Type: application/json" \
 ```
 

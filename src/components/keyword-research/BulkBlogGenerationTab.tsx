@@ -298,8 +298,6 @@ export function BulkBlogGenerationTab({
     (isPrompt && !bulkBindings?.hasGeneratedChecklist) ||
     (isPressRelease && !pressReleaseBindings?.resultMarkdown);
 
-  const pressReleaseEntryInFirstRow = isPressRelease && !pressReleaseBindings?.resultMarkdown;
-
   const baseDetailsProps = {
     workspaceBusy,
     headerProgress,
@@ -533,7 +531,6 @@ export function BulkBlogGenerationTab({
             canRun={canRunPressRelease}
             onRun={() => pressReleaseBindings?.onRun()}
             onClear={() => pressReleaseBindings?.onClear()}
-            entryInFirstRow={pressReleaseEntryInFirstRow}
             detailsProps={{
               isProcessing: Boolean(pressReleaseBindings?.isProcessing),
               runPhase: pressReleaseBindings?.runPhase ?? "",
@@ -628,26 +625,7 @@ export function BulkBlogGenerationTab({
             {pressReleaseBindings ? (
               <PressReleaseWorkspaceBody
                 keyword={pressReleaseBindings.keyword}
-                onKeywordChange={(v) => pressReleaseBindings.setKeyword(v)}
-                title={pressReleaseBindings.title}
-                onTitleChange={(v) => pressReleaseBindings.setTitle(v)}
-                workspaceBusy={workspaceBusy}
-                isProcessing={pressReleaseBindings.isProcessing}
-                canRun={canRunPressRelease}
-                canOpenDetails={canOpenDetails}
-                onRun={() => pressReleaseBindings.onRun()}
-                onClear={() => pressReleaseBindings.onClear()}
                 resultMarkdown={pressReleaseBindings.resultMarkdown}
-                detailsProps={{
-                  isProcessing: pressReleaseBindings.isProcessing,
-                  runPhase: pressReleaseBindings.runPhase,
-                  keyword: pressReleaseBindings.keyword,
-                  title: pressReleaseBindings.title,
-                  wordPressSite: pressReleaseBindings.wordPressSite,
-                  harnessSections: pressReleaseBindings.harnessSections,
-                  harnessPlannedSectionCount: pressReleaseBindings.harnessPlannedSectionCount,
-                  inventoryJsonLink: pressReleaseBindings.inventoryJsonLink,
-                }}
                 placeholderRowCount={BULK_GENERATOR_EMPTY_ROW_COUNT}
               />
             ) : null}

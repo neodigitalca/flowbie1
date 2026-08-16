@@ -7,9 +7,9 @@ order: 0
 
 <!-- manual -->
 
-**God Mode** is the logged-in backend mode of Flowbie Chat on WordPress sites. Visitors use the public RAG chat; logged-in editors switch to God Mode to run the **Backend Assist** pipeline: analytics, SEO research, post edits, Agent Hub blocks, and multi-step workflows.
+**God Mode** is the logged-in backend mode of NEO Pulse Chat on WordPress sites. Visitors use the public RAG chat; logged-in editors switch to God Mode to run the **Backend Assist** pipeline: analytics, SEO research, post edits, Agent Hub blocks, and multi-step workflows.
 
-God Mode is implemented in the **flowbie-wp** WordPress plugin, not in the Node `/api/*` router documented elsewhere in this reference.
+God Mode is implemented in the **neo-pulse-wp** WordPress plugin, not in the Node `/api/*` router documented elsewhere in this reference.
 
 ## Visitor vs God Mode
 
@@ -20,7 +20,7 @@ God Mode is implemented in the **flowbie-wp** WordPress plugin, not in the Node 
 
 The chat widget toolbar shows **Visitor** and **God Mode** toggle buttons when `canBackendMode` is true (`is_user_logged_in()`). In wp-admin, God Mode is the default.
 
-Mode is persisted in `sessionStorage` under `flowbie_chat_admin_mode`.
+Mode is persisted in `sessionStorage` under `neo_pulse_chat_admin_mode`.
 
 ## Ask / Plan / Build
 
@@ -37,11 +37,11 @@ Submode is sent as `admin_submode` (`ask`, `plan`, or `build`) on each stream re
 ## Architecture
 
 ```
-Flowbie Chat widget (frontend)
+NEO Pulse Chat widget (frontend)
   admin_mode=backend + admin_submode
-    → POST admin-ajax.php?action=flowbie_chat_stream
-      → Flowbie_Wp_Chat_Super_Admin
-        → Flowbie_Wp_Backend_Assist_Submode
+    → POST admin-ajax.php?action=neo_pulse_chat_stream
+      → Neo_Pulse_Wp_Chat_Super_Admin
+        → Neo_Pulse_Wp_Backend_Assist_Submode
           → Classify → Plan → Execute → Card
             → 25+ registered tools
 ```
@@ -57,14 +57,14 @@ Flowbie Chat widget (frontend)
 
 OpenRouter API key must be configured for LLM classification and copy generation.
 
-## Source code (flowbie-wp)
+## Source code (neo-pulse-wp)
 
 | Area | Path |
 | --- | --- |
-| Chat widget | `wordpress-plugins/flowbie-wp/assets/frontend/flowbie-chat-widget.js` |
-| Stream entry | `wordpress-plugins/flowbie-wp/includes/class-flowbie-wp-chat-super-admin.php` |
-| Pipeline | `wordpress-plugins/flowbie-wp/includes/backend-assist/` |
-| Tool registry | `wordpress-plugins/flowbie-wp/includes/backend-assist/class-flowbie-wp-backend-assist-registry.php` |
+| Chat widget | `wordpress-plugins/neo-pulse-wp/assets/frontend/neo-pulse-chat-widget.js` |
+| Stream entry | `wordpress-plugins/neo-pulse-wp/includes/class-neo-pulse-wp-chat-super-admin.php` |
+| Pipeline | `wordpress-plugins/neo-pulse-wp/includes/backend-assist/` |
+| Tool registry | `wordpress-plugins/neo-pulse-wp/includes/backend-assist/class-neo-pulse-wp-backend-assist-registry.php` |
 
 ## Related pages
 
@@ -75,5 +75,5 @@ OpenRouter API key must be configured for LLM classification and copy generation
 
 ## Related surfaces (same pipeline)
 
-- **Backend Assist admin page** — wp-admin standalone UI (`Flowbie WP → Backend Assist`)
+- **Backend Assist admin page** — wp-admin standalone UI (`NEO Pulse WP → Backend Assist`)
 - **Agent Hub agent tab** — SEO block workflow from the builder

@@ -5,7 +5,7 @@ section: Semrush
 method: POST
 path: /api/semrush/site-audit-url
 auth: open
-order: 970
+order: 960
 ---
 
 POST `/api/semrush/site-audit-url`.
@@ -35,7 +35,7 @@ Runs the site audit url action in the Semrush API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/semrush/site-audit-url" \
+curl -X POST "https://neodigital.ca/api/semrush/site-audit-url" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

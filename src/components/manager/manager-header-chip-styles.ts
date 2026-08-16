@@ -43,7 +43,7 @@ export const MANAGER_DISPLAY_SQUARE_POWER =
 
 /** Cyan neon glow while entity site warm cache (inventory + GSC) is loading. */
 export const MANAGER_DISPLAY_SITE_WARMING =
-  "flowbie-site-warm-loading ring-1 ring-[hsl(var(--semantic-data)/0.45)]";
+  "neo-pulse-site-warm-loading ring-1 ring-[hsl(var(--semantic-data)/0.45)]";
 
 export const MANAGER_DISPLAY_SQUARE_POWER_WARMING =
   "bg-[hsl(var(--semantic-data))] text-black hover:bg-[hsl(var(--semantic-data))]";

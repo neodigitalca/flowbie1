@@ -1,18 +1,11 @@
-import { TrendingUp } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { BlogGeneratorWorkspaceChrome } from "@/components/blog-generator/BlogGeneratorWorkspaceChrome";
-import {
-  GENERATOR_WORKSPACE_TITLE,
-  type BlogGeneratorSectionId,
-} from "@/components/blog-generator/blog-generator-sections";
-import { LocalAnalysisDetailsPanel } from "@/components/sap-generator/LocalAnalysisDetailsPanel";
+import type { BlogGeneratorSectionId } from "@/components/blog-generator/blog-generator-sections";
+import type { LocalAnalysisDetailsPanelProps } from "@/components/sap-generator/LocalAnalysisDetailsPanel";
 import { EntityDetailsDrawer } from "@/components/sap-generator/EntityDetailsDrawer";
 import { SapGeneratorToolbar } from "@/components/sap-generator/SapGeneratorToolbar";
 import type { LocalAnalysisWorkspaceControls } from "@/components/sap-generator/LocalAnalysisPanel";
 import type { MetaBulkMicroSnapshot } from "@/components/overview/OverviewBulkMicroProgress";
-import { BULK_HEADER_FIELD } from "@/components/keyword-research/bulk/bulk-workspace-header-styles";
 import type { EntityGeographicLevel } from "@/lib/entity-geographic-level";
-import { cn } from "@/lib/utils";
 
 export type SapGeneratorWorkspaceHeaderProps = {
   activeSection: BlogGeneratorSectionId;
@@ -20,14 +13,15 @@ export type SapGeneratorWorkspaceHeaderProps = {
   workspace: LocalAnalysisWorkspaceControls;
   workspaceBusy: boolean;
   progressSnapshot: MetaBulkMicroSnapshot | null;
-  /** Hide idle progress track when Entity list still has empty rows/placeholders. */
   hideIdleProgressTrack?: boolean;
   canOpenDetails: boolean;
   isProcessing: boolean;
   csvParsing: boolean;
   uploadLabel: string;
-  sapPageBudgetInput: string;
-  onSapPageBudgetInputChange: (v: string) => void;
+  entityAdGroupCountInput: string;
+  onEntityAdGroupCountInputChange: (v: string) => void;
+  entityAdsPerGroupInput: string;
+  onEntityAdsPerGroupInputChange: (v: string) => void;
   suggestFocusKeyword: string;
   onSuggestFocusKeywordChange: (v: string) => void;
   suggestFocusLocation: string;
@@ -42,12 +36,13 @@ export type SapGeneratorWorkspaceHeaderProps = {
   hasSapRowsForCsv: boolean;
   onDownloadTargetsCsv: () => void;
   detailsProps: Omit<
-    React.ComponentProps<typeof LocalAnalysisDetailsPanel>,
+    LocalAnalysisDetailsPanelProps,
     "workspaceBusy" | "headerProgress"
   > & {
-    headerProgress: React.ComponentProps<typeof LocalAnalysisDetailsPanel>["headerProgress"];
+    headerProgress: LocalAnalysisDetailsPanelProps["headerProgress"];
   };
   onDetailsOpenChange?: (open: boolean) => void;
+  detailsOpenSignal?: number | string | null;
 };
 
 export function SapGeneratorWorkspaceHeader({
@@ -61,8 +56,10 @@ export function SapGeneratorWorkspaceHeader({
   isProcessing,
   csvParsing,
   uploadLabel,
-  sapPageBudgetInput,
-  onSapPageBudgetInputChange,
+  entityAdGroupCountInput,
+  onEntityAdGroupCountInputChange,
+  entityAdsPerGroupInput,
+  onEntityAdsPerGroupInputChange,
   suggestFocusKeyword,
   onSuggestFocusKeywordChange,
   suggestFocusLocation,
@@ -78,32 +75,16 @@ export function SapGeneratorWorkspaceHeader({
   onDownloadTargetsCsv,
   detailsProps,
   onDetailsOpenChange,
+  detailsOpenSignal,
 }: SapGeneratorWorkspaceHeaderProps) {
   const showTempUrl =
     workspace.mode === "temp" || (!workspace.showConnectedToggle && workspace.mode !== "connected");
 
   return (
     <BlogGeneratorWorkspaceChrome
-      icon={TrendingUp}
-      title={GENERATOR_WORKSPACE_TITLE}
       activeSection={activeSection}
       onSectionChange={onSectionChange}
       sectionSwitchDisabled={isProcessing}
-      titleRowMenu={
-        showTempUrl ? (
-          <div className="min-w-0 max-w-md">
-            <Input
-              type="url"
-              className={cn(BULK_HEADER_FIELD, "font-mono text-base")}
-              placeholder="https://example.com"
-              value={workspace.tempSeedUrl}
-              onChange={(e) => workspace.onTempSeedUrlChange(e.target.value)}
-              disabled={workspaceBusy}
-              aria-label="Website URL"
-            />
-          </div>
-        ) : null
-      }
       workspaceBusy={workspaceBusy}
       progressSnapshot={progressSnapshot}
       hideIdleProgressTrack={hideIdleProgressTrack}
@@ -111,13 +92,16 @@ export function SapGeneratorWorkspaceHeader({
       isProcessing={isProcessing}
       detailsPanelId="sap-local-analysis-details-panel"
       onDetailsOpenChange={onDetailsOpenChange}
+      detailsOpenSignal={detailsOpenSignal}
       toolbar={
         <SapGeneratorToolbar
           workspaceBusy={workspaceBusy}
           csvParsing={csvParsing}
           uploadLabel={uploadLabel}
-          sapPageBudgetInput={sapPageBudgetInput}
-          onSapPageBudgetInputChange={onSapPageBudgetInputChange}
+          entityAdGroupCountInput={entityAdGroupCountInput}
+          onEntityAdGroupCountInputChange={onEntityAdGroupCountInputChange}
+          entityAdsPerGroupInput={entityAdsPerGroupInput}
+          onEntityAdsPerGroupInputChange={onEntityAdsPerGroupInputChange}
           suggestFocusKeyword={suggestFocusKeyword}
           onSuggestFocusKeywordChange={onSuggestFocusKeywordChange}
           suggestFocusLocation={suggestFocusLocation}
@@ -131,6 +115,9 @@ export function SapGeneratorWorkspaceHeader({
           onEntityTypeFocusChange={onEntityTypeFocusChange}
           hasSapRowsForCsv={hasSapRowsForCsv}
           onDownloadTargetsCsv={onDownloadTargetsCsv}
+          showTempUrl={showTempUrl}
+          tempSeedUrl={workspace.tempSeedUrl}
+          onTempSeedUrlChange={workspace.onTempSeedUrlChange}
         />
       }
       detailsPanel={

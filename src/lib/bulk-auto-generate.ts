@@ -363,7 +363,7 @@ export interface BulkProcessingOptions {
    * so prompt permutations match the schedule preview.
    */
   bulkScheduleSlotIndex?: number;
-  /** Hybrid-run bundle id merged into bank `source_row` as `flowbie_content_bundle_id`. */
+  /** Hybrid-run bundle id merged into bank `source_row` as `neo_pulse_content_bundle_id`. */
   contentBundleId?: string;
   /**
    * Run-scoped Google Maps media bank: one WP upload per site + location entity.
@@ -641,7 +641,7 @@ export function addKeywordResearchSnapshotToBulkFiles(
     rowData: row,
   };
   fileManager.addFile(file);
-  options.onProgress?.(rowIndex, 0, 'Keyword research JSON (DataForSEO + Semrush) ready - download above');
+  options.onProgress?.(rowIndex, 0, 'Keyword research ready');
   return file;
 }
 
@@ -880,7 +880,7 @@ try {
       };
       fileManager.addFile(semrushFile);
       generatedFiles.push(semrushFile);
-      options.onProgress?.(rowIndex, 0, 'Semrush enrichment JSON ready - download above');
+      options.onProgress?.(rowIndex, 0, 'Semrush enrichment ready');
 
       semrushSnapshotForAcf = semrush;
       semrushCitationForAcf = prefetchedResearch?.primaryExternalCitationUrl ?? null;
@@ -1065,7 +1065,7 @@ try {
     checklist = pipelineChecklist;
     fileManager.addFile(checklistFile);
     generatedFiles.push(checklistFile);
-    options.onProgress?.(rowIndex, 0, 'Blog checklist JSON ready - download above');
+    options.onProgress?.(rowIndex, 0, 'Blog checklist ready');
 
     const flowPurposeStr = options.flowPurpose || buildFocusedArticlePurpose(keywordData.keyword);
     const outlineTextForImage = `Blog checklist outline:\n${checklist.join('\n')}`;
@@ -2061,7 +2061,7 @@ try {
             }
             const bundleId = options.contentBundleId?.trim();
             if (bundleId) {
-              sourceRow = { ...sourceRow, flowbie_content_bundle_id: bundleId };
+              sourceRow = { ...sourceRow, neo_pulse_content_bundle_id: bundleId };
             }
             const bankPayload = {
               siteId: site.id,
@@ -2507,7 +2507,7 @@ try {
             options.onProgress?.(
               rowIndex,
               0,
-              `WordPress post created on ${site.name}: ${postResult.postId} (scheduled for ${formatWordPressDate(scheduledDate)}${
+              `WordPress post created on ${site.name}: ${postResult.link || postResult.postId} (ID ${postResult.postId}, scheduled for ${formatWordPressDate(scheduledDate)}${
                 bulkPublishDateSource === 'csv' ? ', from CSV publish_date_gmt' : ''
               })`,
             );

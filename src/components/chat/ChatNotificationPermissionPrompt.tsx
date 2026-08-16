@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { CHAT_TEXT_MUTED, CHAT_TEXT_PRIMARY } from "@/components/chat/chat-theme";
 import { cn } from "@/lib/utils";
 
-const DISMISS_KEY = (teamId: number) => `flowbie-chat-notif-prompt-dismissed-${teamId}`;
+const DISMISS_KEY = (teamId: number) => `neo-pulse-chat-notif-prompt-dismissed-${teamId}`;
 
 type Props = {
   teamId: number;

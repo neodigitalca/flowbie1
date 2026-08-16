@@ -1,7 +1,5 @@
 /** Notify copy: dashboard. */
 
-export const NOTIFY_AGENTMAIL_API_KEY_SAVED_USED_FOR_COMMUNI = "AgentMail key saved";
-export const NOTIFY_AGENTMAIL_API_KEY_CLEARED = "AgentMail API key cleared.";
 export const NOTIFY_API_KEY_SAVED_AND_UPDATED_FOR_CURRENT_SE = "API Key saved and updated for current session.";
 export const NOTIFY_API_KEY_CLEARED_AI_GENERATION_IS_DISABLE = "API Key cleared. AI generation is disabled.";
 export const NOTIFY_DATAFORSEO_API_KEY_SAVED_SUCCESSFULLY = "DataForSEO API Key saved successfully.";
@@ -33,12 +31,6 @@ export const NOTIFY_SCRAPER_FINISHED_BUT_NO_PAGES_WERE_STORE = "Scraper finished
 export const NOTIFY_SITE_SCRAPE_CANCELLED = "Site scrape cancelled";
 export const NOTIFY_SITE_SCRAPER_FAILED_SEE_CONSOLE_FOR_DETA = "Site scraper failed. See console for details.";
 export const NOTIFY_STARTED_A_NEW_CONVERSATION = "Started a new conversation.";
-export const NOTIFY_INBOX_ADDRESS_COPIED = "Inbox address copied";
-export const NOTIFY_TO_SUBJECT_AND_MESSAGE_BODY_ARE_REQUIRED = "To, subject, and message body are required";
-export const NOTIFY_MESSAGE_SENT = "Message sent";
-export const NOTIFY_EMAIL_AGENT_SENDER_LISTS_SAVED = "Email Agent sender lists saved.";
-export const NOTIFY_AGENTMAIL_API_KEY_SAVED =
-  "AgentMail API key saved for Communication inbox and Properties email threads.";
 export const NOTIFY_SIGN_IN_TO_LOAD_SETTINGS_FROM_THE_CLOUD = "Sign in to load settings from the cloud";
 export const NOTIFY_SIGN_IN_TO_SAVE_SUPABASE_CREDENTIALS = "Sign in to save Supabase credentials";
 export const NOTIFY_ENTER_PROJECT_URL_AND_SERVICE_ROLE_KEY = "Enter project URL and service role key";

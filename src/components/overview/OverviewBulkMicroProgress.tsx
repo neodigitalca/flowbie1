@@ -362,19 +362,19 @@ function HarnessNeonProgressBar({
     if (indeterminate) {
       return (
         <div
-          className="flowbie-overview-header-progress-track w-full"
+          className="neo-pulse-overview-header-progress-track w-full"
           aria-label={ariaLabel}
           aria-busy="true"
         >
-          <div className="flowbie-overview-header-progress-indeterminate" aria-hidden />
+          <div className="neo-pulse-overview-header-progress-indeterminate" aria-hidden />
         </div>
       );
     }
     const v = Math.min(100, Math.max(0, pct));
     return (
-      <div className="flowbie-overview-header-progress-track w-full">
+      <div className="neo-pulse-overview-header-progress-track w-full">
         <div
-          className="flowbie-overview-header-progress-fill"
+          className="neo-pulse-overview-header-progress-fill"
           style={{ width: `${v}%` }}
           role="progressbar"
           aria-valuenow={v}
@@ -389,19 +389,19 @@ function HarnessNeonProgressBar({
   if (indeterminate) {
     return (
       <div
-        className="flowbie-competitor-progress-track h-2 w-full rounded-full"
+        className="neo-pulse-competitor-progress-track h-2 w-full rounded-full"
         aria-label={ariaLabel}
         aria-busy="true"
       >
-        <div className="flowbie-competitor-progress-indeterminate" aria-hidden />
+        <div className="neo-pulse-competitor-progress-indeterminate" aria-hidden />
       </div>
     );
   }
   const v = Math.min(100, Math.max(0, pct));
   return (
-    <div className="flowbie-competitor-progress-track h-2 w-full rounded-full">
+    <div className="neo-pulse-competitor-progress-track h-2 w-full rounded-full">
       <div
-        className="flowbie-competitor-progress-fill h-full rounded-full transition-[width] duration-300 ease-out"
+        className="neo-pulse-competitor-progress-fill h-full rounded-full transition-[width] duration-300 ease-out"
         style={{ width: `${v}%` }}
         role="progressbar"
         aria-valuenow={v}
@@ -453,7 +453,7 @@ function EmbeddedMicroProgressRow({
     >
       {idle ? (
         <div
-          className="flowbie-overview-header-progress-track w-full opacity-40"
+          className="neo-pulse-overview-header-progress-track w-full opacity-40"
           aria-hidden
         />
       ) : (

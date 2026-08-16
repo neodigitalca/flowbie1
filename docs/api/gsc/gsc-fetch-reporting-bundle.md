@@ -5,7 +5,7 @@ section: Google Search Console
 method: POST
 path: /api/gsc/fetch-reporting-bundle
 auth: open
-order: 410
+order: 400
 ---
 
 POST `/api/gsc/fetch-reporting-bundle`.
@@ -34,7 +34,7 @@ Runs the fetch reporting bundle action in the Google Search Console API from a J
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/gsc/fetch-reporting-bundle" \
+curl -X POST "https://neodigital.ca/api/gsc/fetch-reporting-bundle" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

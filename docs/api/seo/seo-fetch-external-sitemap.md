@@ -5,7 +5,7 @@ section: SEO
 method: POST
 path: /api/seo/fetch-external-sitemap
 auth: open
-order: 1000
+order: 990
 ---
 
 POST `/api/seo/fetch-external-sitemap`.
@@ -37,7 +37,7 @@ Fetches fetch external sitemap from the SEO API. On success, returns `urls`, `si
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/seo/fetch-external-sitemap" \
+curl -X POST "https://neodigital.ca/api/seo/fetch-external-sitemap" \
   -H "Content-Type: application/json" \
   -d '{   "url": "..." }'
 ```

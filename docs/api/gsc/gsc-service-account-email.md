@@ -5,7 +5,7 @@ section: Google Search Console
 method: GET
 path: /api/gsc/service-account-email
 auth: open
-order: 480
+order: 470
 ---
 
 GET `/api/gsc/service-account-email`.
@@ -34,7 +34,7 @@ Reads service account email from the Google Search Console API.
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/gsc/service-account-email" \
+curl -X GET "https://neodigital.ca/api/gsc/service-account-email" \
   -H "Content-Type: application/json" \
 ```
 

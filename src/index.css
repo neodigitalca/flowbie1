@@ -103,8 +103,8 @@ All colors MUST be HSL.
       0 0 0 1px hsl(var(--semantic-publish) / 0.22),
       0 0 28px -8px hsl(var(--semantic-publish) / 0.12);
 
-    --flowbie-glow: 78 100% 45%;
-    --flowbie-glow-subtle: 78 85% 22%;
+    --neo-pulse-glow: 78 100% 45%;
+    --neo-pulse-glow-subtle: 78 85% 22%;
     --neural-glow: 78 100% 45%;
     --neural-glow-subtle: 78 85% 22%;
     --canvas-bg: 0 0% 3%;
@@ -119,7 +119,7 @@ All colors MUST be HSL.
 
 /* List / grid rows: one neon left accent + tile - no stacked border+ring */
 @layer components {
-  .flowbie-accent-row {
+  .neo-pulse-accent-row {
     position: relative;
     border-radius: var(--radius);
     border: 0;
@@ -130,12 +130,12 @@ All colors MUST be HSL.
     transition: box-shadow 0.2s ease;
   }
 
-  .flowbie-accent-row:hover {
+  .neo-pulse-accent-row:hover {
     box-shadow: var(--shadow-tile-pop);
   }
 
-  /** Same left neon bar as .flowbie-accent-row but no second surface - use inside an already-elevated card */
-  .flowbie-accent-row-flat {
+  /** Same left neon bar as .neo-pulse-accent-row but no second surface - use inside an already-elevated card */
+  .neo-pulse-accent-row-flat {
     position: relative;
     border-radius: var(--radius);
     border: 0;
@@ -148,7 +148,7 @@ All colors MUST be HSL.
   /**
    * Primary shell: flat tile (no lime L/R frame).
    */
-  .flowbie-frame-primary {
+  .neo-pulse-frame-primary {
     border-radius: var(--radius);
     border: 0;
     background-color: hsl(var(--card));
@@ -158,7 +158,7 @@ All colors MUST be HSL.
   /**
    * Data shell: flat tile (no cyan frame).
    */
-  .flowbie-frame-data {
+  .neo-pulse-frame-data {
     border-radius: var(--radius);
     border: 0;
     background-color: hsl(var(--card));
@@ -167,10 +167,10 @@ All colors MUST be HSL.
 
   /**
    * Semantic zone stacks - no outer rectangle.
-   * Thick L/R + thin T/B live on each .flowbie-zone-row tile only (see below).
+   * Thick L/R + thin T/B live on each .neo-pulse-zone-row tile only (see below).
    */
-  .flowbie-zone-tile--analysis,
-  .flowbie-zone-tile--data {
+  .neo-pulse-zone-tile--analysis,
+  .neo-pulse-zone-tile--data {
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -178,14 +178,14 @@ All colors MUST be HSL.
   }
 
   /** Full-width tab/panel shell: same canvas as header/footer (not pure black); no hairline frame. */
-  .flowbie-panel-neon {
+  .neo-pulse-panel-neon {
     border-radius: var(--radius);
     border: 0;
     background-color: hsl(var(--background));
     box-shadow: none;
   }
 
-  .flowbie-label-caps {
+  .neo-pulse-label-caps {
     font-size: 1rem;
     font-weight: 600;
     letter-spacing: 0.05em;
@@ -198,19 +198,19 @@ All colors MUST be HSL.
     color: #ffffff !important;
   }
 
-  .flowbie-title-lime {
+  .neo-pulse-title-lime {
     color: hsl(var(--foreground));
   }
 
-  .flowbie-zone-tile--publish {
+  .neo-pulse-zone-tile--publish {
     border-radius: var(--radius);
     border: 1px solid hsl(var(--semantic-publish) / 0.42);
     background-color: hsl(var(--semantic-publish) / 0.07);
     box-shadow: var(--shadow-zone-publish);
   }
 
-  /** Row inside a zone: left accent + optional tint (lighter when nested in matching .flowbie-zone-tile) */
-  .flowbie-zone-row {
+  /** Row inside a zone: left accent + optional tint (lighter when nested in matching .neo-pulse-zone-tile) */
+  .neo-pulse-zone-row {
     position: relative;
     border-radius: var(--radius);
     border: 0;
@@ -221,7 +221,7 @@ All colors MUST be HSL.
   /**
    * Keyword target tiles: asymmetric frame per row (thick L/R + thin T/B) - no outer section box.
    */
-  .flowbie-zone-row.flowbie-zone-row--analysis {
+  .neo-pulse-zone-row.neo-pulse-zone-row--analysis {
     border-radius: var(--radius);
     border: 0;
     background-color: hsl(var(--surface-elevated));
@@ -231,7 +231,7 @@ All colors MUST be HSL.
   }
 
   /** SAP / local analysis CTA - neutral outline (no chartreuse). */
-  .flowbie-btn-semantic-analysis {
+  .neo-pulse-btn-semantic-analysis {
     margin-top: 10px;
     height: 2.25rem;
     border-radius: var(--radius);
@@ -245,13 +245,13 @@ All colors MUST be HSL.
     transition: background-color 0.15s ease, border-color 0.15s ease;
   }
 
-  .flowbie-btn-semantic-analysis:hover:not(:disabled) {
+  .neo-pulse-btn-semantic-analysis:hover:not(:disabled) {
     background-color: hsl(var(--muted) / 0.65) !important;
     border-color: hsl(var(--muted-foreground) / 0.45);
   }
 
   /** Data-zone row tiles (e.g. bulk “bulk rows” strip): cyan asymmetric frame, not a wrapping box */
-  .flowbie-zone-row.flowbie-zone-row--data {
+  .neo-pulse-zone-row.neo-pulse-zone-row--data {
     border-radius: var(--radius);
     border: 0;
     background-color: hsl(var(--surface-elevated));
@@ -260,12 +260,12 @@ All colors MUST be HSL.
     box-shadow: var(--shadow-tile);
   }
 
-  .flowbie-zone-row--publish {
+  .neo-pulse-zone-row--publish {
     border-left: var(--tile-accent-width) solid hsl(var(--semantic-publish));
     background-color: hsl(var(--semantic-publish) / 0.05);
   }
 
-  .flowbie-zone-tile--publish .flowbie-zone-row--publish {
+  .neo-pulse-zone-tile--publish .neo-pulse-zone-row--publish {
     background-color: hsl(var(--semantic-publish) / 0.03);
   }
 }
@@ -274,52 +274,52 @@ All colors MUST be HSL.
  * Local analysis / SAP row inputs: dark fill + semantic tint, no neon glow (!important so Input’s bg wins).
  */
 @layer utilities {
-  .flowbie-input-field--analysis {
+  .neo-pulse-input-field--analysis {
     background-color: hsl(0 0% 0%) !important;
     color: hsl(var(--semantic-analysis-foreground) / 0.92) !important;
     caret-color: hsl(var(--semantic-analysis));
   }
 
-  .flowbie-input-field--analysis-readonly {
+  .neo-pulse-input-field--analysis-readonly {
     background-color: hsl(0 0% 0%) !important;
     color: hsl(var(--semantic-analysis-foreground) / 0.5) !important;
   }
 
-  .flowbie-input-field--data {
+  .neo-pulse-input-field--data {
     background-color: hsl(0 0% 0%) !important;
     color: hsl(var(--semantic-data-foreground) / 0.92) !important;
     caret-color: hsl(var(--semantic-data));
   }
 
-  .flowbie-input-field--publish {
+  .neo-pulse-input-field--publish {
     background-color: hsl(0 0% 0%) !important;
     color: hsl(var(--semantic-publish-foreground) / 0.92) !important;
     caret-color: hsl(var(--semantic-publish));
   }
 
-  .flowbie-input-field--warning {
+  .neo-pulse-input-field--warning {
     background-color: hsl(0 0% 0%) !important;
     color: hsl(var(--semantic-warning-foreground) / 0.92) !important;
     caret-color: hsl(var(--semantic-warning));
   }
 
-  .local-analysis-panel input.flowbie-input-field--analysis::placeholder {
+  .local-analysis-panel input.neo-pulse-input-field--analysis::placeholder {
     color: hsl(var(--semantic-analysis-foreground) / 0.38) !important;
   }
 
-  .local-analysis-panel input.flowbie-input-field--analysis-readonly::placeholder {
+  .local-analysis-panel input.neo-pulse-input-field--analysis-readonly::placeholder {
     color: hsl(var(--semantic-analysis-foreground) / 0.32) !important;
   }
 
-  .local-analysis-panel input.flowbie-input-field--data::placeholder {
+  .local-analysis-panel input.neo-pulse-input-field--data::placeholder {
     color: hsl(var(--semantic-data-foreground) / 0.38) !important;
   }
 
-  .local-analysis-panel input.flowbie-input-field--publish::placeholder {
+  .local-analysis-panel input.neo-pulse-input-field--publish::placeholder {
     color: hsl(var(--semantic-publish-foreground) / 0.38) !important;
   }
 
-  .local-analysis-panel input.flowbie-input-field--warning::placeholder {
+  .local-analysis-panel input.neo-pulse-input-field--warning::placeholder {
     color: hsl(var(--semantic-warning-foreground) / 0.38) !important;
   }
 }
@@ -339,6 +339,7 @@ All colors MUST be HSL.
 
   html {
     font-size: 100%;
+    scrollbar-gutter: stable;
   }
 
   body {
@@ -355,31 +356,31 @@ All colors MUST be HSL.
   }
 
   /** Content Optimizer / Overview tab: Lato + 1rem floor on all copy */
-  .flowbie-overview-tab {
+  .neo-pulse-overview-tab {
     font-family: "Lato", sans-serif;
     font-size: var(--font-size-min);
   }
 
-  .flowbie-overview-tab :where(input, textarea, button, label, select, option, a, p, span, li, summary, code) {
+  .neo-pulse-overview-tab :where(input, textarea, button, label, select, option, a, p, span, li, summary, code) {
     font-family: inherit;
   }
 
-  .flowbie-overview-tab :where(input, textarea, button, label, select, option) {
+  .neo-pulse-overview-tab :where(input, textarea, button, label, select, option) {
     font-size: inherit;
   }
 
   /** API tab: Lato + 1rem floor; overrides WP theme link/table sizes on SPA. */
-  .flowbie-api-tab {
+  .neo-pulse-api-tab {
     font-family: "Lato", sans-serif;
     font-size: var(--font-size-min);
   }
 
-  .flowbie-api-tab :where(p, span, li, button, td, th, a, code, pre, strong, em, label, small) {
+  .neo-pulse-api-tab :where(p, span, li, button, td, th, a, code, pre, strong, em, label, small) {
     font-family: inherit;
     font-size: inherit;
   }
 
-  .flowbie-api-tab :where(h1, h2, h3, h4, th) {
+  .neo-pulse-api-tab :where(h1, h2, h3, h4, th) {
     font-family: inherit;
     font-weight: 400;
   }
@@ -388,15 +389,15 @@ All colors MUST be HSL.
   .local-analysis-panel input:-webkit-autofill,
   .local-analysis-panel input:-webkit-autofill:hover,
   .local-analysis-panel input:-webkit-autofill:focus,
-  input[data-flowbie-black]:-webkit-autofill,
-  input[data-flowbie-black]:-webkit-autofill:hover,
-  input[data-flowbie-black]:-webkit-autofill:focus {
+  input[data-neo-pulse-black]:-webkit-autofill,
+  input[data-neo-pulse-black]:-webkit-autofill:hover,
+  input[data-neo-pulse-black]:-webkit-autofill:focus {
     -webkit-text-fill-color: inherit;
     transition: background-color 99999s ease-out;
     -webkit-box-shadow: 0 0 0 1000px hsl(0 0% 0%) inset !important;
   }
 
-  .flowbie-grid {
+  .neo-pulse-grid {
     background-image: 
       linear-gradient(white 1px, transparent 1px),
       linear-gradient(90deg, white 1px, transparent 1px);
@@ -404,11 +405,11 @@ All colors MUST be HSL.
   }
 
   .glow-text {
-    text-shadow: 0 0 10px hsl(var(--flowbie-glow) / 0.5);
+    text-shadow: 0 0 10px hsl(var(--neo-pulse-glow) / 0.5);
   }
 
   .glow-border {
-    box-shadow: 0 0 15px hsl(var(--flowbie-glow) / 0.4);
+    box-shadow: 0 0 15px hsl(var(--neo-pulse-glow) / 0.4);
   }
 
   .react-flow__node {
@@ -448,25 +449,25 @@ All colors MUST be HSL.
 
   /**
    * App-wide scrollbars: same primary track + thumb everywhere (Firefox + WebKit).
-   * .custom-scrollbar / .flowbie-manager-tab-scroll are aliases for explicit markup hooks only.
+   * .custom-scrollbar / .neo-pulse-manager-tab-scroll are aliases for explicit markup hooks only.
    */
   *,
   .custom-scrollbar,
-  .flowbie-manager-tab-scroll {
+  .neo-pulse-manager-tab-scroll {
     scrollbar-width: auto;
     scrollbar-color: hsl(var(--primary) / 0.85) hsl(0 0% 8% / 0.95);
   }
 
   *::-webkit-scrollbar,
   .custom-scrollbar::-webkit-scrollbar,
-  .flowbie-manager-tab-scroll::-webkit-scrollbar {
+  .neo-pulse-manager-tab-scroll::-webkit-scrollbar {
     width: 18px;
     height: 18px;
   }
 
   *::-webkit-scrollbar-track,
   .custom-scrollbar::-webkit-scrollbar-track,
-  .flowbie-manager-tab-scroll::-webkit-scrollbar-track {
+  .neo-pulse-manager-tab-scroll::-webkit-scrollbar-track {
     background: hsl(0 0% 8% / 0.95);
     border-radius: 10px;
     border: 1px solid hsl(0 0% 22% / 0.6);
@@ -474,7 +475,7 @@ All colors MUST be HSL.
 
   *::-webkit-scrollbar-thumb,
   .custom-scrollbar::-webkit-scrollbar-thumb,
-  .flowbie-manager-tab-scroll::-webkit-scrollbar-thumb {
+  .neo-pulse-manager-tab-scroll::-webkit-scrollbar-thumb {
     background-color: hsl(var(--primary) / 0.75);
     border-radius: 10px;
     border: 3px solid hsl(0 0% 8% / 0.95);
@@ -482,30 +483,30 @@ All colors MUST be HSL.
 
   *::-webkit-scrollbar-thumb:hover,
   .custom-scrollbar::-webkit-scrollbar-thumb:hover,
-  .flowbie-manager-tab-scroll::-webkit-scrollbar-thumb:hover {
+  .neo-pulse-manager-tab-scroll::-webkit-scrollbar-thumb:hover {
     background-color: hsl(var(--primary) / 0.95);
   }
 
   *::-webkit-scrollbar-corner,
   .custom-scrollbar::-webkit-scrollbar-corner,
-  .flowbie-manager-tab-scroll::-webkit-scrollbar-corner {
+  .neo-pulse-manager-tab-scroll::-webkit-scrollbar-corner {
     background: hsl(0 0% 8% / 0.95);
   }
 
   /** Scrollable region with wheel/trackpad only (no visible scrollbar). Scoped — do not replace global * rules above. */
-  .flowbie-hide-scrollbar {
+  .neo-pulse-hide-scrollbar {
     scrollbar-width: none;
     -ms-overflow-style: none;
   }
 
-  .flowbie-hide-scrollbar::-webkit-scrollbar {
+  .neo-pulse-hide-scrollbar::-webkit-scrollbar {
     display: none;
     width: 0;
     height: 0;
   }
 
   /** Competitor research - cyan neon progress (semantic data zone) */
-  .flowbie-competitor-progress-track {
+  .neo-pulse-competitor-progress-track {
     position: relative;
     min-height: 1rem;
     height: 1rem;
@@ -518,7 +519,7 @@ All colors MUST be HSL.
       0 0 14px hsl(var(--semantic-data) / 0.12);
   }
 
-  .flowbie-competitor-progress-indeterminate {
+  .neo-pulse-competitor-progress-indeterminate {
     position: absolute;
     top: 0;
     bottom: 0;
@@ -532,10 +533,10 @@ All colors MUST be HSL.
       transparent
     );
     box-shadow: 0 0 12px hsl(var(--semantic-data) / 0.55);
-    animation: flowbie-competitor-progress-slide 1.35s ease-in-out infinite;
+    animation: neo-pulse-competitor-progress-slide 1.35s ease-in-out infinite;
   }
 
-  .flowbie-competitor-progress-fill {
+  .neo-pulse-competitor-progress-fill {
     height: 100%;
     border-radius: 9999px;
     background: hsl(var(--semantic-data) / 0.82);
@@ -543,15 +544,15 @@ All colors MUST be HSL.
   }
 
   /** Manager top bar: connected site pill while entity warm cache loads */
-  .flowbie-site-warm-loading {
+  .neo-pulse-site-warm-loading {
     box-shadow:
       0 0 0 1px hsl(var(--semantic-data) / 0.35),
       0 0 16px hsl(var(--semantic-data) / 0.35),
       0 0 28px hsl(var(--semantic-data) / 0.18);
-    animation: flowbie-site-warm-glow 1.5s ease-in-out infinite;
+    animation: neo-pulse-site-warm-glow 1.5s ease-in-out infinite;
   }
 
-  @keyframes flowbie-site-warm-glow {
+  @keyframes neo-pulse-site-warm-glow {
     0%,
     100% {
       box-shadow:
@@ -568,7 +569,7 @@ All colors MUST be HSL.
   }
 
   /** Overview Content header: slim two-tone neon bar */
-  .flowbie-overview-header-progress-track {
+  .neo-pulse-overview-header-progress-track {
     position: relative;
     min-height: 1.25rem;
     height: 1.25rem;
@@ -579,7 +580,7 @@ All colors MUST be HSL.
     box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.04);
   }
 
-  .flowbie-overview-header-progress-fill {
+  .neo-pulse-overview-header-progress-fill {
     position: absolute;
     top: 0;
     bottom: 0;
@@ -597,7 +598,7 @@ All colors MUST be HSL.
     transition: width 300ms ease-out;
   }
 
-  .flowbie-overview-header-progress-fill::after {
+  .neo-pulse-overview-header-progress-fill::after {
     content: "";
     position: absolute;
     top: 0;
@@ -608,7 +609,7 @@ All colors MUST be HSL.
     pointer-events: none;
   }
 
-  .flowbie-overview-header-progress-indeterminate {
+  .neo-pulse-overview-header-progress-indeterminate {
     position: absolute;
     top: 0;
     bottom: 0;
@@ -624,10 +625,10 @@ All colors MUST be HSL.
       hsl(214 76% 26%) 100%
     );
     box-shadow: 0 0 8px hsl(var(--semantic-data) / 0.32);
-    animation: flowbie-competitor-progress-slide 1.35s ease-in-out infinite;
+    animation: neo-pulse-competitor-progress-slide 1.35s ease-in-out infinite;
   }
 
-  .flowbie-overview-header-progress-ticker {
+  .neo-pulse-overview-header-progress-ticker {
     position: absolute;
     top: 0;
     right: 0;
@@ -648,7 +649,7 @@ All colors MUST be HSL.
   }
 }
 
-@keyframes flowbie-competitor-progress-slide {
+@keyframes neo-pulse-competitor-progress-slide {
   0% {
     transform: translateX(-120%);
   }

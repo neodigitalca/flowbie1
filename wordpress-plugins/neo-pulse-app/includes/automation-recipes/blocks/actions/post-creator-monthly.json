@@ -1,0 +1,20 @@
+{
+  "keyword": "post-creator-monthly",
+  "name": "Post creator",
+  "executionKind": "post_creator",
+  "description": "Generate and schedule blog posts via the bulk pipeline.",
+  "defaults": {
+    "executionPayload": {
+      "postCount": 1,
+      "keywordSource": "prompt",
+      "featuredImage": true,
+      "sitemapType": "post",
+      "postDestination": "wordpress",
+      "scheduleTimesPerMonth": 1,
+      "scheduleStartDay": 1,
+      "scheduleStartTime": "09:00",
+      "scheduleStaggerOptimized": true,
+      "targetBucket": "posts"
+    }
+  }
+}

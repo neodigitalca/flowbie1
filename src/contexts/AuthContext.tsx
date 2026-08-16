@@ -21,7 +21,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const DEV_ADMIN_USER: AuthUser = {
   id: 0,
-  email: "admin@flowbie.local",
+  email: "admin@neo-pulse.local",
   displayName: "Admin",
 };
 

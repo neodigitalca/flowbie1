@@ -1,5 +1,5 @@
 /**
- * Resolve dedicated SEO meta text from Flowbie Fields / ACF (not prompt_modifier).
+ * Resolve dedicated SEO meta text from NEO Pulse Fields / ACF (not prompt_modifier).
  * Overview scrape uses WordPress excerpt for meta; this is for explicit meta_description fields only.
  */
 export function acfMetaDescriptionLine(acf: Record<string, unknown> | null | undefined): string {

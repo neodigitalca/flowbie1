@@ -34,7 +34,7 @@ Runs the google images action in the DataForSEO API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/dataforseo/google-images" \
+curl -X POST "https://neodigital.ca/api/dataforseo/google-images" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

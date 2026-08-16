@@ -1,4 +1,5 @@
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { readOpenRouterResponseJson } from "@/lib/openrouter-response-body";
 /**
  * One-shot OpenRouter multimodal chat (vision) with JSON-shaped replies.
  */
@@ -39,7 +40,7 @@ export async function openRouterVisionChatCompletion(params: {
     throw new Error(`OpenRouter vision error ${response.status}: ${errorText}`);
   }
 
-  const data = (await response.json()) as {
+  const data = (await readOpenRouterResponseJson(response)) as {
     choices?: Array<{ message?: { content?: string } }>;
   };
   const content = data.choices?.[0]?.message?.content;

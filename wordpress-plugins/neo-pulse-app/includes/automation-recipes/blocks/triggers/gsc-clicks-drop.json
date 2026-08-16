@@ -1,0 +1,19 @@
+{
+  "keyword": "gsc-clicks-drop",
+  "name": "GSC clicks drop",
+  "kind": "gsc",
+  "description": "Fire when total clicks fall vs prior period.",
+  "defaults": {
+    "source": "gsc",
+    "triggerConfig": {
+      "sources": ["gsc"],
+      "match": "any",
+      "conditions": [{ "signal": "clicks_drop", "operator": "gte", "value": 10, "minImpressions": 100 }],
+      "lookbackDays": 28,
+      "compareDays": 28,
+      "pollHours": 24,
+      "cooldownHours": 72,
+      "maxUrls": 5
+    }
+  }
+}

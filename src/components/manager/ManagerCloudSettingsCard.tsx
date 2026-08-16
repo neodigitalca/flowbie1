@@ -23,7 +23,6 @@ import {
 export type ManagerCloudSettingsCardProps = {
   apiKey: string;
   dataForSEOApiKey: string;
-  agentMailApiKey: string;
   selectedModel: string;
   temperature: number;
   maxTokens: number;
@@ -33,7 +32,6 @@ export type ManagerCloudSettingsCardProps = {
 export function ManagerCloudSettingsCard({
   apiKey,
   dataForSEOApiKey,
-  agentMailApiKey,
   selectedModel,
   temperature,
   maxTokens,
@@ -68,7 +66,6 @@ export function ManagerCloudSettingsCard({
         {
           "openrouter-api-key": apiKey,
           "dataforseo-api-key": dataForSEOApiKey,
-          "agentmail-api-key": agentMailApiKey,
         },
         { selectedModel, temperature, maxTokens, topP },
       );
@@ -90,7 +87,6 @@ export function ManagerCloudSettingsCard({
     status?.supabaseConfigured,
     apiKey,
     dataForSEOApiKey,
-    agentMailApiKey,
     selectedModel,
     temperature,
     maxTokens,

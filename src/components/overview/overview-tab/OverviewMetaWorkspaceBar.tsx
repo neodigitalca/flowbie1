@@ -1,10 +1,9 @@
 import React from "react";
-import { TrendingUp, Wand2 } from "lucide-react";
+import { Wand2 } from "lucide-react";
 import { ContentOptimizerSectionPills } from "@/components/content-optimizer/ContentOptimizerSectionPills";
 import type { ContentOptimizerSectionId } from "@/components/content-optimizer/content-optimizer-sections";
 import type { ContentOptimizerGeneratorChrome } from "@/components/content-optimizer/content-optimizer-generator-chrome";
 import { BlogGeneratorWorkspaceChrome } from "@/components/blog-generator/BlogGeneratorWorkspaceChrome";
-import { GENERATOR_WORKSPACE_TITLE } from "@/components/blog-generator/blog-generator-sections";
 import { UnifiedWorkspaceChrome } from "@/components/shared/UnifiedWorkspaceChrome";
 import { WorkspacePill } from "@/components/shared/WorkspacePill";
 import {
@@ -26,6 +25,7 @@ import {
 } from "@/components/overview/OverviewBulkMicroProgress";
 import { BULK_TOOLBAR_GROUP_DIVIDER } from "@/components/keyword-research/bulk/bulk-workspace-header-styles";
 import type { OverviewTabController } from "@/hooks/overview/use-overview-tab-controller";
+import { useOverviewSiteWarmDetails } from "@/hooks/overview/use-overview-site-warm-details";
 import type { useWordPressOptimization } from "@/contexts/wordpress-optimization-context";
 import type { MetaBulkActionKey, BulkProgressSlice } from "@/components/overview/overview-tab-constants";
 import {
@@ -33,12 +33,6 @@ import {
   overviewContentDetailsCanOpen,
   type OverviewSinglePageDetailsContext,
 } from "@/components/overview/overview-tab/OverviewContentDetailsPanel";
-import { notify } from "@/lib/app-notifications";
-import { NOTIFY_BATCH_CLEARED_FROM_VIEW } from "@/lib/notify-messages";
-import {
-  deriveOverviewBulkRunGsc,
-  getOverviewBulkPageTitle,
-} from "@/components/overview/overview-tab/overview-bulk-run-helpers";
 
 type Opt = ReturnType<typeof useWordPressOptimization>;
 
@@ -112,16 +106,14 @@ export function OverviewContentHeader({
   bulkBatchKey,
   batchProgress,
   opt,
-  setBulkActionProgress,
-  onUploadToWordPress,
   optimizerSection,
   onOptimizerSectionChange,
-  paginationLayoutTotal,
   onDetailsOpenChange,
   generatorChrome,
 }: OverviewContentHeaderProps) {
   const hasDetectedSitemaps = Boolean(c.site?.sitemaps?.mainSitemapUrl);
   const site = c.site;
+  const warmDetails = useOverviewSiteWarmDetails(site);
   const workspaceBusy = metaOptBulkStripBusy || isBatchContentRunning || isSinglePageOptimizing;
 
   const clusters = buildOverviewBulkActionClusters(c, {
@@ -143,6 +135,11 @@ export function OverviewContentHeader({
     c.bulkActionProgress,
     batchBulkState,
     singlePageCtx,
+    {
+      sitemapInventoryLinks: warmDetails.sitemapInventoryLinks,
+      gscHostedLink: warmDetails.gscHostedLink,
+      sitemapInventoryLoading: warmDetails.sitemapInventoryLoading,
+    },
   );
 
   const detailsOpenSignal =
@@ -151,25 +148,6 @@ export function OverviewContentHeader({
       : site && isSinglePageOptimizing
         ? `single-opt-${site.id}`
         : null;
-
-  const gscDerived = site
-    ? deriveOverviewBulkRunGsc(site, batchBulkState, bulkBatchKey, batchProgress, opt)
-    : null;
-
-  const pageTitle = site && batchBulkState ? getOverviewBulkPageTitle(batchBulkState, site) : undefined;
-
-  const handleBatchClose = (abortingRun: boolean) => {
-    if (!bulkBatchKey) return;
-    opt.resetBulkBatch(bulkBatchKey);
-    setBulkActionProgress((p) => {
-      const next = { ...p };
-      delete next.optimizeAll;
-      return next;
-    });
-    if (abortingRun) {
-      notify.info(NOTIFY_BATCH_CLEARED_FROM_VIEW);
-    }
-  };
 
   const bulkPostTicker =
     isBatchContentRunning && batchBulkState ? resolveBulkPostTicker(batchBulkState) : null;
@@ -186,12 +164,6 @@ export function OverviewContentHeader({
 
   const toolbarContent = (
     <>
-      {generatorChrome ? (
-        <>
-          {optimizerSectionPills}
-          <div className={BULK_TOOLBAR_GROUP_DIVIDER} aria-hidden />
-        </>
-      ) : null}
       {clusters.map((cluster) => (
         <OverviewBulkClusterFlyout
           key={cluster.id}
@@ -251,12 +223,9 @@ export function OverviewContentHeader({
       bulkBatchKey={bulkBatchKey}
       batchProgress={batchProgress}
       opt={opt}
-      pageTitle={pageTitle}
-      gscPreviewByUrl={gscDerived?.gscMapOverview ?? {}}
-      gscActiveUrl={gscDerived?.bulkActiveUrl ?? null}
-      gscFetching={gscDerived?.gscPreviewLoading ?? false}
-      onUploadToWordPress={onUploadToWordPress}
-      onBatchClose={handleBatchClose}
+      sitemapInventoryLinks={warmDetails.sitemapInventoryLinks}
+      gscHostedLink={warmDetails.gscHostedLink}
+      sitemapInventoryLoading={warmDetails.sitemapInventoryLoading}
     />
   ) : null;
 
@@ -277,8 +246,6 @@ export function OverviewContentHeader({
   if (generatorChrome) {
     return (
       <BlogGeneratorWorkspaceChrome
-        icon={TrendingUp}
-        title={GENERATOR_WORKSPACE_TITLE}
         activeSection={generatorChrome.activeSection}
         onSectionChange={generatorChrome.onSectionChange}
         sectionSwitchDisabled={generatorChrome.sectionSwitchDisabled}

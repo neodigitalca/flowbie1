@@ -60,8 +60,6 @@ export function CompetitorAnalysisPanel({
     seedPromptBlogSlots(COMPETITOR_DEFAULT_BUDGET),
   );
   const [entitySelectedRowIndices, setEntitySelectedRowIndices] = useState<Set<number>>(() => new Set());
-  const [detailsOpenSignal, setDetailsOpenSignal] = useState(0);
-
   const parsedBudget = useMemo(
     () => parseCompetitorBudgetInput(sapPageBudgetInput),
     [sapPageBudgetInput],
@@ -132,7 +130,6 @@ export function CompetitorAnalysisPanel({
       notify.error("Upload a Local Dominator grid CSV first.");
       return;
     }
-    setDetailsOpenSignal((n) => n + 1);
     void handleGenerate(site, gridPlaces, keyword, count, undefined, (rows) => {
       setEntitySelectedRowIndices(allRowIndicesSet(rows.length));
     });
@@ -199,7 +196,6 @@ export function CompetitorAnalysisPanel({
           progressSnapshot={progressSnapshot}
           hideIdleProgressTrack={hideIdleProgressTrack}
           canOpenDetails={canOpenDetails}
-          detailsOpenSignal={detailsOpenSignal}
           isProcessing={workspaceBusy}
           csvParsing={csvParsing}
           uploadLabel={gridUploadLabel}
@@ -216,11 +212,8 @@ export function CompetitorAnalysisPanel({
           detailsProps={{
             workspaceBusy,
             progress,
-            uploadLabel: gridUploadLabel,
+            displayRows: listRows,
             keyword: suggestFocusKeyword,
-            rowCount: listRows.length,
-            hasRowsForCsv: generatedRows.length > 0,
-            onDownloadTargetsCsv,
           }}
         />
       </div>

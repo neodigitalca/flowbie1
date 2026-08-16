@@ -1,18 +1,36 @@
 import type { AssistCardStep } from "@/lib/pulse-assist/types";
+import {
+  taskExecutionPostCreatorIsConfigured,
+  taskExecutionReportingIsConfigured,
+  taskExecutionTargetIsConfigured,
+} from "@/lib/task-execution-bucket";
 
 export type AgentRunStatus = "queued" | "running" | "done" | "failed" | "cancelled";
 
 export type AgentRunSource = "pulse_assist" | "task_manager";
 
-export type AgentRunRecipeKey = "overview_pages_meta_batch" | "content_optimizer_bulk";
+export type AgentRunRecipeKey =
+  | "overview_pages_meta_batch"
+  | "content_optimizer_bulk"
+  | "gsc_reporting"
+  | "post_creator";
+
+export type AgentRunStepArtifact = {
+  id: string;
+  name: string;
+  url: string;
+  mime?: string;
+};
 
 export type AgentRunStep = {
   id: number;
   stepIndex: number;
+  stepKey?: string;
   label: string;
   status: AssistCardStep["status"];
   payload?: Record<string, unknown>;
   createdAt: string;
+  updatedAt?: string;
 };
 
 export type AgentRunContext = {
@@ -29,6 +47,47 @@ export type AgentRunPlan = Record<string, unknown> & {
   taskExecutionId?: number;
   clientRunContract?: import("@/lib/tasks-types").TaskExecutionClientRunContract;
   sitemapSource?: string;
+  executionMode?: "client" | "server";
+};
+
+export type AgentRunCheckpointUrlSummary = {
+  url: string;
+  postTitle?: string;
+};
+
+export type AgentRunCheckpoint = {
+  completedUrls: string[];
+  uploadedUrls: string[];
+  currentUrl?: string;
+  currentIndex?: number;
+  totalCount?: number;
+  currentUrlProgress?: number;
+  lastMessage?: string;
+  completedUrlSummaries?: AgentRunCheckpointUrlSummary[];
+  lastStepLabel?: string;
+  lastStepAt?: string;
+  lastStepPayload?: Record<string, unknown>;
+};
+
+export type AgentRunResumePoint = {
+  label: string;
+  status: AgentRunStep["status"];
+  createdAt: string;
+  payload: Record<string, unknown>;
+  stepIndex: number;
+};
+
+export type AgentRunUploadedPost = {
+  url: string;
+  postId?: number;
+  title?: string;
+  scheduledFor?: string;
+};
+
+export type AgentRunBlockedRow = {
+  keyword: string;
+  reason: string;
+  conflictingUrl?: string;
 };
 
 export type AgentRunResult = {
@@ -37,6 +96,11 @@ export type AgentRunResult = {
   failed?: number;
   batchKey?: string;
   message?: string;
+  checkpoint?: AgentRunCheckpoint;
+  uploadedPosts?: AgentRunUploadedPost[];
+  blockedRows?: AgentRunBlockedRow[];
+  postCount?: number;
+  executionMode?: "client" | "server";
 };
 
 export type AgentRun = {
@@ -92,16 +156,74 @@ export function isAgentRunTerminal(status: AgentRunStatus): boolean {
 export function taskExecutionKindToRecipe(kind: string): AgentRunRecipeKey | null {
   if (kind === "content_optimizer") return "content_optimizer_bulk";
   if (kind === "content_optimizer_meta") return "overview_pages_meta_batch";
+  if (kind === "gsc_reporting") return "gsc_reporting";
+  if (kind === "post_creator") return "post_creator";
   return null;
 }
 
-export function taskCanExecuteWithAgent(task: {
-  executionKind?: string;
-  executionPayload?: { targetUrl?: string };
-  assigneeIds?: number[];
-}): boolean {
-  const recipe = taskExecutionKindToRecipe(task.executionKind ?? "");
+function taskExecutionIsConfigured(
+  kind: string,
+  payload?: {
+    targetUrl?: string;
+    targetBucket?: string;
+    targetUrls?: string[];
+    comparePreset?: string;
+    postCount?: number;
+  },
+): boolean {
+  if (kind === "gsc_reporting") return taskExecutionReportingIsConfigured(payload);
+  if (kind === "post_creator") return taskExecutionPostCreatorIsConfigured(payload);
+  return taskExecutionTargetIsConfigured(payload);
+}
+
+export function taskCanExecuteWithAgent(
+  task: {
+    executionKind?: string;
+    executionPayload?: { targetUrl?: string; targetBucket?: string };
+    assigneeIds?: number[];
+    wordpressSiteId?: string;
+  },
+  members: Array<{ userId: number; email?: string; isBot?: boolean; displayName?: string }> = [],
+  activeWordPressSiteId?: string | null,
+): boolean {
+  const kind = (task.executionKind ?? "").trim() || "content_optimizer";
+  const recipe = taskExecutionKindToRecipe(kind);
   if (!recipe) return false;
-  const url = task.executionPayload?.targetUrl?.trim();
-  return Boolean(url);
+  if (members.length > 0) {
+    const pulseAssigned = task.assigneeIds?.some((userId) => {
+      const member = members.find((m) => m.userId === userId);
+      return (
+        member &&
+        (Boolean(member.isBot) ||
+          member.displayName === "NEO Pulse" ||
+          member.displayName === "FLO" ||
+          member.email === "pulse@neodigital.ca")
+      );
+    });
+    if (!pulseAssigned) return false;
+  }
+  if (!resolveTaskExecuteSiteId(task, activeWordPressSiteId)) return false;
+  return taskExecutionIsConfigured(kind, task.executionPayload);
+}
+
+/** Scheduled Pulse runs: site + bucket only (assignee already filtered). */
+export function scheduledPulseTaskCanExecute(
+  task: {
+    executionKind?: string;
+    executionPayload?: { targetUrl?: string; targetBucket?: string };
+    wordpressSiteId?: string;
+  },
+  activeWordPressSiteId?: string | null,
+): boolean {
+  const kind = (task.executionKind ?? "").trim() || "content_optimizer";
+  if (!taskExecutionKindToRecipe(kind)) return false;
+  if (!resolveTaskExecuteSiteId(task, activeWordPressSiteId)) return false;
+  return taskExecutionIsConfigured(kind, task.executionPayload);
+}
+
+export function resolveTaskExecuteSiteId(
+  task: { wordpressSiteId?: string | null },
+  activeWordPressSiteId?: string | null,
+): string {
+  return task.wordpressSiteId?.trim() || activeWordPressSiteId?.trim() || "";
 }

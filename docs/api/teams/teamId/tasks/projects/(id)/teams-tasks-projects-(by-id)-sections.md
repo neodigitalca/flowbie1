@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/tasks/projects/({id})/sections
 auth: session-team
-order: 1820
+order: 1810
 ---
 
 POST `/api/teams/{teamId}/tasks/projects/({id})/sections`.
@@ -34,7 +34,7 @@ Runs the sections action in the Teams API from a JSON request body. Requires a s
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/tasks/projects/({id})/sections" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/tasks/projects/({id})/sections" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

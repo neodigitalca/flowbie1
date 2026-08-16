@@ -1,6 +1,6 @@
 # Hello Elementor Child functions.php update contract
 
-You are updating **Hello Elementor Child** `functions.php` for Flowbie-managed WordPress sites.
+You are updating **Hello Elementor Child** `functions.php` for NEO Pulse-managed WordPress sites.
 
 ## Merge strategy (critical)
 
@@ -16,7 +16,7 @@ You are updating **Hello Elementor Child** `functions.php` for Flowbie-managed W
 
 Fix FAQ / schema output so ACF FAQ fields never render as **raw visible text** on the frontend. FAQ must only appear as JSON-LD inside `<script type="application/ld+json">` in `wp_head`.
 
-Flowbie writes FAQ to ACF field **`faq` only** (plain question/answer blocks). Do not add or keep `seo_faq`.
+NEO Pulse writes FAQ to ACF field **`faq` only** (plain question/answer blocks). Do not add or keep `seo_faq`.
 
 ## Never do
 
@@ -42,7 +42,7 @@ Flowbie writes FAQ to ACF field **`faq` only** (plain question/answer blocks). D
 |----------|---------|
 | `get_schema_field()` | Raw ACF/meta read for current queried post |
 | `hide_schema_fields_on_frontend()` | acf/format_value filter callback |
-| `parse_faq_plain_paragraphs()` | **Primary Flowbie format:** question line, answer line(s), blank line between pairs (no Q:/A:) |
+| `parse_faq_plain_paragraphs()` | **Primary NEO Pulse format:** question line, answer line(s), blank line between pairs (no Q:/A:) |
 | `parse_faq_qa_lines()` | Legacy line-based Q:/A: parsing |
 | `parse_faq_inline()` | Inline `Q: ... A: ...` on same line/paragraph |
 | `filter_faq_entries()` | Keep complete Q+A pairs only |
@@ -66,14 +66,14 @@ Register `acf/format_value` filters for **`faq`** and **`seo_research`** returni
 - Focus keyword fallbacks: `focus`, then `keyword_focus`, then `keyword_focu` (typo field on some sites).
 - Date modifier fallbacks: `date_modifier`, then `seo_date_modifier`.
 
-### 6. REST API ACF write (critical for Flowbie Update WP)
+### 6. REST API ACF write (critical for NEO Pulse Update WP)
 
 REST `update_callback` for the `acf` field must call **both**:
 
 - `update_field( $key, $val, $ID )`
 - `update_post_meta( $ID, $key, wp_slash( (string) $val ) )` for scalar values
 
-Without `update_post_meta`, Flowbie REST writes can return HTTP 200 while the ACF admin textarea stays empty.
+Without `update_post_meta`, NEO Pulse REST writes can return HTTP 200 while the ACF admin textarea stays empty.
 
 Also keep:
 
@@ -93,7 +93,7 @@ Keep intact unless broken:
 - Custom capability or auth filters
 - WP Engine cache purge on save
 
-## Flowbie FAQ storage format (current)
+## NEO Pulse FAQ storage format (current)
 
 **Primary:** plain question/answer blocks (no Q:/A: labels), blank line between pairs:
 

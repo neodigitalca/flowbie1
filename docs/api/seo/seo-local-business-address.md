@@ -5,7 +5,7 @@ section: SEO
 method: POST
 path: /api/seo/local-business-address
 auth: open
-order: 1010
+order: 1000
 ---
 
 POST `/api/seo/local-business-address`.
@@ -38,7 +38,7 @@ Runs the local business address action in the SEO API from a JSON request body. 
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/seo/local-business-address" \
+curl -X POST "https://neodigital.ca/api/seo/local-business-address" \
   -H "Content-Type: application/json" \
   -d '{   "url": "..." }'
 ```

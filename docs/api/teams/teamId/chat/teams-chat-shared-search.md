@@ -5,7 +5,7 @@ section: Teams
 method: GET
 path: /api/teams/{teamId}/chat/shared-search
 auth: team-rbac-communication
-order: 1550
+order: 1540
 ---
 
 GET `/api/teams/{teamId}/chat/shared-search`.
@@ -34,7 +34,7 @@ Reads shared search from the Teams API. Requires a signed-in team member with co
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/teams/{teamId}/chat/shared-search" \
+curl -X GET "https://neodigital.ca/api/teams/{teamId}/chat/shared-search" \
   -H "Content-Type: application/json" \
 ```
 

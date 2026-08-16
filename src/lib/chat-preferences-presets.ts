@@ -55,28 +55,12 @@ export const CHAT_BUILTIN_PRESETS: PresetDef[] = [
       ...BASE_SNAPSHOT,
       appearance: {
         ...BASE_APPEARANCE,
-        ...zones("light", "light", "light", "light"),
-        accentPreset: "brand",
-        density: "compact",
-        sidebarSections: { channels: true, dms: true, mentions: true, alerts: false },
-      },
-      notifications: {
-        mentions: true,
-        dms: true,
-        threads: false,
-        calls: false,
-        channelMessages: false,
-        desktopAlerts: false,
-        soundEnabled: false,
-        soundPreset: "none",
-        keywordWatch: [],
-        topicWatch: [],
-      },
-      behavior: {
-        enterToSend: true,
-        showLinkPreviews: false,
-        showTypingIndicators: false,
-        collapseThreadsByDefault: true,
+        layoutMode: "minimal",
+        ...zones("slack", "slack", "slack", "slack"),
+        accentPreset: "blue",
+        density: "comfortable",
+        sidebarSections: { channels: true, dms: true, mentions: true, alerts: true },
+        starredChannelIds: [],
       },
     },
   },
@@ -143,19 +127,20 @@ export const CHAT_BUILTIN_PRESETS: PresetDef[] = [
   },
 ];
 
-export function getBuiltinPreset(id: ChatBuiltinPresetId): PresetDef | undefined {
-  return CHAT_BUILTIN_PRESETS.find((p) => p.id === id);
+export function getBuiltinPreset(id: ChatBuiltinPresetId | "slack"): PresetDef | undefined {
+  const presetId = id === "slack" ? "minimal" : id;
+  return CHAT_BUILTIN_PRESETS.find((p) => p.id === presetId);
 }
 
 export function applyBuiltinPreset(
   current: ChatUserPreferences,
-  presetId: ChatBuiltinPresetId,
+  presetId: ChatBuiltinPresetId | "slack",
 ): ChatUserPreferences {
   const preset = getBuiltinPreset(presetId);
   if (!preset) return current;
   return {
     ...current,
-    activePresetId: presetId,
+    activePresetId: preset.id,
     appearance: { ...preset.snapshot.appearance },
     notifications: { ...preset.snapshot.notifications },
     behavior: { ...preset.snapshot.behavior },
@@ -189,6 +174,7 @@ export function buildCustomPresetPatch(
       ...current.appearance,
       zoneThemes: { ...current.appearance.zoneThemes },
       sidebarSections: { ...current.appearance.sidebarSections },
+      starredChannelIds: [...current.appearance.starredChannelIds],
     },
     notifications: {
       ...current.notifications,
@@ -219,6 +205,7 @@ export const CHAT_THEME_OPTIONS = [
   { id: "midnight" as const, label: "Midnight" },
   { id: "high-contrast" as const, label: "High contrast" },
   { id: "brand" as const, label: "Brand chartreuse" },
+  { id: "slack" as const, label: "Aubergine" },
 ];
 
 export const CHAT_ACCENT_OPTIONS = [

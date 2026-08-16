@@ -3,14 +3,14 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 
-/** `flowbieBlack`: neon-flat black well + primary focus ring (global design system). */
+/** `neoPulseBlack`: neon-flat black well + primary focus ring (global design system). */
 const inputVariants = cva(
   "flex w-full rounded-md border-0 bg-input px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
   {
     variants: {
       variant: {
         default: "h-10",
-        flowbieBlack:
+        neoPulseBlack:
           "h-10 border-0 bg-black text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/55 focus-visible:ring-offset-0 focus-visible:ring-offset-background",
       },
     },
@@ -29,7 +29,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
     return (
       <input
         type={type}
-        data-flowbie-black={variant === "flowbieBlack" ? "" : undefined}
+        data-neo-pulse-black={variant === "neoPulseBlack" ? "" : undefined}
         className={cn(inputVariants({ variant }), className)}
         ref={ref}
         {...props}

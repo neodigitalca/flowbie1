@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/get-quarter-editorial-counts
 auth: open
-order: 2580
+order: 2530
 ---
 
 POST `/api/wordpress/get-quarter-editorial-counts`.
@@ -34,7 +34,7 @@ Runs the get quarter editorial counts action in the WordPress API from a JSON re
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/get-quarter-editorial-counts" \
+curl -X POST "https://neodigital.ca/api/wordpress/get-quarter-editorial-counts" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

@@ -5,7 +5,7 @@ section: Teams
 method: GET
 path: /api/teams/{teamId}/tasks/search
 auth: session-team
-order: 1910
+order: 1900
 ---
 
 GET `/api/teams/{teamId}/tasks/search`.
@@ -34,7 +34,7 @@ Reads search from the Teams API. Requires a signed-in user who belongs to the te
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/teams/{teamId}/tasks/search" \
+curl -X GET "https://neodigital.ca/api/teams/{teamId}/tasks/search" \
   -H "Content-Type: application/json" \
 ```
 

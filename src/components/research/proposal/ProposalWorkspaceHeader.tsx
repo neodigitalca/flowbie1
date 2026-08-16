@@ -1,18 +1,21 @@
 import { useMemo } from "react";
-import { FileStack } from "lucide-react";
-import { UnifiedWorkspaceChrome } from "@/components/shared/UnifiedWorkspaceChrome";
+import { BlogGeneratorWorkspaceChrome } from "@/components/blog-generator/BlogGeneratorWorkspaceChrome";
+import type { GeneratorWorkspaceChromeBindings } from "@/components/blog-generator/generator-workspace-chrome-bindings";
+import { BulkGeneratorDetailsDrawer } from "@/components/keyword-research/bulk/BulkGeneratorDetailsDrawer";
+import { BULK_TOOLBAR_GROUP_DIVIDER } from "@/components/keyword-research/bulk/bulk-workspace-header-styles";
 import {
-  ProposalDetailsPanel,
   type ProposalDetailsPanelProps,
 } from "@/components/research/proposal/ProposalDetailsPanel";
 import { ProposalToolbar, type ProposalToolbarProps } from "@/components/research/proposal/ProposalToolbar";
-import { ResearchSectionPillsFromContext } from "@/components/research/ResearchSectionPillsFromContext";
+import { ResearchToolbarModeMenu } from "@/components/research/ResearchToolbarModeMenu";
+import { useResearchWorkspaceNav } from "@/components/research/ResearchWorkspaceNavContext";
+import { buildProposalBulkGeneratorDetailsProps } from "@/lib/research/proposal-bulk-details-bindings";
 import { buildProposalMicroSnapshot } from "@/lib/research/proposal-header-progress";
 import type { ProposalProgressPhase, ProposalProgressSubphase } from "@/lib/research/proposal-header-progress";
 
 const DETAILS_PANEL_ID = "proposal-details-panel";
 
-export type ProposalWorkspaceHeaderProps = {
+export type ProposalWorkspaceHeaderProps = GeneratorWorkspaceChromeBindings & {
   busy: boolean;
   phase: ProposalProgressPhase;
   proposalSubphase: ProposalProgressSubphase;
@@ -28,6 +31,9 @@ export type ProposalWorkspaceHeaderProps = {
 };
 
 export function ProposalWorkspaceHeader({
+  activeSection,
+  onSectionChange,
+  onDetailsOpenChange,
   busy,
   phase,
   proposalSubphase,
@@ -41,6 +47,7 @@ export function ProposalWorkspaceHeader({
   toolbarProps,
   detailsProps,
 }: ProposalWorkspaceHeaderProps) {
+  const researchNav = useResearchWorkspaceNav();
   const progressSnapshot = useMemo(
     () =>
       busy
@@ -68,18 +75,44 @@ export function ProposalWorkspaceHeader({
     ],
   );
 
+  const drawerProps = useMemo(
+    () => buildProposalBulkGeneratorDetailsProps({ ...detailsProps, busy }),
+    [detailsProps, busy],
+  );
+
   return (
-    <UnifiedWorkspaceChrome
-      icon={FileStack}
-      title="Proposal"
-      titleRowEnd={<ResearchSectionPillsFromContext />}
+    <BlogGeneratorWorkspaceChrome
+      activeSection={activeSection}
+      onSectionChange={onSectionChange}
+      sectionSwitchDisabled={busy}
       workspaceBusy={busy}
       progressSnapshot={progressSnapshot}
       canOpenDetails={canOpenDetails}
       isProcessing={busy}
       detailsPanelId={DETAILS_PANEL_ID}
-      toolbar={<ProposalToolbar {...toolbarProps} />}
-      detailsPanel={<ProposalDetailsPanel {...detailsProps} />}
+      onDetailsOpenChange={onDetailsOpenChange}
+      toolbar={
+        <>
+          {researchNav ? (
+            <ResearchToolbarModeMenu
+              activeSection={researchNav.activeSection}
+              onSectionChange={researchNav.onSectionChange}
+              disabled={busy}
+            />
+          ) : (
+            <div className={BULK_TOOLBAR_GROUP_DIVIDER} aria-hidden />
+          )}
+          <ProposalToolbar {...toolbarProps} />
+        </>
+      }
+      detailsPanel={
+        <BulkGeneratorDetailsDrawer
+          variant="csv"
+          postDestination="local"
+          wpConfig={null}
+          {...drawerProps}
+        />
+      }
     />
   );
 }

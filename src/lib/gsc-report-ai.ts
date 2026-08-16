@@ -4,6 +4,11 @@
  */
 
 import type { GSCPerformanceStats, GMBReportData } from "@/components/integrations/types";
+import {
+  deriveGscCompareSignals,
+  COMPARE_SIGNALS_LEXICON,
+  type GscCompareSignals,
+} from "@/lib/gsc-reporting/gsc-reporting-compare-signals";
 import { formatMonthYearFromAPI } from "./gsc-date-helpers";
 import { streamGeneration } from "./api";
 import { AGENCY_NAME } from "./report-planner";
@@ -97,6 +102,7 @@ export interface RawReportData {
   napInfo?: { name?: string; address?: string; phone?: string; email?: string };
   sampleTitles?: string[];
   monthlyStats?: Array<{ month: string; impressions: number; avgPosition: number }>;
+  compareSignals?: GscCompareSignals | null;
 }
 
 /** Section definition: id, heading template (with {siteName}, {currentPeriodLabel}, {comparisonPeriodLabel}), purpose, table row cap if any */
@@ -294,6 +300,54 @@ export function serializeRawData(discoveryData: GSCReportDiscoveryInput): RawRep
     };
   }
 
+  const priorSearchTermsCount = stats.comparisonPeriod.searchTermsCount;
+
+  const primaryQueries = keywords
+    .filter((k) => k.currentImpressions > 0)
+    .map((k) => ({
+      query: k.query,
+      clicks: k.currentClicks,
+      impressions: k.currentImpressions,
+      ctr: k.currentImpressions > 0 ? k.currentClicks / k.currentImpressions : 0,
+      position: k.currentRanking,
+    }));
+  const compareQueries = keywords
+    .filter((k) => k.previousImpressions > 0)
+    .map((k) => ({
+      query: k.query,
+      clicks: k.previousClicks,
+      impressions: k.previousImpressions,
+      ctr: k.previousImpressions > 0 ? k.previousClicks / k.previousImpressions : 0,
+      position: k.previousRanking,
+    }));
+
+  const compareSignals = deriveGscCompareSignals({
+    compareKind: "mom",
+    compareLabel: `${currentPeriodLabel} vs ${comparisonPeriodLabel}`,
+    aggregatePrimary: {
+      label: currentPeriodLabel,
+      startDate: stats.currentPeriod.startDate,
+      endDate: stats.currentPeriod.endDate,
+      clicks: stats.currentPeriod.clicks,
+      impressions: stats.currentPeriod.impressions,
+      ctr: stats.currentPeriod.ctr,
+      position: stats.currentPeriod.avgPosition,
+    },
+    aggregateCompare: {
+      label: comparisonPeriodLabel,
+      startDate: stats.comparisonPeriod.startDate,
+      endDate: stats.comparisonPeriod.endDate,
+      clicks: stats.comparisonPeriod.clicks,
+      impressions: stats.comparisonPeriod.impressions,
+      ctr: stats.comparisonPeriod.ctr,
+      position: stats.comparisonPeriod.avgPosition,
+    },
+    queryCountPrimary: stats.currentPeriod.searchTermsCount,
+    queryCountCompare: priorSearchTermsCount,
+    primaryQueries,
+    compareQueries,
+  });
+
   return {
     siteName,
     periodContext,
@@ -328,6 +382,7 @@ export function serializeRawData(discoveryData: GSCReportDiscoveryInput): RawRep
       const filtered = all.filter(m => m.month >= startMonth && m.month <= endMonth);
       return (filtered.length ? filtered : all);
     })(),
+    compareSignals,
   };
 }
 
@@ -569,6 +624,8 @@ function buildSectionPrompts(
     : "a GSC performance report.";
 
   const systemPrompt = `You are a senior SEO strategist at ${AGENCY_NAME}. You write ONE section of ${reportContext}
+
+${rawData.compareSignals ? COMPARE_SIGNALS_LEXICON : ""}
 
 ZERO HALLUCINATION:
 - Every keyword, number, page, metric MUST exist in RAW_DATA or SCOPE_DATA. Never invent, guess, or fabricate.

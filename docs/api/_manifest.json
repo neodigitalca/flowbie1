@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-10T00:36:06.476Z",
-  "routeCount": 286,
+  "generatedAt": "2026-08-13T16:54:49.702Z",
+  "routeCount": 285,
   "sections": [
     {
       "id": "getting-started",
@@ -356,20 +356,6 @@
           "path": "/api/gmb/test-and-save",
           "auth": "open",
           "order": 130
-        }
-      ]
-    },
-    {
-      "id": "grid-local",
-      "label": "Grid Local",
-      "items": [
-        {
-          "slug": "grid-local/maps-serp-batch",
-          "title": "Maps Serp Batch",
-          "method": "POST",
-          "path": "/api/grid-local/maps-serp-batch",
-          "auth": "open",
-          "order": 10
         }
       ]
     },
@@ -2067,290 +2053,290 @@
           "order": 140
         },
         {
-          "slug": "wordpress/flowbie-wp-tool",
-          "title": "Flowbie Wp Tool",
+          "slug": "wordpress/get-acf-fields",
+          "title": "Get Acf Fields",
           "method": "GET",
-          "path": "/api/wordpress/flowbie-wp-tool",
+          "path": "/api/wordpress/get-acf-fields",
           "auth": "open",
           "order": 150
         },
         {
-          "slug": "wordpress/flowbie-wp-tool",
-          "title": "Flowbie Wp Tool",
+          "slug": "wordpress/get-acf-fields",
+          "title": "Get Acf Fields",
           "method": "POST",
-          "path": "/api/wordpress/flowbie-wp-tool",
+          "path": "/api/wordpress/get-acf-fields",
           "auth": "open",
           "order": 160
         },
         {
-          "slug": "wordpress/flowbie-wp-tools-list",
-          "title": "Flowbie Wp Tools List",
+          "slug": "wordpress/get-acf-fields-batch",
+          "title": "Get Acf Fields Batch",
           "method": "GET",
-          "path": "/api/wordpress/flowbie-wp-tools-list",
+          "path": "/api/wordpress/get-acf-fields-batch",
           "auth": "open",
           "order": 170
         },
         {
-          "slug": "wordpress/flowbie-wp-tools-list",
-          "title": "Flowbie Wp Tools List",
+          "slug": "wordpress/get-acf-fields-batch",
+          "title": "Get Acf Fields Batch",
           "method": "POST",
-          "path": "/api/wordpress/flowbie-wp-tools-list",
+          "path": "/api/wordpress/get-acf-fields-batch",
           "auth": "open",
           "order": 180
         },
         {
-          "slug": "wordpress/get-acf-fields",
-          "title": "Get Acf Fields",
+          "slug": "wordpress/get-acf-fields-by-url",
+          "title": "Get Acf Fields By Url",
           "method": "GET",
-          "path": "/api/wordpress/get-acf-fields",
+          "path": "/api/wordpress/get-acf-fields-by-url",
           "auth": "open",
           "order": 190
         },
         {
-          "slug": "wordpress/get-acf-fields",
-          "title": "Get Acf Fields",
+          "slug": "wordpress/get-acf-fields-by-url",
+          "title": "Get Acf Fields By Url",
           "method": "POST",
-          "path": "/api/wordpress/get-acf-fields",
+          "path": "/api/wordpress/get-acf-fields-by-url",
           "auth": "open",
           "order": 200
         },
         {
-          "slug": "wordpress/get-acf-fields-batch",
-          "title": "Get Acf Fields Batch",
+          "slug": "wordpress/get-acf-fields-by-url-batch",
+          "title": "Get Acf Fields By Url Batch",
           "method": "GET",
-          "path": "/api/wordpress/get-acf-fields-batch",
+          "path": "/api/wordpress/get-acf-fields-by-url-batch",
           "auth": "open",
           "order": 210
         },
         {
-          "slug": "wordpress/get-acf-fields-batch",
-          "title": "Get Acf Fields Batch",
+          "slug": "wordpress/get-acf-fields-by-url-batch",
+          "title": "Get Acf Fields By Url Batch",
           "method": "POST",
-          "path": "/api/wordpress/get-acf-fields-batch",
+          "path": "/api/wordpress/get-acf-fields-by-url-batch",
           "auth": "open",
           "order": 220
         },
         {
-          "slug": "wordpress/get-acf-fields-by-url",
-          "title": "Get Acf Fields By Url",
+          "slug": "wordpress/get-author-usage",
+          "title": "Get Author Usage",
           "method": "GET",
-          "path": "/api/wordpress/get-acf-fields-by-url",
+          "path": "/api/wordpress/get-author-usage",
           "auth": "open",
           "order": 230
         },
         {
-          "slug": "wordpress/get-acf-fields-by-url",
-          "title": "Get Acf Fields By Url",
+          "slug": "wordpress/get-author-usage",
+          "title": "Get Author Usage",
           "method": "POST",
-          "path": "/api/wordpress/get-acf-fields-by-url",
+          "path": "/api/wordpress/get-author-usage",
           "auth": "open",
           "order": 240
         },
         {
-          "slug": "wordpress/get-acf-fields-by-url-batch",
-          "title": "Get Acf Fields By Url Batch",
+          "slug": "wordpress/get-optimization-activity-counts",
+          "title": "Get Optimization Activity Counts",
           "method": "GET",
-          "path": "/api/wordpress/get-acf-fields-by-url-batch",
+          "path": "/api/wordpress/get-optimization-activity-counts",
           "auth": "open",
           "order": 250
         },
         {
-          "slug": "wordpress/get-acf-fields-by-url-batch",
-          "title": "Get Acf Fields By Url Batch",
+          "slug": "wordpress/get-optimization-activity-counts",
+          "title": "Get Optimization Activity Counts",
           "method": "POST",
-          "path": "/api/wordpress/get-acf-fields-by-url-batch",
+          "path": "/api/wordpress/get-optimization-activity-counts",
           "auth": "open",
           "order": 260
         },
         {
-          "slug": "wordpress/get-author-usage",
-          "title": "Get Author Usage",
+          "slug": "wordpress/get-post-content",
+          "title": "Get Post Content",
           "method": "GET",
-          "path": "/api/wordpress/get-author-usage",
+          "path": "/api/wordpress/get-post-content",
           "auth": "open",
           "order": 270
         },
         {
-          "slug": "wordpress/get-author-usage",
-          "title": "Get Author Usage",
+          "slug": "wordpress/get-post-content",
+          "title": "Get Post Content",
           "method": "POST",
-          "path": "/api/wordpress/get-author-usage",
+          "path": "/api/wordpress/get-post-content",
           "auth": "open",
           "order": 280
         },
         {
-          "slug": "wordpress/get-optimization-activity-counts",
-          "title": "Get Optimization Activity Counts",
+          "slug": "wordpress/get-post-meta",
+          "title": "Get Post Meta",
           "method": "GET",
-          "path": "/api/wordpress/get-optimization-activity-counts",
+          "path": "/api/wordpress/get-post-meta",
           "auth": "open",
           "order": 290
         },
         {
-          "slug": "wordpress/get-optimization-activity-counts",
-          "title": "Get Optimization Activity Counts",
+          "slug": "wordpress/get-post-meta",
+          "title": "Get Post Meta",
           "method": "POST",
-          "path": "/api/wordpress/get-optimization-activity-counts",
+          "path": "/api/wordpress/get-post-meta",
           "auth": "open",
           "order": 300
         },
         {
-          "slug": "wordpress/get-post-content",
-          "title": "Get Post Content",
+          "slug": "wordpress/get-post-types",
+          "title": "Get Post Types",
           "method": "GET",
-          "path": "/api/wordpress/get-post-content",
+          "path": "/api/wordpress/get-post-types",
           "auth": "open",
           "order": 310
         },
         {
-          "slug": "wordpress/get-post-content",
-          "title": "Get Post Content",
+          "slug": "wordpress/get-post-types",
+          "title": "Get Post Types",
           "method": "POST",
-          "path": "/api/wordpress/get-post-content",
+          "path": "/api/wordpress/get-post-types",
           "auth": "open",
           "order": 320
         },
         {
-          "slug": "wordpress/get-post-meta",
-          "title": "Get Post Meta",
+          "slug": "wordpress/get-posts-list",
+          "title": "Get Posts List",
           "method": "GET",
-          "path": "/api/wordpress/get-post-meta",
+          "path": "/api/wordpress/get-posts-list",
           "auth": "open",
           "order": 330
         },
         {
-          "slug": "wordpress/get-post-meta",
-          "title": "Get Post Meta",
+          "slug": "wordpress/get-posts-list",
+          "title": "Get Posts List",
           "method": "POST",
-          "path": "/api/wordpress/get-post-meta",
+          "path": "/api/wordpress/get-posts-list",
           "auth": "open",
           "order": 340
         },
         {
-          "slug": "wordpress/get-post-types",
-          "title": "Get Post Types",
+          "slug": "wordpress/get-published-posts",
+          "title": "Get Published Posts",
           "method": "GET",
-          "path": "/api/wordpress/get-post-types",
+          "path": "/api/wordpress/get-published-posts",
           "auth": "open",
           "order": 350
         },
         {
-          "slug": "wordpress/get-post-types",
-          "title": "Get Post Types",
+          "slug": "wordpress/get-published-posts",
+          "title": "Get Published Posts",
           "method": "POST",
-          "path": "/api/wordpress/get-post-types",
+          "path": "/api/wordpress/get-published-posts",
           "auth": "open",
           "order": 360
         },
         {
-          "slug": "wordpress/get-posts-list",
-          "title": "Get Posts List",
+          "slug": "wordpress/get-quarter-editorial-counts",
+          "title": "Get Quarter Editorial Counts",
           "method": "GET",
-          "path": "/api/wordpress/get-posts-list",
+          "path": "/api/wordpress/get-quarter-editorial-counts",
           "auth": "open",
           "order": 370
         },
         {
-          "slug": "wordpress/get-posts-list",
-          "title": "Get Posts List",
+          "slug": "wordpress/get-quarter-editorial-counts",
+          "title": "Get Quarter Editorial Counts",
           "method": "POST",
-          "path": "/api/wordpress/get-posts-list",
+          "path": "/api/wordpress/get-quarter-editorial-counts",
           "auth": "open",
           "order": 380
         },
         {
-          "slug": "wordpress/get-published-posts",
-          "title": "Get Published Posts",
+          "slug": "wordpress/get-scheduled-posts",
+          "title": "Get Scheduled Posts",
           "method": "GET",
-          "path": "/api/wordpress/get-published-posts",
+          "path": "/api/wordpress/get-scheduled-posts",
           "auth": "open",
           "order": 390
         },
         {
-          "slug": "wordpress/get-published-posts",
-          "title": "Get Published Posts",
+          "slug": "wordpress/get-scheduled-posts",
+          "title": "Get Scheduled Posts",
           "method": "POST",
-          "path": "/api/wordpress/get-published-posts",
+          "path": "/api/wordpress/get-scheduled-posts",
           "auth": "open",
           "order": 400
         },
         {
-          "slug": "wordpress/get-quarter-editorial-counts",
-          "title": "Get Quarter Editorial Counts",
+          "slug": "wordpress/get-site-inventory-bulk",
+          "title": "Get Site Inventory Bulk",
           "method": "GET",
-          "path": "/api/wordpress/get-quarter-editorial-counts",
+          "path": "/api/wordpress/get-site-inventory-bulk",
           "auth": "open",
           "order": 410
         },
         {
-          "slug": "wordpress/get-quarter-editorial-counts",
-          "title": "Get Quarter Editorial Counts",
+          "slug": "wordpress/get-site-inventory-bulk",
+          "title": "Get Site Inventory Bulk",
           "method": "POST",
-          "path": "/api/wordpress/get-quarter-editorial-counts",
+          "path": "/api/wordpress/get-site-inventory-bulk",
           "auth": "open",
           "order": 420
         },
         {
-          "slug": "wordpress/get-scheduled-posts",
-          "title": "Get Scheduled Posts",
+          "slug": "wordpress/get-site-post-inventory",
+          "title": "Get Site Post Inventory",
           "method": "GET",
-          "path": "/api/wordpress/get-scheduled-posts",
+          "path": "/api/wordpress/get-site-post-inventory",
           "auth": "open",
           "order": 430
         },
         {
-          "slug": "wordpress/get-scheduled-posts",
-          "title": "Get Scheduled Posts",
+          "slug": "wordpress/get-site-post-inventory",
+          "title": "Get Site Post Inventory",
           "method": "POST",
-          "path": "/api/wordpress/get-scheduled-posts",
+          "path": "/api/wordpress/get-site-post-inventory",
           "auth": "open",
           "order": 440
         },
         {
-          "slug": "wordpress/get-site-inventory-bulk",
-          "title": "Get Site Inventory Bulk",
+          "slug": "wordpress/list-media",
+          "title": "List Media",
           "method": "GET",
-          "path": "/api/wordpress/get-site-inventory-bulk",
+          "path": "/api/wordpress/list-media",
           "auth": "open",
           "order": 450
         },
         {
-          "slug": "wordpress/get-site-inventory-bulk",
-          "title": "Get Site Inventory Bulk",
+          "slug": "wordpress/list-media",
+          "title": "List Media",
           "method": "POST",
-          "path": "/api/wordpress/get-site-inventory-bulk",
+          "path": "/api/wordpress/list-media",
           "auth": "open",
           "order": 460
         },
         {
-          "slug": "wordpress/get-site-post-inventory",
-          "title": "Get Site Post Inventory",
+          "slug": "wordpress/neo-pulse-wp-tool",
+          "title": "Neo Pulse Wp Tool",
           "method": "GET",
-          "path": "/api/wordpress/get-site-post-inventory",
+          "path": "/api/wordpress/neo-pulse-wp-tool",
           "auth": "open",
           "order": 470
         },
         {
-          "slug": "wordpress/get-site-post-inventory",
-          "title": "Get Site Post Inventory",
+          "slug": "wordpress/neo-pulse-wp-tool",
+          "title": "Neo Pulse Wp Tool",
           "method": "POST",
-          "path": "/api/wordpress/get-site-post-inventory",
+          "path": "/api/wordpress/neo-pulse-wp-tool",
           "auth": "open",
           "order": 480
         },
         {
-          "slug": "wordpress/list-media",
-          "title": "List Media",
+          "slug": "wordpress/neo-pulse-wp-tools-list",
+          "title": "Neo Pulse Wp Tools List",
           "method": "GET",
-          "path": "/api/wordpress/list-media",
+          "path": "/api/wordpress/neo-pulse-wp-tools-list",
           "auth": "open",
           "order": 490
         },
         {
-          "slug": "wordpress/list-media",
-          "title": "List Media",
+          "slug": "wordpress/neo-pulse-wp-tools-list",
+          "title": "Neo Pulse Wp Tools List",
           "method": "POST",
-          "path": "/api/wordpress/list-media",
+          "path": "/api/wordpress/neo-pulse-wp-tools-list",
           "auth": "open",
           "order": 500
         },

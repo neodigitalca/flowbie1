@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/get-scheduled-posts
 auth: open
-order: 2600
+order: 2550
 ---
 
 POST `/api/wordpress/get-scheduled-posts`.
@@ -34,7 +34,7 @@ Runs the get scheduled posts action in the WordPress API from a JSON request bod
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/get-scheduled-posts" \
+curl -X POST "https://neodigital.ca/api/wordpress/get-scheduled-posts" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

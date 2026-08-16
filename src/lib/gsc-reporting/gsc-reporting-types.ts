@@ -52,6 +52,10 @@ export type RunGscReportingPipelineArgs = {
   files: { name: string; content: string }[];
   /** When set, SAP section retrieval pins entity sitemap allowlist + filtered Pages MoM rows. */
   sapEntityGrounding?: SapEntityGrounding;
+  /** Period compare preset for canonical section titles and signal context. */
+  compareKind?: import("@/lib/gsc-reporting/gsc-reporting-compare-signals").GscCompareKind;
+  /** Human-readable period A vs B label for compare signals derivation. */
+  compareLabel?: string;
   signal?: AbortSignal;
   onProgress?: (p: GscReportingPipelineProgress) => void;
   /** Fires after the outline OpenRouter call succeeds. */
@@ -60,12 +64,11 @@ export type RunGscReportingPipelineArgs = {
     outlineRequestBodyJson: string;
   }) => void;
   onSectionStart?: (index: number, plan: GscReportingSectionPlan) => void;
-  onSectionReady?: (payload: {
-    plan: GscReportingSectionPlan;
-    index: number;
-    markdownBlock: string;
-    requestBodyJson: string;
-  }) => void;
+  onSectionReady?: (payload: GscReportingSectionResult) => void;
+  /** Resume: skip outline generation and reuse prior section markdown. */
+  priorSectionResults?: GscReportingSectionResult[];
+  savedOutline?: GscReportingOutlineResult;
+  savedOutlineRequestBodyJson?: string;
 };
 
 export type GscReportingPipelineResult = {

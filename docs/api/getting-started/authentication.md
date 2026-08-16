@@ -5,13 +5,13 @@ section: Getting started
 order: 10
 ---
 
-Flowbie uses a **session cookie** for authenticated requests.
+NEO Pulse uses a **session cookie** for authenticated requests.
 
 ## Session cookie
 
 | Property | Value |
 | --- | --- |
-| Name | `flowbie_session` |
+| Name | `neo_pulse_session` |
 | HttpOnly | yes |
 | SameSite | Lax |
 | Secure | yes when served over HTTPS |

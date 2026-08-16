@@ -31,6 +31,8 @@ export type ChatThreadPanelProps = {
   onDelete?: (message: ChatMessage) => void;
   onAiCorrect?: (message: ChatMessage) => void;
   composerRef?: React.RefObject<ChatComposerHandle | null>;
+  userCardLayout?: boolean;
+  compactToolbar?: boolean;
 };
 
 export function ChatThreadPanel({
@@ -52,10 +54,11 @@ export function ChatThreadPanel({
   onDelete,
   onAiCorrect,
   composerRef,
+  userCardLayout = false,
+  compactToolbar = false,
 }: ChatThreadPanelProps): React.ReactElement {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const pollRef = useRef<number | null>(null);
 
   const refresh = useCallback(async () => {
     const list = await loadThread(threadRoot.id);
@@ -66,10 +69,6 @@ export function ChatThreadPanel({
 
   useEffect(() => {
     void refresh();
-    pollRef.current = window.setInterval(() => void refresh(), 3000);
-    return () => {
-      if (pollRef.current) window.clearInterval(pollRef.current);
-    };
   }, [refresh]);
 
   useEffect(() => {
@@ -119,6 +118,8 @@ export function ChatThreadPanel({
             onEdit={onEdit}
             onDelete={onDelete}
             onAiCorrect={onAiCorrect}
+            userCardLayout={userCardLayout}
+            altRow={userCardLayout ? false : undefined}
           />
         ) : null}
         {!emptySearch ? (
@@ -143,6 +144,8 @@ export function ChatThreadPanel({
             onEdit={onEdit}
             onDelete={onDelete}
             onAiCorrect={onAiCorrect}
+            userCardLayout={userCardLayout}
+            altRow={userCardLayout ? (showRoot ? idx + 1 : idx) % 2 === 1 : undefined}
           />
         ))}
         <div ref={bottomRef} />
@@ -157,6 +160,7 @@ export function ChatThreadPanel({
         onSend={handleSend}
         onTyping={pingTyping}
         placeholder="Reply in thread…"
+        compactToolbar={compactToolbar}
       />
     </div>
   );

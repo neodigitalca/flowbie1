@@ -34,7 +34,7 @@ Runs the test and save action in the Google Business Profile API from a JSON req
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/gmb/test-and-save" \
+curl -X POST "https://neodigital.ca/api/gmb/test-and-save" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/chat/calls/start
 auth: team-rbac-communication
-order: 1250
+order: 1240
 ---
 
 POST `/api/teams/{teamId}/chat/calls/start`.
@@ -34,7 +34,7 @@ Runs the start action in the Teams API from a JSON request body. Requires a sign
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/chat/calls/start" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/chat/calls/start" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

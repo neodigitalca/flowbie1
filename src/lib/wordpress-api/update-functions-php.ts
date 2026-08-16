@@ -13,7 +13,7 @@ export type UpdateFunctionsPhpResult = {
 };
 
 const SYSTEM_PROMPT =
-  'You are a senior WordPress/PHP engineer updating Hello Elementor Child functions.php for Flowbie SEO sites. '
+  'You are a senior WordPress/PHP engineer updating Hello Elementor Child functions.php for NEO Pulse SEO sites. '
   + 'MERGE strategy: start from the source file and output a complete merged PHP file. '
   + 'Keep ALL valid site-specific code from the source (Google Maps shortcodes, custom hooks, capability filters, '
   + 'site-specific constants, WP Engine cache, Rank Math sync). '

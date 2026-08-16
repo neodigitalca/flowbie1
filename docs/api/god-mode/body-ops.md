@@ -7,7 +7,7 @@ order: 30
 
 <!-- manual -->
 
-In-place post body edits use **`add_content`** with **`mode: ops`**. The pipeline classifies intent, plans a JSON op list, and applies deterministic HTML transforms via `Flowbie_Wp_Backend_Assist_Body_Ops`. No full-body LLM regeneration.
+In-place post body edits use **`add_content`** with **`mode: ops`**. The pipeline classifies intent, plans a JSON op list, and applies deterministic HTML transforms via `Neo_Pulse_Wp_Backend_Assist_Body_Ops`. No full-body LLM regeneration.
 
 Plan mode shows op descriptions before Build runs them. Plan cache keeps Plan/Build parity for the same message.
 
@@ -60,4 +60,4 @@ Follow-up edits ("change the intro h2") use conversation history to target the s
 - List format changes → `convert_list_in_section`, not `replace_section_html`
 - Never replace or regenerate the full post body
 
-Source: `class-flowbie-wp-backend-assist-pipeline-content-prep.php`, `class-flowbie-wp-backend-assist-body-ops.php`
+Source: `class-neo-pulse-wp-backend-assist-pipeline-content-prep.php`, `class-neo-pulse-wp-backend-assist-body-ops.php`

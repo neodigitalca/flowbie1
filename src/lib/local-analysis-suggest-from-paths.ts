@@ -1,7 +1,6 @@
 import {
   LOCAL_ANALYSIS_SAP_MAX,
   LOCAL_ANALYSIS_SAP_MIN,
-  LOCAL_ANALYSIS_TOTAL_SAP_CAP,
 } from "@/lib/local-analysis-target-constants";
 import { repairSapPageAllocation, type SuggestedKeywordTarget } from "@/lib/local-analysis-suggest-keyword-targets";
 
@@ -250,8 +249,8 @@ export function suggestKeywordTargetsFromSiteUrls(
   siteOrigin: string,
   totalSapPages: number
 ): SuggestedKeywordTarget[] {
-  if (totalSapPages < LOCAL_ANALYSIS_SAP_MIN || totalSapPages > LOCAL_ANALYSIS_TOTAL_SAP_CAP) {
-    throw new Error(`Total must be between ${LOCAL_ANALYSIS_SAP_MIN} and ${LOCAL_ANALYSIS_TOTAL_SAP_CAP}.`);
+  if (totalSapPages < LOCAL_ANALYSIS_SAP_MIN) {
+    throw new Error(`Total must be at least ${LOCAL_ANALYSIS_SAP_MIN}.`);
   }
   const candidates = extractKeywordsFromSiteUrls(urls, siteOrigin);
   if (candidates.length === 0) {

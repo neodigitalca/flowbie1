@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { BlueprintData } from "./use-blueprint-management";
 
-const DRAFT_AUTOSAVE_KEY = "flowbie-draft-autosave";
+const DRAFT_AUTOSAVE_KEY = "neo-pulse-draft-autosave";
 const AUTOSAVE_INTERVAL = 30000; // 30 seconds
 
 export interface DraftData {

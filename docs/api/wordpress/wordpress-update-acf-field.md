@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/update-acf-field
 auth: open
-order: 2760
+order: 2750
 ---
 
 POST `/api/wordpress/update-acf-field`.
@@ -34,7 +34,7 @@ Runs the update acf field action in the WordPress API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/update-acf-field" \
+curl -X POST "https://neodigital.ca/api/wordpress/update-acf-field" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

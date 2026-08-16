@@ -5,7 +5,7 @@ section: SEO
 method: POST
 path: /api/seo/discover-locations
 auth: open
-order: 980
+order: 970
 ---
 
 POST `/api/seo/discover-locations`.
@@ -40,7 +40,7 @@ Runs the discover locations action in the SEO API from a JSON request body. On s
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/seo/discover-locations" \
+curl -X POST "https://neodigital.ca/api/seo/discover-locations" \
   -H "Content-Type: application/json" \
   -d '{   "siteUrl": "..." }'
 ```

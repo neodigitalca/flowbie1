@@ -3,10 +3,10 @@ import type { EntityGscKeywordBundle } from "@/lib/bulk/bulk-gsc-site-queries";
 import type { PromptBulkSitemapInventoryBuckets } from "@/lib/bulk/prompt-bulk-sitemap-inventory";
 import type { EntitySiteWarmBundle, EntitySiteWarmCounts } from "@/lib/local-analysis/entity-site-warm-cache";
 
-const DB_NAME = "flowbie-site-prefetch";
+const DB_NAME = "neo-pulse-site-prefetch";
 const DB_VERSION = 1;
 const STORE = "bundles";
-const STORAGE_PREFIX = "flowbie-site-prefetch:v1:";
+const STORAGE_PREFIX = "neo-pulse-site-prefetch:v1:";
 
 export type PersistedSitePrefetch = {
   siteId: string;

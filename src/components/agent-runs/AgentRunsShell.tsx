@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { readAgentRunsSidebarOpen } from "@/lib/agent-runs/storage";
+import { readSidebarPanel, type SidebarPanel } from "@/lib/pulse-assist/storage";
 import { AgentRunsContextProvider } from "@/contexts/agent-runs-context";
-import { AgentRunsRoot } from "@/components/agent-runs/AgentRunsRoot";
 import { useDefaultAgentRunHarnesses } from "@/lib/agent-runs/use-default-agent-run-harnesses";
 
 type AgentRunsShellProps = {
@@ -14,13 +13,18 @@ function AgentRunsHarnessBootstrap(): null {
 }
 
 export function AgentRunsShell({ children }: AgentRunsShellProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(() => readAgentRunsSidebarOpen());
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarPanel, setSidebarPanel] = useState<SidebarPanel>(() => readSidebarPanel());
 
   return (
-    <AgentRunsContextProvider sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}>
+    <AgentRunsContextProvider
+      sidebarOpen={sidebarOpen}
+      setSidebarOpen={setSidebarOpen}
+      sidebarPanel={sidebarPanel}
+      setSidebarPanel={setSidebarPanel}
+    >
       <AgentRunsHarnessBootstrap />
       {children}
-      <AgentRunsRoot />
     </AgentRunsContextProvider>
   );
 }

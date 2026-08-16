@@ -5,11 +5,16 @@ import { useWordPressSites } from "@/hooks/use-wordpress-sites";
 import { buildTempLocalAnalysisSite } from "@/lib/temp-local-analysis-site";
 import { getCyberpunkTextClasses } from "@/components/integrations/wordpress/cyberpunk-theme";
 import { SEO_WORKSPACE_SHELL_CLASS } from "@/components/seo/seo-workspace-layout";
+import type { SocialPlatformTab } from "@/components/social/SocialPlatformPills";
+
+export type GbpPostShellProps = {
+  onPlatformChange?: (tab: SocialPlatformTab) => void;
+};
 
 /**
  * SEO mega menu workspace for Google Business Profile posting (connected site).
  */
-export const GbpPostShell: React.FC = () => {
+export const GbpPostShell: React.FC<GbpPostShellProps> = ({ onPlatformChange }) => {
   const { enabledSites, connectedSite, canUseConnected } = useManagerSeedWorkspace();
   const { sites: allWordPressSites } = useWordPressSites();
 
@@ -35,7 +40,11 @@ export const GbpPostShell: React.FC = () => {
 
   return (
     <div className={SEO_WORKSPACE_SHELL_CLASS}>
-      <GbpPostPropertyPanel site={site} allSites={allWordPressSites} />
+      <GbpPostPropertyPanel
+        site={site}
+        allSites={allWordPressSites}
+        onPlatformChange={onPlatformChange}
+      />
     </div>
   );
 };

@@ -1,5 +1,5 @@
-const STORAGE_KEY = "flowbie_device_auth";
-const SESSION_TOKEN_KEY = "flowbie_session_token";
+const STORAGE_KEY = "neo-pulse_device_auth";
+const SESSION_TOKEN_KEY = "neo_pulse_session_token";
 
 let memorySessionToken: string | null = null;
 

@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/select";
 import { UnifiedWorkspaceChrome } from "@/components/shared/UnifiedWorkspaceChrome";
 import { VerticalBenchmarkContentPills } from "@/components/vertical-benchmark/VerticalBenchmarkContentPills";
-import { VerticalBenchmarkDetailsPanel } from "@/components/vertical-benchmark/VerticalBenchmarkDetailsPanel";
+import { ContentOptimizerDetailsDrawer } from "@/components/overview/overview-tab/ContentOptimizerDetailsDrawer";
 import {
   BULK_HEADER_RUN_BTN,
   BULK_HEADER_SELECT,
@@ -20,6 +20,7 @@ import {
   buildVerticalBenchmarkMicroSnapshot,
   verticalBenchmarkProgressBusy,
 } from "@/lib/vertical-benchmark/vertical-benchmark-header-progress";
+import { buildVerticalBenchmarkBulkGeneratorDetailsProps } from "@/lib/vertical-benchmark/vertical-benchmark-bulk-details-bindings";
 import type { BenchmarkGridCsvContext } from "@/lib/vertical-benchmark/vertical-benchmark-grid-entity";
 import type {
   BenchmarkInventoryHostedLink,
@@ -38,6 +39,7 @@ export type VerticalBenchmarkWorkspaceHeaderProps = {
   onCreateBulkTemplate: () => void | Promise<void>;
   onGridCsvFile: (file: File | null) => void | Promise<void>;
   onClearGridCsv: () => void;
+  exporting: boolean;
   generatingBulkTemplate: boolean;
   busy: boolean;
   exportProgress: BenchmarkPipelineProgress | null;
@@ -48,6 +50,7 @@ export type VerticalBenchmarkWorkspaceHeaderProps = {
   gridCsvParsing: boolean;
   rosterCount: number;
   selectedCount: number;
+  onDetailsOpenChange?: (open: boolean) => void;
 };
 
 export function VerticalBenchmarkWorkspaceHeader({
@@ -59,6 +62,7 @@ export function VerticalBenchmarkWorkspaceHeader({
   onCreateBulkTemplate,
   onGridCsvFile,
   onClearGridCsv,
+  exporting,
   generatingBulkTemplate,
   busy,
   exportProgress,
@@ -69,22 +73,23 @@ export function VerticalBenchmarkWorkspaceHeader({
   gridCsvParsing,
   rosterCount,
   selectedCount,
+  onDetailsOpenChange,
 }: VerticalBenchmarkWorkspaceHeaderProps) {
   const gridFileInputRef = useRef<HTMLInputElement>(null);
 
   const progressSnapshot = useMemo(
     () =>
       buildVerticalBenchmarkMicroSnapshot({
-        exporting: false,
+        exporting,
         generatingBulkTemplate,
         exportProgress,
         bulkTemplateProgress,
       }),
-    [generatingBulkTemplate, exportProgress, bulkTemplateProgress],
+    [exporting, generatingBulkTemplate, exportProgress, bulkTemplateProgress],
   );
 
   const isProcessing = verticalBenchmarkProgressBusy({
-    exporting: false,
+    exporting,
     generatingBulkTemplate,
   });
   const canOpenDetails =
@@ -92,6 +97,38 @@ export function VerticalBenchmarkWorkspaceHeader({
     bulkInventoryLinks.length > 0 ||
     Boolean(gridCsvContext) ||
     selectedCount > 0;
+
+  const drawerProps = useMemo(
+    () =>
+      buildVerticalBenchmarkBulkGeneratorDetailsProps({
+        busy,
+        exporting,
+        generatingBulkTemplate,
+        exportProgress,
+        bulkTemplateProgress,
+        bulkInventoryLinks,
+        selectedCount,
+        rosterCount,
+        tagFilter,
+        gridCsvContext,
+        gridCsvFileName,
+        contentTypeFilter,
+      }),
+    [
+      busy,
+      exporting,
+      generatingBulkTemplate,
+      exportProgress,
+      bulkTemplateProgress,
+      bulkInventoryLinks,
+      selectedCount,
+      rosterCount,
+      tagFilter,
+      gridCsvContext,
+      gridCsvFileName,
+      contentTypeFilter,
+    ],
+  );
 
   return (
     <UnifiedWorkspaceChrome
@@ -109,20 +146,9 @@ export function VerticalBenchmarkWorkspaceHeader({
       canOpenDetails={canOpenDetails}
       isProcessing={isProcessing}
       detailsPanelId={DETAILS_PANEL_ID}
+      onDetailsOpenChange={onDetailsOpenChange}
       detailsPanel={
-        <VerticalBenchmarkDetailsPanel
-          busy={busy}
-          exporting={false}
-          generatingBulkTemplate={generatingBulkTemplate}
-          exportProgress={exportProgress}
-          bulkTemplateProgress={bulkTemplateProgress}
-          bulkInventoryLinks={bulkInventoryLinks}
-          selectedCount={selectedCount}
-          rosterCount={rosterCount}
-          tagFilter={tagFilter}
-          gridCsvContext={gridCsvContext}
-          gridCsvFileName={gridCsvFileName}
-        />
+        <ContentOptimizerDetailsDrawer postDestination="local" {...drawerProps} />
       }
       toolbar={
         <>

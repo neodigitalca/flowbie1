@@ -1,26 +1,25 @@
 import {
-  META_BULK_MICRO_LABELS,
   META_BULK_MICRO_ORDER,
   type BulkProgressSlice,
   type MetaBulkActionKey,
 } from "@/components/overview/overview-tab-constants";
-import { BulkOptimizationPanel } from "@/components/integrations/wordpress/BulkOptimizationPanel";
 import type { OverviewTabController } from "@/hooks/overview/use-overview-tab-controller";
 import type { useWordPressOptimization } from "@/contexts/wordpress-optimization-context";
-import type { GscPerformancePreviewSnapshot } from "@/hooks/content-optimization/gsc-preview-types";
-import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
 import {
-  WorkspaceDetailsProgressRow,
   WorkspaceDetailsStack,
 } from "@/components/shared/WorkspaceDetailsStack";
-import { WorkspaceDetailsPipelineSteps } from "@/components/shared/WorkspaceDetailsPipelineSteps";
 import { isOverviewBatchAllComplete } from "@/components/overview/overview-tab/overview-bulk-run-helpers";
 import { SinglePageOptimizationDetailsPanel } from "@/components/overview/overview-tab/SinglePageOptimizationDetailsPanel";
-import { BulkGeneratorDetailsDrawer } from "@/components/keyword-research/bulk/BulkGeneratorDetailsDrawer";
+import { ContentOptimizerDetailsDrawer } from "@/components/overview/overview-tab/ContentOptimizerDetailsDrawer";
 import {
-  buildContentOptimizerBulkGeneratorDetailsProps,
-  isContentOptimizerBulkRun,
-} from "@/lib/content-optimization/content-optimizer-bulk-generator-bindings";
+  buildOverviewBulkGeneratorDetailsProps,
+  buildOverviewWarmInventoryDetailsProps,
+  isOverviewBulkDetailsRun,
+  overviewBulkDetailsCanOpenFromWarm,
+} from "@/lib/overview/overview-bulk-details-bindings";
+import type { BulkGscKeywordsHostedLink } from "@/lib/bulk/bulk-gsc-keywords-hosted-link";
+import type { PromptBulkSitemapInventoryLink } from "@/lib/bulk/prompt-bulk-sitemap-inventory";
+import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
 import type { OptimizationProgressState } from "@/hooks/content-optimization/use-optimization-state";
 import type { OptimizationFileManager } from "@/lib/optimization-file-manager";
 
@@ -55,12 +54,9 @@ export type OverviewContentDetailsPanelProps = {
   bulkBatchKey: string;
   batchProgress: Opt["optimizationProgress"][string] | undefined;
   opt: Opt;
-  pageTitle?: string;
-  gscPreviewByUrl: Record<string, GscPerformancePreviewSnapshot | null | undefined>;
-  gscActiveUrl: string | null;
-  gscFetching: boolean;
-  onUploadToWordPress?: () => void;
-  onBatchClose: (abortingRun: boolean) => void;
+  sitemapInventoryLinks?: PromptBulkSitemapInventoryLink[];
+  gscHostedLink?: BulkGscKeywordsHostedLink | null;
+  sitemapInventoryLoading?: boolean;
 };
 
 function isActiveBulkSlice(slice: BulkProgressSlice): boolean {
@@ -68,13 +64,12 @@ function isActiveBulkSlice(slice: BulkProgressSlice): boolean {
   return slice.completed < slice.total;
 }
 
-function activeBulkSlices(
+function hasActiveMicroSlices(
   bulkActionProgress: Partial<Record<MetaBulkActionKey, BulkProgressSlice>>,
-): Array<{ key: MetaBulkActionKey; slice: BulkProgressSlice }> {
-  return META_BULK_MICRO_ORDER.flatMap((key) => {
+): boolean {
+  return META_BULK_MICRO_ORDER.some((key) => {
     const slice = bulkActionProgress[key];
-    if (!slice || !isActiveBulkSlice(slice)) return [];
-    return [{ key, slice }];
+    return slice && isActiveBulkSlice(slice);
   });
 }
 
@@ -92,13 +87,27 @@ export function hasOverviewContentDetailsActivity(
   bulkActionProgress: Partial<Record<MetaBulkActionKey, BulkProgressSlice>>,
   batchBulkState: BulkOptimizationState | undefined,
   singlePageCtx?: OverviewSinglePageDetailsContext,
+  warmInventory?: {
+    sitemapInventoryLinks: PromptBulkSitemapInventoryLink[];
+    gscHostedLink: BulkGscKeywordsHostedLink | null;
+    sitemapInventoryLoading: boolean;
+  },
 ): boolean {
   const hasBatch = Boolean(batchBulkState?.urls?.length);
-  const hasActiveSlices = META_BULK_MICRO_ORDER.some((key) => {
-    const slice = bulkActionProgress[key];
-    return slice && isActiveBulkSlice(slice);
-  });
-  return hasBatch || hasActiveSlices || hasSinglePageOptimizationDetailsActivity(singlePageCtx);
+  const hasActiveSlices = hasActiveMicroSlices(bulkActionProgress);
+  const hasWarmInventory = warmInventory
+    ? overviewBulkDetailsCanOpenFromWarm(
+        warmInventory.sitemapInventoryLinks,
+        warmInventory.gscHostedLink,
+        warmInventory.sitemapInventoryLoading,
+      )
+    : false;
+  return (
+    hasBatch ||
+    hasActiveSlices ||
+    hasWarmInventory ||
+    hasSinglePageOptimizationDetailsActivity(singlePageCtx)
+  );
 }
 
 export function OverviewContentDetailsPanel({
@@ -107,14 +116,10 @@ export function OverviewContentDetailsPanel({
   bulkBatchKey,
   batchProgress,
   opt,
-  pageTitle,
-  gscPreviewByUrl,
-  gscActiveUrl,
-  gscFetching,
-  onUploadToWordPress,
-  onBatchClose,
+  sitemapInventoryLinks = [],
+  gscHostedLink = null,
+  sitemapInventoryLoading = false,
 }: OverviewContentDetailsPanelProps) {
-  const slices = activeBulkSlices(c.bulkActionProgress);
   const site = c.site;
   const siteId = site?.id ?? "";
   const singlePageCtx: OverviewSinglePageDetailsContext | undefined = site
@@ -132,37 +137,59 @@ export function OverviewContentDetailsPanel({
     opt.isOptimizingContent,
   );
   const showSinglePage = hasSinglePageOptimizationDetailsActivity(singlePageCtx);
-  // Keep the completed report visible after harness runs finish.
   const keepCompletedBatch =
     batchBulkState?.runKind === "aiInContentImage" ||
     batchBulkState?.runKind === "aiWikipediaLink";
   const showBatch = Boolean(
     site && batchBulkState?.urls?.length && (batchActive || keepCompletedBatch),
   );
-  const showSlices = !batchActive && slices.length > 0;
-  const batchHarnessSteps = batchBulkState?.batchPipelineSteps;
-  const showBatchHarness = Boolean(batchActive && batchHarnessSteps?.length);
   const isSinglePageOptimizing = Boolean(site && opt.isOptimizingContent[siteId]);
-  const showBatchPanel = showBatch && !showBatchHarness && !isSinglePageOptimizing;
-  const isContentOptimizeBatch =
-    Boolean(batchBulkState && isContentOptimizerBulkRun(batchBulkState)) && showBatchPanel;
-  const contentOptimizerDetailsProps =
-    isContentOptimizeBatch && batchBulkState && site
-      ? buildContentOptimizerBulkGeneratorDetailsProps(
+  const hasMicroActivity = hasActiveMicroSlices(c.bulkActionProgress);
+  const workspaceBusy = Boolean(
+    opt.isOptimizingContent[bulkBatchKey] ||
+      opt.isOptimizingContent[siteId] ||
+      hasMicroActivity,
+  );
+
+  const bulkDetailsProps =
+    site && (showBatch || hasMicroActivity || isOverviewBulkDetailsRun(batchBulkState))
+      ? buildOverviewBulkGeneratorDetailsProps(
           {
             siteId,
             batchKey: bulkBatchKey,
-            bulkState: batchBulkState,
+            bulkState: batchBulkState ?? { urls: [], currentIndex: 0, urlStatuses: {}, currentStep: "" },
             batchProgress,
             siteProgress: opt.optimizationProgress[siteId],
             overviewRows: c.rows,
             isOptimizingContent: opt.isOptimizingContent,
             optimizationFileManagers: opt.optimizationFileManagers,
             siteName: site.name,
+            sitemapInventoryLinks,
+            siteKwHostedLink: gscHostedLink,
+            sitemapInventoryLoading,
+            sitemapSource: c.sitemapSource,
+            bulkActionProgress: c.bulkActionProgress,
+            bulkScopeUrlKeys: c.bulkScopeUrlKeys,
           },
-          Boolean(opt.isOptimizingContent[bulkBatchKey] || opt.isOptimizingContent[siteId]),
+          workspaceBusy,
         )
       : null;
+
+  const showWarmInventoryOnly =
+    !bulkDetailsProps &&
+    overviewBulkDetailsCanOpenFromWarm(sitemapInventoryLinks, gscHostedLink, sitemapInventoryLoading);
+
+  const warmOnlyProps = showWarmInventoryOnly
+    ? buildOverviewWarmInventoryDetailsProps({
+        overviewRows: c.rows,
+        sitemapInventoryLinks,
+        siteKwHostedLink: gscHostedLink,
+        sitemapInventoryLoading,
+        sitemapSource: c.sitemapSource,
+      })
+    : null;
+
+  const drawerProps = bulkDetailsProps ?? warmOnlyProps;
 
   return (
     <WorkspaceDetailsStack>
@@ -175,40 +202,8 @@ export function OverviewContentDetailsPanel({
           hideRowBody={Boolean(batchActive && batchBulkState?.urls?.length)}
         />
       ) : null}
-      {showBatchHarness ? <WorkspaceDetailsPipelineSteps steps={batchHarnessSteps!} /> : null}
-      {showSlices
-        ? slices.map(({ key, slice }, index) => (
-            <WorkspaceDetailsProgressRow
-              key={key}
-              label={META_BULK_MICRO_LABELS[key]}
-              slice={slice}
-              stripeIndex={index}
-            />
-          ))
-        : null}
 
-      {isContentOptimizeBatch && contentOptimizerDetailsProps ? (
-        <BulkGeneratorDetailsDrawer {...contentOptimizerDetailsProps} />
-      ) : showBatchPanel ? (
-        <BulkOptimizationPanel
-            variant="page"
-            displayMode="details-only"
-            bulkState={batchBulkState}
-            batchKey={bulkBatchKey}
-            siteProgress={batchProgress}
-            pageTitle={pageTitle}
-            gscPreviewByUrl={gscPreviewByUrl}
-            gscActiveUrl={gscActiveUrl}
-            gscFetching={gscFetching}
-            sitemapSource={c.sitemapSource}
-            wpTitlesByUrl={c.wpTitlesByUrl}
-            overviewRows={c.rows}
-            onUploadToWordPress={onUploadToWordPress}
-            onRequestClose={({ abortingRun }) => onBatchClose(Boolean(abortingRun))}
-            onRowDateModifierChange={c.patchRowDateModifierByUrl}
-            onRowDateModifierCommit={c.commitRowDateModifierByUrl}
-        />
-      ) : null}
+      {drawerProps ? <ContentOptimizerDetailsDrawer {...drawerProps} /> : null}
     </WorkspaceDetailsStack>
   );
 }
@@ -218,8 +213,19 @@ export function overviewContentDetailsCanOpen(
   bulkActionProgress: Partial<Record<MetaBulkActionKey, BulkProgressSlice>>,
   batchBulkState: BulkOptimizationState | undefined,
   singlePageCtx?: OverviewSinglePageDetailsContext,
+  warmInventory?: {
+    sitemapInventoryLinks: PromptBulkSitemapInventoryLink[];
+    gscHostedLink: BulkGscKeywordsHostedLink | null;
+    sitemapInventoryLoading: boolean;
+  },
 ): boolean {
   return Boolean(
-    site && hasOverviewContentDetailsActivity(bulkActionProgress, batchBulkState, singlePageCtx),
+    site &&
+      hasOverviewContentDetailsActivity(
+        bulkActionProgress,
+        batchBulkState,
+        singlePageCtx,
+        warmInventory,
+      ),
   );
 }

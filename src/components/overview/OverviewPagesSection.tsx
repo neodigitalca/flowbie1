@@ -189,7 +189,7 @@ export function OverviewPagesSection({
     const isActiveOptimize =
       isOverviewRowBulkActive(row.url, batchBulkState, batchRunning) ||
       row.status === "ai-wikipedia-link";
-    const panelId = `flowbie-meta-panel-${index}`;
+    const panelId = `neo-pulse-meta-panel-${index}`;
     const isExpanded = !placeholder && expandedPageUrl === row.url;
 
     if (!isExpanded) {

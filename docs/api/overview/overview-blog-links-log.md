@@ -5,7 +5,7 @@ section: Overview
 method: POST
 path: /api/overview/blog-links-log
 auth: open
-order: 840
+order: 830
 ---
 
 POST `/api/overview/blog-links-log`.
@@ -34,7 +34,7 @@ Runs the blog links log action in the Overview API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/overview/blog-links-log" \
+curl -X POST "https://neodigital.ca/api/overview/blog-links-log" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

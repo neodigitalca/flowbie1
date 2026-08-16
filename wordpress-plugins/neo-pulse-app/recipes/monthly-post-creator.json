@@ -1,0 +1,85 @@
+{
+  "keyword": "monthly-post-creator",
+  "name": "Monthly Post Creator",
+  "description": "Generate scheduled blog posts on a calendar cadence with full harness body, meta, and AI featured images.",
+  "notes": [
+    "Runs on a calendar schedule (default: 1st of each month, 9:00 Edmonton time).",
+    "Uses the Generator bulk pipeline: AI blog ideas, keyword research, harnessed content, meta, and featured image.",
+    "Posts are scheduled across the month (times per month setting).",
+    "Requires WordPress site link, OpenRouter key, and DataForSEO key."
+  ],
+  "category": "editorial",
+  "verticals": [
+    "general"
+  ],
+  "tags": [
+    "posts",
+    "editorial",
+    "generator",
+    "monthly"
+  ],
+  "prerequisites": [
+    "wordpress"
+  ],
+  "filters": {
+    "executionKinds": [
+      "post_creator"
+    ],
+    "targetBuckets": [
+      "posts"
+    ],
+    "actionCount": 1
+  },
+  "defaultTasks": [
+    {
+      "keyword": "monthly-post-creator-run",
+      "title": "Create scheduled blog posts",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "post_creator",
+      "executionPayload": {
+        "postCount": 1,
+        "keywordSource": "prompt",
+        "featuredImage": true,
+        "sitemapType": "post",
+        "postDestination": "wordpress",
+        "scheduleTimesPerMonth": 1,
+        "scheduleStartDay": 1,
+        "scheduleStartTime": "09:00",
+        "scheduleStaggerOptimized": true,
+        "targetBucket": "posts"
+      },
+      "scheduleMode": "calendar",
+      "dueDate": "2026-09-01",
+      "dueTime": "09:00",
+      "recurrenceRule": "monthly"
+    }
+  ],
+  "isAutomation": true,
+  "kind": "template",
+  "triggerBlock": {
+    "keyword": "schedule-monthly",
+    "kind": "calendar",
+    "frequency": "monthly",
+    "startDate": "2026-09-01",
+    "time": "09:00",
+    "targetBucket": "posts"
+  },
+  "actionBlock": {
+    "keyword": "post-creator-monthly",
+    "executionKind": "post_creator",
+    "executionPayload": {
+      "postCount": 1,
+      "keywordSource": "prompt",
+      "featuredImage": true,
+      "sitemapType": "post",
+      "postDestination": "wordpress",
+      "scheduleTimesPerMonth": 1,
+      "scheduleStartDay": 1,
+      "scheduleStartTime": "09:00",
+      "scheduleStaggerOptimized": true,
+      "targetBucket": "posts"
+    },
+    "title": "Create scheduled blog posts"
+  }
+}

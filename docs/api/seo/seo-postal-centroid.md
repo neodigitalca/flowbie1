@@ -5,7 +5,7 @@ section: SEO
 method: POST
 path: /api/seo/postal-centroid
 auth: open
-order: 1020
+order: 1010
 ---
 
 POST `/api/seo/postal-centroid`.
@@ -41,7 +41,7 @@ Runs the postal centroid action in the SEO API from a JSON request body. On succ
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/seo/postal-centroid" \
+curl -X POST "https://neodigital.ca/api/seo/postal-centroid" \
   -H "Content-Type: application/json" \
   -d '{   "city": "..." }'
 ```

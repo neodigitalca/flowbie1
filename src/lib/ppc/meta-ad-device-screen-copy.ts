@@ -1,7 +1,7 @@
 import { resolveMetaAdvertiserLabel } from "@/lib/ppc/meta-ad-prompt-builder";
 import type { MetaAdCreativeBrief } from "@/lib/ppc/meta-ads-types";
 
-export type MetaAdDeviceScreenUiStyle = "elementor" | "wordpress" | "flowbie";
+export type MetaAdDeviceScreenUiStyle = "elementor" | "wordpress" | "neo-pulse";
 
 export type MetaAdDeviceScreenCopy = {
   uiStyle: MetaAdDeviceScreenUiStyle;
@@ -11,7 +11,7 @@ export type MetaAdDeviceScreenCopy = {
   secondaryButton?: string;
 };
 
-const VALID_UI_STYLES = new Set<MetaAdDeviceScreenUiStyle>(["elementor", "wordpress", "flowbie"]);
+const VALID_UI_STYLES = new Set<MetaAdDeviceScreenUiStyle>(["elementor", "wordpress", "neo-pulse"]);
 
 function trimWords(value: string, max: number): string {
   return value
@@ -34,7 +34,7 @@ export function normalizeMetaDeviceScreenUiStyle(raw: unknown): MetaAdDeviceScre
   if (VALID_UI_STYLES.has(value as MetaAdDeviceScreenUiStyle)) {
     return value as MetaAdDeviceScreenUiStyle;
   }
-  if (value.includes("flowbie")) return "flowbie";
+  if (value.includes("neo-pulse")) return "neo-pulse";
   if (value.includes("elementor")) return "elementor";
   if (value.includes("wordpress") || value.includes("wp admin")) return "wordpress";
   return undefined;
@@ -78,7 +78,7 @@ Sidebars and panels will be icon-only in the image. Do not output sidebar labels
 Align copy to the creative brief, landing topic, and city when provided.
 Do not use brand logos or the word Elementor on screen.
 heroTitle max 4 words. heroSubline max 6 words. Each button max 2 words.
-uiStyle must be exactly one of: elementor, wordpress, flowbie.
+uiStyle must be exactly one of: elementor, wordpress, neo-pulse.
 
 Return ONLY valid JSON with these exact keys:
 {"uiStyle":"elementor","heroTitle":"string","heroSubline":"string","primaryButton":"string","secondaryButton":"string or empty"}`;
@@ -103,7 +103,7 @@ export function buildMetaDeviceScreenCopyUserPayload(options: {
       captionHook: options.creativeBrief.captionHook,
     },
     outputSchema: {
-      uiStyle: "elementor | wordpress | flowbie",
+      uiStyle: "elementor | wordpress | neo-pulse",
       heroTitle: "string, max 4 words",
       heroSubline: "string, max 6 words",
       primaryButton: "string, max 2 words",

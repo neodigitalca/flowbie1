@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/get-site-inventory-bulk
 auth: open
-order: 2620
+order: 2570
 ---
 
 POST `/api/wordpress/get-site-inventory-bulk`.
@@ -34,7 +34,7 @@ Runs a bulk wordpress operation from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/get-site-inventory-bulk" \
+curl -X POST "https://neodigital.ca/api/wordpress/get-site-inventory-bulk" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

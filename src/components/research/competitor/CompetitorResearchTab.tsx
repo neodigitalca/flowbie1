@@ -187,7 +187,7 @@ function GscStatusLabel({
   return (
     <div className="mt-2 px-2 sm:px-0">
       <span
-        className="inline-flex min-h-[1rem] max-w-full items-center rounded-sm px-2.5 py-1 text-[1rem] font-semibold uppercase leading-normal tracking-wide flowbie-frame-primary bg-black/40 text-primary"
+        className="inline-flex min-h-[1rem] max-w-full items-center rounded-sm px-2.5 py-1 text-[1rem] font-semibold uppercase leading-normal tracking-wide neo-pulse-frame-primary bg-black/40 text-primary"
         title={titleAttr}
       >
         {label}
@@ -207,7 +207,7 @@ function fmtSeedMoney(n: number | null | undefined): string {
 
 function SeedMetricsStrip({ metrics }: { metrics: CompetitorSeedMetrics }) {
   return (
-    <div className="flowbie-zone-tile--data mt-2 px-2 py-2 sm:px-3">
+    <div className="neo-pulse-zone-tile--data mt-2 px-2 py-2 sm:px-3">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-md border border-border/50 bg-black/25 px-2 py-1.5">
           <div className="min-h-[1rem] text-[1rem] font-medium uppercase leading-normal tracking-wide text-muted-foreground">
@@ -234,7 +234,7 @@ function SeedMetricsStrip({ metrics }: { metrics: CompetitorSeedMetrics }) {
 
 function SeedOverviewStrip({ overview }: { overview: CompetitorSeedOverview }) {
   return (
-    <div className="flowbie-zone-tile--data mt-2 px-2 py-2 sm:px-3">
+    <div className="neo-pulse-zone-tile--data mt-2 px-2 py-2 sm:px-3">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="rounded-md border border-border/50 bg-black/25 px-2 py-1.5">
           <div className="min-h-[1rem] text-[1rem] font-medium uppercase leading-normal tracking-wide text-muted-foreground">
@@ -1633,7 +1633,7 @@ export function CompetitorResearchTab() {
       </div>
 
       {competitorWorkspaceMode === "connected" && (!site || !site.siteUrl?.trim()) ? (
-        <div className="flowbie-zone-tile--data px-2 py-3 text-[1rem] leading-normal text-muted-foreground">
+        <div className="neo-pulse-zone-tile--data px-2 py-3 text-[1rem] leading-normal text-muted-foreground">
           {!site
             ? "Connect a WordPress site and select it in the header, or switch to Temp seed for unconnected research."
             : "This site has no URL saved."}
@@ -1649,7 +1649,7 @@ export function CompetitorResearchTab() {
                 {competitorWorkspaceMode === "temp" ? (
                   <Input
                     type="url"
-                    variant="flowbieBlack"
+                    variant="neoPulseBlack"
                     className="h-9 font-mono text-sm"
                     placeholder="https://example.com"
                     aria-label="Seed site URL for competitor research"
@@ -1683,7 +1683,7 @@ export function CompetitorResearchTab() {
             </div>
           </div>
 
-          <div className="flowbie-zone-tile--analysis px-2 py-2 sm:px-3">
+          <div className="neo-pulse-zone-tile--analysis px-2 py-2 sm:px-3">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <div
                 className="inline-flex h-9 shrink-0 overflow-hidden rounded-md border border-[hsl(var(--semantic-analysis)/0.48)] bg-black/30 p-0.5 shadow-none"
@@ -1781,7 +1781,7 @@ export function CompetitorResearchTab() {
               </Button>
               <Button
                 type="button"
-                className={cn("flowbie-btn-semantic-analysis", COMPETITOR_TOOLBAR_BTN)}
+                className={cn("neo-pulse-btn-semantic-analysis", COMPETITOR_TOOLBAR_BTN)}
                 disabled={busy}
                 onClick={() => void analyze()}
               >
@@ -2006,29 +2006,29 @@ export function CompetitorResearchTab() {
                           : undefined
                 }
               >
-                <div className="flowbie-competitor-progress-track">
+                <div className="neo-pulse-competitor-progress-track">
                   {gridCsvBusy && phase === "idle" ? (
-                    <div className="flowbie-competitor-progress-indeterminate" aria-hidden />
+                    <div className="neo-pulse-competitor-progress-indeterminate" aria-hidden />
                   ) : phase === "semrush" ? (
-                    <div className="flowbie-competitor-progress-indeterminate" aria-hidden />
+                    <div className="neo-pulse-competitor-progress-indeterminate" aria-hidden />
                   ) : phase === "tiers" || phase === "manual" ? (
                     <div className="flex h-full w-full" aria-hidden>
-                      <div className="flowbie-competitor-progress-fill w-1/2 shrink-0" />
+                      <div className="neo-pulse-competitor-progress-fill w-1/2 shrink-0" />
                       <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-                        <div className="flowbie-competitor-progress-indeterminate" />
+                        <div className="neo-pulse-competitor-progress-indeterminate" />
                       </div>
                     </div>
                   ) : phase === "report" ? (
                     reportPipelineStep === 4 || reportPipelineStep === 6 ? (
                       <div className="flex h-full w-full" aria-hidden>
-                        <div className="flowbie-competitor-progress-fill h-full shrink-0" style={{ width: "40%" }} />
+                        <div className="neo-pulse-competitor-progress-fill h-full shrink-0" style={{ width: "40%" }} />
                         <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-                          <div className="flowbie-competitor-progress-indeterminate" />
+                          <div className="neo-pulse-competitor-progress-indeterminate" />
                         </div>
                       </div>
                     ) : (
                       <div
-                        className="flowbie-competitor-progress-fill h-full transition-[width] duration-300 ease-out"
+                        className="neo-pulse-competitor-progress-fill h-full transition-[width] duration-300 ease-out"
                         style={{
                           width: `${reportPipelineStep <= 0 ? 0 : (reportPipelineStep / REPORT_PIPELINE_MICRO_TOTAL) * 100}%`,
                         }}
@@ -2105,7 +2105,7 @@ export function CompetitorResearchTab() {
             />
           ) : null}
 
-          <div className="flowbie-zone-tile--analysis mt-2 space-y-3 px-2 py-2 sm:px-3">
+          <div className="neo-pulse-zone-tile--analysis mt-2 space-y-3 px-2 py-2 sm:px-3">
             {analyzeMode === "manual" && pendingManualDomains.length > 0 ? (
               <div className="rounded-md border border-border/50 bg-black/20 px-2 py-2">
                 <p className="mb-2 min-h-[1rem] text-base leading-snug text-muted-foreground">

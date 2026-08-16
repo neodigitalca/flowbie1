@@ -5,7 +5,7 @@ section: Knowledge Model
 method: POST
 path: /api/knowledge-model/expand-node
 auth: open
-order: 580
+order: 570
 ---
 
 POST `/api/knowledge-model/expand-node`.
@@ -35,7 +35,7 @@ Runs the expand node action in the Knowledge Model API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/knowledge-model/expand-node" \
+curl -X POST "https://neodigital.ca/api/knowledge-model/expand-node" \
   -H "Content-Type: application/json" \
   -d '{   "keyword": "..." }'
 ```

@@ -5,7 +5,7 @@ section: Manager WordPress Properties
 method: POST
 path: /api/manager-wordpress-properties/save
 auth: open
-order: 660
+order: 650
 ---
 
 POST `/api/manager-wordpress-properties/save`.
@@ -34,7 +34,7 @@ Runs the save action in the Manager WordPress Properties API from a JSON request
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/manager-wordpress-properties/save" \
+curl -X POST "https://neodigital.ca/api/manager-wordpress-properties/save" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

@@ -74,10 +74,7 @@ export function ChatSharedDrawer({
 
   useEffect(() => {
     void loadLog();
-    if (!open) return;
-    const id = window.setInterval(() => void loadLog(), 5000);
-    return () => window.clearInterval(id);
-  }, [loadLog, open]);
+  }, [loadLog]);
 
   const filtered = useMemo(() => {
     return items.filter((entry) => {

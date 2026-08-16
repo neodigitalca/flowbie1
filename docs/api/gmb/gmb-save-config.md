@@ -34,7 +34,7 @@ Runs the save config action in the Google Business Profile API from a JSON reque
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/gmb/save-config" \
+curl -X POST "https://neodigital.ca/api/gmb/save-config" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

@@ -36,7 +36,7 @@ export function CSVProcessingControls({
         onClick={handleStartProcessing}
         disabled={isProcessing || displayRows.length === 0 || !apiKey || !openRouterApiKey}
         className={cn(
-          'flowbie-btn-semantic-analysis min-w-[10rem] flex-1',
+          'neo-pulse-btn-semantic-analysis min-w-[10rem] flex-1',
           REPORTING_TOOLBAR_BTN,
         )}
       >

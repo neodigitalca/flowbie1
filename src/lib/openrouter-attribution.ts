@@ -1,5 +1,5 @@
-export const OPENROUTER_WEB_APP_TITLE = "Flowbie Web App";
-export const OPENROUTER_WEB_APP_REFERER = "https://flowbie.ca/flowbie/";
+export const OPENROUTER_WEB_APP_TITLE = "NEO Pulse Web App";
+export const OPENROUTER_WEB_APP_REFERER = "https://neodigital.ca/neo-pulse/";
 
 export function resolveOpenRouterWebReferer(): string {
   if (typeof window !== "undefined" && window.location?.origin) {

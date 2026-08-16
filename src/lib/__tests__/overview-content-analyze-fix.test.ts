@@ -101,7 +101,7 @@ describe("parseOverviewAnalyzeResponseJson", () => {
       { ...emptySides(), issue: "Broken table", proposedFix: "Close tr tags" },
       { ...emptySides(), issue: "orphan", proposedFix: "" },
     ]);
-    expect(JSON.parse(r.storedJson).flowbieContentAuditV1.issues).toEqual(r.issues);
+    expect(JSON.parse(r.storedJson).neoPulseContentAuditV1.issues).toEqual(r.issues);
     expect(r.fixBulletsMarkdown).toBe(
       "- Finding 1: Broken table | Apply: Close tr tags\n- Finding 2: orphan",
     );
@@ -190,7 +190,7 @@ describe("parseOverviewAnalyzeResponseJson", () => {
 describe("parseContentAuditStorage and contentAuditStorageToFixBulletsMarkdown", () => {
   it("parses stored v1 JSON including new fields", () => {
     const stored = JSON.stringify({
-      flowbieContentAuditV1: {
+      neoPulseContentAuditV1: {
         issues: [
           {
             title: "",
@@ -229,7 +229,7 @@ describe("parseContentAuditStorage and contentAuditStorageToFixBulletsMarkdown",
 
   it("drops stored findings whose Before and After markup are identical (nonsense comparison)", () => {
     const stored = JSON.stringify({
-      flowbieContentAuditV1: {
+      neoPulseContentAuditV1: {
         issues: [
           {
             issue: "Fake diff",
@@ -257,7 +257,7 @@ describe("parseContentAuditStorage and contentAuditStorageToFixBulletsMarkdown",
   });
 
   it("migrates minimal legacy stored rows", () => {
-    const stored = '{"flowbieContentAuditV1":{"issues":[{"issue":"X","proposedFix":"Y"}]}}';
+    const stored = '{"neoPulseContentAuditV1":{"issues":[{"issue":"X","proposedFix":"Y"}]}}';
     const p = parseContentAuditStorage(stored);
     expect(p.kind).toBe("v1");
     if (p.kind === "v1") {

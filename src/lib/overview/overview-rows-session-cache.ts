@@ -3,7 +3,7 @@ import type { OverviewSitemapSource } from "@/lib/overview/overview-sitemap-sour
 import { clearOverviewSitemapLoadFingerprints } from "@/lib/overview/overview-sitemap-load-cache";
 
 function cacheKey(siteId: string, source: OverviewSitemapSource): string {
-  return `flowbie-overview-rows-v2:${siteId}:${source}`;
+  return `neo-pulse-overview-rows-v2:${siteId}:${source}`;
 }
 
 const memoryByKey = new Map<string, OverviewRow[]>();

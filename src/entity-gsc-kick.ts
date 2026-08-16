@@ -1,5 +1,5 @@
 /** First client operation: mirror active site to server and fire GSC before React loads. */
-const ACTIVE_WP_SITE_STORAGE_KEY = "flowbie-active-wp-site-id";
+const ACTIVE_WP_SITE_STORAGE_KEY = "neo-pulse-active-wp-site-id";
 const WORDPRESS_SITES_STORAGE_KEY = "wordpress_sites";
 const ENTITY_SITE_WARM_GSC_ROW_LIMIT = 100;
 

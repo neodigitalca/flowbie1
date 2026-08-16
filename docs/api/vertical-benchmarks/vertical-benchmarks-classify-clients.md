@@ -5,7 +5,7 @@ section: Vertical Benchmarks
 method: POST
 path: /api/vertical-benchmarks/classify-clients
 auth: open
-order: 2130
+order: 2120
 ---
 
 POST `/api/vertical-benchmarks/classify-clients`.
@@ -38,7 +38,7 @@ Classifies managed WordPress sites into vertical benchmark client tags using tax
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/vertical-benchmarks/classify-clients" \
+curl -X POST "https://neodigital.ca/api/vertical-benchmarks/classify-clients" \
   -H "Content-Type: application/json" \
   -d '{   "apiKey": "..." }'
 ```

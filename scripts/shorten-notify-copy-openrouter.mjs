@@ -77,8 +77,8 @@ async function callOpenRouter(apiKey, batch) {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://flowbie.ca/flowbie/",
-      "X-Title": "Flowbie Web App",
+      "HTTP-Referer": "https://neodigital.ca/neo-pulse/",
+      "X-Title": "NEO Pulse Web App",
     },
     body: JSON.stringify({
       model: MODEL,

@@ -1,0 +1,11 @@
+{
+  "checklistSystemMarkers": [
+    "Do NOT use ## markdown headings",
+    "FOCUS KEYWORD DENSITY",
+    "WORDPRESS POSTS SOURCE"
+  ],
+  "blueprintSystemMarkers": [
+    "Blueprint Architect",
+    "Rename Introduction/Intro"
+  ]
+}

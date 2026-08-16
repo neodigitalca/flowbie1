@@ -1,6 +1,6 @@
 import { getCompetitorReportMaxOutputTokens } from "@/lib/competitor-research/competitor-report-openrouter-limits";
 import { appendMasterInstructionsToSystemPrompt, ensureMasterInstructionsInMemory } from "@/lib/master-instructions-storage";
-import { appendFlowbieMetaMarketingContext } from "@/lib/ppc/flowbie-meta-marketing-context";
+import { appendNeoPulseMetaMarketingContext } from "@/lib/ppc/neo-pulse-meta-marketing-context";
 import { appendMetaInstagramBestPractices } from "@/lib/ppc/load-meta-ad-instagram-best-practices";
 import {
   buildMetaInstagramGoalSystemPrompt,
@@ -33,7 +33,7 @@ export async function runMetaAdInstagramGoalAgent(options: {
 
   const system = appendMasterInstructionsToSystemPrompt(
     appendMetaInstagramBestPractices(
-      appendFlowbieMetaMarketingContext(buildMetaInstagramGoalSystemPrompt(options.siteName), options.teamName, {
+      appendNeoPulseMetaMarketingContext(buildMetaInstagramGoalSystemPrompt(options.siteName), options.teamName, {
         contextSource: options.contextSource,
       }),
     ),

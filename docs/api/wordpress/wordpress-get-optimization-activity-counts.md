@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/get-optimization-activity-counts
 auth: open
-order: 2460
+order: 2410
 ---
 
 POST `/api/wordpress/get-optimization-activity-counts`.
@@ -34,7 +34,7 @@ Runs the get optimization activity counts action in the WordPress API from a JSO
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/get-optimization-activity-counts" \
+curl -X POST "https://neodigital.ca/api/wordpress/get-optimization-activity-counts" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

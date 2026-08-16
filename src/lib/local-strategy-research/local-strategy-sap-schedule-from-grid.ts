@@ -8,7 +8,6 @@ import type {
 import {
   LOCAL_ANALYSIS_SAP_MAX,
   LOCAL_ANALYSIS_SAP_MIN,
-  LOCAL_ANALYSIS_TOTAL_SAP_CAP,
 } from "@/lib/local-analysis-target-constants";
 import { repairSapPageAllocationWeighted } from "@/lib/local-analysis-suggest-keyword-targets";
 import {
@@ -149,8 +148,8 @@ export function buildLocalStrategySapKeywordTargets(args: {
   targetTotal?: number;
 }): LocalKeywordTarget[] {
   const targetTotal = args.targetTotal ?? LOCAL_STRATEGY_SAP_SCHEDULE_TOTAL_ROWS;
-  if (targetTotal < LOCAL_ANALYSIS_SAP_MIN || targetTotal > LOCAL_ANALYSIS_TOTAL_SAP_CAP) {
-    throw new Error(`SAP row total must be between ${LOCAL_ANALYSIS_SAP_MIN} and ${LOCAL_ANALYSIS_TOTAL_SAP_CAP}.`);
+  if (targetTotal < LOCAL_ANALYSIS_SAP_MIN) {
+    throw new Error(`SAP row total must be at least ${LOCAL_ANALYSIS_SAP_MIN}.`);
   }
 
   const pool = buildWeightedKeywordPoolForSap(args).slice(0, MAX_DISTINCT_KEYWORDS_FOR_ALLOCATION);
@@ -189,8 +188,8 @@ export function buildLocalStrategySapKeywordTargetsFromGrid(args: {
   targetTotal?: number;
 }): LocalKeywordTarget[] {
   const targetTotal = args.targetTotal ?? LOCAL_STRATEGY_SAP_SCHEDULE_TOTAL_ROWS;
-  if (targetTotal < LOCAL_ANALYSIS_SAP_MIN || targetTotal > LOCAL_ANALYSIS_TOTAL_SAP_CAP) {
-    throw new Error(`SAP row total must be between ${LOCAL_ANALYSIS_SAP_MIN} and ${LOCAL_ANALYSIS_TOTAL_SAP_CAP}.`);
+  if (targetTotal < LOCAL_ANALYSIS_SAP_MIN) {
+    throw new Error(`SAP row total must be at least ${LOCAL_ANALYSIS_SAP_MIN}.`);
   }
 
   const sorted = [...args.gridKeywordWeights]
@@ -259,8 +258,8 @@ export function buildLocalStrategySapKeywordTargetsFromProposalMatrix(args: {
   targetTotal?: number;
 }): LocalKeywordTarget[] {
   const targetTotal = args.targetTotal ?? LOCAL_STRATEGY_SAP_SCHEDULE_TOTAL_ROWS;
-  if (targetTotal < LOCAL_ANALYSIS_SAP_MIN || targetTotal > LOCAL_ANALYSIS_TOTAL_SAP_CAP) {
-    throw new Error(`SAP row total must be between ${LOCAL_ANALYSIS_SAP_MIN} and ${LOCAL_ANALYSIS_TOTAL_SAP_CAP}.`);
+  if (targetTotal < LOCAL_ANALYSIS_SAP_MIN) {
+    throw new Error(`SAP row total must be at least ${LOCAL_ANALYSIS_SAP_MIN}.`);
   }
 
   const matrixRows = extractContentOpportunityMatrixRows(args.competitorReportMd);

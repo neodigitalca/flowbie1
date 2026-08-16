@@ -5,7 +5,7 @@ section: Wikipedia
 method: GET
 path: /api/wikipedia/api
 auth: open
-order: 2160
+order: 2150
 ---
 
 GET `/api/wikipedia/api`.
@@ -34,7 +34,7 @@ Reads api from the Wikipedia API.
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/wikipedia/api" \
+curl -X GET "https://neodigital.ca/api/wikipedia/api" \
   -H "Content-Type: application/json" \
 ```
 

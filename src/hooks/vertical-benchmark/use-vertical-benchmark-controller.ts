@@ -256,7 +256,7 @@ export function useVerticalBenchmarkController(openRouterApiKey: string) {
       const msg = e instanceof Error ? e.message : "Export failed";
       notify.error(
         msg.includes("404")
-          ? "Benchmark API not found. Restart the Flowbie API server (port 3001)."
+          ? "Benchmark API not found. Restart the NEO Pulse API server (port 3001)."
           : `Export could not finish: ${msg}`,
       );
     } finally {

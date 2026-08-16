@@ -88,12 +88,12 @@ function withProtectedHtmlTables(
   const protectedBody = html.replace(/<table\b[\s\S]*?<\/table>/gi, (block) => {
     const idx = placeholders.length;
     placeholders.push(block);
-    return `<!--FLOWBIE_TABLE_${idx}-->`;
+    return `<!--NEO_PULSE_TABLE_${idx}-->`;
   });
   const result = fn(protectedBody);
   let restored = result.html;
   for (let i = 0; i < placeholders.length; i++) {
-    restored = restored.replace(`<!--FLOWBIE_TABLE_${i}-->`, placeholders[i]!);
+    restored = restored.replace(`<!--NEO_PULSE_TABLE_${i}-->`, placeholders[i]!);
   }
   return { html: restored, convertedCount: result.convertedCount };
 }

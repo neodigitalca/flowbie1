@@ -1,61 +1,105 @@
-import { BulkOptimizationPanel } from "@/components/integrations/wordpress/BulkOptimizationPanel";
+import { ContentOptimizerDetailsDrawer } from "@/components/overview/overview-tab/ContentOptimizerDetailsDrawer";
+import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
 import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
-import type { GscPerformancePreviewSnapshot } from "@/hooks/content-optimization/gsc-preview-types";
+import type { OptimizationProgressState } from "@/hooks/content-optimization/use-optimization-state";
+import type { WordPressSite } from "@/components/integrations/types";
+import type { BulkGscKeywordsHostedLink } from "@/lib/bulk/bulk-gsc-keywords-hosted-link";
+import type { PromptBulkSitemapInventoryLink } from "@/lib/bulk/prompt-bulk-sitemap-inventory";
+import type { OptimizationFileManager } from "@/lib/optimization-file-manager";
 import {
-  WorkspaceDetailsStack,
-} from "@/components/shared/WorkspaceDetailsStack";
+  buildMultiSiteBulkGeneratorDetailsProps,
+  buildOverviewWarmInventoryDetailsProps,
+  overviewBulkDetailsCanOpenFromWarm,
+} from "@/lib/overview/overview-bulk-details-bindings";
+import { WorkspaceDetailsStack } from "@/components/shared/WorkspaceDetailsStack";
 
 export type MultiSiteContentDetailsPanelProps = {
   batchBulkState: BulkOptimizationState | null | undefined;
   bulkRunBatchKey: string;
+  batchSite?: WordPressSite | null;
   batchSiteName?: string;
-  rowProgressDs: { step?: string; message?: string } | undefined;
-  gscMap: Record<string, GscPerformancePreviewSnapshot | null | undefined>;
-  gscPreviewLoadingDs: boolean;
-  bulkActiveUrlDs: string | null;
-  onApproveKeywords: (batchKey: string) => void;
-  onBatchClose: (abortingRun: boolean) => void;
+  rowProgressDs: OptimizationProgressState | { step?: string; message?: string } | undefined;
+  sitemapInventoryLinks?: PromptBulkSitemapInventoryLink[];
+  gscHostedLink?: BulkGscKeywordsHostedLink | null;
+  sitemapInventoryLoading?: boolean;
+  overviewRows?: OverviewRow[];
+  isOptimizingContent: Record<string, boolean>;
+  optimizationFileManagers: Record<string, OptimizationFileManager>;
 };
 
 export function multiSiteContentDetailsCanOpen(
   batchBulkState: BulkOptimizationState | null | undefined,
+  warmInventory?: {
+    sitemapInventoryLinks: PromptBulkSitemapInventoryLink[];
+    gscHostedLink: BulkGscKeywordsHostedLink | null;
+    sitemapInventoryLoading: boolean;
+  },
 ): boolean {
-  return Boolean(batchBulkState?.urls?.length);
+  if (Boolean(batchBulkState?.urls?.length)) return true;
+  if (!warmInventory) return false;
+  return overviewBulkDetailsCanOpenFromWarm(
+    warmInventory.sitemapInventoryLinks,
+    warmInventory.gscHostedLink,
+    warmInventory.sitemapInventoryLoading,
+  );
 }
 
 export function MultiSiteContentDetailsPanel({
   batchBulkState,
   bulkRunBatchKey,
+  batchSite,
   batchSiteName,
   rowProgressDs,
-  gscMap,
-  gscPreviewLoadingDs,
-  bulkActiveUrlDs,
-  onApproveKeywords,
-  onBatchClose,
+  sitemapInventoryLinks = [],
+  gscHostedLink = null,
+  sitemapInventoryLoading = false,
+  overviewRows = [],
+  isOptimizingContent,
+  optimizationFileManagers,
 }: MultiSiteContentDetailsPanelProps) {
-  const pageTitle = batchSiteName ? `Content Optimizer - ${batchSiteName}` : "Content Optimizer";
+  const siteId = batchSite?.id ?? bulkRunBatchKey.replace(/-batch$/, "");
+  const workspaceBusy = Boolean(
+    bulkRunBatchKey && isOptimizingContent[bulkRunBatchKey],
+  );
 
-  if (!batchBulkState?.urls?.length) {
-    return null;
-  }
+  const bulkDetailsProps =
+    batchBulkState?.urls?.length && siteId
+      ? buildMultiSiteBulkGeneratorDetailsProps(
+          {
+            siteId,
+            batchKey: bulkRunBatchKey,
+            bulkState: batchBulkState,
+            batchProgress: rowProgressDs as OptimizationProgressState | undefined,
+            siteProgress: rowProgressDs as OptimizationProgressState | undefined,
+            overviewRows,
+            isOptimizingContent,
+            optimizationFileManagers,
+            siteName: batchSiteName ?? batchSite?.name,
+            sitemapInventoryLinks,
+            siteKwHostedLink: gscHostedLink,
+            sitemapInventoryLoading,
+          },
+          workspaceBusy,
+        )
+      : null;
+
+  const warmOnlyProps =
+    !bulkDetailsProps &&
+    overviewBulkDetailsCanOpenFromWarm(sitemapInventoryLinks, gscHostedLink, sitemapInventoryLoading)
+      ? buildOverviewWarmInventoryDetailsProps({
+          overviewRows,
+          sitemapInventoryLinks,
+          siteKwHostedLink: gscHostedLink,
+          sitemapInventoryLoading,
+        })
+      : null;
+
+  const drawerProps = bulkDetailsProps ?? warmOnlyProps;
+  if (!drawerProps) return null;
 
   return (
     <WorkspaceDetailsStack>
-      <BulkOptimizationPanel
-          variant="page"
-          displayMode="details-only"
-          bulkState={batchBulkState}
-          batchKey={bulkRunBatchKey}
-          siteProgress={rowProgressDs}
-          onApproveKeywords={onApproveKeywords}
-          pageTitle={pageTitle}
-          pageSubtitle="Bulk operation in progress"
-          gscPreviewByUrl={gscMap}
-          gscFetching={gscPreviewLoadingDs}
-          gscActiveUrl={bulkActiveUrlDs}
-          onRequestClose={({ abortingRun }) => onBatchClose(Boolean(abortingRun))}
-      />
+      <ContentOptimizerDetailsDrawer {...drawerProps} />
     </WorkspaceDetailsStack>
   );
 }

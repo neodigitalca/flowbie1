@@ -5,7 +5,7 @@ section: DataForSEO MCP
 method: POST
 path: /api/mcp/DataForSEO_on_page_lighthouse
 auth: open
-order: 780
+order: 770
 ---
 
 POST `/api/mcp/DataForSEO_on_page_lighthouse`.
@@ -34,7 +34,7 @@ Runs the dataforseo_on_page_lighthouse action in the DataForSEO MCP API from a J
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/mcp/DataForSEO_on_page_lighthouse" \
+curl -X POST "https://neodigital.ca/api/mcp/DataForSEO_on_page_lighthouse" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

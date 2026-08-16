@@ -34,7 +34,7 @@ Runs the test and save action in the Google Analytics API from a JSON request bo
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/ga/test-and-save" \
+curl -X POST "https://neodigital.ca/api/ga/test-and-save" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

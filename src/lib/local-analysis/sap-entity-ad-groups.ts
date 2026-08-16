@@ -11,17 +11,25 @@ export function entityAdGroupKey(entity: string): string {
   return entity.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-/** Ad-group sections in first-seen entity order. Rows without an entity are omitted (never "Unknown location"). */
+/** MapPin header label: parent city/area when set, else row entity. */
+export function entityAdGroupHeaderLabel(row: CSVRow): string {
+  const parent = normalizeEntityHintCommaLabel((row.ad_group_label ?? "").trim());
+  const entity = normalizeEntityHintCommaLabel((row.entity ?? "").trim());
+  return parent || entity;
+}
+
+/** Ad-group sections in first-seen header order. Rows without an entity are omitted (never "Unknown location"). */
 export function buildEntityAdGroupSections(rows: CSVRow[]): EntityAdGroupSection[] {
   const sections: EntityAdGroupSection[] = [];
   const byKey = new Map<string, EntityAdGroupSection>();
   for (let i = 0; i < rows.length; i++) {
     const entity = normalizeEntityHintCommaLabel((rows[i]?.entity ?? "").trim());
     if (!entity) continue;
-    const key = entityAdGroupKey(entity);
+    const header = entityAdGroupHeaderLabel(rows[i]!);
+    const key = entityAdGroupKey(header);
     let section = byKey.get(key);
     if (!section) {
-      section = { entity, groupId: key, rowIndices: [] };
+      section = { entity: header, groupId: key, rowIndices: [] };
       byKey.set(key, section);
       sections.push(section);
     }

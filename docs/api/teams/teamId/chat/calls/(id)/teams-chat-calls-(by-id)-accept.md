@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/chat/calls/({id})/accept
 auth: team-rbac-communication
-order: 1110
+order: 1100
 ---
 
 POST `/api/teams/{teamId}/chat/calls/({id})/accept`.
@@ -34,7 +34,7 @@ Runs the accept action in the Teams API from a JSON request body. Requires a sig
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/chat/calls/({id})/accept" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/chat/calls/({id})/accept" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

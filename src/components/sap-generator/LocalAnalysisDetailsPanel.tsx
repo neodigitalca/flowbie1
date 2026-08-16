@@ -1,33 +1,22 @@
-import { Download } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  entityLevelShortLabel,
-  entityTypeShortLabel,
-  type EntityGeographicLevel,
-} from "@/lib/entity-geographic-level";
-import {
-  activePhaseIndex,
-  LOCAL_ANALYSIS_SUGGEST_PHASES,
-  type LocalAnalysisHeaderProgress,
-} from "@/lib/local-analysis/header-progress";
-import { EntityTitleClusterHarnessPanel } from "@/components/sap-generator/EntityTitleClusterHarnessPanel";
-import { cn } from "@/lib/utils";
-import { contentOptimizerRowStripeClass } from "@/components/overview/overview-tab/overview-tab-content-constants";
-import {
-  WorkspaceDetailsKvRow,
-  WorkspaceDetailsSection,
-  WorkspaceDetailsStack,
-} from "@/components/shared/WorkspaceDetailsStack";
-import { BulkSitemapInventoryRunDetail } from "@/components/keyword-research/bulk/BulkSitemapInventoryRunDetail";
+import type { EntityGeographicLevel } from "@/lib/entity-geographic-level";
+import type { LocalAnalysisHeaderProgress } from "@/lib/local-analysis/header-progress";
 import type { PromptBulkSitemapInventoryLink } from "@/lib/bulk/prompt-bulk-sitemap-inventory";
 import type { BulkGscKeywordsHostedLink } from "@/lib/bulk/bulk-gsc-keywords-hosted-link";
 import { workspaceDetailsCanOpen } from "@/lib/workspace/workspace-details-can-open";
 import type { BulkHarnessSectionUi } from "@/hooks/use-bulk-auto-generate";
 import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
+import type { OverviewSitemapSource } from "@/lib/overview/overview-sitemap-source";
+import {
+  CONTENT_PREP_ENTITY_SAP_BATCH_SECTION_TITLES,
+  CONTENT_PREP_POST_SECTION_TITLES,
+  ENTITY_SAP_GSC_PREP_SECTION_TITLE,
+} from "@/lib/overview/overview-content-prep-harness-sections";
 
 export type LocalAnalysisDetailsPanelProps = {
   workspaceBusy: boolean;
   headerProgress: LocalAnalysisHeaderProgress | null;
+  isProcessing?: boolean;
+  status?: string;
   uploadLabel: string;
   keywordTargetCount: number;
   sapRowCount: number;
@@ -38,10 +27,16 @@ export type LocalAnalysisDetailsPanelProps = {
   hasSapRowsForCsv: boolean;
   displayRows: CSVRow[];
   currentRow: number;
+  harnessSections?: BulkHarnessSectionUi[];
   harnessByRow?: Map<number, BulkHarnessSectionUi[]>;
   batchPrepHarnessSections?: BulkHarnessSectionUi[];
+  harnessPlannedSectionCount?: number | null;
   sitemapInventoryLinks?: PromptBulkSitemapInventoryLink[];
   gscHostedLink?: BulkGscKeywordsHostedLink | null;
+  sitemapInventoryLoading?: boolean;
+  prepAccordionTitle?: string;
+  pipelineSectionTitles?: readonly string[];
+  liveMessage?: string | null;
   onDownloadTargetsCsv: () => void;
   onDownloadStrategyMarkdown: () => void;
 };
@@ -53,155 +48,64 @@ export function localAnalysisDetailsCanOpen(
   return workspaceDetailsCanOpen(hasData, busy);
 }
 
-export function LocalAnalysisDetailsPanel({
-  workspaceBusy,
-  headerProgress,
-  uploadLabel,
-  keywordTargetCount,
-  sapRowCount,
-  entityGeographicLevel,
-  entityTypeFocus,
-  gridSummaryMarkdown,
-  strategyMarkdown,
-  hasSapRowsForCsv,
-  sitemapInventoryLinks = [],
-  gscHostedLink = null,
-  onDownloadTargetsCsv,
-  onDownloadStrategyMarkdown,
-}: LocalAnalysisDetailsPanelProps) {
-  const focusLabel =
-    entityTypeFocus.length > 0
-      ? entityTypeFocus.map((t) => entityTypeShortLabel(entityGeographicLevel, t)).join(", ")
-      : "None";
+const PREP_SOURCE_BY_TITLE: Record<(typeof CONTENT_PREP_ENTITY_SAP_BATCH_SECTION_TITLES)[number], OverviewSitemapSource> = {
+  "Posts sitemap": "posts",
+  "Pages sitemap": "pages",
+  "Entity sitemap": "sap",
+};
 
-  const harnessActive =
-    workspaceBusy &&
-    headerProgress?.kind === "generate" &&
-    (headerProgress.titleHarnessGroups?.length ?? 0) > 0;
-  const pipelineBusy =
-    workspaceBusy && headerProgress && !harnessActive && headerProgress.kind !== "generate";
+export function buildEntityBatchPrepHarnessSections(
+  links: PromptBulkSitemapInventoryLink[],
+  sitePrepLoading: boolean,
+  workspaceBusy: boolean,
+  headerProgress: LocalAnalysisHeaderProgress | null,
+  gscHostedLink?: BulkGscKeywordsHostedLink | null,
+): BulkHarnessSectionUi[] {
+  const linkBySource = new Map(links.map((link) => [link.source, link]));
 
-  const phases =
-    headerProgress?.kind === "suggest" || headerProgress?.kind === "generate"
-      ? LOCAL_ANALYSIS_SUGGEST_PHASES
-      : [];
-  const activeIdx =
-    headerProgress && phases.length > 0
-      ? activePhaseIndex(phases, headerProgress.phase)
-      : -1;
+  const phase = headerProgress?.phase?.trim().toLowerCase() ?? "";
+  const loadingInventory =
+    sitePrepLoading ||
+    (workspaceBusy &&
+      (phase.includes("inventory") ||
+        phase.includes("cache") ||
+        phase.includes("gsc") ||
+        headerProgress?.kind === "csv"));
 
-  let kvIndex = 0;
+  const sitemapSections = CONTENT_PREP_ENTITY_SAP_BATCH_SECTION_TITLES.map((title, sectionIndex) => {
+    const source = PREP_SOURCE_BY_TITLE[title];
+    const link = linkBySource.get(source);
+    const hasLink = Boolean(link);
+    let status: BulkHarnessSectionUi["status"] = "waiting";
+    if (hasLink) status = "done";
+    else if (loadingInventory) status = "generating";
+    return {
+      sectionIndex,
+      title: link ? `${title} (${link.rowCount.toLocaleString()})` : title,
+      status,
+      ...(link ? { markdown: `${link.filename}\n${link.href}` } : {}),
+    };
+  });
 
-  return (
-    <WorkspaceDetailsStack>
-      <WorkspaceDetailsSection title="Workspace" stripeIndex={0}>
-        <WorkspaceDetailsKvRow label="Keyword targets" value={String(keywordTargetCount)} stripeIndex={kvIndex++} />
-        <WorkspaceDetailsKvRow label="SAP rows" value={String(sapRowCount)} stripeIndex={kvIndex++} />
-        <WorkspaceDetailsKvRow
-          label="Geography"
-          value={entityLevelShortLabel(entityGeographicLevel)}
-          stripeIndex={kvIndex++}
-        />
-        <WorkspaceDetailsKvRow label="Entity focus" value={focusLabel} stripeIndex={kvIndex++} />
-        {uploadLabel ? (
-          <WorkspaceDetailsKvRow label="Grid upload" value={uploadLabel} stripeIndex={kvIndex++} />
-        ) : null}
-      </WorkspaceDetailsSection>
+  let gscStatus: BulkHarnessSectionUi["status"] = "waiting";
+  if (gscHostedLink) gscStatus = "done";
+  else if (loadingInventory) gscStatus = "generating";
 
-      <WorkspaceDetailsSection title="Run detail" stripeIndex={1} defaultOpen>
-        {sitemapInventoryLinks.length > 0 || gscHostedLink ? (
-          <BulkSitemapInventoryRunDetail
-            links={sitemapInventoryLinks}
-            gscHostedLink={gscHostedLink}
-          />
-        ) : null}
+  const gscTitle = gscHostedLink
+    ? `${ENTITY_SAP_GSC_PREP_SECTION_TITLE} (${gscHostedLink.rowCount.toLocaleString()})`
+    : ENTITY_SAP_GSC_PREP_SECTION_TITLE;
 
-        {harnessActive && headerProgress?.titleHarnessGroups ? (
-          <EntityTitleClusterHarnessPanel
-            phase={headerProgress.phase}
-            clusterGroups={headerProgress.titleHarnessGroups}
-            plannedEntityCount={headerProgress.harnessPlannedSectionCount ?? headerProgress.total}
-            isProcessing
-          />
-        ) : pipelineBusy && headerProgress ? (
-          <>
-            <WorkspaceDetailsKvRow label="Phase" value={headerProgress.phase} stripeIndex={0} />
-            {phases.length > 0 ? (
-              <ol className="flex flex-col gap-0" aria-label="Run steps">
-                {phases.map((step, i) => {
-                  const status =
-                    activeIdx < 0
-                      ? "pending"
-                      : i < activeIdx
-                        ? "done"
-                        : i === activeIdx
-                          ? "active"
-                          : "pending";
-                  return (
-                    <li
-                      key={step}
-                      className={cn(
-                        "border-0 px-2.5 py-1.5 text-base sm:px-3",
-                        contentOptimizerRowStripeClass(i + 1, { isActiveOptimize: status === "active" }),
-                        status === "done" && "text-muted-foreground",
-                        status === "pending" && "text-muted-foreground/70",
-                        status === "active" && "text-white",
-                      )}
-                    >
-                      {step}
-                    </li>
-                  );
-                })}
-              </ol>
-            ) : null}
-          </>
-        ) : !workspaceBusy ? (
-          <>
-            {gridSummaryMarkdown.trim() ? (
-              <details className="border-0 bg-zinc-950">
-                <summary className="cursor-pointer px-2.5 py-2 text-white sm:px-3">Grid summary</summary>
-                <pre className="max-h-48 overflow-auto whitespace-pre-wrap px-2.5 pb-2.5 text-base text-muted-foreground sm:px-3">
-                  {gridSummaryMarkdown.trim().slice(0, 4000)}
-                  {gridSummaryMarkdown.length > 4000 ? "\n…" : ""}
-                </pre>
-              </details>
-            ) : null}
-            {strategyMarkdown.trim() ? (
-              <details className="border-0 bg-zinc-950">
-                <summary className="cursor-pointer px-2.5 py-2 text-white sm:px-3">Grid strategy</summary>
-                <pre className="max-h-48 overflow-auto whitespace-pre-wrap px-2.5 pb-2.5 text-base text-muted-foreground sm:px-3">
-                  {strategyMarkdown.trim().slice(0, 4000)}
-                  {strategyMarkdown.length > 4000 ? "\n…" : ""}
-                </pre>
-              </details>
-            ) : null}
-            <div className="flex flex-wrap gap-2 px-2.5 py-2 sm:px-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 border-0 bg-zinc-900 text-base shadow-none hover:bg-zinc-800"
-                disabled={!hasSapRowsForCsv}
-                onClick={onDownloadTargetsCsv}
-              >
-                <Download className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                Bulk CSV
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 border-0 bg-zinc-900 text-base shadow-none hover:bg-zinc-800"
-                disabled={!strategyMarkdown.trim()}
-                onClick={onDownloadStrategyMarkdown}
-              >
-                <Download className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                Grid strategy
-              </Button>
-            </div>
-          </>
-        ) : null}
-      </WorkspaceDetailsSection>
-    </WorkspaceDetailsStack>
-  );
+  return [
+    ...sitemapSections,
+    {
+      sectionIndex: sitemapSections.length,
+      title: gscTitle,
+      status: gscStatus,
+      ...(gscHostedLink
+        ? { markdown: `${gscHostedLink.filename}\n${gscHostedLink.href}` }
+        : {}),
+    },
+  ];
 }
+
+export const ENTITY_DETAILS_PIPELINE_SECTION_TITLES = CONTENT_PREP_POST_SECTION_TITLES;

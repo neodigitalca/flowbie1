@@ -3,17 +3,17 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTeam } from "@/contexts/TeamContext";
 import { usePulseAssistContext } from "@/contexts/pulse-assist-context";
 import { useAgentRunsContext } from "@/contexts/agent-runs-context";
-import { taskCanExecuteWithAgent } from "@/lib/agent-runs-types";
+import { taskCanExecuteWithAgent, resolveTaskExecuteSiteId } from "@/lib/agent-runs-types";
+import { automationUsesTriggerUi, resolveEffectiveExecutionKind, taskSupportsManualAutomationExecute } from "@/lib/task-automation-ui";
+import { ensurePostCreatorPayload } from "@/lib/post-creator/post-creator-defaults";
 import { TasksNavSidebar } from "@/components/manager/tasks/TasksNavSidebar";
 import { TasksContextHeader } from "@/components/manager/tasks/TasksContextHeader";
-import { TasksFilterToolbar } from "@/components/manager/tasks/TasksFilterToolbar";
 import { TasksListView } from "@/components/manager/tasks/TasksListView";
 import { TasksBoardView } from "@/components/manager/tasks/TasksBoardView";
 import { TasksCalendarView } from "@/components/manager/tasks/TasksCalendarView";
 import { TasksFilesView } from "@/components/manager/tasks/TasksFilesView";
 import { TaskDetailPane } from "@/components/manager/tasks/TaskDetailPane";
 import { NewProjectDialog } from "@/components/manager/tasks/NewProjectDialog";
-import { TemplateManagerDialog } from "@/components/manager/tasks/TemplateManagerDialog";
 import { NewTaskDialog, type TaskFormPayload } from "@/components/manager/tasks/NewTaskDialog";
 import { AddSectionDialog } from "@/components/manager/tasks/AddSectionDialog";
 import { useWordPressSites } from "@/hooks/use-wordpress-sites";
@@ -27,28 +27,22 @@ import {
   deleteProjectSection,
   deleteTask,
   deleteTaskProject,
-  fetchMyTasks,
-  fetchProjectFiles,
   fetchProjectSections,
-  fetchProjectTasks,
   fetchTaskDetail,
-  fetchTaskProjects,
-  fetchTaskTags,
-  fetchTaskTemplates,
-  saveTemplateFromProject,
   updateProjectSection,
   updateTask,
   updateTaskProject,
   uploadTaskFile,
 } from "@/lib/tasks-api";
-import { filterTasks, filterTasksByQuery, sortTasks } from "@/lib/tasks-filter";
+import { filterTasks, filterTasksByQuery, sortTasks, taskHasPulseAssignee } from "@/lib/tasks-filter";
+import { isAutomationProject, isProjectBundleNavMode } from "@/lib/task-automation-templates";
+import { isNeoPulseBotMember } from "@/lib/chat-neo-pulse";
+import { defaultTaskTriggerConfig } from "@/lib/task-trigger-types";
 import type {
   TaskFile,
   TaskNote,
   TaskProject,
   TaskSection,
-  TaskTag,
-  TaskTemplate,
   TeamTask,
   TaskStatus,
   TasksFilterMode,
@@ -57,9 +51,29 @@ import type {
   TasksViewMode,
 } from "@/lib/tasks-types";
 
-export function TasksShell(): React.ReactElement {
+export type TasksShellProps = {
+  onOpenPulseForge?: () => void;
+};
+
+export function TasksShell({ onOpenPulseForge }: TasksShellProps = {}): React.ReactElement {
   const { user } = useAuth();
-  const { activeTeam, members } = useTeam();
+  const {
+    activeTeam,
+    members,
+    taskProjects,
+    taskTags,
+    taskTemplates,
+    myTasks,
+    completedToday,
+    projectBundles,
+    refreshTasksWorkspace,
+    refreshProjectBundle,
+    setMyTasks,
+    setTaskProjects,
+    setTaskTemplates,
+    updateProjectBundle,
+    purgeProjectBundle,
+  } = useTeam();
   const { setTasksBridge } = usePulseAssistContext();
   const { startRunFromTask } = useAgentRunsContext();
   const { sites: wpSites } = useWordPressSites();
@@ -72,34 +86,39 @@ export function TasksShell(): React.ReactElement {
   const [filterMode, setFilterMode] = useState<TasksFilterMode>("incomplete");
   const [sortMode, setSortMode] = useState<TasksSortMode>("dueDate");
   const [searchQuery, setSearchQuery] = useState("");
-  const [projects, setProjects] = useState<TaskProject[]>([]);
-  const [templates, setTemplates] = useState<TaskTemplate[]>([]);
-  const [tags, setTags] = useState<TaskTag[]>([]);
-  const [sections, setSections] = useState<TaskSection[]>([]);
-  const [tasks, setTasks] = useState<TeamTask[]>([]);
-  const [projectFiles, setProjectFiles] = useState<TaskFile[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [selectedNotes, setSelectedNotes] = useState<TaskNote[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<TaskFile[]>([]);
   const [selectedSubtasks, setSelectedSubtasks] = useState<TeamTask[]>([]);
-  const [completedToday, setCompletedToday] = useState(0);
-  const [loadingProjects, setLoadingProjects] = useState(false);
-  const [loadingTasks, setLoadingTasks] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
-  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [sectionDialogOpen, setSectionDialogOpen] = useState(false);
   const [creatingSection, setCreatingSection] = useState(false);
-  const [savingTemplate, setSavingTemplate] = useState(false);
   const [editingProject, setEditingProject] = useState<TaskProject | null>(null);
   const [editingSection, setEditingSection] = useState<TaskSection | null>(null);
   const [editingTask, setEditingTask] = useState<TeamTask | null>(null);
 
   const updateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingPatchRef = useRef<Record<string, unknown>>({});
+
+  const activeBundle = activeProjectId != null ? projectBundles[activeProjectId] : null;
+  const inProjectBundle = isProjectBundleNavMode(navMode);
+  const tasks = navMode === "my" ? myTasks : (activeBundle?.tasks ?? []);
+  const sections = navMode === "my" ? [] : (activeBundle?.sections ?? []);
+  const projectFiles = navMode === "my" ? [] : (activeBundle?.files ?? []);
+
+  const regularProjects = useMemo(() => {
+    const regular: TaskProject[] = [];
+    for (const project of taskProjects) {
+      const bundleTasks = projectBundles[project.id]?.tasks;
+      if (isAutomationProject(project, bundleTasks, members)) continue;
+      regular.push(project);
+    }
+    return regular;
+  }, [members, projectBundles, taskProjects]);
 
   const humanMembers = useMemo(() => members.filter((m) => !m.isBot), [members]);
 
@@ -120,9 +139,32 @@ export function TasksShell(): React.ReactElement {
   }, [members]);
 
   const activeProject = useMemo(
-    () => projects.find((p) => p.id === activeProjectId) ?? null,
-    [projects, activeProjectId],
+    () => taskProjects.find((p) => p.id === activeProjectId) ?? null,
+    [taskProjects, activeProjectId],
   );
+
+  const activeBundleIsAutomation = useMemo(
+    () =>
+      activeProject != null
+        ? isAutomationProject(activeProject, activeBundle?.tasks, members)
+        : false,
+    [activeBundle?.tasks, activeProject, members],
+  );
+
+  const taskDialogAutomationContext = useMemo(() => {
+    if (editingTask) {
+      const project = taskProjects.find((p) => p.id === editingTask.projectId);
+      return project
+        ? isAutomationProject(project, projectBundles[project.id]?.tasks, members)
+        : false;
+    }
+    return false;
+  }, [editingTask, members, projectBundles, taskProjects]);
+
+  const taskDialogProjects = useMemo(() => {
+    if (navMode === "project" && activeProject) return [activeProject];
+    return regularProjects;
+  }, [activeProject, navMode, regularProjects]);
 
   useEffect(() => {
     setTasksBridge({
@@ -138,6 +180,48 @@ export function TasksShell(): React.ReactElement {
     [tasks, selectedTaskId],
   );
 
+  const selectedTaskProject = useMemo(
+    () =>
+      selectedTask != null ? (taskProjects.find((p) => p.id === selectedTask.projectId) ?? null) : null,
+    [selectedTask, taskProjects],
+  );
+
+  const selectedTaskAutomationContext = useMemo(
+    () =>
+      selectedTaskProject != null
+        ? isAutomationProject(
+            selectedTaskProject,
+            projectBundles[selectedTaskProject.id]?.tasks,
+            members,
+          )
+        : false,
+    [members, projectBundles, selectedTaskProject],
+  );
+
+  const selectedTaskForExecute = useMemo(() => {
+    if (!selectedTask) return null;
+    const siteId = resolveTaskExecuteSiteId(selectedTask, activeWordPressSiteId);
+    return siteId ? { ...selectedTask, wordpressSiteId: siteId } : selectedTask;
+  }, [activeWordPressSiteId, selectedTask]);
+
+  const automationProjectForTask = useCallback(
+    (task: TeamTask) => taskProjects.find((p) => p.id === task.projectId) ?? null,
+    [taskProjects],
+  );
+
+  const canExecuteTask = useCallback(
+    (task: TeamTask) => {
+      const project = automationProjectForTask(task);
+      return taskSupportsManualAutomationExecute(
+        task,
+        project,
+        project ? projectBundles[project.id]?.tasks : undefined,
+        members,
+      );
+    },
+    [automationProjectForTask, members, projectBundles],
+  );
+
   const displayTasks = useMemo(() => {
     let list = filterTasks(tasks, filterMode);
     list = filterTasksByQuery(list, searchQuery);
@@ -145,60 +229,64 @@ export function TasksShell(): React.ReactElement {
     return list;
   }, [tasks, filterMode, searchQuery, sortMode]);
 
-  const refreshProjects = useCallback(async () => {
-    if (!teamId) return;
-    setLoadingProjects(true);
-    try {
-      const [list, tagList, tpl] = await Promise.all([
-        fetchTaskProjects(teamId),
-        fetchTaskTags(teamId),
-        fetchTaskTemplates(teamId),
-      ]);
-      setProjects(list);
-      setTags(tagList);
-      setTemplates(tpl);
-    } finally {
-      setLoadingProjects(false);
-    }
-  }, [teamId]);
-
-  const refreshMyTasks = useCallback(async () => {
-    if (!teamId) return;
-    setLoadingTasks(true);
-    try {
-      const { tasks: list, completedToday: count } = await fetchMyTasks(teamId);
-      setTasks(list);
-      setCompletedToday(count);
-      setSections([]);
-    } finally {
-      setLoadingTasks(false);
-    }
-  }, [teamId]);
-
-  const refreshProjectData = useCallback(async () => {
-    if (!teamId || activeProjectId == null) {
-      setTasks([]);
-      setSections([]);
-      setProjectFiles([]);
-      return;
-    }
-    setLoadingTasks(true);
-    try {
-      const [taskList, sectionList, files] = await Promise.all([
-        fetchProjectTasks(teamId, activeProjectId),
-        fetchProjectSections(teamId, activeProjectId),
-        fetchProjectFiles(teamId, activeProjectId),
-      ]);
-      setTasks(taskList);
-      setSections(sectionList);
-      setProjectFiles(files);
-      if (selectedTaskId != null && !taskList.some((t) => t.id === selectedTaskId)) {
-        setSelectedTaskId(null);
+  const patchTaskInView = useCallback(
+    (task: TeamTask) => {
+      if (navMode === "my") {
+        setMyTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)));
+        return;
       }
-    } finally {
-      setLoadingTasks(false);
-    }
-  }, [activeProjectId, selectedTaskId, teamId]);
+      if (activeProjectId == null) return;
+      const currentTasks = projectBundles[activeProjectId]?.tasks ?? [];
+      updateProjectBundle(activeProjectId, {
+        tasks: currentTasks.map((t) => (t.id === task.id ? task : t)),
+      });
+    },
+    [activeProjectId, navMode, projectBundles, setMyTasks, updateProjectBundle],
+  );
+
+  const addTaskInView = useCallback(
+    (task: TeamTask) => {
+      if (navMode === "my") {
+        setMyTasks((prev) => [...prev, task]);
+        return;
+      }
+      if (activeProjectId == null) return;
+      const currentTasks = projectBundles[activeProjectId]?.tasks ?? [];
+      updateProjectBundle(activeProjectId, { tasks: [...currentTasks, task] });
+    },
+    [activeProjectId, navMode, projectBundles, setMyTasks, updateProjectBundle],
+  );
+
+  const removeTaskFromView = useCallback(
+    (taskId: number) => {
+      if (navMode === "my") {
+        setMyTasks((prev) => prev.filter((t) => t.id !== taskId));
+        return;
+      }
+      if (activeProjectId == null) return;
+      const currentTasks = projectBundles[activeProjectId]?.tasks ?? [];
+      updateProjectBundle(activeProjectId, {
+        tasks: currentTasks.filter((t) => t.id !== taskId),
+      });
+    },
+    [activeProjectId, navMode, projectBundles, setMyTasks, updateProjectBundle],
+  );
+
+  const setSectionsInView = useCallback(
+    (next: TaskSection[] | ((prev: TaskSection[]) => TaskSection[])) => {
+      if (activeProjectId == null) return;
+      const current = projectBundles[activeProjectId]?.sections ?? [];
+      const resolved = typeof next === "function" ? next(current) : next;
+      updateProjectBundle(activeProjectId, { sections: resolved });
+    },
+    [activeProjectId, projectBundles, updateProjectBundle],
+  );
+
+  useEffect(() => {
+    if (!teamId || !inProjectBundle || activeProjectId == null) return;
+    if (projectBundles[activeProjectId]) return;
+    void refreshProjectBundle(activeProjectId);
+  }, [activeProjectId, inProjectBundle, projectBundles, refreshProjectBundle, teamId]);
 
   const refreshTaskDetail = useCallback(async () => {
     if (!teamId || selectedTaskId == null) {
@@ -209,33 +297,22 @@ export function TasksShell(): React.ReactElement {
     }
     const detail = await fetchTaskDetail(teamId, selectedTaskId);
     if (detail.task) {
-      setTasks((prev) => prev.map((t) => (t.id === detail.task!.id ? detail.task! : t)));
+      patchTaskInView(detail.task);
       setSelectedNotes(detail.notes);
       setSelectedFiles(detail.files);
       setSelectedSubtasks(detail.subtasks);
     }
-  }, [selectedTaskId, teamId]);
-
-  useEffect(() => {
-    if (!teamId) {
-      setProjects([]);
-      setTasks([]);
-      return;
-    }
-    void refreshProjects();
-  }, [teamId, refreshProjects]);
-
-  useEffect(() => {
-    if (navMode === "my") {
-      void refreshMyTasks();
-    } else {
-      void refreshProjectData();
-    }
-  }, [navMode, refreshMyTasks, refreshProjectData]);
+  }, [patchTaskInView, selectedTaskId, teamId]);
 
   useEffect(() => {
     void refreshTaskDetail();
   }, [refreshTaskDetail]);
+
+  const handleAfterAutomationExecute = useCallback(() => {
+    void refreshTasksWorkspace();
+    if (activeProjectId != null) void refreshProjectBundle(activeProjectId);
+    void refreshTaskDetail();
+  }, [activeProjectId, refreshProjectBundle, refreshTaskDetail, refreshTasksWorkspace]);
 
   const flushTaskPatch = useCallback(async () => {
     if (!teamId || selectedTaskId == null) return;
@@ -246,20 +323,33 @@ export function TasksShell(): React.ReactElement {
     try {
       const result = await updateTask(teamId, selectedTaskId, patch as Parameters<typeof updateTask>[2]);
       if (result.ok && result.task) {
-        setTasks((prev) => prev.map((t) => (t.id === result.task!.id ? result.task! : t)));
+        patchTaskInView(result.task);
       }
     } finally {
       setSaving(false);
     }
-  }, [selectedTaskId, teamId]);
+  }, [patchTaskInView, selectedTaskId, teamId]);
 
   const queueTaskPatch = useCallback(
     (patch: Parameters<typeof updateTask>[2]) => {
       pendingPatchRef.current = { ...pendingPatchRef.current, ...patch };
+      if (selectedTaskId != null) {
+        const current = tasks.find((t) => t.id === selectedTaskId);
+        if (current) {
+          const next: TeamTask = { ...current, ...patch };
+          if (patch.executionPayload) {
+            next.executionPayload = { ...current.executionPayload, ...patch.executionPayload };
+          }
+          if (patch.triggerConfig) {
+            next.triggerConfig = { ...current.triggerConfig, ...patch.triggerConfig };
+          }
+          patchTaskInView(next);
+        }
+      }
       if (updateTimerRef.current) clearTimeout(updateTimerRef.current);
       updateTimerRef.current = setTimeout(() => void flushTaskPatch(), 400);
     },
-    [flushTaskPatch],
+    [flushTaskPatch, patchTaskInView, selectedTaskId, tasks],
   );
 
   const handleStatusChange = useCallback(
@@ -267,11 +357,11 @@ export function TasksShell(): React.ReactElement {
       if (!teamId) return;
       const result = await updateTask(teamId, taskId, { status });
       if (result.ok && result.task) {
-        setTasks((prev) => prev.map((t) => (t.id === result.task!.id ? result.task! : t)));
-        if (navMode === "my") void refreshMyTasks();
+        patchTaskInView(result.task);
+        if (navMode === "my") void refreshTasksWorkspace();
       }
     },
-    [navMode, refreshMyTasks, teamId],
+    [navMode, patchTaskInView, refreshTasksWorkspace, teamId],
   );
 
   const handleCreateProject = useCallback(
@@ -279,62 +369,59 @@ export function TasksShell(): React.ReactElement {
       if (!teamId) return false;
       const result = await createTaskProject(teamId, payload);
       if (result.ok && result.project) {
-        setProjects((prev) => [...prev, result.project!]);
+        setTaskProjects((prev) => [...prev, result.project!]);
         setNavMode("project");
         setActiveProjectId(result.project.id);
         return true;
       }
       return false;
     },
-    [teamId],
+    [setTaskProjects, teamId],
   );
 
   const handleUpdateProject = useCallback(
-    async (projectId: number, payload: { keyword: string; title: string; description?: string }) => {
+    async (
+      projectId: number,
+      payload: { keyword: string; title: string; description?: string; wordpressSiteId?: string | null },
+    ) => {
       if (!teamId) return false;
       const result = await updateTaskProject(teamId, projectId, payload);
       if (result.ok && result.project) {
-        setProjects((prev) => prev.map((p) => (p.id === projectId ? result.project! : p)));
+        setTaskProjects((prev) => prev.map((p) => (p.id === projectId ? result.project! : p)));
+        void refreshTasksWorkspace();
+        if (activeProjectId === projectId) {
+          void refreshProjectBundle(projectId);
+        }
         return true;
       }
       return false;
     },
-    [teamId],
+    [activeProjectId, refreshProjectBundle, refreshTasksWorkspace, setTaskProjects, teamId],
   );
-
-  const handleSaveTemplate = useCallback(async () => {
-    if (!teamId || activeProjectId == null || !activeProject?.title?.trim()) return;
-    setSavingTemplate(true);
-    try {
-      const result = await saveTemplateFromProject(teamId, {
-        projectId: activeProjectId,
-        name: activeProject.title.trim(),
-        keyword: activeProject.keyword?.trim() || undefined,
-      });
-      if (result.ok && result.templates) {
-        setTemplates(result.templates);
-      }
-    } finally {
-      setSavingTemplate(false);
-    }
-  }, [activeProject?.keyword, activeProject?.title, activeProjectId, teamId]);
 
   const handleDeleteProject = useCallback(
     async (projectId: number) => {
       if (!teamId) return;
       const result = await deleteTaskProject(teamId, projectId);
       if (result.ok) {
-        setProjects((prev) => prev.filter((p) => p.id !== projectId));
+        setTaskProjects((prev) => prev.filter((p) => p.id !== projectId));
+        purgeProjectBundle(projectId);
         if (activeProjectId === projectId) {
           setNavMode("my");
           setActiveProjectId(null);
           setSelectedTaskId(null);
-          setTasks([]);
-          setSections([]);
+        } else if (selectedTaskId != null) {
+          const selected =
+            tasks.find((t) => t.id === selectedTaskId) ??
+            Object.values(projectBundles).flatMap((bundle) => bundle.tasks).find((t) => t.id === selectedTaskId);
+          if (selected?.projectId === projectId) {
+            setSelectedTaskId(null);
+          }
         }
+        void refreshTasksWorkspace();
       }
     },
-    [activeProjectId, teamId],
+    [activeProjectId, projectBundles, purgeProjectBundle, refreshTasksWorkspace, selectedTaskId, setTaskProjects, tasks, teamId],
   );
 
   const handleCreateTask = useCallback(
@@ -349,56 +436,113 @@ export function TasksShell(): React.ReactElement {
         sectionId = sectionList[0]?.id ?? 0;
       }
 
-      const assigneeIds =
-        payload.assigneeIds && payload.assigneeIds.length > 0
+      const targetProject = taskProjects.find((p) => p.id === payload.projectId);
+      const targetIsAutomation =
+        targetProject != null
+          ? isAutomationProject(targetProject, projectBundles[payload.projectId]?.tasks, members)
+          : false;
+      const pulseId = members.find((m) => isNeoPulseBotMember(m))?.userId ?? null;
+
+      const assigneeIds = targetIsAutomation
+        ? pulseId != null
+          ? [pulseId]
+          : []
+        : payload.assigneeIds && payload.assigneeIds.length > 0
           ? payload.assigneeIds
           : userId > 0
             ? [userId]
             : [];
+
+      const automationUsesCalendar =
+        targetIsAutomation &&
+        !automationUsesTriggerUi(payload.executionKind, payload.scheduleMode ?? "calendar");
 
       const result = await createProjectTask(teamId, payload.projectId, {
         keyword: payload.keyword,
         title: payload.title,
         description: payload.description,
         status: payload.status,
-        dueDate: payload.dueDate,
-        recurrenceRule: payload.recurrenceRule,
+        dueDate: targetIsAutomation && !automationUsesCalendar ? undefined : payload.dueDate,
+        dueTime: targetIsAutomation && !automationUsesCalendar ? undefined : payload.dueTime,
+        recurrenceRule: targetIsAutomation && !automationUsesCalendar ? "none" : payload.recurrenceRule,
+        scheduleMode: targetIsAutomation
+          ? automationUsesCalendar
+            ? "calendar"
+            : "trigger"
+          : payload.scheduleMode ?? "calendar",
+        triggerConfig: targetIsAutomation && !automationUsesCalendar ? payload.triggerConfig : undefined,
         assigneeIds,
-        wordpressSiteId: payload.wordpressSiteId,
-        tagIds: payload.tagIds,
+        tagIds: targetIsAutomation ? undefined : payload.tagIds,
+        executionKind: targetIsAutomation ? payload.executionKind : undefined,
+        executionPayload:
+          targetIsAutomation && payload.executionKind === "post_creator"
+            ? ensurePostCreatorPayload(payload.executionPayload)
+            : targetIsAutomation
+              ? payload.executionPayload
+              : undefined,
         sectionId,
       });
       if (result.ok && result.task) {
         if (navMode === "my") {
-          void refreshMyTasks();
+          addTaskInView(result.task);
+          void refreshTasksWorkspace();
         } else if (activeProjectId === payload.projectId) {
-          setTasks((prev) => [...prev, result.task!]);
+          addTaskInView(result.task);
         } else {
-          void refreshProjectData();
+          void refreshProjectBundle(payload.projectId);
         }
         setSelectedTaskId(result.task.id);
         return true;
       }
       return false;
     },
-    [activeProjectId, navMode, refreshMyTasks, refreshProjectData, sections, teamId, userId],
+    [
+      activeProjectId,
+      addTaskInView,
+      members,
+      navMode,
+      projectBundles,
+      refreshProjectBundle,
+      refreshTasksWorkspace,
+      sections,
+      taskProjects,
+      teamId,
+      userId,
+    ],
   );
 
   const handleInlineAddTask = useCallback(
     async (sectionId: number, title: string) => {
       if (!teamId || activeProjectId == null) return;
       const keyword = title.toLowerCase().replace(/\s+/g, "-");
-      const result = await createProjectTask(teamId, activeProjectId, {
-        keyword,
-        title,
-        sectionId,
-        assigneeIds: userId > 0 ? [userId] : [],
-      });
+      const pulseId = members.find((m) => isNeoPulseBotMember(m))?.userId ?? null;
+      const result = await createProjectTask(
+        teamId,
+        activeProjectId,
+        activeBundleIsAutomation
+          ? {
+              keyword,
+              title,
+              sectionId,
+              scheduleMode: "trigger",
+              recurrenceRule: "none",
+              assigneeIds: pulseId != null ? [pulseId] : [],
+              executionKind: "content_optimizer",
+              executionPayload: { updateMode: "update" },
+              triggerConfig: defaultTaskTriggerConfig(),
+            }
+          : {
+              keyword,
+              title,
+              sectionId,
+              assigneeIds: userId > 0 ? [userId] : [],
+            },
+      );
       if (result.ok && result.task) {
-        setTasks((prev) => [...prev, result.task!]);
+        addTaskInView(result.task);
       }
     },
-    [activeProjectId, teamId, userId],
+    [activeBundleIsAutomation, activeProjectId, addTaskInView, members, teamId, userId],
   );
 
   const handleMoveTask = useCallback(
@@ -406,10 +550,10 @@ export function TasksShell(): React.ReactElement {
       if (!teamId) return;
       const result = await updateTask(teamId, taskId, { sectionId });
       if (result.ok && result.task) {
-        setTasks((prev) => prev.map((t) => (t.id === result.task!.id ? result.task! : t)));
+        patchTaskInView(result.task);
       }
     },
-    [teamId],
+    [patchTaskInView, teamId],
   );
 
   const handleCreateSection = useCallback(
@@ -423,7 +567,7 @@ export function TasksShell(): React.ReactElement {
           sortOrder: sections.length,
         });
         if (result.ok && result.section) {
-          setSections((prev) => [...prev, result.section!]);
+          setSectionsInView((prev) => [...prev, result.section!]);
           return true;
         }
         return false;
@@ -431,7 +575,7 @@ export function TasksShell(): React.ReactElement {
         setCreatingSection(false);
       }
     },
-    [activeProjectId, sections.length, teamId],
+    [activeProjectId, sections.length, setSectionsInView, teamId],
   );
 
   const handleUpdateSection = useCallback(
@@ -439,12 +583,12 @@ export function TasksShell(): React.ReactElement {
       if (!teamId || activeProjectId == null) return false;
       const result = await updateProjectSection(teamId, activeProjectId, sectionId, payload);
       if (result.ok && result.section) {
-        setSections((prev) => prev.map((s) => (s.id === sectionId ? result.section! : s)));
+        setSectionsInView((prev) => prev.map((s) => (s.id === sectionId ? result.section! : s)));
         return true;
       }
       return false;
     },
-    [activeProjectId, teamId],
+    [activeProjectId, setSectionsInView, teamId],
   );
 
   const handleDeleteSection = useCallback(
@@ -455,14 +599,19 @@ export function TasksShell(): React.ReactElement {
       );
       const result = await deleteProjectSection(teamId, activeProjectId, sectionId);
       if (result.ok) {
-        setSections((prev) => prev.filter((s) => s.id !== sectionId));
-        setTasks((prev) => prev.filter((t) => t.sectionId !== sectionId));
+        setSectionsInView((prev) => prev.filter((s) => s.id !== sectionId));
+        if (activeProjectId != null) {
+          const currentTasks = projectBundles[activeProjectId]?.tasks ?? [];
+          updateProjectBundle(activeProjectId, {
+            tasks: currentTasks.filter((t) => t.sectionId !== sectionId),
+          });
+        }
         if (selectedTaskId != null && deletedTaskIds.has(selectedTaskId)) {
           setSelectedTaskId(null);
         }
       }
     },
-    [activeProjectId, selectedTaskId, tasks, teamId],
+    [activeProjectId, projectBundles, selectedTaskId, setSectionsInView, tasks, teamId, updateProjectBundle],
   );
 
   const handleAddNote = useCallback(
@@ -484,13 +633,15 @@ export function TasksShell(): React.ReactElement {
         const result = await uploadTaskFile(teamId, selectedTaskId, file);
         if (result.ok && result.file) {
           setSelectedFiles((prev) => [...prev, result.file!]);
-          if (navMode === "project") void refreshProjectData();
+          if (inProjectBundle && activeProjectId != null) {
+            void refreshProjectBundle(activeProjectId);
+          }
         }
       } finally {
         setUploading(false);
       }
     },
-    [navMode, refreshProjectData, selectedTaskId, teamId],
+    [activeProjectId, inProjectBundle, refreshProjectBundle, selectedTaskId, teamId],
   );
 
   const handleAddSubtask = useCallback(
@@ -512,12 +663,12 @@ export function TasksShell(): React.ReactElement {
       if (!teamId) return false;
       const result = await updateTask(teamId, taskId, payload);
       if (result.ok && result.task) {
-        setTasks((prev) => prev.map((t) => (t.id === taskId ? result.task! : t)));
+        patchTaskInView(result.task);
         return true;
       }
       return false;
     },
-    [teamId],
+    [patchTaskInView, teamId],
   );
 
   const handleDeleteTaskById = useCallback(
@@ -525,19 +676,58 @@ export function TasksShell(): React.ReactElement {
       if (!teamId) return;
       const result = await deleteTask(teamId, taskId);
       if (result.ok) {
-        setTasks((prev) => prev.filter((t) => t.id !== taskId));
+        removeTaskFromView(taskId);
         if (selectedTaskId === taskId) {
           setSelectedTaskId(null);
         }
       }
     },
-    [selectedTaskId, teamId],
+    [removeTaskFromView, selectedTaskId, teamId],
+  );
+
+  const handleDeleteAutomationOrTask = useCallback(
+    async (taskId: number) => {
+      if (!teamId) return;
+      const task =
+        tasks.find((t) => t.id === taskId) ??
+        (activeProjectId != null
+          ? projectBundles[activeProjectId]?.tasks.find((t) => t.id === taskId)
+          : undefined);
+      if (task) {
+        const project = taskProjects.find((p) => p.id === task.projectId);
+        if (project && isAutomationProject(project, projectBundles[project.id]?.tasks, members)) {
+          await handleDeleteProject(task.projectId);
+          return;
+        }
+      }
+      await handleDeleteTaskById(taskId);
+    },
+    [
+      activeProjectId,
+      handleDeleteProject,
+      handleDeleteTaskById,
+      members,
+      projectBundles,
+      taskProjects,
+      tasks,
+      teamId,
+    ],
   );
 
   const handleDeleteTask = useCallback(async () => {
     if (selectedTaskId == null) return;
+    if (selectedTaskAutomationContext && selectedTask) {
+      await handleDeleteProject(selectedTask.projectId);
+      return;
+    }
     await handleDeleteTaskById(selectedTaskId);
-  }, [handleDeleteTaskById, selectedTaskId]);
+  }, [
+    handleDeleteProject,
+    handleDeleteTaskById,
+    selectedTask,
+    selectedTaskAutomationContext,
+    selectedTaskId,
+  ]);
 
   if (!teamId || !activeTeam) {
     return (
@@ -548,19 +738,13 @@ export function TasksShell(): React.ReactElement {
   }
 
   const mainView = (() => {
-    if (loadingTasks) {
-      return (
-        <div className="flex flex-1 items-center justify-center">
-          <p className="text-base text-muted-foreground">Loading tasks…</p>
-        </div>
-      );
-    }
     if (viewMode === "board") {
       return (
         <TasksBoardView
           tasks={displayTasks}
           selectedTaskId={selectedTaskId}
           memberNames={memberNames}
+          members={members}
           onSelectTask={setSelectedTaskId}
           onStatusChange={(id, status) => void handleStatusChange(id, status)}
         />
@@ -584,12 +768,19 @@ export function TasksShell(): React.ReactElement {
       <TasksListView
         sections={sections}
         tasks={displayTasks}
-        tags={tags}
+        tags={taskTags}
         filterMode={filterMode}
         selectedTaskId={selectedTaskId}
         memberNames={memberNames}
+        members={members}
         siteOptions={siteOptions}
         myTasksMode={navMode === "my"}
+        automationMode={navMode === "my"}
+        scheduleColumnLabel={navMode === "my" ? "Trigger" : "Repeat"}
+        showExecuteAction={navMode === "my"}
+        canExecuteTask={canExecuteTask}
+        automationProjectForTask={automationProjectForTask}
+        teamId={teamId}
         onSelectTask={setSelectedTaskId}
         onStatusChange={(id, status) => void handleStatusChange(id, status)}
         onAddTask={(sectionId, title) => void handleInlineAddTask(sectionId, title)}
@@ -605,7 +796,8 @@ export function TasksShell(): React.ReactElement {
           setEditingTask(task);
           setTaskDialogOpen(true);
         }}
-        onDeleteTask={(taskId) => void handleDeleteTaskById(taskId)}
+        onDeleteTask={(taskId) => void handleDeleteAutomationOrTask(taskId)}
+        onExecuteTask={() => handleAfterAutomationExecute()}
       />
     );
   })();
@@ -615,8 +807,7 @@ export function TasksShell(): React.ReactElement {
       <TasksNavSidebar
         navMode={navMode}
         activeProjectId={activeProjectId}
-        projects={projects}
-        loading={loadingProjects}
+        regularProjects={regularProjects}
         onSelectMyTasks={() => {
           setNavMode("my");
           setSelectedTaskId(null);
@@ -630,12 +821,12 @@ export function TasksShell(): React.ReactElement {
           setEditingProject(null);
           setProjectDialogOpen(true);
         }}
-        onOpenTemplates={() => setTemplateDialogOpen(true)}
         onEditProject={(project) => {
           setEditingProject(project);
           setProjectDialogOpen(true);
         }}
         onDeleteProject={(projectId) => void handleDeleteProject(projectId)}
+        onOpenPulseForge={onOpenPulseForge}
       />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <TasksContextHeader
@@ -643,12 +834,10 @@ export function TasksShell(): React.ReactElement {
           viewMode={viewMode}
           completedToday={completedToday}
           onViewModeChange={setViewMode}
-        />
-        <TasksFilterToolbar
           searchQuery={searchQuery}
           filterMode={filterMode}
           sortMode={sortMode}
-          addTaskDisabled={projects.length === 0}
+          addTaskDisabled={regularProjects.length === 0}
           onSearchChange={setSearchQuery}
           onFilterChange={setFilterMode}
           onSortChange={setSortMode}
@@ -661,72 +850,83 @@ export function TasksShell(): React.ReactElement {
             setSectionDialogOpen(true);
           }}
           showAddSection={navMode === "project" && viewMode === "list" && !sectionDialogOpen && !creatingSection}
-          showSaveTemplate={navMode === "project" && activeProjectId != null}
-          saveTemplateDisabled={savingTemplate || tasks.length === 0}
-          onSaveTemplate={() => void handleSaveTemplate()}
         />
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          {mainView}
-          {selectedTask ? (
-            <TaskDetailPane
-              task={selectedTask}
-              notes={selectedNotes}
-              files={selectedFiles}
-              subtasks={selectedSubtasks}
-              tags={tags}
-              members={members}
-              mentionMembers={humanMembers}
-              siteOptions={siteOptions}
-              memberNames={memberNames}
-              teamId={teamId}
-              saving={saving}
-              uploading={uploading}
-              onClose={() => setSelectedTaskId(null)}
-              onMarkDone={() => void handleStatusChange(selectedTask.id, "done")}
-              onUpdate={queueTaskPatch}
-              onAddNote={(body, ids) => void handleAddNote(body, ids)}
-              onUploadFile={(file) => void handleUploadFile(file)}
-              onAddSubtask={(title) => void handleAddSubtask(title)}
-              onToggleSubtask={(id, status) => void handleStatusChange(id, status)}
-              onDelete={() => void handleDeleteTask()}
-              onExecuteWithAgent={
-                selectedTask.executionKind
-                  ? () => {
-                      if (!taskCanExecuteWithAgent(selectedTask)) return;
-                      void startRunFromTask(selectedTask);
-                    }
-                  : undefined
-              }
-              executeWithAgentDisabledReason={
-                selectedTask.executionKind && !taskCanExecuteWithAgent(selectedTask)
-                  ? "Add executionPayload.targetUrl on the task to run with an agent."
-                  : null
-              }
-            />
-          ) : null}
-        </div>
+        <div className="min-h-0 flex-1 overflow-hidden">{mainView}</div>
       </div>
+      <TaskDetailPane
+        open={selectedTask != null}
+        task={selectedTask}
+        notes={selectedNotes}
+        files={selectedFiles}
+        subtasks={selectedSubtasks}
+        tags={taskTags}
+        members={members}
+        mentionMembers={humanMembers}
+        siteOptions={siteOptions}
+        memberNames={memberNames}
+        teamId={teamId}
+        saving={saving}
+        uploading={uploading}
+        isAutomationContext={selectedTaskAutomationContext}
+        automationProject={selectedTaskProject}
+        onClose={() => setSelectedTaskId(null)}
+        onMarkDone={() => {
+          if (selectedTask) void handleStatusChange(selectedTask.id, "done");
+        }}
+        onUpdate={queueTaskPatch}
+        onAddNote={(body, ids) => void handleAddNote(body, ids)}
+        onUploadFile={(file) => void handleUploadFile(file)}
+        onAddSubtask={(title) => void handleAddSubtask(title)}
+        onToggleSubtask={(id, status) => void handleStatusChange(id, status)}
+        onDelete={() => void handleDeleteTask()}
+        onExecuteAutomationTask={handleAfterAutomationExecute}
+        onExecuteWithAgent={
+          selectedTaskForExecute && taskHasPulseAssignee(selectedTaskForExecute, members)
+            ? async () => {
+                if (!taskCanExecuteWithAgent(selectedTaskForExecute, members)) return;
+                const result = await startRunFromTask(
+                  {
+                    ...selectedTaskForExecute,
+                    executionKind: resolveEffectiveExecutionKind(selectedTaskForExecute),
+                  },
+                  { openSidebar: true },
+                );
+                void result;
+              }
+            : undefined
+        }
+        executeWithAgentDisabledReason={
+          selectedTaskForExecute && taskHasPulseAssignee(selectedTaskForExecute, members)
+            ? !taskCanExecuteWithAgent(selectedTaskForExecute, members, activeWordPressSiteId)
+              ? !resolveTaskExecuteSiteId(selectedTaskForExecute, activeWordPressSiteId)
+                ? "Set a client on the project."
+                : "Complete execution settings."
+              : null
+            : null
+        }
+      />
       <NewProjectDialog
         open={projectDialogOpen}
         onOpenChange={(open) => {
           setProjectDialogOpen(open);
           if (!open) setEditingProject(null);
         }}
-        templates={templates}
+        teamId={teamId}
+        templates={taskTemplates}
         sites={siteOptions}
+        members={members}
+        tags={taskTags}
         defaultSiteId={activeWordPressSiteId}
         editProject={editingProject}
+        editProjectTasks={
+          editingProject
+            ? (projectBundles[editingProject.id]?.tasks ??
+              (activeProjectId === editingProject.id ? tasks : []))
+            : []
+        }
+        onTemplatesChange={setTaskTemplates}
         onCreate={handleCreateProject}
         onUpdate={handleUpdateProject}
-      />
-      <TemplateManagerDialog
-        open={templateDialogOpen}
-        onOpenChange={setTemplateDialogOpen}
-        teamId={teamId}
-        templates={templates}
-        activeProjectId={navMode === "project" ? activeProjectId : null}
-        activeProjectTitle={activeProject?.title ?? null}
-        onTemplatesChange={setTemplates}
       />
       <NewTaskDialog
         open={taskDialogOpen}
@@ -734,13 +934,13 @@ export function TasksShell(): React.ReactElement {
           setTaskDialogOpen(open);
           if (!open) setEditingTask(null);
         }}
-        projects={projects}
-        defaultProjectId={navMode === "project" ? activeProjectId : null}
+        projects={taskDialogProjects}
+        defaultProjectId={inProjectBundle ? activeProjectId : null}
+        automationContext={taskDialogAutomationContext}
         editTask={editingTask}
         members={members}
-        siteOptions={siteOptions}
-        tags={tags}
-        defaultClientId={activeWordPressSiteId}
+        tags={taskTags}
+        sites={siteOptions}
         onCreate={handleCreateTask}
         onUpdate={handleUpdateTask}
       />

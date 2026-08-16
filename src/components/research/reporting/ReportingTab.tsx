@@ -14,13 +14,9 @@ import {
 import { useWordPressSites } from "@/hooks/use-wordpress-sites";
 import { useWordPressOptimization } from "@/contexts/wordpress-optimization-context";
 import { loadApiKey } from "@/lib/api";
-import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { notify } from "@/lib/app-notifications";
 import { NOTIFY_ADD_AN_OPENROUTER_API_KEY_IN_SETTINGS, NOTIFY_COULD_NOT_COPY, NOTIFY_DOWNLOADED_MARKDOWN_FILE, NOTIFY_DOWNLOADED_OUTLINE_JSON, NOTIFY_DOWNLOADED_OUTLINE_POST_BODY, NOTIFY_GENERATE_A_REPORT_FIRST, NOTIFY_GSC_REPORT_GENERATED, NOTIFY_MARKDOWN_COPIED, NOTIFY_REPORT_ADDED_TO_KNOWLEDGE_BASE, NOTIFY_REPORT_CANCELLED, NOTIFY_SET_A_PUBLIC_SITE_URL_FOR_THIS_PROPERTY_ } from "@/lib/notify-messages";
-import { fetchGscQueriesRawForReporting } from "@/lib/gsc-reporting/gsc-reporting-fetch";
-import { runGscReportingPipeline } from "@/lib/gsc-reporting/gsc-reporting-pipeline";
-import { buildSapEntityGrounding } from "@/lib/gsc-reporting/gsc-reporting-sap-entity-context";
-import { listSiteUrlsForMode } from "@/lib/local-analysis-site-context";
+import { runGscReportingAgentHarness } from "@/lib/gsc-reporting/gsc-reporting-agent-harness";
 import { getPublicSiteUrl } from "@/lib/wordpress-site-public-url";
 import type {
   GscReportingOutlineResult,
@@ -32,15 +28,18 @@ import { cn } from "@/lib/utils";
 import { pickClusterMarkdownForPipeline } from "@/lib/gsc-reporting/gsc-query-cluster-ai";
 import type { GscFetchDateRange } from "@/lib/gsc-reporting/gsc-console-ui-url";
 import {
-  computeMomCompareRanges,
+  computeCompareRangesForPreset,
   formatLocalYmd,
   validateGscCompareFetchRanges,
   type GscCompareRanges,
   type GscReportingComparePresetId,
 } from "@/lib/gsc-reporting/gsc-fetch-date-presets";
+import { getPublicSiteUrl } from "@/lib/wordpress-site-public-url";
 import { GscReportingSectionsPanel } from "@/components/research/reporting/GscReportingSectionsPanel";
 import { GscReportingWorkspaceHeader } from "@/components/research/reporting/GscReportingWorkspaceHeader";
 import { gscReportingDetailsCanOpen } from "@/components/research/reporting/GscReportingDetailsPanel";
+import type { GeneratorWorkspaceChromeBindings } from "@/components/blog-generator/generator-workspace-chrome-bindings";
+import { WORKSPACE_DETAILS_DIM_OVERLAY_CLASS } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import {
   SEO_WORKSPACE_BODY_SCROLL_CLASS,
   SEO_WORKSPACE_HEADER_CLASS,
@@ -91,7 +90,10 @@ function triggerBlobDownload(content: string, filename: string, mime: string): v
   URL.revokeObjectURL(url);
 }
 
-export function ReportingTab() {
+export type ReportingTabProps = GeneratorWorkspaceChromeBindings;
+
+export function ReportingTab({ activeSection, onSectionChange }: ReportingTabProps) {
+  const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false);
   const { sites } = useWordPressSites();
   const { activeWordPressSiteId, setActiveWordPressSiteId } = useWordPressOptimization();
   const enabledSites = useMemo(() => sites.filter((s) => s.enabled !== false), [sites]);
@@ -124,7 +126,9 @@ export function ReportingTab() {
   const [gscFetchRange, setGscFetchRange] = useState<GscFetchDateRange | null>(null);
   const [gscCompareFetchRange, setGscCompareFetchRange] = useState<GscFetchDateRange | null>(null);
   const [gscFetchPreset, setGscFetchPreset] = useState<GscReportingComparePresetId>("mom");
-  const [compareRangeDraft, setCompareRangeDraft] = useState<GscCompareRanges>(() => computeMomCompareRanges());
+  const [compareRangeDraft, setCompareRangeDraft] = useState<GscCompareRanges>(() =>
+    computeCompareRangesForPreset("mom"),
+  );
   const todayYmdMax = useMemo(() => formatLocalYmd(new Date()), []);
   const [lastOutline, setLastOutline] = useState<GscReportingOutlineResult | null>(null);
   const [outlinePostJson, setOutlinePostJson] = useState<string | null>(null);
@@ -134,7 +138,7 @@ export function ReportingTab() {
 
   useEffect(() => {
     if (gscFetchPreset === "custom_compare") return;
-    setCompareRangeDraft(computeMomCompareRanges());
+    setCompareRangeDraft(computeCompareRangesForPreset(gscFetchPreset));
   }, [gscFetchPreset]);
 
   const filesForPipeline = useMemo(() => {
@@ -169,48 +173,26 @@ export function ReportingTab() {
     setProgress({ step: 0, total: 1, label: "Starting…" });
     resetReportArtifacts();
     try {
-      let pipelineFiles: { name: string; content: string }[];
-      if (files.length === 0) {
-        const gscSiteUrl = reportingPublicSiteUrl.trim();
-        if (!gscSiteUrl) {
-          notify.error(NOTIFY_SET_A_PUBLIC_SITE_URL_FOR_THIS_PROPERTY_);
-          return;
-        }
+      const comparePreset =
+        gscFetchPreset === "yoy" ? "yoy" : gscFetchPreset === "mom" ? "mom" : undefined;
+      const useCached = files.length > 0;
+      if (!useCached && !reportingPublicSiteUrl.trim()) {
+        notify.error(NOTIFY_SET_A_PUBLIC_SITE_URL_FOR_THIS_PROPERTY_);
+        return;
+      }
+      if (!useCached) {
         const check = validateGscCompareFetchRanges(compareRangeDraft.primary, compareRangeDraft.compare);
         if (!check.ok) {
           notify.error(check.error);
           return;
         }
-        setProgress({ step: 0, total: 1, label: "Fetching GSC bundle…" });
-        const res = await fetchGscQueriesRawForReporting(gscSiteUrl, compareRangeDraft);
-        setFiles(res.files);
-        setGscFetchRange({ startDate: res.startDate, endDate: res.endDate });
-        setGscCompareFetchRange({ startDate: res.compareStartDate, endDate: res.compareEndDate });
-        pipelineFiles = res.files.map((f) => ({ ...f }));
-        const md = pickClusterMarkdownForPipeline(res.files, {});
-        if (md) pipelineFiles.push({ name: "Queries-AI-clusters.md", content: md });
-      } else {
-        pipelineFiles = filesForPipeline;
       }
 
-      const allowlistUrls = (await listSiteUrlsForMode(site, "entity")) ?? [];
-      const entityTail = site.entitySitemapUrl?.trim().split("/").pop();
-      const sapEntityGrounding = buildSapEntityGrounding({
-        files: pipelineFiles,
-        allowlistUrls,
-        sourceLabel: entityTail
-          ? `Entity sitemap (${entityTail})`
-          : "Entity URLs from WordPress sitemap",
-        publicSiteUrl: getPublicSiteUrl(site),
-      });
-
-      const result = await runGscReportingPipeline({
-        apiKey,
-        model: getResearchModel(site.id),
-        siteName: site.name,
-        siteUrl: getPublicSiteUrl(site),
-        files: pipelineFiles,
-        sapEntityGrounding,
+      const result = await runGscReportingAgentHarness({
+        site,
+        comparePreset: comparePreset ?? "mom",
+        compareRanges: gscFetchPreset === "custom_compare" ? compareRangeDraft : undefined,
+        cachedFiles: useCached ? filesForPipeline : undefined,
         signal: abortRef.current.signal,
         onProgress,
         onOutlineReady: ({ outline, outlineRequestBodyJson }) => {
@@ -224,6 +206,13 @@ export function ReportingTab() {
           setSectionMap((m) => ({ ...m, [row.index]: row }));
         },
       });
+
+      if (!useCached) {
+        setFiles(result.files);
+        setGscFetchRange(result.fetchRange);
+        setGscCompareFetchRange(result.compareFetchRange);
+      }
+
       setReportMd(result.markdown);
       setLastOutline(result.outline);
       setOutlinePostJson(result.outlineRequestBodyJson);
@@ -248,6 +237,7 @@ export function ReportingTab() {
     filesForPipeline,
     reportingPublicSiteUrl,
     compareRangeDraft,
+    gscFetchPreset,
     onProgress,
     resetReportArtifacts,
   ]);
@@ -346,7 +336,7 @@ export function ReportingTab() {
             GSC Reporting
           </h2>
         </div>
-        <div className="flowbie-zone-tile--data px-2 py-3 text-[1rem] leading-normal text-muted-foreground">
+        <div className="neo-pulse-zone-tile--data px-2 py-3 text-[1rem] leading-normal text-muted-foreground">
           Connect a WordPress site and select it in the header to run reporting.
         </div>
       </div>
@@ -356,20 +346,26 @@ export function ReportingTab() {
   return (
     <div className={SEO_WORKSPACE_SHELL_CLASS}>
       {!site ? (
-        <div className="flowbie-zone-tile--data px-2 py-3 text-base leading-normal text-muted-foreground">
+        <div className="neo-pulse-zone-tile--data px-2 py-3 text-base leading-normal text-muted-foreground">
           Select a site in the header.
         </div>
       ) : !site.siteUrl?.trim() ? (
-        <div className="flowbie-zone-tile--data px-2 py-3 text-base leading-normal text-muted-foreground">
+        <div className="neo-pulse-zone-tile--data px-2 py-3 text-base leading-normal text-muted-foreground">
           This site has no URL saved.
         </div>
       ) : (
         <>
           <div className={SEO_WORKSPACE_HEADER_CLASS}>
             <GscReportingWorkspaceHeader
+              activeSection={activeSection}
+              onSectionChange={onSectionChange}
+              onDetailsOpenChange={setDetailsDrawerOpen}
               busy={busy}
               progress={progress}
               canOpenDetails={canOpenDetails}
+              outlineSections={outlineSections}
+              sectionMap={sectionMap}
+              generatingSectionIndex={generatingSectionIndex}
               toolbarProps={{
                 busy,
                 gscFetchPreset,
@@ -398,7 +394,10 @@ export function ReportingTab() {
             />
           </div>
 
-          <div className={SEO_WORKSPACE_BODY_SCROLL_CLASS}>
+          <div className={cn(SEO_WORKSPACE_BODY_SCROLL_CLASS, "relative")}>
+            {detailsDrawerOpen ? (
+              <div className={WORKSPACE_DETAILS_DIM_OVERLAY_CLASS} aria-hidden />
+            ) : null}
           {outlineSections && outlineSections.length > 0 ? (
             <GscReportingSectionsPanel
               plans={outlineSections}
@@ -415,7 +414,7 @@ export function ReportingTab() {
           ) : null}
 
           {reportMd?.trim() ? (
-            <div className="flowbie-zone-tile--analysis space-y-2 px-2 py-2 sm:px-3">
+            <div className="neo-pulse-zone-tile--analysis space-y-2 px-2 py-2 sm:px-3">
               <div className="min-h-[1rem] text-base font-semibold uppercase leading-normal tracking-wide text-muted-foreground">
                 Stitched report preview
               </div>

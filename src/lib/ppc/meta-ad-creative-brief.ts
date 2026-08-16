@@ -10,9 +10,12 @@ import {
   visualToolPaletteMarkdown,
 } from "@/lib/ppc/meta-ad-visual-tool-palette";
 import {
+  META_IMAGE_NO_SPEC_FRAME_RULE,
   META_VALUE_PROPOSITION_RULES,
   resolveMetaAdvertiserLabel,
 } from "@/lib/ppc/meta-ad-prompt-builder";
+import { normalizeMetaOnImageText } from "@/lib/ppc/meta-ad-image-on-image-text";
+import { parseMetaDeviceScreenLayout } from "@/lib/ppc/meta-ad-device-screen-layout";
 import { META_ADS_COPY_LIMITS_PROMPT } from "@/lib/ppc/meta-ads-field-limits";
 import type {
   MetaAdColorPalette,
@@ -35,6 +38,15 @@ const VALID_VIBES = new Set([
 
 const VALID_STYLES = new Set<MetaAdCreativeStyle>(["designed_graphic", "photo_hero"]);
 
+export type MetaCreativeBriefVisualToolMode = "fixed" | "context";
+
+export const META_CREATIVE_BRIEF_CONTEXT_MODE_PROMPT = `Context mode (random per post):
+- Vary visualToolPalette degrees per post from page context. Do not reuse the same abstract tool mix every time.
+- Prefer realism: photo_focal, device_screen with realistic WordPress or Elementor layouts, clean-premium or warm-local vibes.
+- Avoid neon-tech holographic overlays, floating chart dashboards, social icon sunbursts, and wireframe-only screens unless the topic explicitly demands abstract tech art.
+- When localityCity is set in the payload, decide city_skyline from page context: subtle recognizable skyline or cityscape only when local intent fits. Otherwise keep city_skyline at 0.
+- Keep icon_cluster and accent_shapes moderate; do not let abstract icons replace a believable environment.`;
+
 export function countWords(value: string): number {
   return value.trim().split(/\s+/).filter(Boolean).length;
 }
@@ -53,6 +65,12 @@ visualVibe and backgroundTreatment set mood and palette.
 When userColorPalette is set in the payload, use those exact hex colors in backgroundTreatment.
 useMapOverlay: when true, set map_overlay.degree above zero.
 onImageHeadline must be natural English, never the raw focus keyword verbatim or jammed.
+onImageSubline must differ from onImageHeadline and appear once only under the headline, never repeated as footer or badge text.
+visualConcept describes graphics, layout, and motifs only. Do not quote or repeat onImageHeadline or onImageSubline in visualConcept.
+visualConcept must never instruct design-spec framing, placement labels, or platform meta text as on-image copy.
+When device_screen.degree > 0, set deviceScreenLayout from post context (web design → elementor_editor; WordPress workflow → wordpress_admin or neo_pulse_dashboard; local/service business → published_homepage or published_service_page). visualConcept must describe recognizable page-builder or site structure, not data dashboards or chart UI. When device_screen.degree is 0, set deviceScreenLayout to none.
+Avoid holographic dashboards, floating UI windows, neon circuit overlays, and duplicate chart icons when device_screen is off.
+${META_IMAGE_NO_SPEC_FRAME_RULE}
 ${META_VALUE_PROPOSITION_RULES}
 ${META_FOCUS_KEYWORD_GRAMMAR_RULES}
 ${META_ADS_COPY_LIMITS_PROMPT}
@@ -68,11 +86,13 @@ export function buildMetaCreativeBriefUserPayload(options: {
   localityRegion?: string;
   colorPalette?: MetaAdColorPalette;
   visualToolPalette?: MetaAdVisualToolPalette;
+  visualToolMode?: MetaCreativeBriefVisualToolMode;
 }): string {
   const colorConstraint = formatMetaColorPaletteBriefConstraint(options.colorPalette);
   const toolConstraint = formatMetaVisualToolPaletteBriefConstraint(options.visualToolPalette);
   return JSON.stringify({
     task: "meta_ad_creative_brief",
+    visualToolMode: options.visualToolMode ?? "fixed",
     focusKeyword: options.focusKeyword?.trim() || "",
     placement: options.placement,
     placementLabel: metaAdPlacementLabel(options.placement),
@@ -93,6 +113,8 @@ export function buildMetaCreativeBriefUserPayload(options: {
       useMapOverlay: false,
       creativeStyle: "designed_graphic | photo_hero",
       visualToolPalette: META_VISUAL_TOOL_OUTPUT_SCHEMA,
+      deviceScreenLayout:
+        "none | elementor_editor | wordpress_admin | published_homepage | published_service_page | neo_pulse_dashboard (from post context when device_screen.degree > 0)",
       referenceAdPattern:
         "optional: ad-01-bofu-action-list | ad-02-bofu-wordpress-connected | ad-03-mofu-agency-scale | ad-04-mofu-enterprise-flows | ad-05-tofu-local-search | ad-06-tofu-awareness",
     },
@@ -132,7 +154,7 @@ export function parseMetaCreativeBrief(raw: unknown, _focusKeyword?: string): Me
     throw new Error("Creative brief onImageSubline exceeds 5 words.");
   }
 
-  return {
+  const parsedBrief: MetaAdCreativeBrief = {
     strategyStatement,
     captionHook,
     onImageHeadline,
@@ -143,8 +165,11 @@ export function parseMetaCreativeBrief(raw: unknown, _focusKeyword?: string): Me
     useMapOverlay,
     creativeStyle,
     visualToolPalette,
+    deviceScreenLayout: parseMetaDeviceScreenLayout(root.deviceScreenLayout),
     referenceAdPattern: root.referenceAdPattern?.trim() || undefined,
   };
+
+  return normalizeMetaOnImageText(parsedBrief);
 }
 
 export function applyUserVisualToolPaletteToBrief(
@@ -175,6 +200,7 @@ export function buildCreativeBriefMarkdown(brief: MetaAdCreativeBrief): string {
     `- Background: ${brief.backgroundTreatment}`,
     `- Style: ${brief.creativeStyle}`,
     `- Map overlay: ${brief.useMapOverlay ? "yes" : "no"}`,
+    `- Device screen layout: ${brief.deviceScreenLayout ?? "none"}`,
     "",
     "## Visual tool palette (degree)",
     visualToolPaletteMarkdown(brief),

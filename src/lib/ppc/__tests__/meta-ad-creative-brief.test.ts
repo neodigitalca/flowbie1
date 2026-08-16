@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildMetaCreativeBriefSystemPrompt,
   buildCreativeBriefMarkdown,
   countWords,
   parseMetaCreativeBrief,
 } from "@/lib/ppc/meta-ad-creative-brief";
+import { META_IMAGE_NO_SPEC_FRAME_RULE } from "@/lib/ppc/meta-ad-prompt-builder";
 
 describe("meta-ad-creative-brief", () => {
   const validRaw = {
@@ -62,5 +64,17 @@ describe("meta-ad-creative-brief", () => {
 
   it("counts words", () => {
     expect(countWords("Get Found Locally")).toBe(3);
+  });
+
+  it("collapses consecutive duplicate words in on-image text", () => {
+    const brief = parseMetaCreativeBrief({
+      ...validRaw,
+      onImageHeadline: "Websites That That Rank",
+    });
+    expect(brief.onImageHeadline).toBe("Websites That Rank");
+  });
+
+  it("includes no-spec-frame rule in system prompt", () => {
+    expect(buildMetaCreativeBriefSystemPrompt("Acme")).toContain(META_IMAGE_NO_SPEC_FRAME_RULE);
   });
 });

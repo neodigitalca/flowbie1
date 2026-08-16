@@ -5,7 +5,7 @@ section: Google Search Console
 method: GET
 path: /api/gsc/test-connection
 auth: open
-order: 490
+order: 480
 ---
 
 GET `/api/gsc/test-connection`.
@@ -34,7 +34,7 @@ Reads test connection from the Google Search Console API.
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/gsc/test-connection" \
+curl -X GET "https://neodigital.ca/api/gsc/test-connection" \
   -H "Content-Type: application/json" \
 ```
 

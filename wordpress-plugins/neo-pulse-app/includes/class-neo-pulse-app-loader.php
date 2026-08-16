@@ -22,6 +22,12 @@ class Neo_Pulse_App_Loader {
 		Neo_Pulse_App_Dataforseo_Route_Handlers::register();
 		Neo_Pulse_App_Semrush_Route_Handlers::register();
 		Neo_Pulse_App_Proposal_Route_Handlers::register();
+		Neo_Pulse_App_Task_Trigger_Cron::init();
+		Neo_Pulse_App_Task_Schedule_Cron::init();
+		Neo_Pulse_App_Agent_Run_Worker_Cron::init();
+		if ( class_exists( 'Neo_Pulse_App_Agent_Run_Worker_Cron' ) ) {
+			Neo_Pulse_App_Agent_Run_Worker_Cron::activate();
+		}
 	}
 
 	public static function activate(): void {
@@ -44,11 +50,18 @@ class Neo_Pulse_App_Loader {
 		Neo_Pulse_App_Data_Paths::subdir( 'vertical-benchmarks' );
 		Neo_Pulse_App_Data_Paths::subdir( 'knowledge-model-jobs' );
 		Neo_Pulse_App_Data_Paths::subdir( 'support' );
+		Neo_Pulse_App_Data_Paths::subdir( 'wpengine/plugin' );
 		Neo_Pulse_App_Api_Dispatcher::register_rewrites();
+		Neo_Pulse_App_Task_Trigger_Cron::activate();
+		Neo_Pulse_App_Task_Schedule_Cron::activate();
+		Neo_Pulse_App_Agent_Run_Worker_Cron::activate();
 		flush_rewrite_rules();
 	}
 
 	public static function deactivate(): void {
+		Neo_Pulse_App_Task_Trigger_Cron::deactivate();
+		Neo_Pulse_App_Task_Schedule_Cron::deactivate();
+		Neo_Pulse_App_Agent_Run_Worker_Cron::deactivate();
 		flush_rewrite_rules();
 	}
 
@@ -117,6 +130,10 @@ class Neo_Pulse_App_Loader {
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/integrations/class-integrations-route-handlers.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/integrations/class-manager-route-handlers.php';
 
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/wpengine/class-wpengine-catalog.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/wpengine/class-wpengine-sftp-deploy.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/wpengine/class-wpengine-route-handlers.php';
+
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/teams/class-teams-store.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/chat/class-chat-typing.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/chat/class-chat-calls.php';
@@ -131,19 +148,49 @@ class Neo_Pulse_App_Loader {
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/mail/class-neo-pulse-app-mail.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/teams/class-teams-invites.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/chat/class-chat-route-handlers.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/automation-recipes/class-automation-recipe-registry.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/automation-recipes/class-automation-trigger-registry.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/automation-recipes/class-automation-action-registry.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/tasks/class-tasks-store.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/tasks/class-tasks-assignments.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/tasks/class-tasks-assets.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/tasks/class-tasks-route-handlers.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-runs-recipe-registry.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-runs-store.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-runs-artifacts.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-runs-route-handlers.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-run-worker.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-run-worker-cron.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-run-harness-post-creator.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-run-keyword-research.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-run-keyword-ai-analysis.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-run-article-length-policy.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-run-post-creator-inventory.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/prompts/post-creator-exported-prompts.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/prompts/post-creator-generator-prompts.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-run-checklist-post-process.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-run-blueprint-post-process.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-run-gsc-kw-inventory.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-run-gsc-keyword-select.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-run-h2-select.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-run-harness-section-tokens.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-run-post-creator-pipeline.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-run-internal-link-resolver.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/agent-runs/class-agent-run-post-creator-row.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-execution/class-task-execution-store.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-execution/class-task-execution-progress.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-execution/class-task-execution-site-resolver.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-execution/class-task-execution-registry.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-execution/class-task-execution-coordinator.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-execution/runners/class-task-execution-runner-content-optimizer.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-execution/runners/class-task-execution-runner-gsc-reporting.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-execution/runners/class-task-execution-runner-post-creator.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-triggers/class-task-trigger-inventory.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-triggers/class-task-trigger-gsc.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-triggers/class-task-trigger-pending-store.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-triggers/class-task-trigger-evaluator.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-triggers/class-task-trigger-cron.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-triggers/class-task-schedule-cron.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/support/class-support-store.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/support/class-support-ai.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/support/class-support-route-handlers.php';
@@ -156,6 +203,8 @@ class Neo_Pulse_App_Loader {
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/platform-data/class-platform-data-lead-agent.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/platform-data/class-platform-data-orchestrator.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/platform-data/class-platform-data-gsc-tools.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/platform-data/class-platform-data-gsc-reporting-tools.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/platform-data/class-platform-data-post-creator-tools.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/platform-data/class-platform-data-tools.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/pulse-assist/class-pulse-assist-module-catalog.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/pulse-assist/class-pulse-assist-data-tools.php';
@@ -164,6 +213,7 @@ class Neo_Pulse_App_Loader {
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/pulse-assist/action/class-pulse-assist-action-tools-tasks.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/pulse-assist/action/class-pulse-assist-action-tools-executions.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/pulse-assist/action/class-pulse-assist-action-tools-templates.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/pulse-assist/action/class-pulse-assist-action-tools-recipes.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/pulse-assist/action/class-pulse-assist-action-executor.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/pulse-assist/action/class-pulse-assist-action-intent.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/pulse-assist/action/class-pulse-assist-automation-intent.php';
@@ -175,6 +225,13 @@ class Neo_Pulse_App_Loader {
 
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/auth/class-auth-session.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/auth/class-auth-route-handlers.php';
+
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/push/class-push-notification-actions.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/push/class-push-device-store.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/push/class-push-preferences.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/push/class-push-dispatcher.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/push/class-push-events.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/push/class-push-route-handlers.php';
 
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/images/class-openrouter-image.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/images/class-images-route-handlers.php';

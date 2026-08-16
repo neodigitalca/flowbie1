@@ -167,7 +167,7 @@ export function PromptInputSection({
         }}
         disabled={isGeneratingChecklist || isProcessing || !apiKey || !openRouterApiKey}
         className={cn(
-          'flowbie-btn-semantic-analysis w-full text-lg h-12',
+          'neo-pulse-btn-semantic-analysis w-full text-lg h-12',
           REPORTING_TOOLBAR_BTN,
         )}
         size="lg"

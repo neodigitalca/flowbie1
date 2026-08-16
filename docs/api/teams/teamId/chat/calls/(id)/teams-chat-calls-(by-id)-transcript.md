@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/chat/calls/({id})/transcript
 auth: team-rbac-communication
-order: 1220
+order: 1210
 ---
 
 POST `/api/teams/{teamId}/chat/calls/({id})/transcript`.
@@ -34,7 +34,7 @@ Runs the transcript action in the Teams API from a JSON request body. Requires a
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/chat/calls/({id})/transcript" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/chat/calls/({id})/transcript" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

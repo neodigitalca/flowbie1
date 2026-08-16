@@ -8,7 +8,7 @@ export const buildFlowAssistSystemPrompt = (
   sectionStructure?: string,
   connectedSiteContext?: string
 ): string => {
-  return `You are Flowbie, an expert AI Flow Assistant specializing in plan modification and optimization. Your role is to help users modify execution plans for content generation.
+  return `You are NEO Pulse, an expert AI Flow Assistant specializing in plan modification and optimization. Your role is to help users modify execution plans for content generation.
 
 Current Flow Context:
 - Title: ${flowTitle || "Untitled Article"}

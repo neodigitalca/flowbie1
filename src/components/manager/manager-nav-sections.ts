@@ -5,26 +5,24 @@ import {
   Users,
   Cloud,
   Crosshair,
-  FlaskConical,
   GitMerge,
-  Shield,
   Key,
   LayoutDashboard,
-  LineChart,
   Layers,
+  LifeBuoy,
   Megaphone,
-  Mail,
   MessageCircle,
   CheckSquare,
   Share2,
   ScrollText,
   Search,
   Sparkles,
+  Server,
   Target,
   TrendingUp,
+  Zap,
 } from "lucide-react";
 import type { ManagerSettingsClusterId } from "@/components/manager/manager-settings-cluster";
-import { FLOWBIE_CA_DEPLOY } from "@/lib/flowbie-ca-deploy";
 
 export type ManagerNavItem = {
   /** Stable key when multiple items share the same `value` (e.g. Generator sections). */
@@ -65,7 +63,7 @@ export const MANAGER_NAV_SECTIONS: ManagerNavSection[] = [
       {
         value: "dashboard-api-keys",
         label: "API Keys",
-        description: "OpenRouter, DataForSEO, AgentMail",
+        description: "OpenRouter and DataForSEO",
         icon: Key,
         dashboardCluster: "api-keys",
       },
@@ -91,11 +89,11 @@ export const MANAGER_NAV_SECTIONS: ManagerNavSection[] = [
         dashboardCluster: "google",
       },
       {
-        value: "dashboard-email-agent-admin",
-        label: "Email Agent",
-        description: "Inbound sender whitelist and blacklist",
-        icon: Shield,
-        dashboardCluster: "email-agent-admin",
+        value: "dashboard-wp-engine",
+        label: "WP Engine",
+        description: "SFTP catalog and neo-pulse-wp deploy",
+        icon: Server,
+        dashboardCluster: "wp-engine",
       },
     ],
   },
@@ -122,18 +120,17 @@ export const MANAGER_NAV_SECTIONS: ManagerNavSection[] = [
         description: "Team projects, tasks, and notes",
         icon: CheckSquare,
       },
-    ],
-  },
-  {
-    id: "communication",
-    label: "Communication",
-    icon: Mail,
-    items: [
       {
-        value: "communication",
-        label: "Flo inbox",
-        description: "AgentMail send/list - thread view lives under Properties → Email on each site",
-        icon: Mail,
+        value: "pulse-forge",
+        label: "Pulse Forge",
+        description: "WHEN/THEN SEO automations, recipes, and schedules",
+        icon: Zap,
+      },
+      {
+        value: "support",
+        label: "Support",
+        description: "Pulse Assist tickets, chat logs, and export",
+        icon: LifeBuoy,
       },
     ],
   },
@@ -145,14 +142,8 @@ export const MANAGER_NAV_SECTIONS: ManagerNavSection[] = [
       {
         value: "generator",
         label: "Generator",
-        description: "Opt, CSV, prompt, import, PR, entity, flow, and image",
+        description: "Opt, CSV, prompt, import, PR, entity, flow, image, research, and report",
         icon: TrendingUp,
-      },
-      {
-        value: "gsc-reporting",
-        label: "Report",
-        description: "GSC MoM or API bundle, outline, section writers, stitched Markdown",
-        icon: LineChart,
       },
       {
         value: "sitemap-optimizer",
@@ -161,22 +152,10 @@ export const MANAGER_NAV_SECTIONS: ManagerNavSection[] = [
         icon: GitMerge,
       },
       {
-        value: "grid-local",
-        label: "Grid Local",
-        description: "Local pack rank grid scan via DataForSEO Maps SERP",
-        icon: Crosshair,
-      },
-      {
         value: "vertical-benchmarks",
         label: "Industry verticals",
-        description: "GSC top 10 per Flowbie property, bulk CSV packages",
+        description: "GSC top 10 per NEO Pulse property, bulk CSV packages",
         icon: Layers,
-      },
-      {
-        value: "research",
-        label: "Research",
-        description: "Proposal, citation, and backlinking",
-        icon: FlaskConical,
       },
     ],
   },
@@ -190,6 +169,18 @@ export const MANAGER_NAV_SECTIONS: ManagerNavSection[] = [
         label: "GBP",
         description: "Keyword harness, site image match, money-page button, publish to Google Business Profile",
         icon: Megaphone,
+      },
+      {
+        value: "content-calendar",
+        label: "Calendar",
+        description: "AI content calendar sheet",
+        icon: TrendingUp,
+      },
+      {
+        value: "social-creator",
+        label: "Creator",
+        description: "Organic post generator with visuals",
+        icon: TrendingUp,
       },
     ],
   },
@@ -214,25 +205,9 @@ export const MANAGER_NAV_SECTIONS: ManagerNavSection[] = [
   },
 ];
 
-const FLOWBIE_CA_HIDDEN_SECTION_IDS = new Set(["communication"]);
-const FLOWBIE_CA_HIDDEN_DASHBOARD_VALUES = new Set(["dashboard-email-agent-admin"]);
-
-/** Nav sections for the active build (Communication hidden on flowbie.ca). */
+/** Nav sections for the active build. */
 export function getManagerNavSections(): ManagerNavSection[] {
-  if (!FLOWBIE_CA_DEPLOY) {
-    return MANAGER_NAV_SECTIONS;
-  }
-  return MANAGER_NAV_SECTIONS.filter((section) => !FLOWBIE_CA_HIDDEN_SECTION_IDS.has(section.id)).map(
-    (section) => {
-      if (section.id !== "dashboard") {
-        return section;
-      }
-      return {
-        ...section,
-        items: section.items.filter((item) => !FLOWBIE_CA_HIDDEN_DASHBOARD_VALUES.has(item.value)),
-      };
-    },
-  );
+  return MANAGER_NAV_SECTIONS;
 }
 
 /** True when the item or any nested child matches the active workspace tab. */
@@ -260,6 +235,7 @@ export function isManagerNavItemSelected(
   if (managerTab === "blog-generator" && item.value === "generator") return true;
   if (managerTab === "sap-generator" && item.value === "generator") return true;
   if (managerTab === "free-flow" && item.value === "generator") return true;
-  if (managerTab === "research" && item.value === "research") return true;
+  if (managerTab === "research" && item.value === "generator") return true;
+  if (managerTab === "gsc-reporting" && item.value === "generator") return true;
   return managerTab === item.value;
 }

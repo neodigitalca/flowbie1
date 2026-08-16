@@ -3,8 +3,19 @@ import {
 } from "@/lib/ppc/meta-ad-focus-keyword-grammar";
 import {
   buildMetaImageRealismSceneSpec,
+  META_IMAGE_ANTI_ABSTRACT_UI_RULE,
   META_IMAGE_REALISM_RULE,
 } from "@/lib/ppc/meta-ad-image-realism-spec";
+import {
+  buildMetaDeviceScreenLayoutBlock,
+  resolveMetaDeviceScreenLayout,
+} from "@/lib/ppc/meta-ad-device-screen-layout";
+import {
+  buildMetaImageOnImageTextLockBlock,
+  META_IMAGE_SINGLE_ZONE_RULE,
+  META_IMAGE_TEXT_LOCK_REFERENCE,
+  prepareCreativeBriefForImageGeneration,
+} from "@/lib/ppc/meta-ad-image-on-image-text";
 import { formatVisualToolPaletteBlock, visualToolIsActive } from "@/lib/ppc/meta-ad-visual-tool-palette";
 import { formatMetaColorPaletteBlock } from "@/lib/ppc/meta-ad-color-palette";
 import { formatTypographyStyleForPrompt, type MetaAdTypographyStyle } from "@/lib/ppc/meta-ad-typography-styles";
@@ -38,19 +49,28 @@ ${backgroundRule}
 - Voice: speak as we/our/us for ${advertiser}, factual, benefit-focused${colorBlock ? `\n- ${colorBlock}` : ""}`;
 }
 
+export const META_IMAGE_NO_SPEC_FRAME_RULE = `Never render design-spec, format, or platform labels as visible text in the image.
+Forbidden on-image text includes: "Designed", "Instagram Feed", "1:1", "4:5", "9:16", "Sponsored", "Sponsored Ad", "Placement", "Format", "PROMPT DESCRIPTION", aspect ratio labels, or any meta label describing the ad type.
+Setup instructions in this prompt (placement, format, style) are for the generator only. Do not paint them into the creative.
+The output is the finished ad creative only. No outer frame, no spec header, no mockup label bar.`;
+
 export const META_IMAGE_TEXT_RULES = `On-image text rules (critical):
-- Render ONLY the exact headline and optional subline from the creative brief (once each)
+- Render ONLY the strings in ON-IMAGE TEXT LOCK (once each, one upper text block)
+- ${META_IMAGE_SINGLE_ZONE_RULE}
 - Never paste the focus keyword verbatim on the image
-- Never duplicate the headline
+- Never duplicate line 1 or line 2 anywhere (no footer, badge, watermark, or bottom-band repeat)
+- Maximum on-image text: line 1 plus optional line 2. No third line, no footer slogan
 - No body copy, bullets, URLs, CTA buttons, checklist text, or caption on the image
 - Meta ad primaryText (caption) belongs in ad fields only, not painted into the creative`;
 
 export const META_IMAGE_LAYOUT_RULES = `Layout rules:
 - Must read as a real Instagram feed or story sponsored ad creative
 - Designed graphic with bold typography AND visible focal graphic elements from visualConcept (icons, accent bars, shapes, abstract motifs)
+- ${META_IMAGE_SINGLE_ZONE_RULE}
 - Not text-only on empty, white, or faded photo background
 - Photo-hero only when creative brief creativeStyle is photo_hero
-- No Instagram UI chrome (no profile bar, Sponsored label, like buttons, or phone bezels)`;
+- No Instagram UI chrome (no profile bar, Sponsored label, like buttons, or phone bezels)
+- ${META_IMAGE_NO_SPEC_FRAME_RULE}`;
 
 export const META_IMAGE_ANTI_PATTERNS = META_IMAGE_REALISM_RULE;
 
@@ -94,7 +114,7 @@ The landing page defines the offer and click destination. Context URL defines wh
 primaryTopic must match the landing page offer, not unrelated product UI.
 creativeMode:
 - agency_service: Neo Digital sells a service (SEO, web design, audits)
-- product_saas: FlowbieONE product marketing only when landing/topic is the app
+- product_saas: NEO Pulse product marketing only when landing/topic is the app
 - local_lead: local business lead gen
 visualDirection must follow the landing offer and creative strategy. Include visible designed graphic elements (icons, shapes, accent bars, motifs). Include a device or screen UI only when it supports the concept.
 visualDirection must describe a designed Instagram feed creative concept (modern, engaging), not ad copy. Not text-only on empty background.
@@ -201,6 +221,8 @@ export function buildMetaImageChecklistSystemPrompt(options?: {
 
 Build an image generation checklist (5 to 8 items) for a Meta ad creative.
 Follow creative brief visualConcept and visualReferenceElements exactly. Do not add elements not in the plan.
+Do not quote on-image headline or subline strings in checklist labels. Refer to ON-IMAGE TEXT LOCK instead.
+${META_IMAGE_NO_SPEC_FRAME_RULE}
 ${META_IMAGE_TEXT_RULES}
 ${META_IMAGE_LAYOUT_RULES}
 ${META_IMAGE_ANTI_PATTERNS}${noPeopleBlock}
@@ -218,7 +240,7 @@ export function buildMetaCopySystemPrompt(siteName?: string | null): string {
 
 Write ad copy grounded in the Instagram ad goal, creative brief, landing page, and checklist.
 Caption (primaryText) must expand creativeBrief.captionHook in sentence 1. Do not paste onImageHeadline as the full caption.
-Do not advertise FlowbieONE unless primaryTopic is FlowbieONE.
+Do not advertise NEO Pulse unless primaryTopic is NEO Pulse.
 ${META_VALUE_PROPOSITION_RULES}
 ${META_FOCUS_KEYWORD_GRAMMAR_RULES}
 ${META_INSTAGRAM_CAPTION_RULES}
@@ -257,9 +279,18 @@ export function buildMetaImagePromptDescription(options: {
   localityCity?: string;
   typographyStyle?: MetaAdTypographyStyle;
   colorPalette?: MetaAdColorPalette;
+  pageContext?: string;
 }): string {
-  const brief = options.creativeBrief;
+  const brief = prepareCreativeBriefForImageGeneration(options.creativeBrief);
   const elements = options.visualReferenceElements ?? [];
+  const includesDevice =
+    visualToolIsActive(brief.visualToolPalette.device_screen) ||
+    elements.some((element) => element.kind === "device");
+  const deviceLayout = resolveMetaDeviceScreenLayout(brief, {
+    focusKeyword: options.focusKeyword,
+    pageContext: options.pageContext,
+  });
+  const deviceLayoutBlock = includesDevice ? buildMetaDeviceScreenLayoutBlock(deviceLayout) : null;
   const allowPeople = options.allowPeopleInImage === true;
   const modifier = options.imagePromptModifier?.trim();
   const keyword = options.focusKeyword?.trim();
@@ -281,12 +312,8 @@ export function buildMetaImagePromptDescription(options: {
     formatMetaColorPaletteBlock(options.colorPalette)
       ? `- ${formatMetaColorPaletteBlock(options.colorPalette)}`
       : "",
-    `- On-image headline (render exactly once): "${brief.onImageHeadline}"`,
-    brief.onImageSubline
-      ? `- On-image subline (render exactly once): "${brief.onImageSubline}"`
-      : "- On-image subline: none",
+    `- On-image text: ${META_IMAGE_TEXT_LOCK_REFERENCE}`,
     keyword ? `- DO NOT render focus keyword on image: "${keyword}"` : "",
-    "- DO NOT duplicate the headline",
     "- DO NOT render caption, primaryText, description, CTA, URLs, or checklist text",
     brief.useMapOverlay
       ? "- Map overlay allowed per brief (subtle, designed graphic treatment)"
@@ -304,16 +331,17 @@ export function buildMetaImagePromptDescription(options: {
     lines.push("- Visual reference elements:");
     lines.push(formatMetaVisualReferenceElementsForPrompt(elements));
   }
-  const localityCity = options.localityCity?.trim();
-  if (localityCity) {
-    lines.push(`- Locality context: ${localityCity} (city_skyline degree in palette drives skyline use)`);
+  if (deviceLayoutBlock) {
+    lines.push(deviceLayoutBlock);
   }
   lines.push(
     buildMetaImageRealismSceneSpec({
       creativeBrief: brief,
       placement: options.placement,
-      localityCity,
+      localityCity: options.localityCity,
       visualReferenceElements: elements,
+      focusKeyword: options.focusKeyword,
+      pageContext: options.pageContext,
     }),
   );
   return lines.join("\n");
@@ -348,10 +376,13 @@ export function buildMetaImagePrompt(options: {
   siteName?: string | null;
   typographyStyle?: MetaAdTypographyStyle;
   colorPalette?: MetaAdColorPalette;
+  pageContext?: string;
 }): string {
+  const brief = prepareCreativeBriefForImageGeneration(options.creativeBrief);
+  const textLock = buildMetaImageOnImageTextLockBlock(brief);
   const checklistText = formatMetaChecklistForPrompt(options.checklist);
   const promptDescription = buildMetaImagePromptDescription({
-    creativeBrief: options.creativeBrief,
+    creativeBrief: brief,
     focusKeyword: options.focusKeyword,
     placement: options.placement,
     allowPeopleInImage: options.allowPeopleInImage,
@@ -360,6 +391,7 @@ export function buildMetaImagePrompt(options: {
     localityCity: options.localityCity,
     typographyStyle: options.typographyStyle,
     colorPalette: options.colorPalette,
+    pageContext: options.pageContext,
   });
   const noPeopleBlock =
     options.allowPeopleInImage === true ? "" : `\n\n${META_IMAGE_NO_PEOPLE_RULES}`;
@@ -367,17 +399,22 @@ export function buildMetaImagePrompt(options: {
     ? `\n\nPrompt Modifier:\n${options.imagePromptModifier.trim()}`
     : "";
   return [
+    textLock,
+    META_IMAGE_NO_SPEC_FRAME_RULE,
+    META_IMAGE_SINGLE_ZONE_RULE,
     `Meta ad image for ${metaAdPlacementLabel(options.placement)} placement.`,
     promptDescription,
     META_IMAGE_TEXT_RULES,
     META_IMAGE_LAYOUT_RULES,
     META_IMAGE_ANTI_PATTERNS,
+    META_IMAGE_ANTI_ABSTRACT_UI_RULE,
     META_IMAGE_REALISM_RULE,
     noPeopleBlock,
     buildMetaBrandRules(options.siteName, options.colorPalette),
     "Checklist:",
     checklistText,
     "Caption and Meta ad fields are for setup only. Do not paint them into the image.",
+    "FINAL: Paint ON-IMAGE TEXT LOCK once in the upper third only. Lower half of the frame must have zero readable text.",
     options.referencePromptSuffix?.trim(),
     modifierBlock,
   ]

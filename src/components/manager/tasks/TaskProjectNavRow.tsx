@@ -19,6 +19,7 @@ export type TaskProjectNavRowProps = {
   onSelect: () => void;
   onEdit: (project: TaskProject) => void;
   onDelete: (projectId: number) => void;
+  deleteLabel?: string;
 };
 
 export function TaskProjectNavRow({
@@ -27,6 +28,7 @@ export function TaskProjectNavRow({
   onSelect,
   onEdit,
   onDelete,
+  deleteLabel = "Delete project",
 }: TaskProjectNavRowProps): React.ReactElement {
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -74,9 +76,9 @@ export function TaskProjectNavRow({
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent className="rounded-none border-0 bg-zinc-950 text-white">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-base">Delete project</AlertDialogTitle>
+            <AlertDialogTitle className="text-base">{deleteLabel}</AlertDialogTitle>
             <AlertDialogDescription className="text-base text-muted-foreground">
-              Delete &quot;{project.title}&quot;? It will be removed from your project list.
+              Delete &quot;{project.title}&quot;? It will be removed from Pulse Forge and My Tasks.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

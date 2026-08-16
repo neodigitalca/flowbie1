@@ -1,0 +1,1589 @@
+{
+  "version": 2,
+  "generatedAt": "2026-08-16T17:19:15.876Z",
+  "modules": [
+    {
+      "id": "dashboard/properties",
+      "label": "Properties",
+      "menuPath": "Dashboard → Properties",
+      "section": "dashboard",
+      "hash": "#settings",
+      "pulseNav": "pulse:nav/dashboard/properties",
+      "managerTab": "dashboard",
+      "dashboardCluster": "properties",
+      "description": "WordPress sites and integrations roster. Add, enable, and manage connected client properties.",
+      "aliases": [
+        "properties",
+        "sites",
+        "clients",
+        "wordpress sites",
+        "integrations roster"
+      ],
+      "features": [
+        "add property",
+        "enable site",
+        "site credentials",
+        "multi-site"
+      ],
+      "uiNotes": "Hash route is #settings with Properties cluster selected.",
+      "relatedModules": [
+        "integrations",
+        "dashboard/api-keys"
+      ]
+    },
+    {
+      "id": "dashboard/api-keys",
+      "label": "API Keys",
+      "menuPath": "Dashboard → API Keys",
+      "section": "dashboard",
+      "hash": "#settings",
+      "pulseNav": "pulse:nav/dashboard/api-keys",
+      "managerTab": "dashboard",
+      "dashboardCluster": "api-keys",
+      "description": "OpenRouter and DataForSEO API keys for AI and SEO tooling.",
+      "aliases": [
+        "api keys",
+        "openrouter",
+        "dataforseo",
+        "settings"
+      ],
+      "features": [
+        "openrouter key",
+        "dataforseo key"
+      ],
+      "uiNotes": "Dashboard tab uses hash #settings, not #dashboard.",
+      "relatedModules": [
+        "dashboard/properties",
+        "dashboard/ai-generation"
+      ]
+    },
+    {
+      "id": "dashboard/master-rules",
+      "label": "Master Rules",
+      "menuPath": "Dashboard → Master Rules",
+      "section": "dashboard",
+      "hash": "#settings",
+      "pulseNav": "pulse:nav/dashboard/master-rules",
+      "managerTab": "dashboard",
+      "dashboardCluster": "master-rules",
+      "description": "Per-site client instructions stored in Supabase for AI generation.",
+      "aliases": [
+        "master rules",
+        "client rules",
+        "instructions"
+      ],
+      "features": [
+        "per-site rules",
+        "supabase sync"
+      ],
+      "relatedModules": [
+        "dashboard/properties"
+      ]
+    },
+    {
+      "id": "dashboard/ai-generation",
+      "label": "AI & Models",
+      "menuPath": "Dashboard → AI & Models",
+      "section": "dashboard",
+      "hash": "#settings",
+      "pulseNav": "pulse:nav/dashboard/ai-generation",
+      "managerTab": "dashboard",
+      "dashboardCluster": "ai-generation",
+      "description": "Default OpenRouter model and generation parameters (temperature, tokens).",
+      "aliases": [
+        "ai models",
+        "model settings",
+        "generation settings"
+      ],
+      "features": [
+        "default model",
+        "temperature",
+        "max tokens"
+      ],
+      "relatedModules": [
+        "dashboard/api-keys"
+      ]
+    },
+    {
+      "id": "dashboard/google",
+      "label": "Google Services",
+      "menuPath": "Dashboard → Google Services",
+      "section": "dashboard",
+      "hash": "#settings",
+      "pulseNav": "pulse:nav/dashboard/google",
+      "managerTab": "dashboard",
+      "dashboardCluster": "google",
+      "description": "Google Search Console, Analytics 4, and Business Profile connection settings.",
+      "aliases": [
+        "google",
+        "gsc",
+        "ga4",
+        "analytics",
+        "search console",
+        "gbp settings"
+      ],
+      "features": [
+        "GSC",
+        "GA4",
+        "GBP credentials"
+      ],
+      "relatedModules": [
+        "generator/report",
+        "gbp-post"
+      ]
+    },
+    {
+      "id": "users",
+      "label": "Users",
+      "menuPath": "Teams → Users",
+      "section": "teams",
+      "hash": "#users",
+      "pulseNav": "pulse:nav/users",
+      "managerTab": "users",
+      "description": "Agency seats, invites, and member profiles.",
+      "aliases": [
+        "team members",
+        "invites",
+        "seats",
+        "members",
+        "agency users"
+      ],
+      "features": [
+        "invite user",
+        "roles",
+        "member profiles"
+      ],
+      "relatedModules": [
+        "chat",
+        "tasks"
+      ]
+    },
+    {
+      "id": "chat",
+      "label": "Chat",
+      "menuPath": "Teams → Chat",
+      "section": "teams",
+      "hash": "#chat",
+      "pulseNav": "pulse:nav/chat",
+      "managerTab": "chat",
+      "description": "Team channels, direct messages, threads, files, and voice huddles.",
+      "aliases": [
+        "teams chat",
+        "channels",
+        "dms",
+        "messages",
+        "huddle"
+      ],
+      "features": [
+        "channels",
+        "direct messages",
+        "threads",
+        "file uploads",
+        "mentions"
+      ],
+      "relatedModules": [
+        "users",
+        "tasks"
+      ]
+    },
+    {
+      "id": "tasks",
+      "label": "Tasks",
+      "menuPath": "Teams → Tasks",
+      "section": "teams",
+      "hash": "#tasks",
+      "pulseNav": "pulse:nav/tasks",
+      "managerTab": "tasks",
+      "description": "Team projects, tasks, sections, and notes.",
+      "aliases": [
+        "projects",
+        "team tasks",
+        "kanban"
+      ],
+      "features": [
+        "projects",
+        "tasks",
+        "sections"
+      ],
+      "relatedModules": [
+        "chat",
+        "users",
+        "pulse-forge"
+      ]
+    },
+    {
+      "id": "pulse-forge",
+      "label": "Pulse Forge",
+      "menuPath": "Teams → Pulse Forge",
+      "section": "teams",
+      "hash": "#pulse-forge",
+      "pulseNav": "pulse:nav/pulse-forge",
+      "managerTab": "pulse-forge",
+      "description": "WHEN/THEN SEO automations: recipe library, scheduling, GSC triggers, and installed automations.",
+      "aliases": [
+        "automations",
+        "automation planner",
+        "recipe library",
+        "seo automations",
+        "pulse forge"
+      ],
+      "features": [
+        "recipe library",
+        "automation planner",
+        "scheduling",
+        "gsc triggers",
+        "installed automations"
+      ],
+      "relatedModules": [
+        "tasks",
+        "generator/opt"
+      ]
+    },
+    {
+      "id": "generator/opt",
+      "label": "Overview",
+      "menuPath": "SEO → Generator → Opt",
+      "section": "seo",
+      "hash": "#generator",
+      "pulseNav": "pulse:nav/generator/opt",
+      "managerTab": "generator",
+      "generatorSection": "opt",
+      "description": "Single-site content optimizer: sitemap grid (Pages, Posts, SAP), meta editing, AISEO bulk flyouts, row expansion.",
+      "aliases": [
+        "overview",
+        "opt",
+        "content optimizer",
+        "meta optimizer",
+        "pages grid",
+        "sitemap grid"
+      ],
+      "features": [
+        "pages posts sap pills",
+        "AISEO bulk meta",
+        "row expansion",
+        "AI meta",
+        "multi-site pill"
+      ],
+      "uiNotes": "Overview is Generator → Opt, not a top-level tab. AISEO flyouts cannot be deep-linked.",
+      "relatedModules": [
+        "generator/research",
+        "sitemap-optimizer"
+      ]
+    },
+    {
+      "id": "generator/bulk-csv",
+      "label": "CSV",
+      "menuPath": "SEO → Generator → CSV",
+      "section": "seo",
+      "hash": "#generator",
+      "pulseNav": "pulse:nav/generator/bulk-csv",
+      "managerTab": "generator",
+      "generatorSection": "bulk-csv",
+      "description": "Bulk blog generation from CSV upload.",
+      "aliases": [
+        "csv",
+        "bulk csv",
+        "bulk blog"
+      ],
+      "features": [
+        "csv upload",
+        "bulk generate"
+      ],
+      "relatedModules": [
+        "generator/bulk-prompt"
+      ]
+    },
+    {
+      "id": "generator/bulk-prompt",
+      "label": "Prompt",
+      "menuPath": "SEO → Generator → Prompt",
+      "section": "seo",
+      "hash": "#generator",
+      "pulseNav": "pulse:nav/generator/bulk-prompt",
+      "managerTab": "generator",
+      "generatorSection": "bulk-prompt",
+      "description": "Bulk blog generation from prompt templates.",
+      "aliases": [
+        "prompt bulk",
+        "bulk prompt"
+      ],
+      "relatedModules": [
+        "generator/bulk-csv"
+      ]
+    },
+    {
+      "id": "generator/bulk-blog-import",
+      "label": "Import",
+      "menuPath": "SEO → Generator → Import",
+      "section": "seo",
+      "hash": "#generator",
+      "pulseNav": "pulse:nav/generator/bulk-blog-import",
+      "managerTab": "generator",
+      "generatorSection": "bulk-blog-import",
+      "description": "Import existing blog posts for optimization.",
+      "aliases": [
+        "blog import",
+        "import"
+      ],
+      "relatedModules": [
+        "generator/bulk-csv"
+      ]
+    },
+    {
+      "id": "generator/bulk-press-release",
+      "label": "PR",
+      "menuPath": "SEO → Generator → PR",
+      "section": "seo",
+      "hash": "#generator",
+      "pulseNav": "pulse:nav/generator/bulk-press-release",
+      "managerTab": "generator",
+      "generatorSection": "bulk-press-release",
+      "description": "Press release bulk generator.",
+      "aliases": [
+        "press release",
+        "pr generator"
+      ],
+      "relatedModules": [
+        "generator/bulk-csv"
+      ]
+    },
+    {
+      "id": "generator/entity",
+      "label": "Entity",
+      "menuPath": "SEO → Generator → Entity",
+      "section": "seo",
+      "hash": "#generator",
+      "pulseNav": "pulse:nav/generator/entity",
+      "managerTab": "generator",
+      "generatorSection": "entity",
+      "description": "SAP / entity location page generator.",
+      "aliases": [
+        "entity",
+        "sap",
+        "location pages",
+        "sap generator"
+      ],
+      "relatedModules": [
+        "generator/opt"
+      ]
+    },
+    {
+      "id": "generator/competitor",
+      "label": "Competitor",
+      "menuPath": "SEO → Generator → Competitor",
+      "section": "seo",
+      "hash": "#generator",
+      "pulseNav": "pulse:nav/generator/competitor",
+      "managerTab": "generator",
+      "generatorSection": "competitor",
+      "description": "Competitor research content generator.",
+      "aliases": [
+        "competitor generator"
+      ],
+      "relatedModules": [
+        "generator/research"
+      ]
+    },
+    {
+      "id": "generator/flow",
+      "label": "Flow",
+      "menuPath": "SEO → Generator → Flow",
+      "section": "seo",
+      "hash": "#generator",
+      "pulseNav": "pulse:nav/generator/flow",
+      "managerTab": "generator",
+      "generatorSection": "flow",
+      "description": "Free Flow AI writing workspace.",
+      "aliases": [
+        "free flow",
+        "flow",
+        "freeflow"
+      ],
+      "relatedModules": [
+        "generator/opt"
+      ]
+    },
+    {
+      "id": "generator/image",
+      "label": "Image",
+      "menuPath": "SEO → Generator → Image",
+      "section": "seo",
+      "hash": "#generator",
+      "pulseNav": "pulse:nav/generator/image",
+      "managerTab": "generator",
+      "generatorSection": "image",
+      "description": "AI image generation for content.",
+      "aliases": [
+        "image generator",
+        "ai images"
+      ],
+      "relatedModules": [
+        "generator/opt"
+      ]
+    },
+    {
+      "id": "generator/research",
+      "label": "Research",
+      "menuPath": "SEO → Generator → Research",
+      "section": "seo",
+      "hash": "#generator",
+      "pulseNav": "pulse:nav/generator/research",
+      "managerTab": "generator",
+      "generatorSection": "research",
+      "description": "Proposal, citation, and backlinking research workspaces.",
+      "aliases": [
+        "research",
+        "proposal",
+        "citation",
+        "backlinking"
+      ],
+      "features": [
+        "proposal",
+        "citation",
+        "backlinking"
+      ],
+      "relatedModules": [
+        "sitemap-optimizer",
+        "generator/competitor"
+      ]
+    },
+    {
+      "id": "generator/report",
+      "label": "Report",
+      "menuPath": "SEO → Generator → Report",
+      "section": "seo",
+      "hash": "#generator",
+      "pulseNav": "pulse:nav/generator/report",
+      "managerTab": "generator",
+      "generatorSection": "report",
+      "description": "GSC reporting and performance analytics.",
+      "aliases": [
+        "gsc report",
+        "reporting",
+        "gsc reporting"
+      ],
+      "relatedModules": [
+        "dashboard/google",
+        "generator/opt"
+      ]
+    },
+    {
+      "id": "sitemap-optimizer",
+      "label": "Sitemap",
+      "menuPath": "SEO → Sitemap",
+      "section": "seo",
+      "hash": "#sitemap-optimizer",
+      "pulseNav": "pulse:nav/sitemap-optimizer",
+      "managerTab": "sitemap-optimizer",
+      "description": "Sitemap cluster planning, legacy redirects, and URL optimization.",
+      "aliases": [
+        "sitemap",
+        "url optimizer",
+        "legacy redirects",
+        "sitemap optimizer"
+      ],
+      "features": [
+        "plan mode",
+        "legacy redirects",
+        "url optimizer"
+      ],
+      "relatedModules": [
+        "generator/opt"
+      ]
+    },
+    {
+      "id": "vertical-benchmarks",
+      "label": "Industry verticals",
+      "menuPath": "SEO → Industry verticals",
+      "section": "seo",
+      "hash": "#vertical-benchmarks",
+      "pulseNav": "pulse:nav/vertical-benchmarks",
+      "managerTab": "vertical-benchmarks",
+      "description": "GSC top 10 benchmarks per property, bulk CSV packages.",
+      "aliases": [
+        "vertical benchmarks",
+        "industry verticals",
+        "benchmarks"
+      ],
+      "relatedModules": [
+        "generator/report"
+      ]
+    },
+    {
+      "id": "gbp-post",
+      "label": "GBP",
+      "menuPath": "Social → GBP",
+      "section": "social",
+      "hash": "#gbp-post",
+      "pulseNav": "pulse:nav/gbp-post",
+      "managerTab": "gbp-post",
+      "description": "Google Business Profile post publishing with keyword harness and site image match.",
+      "aliases": [
+        "gbp",
+        "google business profile",
+        "business profile posts"
+      ],
+      "relatedModules": [
+        "dashboard/google",
+        "social-creator"
+      ]
+    },
+    {
+      "id": "content-calendar",
+      "label": "Calendar",
+      "menuPath": "Social → Calendar",
+      "section": "social",
+      "hash": "#content-calendar",
+      "pulseNav": "pulse:nav/content-calendar",
+      "managerTab": "content-calendar",
+      "description": "AI content calendar sheet.",
+      "aliases": [
+        "calendar",
+        "content calendar"
+      ],
+      "relatedModules": [
+        "social-creator"
+      ]
+    },
+    {
+      "id": "social-creator",
+      "label": "Creator",
+      "menuPath": "Social → Creator",
+      "section": "social",
+      "hash": "#social-creator",
+      "pulseNav": "pulse:nav/social-creator",
+      "managerTab": "social-creator",
+      "description": "Organic social post generator with visuals.",
+      "aliases": [
+        "social creator",
+        "organic posts",
+        "social posts"
+      ],
+      "relatedModules": [
+        "content-calendar",
+        "gbp-post"
+      ]
+    },
+    {
+      "id": "ppc-google",
+      "label": "Google PPC",
+      "menuPath": "PPC → Google",
+      "section": "ppc",
+      "hash": "#ppc-google",
+      "pulseNav": "pulse:nav/ppc-google",
+      "managerTab": "ppc-google",
+      "description": "Google Search campaigns from WordPress pages and GSC queries.",
+      "aliases": [
+        "google ads",
+        "ppc google",
+        "search campaigns"
+      ],
+      "relatedModules": [
+        "ppc-meta",
+        "generator/opt"
+      ]
+    },
+    {
+      "id": "ppc-meta",
+      "label": "Meta PPC",
+      "menuPath": "PPC → Meta",
+      "section": "ppc",
+      "hash": "#ppc-meta",
+      "pulseNav": "pulse:nav/ppc-meta",
+      "managerTab": "ppc-meta",
+      "description": "Meta feed ads from WordPress page copy and creative assets.",
+      "aliases": [
+        "meta ads",
+        "facebook ads",
+        "instagram ads",
+        "ppc meta"
+      ],
+      "relatedModules": [
+        "ppc-google",
+        "social-creator"
+      ]
+    },
+    {
+      "id": "integrations",
+      "label": "Integrations",
+      "menuPath": "Integrations",
+      "section": "footer",
+      "hash": "#integrations",
+      "pulseNav": "pulse:nav/integrations",
+      "managerTab": "integrations",
+      "description": "Connect and manage WordPress site integrations.",
+      "aliases": [
+        "integrations",
+        "wordpress connect"
+      ],
+      "relatedModules": [
+        "dashboard/properties"
+      ]
+    },
+    {
+      "id": "knowledge",
+      "label": "Knowledge Base",
+      "menuPath": "Knowledge Base",
+      "section": "topbar",
+      "hash": "#knowledge",
+      "pulseNav": "pulse:nav/knowledge",
+      "managerTab": "knowledge",
+      "description": "Upload files and manual text for RAG knowledge used in generation.",
+      "aliases": [
+        "knowledge base",
+        "kb",
+        "rag",
+        "files"
+      ],
+      "relatedModules": [
+        "dashboard/master-rules"
+      ]
+    },
+    {
+      "id": "api",
+      "label": "API",
+      "menuPath": "API Docs",
+      "section": "footer",
+      "hash": "#api",
+      "pulseNav": "pulse:nav/api",
+      "managerTab": "api",
+      "description": "NEO Pulse REST API documentation browser.",
+      "aliases": [
+        "api docs",
+        "api documentation",
+        "endpoints"
+      ],
+      "relatedModules": []
+    }
+  ],
+  "featurePlaybooks": [
+    {
+      "id": "dashboard/properties/add-property",
+      "moduleId": "dashboard/properties",
+      "label": "Add property",
+      "question": "How do I add a property?",
+      "pulseNav": "pulse:nav/dashboard/properties",
+      "steps": [
+        "Open [Dashboard → Properties](pulse:nav/dashboard/properties).",
+        "Click **Add property** (or connect a new WordPress site).",
+        "Enter site URL, credentials, and save."
+      ],
+      "aliases": [
+        "add property",
+        "connect site",
+        "new client"
+      ]
+    },
+    {
+      "id": "dashboard/properties/enable-site",
+      "moduleId": "dashboard/properties",
+      "label": "Enable site",
+      "question": "How do I enable a property?",
+      "pulseNav": "pulse:nav/dashboard/properties",
+      "steps": [
+        "Open [Dashboard → Properties](pulse:nav/dashboard/properties).",
+        "Find the property in the roster.",
+        "Toggle the enable switch next to the property name (green = enabled)."
+      ],
+      "aliases": [
+        "enable property",
+        "enable site",
+        "how to enable a property"
+      ]
+    },
+    {
+      "id": "dashboard/properties/site-credentials",
+      "moduleId": "dashboard/properties",
+      "label": "Site credentials",
+      "question": "How do I edit site credentials?",
+      "pulseNav": "pulse:nav/dashboard/properties",
+      "steps": [
+        "Open [Dashboard → Properties](pulse:nav/dashboard/properties).",
+        "Select the property tile.",
+        "Update username, app password, or site URL in the property panel and save."
+      ],
+      "aliases": [
+        "credentials",
+        "app password",
+        "wordpress credentials"
+      ]
+    },
+    {
+      "id": "dashboard/properties/multi-site",
+      "moduleId": "dashboard/properties",
+      "label": "Multi-site roster",
+      "question": "How do I manage multiple properties?",
+      "pulseNav": "pulse:nav/dashboard/properties",
+      "steps": [
+        "Open [Dashboard → Properties](pulse:nav/dashboard/properties).",
+        "Each connected WordPress site appears as a property tile.",
+        "Use the header property picker to switch the active workspace property."
+      ],
+      "aliases": [
+        "multi-site",
+        "multiple clients",
+        "property roster"
+      ]
+    },
+    {
+      "id": "dashboard/api-keys/openrouter-key",
+      "moduleId": "dashboard/api-keys",
+      "label": "OpenRouter key",
+      "question": "How do I add my OpenRouter API key?",
+      "pulseNav": "pulse:nav/dashboard/api-keys",
+      "steps": [
+        "Open [Dashboard → API Keys](pulse:nav/dashboard/api-keys).",
+        "Paste your OpenRouter API key in the **OpenRouter** field.",
+        "Click **Test and save**."
+      ],
+      "aliases": [
+        "openrouter",
+        "openrouter key",
+        "api key openrouter"
+      ]
+    },
+    {
+      "id": "dashboard/api-keys/dataforseo-key",
+      "moduleId": "dashboard/api-keys",
+      "label": "DataForSEO key",
+      "question": "How do I add my DataForSEO API key?",
+      "pulseNav": "pulse:nav/dashboard/api-keys",
+      "steps": [
+        "Open [Dashboard → API Keys](pulse:nav/dashboard/api-keys).",
+        "Enter DataForSEO login and password.",
+        "Click **Test and save**."
+      ],
+      "aliases": [
+        "dataforseo",
+        "dataforseo key"
+      ]
+    },
+    {
+      "id": "dashboard/master-rules/per-site-rules",
+      "moduleId": "dashboard/master-rules",
+      "label": "Per-site rules",
+      "question": "How do I edit master rules for a site?",
+      "pulseNav": "pulse:nav/dashboard/master-rules",
+      "steps": [
+        "Open [Dashboard → Master Rules](pulse:nav/dashboard/master-rules).",
+        "Select the property from the roster.",
+        "Edit client instructions in the **Master Rules** editor and save."
+      ],
+      "aliases": [
+        "master rules",
+        "client rules",
+        "instructions"
+      ]
+    },
+    {
+      "id": "dashboard/master-rules/supabase-sync",
+      "moduleId": "dashboard/master-rules",
+      "label": "Supabase sync",
+      "question": "How do master rules sync to Supabase?",
+      "pulseNav": "pulse:nav/dashboard/master-rules",
+      "steps": [
+        "Open [Dashboard → Master Rules](pulse:nav/dashboard/master-rules).",
+        "Saved rules sync to Supabase for the selected property automatically on save."
+      ],
+      "aliases": [
+        "supabase sync",
+        "supabase rules"
+      ]
+    },
+    {
+      "id": "dashboard/ai-generation/default-model",
+      "moduleId": "dashboard/ai-generation",
+      "label": "Default model",
+      "question": "How do I change the default AI model?",
+      "pulseNav": "pulse:nav/dashboard/ai-generation",
+      "steps": [
+        "Open [Dashboard → AI & Models](pulse:nav/dashboard/ai-generation).",
+        "Pick the default OpenRouter model from the model selector.",
+        "Save settings."
+      ],
+      "aliases": [
+        "default model",
+        "change model",
+        "ai model"
+      ]
+    },
+    {
+      "id": "dashboard/ai-generation/temperature",
+      "moduleId": "dashboard/ai-generation",
+      "label": "Temperature",
+      "question": "How do I adjust AI temperature?",
+      "pulseNav": "pulse:nav/dashboard/ai-generation",
+      "steps": [
+        "Open [Dashboard → AI & Models](pulse:nav/dashboard/ai-generation).",
+        "Adjust the **Temperature** slider.",
+        "Save settings."
+      ],
+      "aliases": [
+        "temperature",
+        "generation temperature"
+      ]
+    },
+    {
+      "id": "dashboard/ai-generation/max-tokens",
+      "moduleId": "dashboard/ai-generation",
+      "label": "Max tokens",
+      "question": "How do I change max tokens?",
+      "pulseNav": "pulse:nav/dashboard/ai-generation",
+      "steps": [
+        "Open [Dashboard → AI & Models](pulse:nav/dashboard/ai-generation).",
+        "Set **Max tokens** for generation output.",
+        "Save settings."
+      ],
+      "aliases": [
+        "max tokens",
+        "token limit"
+      ]
+    },
+    {
+      "id": "dashboard/google/gsc",
+      "moduleId": "dashboard/google",
+      "label": "GSC connection",
+      "question": "How do I connect Google Search Console?",
+      "pulseNav": "pulse:nav/dashboard/google",
+      "steps": [
+        "Open [Dashboard → Google Services](pulse:nav/dashboard/google).",
+        "Configure **Google Search Console** credentials for the property.",
+        "Test connection and save."
+      ],
+      "aliases": [
+        "gsc",
+        "search console",
+        "connect gsc"
+      ]
+    },
+    {
+      "id": "dashboard/google/ga4",
+      "moduleId": "dashboard/google",
+      "label": "GA4 connection",
+      "question": "How do I connect Google Analytics?",
+      "pulseNav": "pulse:nav/dashboard/google",
+      "steps": [
+        "Open [Dashboard → Google Services](pulse:nav/dashboard/google).",
+        "Configure **Google Analytics 4** credentials.",
+        "Test connection and save."
+      ],
+      "aliases": [
+        "ga4",
+        "analytics",
+        "google analytics"
+      ]
+    },
+    {
+      "id": "dashboard/google/gbp-credentials",
+      "moduleId": "dashboard/google",
+      "label": "GBP credentials",
+      "question": "How do I connect Google Business Profile?",
+      "pulseNav": "pulse:nav/dashboard/google",
+      "steps": [
+        "Open [Dashboard → Google Services](pulse:nav/dashboard/google).",
+        "Configure **Google Business Profile** OAuth and location settings.",
+        "Save credentials."
+      ],
+      "aliases": [
+        "gbp",
+        "business profile",
+        "google business profile settings"
+      ]
+    },
+    {
+      "id": "users/invite-user",
+      "moduleId": "users",
+      "label": "Invite user",
+      "question": "How do I invite a team member?",
+      "pulseNav": "pulse:nav/users",
+      "steps": [
+        "Open [Teams → Users](pulse:nav/users).",
+        "In **Add member**, enter **Email**, **Display name**, and **Password**.",
+        "Choose **Access role** and **Job title**.",
+        "Click **Add member**."
+      ],
+      "aliases": [
+        "invite user",
+        "add member",
+        "invite someone",
+        "add team member"
+      ]
+    },
+    {
+      "id": "users/roles",
+      "moduleId": "users",
+      "label": "Access roles",
+      "question": "How do user roles work?",
+      "pulseNav": "pulse:nav/users",
+      "steps": [
+        "Open [Teams → Users](pulse:nav/users).",
+        "When adding a member, set **Access role** (owner, admin, member, etc.).",
+        "Roles control Teams module write access."
+      ],
+      "aliases": [
+        "roles",
+        "access role",
+        "permissions"
+      ]
+    },
+    {
+      "id": "users/member-profiles",
+      "moduleId": "users",
+      "label": "Member profiles",
+      "question": "How do I view team member profiles?",
+      "pulseNav": "pulse:nav/users",
+      "steps": [
+        "Open [Teams → Users](pulse:nav/users).",
+        "Browse the member roster for display names, emails, and job titles."
+      ],
+      "aliases": [
+        "member profiles",
+        "team members",
+        "user list"
+      ]
+    },
+    {
+      "id": "chat/create-channel",
+      "moduleId": "chat",
+      "label": "Create a channel",
+      "question": "How do I create a channel?",
+      "pulseNav": "pulse:nav/chat",
+      "steps": [
+        "Open [Teams → Chat](pulse:nav/chat).",
+        "Under **Channels**, click **New channel** (+).",
+        "Enter **Name**, choose **Visibility** (Public or Private).",
+        "For private channels, select **Members**.",
+        "Click **Create**."
+      ],
+      "aliases": [
+        "create channel",
+        "new channel",
+        "add channel"
+      ]
+    },
+    {
+      "id": "chat/send-dm",
+      "moduleId": "chat",
+      "label": "Send a direct message",
+      "question": "How do I send a direct message?",
+      "pulseNav": "pulse:nav/chat",
+      "steps": [
+        "Open [Teams → Chat](pulse:nav/chat).",
+        "Under **DMs**, click **New direct message** (+).",
+        "Select a team member and start typing in the composer."
+      ],
+      "aliases": [
+        "direct message",
+        "dm",
+        "new direct message",
+        "private message"
+      ]
+    },
+    {
+      "id": "chat/use-threads",
+      "moduleId": "chat",
+      "label": "Threads",
+      "question": "How do threads work in Chat?",
+      "pulseNav": "pulse:nav/chat",
+      "steps": [
+        "Open [Teams → Chat](pulse:nav/chat).",
+        "Open a channel or DM.",
+        "Click **Reply in thread** on a message to open the thread panel.",
+        "Send replies in the thread composer."
+      ],
+      "aliases": [
+        "threads",
+        "reply in thread",
+        "thread reply"
+      ]
+    },
+    {
+      "id": "chat/upload-file",
+      "moduleId": "chat",
+      "label": "Upload a file",
+      "question": "How do I upload a file in Chat?",
+      "pulseNav": "pulse:nav/chat",
+      "steps": [
+        "Open [Teams → Chat](pulse:nav/chat).",
+        "Open a channel or DM.",
+        "Use the attachment control in the message composer to upload a file."
+      ],
+      "aliases": [
+        "file uploads",
+        "upload file",
+        "attach file",
+        "attachment"
+      ]
+    },
+    {
+      "id": "chat/mentions",
+      "moduleId": "chat",
+      "label": "Mentions",
+      "question": "How do mentions work in Chat?",
+      "pulseNav": "pulse:nav/chat",
+      "steps": [
+        "Open [Teams → Chat](pulse:nav/chat).",
+        "In the composer, type **@** followed by a team member name to mention them.",
+        "Check **Mentions** in the sidebar for messages where you were mentioned."
+      ],
+      "aliases": [
+        "mentions",
+        "@mention",
+        "notify user"
+      ]
+    },
+    {
+      "id": "tasks/projects",
+      "moduleId": "tasks",
+      "label": "Projects",
+      "question": "How do I create a project in Tasks?",
+      "pulseNav": "pulse:nav/tasks",
+      "steps": [
+        "Open [Teams → Tasks](pulse:nav/tasks).",
+        "Click **New project** in the projects sidebar.",
+        "Name the project and start adding sections and tasks."
+      ],
+      "aliases": [
+        "projects",
+        "new project",
+        "create project"
+      ]
+    },
+    {
+      "id": "tasks/tasks",
+      "moduleId": "tasks",
+      "label": "Tasks",
+      "question": "How do I add a task?",
+      "pulseNav": "pulse:nav/tasks",
+      "steps": [
+        "Open [Teams → Tasks](pulse:nav/tasks).",
+        "Select a project and section.",
+        "Click **Add task** and enter the task title."
+      ],
+      "aliases": [
+        "tasks",
+        "add task",
+        "create task"
+      ]
+    },
+    {
+      "id": "tasks/sections",
+      "moduleId": "tasks",
+      "label": "Sections",
+      "question": "How do I organize task sections?",
+      "pulseNav": "pulse:nav/tasks",
+      "steps": [
+        "Open [Teams → Tasks](pulse:nav/tasks).",
+        "Inside a project, add or rename **Sections** to group tasks."
+      ],
+      "aliases": [
+        "sections",
+        "task sections",
+        "kanban columns"
+      ]
+    },
+    {
+      "id": "generator/opt/sitemap-pills",
+      "moduleId": "generator/opt",
+      "label": "Pages Posts SAP pills",
+      "question": "How do I switch between Pages, Posts, and SAP?",
+      "pulseNav": "pulse:nav/generator/opt",
+      "steps": [
+        "Open [SEO → Generator → Opt](pulse:nav/generator/opt) (Overview).",
+        "On the black toolbar, click **Pages**, **Posts**, or **SAP** sitemap source pills."
+      ],
+      "aliases": [
+        "pages posts sap",
+        "sitemap source",
+        "sitemap pills"
+      ]
+    },
+    {
+      "id": "generator/opt/aiseo-bulk-meta",
+      "moduleId": "generator/opt",
+      "label": "AISEO bulk meta",
+      "question": "How do I bulk-optimize meta on Overview?",
+      "pulseNav": "pulse:nav/generator/opt",
+      "steps": [
+        "Open [SEO → Generator → Opt](pulse:nav/generator/opt) (Overview).",
+        "Select rows with checkboxes.",
+        "Open the **AISEO** flyout on the black toolbar → **Meta** → **All Meta** or **MD**.",
+        "Run the bulk job on selected rows."
+      ],
+      "aliases": [
+        "bulk meta",
+        "bulk optimize meta",
+        "aiseo bulk",
+        "all meta"
+      ]
+    },
+    {
+      "id": "generator/opt/row-expansion",
+      "moduleId": "generator/opt",
+      "label": "Row expansion",
+      "question": "How do I expand an Overview row?",
+      "pulseNav": "pulse:nav/generator/opt",
+      "steps": [
+        "Open [SEO → Generator → Opt](pulse:nav/generator/opt) (Overview).",
+        "Click a row in the grid to expand row details.",
+        "Use row actions such as **AI meta** for single-page optimization."
+      ],
+      "aliases": [
+        "row expansion",
+        "expand row",
+        "row details"
+      ]
+    },
+    {
+      "id": "generator/opt/ai-meta",
+      "moduleId": "generator/opt",
+      "label": "AI meta",
+      "question": "How do I run AI meta on one page?",
+      "pulseNav": "pulse:nav/generator/opt",
+      "steps": [
+        "Open [SEO → Generator → Opt](pulse:nav/generator/opt) (Overview).",
+        "Expand the page row.",
+        "Click **AI meta** in row details (pages: meta + FAQs; posts: **AI title** then meta)."
+      ],
+      "aliases": [
+        "ai meta",
+        "single page meta",
+        "optimize one page"
+      ]
+    },
+    {
+      "id": "generator/opt/page-title",
+      "moduleId": "generator/opt",
+      "label": "Optimize page title",
+      "question": "How do I optimize a page title?",
+      "pulseNav": "pulse:nav/generator/opt",
+      "steps": [
+        "Open [SEO → Generator → Opt](pulse:nav/generator/opt) (Overview).",
+        "Use **Pages**, **Posts**, or **SAP** pills to find the URL.",
+        "Expand the row and edit **SEO title** (posts: use **AI title** or **AI meta**).",
+        "Click **Save**."
+      ],
+      "aliases": [
+        "page title",
+        "optimize title",
+        "seo title",
+        "title tag",
+        "optimizae"
+      ]
+    },
+    {
+      "id": "generator/opt",
+      "moduleId": "Multi-site pill",
+      "label": "How do I use multi-site Overview?",
+      "question": "pulse:nav/generator/opt",
+      "pulseNav": [
+        "Open [SEO → Generator → Opt](pulse:nav/generator/opt) (Overview).",
+        "Switch the content optimizer section to **Multi-site** when available.",
+        "Compare or bulk work across connected properties from the multi-site grid."
+      ],
+      "steps": [
+        "multi-site",
+        "multi site overview"
+      ],
+      "aliases": []
+    },
+    {
+      "id": "generator/bulk-csv/csv-upload",
+      "moduleId": "generator/bulk-csv",
+      "label": "CSV upload",
+      "question": "How do I bulk generate from CSV?",
+      "pulseNav": "pulse:nav/generator/bulk-csv",
+      "steps": [
+        "Open [SEO → Generator → CSV](pulse:nav/generator/bulk-csv).",
+        "Upload a CSV with blog generation columns.",
+        "Configure options and run **Bulk generate**."
+      ],
+      "aliases": [
+        "csv upload",
+        "bulk csv",
+        "upload csv"
+      ]
+    },
+    {
+      "id": "generator/bulk-csv/bulk-generate",
+      "moduleId": "generator/bulk-csv",
+      "label": "Bulk generate",
+      "question": "How do I run CSV bulk generation?",
+      "pulseNav": "pulse:nav/generator/bulk-csv",
+      "steps": [
+        "Open [SEO → Generator → CSV](pulse:nav/generator/bulk-csv).",
+        "After CSV upload, start the bulk generation run from the toolbar."
+      ],
+      "aliases": [
+        "bulk generate",
+        "run csv bulk"
+      ]
+    },
+    {
+      "id": "generator/bulk-prompt/overview",
+      "moduleId": "generator/bulk-prompt",
+      "label": "Prompt bulk",
+      "question": "How do I bulk generate from prompts?",
+      "pulseNav": "pulse:nav/generator/bulk-prompt",
+      "steps": [
+        "Open [SEO → Generator → Prompt](pulse:nav/generator/bulk-prompt).",
+        "Configure prompt templates and run bulk generation."
+      ],
+      "aliases": [
+        "prompt bulk",
+        "bulk prompt"
+      ]
+    },
+    {
+      "id": "generator/bulk-blog-import/overview",
+      "moduleId": "generator/bulk-blog-import",
+      "label": "Blog import",
+      "question": "How do I import blog posts?",
+      "pulseNav": "pulse:nav/generator/bulk-blog-import",
+      "steps": [
+        "Open [SEO → Generator → Import](pulse:nav/generator/bulk-blog-import).",
+        "Import existing WordPress posts for optimization workflows."
+      ],
+      "aliases": [
+        "blog import",
+        "import posts"
+      ]
+    },
+    {
+      "id": "generator/bulk-press-release/overview",
+      "moduleId": "generator/bulk-press-release",
+      "label": "Press release bulk",
+      "question": "How do I generate press releases in bulk?",
+      "pulseNav": "pulse:nav/generator/bulk-press-release",
+      "steps": [
+        "Open [SEO → Generator → PR](pulse:nav/generator/bulk-press-release).",
+        "Configure press release rows and run the bulk PR generator."
+      ],
+      "aliases": [
+        "press release",
+        "pr generator"
+      ]
+    },
+    {
+      "id": "generator/entity/overview",
+      "moduleId": "generator/entity",
+      "label": "Entity SAP generator",
+      "question": "How do I generate SAP entity pages?",
+      "pulseNav": "pulse:nav/generator/entity",
+      "steps": [
+        "Open [SEO → Generator → Entity](pulse:nav/generator/entity).",
+        "Configure entity/location pages and run SAP generation."
+      ],
+      "aliases": [
+        "entity",
+        "sap",
+        "location pages"
+      ]
+    },
+    {
+      "id": "generator/competitor/overview",
+      "moduleId": "generator/competitor",
+      "label": "Competitor generator",
+      "question": "How do I run competitor content generation?",
+      "pulseNav": "pulse:nav/generator/competitor",
+      "steps": [
+        "Open [SEO → Generator → Competitor](pulse:nav/generator/competitor).",
+        "Configure competitor research inputs and generate content."
+      ],
+      "aliases": [
+        "competitor generator",
+        "competitor content"
+      ]
+    },
+    {
+      "id": "generator/flow/overview",
+      "moduleId": "generator/flow",
+      "label": "Free Flow",
+      "question": "How do I use Free Flow?",
+      "pulseNav": "pulse:nav/generator/flow",
+      "steps": [
+        "Open [SEO → Generator → Flow](pulse:nav/generator/flow).",
+        "Enter a freeform prompt and generate sectioned content in the Flow workspace."
+      ],
+      "aliases": [
+        "free flow",
+        "flow",
+        "freeform writing"
+      ]
+    },
+    {
+      "id": "generator/image/overview",
+      "moduleId": "generator/image",
+      "label": "AI images",
+      "question": "How do I generate AI images?",
+      "pulseNav": "pulse:nav/generator/image",
+      "steps": [
+        "Open [SEO → Generator → Image](pulse:nav/generator/image).",
+        "Enter image prompts and generate assets for content."
+      ],
+      "aliases": [
+        "image generator",
+        "ai images"
+      ]
+    },
+    {
+      "id": "generator/research/proposal",
+      "moduleId": "generator/research",
+      "label": "Proposal research",
+      "question": "How do I run proposal research?",
+      "pulseNav": "pulse:nav/generator/research",
+      "steps": [
+        "Open [SEO → Generator → Research](pulse:nav/generator/research).",
+        "Select the **Proposal** research section.",
+        "Configure inputs and run the proposal research pipeline."
+      ],
+      "aliases": [
+        "proposal",
+        "proposal research"
+      ]
+    },
+    {
+      "id": "generator/research/citation",
+      "moduleId": "generator/research",
+      "label": "Citation research",
+      "question": "How do I run citation research?",
+      "pulseNav": "pulse:nav/generator/research",
+      "steps": [
+        "Open [SEO → Generator → Research](pulse:nav/generator/research).",
+        "Select the **Citation** research section.",
+        "Run citation discovery for the active property."
+      ],
+      "aliases": [
+        "citation",
+        "citation research"
+      ]
+    },
+    {
+      "id": "generator/research/backlinking",
+      "moduleId": "generator/research",
+      "label": "Backlinking research",
+      "question": "How do I run backlinking research?",
+      "pulseNav": "pulse:nav/generator/research",
+      "steps": [
+        "Open [SEO → Generator → Research](pulse:nav/generator/research).",
+        "Select the **Backlinking** research section.",
+        "Run backlink opportunity research."
+      ],
+      "aliases": [
+        "backlinking",
+        "backlink research"
+      ]
+    },
+    {
+      "id": "generator/report/overview",
+      "moduleId": "generator/report",
+      "label": "GSC reporting",
+      "question": "How do I view GSC reports?",
+      "pulseNav": "pulse:nav/generator/report",
+      "steps": [
+        "Open [SEO → Generator → Report](pulse:nav/generator/report).",
+        "Select a connected property with GSC configured.",
+        "Browse performance reporting tabs and date ranges."
+      ],
+      "aliases": [
+        "gsc report",
+        "reporting",
+        "gsc reporting"
+      ]
+    },
+    {
+      "id": "sitemap-optimizer/plan-mode",
+      "moduleId": "sitemap-optimizer",
+      "label": "Plan mode",
+      "question": "How do I use Sitemap plan mode?",
+      "pulseNav": "pulse:nav/sitemap-optimizer",
+      "steps": [
+        "Open [SEO → Sitemap](pulse:nav/sitemap-optimizer).",
+        "Select **Plan** mode in the workspace header.",
+        "Cluster and plan URL groups before running optimization."
+      ],
+      "aliases": [
+        "plan mode",
+        "sitemap plan"
+      ]
+    },
+    {
+      "id": "sitemap-optimizer/legacy-redirects",
+      "moduleId": "sitemap-optimizer",
+      "label": "Legacy redirects",
+      "question": "How do I match legacy redirects?",
+      "pulseNav": "pulse:nav/sitemap-optimizer",
+      "steps": [
+        "Open [SEO → Sitemap](pulse:nav/sitemap-optimizer).",
+        "Open the **Legacy redirects** section.",
+        "Import or match old URLs to new sitemap URLs."
+      ],
+      "aliases": [
+        "legacy redirects",
+        "redirect match"
+      ]
+    },
+    {
+      "id": "sitemap-optimizer/url-optimizer",
+      "moduleId": "sitemap-optimizer",
+      "label": "URL optimizer",
+      "question": "How do I run the URL optimizer?",
+      "pulseNav": "pulse:nav/sitemap-optimizer",
+      "steps": [
+        "Open [SEO → Sitemap](pulse:nav/sitemap-optimizer).",
+        "Open the **URL optimizer** section.",
+        "Configure and run URL optimization on sitemap clusters."
+      ],
+      "aliases": [
+        "url optimizer",
+        "optimize urls"
+      ]
+    },
+    {
+      "id": "vertical-benchmarks/overview",
+      "moduleId": "vertical-benchmarks",
+      "label": "Industry verticals",
+      "question": "How do I use Industry verticals benchmarks?",
+      "pulseNav": "pulse:nav/vertical-benchmarks",
+      "steps": [
+        "Open [SEO → Industry verticals](pulse:nav/vertical-benchmarks).",
+        "Select a property and vertical benchmark package.",
+        "Export or run bulk CSV benchmark workflows."
+      ],
+      "aliases": [
+        "vertical benchmarks",
+        "industry verticals"
+      ]
+    },
+    {
+      "id": "gbp-post/overview",
+      "moduleId": "gbp-post",
+      "label": "GBP posts",
+      "question": "How do I publish a GBP post?",
+      "pulseNav": "pulse:nav/gbp-post",
+      "steps": [
+        "Open [Social → GBP](pulse:nav/gbp-post).",
+        "Select a property with GBP connected.",
+        "Configure post copy and publish to Google Business Profile."
+      ],
+      "aliases": [
+        "gbp",
+        "google business profile post",
+        "publish gbp"
+      ]
+    },
+    {
+      "id": "content-calendar/overview",
+      "moduleId": "content-calendar",
+      "label": "Content calendar",
+      "question": "How do I use the content calendar?",
+      "pulseNav": "pulse:nav/content-calendar",
+      "steps": [
+        "Open [Social → Calendar](pulse:nav/content-calendar).",
+        "Generate or edit AI content calendar rows for the active property."
+      ],
+      "aliases": [
+        "content calendar",
+        "calendar"
+      ]
+    },
+    {
+      "id": "social-creator/overview",
+      "moduleId": "social-creator",
+      "label": "Social creator",
+      "question": "How do I create social posts?",
+      "pulseNav": "pulse:nav/social-creator",
+      "steps": [
+        "Open [Social → Creator](pulse:nav/social-creator).",
+        "Configure post copy and visuals, then generate organic social posts."
+      ],
+      "aliases": [
+        "social creator",
+        "organic posts",
+        "social posts"
+      ]
+    },
+    {
+      "id": "ppc-google/overview",
+      "moduleId": "ppc-google",
+      "label": "Google PPC",
+      "question": "How do I build Google Search campaigns?",
+      "pulseNav": "pulse:nav/ppc-google",
+      "steps": [
+        "Open [PPC → Google](pulse:nav/ppc-google).",
+        "Select a property and seed campaigns from WordPress pages and GSC queries."
+      ],
+      "aliases": [
+        "google ads",
+        "ppc google",
+        "search campaigns"
+      ]
+    },
+    {
+      "id": "ppc-meta/overview",
+      "moduleId": "ppc-meta",
+      "label": "Meta PPC",
+      "question": "How do I build Meta feed ads?",
+      "pulseNav": "pulse:nav/ppc-meta",
+      "steps": [
+        "Open [PPC → Meta](pulse:nav/ppc-meta).",
+        "Select a property and generate Meta ads from page copy and creatives."
+      ],
+      "aliases": [
+        "meta ads",
+        "facebook ads",
+        "instagram ads"
+      ]
+    },
+    {
+      "id": "integrations/connect-site",
+      "moduleId": "integrations",
+      "label": "Connect WordPress",
+      "question": "How do I connect a WordPress site?",
+      "pulseNav": "pulse:nav/integrations",
+      "steps": [
+        "Open [Integrations](pulse:nav/integrations).",
+        "Add or select a WordPress site tile.",
+        "Enter site URL and application credentials, then save."
+      ],
+      "aliases": [
+        "integrations",
+        "wordpress connect",
+        "connect site"
+      ]
+    },
+    {
+      "id": "knowledge/upload-files",
+      "moduleId": "knowledge",
+      "label": "Knowledge Base files",
+      "question": "How do I upload knowledge base files?",
+      "pulseNav": "pulse:nav/knowledge",
+      "steps": [
+        "Open [Knowledge Base](pulse:nav/knowledge).",
+        "Upload files or paste manual text for RAG knowledge used in generation."
+      ],
+      "aliases": [
+        "knowledge base",
+        "upload files",
+        "rag",
+        "kb"
+      ]
+    },
+    {
+      "id": "api/browse-docs",
+      "moduleId": "api",
+      "label": "API docs",
+      "question": "How do I browse API documentation?",
+      "pulseNav": "pulse:nav/api",
+      "steps": [
+        "Open [API Docs](pulse:nav/api).",
+        "Browse endpoint groups in the API documentation browser."
+      ],
+      "aliases": [
+        "api docs",
+        "api documentation",
+        "endpoints"
+      ]
+    }
+  ]
+}

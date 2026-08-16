@@ -5,7 +5,7 @@ section: Knowledge Model
 method: POST
 path: /api/knowledge-model/auto-graph
 auth: open
-order: 570
+order: 560
 ---
 
 POST `/api/knowledge-model/auto-graph`.
@@ -39,7 +39,7 @@ Runs the auto graph action in the Knowledge Model API from a JSON request body. 
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/knowledge-model/auto-graph" \
+curl -X POST "https://neodigital.ca/api/knowledge-model/auto-graph" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

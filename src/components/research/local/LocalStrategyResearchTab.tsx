@@ -966,7 +966,7 @@ export function LocalStrategyResearchTab() {
       </div>
 
       {workspaceMode === "connected" && (!site || !site.siteUrl?.trim()) ? (
-        <div className="flowbie-zone-tile--data px-2 py-3 text-[1rem] leading-normal text-muted-foreground">
+        <div className="neo-pulse-zone-tile--data px-2 py-3 text-[1rem] leading-normal text-muted-foreground">
           {!site
             ? "Connect a WordPress site and select it in the header, or switch to Temp seed."
             : "This site has no URL saved."}
@@ -982,7 +982,7 @@ export function LocalStrategyResearchTab() {
                 {workspaceMode === "temp" ? (
                   <Input
                     type="url"
-                    variant="flowbieBlack"
+                    variant="neoPulseBlack"
                     className="h-9 font-mono text-sm"
                     placeholder="https://example.com"
                     value={tempSeedUrl}
@@ -1004,7 +1004,7 @@ export function LocalStrategyResearchTab() {
                     GBP search (DataForSEO)
                   </div>
                   <Input
-                    variant="flowbieBlack"
+                    variant="neoPulseBlack"
                     className="h-9 text-sm"
                     placeholder="Business name + city"
                     value={businessNameQuery}
@@ -1017,7 +1017,7 @@ export function LocalStrategyResearchTab() {
                     Location (optional)
                   </div>
                   <Input
-                    variant="flowbieBlack"
+                    variant="neoPulseBlack"
                     className="h-9 text-sm"
                     placeholder="e.g. Georgia, United States"
                     value={geoLabel}
@@ -1029,7 +1029,7 @@ export function LocalStrategyResearchTab() {
             </div>
           </div>
 
-          <div className="flowbie-zone-tile--analysis px-2 py-2 sm:px-3">
+          <div className="neo-pulse-zone-tile--analysis px-2 py-2 sm:px-3">
             <p className="mb-2 text-[1rem] leading-snug text-muted-foreground">
               Organic competitors use <span className="text-foreground/90">DataForSEO Labs</span> only - Semrush API is
               not required. Import a Local Dominator grid CSV (Place ID / cid) for extra competitors; enrichment uses
@@ -1088,7 +1088,7 @@ export function LocalStrategyResearchTab() {
 
               <Button
                 type="button"
-                className={cn("flowbie-btn-semantic-analysis", REPORTING_TOOLBAR_BTN)}
+                className={cn("neo-pulse-btn-semantic-analysis", REPORTING_TOOLBAR_BTN)}
                 disabled={busy || !semrushData}
                 onClick={() => void generateReport()}
               >
@@ -1146,15 +1146,15 @@ export function LocalStrategyResearchTab() {
                 aria-valuemax={phase === "report" ? 100 : undefined}
                 aria-valuenow={phase === "report" ? Math.round(reportProgressPct) : undefined}
               >
-                <div className="flowbie-competitor-progress-track">
+                <div className="neo-pulse-competitor-progress-track">
                   {phase === "report" ? (
                     <div
-                      className="flowbie-competitor-progress-fill h-full transition-[width] duration-300 ease-out"
+                      className="neo-pulse-competitor-progress-fill h-full transition-[width] duration-300 ease-out"
                       style={{ width: `${reportProgressPct}%` }}
                       aria-hidden
                     />
                   ) : (
-                    <div className="flowbie-competitor-progress-indeterminate" aria-hidden />
+                    <div className="neo-pulse-competitor-progress-indeterminate" aria-hidden />
                   )}
                 </div>
                 <p className="min-h-[1rem] text-[1rem] leading-normal text-muted-foreground">
@@ -1224,8 +1224,8 @@ export function LocalStrategyResearchTab() {
             ) : null}
           </div>
 
-          <div className="flowbie-zone-tile--data mt-2 px-2 py-2 sm:px-3">
-            <div className="flowbie-zone-row flowbie-zone-row--data space-y-1 py-2 text-[1rem] leading-normal">
+          <div className="neo-pulse-zone-tile--data mt-2 px-2 py-2 sm:px-3">
+            <div className="neo-pulse-zone-row neo-pulse-zone-row--data space-y-1 py-2 text-[1rem] leading-normal">
               <div className="min-h-[1rem] text-[1rem] font-semibold uppercase leading-normal tracking-wide text-muted-foreground">
                 Seed domain
               </div>
@@ -1264,7 +1264,7 @@ export function LocalStrategyResearchTab() {
           />
 
           {reportMd?.trim() || lastSapScheduleRows?.length ? (
-            <div className="flowbie-zone-tile--analysis mt-2 space-y-2 px-2 py-2 sm:px-3">
+            <div className="neo-pulse-zone-tile--analysis mt-2 space-y-2 px-2 py-2 sm:px-3">
               <div className="min-h-[1rem] text-[1rem] font-semibold uppercase leading-normal tracking-wide text-muted-foreground">
                 Report sections (inventory)
               </div>
@@ -1329,7 +1329,7 @@ export function LocalStrategyResearchTab() {
           ) : null}
 
           {blueprintArtifacts.length > 0 ? (
-            <div className="flowbie-zone-tile--analysis mt-2 space-y-3 px-2 py-2 sm:px-3">
+            <div className="neo-pulse-zone-tile--analysis mt-2 space-y-3 px-2 py-2 sm:px-3">
               <div className="min-h-[1rem] text-[1rem] font-semibold uppercase leading-normal tracking-wide text-muted-foreground">
                 Blueprint outputs
               </div>
@@ -1387,7 +1387,7 @@ export function LocalStrategyResearchTab() {
           ) : null}
 
           {reportMd?.trim() ? (
-            <div className="flowbie-zone-tile--analysis mt-2 space-y-2 px-2 py-2 sm:px-3">
+            <div className="neo-pulse-zone-tile--analysis mt-2 space-y-2 px-2 py-2 sm:px-3">
               <div className="min-h-[1rem] text-[1rem] font-semibold uppercase leading-normal tracking-wide text-muted-foreground">
                 Stitched report preview
               </div>

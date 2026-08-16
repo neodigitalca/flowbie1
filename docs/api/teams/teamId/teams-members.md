@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/members
 auth: session-team
-order: 1650
+order: 1640
 ---
 
 POST `/api/teams/{teamId}/members`.
@@ -34,7 +34,7 @@ Runs the members action in the Teams API from a JSON request body. Requires a si
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/members" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/members" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

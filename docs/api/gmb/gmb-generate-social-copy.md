@@ -34,7 +34,7 @@ Runs the generate social copy action in the Google Business Profile API from a J
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/gmb/generate-social-copy" \
+curl -X POST "https://neodigital.ca/api/gmb/generate-social-copy" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

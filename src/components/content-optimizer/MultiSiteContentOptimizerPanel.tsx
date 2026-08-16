@@ -10,6 +10,7 @@ import type { ContentOptimizerGeneratorChrome } from "@/components/content-optim
 import { useWordPressSites } from "@/hooks/use-wordpress-sites";
 import { useOptimizationActivityCounts } from "@/hooks/use-optimization-activity-counts";
 import { useWordPressOptimization } from "@/contexts/wordpress-optimization-context";
+import { useAgentRunOptimizerScope } from "@/contexts/agent-run-optimizer-scope-context";
 import type { WordPressSite } from "@/components/integrations/types";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -100,8 +101,10 @@ export const MultiSiteContentOptimizerPanel: React.FC<MultiSiteContentOptimizerP
     bulkOptimizationState,
     isOptimizingContent,
     optimizationProgress,
+    optimizationFileManagers,
     gscPerformancePreview,
   } = useWordPressOptimization();
+  const { scope } = useAgentRunOptimizerScope();
 
   const [rowConfigs, setRowConfigs] = useState<Record<string, SiteRowConfig>>({});
   const [optimizeMode, setOptimizeMode] = useState<"update" | "draft">("update");
@@ -196,19 +199,27 @@ export const MultiSiteContentOptimizerPanel: React.FC<MultiSiteContentOptimizerP
   );
 
   const bulkRunBatchKey = useMemo(() => {
+    if (scope?.batchKey) return scope.batchKey;
     for (const s of propertySites) {
       const bk = `${s.id}-batch`;
       if (isOptimizingContent[bk]) return bk;
     }
+    for (const key of Object.keys(isOptimizingContent)) {
+      if (key.startsWith("agent-run-") && isOptimizingContent[key]) return key;
+    }
     if (optimizeBusySiteId) {
       const busyKey = `${optimizeBusySiteId}-batch`;
       if (isOptimizingContent[busyKey] || bulkOptimizationState[busyKey]) return busyKey;
+    }
+    for (const key of Object.keys(bulkOptimizationState)) {
+      if (key.startsWith("agent-run-") && bulkOptimizationState[key]) return key;
     }
     if (pinnedDetailsBatchKey && bulkOptimizationState[pinnedDetailsBatchKey]) {
       return pinnedDetailsBatchKey;
     }
     return null;
   }, [
+    scope?.batchKey,
     propertySites,
     bulkOptimizationState,
     isOptimizingContent,
@@ -216,7 +227,8 @@ export const MultiSiteContentOptimizerPanel: React.FC<MultiSiteContentOptimizerP
     pinnedDetailsBatchKey,
   ]);
 
-  const batchSiteId = bulkRunBatchKey ? bulkRunBatchKey.replace(/-batch$/, "") : "";
+  const batchSiteId = scope?.siteId
+    ?? (bulkRunBatchKey?.endsWith("-batch") ? bulkRunBatchKey.replace(/-batch$/, "") : "");
   const batchSite = propertySites.find((s) => s.id === batchSiteId);
   const batchBulkState = bulkRunBatchKey ? bulkOptimizationState[bulkRunBatchKey] : null;
   const batchProgress = bulkRunBatchKey ? optimizationProgress[bulkRunBatchKey] : undefined;
@@ -497,11 +509,11 @@ export const MultiSiteContentOptimizerPanel: React.FC<MultiSiteContentOptimizerP
           }}
           batchBulkState={batchBulkState}
           bulkRunBatchKey={bulkRunBatchKey ?? ""}
+          batchSite={batchSite}
           batchSiteName={batchSite?.name}
           rowProgressDs={rowProgressDs}
-          gscMap={gscMap}
-          gscPreviewLoadingDs={gscPreviewLoadingDs}
-          bulkActiveUrlDs={bulkActiveUrlDs}
+          isOptimizingContent={isOptimizingContent}
+          optimizationFileManagers={optimizationFileManagers}
           onBatchClose={handleBatchClose}
           paginationLayoutTotal={paginationLayoutTotal}
           generatorChrome={generatorChrome}

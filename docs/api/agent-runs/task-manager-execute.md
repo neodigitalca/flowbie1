@@ -19,8 +19,10 @@ Clicking **Execute with agent**:
 
 1. Calls `POST /api/teams/{teamId}/tasks/tasks/{taskId}/execute`
 2. Creates an AgentRun with `source: task_manager` and `taskId`
-3. Opens **Running Agents** (left sidebar)
+3. Opens the **Agents** tab in the right sidebar
 4. Client executor runs content optimization using `clientRunContract` when returned
+
+Pulse execution updates the linked task to `in_progress` during preflight. It does **not** auto-mark the task `done` when the agent run finishes; mark the task complete manually in Task Manager.
 
 ## Payload fields
 

@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 
 const PRESET_TRIGGER_LABEL: Record<GscReportingComparePresetId, string> = {
   mom: "Month vs month",
+  yoy: "Year over year",
   custom_compare: "Custom ranges",
 };
 

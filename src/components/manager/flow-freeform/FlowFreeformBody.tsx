@@ -198,7 +198,7 @@ export function FlowFreeformBody({
       ) : null}
 
       {sections.length > 0 ? (
-        <div className="flowbie-zone-tile--analysis space-y-3 rounded-md border border-border/50 px-3 py-3">
+        <div className="neo-pulse-zone-tile--analysis space-y-3 rounded-md border border-border/50 px-3 py-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[1rem] font-semibold uppercase tracking-wide text-muted-foreground">Report sections</p>
             <Button

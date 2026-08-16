@@ -5,7 +5,7 @@ section: Getting started
 order: 20
 ---
 
-How Flowbie reports API failures: HTTP status codes, JSON error bodies, and what to do when a route is missing or validation fails.
+How NEO Pulse reports API failures: HTTP status codes, JSON error bodies, and what to do when a route is missing or validation fails.
 
 ## Not found
 
@@ -25,7 +25,7 @@ Unknown routes return **404** with:
 Request:
 
 ```bash
-curl -X POST "https://flowbie.ca/api/auth/login" \
+curl -X POST "https://neodigital.ca/api/auth/login" \
   -H "Content-Type: application/json" \
   -d '{"email":"wrong@example.com","password":"bad"}'
 ```

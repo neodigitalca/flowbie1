@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+android/local.properties
 *.local
 .env
 .env.local
@@ -29,6 +30,9 @@ wordpress-plugins/flowbie-wp/.env
 wordpress-plugins/flowbie-wp/includes/flowbie-wp-secrets.php
 wordpress-plugins/flowbie-wp/includes/flowbie-wp-gsc-config.php
 wordpress-plugins/flowbie-app/includes/flowbie-app-secrets.php
+wordpress-plugins/neo-pulse-app/includes/neo-pulse-app-secrets.php
+wordpress-plugins/neo-pulse-wp/includes/neo-pulse-wp-gsc-config.php
+wordpress-plugins/neo-pulse-wp/includes/credentials/
 
 # Deploy build artifacts (may embed local secrets)
 wordpress-plugins/.deploy/*.zip

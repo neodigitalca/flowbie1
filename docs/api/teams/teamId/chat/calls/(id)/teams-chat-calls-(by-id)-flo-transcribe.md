@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/chat/calls/({id})/flo-transcribe
 auth: team-rbac-communication
-order: 1140
+order: 1130
 ---
 
 POST `/api/teams/{teamId}/chat/calls/({id})/flo-transcribe`.
@@ -34,7 +34,7 @@ Runs the flo transcribe action in the Teams API from a JSON request body. Requir
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/chat/calls/({id})/flo-transcribe" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/chat/calls/({id})/flo-transcribe" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

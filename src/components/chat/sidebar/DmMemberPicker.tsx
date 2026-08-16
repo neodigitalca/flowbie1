@@ -10,8 +10,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTeam } from "@/contexts/TeamContext";
 import { openChatDm } from "@/lib/chat-api";
 import type { ChatChannel } from "@/lib/chat-types";
-import { FloAvatar } from "@/components/chat/FloAvatar";
-import { isFloMember, sortMembersWithFloFirst } from "@/lib/chat-flo";
+import { NeoPulseAvatar } from "@/components/chat/NeoPulseAvatar";
+import { isNeoPulseBotMember, sortMembersWithNeoPulseBotFirst } from "@/lib/chat-neo-pulse";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
@@ -31,7 +31,7 @@ export function DmMemberPicker({
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const others = sortMembersWithFloFirst(members.filter((m) => m.userId !== user?.id));
+  const others = sortMembersWithNeoPulseBotFirst(members.filter((m) => m.userId !== user?.id));
 
   const handleOpen = async (userId: number) => {
     if (!activeTeam) return;
@@ -68,8 +68,8 @@ export function DmMemberPicker({
                 busyId === member.userId && "opacity-60",
               )}
             >
-              {isFloMember(member) ? (
-                <FloAvatar avatarUrl={member.avatarUrl} displayName={member.displayName} className="h-10 w-10" />
+              {isNeoPulseBotMember(member) ? (
+                <NeoPulseAvatar avatarUrl={member.avatarUrl} displayName={member.displayName} className="h-10 w-10" />
               ) : (
                 <Avatar className="h-10 w-10 shrink-0">
                   <AvatarFallback className="bg-primary/20 text-base font-semibold text-white">
@@ -80,7 +80,7 @@ export function DmMemberPicker({
               <div className="min-w-0 flex-1">
                 <span className="text-base font-medium text-white">{member.displayName}</span>
                 <span className="block truncate text-base text-white/50">
-                  {isFloMember(member) ? "AI teammate" : member.email}
+                  {isNeoPulseBotMember(member) ? "AI teammate" : member.email}
                 </span>
               </div>
             </button>

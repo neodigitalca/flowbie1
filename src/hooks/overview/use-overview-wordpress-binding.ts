@@ -301,8 +301,8 @@ function prefetchResultForSource(
     if (csv) {
       const filename =
         sitemapUrls.length > 0
-          ? `flowbie-sitemap-inventory-${hostKey}-${dateKey}.csv`
-          : `flowbie-wp-inventory-${hostKey}-${dateKey}-${source}.csv`;
+          ? `neo-pulse-sitemap-inventory-${hostKey}-${dateKey}.csv`
+          : `neo-pulse-wp-inventory-${hostKey}-${dateKey}-${source}.csv`;
       triggerOverviewCsvDownload(csv, filename);
       csvReady = true;
     }

@@ -9,16 +9,16 @@
 import type { PublishedPostsResult } from './types';
 
 export const WORDPRESS_SGCAPTCHA_BLOCKED_HINT =
-  'SiteGround blocked WordPress REST (sgcaptcha). Allowlist your Flowbie IP in Site Tools, relax bot checks for /wp-json/, or enable CORS on WordPress so the Flowbie app can call /wp-json/ from the browser.';
+  'SiteGround blocked WordPress REST (sgcaptcha). Allowlist your NEO Pulse IP in Site Tools, relax bot checks for /wp-json/, or enable CORS on WordPress so the NEO Pulse app can call /wp-json/ from the browser.';
 
 /**
- * Example must-use plugin: allow Flowbie dev origins to call /wp-json with Authorization.
- * Add your production Flowbie origin to $allowed. Remove or tighten when not needed.
+ * Example must-use plugin: allow NEO Pulse dev origins to call /wp-json with Authorization.
+ * Add your production NEO Pulse origin to $allowed. Remove or tighten when not needed.
  */
-export const FLOWBIE_WORDPRESS_MU_PLUGIN_CORS_EXAMPLE = `<?php
+export const NEO_PULSE_WORDPRESS_MU_PLUGIN_CORS_EXAMPLE = `<?php
 /**
- * Plugin Name: Flowbie REST CORS
- * Description: CORS for Flowbie browser REST. Edit $allowed for your origins.
+ * Plugin Name: NEO Pulse REST CORS
+ * Description: CORS for NEO Pulse browser REST. Edit $allowed for your origins.
  */
 add_action('rest_api_init', function () {
   remove_filter('rest_pre_serve_request', 'rest_send_cors_headers');

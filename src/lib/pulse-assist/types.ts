@@ -79,6 +79,8 @@ export type AssistCard = {
   workflow_id?: string;
   table?: AssistCardTable;
   recipe_key?: string;
+  recipe_keyword?: string;
+  project_id?: number;
   plan_json?: Record<string, unknown>;
   context_json?: Record<string, unknown>;
 };
@@ -143,6 +145,7 @@ export type SiteInventoryContextRow = {
   url: string;
   collection: string;
   date_gmt?: string;
+  status?: string;
   keyword?: string;
   excerpt?: string;
   meta?: string;
@@ -173,6 +176,7 @@ export type TeamContextPulseTask = {
   projectId: number;
   projectTitle: string;
   dueDate: string;
+  dueTime?: string;
   recurrenceRule: string;
   wordpressSiteId: string;
   status: string;

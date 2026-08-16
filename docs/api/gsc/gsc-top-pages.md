@@ -5,7 +5,7 @@ section: Google Search Console
 method: POST
 path: /api/gsc/top-pages
 auth: open
-order: 500
+order: 490
 ---
 
 POST `/api/gsc/top-pages`.
@@ -34,7 +34,7 @@ Runs the top pages action in the Google Search Console API from a JSON request b
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/gsc/top-pages" \
+curl -X POST "https://neodigital.ca/api/gsc/top-pages" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

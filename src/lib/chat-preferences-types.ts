@@ -1,6 +1,7 @@
 import { clampNoiseCancellationStrength } from "@/lib/call-audio-constraints";
 
-export type ChatThemeId = "light" | "dark" | "midnight" | "high-contrast" | "brand";
+export type ChatThemeId = "light" | "dark" | "midnight" | "high-contrast" | "brand" | "slack";
+export type ChatLayoutMode = "default" | "minimal";
 export type ChatAccentPreset = "brand" | "blue" | "violet" | "rose" | "amber";
 export type ChatDensity = "comfortable" | "compact";
 export type ChatFontScale = "default" | "large";
@@ -34,6 +35,8 @@ export type ChatAppearancePrefs = {
   density: ChatDensity;
   fontScale: ChatFontScale;
   sidebarSections: ChatSidebarSections;
+  layoutMode: ChatLayoutMode;
+  starredChannelIds: number[];
 };
 
 /** @deprecated v1 field — migrated to zoneThemes on read */
@@ -98,7 +101,21 @@ export type ChatAlertItem = {
   createdAt: string;
 };
 
-const THEME_IDS: ChatThemeId[] = ["light", "dark", "midnight", "high-contrast", "brand"];
+import { normalizeStarredChannelIds } from "@/lib/chat-starred-channels";
+
+const BUILTIN_PRESET_IDS: ChatBuiltinPresetId[] = ["minimal", "balanced", "all", "focus"];
+
+export function normalizeActivePresetId(
+  id: string | undefined,
+  appearance: ChatAppearancePrefs,
+): ChatBuiltinPresetId | string {
+  if (id === "slack") return "minimal";
+  if (id === "minimal" && appearance.layoutMode !== "minimal") return "balanced";
+  if (id && (BUILTIN_PRESET_IDS as string[]).includes(id)) return id as ChatBuiltinPresetId;
+  return id ?? "balanced";
+}
+
+const THEME_IDS: ChatThemeId[] = ["light", "dark", "midnight", "high-contrast", "brand", "slack"];
 
 export function isChatThemeId(value: string): value is ChatThemeId {
   return (THEME_IDS as string[]).includes(value);
@@ -121,6 +138,8 @@ export function defaultAppearance(): ChatAppearancePrefs {
       mentions: true,
       alerts: false,
     },
+    layoutMode: "default",
+    starredChannelIds: [],
   };
 }
 
@@ -150,6 +169,8 @@ export function normalizeAppearance(raw: LegacyChatAppearancePrefs): ChatAppeara
       mentions: raw.sidebarSections?.mentions ?? true,
       alerts: raw.sidebarSections?.alerts ?? false,
     },
+    layoutMode: raw.layoutMode === "slack" || raw.layoutMode === "minimal" ? "minimal" : "default",
+    starredChannelIds: normalizeStarredChannelIds(raw.starredChannelIds),
   };
 }
 
@@ -177,6 +198,7 @@ export function normalizeChatPreferences(raw: Partial<ChatUserPreferences> & { a
   return {
     ...base,
     ...raw,
+    activePresetId: normalizeActivePresetId(raw.activePresetId, appearance),
     profile: { ...base.profile, ...raw.profile },
     appearance,
     notifications: { ...base.notifications, ...raw.notifications },
@@ -244,6 +266,7 @@ export function mergeChatPreferences(
         ...base.appearance.sidebarSections,
         ...patch.appearance?.sidebarSections,
       },
+      starredChannelIds: patch.appearance?.starredChannelIds ?? base.appearance.starredChannelIds,
     },
     notifications: { ...base.notifications, ...patch.notifications },
     behavior: { ...base.behavior, ...patch.behavior },
@@ -252,7 +275,7 @@ export function mergeChatPreferences(
 }
 
 export function prefsLocalStorageKey(teamId: number): string {
-  return `flowbie.chat.prefs.${teamId}`;
+  return `neo-pulse.chat.prefs.${teamId}`;
 }
 
 export function stripHtmlToPlain(html: string): string {

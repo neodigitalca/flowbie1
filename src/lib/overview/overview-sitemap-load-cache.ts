@@ -7,7 +7,7 @@ import {
 
 function fingerprintKey(siteId: string, source: OverviewSitemapSource): string {
   const ver = source === "sap" ? "v7" : "v1";
-  return `flowbie-overview-sitemap-fp-${ver}:${siteId}:${source}`;
+  return `neo-pulse-overview-sitemap-fp-${ver}:${siteId}:${source}`;
 }
 
 const memoryByKey = new Map<string, string>();

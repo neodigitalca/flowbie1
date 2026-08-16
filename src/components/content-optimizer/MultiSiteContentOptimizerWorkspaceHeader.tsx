@@ -1,4 +1,4 @@
-import { TrendingUp, Wand2 } from "lucide-react";
+import { Wand2 } from "lucide-react";
 import { ContentOptimizerSectionPills } from "@/components/content-optimizer/ContentOptimizerSectionPills";
 import {
   MultiSiteContentOptimizerToolbar,
@@ -11,7 +11,6 @@ import {
 import type { ContentOptimizerSectionId } from "@/components/content-optimizer/content-optimizer-sections";
 import type { ContentOptimizerGeneratorChrome } from "@/components/content-optimizer/content-optimizer-generator-chrome";
 import { BlogGeneratorWorkspaceChrome } from "@/components/blog-generator/BlogGeneratorWorkspaceChrome";
-import { GENERATOR_WORKSPACE_TITLE } from "@/components/blog-generator/blog-generator-sections";
 import { OverviewContentPaginationReserve } from "@/components/overview/overview-tab/OverviewContentChromeReserve";
 import {
   MultiSiteContentDetailsPanel,
@@ -20,8 +19,11 @@ import {
 import { UnifiedWorkspaceChrome } from "@/components/shared/UnifiedWorkspaceChrome";
 import { BULK_TOOLBAR_GROUP_DIVIDER } from "@/components/keyword-research/bulk/bulk-workspace-header-styles";
 import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
-import type { GscPerformancePreviewSnapshot } from "@/hooks/content-optimization/gsc-preview-types";
+import type { OptimizationProgressState } from "@/hooks/content-optimization/use-optimization-state";
+import type { WordPressSite } from "@/components/integrations/types";
+import type { OptimizationFileManager } from "@/lib/optimization-file-manager";
 import type { MetaBulkMicroSnapshot } from "@/components/overview/OverviewBulkMicroProgress";
+import { useOverviewSiteWarmDetails } from "@/hooks/overview/use-overview-site-warm-details";
 
 const DETAILS_PANEL_ID = "multi-site-batch-details-panel";
 
@@ -38,14 +40,14 @@ export type MultiSiteContentOptimizerWorkspaceHeaderProps = {
   toolbarProps: React.ComponentProps<typeof MultiSiteContentOptimizerToolbar>;
   batchBulkState: BulkOptimizationState | null | undefined;
   bulkRunBatchKey: string;
+  batchSite?: WordPressSite | null;
   batchSiteName?: string;
-  rowProgressDs: { step?: string; message?: string } | undefined;
-  gscMap: Record<string, GscPerformancePreviewSnapshot | null | undefined>;
-  gscPreviewLoadingDs: boolean;
-  bulkActiveUrlDs: string | null;
-  onApproveKeywords: (batchKey: string) => void;
+  rowProgressDs: OptimizationProgressState | { step?: string; message?: string } | undefined;
+  isOptimizingContent: Record<string, boolean>;
+  optimizationFileManagers: Record<string, OptimizationFileManager>;
   onBatchClose: (abortingRun: boolean) => void;
   paginationLayoutTotal: number;
+  onDetailsOpenChange?: (open: boolean) => void;
   generatorChrome?: ContentOptimizerGeneratorChrome;
 };
 
@@ -61,17 +63,24 @@ export function MultiSiteContentOptimizerWorkspaceHeader({
   toolbarProps,
   batchBulkState,
   bulkRunBatchKey,
+  batchSite,
   batchSiteName,
   rowProgressDs,
-  gscMap,
-  gscPreviewLoadingDs,
-  bulkActiveUrlDs,
-  onApproveKeywords,
-  onBatchClose,
+  isOptimizingContent,
+  optimizationFileManagers,
   paginationLayoutTotal,
+  onDetailsOpenChange,
   generatorChrome,
 }: MultiSiteContentOptimizerWorkspaceHeaderProps) {
-  const canOpenDetails = multiSiteContentDetailsCanOpen(batchBulkState);
+  const warmDetails = useOverviewSiteWarmDetails(batchSite ?? null);
+
+  const canOpenDetails = multiSiteContentDetailsCanOpen(batchBulkState, {
+    sitemapInventoryLinks: warmDetails.sitemapInventoryLinks,
+    gscHostedLink: warmDetails.gscHostedLink,
+    sitemapInventoryLoading: warmDetails.sitemapInventoryLoading,
+  });
+
+  const detailsOpenSignal = null;
 
   const sourceModePills = (
     <MultiSiteSourceModePills
@@ -96,12 +105,6 @@ export function MultiSiteContentOptimizerWorkspaceHeader({
 
   const toolbarContent = (
     <>
-      {generatorChrome ? (
-        <>
-          {optimizerSectionPills}
-          <div className={BULK_TOOLBAR_GROUP_DIVIDER} aria-hidden />
-        </>
-      ) : null}
       <MultiSiteContentOptimizerToolbar
         {...toolbarProps}
         optimizeMode={optimizeMode}
@@ -127,13 +130,14 @@ export function MultiSiteContentOptimizerWorkspaceHeader({
     <MultiSiteContentDetailsPanel
       batchBulkState={batchBulkState}
       bulkRunBatchKey={bulkRunBatchKey}
+      batchSite={batchSite}
       batchSiteName={batchSiteName}
       rowProgressDs={rowProgressDs}
-      gscMap={gscMap}
-      gscPreviewLoadingDs={gscPreviewLoadingDs}
-      bulkActiveUrlDs={bulkActiveUrlDs}
-      onApproveKeywords={onApproveKeywords}
-      onBatchClose={onBatchClose}
+      sitemapInventoryLinks={warmDetails.sitemapInventoryLinks}
+      gscHostedLink={warmDetails.gscHostedLink}
+      sitemapInventoryLoading={warmDetails.sitemapInventoryLoading}
+      isOptimizingContent={isOptimizingContent}
+      optimizationFileManagers={optimizationFileManagers}
     />
   );
 
@@ -146,13 +150,13 @@ export function MultiSiteContentOptimizerWorkspaceHeader({
     detailsPanelId: DETAILS_PANEL_ID,
     toolbar: toolbarContent,
     detailsPanel,
+    detailsOpenSignal,
+    onDetailsOpenChange,
   };
 
   if (generatorChrome) {
     return (
       <BlogGeneratorWorkspaceChrome
-        icon={TrendingUp}
-        title={GENERATOR_WORKSPACE_TITLE}
         activeSection={generatorChrome.activeSection}
         onSectionChange={generatorChrome.onSectionChange}
         sectionSwitchDisabled={generatorChrome.sectionSwitchDisabled}

@@ -8,7 +8,7 @@ export type MetaAdsImageReferencesSectionProps = {
 };
 
 function referenceSourceLabel(source: MetaAdImageReferenceSummary["source"]): string {
-  return source === "flowbie-marketing" ? "Flowbie marketing" : "DataForSEO Google Images";
+  return source === "neo-pulse-marketing" ? "NEO Pulse marketing" : "DataForSEO Google Images";
 }
 
 export function MetaAdsImageReferencesSection({

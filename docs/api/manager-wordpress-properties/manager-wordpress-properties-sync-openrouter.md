@@ -5,7 +5,7 @@ section: Manager WordPress Properties
 method: POST
 path: /api/manager-wordpress-properties/sync-openrouter
 auth: open
-order: 680
+order: 670
 ---
 
 POST `/api/manager-wordpress-properties/sync-openrouter`.
@@ -34,7 +34,7 @@ Runs the sync openrouter action in the Manager WordPress Properties API from a J
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/manager-wordpress-properties/sync-openrouter" \
+curl -X POST "https://neodigital.ca/api/manager-wordpress-properties/sync-openrouter" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

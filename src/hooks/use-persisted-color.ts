@@ -16,7 +16,7 @@ export function applyPrimaryHexToDocument(hex: string): void {
   document.documentElement.style.setProperty("--ring", hslComponents);
   document.documentElement.style.setProperty("--accent", hslComponents);
   document.documentElement.style.setProperty("--neural-glow", hslComponents);
-  document.documentElement.style.setProperty("--flowbie-glow", hslComponents);
+  document.documentElement.style.setProperty("--neo-pulse-glow", hslComponents);
   document.documentElement.style.setProperty("--primary-color", hex);
 }
 

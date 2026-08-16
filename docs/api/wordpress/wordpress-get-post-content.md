@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/get-post-content
 auth: open
-order: 2480
+order: 2430
 ---
 
 POST `/api/wordpress/get-post-content`.
@@ -34,7 +34,7 @@ Runs the get post content action in the WordPress API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/get-post-content" \
+curl -X POST "https://neodigital.ca/api/wordpress/get-post-content" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

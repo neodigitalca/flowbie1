@@ -43,6 +43,27 @@ describe("buildEntityAdGroupSections", () => {
     expect(sections[0]!.entity).toBe("Westmount, Edmonton, AB");
     expect(sections.every((s) => s.entity.toLowerCase() !== "unknown location")).toBe(true);
   });
+
+  it("groups sub-rows under ad_group_label parent header", () => {
+    const rows: CSVRow[] = [
+      {
+        entity: "South Altona, MB",
+        ad_group_label: "South West Altona, MB",
+        keyword: "blinds South Altona, MB",
+        title: "",
+      },
+      {
+        entity: "North Altona, MB",
+        ad_group_label: "South West Altona, MB",
+        keyword: "shades North Altona, MB",
+        title: "",
+      },
+    ];
+    const sections = buildEntityAdGroupSections(rows);
+    expect(sections).toHaveLength(1);
+    expect(sections[0]!.entity).toBe("South West Altona, MB");
+    expect(sections[0]!.rowIndices).toEqual([0, 1]);
+  });
 });
 
 describe("sapBaseKeywordDisplay", () => {

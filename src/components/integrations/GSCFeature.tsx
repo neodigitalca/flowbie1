@@ -31,7 +31,7 @@ export interface GSCFeatureRef {
 }
 
 /** Placeholder until `/api/gsc/service-account-email` loads (server derives real email from credential JSON). */
-const GSC_EMAIL_FALLBACK = "flowbie-812@flowbie-483717.iam.gserviceaccount.com";
+const GSC_EMAIL_FALLBACK = "neopulse@neopulse-505422.iam.gserviceaccount.com";
 
 export type GscServiceAccountIdentity = {
   /** Service account email — must be added in Search Console for each property (matches server JWT). */

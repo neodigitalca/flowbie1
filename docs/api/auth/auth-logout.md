@@ -10,7 +10,7 @@ order: 30
 
 POST `/api/auth/logout`.
 
-Ends the current session and clears the flowbie_session cookie.
+Ends the current session and clears the neo_pulse_session cookie.
 
 ## Request
 
@@ -33,7 +33,7 @@ Ends the current session and clears the flowbie_session cookie.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/auth/logout" \
+curl -X POST "https://neodigital.ca/api/auth/logout" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

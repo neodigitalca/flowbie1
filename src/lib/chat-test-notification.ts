@@ -5,7 +5,7 @@ export type ChatTestNotificationResult = {
 
 function notificationIconUrl(): string | undefined {
   if (typeof window === "undefined") return undefined;
-  const base = window.location.pathname.startsWith("/flowbie") ? "/flowbie" : "";
+  const base = window.location.pathname.startsWith("/neo-pulse") ? "/neo-pulse" : "";
   return `${window.location.origin}${base}/placeholder.svg`;
 }
 
@@ -40,7 +40,7 @@ export function showChatDesktopNotification(
     try {
       const notification = new Notification(title, {
         body,
-        tag: opts?.tag ?? `flowbie-chat-${Date.now()}`,
+        tag: opts?.tag ?? `neo-pulse-chat-${Date.now()}`,
         requireInteraction: opts?.requireInteraction ?? false,
         icon: notificationIconUrl(),
       });
@@ -92,12 +92,12 @@ export async function queueChatTestNotification(): Promise<ChatTestNotificationR
   if (permission !== "granted") {
     return {
       ok: false,
-      message: "Notification permission is blocked. Allow flowbie.ca in your browser site settings.",
+      message: "Notification permission is blocked. Allow neodigital.ca in your browser site settings.",
     };
   }
 
-  return showChatDesktopNotification("Flowbie Chat", "Test notification. Desktop alerts are working.", {
-    tag: `flowbie-chat-test-${Date.now()}`,
+  return showChatDesktopNotification("NEO Pulse Chat", "Test notification. Desktop alerts are working.", {
+    tag: `neo-pulse-chat-test-${Date.now()}`,
     requireInteraction: true,
     waitForShow: true,
   });

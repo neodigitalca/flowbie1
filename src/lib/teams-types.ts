@@ -6,7 +6,6 @@ export type TeamPermissionArea =
   | "master-rules"
   | "ai-generation"
   | "google"
-  | "email-agent-admin"
   | "content-optimizer"
   | "generator"
   | "gsc-report"

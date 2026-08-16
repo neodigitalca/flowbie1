@@ -134,7 +134,7 @@ const contentAuditStoredIssueSchema = z
   }));
 
 const contentAuditStoredSchema = z.object({
-  flowbieContentAuditV1: z.object({
+  neoPulseContentAuditV1: z.object({
     issues: z.array(contentAuditStoredIssueSchema),
   }),
 });
@@ -144,8 +144,8 @@ const fixResponseSchema = z.object({
 });
 
 /** Model wraps full HTML outside JSON so literals (newlines) do not break JSON.parse (see debug H3). */
-export const OVERVIEW_FIX_HTML_BLOCK_START = "<<<FLOWBIE_HTML_FIX>>>";
-export const OVERVIEW_FIX_HTML_BLOCK_END = "<<<END_FLOWBIE_HTML_FIX>>>";
+export const OVERVIEW_FIX_HTML_BLOCK_START = "<<<NEO_PULSE_HTML_FIX>>>";
+export const OVERVIEW_FIX_HTML_BLOCK_END = "<<<END_NEO_PULSE_HTML_FIX>>>";
 
 export type ContentAuditAspectBullet = { aspect: string; detail: string };
 
@@ -335,7 +335,7 @@ export function issuesToFixBulletsMarkdown(issues: ContentAuditIssueRow[]): stri
 
 export function serializeContentAuditV1(issues: ContentAuditIssueRow[]): string {
   return JSON.stringify({
-    flowbieContentAuditV1: {
+    neoPulseContentAuditV1: {
       issues: issues.map((x) => {
         const base = {
           title: x.title.trim(),
@@ -377,7 +377,7 @@ export function parseContentAuditStorage(raw: string): ParsedContentAuditStorage
       const parsed = JSON.parse(t) as unknown;
       const row = contentAuditStoredSchema.safeParse(parsed);
       if (row.success) {
-        const mappedIssues = row.data.flowbieContentAuditV1.issues
+        const mappedIssues = row.data.neoPulseContentAuditV1.issues
           .map((x) => ({
             title: x.title.trim(),
             issue: x.issue.trim(),
@@ -575,14 +575,14 @@ Rules:
 /** Section-local audit slice: same schema as OVERVIEW_CONTENT_ANALYZE_PROMPT with cross-section forbiddance (SECTION_HTML grounding only). */
 export const OVERVIEW_SECTION_CONTENT_ANALYZE_PROMPT = `You are auditing ONE contiguous slice ("SECTION_HTML") of WordPress post_content. Anything outside SECTION_HTML does not exist for you: never claim headings, spacing, wrappers, outlines, canonical structure, footer usage, prior sections, later sections, or site-wide semantics that are not verbatim inside SECTION_HTML.
 
-Return ONLY valid JSON with this shape (identical schema to Flowbie's whole-post HTML audit):
+Return ONLY valid JSON with this shape (identical schema to NEO Pulse's whole-post HTML audit):
 {"issues":[{"title":"short category title","issue":"one-line summary","rationale":"2-6 sentences explaining why this matters beyond raw markup","rationaleAspects":[{"aspect":"Clarity","detail":"impact visible inside this slice"},{"aspect":"SEO or structure","detail":"impact on structure inside SECTION_HTML"}],"proposedFix":"plain-language steps; cite only tags/snippets present in SECTION_HTML","beforeMarkup":"<brief flawed excerpt or empty>","afterMarkup":"<desired excerpt or empty>","htmlReference":"MULTI-LINE OK: one contiguous verbatim slice copied only from SECTION_HTML. Large enough readers match it in Code view. Prefer the full neighbouring block you discuss, not an unrelated microscopic fragment. Alias keys htmlSnippet, snippet, rawHtml are tolerated. Empty string forbids emitting the finding.","proTip":"practice tip or empty string"},...]}
 
 Section rules:
 - "htmlReference" must be verbatim from SECTION_HTML only and overlap the prose you criticize when it references markup.
 - If either "beforeMarkup" or "afterMarkup" is nonempty, BOTH must differ character-for-character. Otherwise set BOTH to exactly "".
 
-Shared rules mirrored from Flowbie whole-document auditing:
+Shared rules mirrored from NEO Pulse whole-document auditing:
 - Never invent snippets; omit low-confidence filler. Prefer {"issues":[]}.
 - "rationale" and "rationaleAspects" must be substantive human reasons.
 - Do not mention h1 or SERP-density noise.

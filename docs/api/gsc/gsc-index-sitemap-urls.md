@@ -5,7 +5,7 @@ section: Google Search Console
 method: POST
 path: /api/gsc/index-sitemap-urls
 auth: open
-order: 430
+order: 420
 ---
 
 POST `/api/gsc/index-sitemap-urls`.
@@ -34,7 +34,7 @@ Runs the index sitemap urls action in the Google Search Console API from a JSON 
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/gsc/index-sitemap-urls" \
+curl -X POST "https://neodigital.ca/api/gsc/index-sitemap-urls" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

@@ -1,0 +1,9 @@
+{
+  "keyword": "gsc-report-mom",
+  "name": "GSC MoM report",
+  "executionKind": "gsc_reporting",
+  "description": "Month-over-month GSC report saved locally.",
+  "defaults": {
+    "executionPayload": { "comparePreset": "mom", "saveToDisk": true }
+  }
+}

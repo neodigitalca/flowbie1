@@ -34,7 +34,7 @@ Runs the performance action in the Google Business Profile API from a JSON reque
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/gmb/performance" \
+curl -X POST "https://neodigital.ca/api/gmb/performance" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/workspace
 auth: session-team
-order: 2110
+order: 2100
 ---
 
 POST `/api/teams/{teamId}/workspace`.
@@ -34,7 +34,7 @@ Runs the workspace action in the Teams API from a JSON request body. Requires a 
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/workspace" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/workspace" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

@@ -166,10 +166,11 @@ export function resolvePipelineSectionDownloadable(
   files: BulkDetailsDownloadable[],
   claimedNames: Set<string>,
   serpBriefDownload?: BulkDetailsDownloadable | null,
-): BulkDetailsDownloadable {
+  options?: { noFallback?: boolean },
+): BulkDetailsDownloadable | null {
   const available = files.filter((file) => !claimedNames.has(file.name));
 
-  if (isSerpPipelineSection(section) && serpBriefDownload) {
+  if (!options?.noFallback && isSerpPipelineSection(section) && serpBriefDownload) {
     claimedNames.add(serpBriefDownload.name);
     return serpBriefDownload;
   }
@@ -180,25 +181,37 @@ export function resolvePipelineSectionDownloadable(
     return fromMarkdown;
   }
 
-  const linked = linkPipelineSectionToGeneratedFile(section, available);
-  if (linked) {
-    claimedNames.add(linked.name);
-    return linked;
+  if (!options?.noFallback) {
+    const linked = linkPipelineSectionToGeneratedFile(section, available);
+    if (linked) {
+      claimedNames.add(linked.name);
+      return linked;
+    }
+
+    const fallback = sectionFallbackDownloadable(section, orderIndex);
+    claimedNames.add(fallback.name);
+    return fallback;
   }
 
-  const fallback = sectionFallbackDownloadable(section, orderIndex);
-  claimedNames.add(fallback.name);
-  return fallback;
+  return null;
 }
 
 function buildPipelineSectionDownloadables(
   pipelineSections: BulkHarnessSectionUi[],
   files: BulkDetailsDownloadable[],
   serpBriefDownload?: BulkDetailsDownloadable | null,
-): BulkDetailsDownloadable[] {
+  options?: { noFallback?: boolean },
+): Array<BulkDetailsDownloadable | null> {
   const claimedNames = new Set<string>();
   return pipelineSections.map((section, index) =>
-    resolvePipelineSectionDownloadable(section, index, files, claimedNames, serpBriefDownload),
+    resolvePipelineSectionDownloadable(
+      section,
+      index,
+      files,
+      claimedNames,
+      serpBriefDownload,
+      options,
+    ),
   );
 }
 
@@ -206,16 +219,17 @@ export function buildAllDownloadables(
   pipelineSections: BulkHarnessSectionUi[],
   files: BulkDetailsDownloadable[],
   serpBriefDownload?: BulkDetailsDownloadable | null,
+  options?: { noFallback?: boolean },
 ): BulkDetailsDownloadable[] {
   const seen = new Set<string>();
   const all: BulkDetailsDownloadable[] = [];
-  const push = (file: BulkDetailsDownloadable) => {
-    if (seen.has(file.name)) return;
+  const push = (file: BulkDetailsDownloadable | null) => {
+    if (!file || seen.has(file.name)) return;
     seen.add(file.name);
     all.push(file);
   };
-  buildPipelineSectionDownloadables(pipelineSections, files, serpBriefDownload).forEach(push);
-  files.forEach(push);
+  buildPipelineSectionDownloadables(pipelineSections, files, serpBriefDownload, options).forEach(push);
+  files.forEach((file) => push(file));
   return all;
 }
 
@@ -242,20 +256,35 @@ export function BulkDetailsTileSections({
   pipelineSectionTitles?: readonly string[];
 }) {
   const [filesOpen, setFilesOpen] = useState(false);
-  const pipelineSections = pipelineSectionTitles?.length
-    ? resolveDetailsPipelineSections(harnessSections, harnessSections, pipelineSectionTitles)
+  const useExplicitPipeline = Boolean(pipelineSectionTitles?.length);
+  const pipelineSections = useExplicitPipeline
+    ? harnessSections.length
+      ? harnessSections
+      : pipelineSectionTitles!.map((title, sectionIndex) => ({
+          sectionIndex,
+          title,
+          status: "waiting" as const,
+        }))
     : (
         harnessSections.length
           ? filterPipelineHarnessSections(harnessSections)
           : buildWaitingPostHarnessSections()
       ).filter((section) => section.title === DETAILS_DRAWER_PIPELINE_TITLE);
+  const strictPipelineDownloads = useExplicitPipeline;
   const pipelineDownloadables = buildPipelineSectionDownloadables(
     pipelineSections,
     files,
     serpBriefDownload,
+    strictPipelineDownloads ? { noFallback: true } : undefined,
   );
-  const allDownloadables = buildAllDownloadables(pipelineSections, files, serpBriefDownload);
-  const itemCount = pipelineSections.length + files.length;
+  const allDownloadables = buildAllDownloadables(
+    pipelineSections,
+    files,
+    serpBriefDownload,
+    strictPipelineDownloads ? { noFallback: true } : undefined,
+  );
+  const itemCount =
+    pipelineDownloadables.filter(Boolean).length + files.length;
   const trimmedStatus = statusMessage?.trim();
   const trimmedProgress = progressLabel?.trim();
 
@@ -327,23 +356,28 @@ export function BulkDetailsTileSections({
           </CollapsibleTrigger>
           <CollapsibleContent className="space-y-3 pt-3">
             <div className="space-y-2 text-base">
-              {pipelineSections.map((s, i) => (
-                <div key={s.sectionIndex} className="flex min-w-0 items-center gap-2">
-                  <span className="w-6 shrink-0 tabular-nums text-muted-foreground">{i + 1}</span>
-                  <span className="min-w-0 flex-1 text-white">
-                    {s.title || `Section ${s.sectionIndex + 1}`}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 shrink-0 px-2 text-base text-white hover:bg-white/10 hover:text-white"
-                    onClick={() => onDownloadFile(pipelineDownloadables[i]!)}
-                  >
-                    <Download className="mr-1 h-3 w-3" />
-                    File
-                  </Button>
-                </div>
-              ))}
+              {pipelineSections.map((s, i) => {
+                const downloadable = pipelineDownloadables[i];
+                return (
+                  <div key={s.sectionIndex} className="flex min-w-0 items-center gap-2">
+                    <span className="w-6 shrink-0 tabular-nums text-muted-foreground">{i + 1}</span>
+                    <span className="min-w-0 flex-1 text-white">
+                      {s.title || `Section ${s.sectionIndex + 1}`}
+                    </span>
+                    {downloadable ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 shrink-0 px-2 text-base text-white hover:bg-white/10 hover:text-white"
+                        onClick={() => onDownloadFile(downloadable)}
+                      >
+                        <Download className="mr-1 h-3 w-3" />
+                        File
+                      </Button>
+                    ) : null}
+                  </div>
+                );
+              })}
               {files.map((file, idx) => (
                 <div key={`${file.name}-${idx}`} className="flex min-w-0 items-center gap-2">
                   <span className="w-6 shrink-0 tabular-nums text-muted-foreground">
@@ -464,14 +498,31 @@ export function BulkDetailsPrepAccordion({
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-3 pt-3">
           <div className="space-y-2 text-base">
-            {sections.map((s, i) => (
-              <div key={s.sectionIndex} className="flex min-w-0 items-start gap-2">
-                <span className="w-6 shrink-0 tabular-nums text-muted-foreground">{i + 1}</span>
-                <span className="min-w-0 flex-1 text-white">
-                  {s.title || `Section ${s.sectionIndex + 1}`}
-                </span>
-              </div>
-            ))}
+            {sections.map((s, i) => {
+              const md = s.markdown?.trim();
+              const mdLines = md?.split("\n") ?? [];
+              const downloadHref = mdLines.length >= 2 ? mdLines[1]?.trim() : "";
+              const downloadName = mdLines[0]?.trim();
+              return (
+                <div key={s.sectionIndex} className="flex min-w-0 flex-col gap-0.5">
+                  <div className="flex min-w-0 items-start gap-2">
+                    <span className="w-6 shrink-0 tabular-nums text-muted-foreground">{i + 1}</span>
+                    <span className="min-w-0 flex-1 text-white">
+                      {s.title || `Section ${s.sectionIndex + 1}`}
+                    </span>
+                  </div>
+                  {downloadHref && downloadName ? (
+                    <a
+                      href={downloadHref}
+                      download={downloadName}
+                      className="ml-8 text-primary underline-offset-2 hover:underline"
+                    >
+                      {downloadName}
+                    </a>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </CollapsibleContent>
       </Collapsible>

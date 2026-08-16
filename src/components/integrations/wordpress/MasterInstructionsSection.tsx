@@ -9,7 +9,7 @@ import {
   invalidateMasterInstructionsCache,
   type MasterInstructionSource,
 } from "@/lib/master-instructions-storage";
-import { FLOWBIE_MASTER_INSTRUCTIONS_CHANGED_EVENT, GBP_ADDRESS_MASTER_RULES_FILENAME } from "@/lib/master-rules-gbp-address-import";
+import { NEO_PULSE_MASTER_INSTRUCTIONS_CHANGED_EVENT, GBP_ADDRESS_MASTER_RULES_FILENAME } from "@/lib/master-rules-gbp-address-import";
 import {
   extractTextFromInstructionFile,
   isInstructionFileAccepted,
@@ -99,8 +99,8 @@ export const MasterInstructionsSection: React.FC<MasterInstructionsSectionProps>
         setSources(payload.sources);
       });
     };
-    window.addEventListener(FLOWBIE_MASTER_INSTRUCTIONS_CHANGED_EVENT, reload);
-    return () => window.removeEventListener(FLOWBIE_MASTER_INSTRUCTIONS_CHANGED_EVENT, reload);
+    window.addEventListener(NEO_PULSE_MASTER_INSTRUCTIONS_CHANGED_EVENT, reload);
+    return () => window.removeEventListener(NEO_PULSE_MASTER_INSTRUCTIONS_CHANGED_EVENT, reload);
   }, [siteId]);
 
   const persist = useCallback(

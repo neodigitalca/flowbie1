@@ -1,0 +1,109 @@
+{
+  "keyword": "strict-position-alert",
+  "name": "Strict Position Alert",
+  "description": "Meta and extra text on pages when ranking falls 5+ spots (major slips only).",
+  "notes": [
+    "Polls Google Search Console every 24 hours.",
+    "Scope: static pages (Pages bucket).",
+    "Runs when average ranking position worsened by at least 5 spots, with at least 100 impressions.",
+    "Updates title, meta description, and SEO extra text. Page body content is not rewritten.",
+    "Ignores small daily ranking noise.",
+    "Same URL waits 72 hours before it can run again."
+  ],
+  "category": "reactive",
+  "verticals": [
+    "general"
+  ],
+  "tags": [
+    "gsc",
+    "pages",
+    "meta",
+    "strict"
+  ],
+  "prerequisites": [
+    "gsc",
+    "wordpress"
+  ],
+  "filters": {
+    "executionKinds": [
+      "content_optimizer_meta"
+    ],
+    "targetBuckets": [
+      "pages"
+    ],
+    "triggerSignals": [
+      "position_drop"
+    ],
+    "actionCount": 1
+  },
+  "defaultTasks": [
+    {
+      "keyword": "strict-position",
+      "title": "Meta optimize pages on major position drop",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "pages",
+        "updateMode": "update"
+      },
+      "scheduleMode": "trigger",
+      "recurrenceRule": "none",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "position_drop",
+            "operator": "gte",
+            "value": 5,
+            "minImpressions": 100
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    }
+  ],
+  "isAutomation": true,
+  "kind": "template",
+  "triggerBlock": {
+    "keyword": "gsc-position-drop",
+    "kind": "gsc",
+    "source": "gsc",
+    "targetBucket": "pages",
+    "triggerConfig": {
+      "sources": [
+        "gsc"
+      ],
+      "match": "any",
+      "conditions": [
+        {
+          "signal": "position_drop",
+          "operator": "gte",
+          "value": 5,
+          "minImpressions": 100
+        }
+      ],
+      "lookbackDays": 28,
+      "compareDays": 28,
+      "pollHours": 24,
+      "cooldownHours": 72,
+      "maxUrls": 5
+    }
+  },
+  "actionBlock": {
+    "keyword": "content-optimizer-meta",
+    "executionKind": "content_optimizer_meta",
+    "executionPayload": {
+      "targetBucket": "pages",
+      "updateMode": "update"
+    },
+    "title": "Meta optimize pages on major position drop"
+  }
+}

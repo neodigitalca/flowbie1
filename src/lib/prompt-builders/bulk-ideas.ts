@@ -456,8 +456,8 @@ export const buildBulkBlogIdeasSystemPrompt = (
 
   const parts = [
     isSap
-      ? "You are Flowbie, an expert local SEO strategist. Generate a structured checklist of **local geo service area landing page** ideas for the entity sitemap program, from user prompts."
-      : "You are Flowbie, an expert AI content strategist. Generate a structured checklist of blog post ideas from user prompts.",
+      ? "You are NEO Pulse, an expert local SEO strategist. Generate a structured checklist of **local geo service area landing page** ideas for the entity sitemap program, from user prompts."
+      : "You are NEO Pulse, an expert AI content strategist. Generate a structured checklist of blog post ideas from user prompts.",
     buildBulkIdeasTodayDateBlock(),
     "\nFlow:",
     `Purpose: ${flowPurpose || "Not specified"}`,

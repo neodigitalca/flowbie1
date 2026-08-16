@@ -1,0 +1,109 @@
+{
+  "keyword": "sap-clicks-recovery",
+  "name": "SAP Clicks Recovery",
+  "description": "Full AISEO on entity pages when total search clicks decline.",
+  "notes": [
+    "Polls Google Search Console every 24 hours.",
+    "Scope: entity/service-area pages (SAP bucket).",
+    "Runs when total clicks from google search fell at least 15% vs the prior 28 days, with at least 50 impressions.",
+    "Useful when rankings look stable but traffic from Google is still slipping.",
+    "Same URL waits 72 hours before it can run again."
+  ],
+  "category": "local-seo",
+  "verticals": [
+    "local-seo",
+    "home-services"
+  ],
+  "tags": [
+    "gsc",
+    "sap",
+    "clicks"
+  ],
+  "prerequisites": [
+    "gsc",
+    "wordpress",
+    "entity-sitemap"
+  ],
+  "filters": {
+    "executionKinds": [
+      "content_optimizer"
+    ],
+    "targetBuckets": [
+      "sap"
+    ],
+    "triggerSignals": [
+      "clicks_drop"
+    ],
+    "actionCount": 1
+  },
+  "defaultTasks": [
+    {
+      "keyword": "sap-clicks",
+      "title": "Refresh SAP pages on clicks drop",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "targetBucket": "sap",
+        "updateMode": "update"
+      },
+      "scheduleMode": "trigger",
+      "recurrenceRule": "none",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "clicks_drop",
+            "operator": "gte",
+            "value": 15,
+            "minImpressions": 50
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    }
+  ],
+  "isAutomation": true,
+  "kind": "template",
+  "triggerBlock": {
+    "keyword": "gsc-clicks-drop",
+    "kind": "gsc",
+    "source": "gsc",
+    "targetBucket": "sap",
+    "triggerConfig": {
+      "sources": [
+        "gsc"
+      ],
+      "match": "any",
+      "conditions": [
+        {
+          "signal": "clicks_drop",
+          "operator": "gte",
+          "value": 15,
+          "minImpressions": 50
+        }
+      ],
+      "lookbackDays": 28,
+      "compareDays": 28,
+      "pollHours": 24,
+      "cooldownHours": 72,
+      "maxUrls": 5
+    }
+  },
+  "actionBlock": {
+    "keyword": "content-optimizer-full",
+    "executionKind": "content_optimizer",
+    "executionPayload": {
+      "targetBucket": "sap",
+      "updateMode": "update"
+    },
+    "title": "Refresh SAP pages on clicks drop"
+  }
+}

@@ -372,7 +372,7 @@ export async function bulkUpdateOverviewSeo(
           return {
             ...r,
             error:
-              "Cloudflare blocked the WordPress REST response (HTML challenge page). Allow /wp-json/* or whitelist the Flowbie server IP.",
+              "Cloudflare blocked the WordPress REST response (HTML challenge page). Allow /wp-json/* or whitelist the NEO Pulse server IP.",
           };
         }
         return r;

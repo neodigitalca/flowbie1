@@ -5,7 +5,7 @@ section: Teams
 method: PATCH
 path: /api/teams/{teamId}
 auth: session-team
-order: 1090
+order: 1080
 ---
 
 PATCH `/api/teams/{teamId}`.
@@ -34,7 +34,7 @@ Updates teams item through the Teams API. Requires a signed-in user who belongs 
 ## Example
 
 ```bash
-curl -X PATCH "https://flowbie.ca/api/teams/{teamId}" \
+curl -X PATCH "https://neodigital.ca/api/teams/{teamId}" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

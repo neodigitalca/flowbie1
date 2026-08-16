@@ -11,12 +11,11 @@ import {
 } from "@/lib/local-dominator-csv";
 import {
   LOCAL_ANALYSIS_SAP_MIN,
-  LOCAL_ANALYSIS_TOTAL_SAP_CAP,
 } from "@/lib/local-analysis-target-constants";
 import { dedupeRepeatedCommaPlaceSegments, mergePlaceHintWithGeoSuffix } from "@/lib/comma-place-label";
 
 function clampTargetTotal(n: number): number {
-  return Math.min(LOCAL_ANALYSIS_TOTAL_SAP_CAP, Math.max(LOCAL_ANALYSIS_SAP_MIN, Math.floor(n)));
+  return Math.max(LOCAL_ANALYSIS_SAP_MIN, Math.floor(n));
 }
 
 /** Strip GMB listing fluff sometimes present in grid address cells. */

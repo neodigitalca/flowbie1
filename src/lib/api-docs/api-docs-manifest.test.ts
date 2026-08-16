@@ -4,17 +4,17 @@ import { describe, expect, it } from "vitest";
 import { getAllApiDocSlugs, apiDocsManifest } from "@/lib/api-docs";
 
 const DISPATCHER = readFileSync(
-  resolve("wordpress-plugins/flowbie-app/includes/router/class-api-dispatcher.php"),
+  resolve("wordpress-plugins/neo-pulse-app/includes/router/class-api-dispatcher.php"),
   "utf8",
 );
 
 const DISPATCHER_MARKERS = [
-  "Flowbie_App_Wp_Route_Handlers::handle",
-  "Flowbie_App_Gsc_Route_Handlers::dispatch_http",
-  "Flowbie_App_Auth_Route_Handlers::dispatch",
-  "Flowbie_App_Teams_Route_Handlers::dispatch",
-  "Flowbie_App_Dataforseo_Route_Handlers::dispatch_http",
-  "Flowbie_App_Entity_Maps_Image::generate",
+  "Neo_Pulse_App_Wp_Route_Handlers::handle",
+  "Neo_Pulse_App_Gsc_Route_Handlers::dispatch_http",
+  "Neo_Pulse_App_Auth_Route_Handlers::dispatch",
+  "Neo_Pulse_App_Teams_Route_Handlers::dispatch",
+  "Neo_Pulse_App_Dataforseo_Route_Handlers::dispatch_http",
+  "Neo_Pulse_App_Entity_Maps_Image::generate",
 ];
 
 describe("api docs manifest", () => {

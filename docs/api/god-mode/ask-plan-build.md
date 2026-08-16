@@ -64,7 +64,7 @@ Switching to Build after a blocked Ask card can **auto-rerun** the last message 
 | Submode switch CTA | Card button switches submode and may rerun |
 | Greeting subline | Empty-state copy changes per submode |
 
-Submode persists in `sessionStorage` key `flowbie_chat_admin_submode`.
+Submode persists in `sessionStorage` key `neo_pulse_chat_admin_submode`.
 
 ## Classifier hints
 
@@ -74,7 +74,7 @@ The classify prompt receives a submode hint:
 - **Plan** — classify writes; execution deferred to plan preview
 - **Build** — full execution allowed
 
-Source: `class-flowbie-wp-backend-assist-pipeline-classify.php`
+Source: `class-neo-pulse-wp-backend-assist-pipeline-classify.php`
 
 ## Response card types by submode
 

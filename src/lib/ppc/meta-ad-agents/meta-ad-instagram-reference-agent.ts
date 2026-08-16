@@ -15,7 +15,7 @@ import type {
   MetaAdImageReferenceRole,
   MetaAdImageReferenceSummary,
 } from "@/lib/ppc/meta-ad-image-reference-types";
-import { loadFlowbieMarketingAdReferenceFromBrief } from "@/lib/ppc/load-flowbie-marketing-ad-reference";
+import { loadNeoPulseMarketingAdReferenceFromBrief } from "@/lib/ppc/load-neo-pulse-marketing-ad-reference";
 import type {
   MetaAdCreativeBrief,
   MetaAdPlacement,
@@ -256,7 +256,7 @@ export function buildMetaInstagramReferencePromptSuffix(
       ? "Composite the map ref as a subtle designed overlay when brief allows."
       : "",
     hasDeviceRef
-      ? "Match device refs for hardware shape. Reproduce exact device screen strings from the image prompt with perfect spelling."
+      ? "Match device refs for hardware shape. Screen shows realistic page-builder or site layout with placeholder blocks only, no readable text."
       : "",
     "Do not copy watermarks, profile names, Sponsored labels, or Instagram UI chrome from references.",
     ...lines,
@@ -327,7 +327,7 @@ export async function runMetaAdInstagramReferenceAgent(options: {
     throw new Error("Visual reference plan elements are required for image reference fetch.");
   }
 
-  const marketingLayoutRef = await loadFlowbieMarketingAdReferenceFromBrief(options.creativeBrief);
+  const marketingLayoutRef = await loadNeoPulseMarketingAdReferenceFromBrief(options.creativeBrief);
   if (!marketingLayoutRef?.dataUrl) {
     throw new Error("Marketing layout reference image is required but could not be loaded.");
   }

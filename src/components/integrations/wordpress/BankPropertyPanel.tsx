@@ -9,7 +9,7 @@ import { usePostBankPanel } from "./use-post-bank-panel";
 import { useSapBankPanel } from "./use-sap-bank-panel";
 import { WP_PANEL_SECTION_SHELL } from "./wordpress-panel-chrome";
 
-const storageKey = (siteId: string) => `flowbie-bank-panel-kind:${siteId}`;
+const storageKey = (siteId: string) => `neo-pulse-bank-panel-kind:${siteId}`;
 
 export type BankPanelKind = "post" | "sap";
 

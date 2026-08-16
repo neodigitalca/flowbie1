@@ -3,6 +3,12 @@
  * Uses POST /api/gsc/fetch-reporting-bundle: queries, page performance, sitemap list, indexed URL list.
  */
 import type { GscCompareRanges } from "@/lib/gsc-reporting/gsc-fetch-date-presets";
+import {
+  deriveGscCompareSignals,
+  gscCompareSignalsFileContent,
+  GSC_COMPARE_SIGNALS_FILENAME,
+  type GscCompareKind,
+} from "@/lib/gsc-reporting/gsc-reporting-compare-signals";
 import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
 /** Site-wide Search Analytics aggregate for one date range (no dimensions). */
 export type GscSiteTotalsPreviousMonth = {
@@ -441,9 +447,15 @@ export function gscSitemapsToCsv(sitemaps: GscSitemapApiRow[]): string {
   return [header, ...rows].join("\n");
 }
 
+export type GscReportingFetchOptions = {
+  compareKind?: GscCompareKind;
+  compareLabel?: string;
+};
+
 export async function fetchGscQueriesRawForReporting(
   siteUrl: string,
   ranges: GscCompareRanges,
+  options?: GscReportingFetchOptions,
 ): Promise<GscReportingFetchResult> {
   const API_BASE = getApiBase();
 
@@ -588,6 +600,27 @@ export async function fetchGscQueriesRawForReporting(
     name: "Site-totals-MoM.csv",
     content: gscSiteTotalsMomComparisonCsv(aggP, aggC, queries.length, compareQueries.length),
   });
+
+  const compareKind = options?.compareKind ?? "mom";
+  const compareLabel =
+    options?.compareLabel ??
+    `${gscCompactPeriodLabelFromIsoRange(startDateStr, endDateStr)} vs ${gscCompactPeriodLabelFromIsoRange(compareStartDateStr, compareEndDateStr)}`;
+  const compareSignals = deriveGscCompareSignals({
+    compareKind,
+    compareLabel,
+    aggregatePrimary: aggP,
+    aggregateCompare: aggC,
+    queryCountPrimary: queries.length,
+    queryCountCompare: compareQueries.length,
+    primaryQueries: toQueryPerf(queries),
+    compareQueries: toQueryPerf(compareQueries),
+  });
+  if (compareSignals) {
+    files.push({
+      name: GSC_COMPARE_SIGNALS_FILENAME,
+      content: gscCompareSignalsFileContent(compareSignals),
+    });
+  }
 
   const sm = data.sitemaps;
   if (Array.isArray(sm) && sm.length > 0) {

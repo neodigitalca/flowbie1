@@ -34,7 +34,7 @@ Fetches a single serp dump item from the DataForSEO API.
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/dataforseo/serp-dump/{filename}" \
+curl -X GET "https://neodigital.ca/api/dataforseo/serp-dump/{filename}" \
   -H "Content-Type: application/json" \
 ```
 

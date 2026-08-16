@@ -8,6 +8,7 @@ import { BlogGeneratorShell } from "@/components/blog-generator/BlogGeneratorShe
 import { IntegrationsTab } from "@/components/IntegrationsTab";
 import { ChatTabContent } from "@/components/chat/ChatTabContent";
 import { TasksTabContent } from "@/components/manager/tasks/TasksTabContent";
+import { PulseForgeTabContent } from "@/components/manager/pulse-forge/PulseForgeTabContent";
 import { UsersTabContent } from "@/components/manager/UsersTabContent";
 import { SupportTabContent } from "@/components/manager/support/SupportTabContent";
 import { PpcTabContent } from "@/components/ppc/PpcTabContent";
@@ -42,8 +43,6 @@ export interface ManagerWorkspaceProps {
   onResetWorkspace?: () => void;
   managerTab: string;
   onManagerTabChange: (tab: string) => void;
-  /** Forces BlogGeneratorShell remount when mega menu switches blog section on same tab */
-  blogGeneratorShellKey?: number;
   onManualContentUpdate: (content: string) => void;
   onFilesUpdate: (files: StoredFile[]) => void;
   currentKBFiles: StoredFile[];
@@ -84,7 +83,6 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
   onResetWorkspace,
   managerTab,
   onManagerTabChange,
-  blogGeneratorShellKey = 0,
   onManualContentUpdate,
   onFilesUpdate,
   currentKBFiles,
@@ -116,7 +114,7 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
     }
   });
   const embedded = variant === "embedded";
-  const chatFullBleed = embedded && (managerTab === "chat" || managerTab === "tasks" || managerTab === "api");
+  const chatFullBleed = embedded && (managerTab === "chat" || managerTab === "tasks" || managerTab === "pulse-forge" || managerTab === "api");
   /** Radix tabpanel must participate in flex-1 chain when embedded; parent-only selectors are unreliable. */
   const embeddedTabPanelStretch = embedded ? "flex h-full min-h-0 flex-1 flex-col overflow-hidden" : undefined;
   const showResetToolbar = embedded && onResetBlueprint && onResetWorkspace;
@@ -236,6 +234,7 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
                   managerTab === "generator" ||
                   managerTab === "chat" ||
                   managerTab === "tasks" ||
+                  managerTab === "pulse-forge" ||
                   managerTab === "api"
                   ? "overflow-y-hidden"
                   : "overflow-y-auto",
@@ -261,7 +260,6 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
 
         <TabsContent value="generator" className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}>
           <BlogGeneratorShell
-            key={blogGeneratorShellKey}
             flowPurpose={flowPurpose}
             dataForSEOApiKey={dataForSEOApiKey}
             openRouterApiKey={apiKey}
@@ -289,8 +287,12 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
           <ChatTabContent />
         </TabsContent>
 
-        <TabsContent value="tasks" className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}>
-          <TasksTabContent />
+        <TabsContent value="tasks" forceMount className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}>
+          <TasksTabContent onOpenPulseForge={() => onManagerTabChange("pulse-forge")} />
+        </TabsContent>
+
+        <TabsContent value="pulse-forge" forceMount className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}>
+          <PulseForgeTabContent />
         </TabsContent>
 
         <TabsContent value="support" className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}>
@@ -437,10 +439,10 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
           managerDashboardCluster={managerDashboardCluster}
           onAssistNavigate={onAssistNavigate}
         >
-          <div className="absolute inset-0 z-50 bg-black/90 backdrop-blur-sm p-4 md:p-8 overflow-y-auto">
-            {inner}
+          <div className="absolute inset-0 z-50 flex overflow-hidden bg-black/90 backdrop-blur-sm">
+            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 md:p-8">{inner}</div>
+            <PulseAssistRoot layout="docked" />
           </div>
-          <PulseAssistRoot />
         </PulseAssistContextProvider>
       </AgentRunsShell>
     );
@@ -449,10 +451,10 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
   return (
     <AgentRunsShell>
       <PulseAssistContextProvider managerTab={managerTab} onAssistNavigate={onAssistNavigate}>
-        <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
-          <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">{inner}</div>
+        <div className="flex h-full min-h-0 flex-1 overflow-hidden bg-background">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{inner}</div>
+          <PulseAssistRoot layout="docked" />
         </div>
-        <PulseAssistRoot />
       </PulseAssistContextProvider>
     </AgentRunsShell>
   );

@@ -32,12 +32,12 @@ First account when no users exist yet. No existing session is required.
 | --- | --- | --- |
 | 403 | `Bootstrap not available` | Returned when validation or auth fails. |
 | 400 | `Missing required fields` | Returned when validation or auth fails. |
-| 500 | `Could not create user. Reactivate flowbie-app plugin.` | Returned when validation or auth fails. |
+| 500 | `Could not create user. Reactivate neo-pulse-app plugin.` | Returned when validation or auth fails. |
 
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/auth/bootstrap" \
+curl -X POST "https://neodigital.ca/api/auth/bootstrap" \
   -H "Content-Type: application/json" \
   -d '{   "email": "you@example.com",   "password": "your-password" }'
 ```

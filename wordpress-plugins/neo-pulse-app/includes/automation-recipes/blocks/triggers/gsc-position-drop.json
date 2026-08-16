@@ -1,0 +1,19 @@
+{
+  "keyword": "gsc-position-drop",
+  "name": "GSC position drop",
+  "kind": "gsc",
+  "description": "Fire when average ranking position worsens.",
+  "defaults": {
+    "source": "gsc",
+    "triggerConfig": {
+      "sources": ["gsc"],
+      "match": "any",
+      "conditions": [{ "signal": "position_drop", "operator": "gte", "value": 3, "minImpressions": 100 }],
+      "lookbackDays": 28,
+      "compareDays": 28,
+      "pollHours": 24,
+      "cooldownHours": 72,
+      "maxUrls": 5
+    }
+  }
+}

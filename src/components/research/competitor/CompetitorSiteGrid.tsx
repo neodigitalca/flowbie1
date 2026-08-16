@@ -345,7 +345,7 @@ export function CompetitorSiteGrid({
           No competitor domains returned.
         </p>
       ) : (
-        <div className="flowbie-zone-tile--analysis px-0 py-2 sm:px-1">
+        <div className="neo-pulse-zone-tile--analysis px-0 py-2 sm:px-1">
           <div className="overflow-x-auto rounded-md border border-border/50">
             <table className="w-full min-w-[1120px] border-collapse text-left text-[1rem] leading-normal">
               <thead>

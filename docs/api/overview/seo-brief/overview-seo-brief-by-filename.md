@@ -5,7 +5,7 @@ section: Overview
 method: GET
 path: /api/overview/seo-brief/{filename}
 auth: open
-order: 880
+order: 870
 ---
 
 GET `/api/overview/seo-brief/{filename}`.
@@ -34,7 +34,7 @@ Fetches a single seo brief item from the Overview API.
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/overview/seo-brief/{filename}" \
+curl -X GET "https://neodigital.ca/api/overview/seo-brief/{filename}" \
   -H "Content-Type: application/json" \
 ```
 

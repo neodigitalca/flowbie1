@@ -249,16 +249,16 @@ function BulkProgressBar({
 }) {
   if (indeterminate) {
     return (
-      <div className="flowbie-competitor-progress-track rounded-sm">
-        <div className="flowbie-competitor-progress-indeterminate" aria-hidden />
+      <div className="neo-pulse-competitor-progress-track rounded-sm">
+        <div className="neo-pulse-competitor-progress-indeterminate" aria-hidden />
       </div>
     );
   }
   const v = Math.min(100, Math.max(0, value ?? 0));
   return (
-    <div className="flowbie-competitor-progress-track rounded-sm">
+    <div className="neo-pulse-competitor-progress-track rounded-sm">
       <div
-        className="flowbie-competitor-progress-fill rounded-sm transition-[width] duration-300 ease-out"
+        className="neo-pulse-competitor-progress-fill rounded-sm transition-[width] duration-300 ease-out"
         style={{ width: `${v}%` }}
         role="progressbar"
         aria-valuenow={v}

@@ -1,0 +1,109 @@
+{
+  "keyword": "sap-ctr-rescue",
+  "name": "SAP CTR Rescue",
+  "description": "Full AISEO on entity pages when click-through rate falls.",
+  "notes": [
+    "Polls Google Search Console every 24 hours.",
+    "Scope: entity/service-area pages (SAP bucket).",
+    "Runs when click-through rate fell at least 15% vs the prior 28 days (similar visibility, fewer clicks), with at least 50 impressions.",
+    "NEO Pulse rewrites title, meta, headings, and body on the entity page.",
+    "Same URL waits 72 hours before it can run again."
+  ],
+  "category": "local-seo",
+  "verticals": [
+    "local-seo",
+    "home-services"
+  ],
+  "tags": [
+    "gsc",
+    "sap",
+    "ctr"
+  ],
+  "prerequisites": [
+    "gsc",
+    "wordpress",
+    "entity-sitemap"
+  ],
+  "filters": {
+    "executionKinds": [
+      "content_optimizer"
+    ],
+    "targetBuckets": [
+      "sap"
+    ],
+    "triggerSignals": [
+      "ctr_drop"
+    ],
+    "actionCount": 1
+  },
+  "defaultTasks": [
+    {
+      "keyword": "sap-ctr-rescue",
+      "title": "Full AISEO on SAP pages when CTR drops",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "targetBucket": "sap",
+        "updateMode": "update"
+      },
+      "scheduleMode": "trigger",
+      "recurrenceRule": "none",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "ctr_drop",
+            "operator": "gte",
+            "value": 15,
+            "minImpressions": 50
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    }
+  ],
+  "isAutomation": true,
+  "kind": "template",
+  "triggerBlock": {
+    "keyword": "gsc-ctr-drop",
+    "kind": "gsc",
+    "source": "gsc",
+    "targetBucket": "sap",
+    "triggerConfig": {
+      "sources": [
+        "gsc"
+      ],
+      "match": "any",
+      "conditions": [
+        {
+          "signal": "ctr_drop",
+          "operator": "gte",
+          "value": 15,
+          "minImpressions": 50
+        }
+      ],
+      "lookbackDays": 28,
+      "compareDays": 28,
+      "pollHours": 24,
+      "cooldownHours": 72,
+      "maxUrls": 5
+    }
+  },
+  "actionBlock": {
+    "keyword": "content-optimizer-full",
+    "executionKind": "content_optimizer",
+    "executionPayload": {
+      "targetBucket": "sap",
+      "updateMode": "update"
+    },
+    "title": "Full AISEO on SAP pages when CTR drops"
+  }
+}

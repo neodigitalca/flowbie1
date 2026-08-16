@@ -36,6 +36,28 @@ export function csvRowToOverviewRowDisplay(
   };
 }
 
+/** Entity SAP preload rows: show entity in title column until titles exist. */
+export function csvRowToEntitySapOverviewRowDisplay(
+  row: CSVRow,
+  index: number,
+  previewUrl?: string,
+  rowKeyPrefix = "entity-sap-row",
+): OverviewRow {
+  const liveUrl = previewUrl?.trim() || row.destination_url?.trim();
+  const entity = row.entity?.trim();
+  const title = row.title?.trim() || entity || `Row ${index + 1}`;
+  return {
+    url: liveUrl || `#${rowKeyPrefix}-${index}`,
+    title,
+    metaDescription: row.meta_description ?? "",
+    aiTitle: "",
+    aiMeta: "",
+    status: "idle",
+    focusKeyword: row.keyword?.trim(),
+    dateModifier: row.publish_date_gmt?.trim() || undefined,
+  };
+}
+
 export function publishDateLabelForRow(
   index: number,
   publishDateLabelByIndex: Record<number, string> | undefined,

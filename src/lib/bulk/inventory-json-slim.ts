@@ -16,6 +16,10 @@ const NAMED_ENTITIES: Record<string, string> = {
   nbsp: " ",
 };
 
+export function inventoryFieldString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 export function decodeInventoryTitleText(raw: string): string {
   if (!raw) return "";
   return raw
@@ -29,8 +33,8 @@ export function decodeInventoryTitleText(raw: string): string {
     .trim();
 }
 
-export function inventoryUrlForRow(row: { url?: string }): string {
-  const url = (row.url ?? "").trim();
+export function inventoryUrlForRow(row: { url?: unknown; link?: unknown }): string {
+  const url = inventoryFieldString(row.url) || inventoryFieldString(row.link);
   if (!url || isInventoryExcludedSitemapUrl(url)) return "";
   return url;
 }
@@ -54,6 +58,38 @@ export function stringifyInventoryUrlList(urls: string[]): string {
 }
 
 /** Plain text: one published URL per line (sitemap buckets). */
+/** Content bucket artifact: structured posts only (no duplicate URL list). */
+export function stringifyContentBucketPostsJson(
+  source: string,
+  rows: Array<{
+    id?: number;
+    slug?: string;
+    title?: string;
+    url?: string;
+    link?: string;
+    fields?: { title?: string };
+  }>,
+): string {
+  const seen = new Set<string>();
+  const posts: Array<{ id: number; slug: string; title: string; link: string }> = [];
+  for (const row of rows) {
+    const link = inventoryUrlForRow(row);
+    if (!link) continue;
+    const key = link.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    posts.push({
+      id: typeof row.id === "number" && Number.isFinite(row.id) ? row.id : 0,
+      slug: inventoryFieldString(row.slug),
+      title: decodeInventoryTitleText(
+        inventoryFieldString(row.title) || inventoryFieldString(row.fields?.title),
+      ),
+      link,
+    });
+  }
+  return JSON.stringify({ source, posts }, null, 2);
+}
+
 export function stringifyCompactInventoryJson(
   rows: Array<{ url?: string }>,
 ): string {
@@ -65,9 +101,11 @@ export function inventoryKeywordForRow(row: {
   url?: string;
   fields?: { title?: string; keyword?: string };
 }): string {
-  const keyword = row.fields?.keyword?.trim();
+  const keyword = inventoryFieldString(row.fields?.keyword);
   if (keyword) return decodeInventoryTitleText(keyword);
-  return decodeInventoryTitleText(row.title ?? row.fields?.title ?? "");
+  return decodeInventoryTitleText(
+    inventoryFieldString(row.title) || inventoryFieldString(row.fields?.title),
+  );
 }
 
 export function compactInventoryKeywordsForJson(
@@ -101,49 +139,28 @@ function linesFromPlainTextBlock(block: string): string[] {
     .filter((line) => line.length > 0);
 }
 
-function parseLegacyInventoryJson(block: string): string[] {
+/** Content bucket JSON: `{ source, posts: [{ id, slug, title, link }] }`. */
+function parseContentBucketPostsJson(block: string): string[] {
   const parsed: unknown = JSON.parse(block);
-  if (Array.isArray(parsed)) {
-    if (parsed.length === 0) return [];
-    if (typeof parsed[0] === "string") {
-      return linesFromPlainTextBlock(parsed.map(String).join("\n"));
-    }
-    if (Array.isArray(parsed[0])) {
-      return (parsed as unknown[])
-        .map((item) => {
-          if (!Array.isArray(item)) return "";
-          return String(item[0] ?? "").trim();
-        })
-        .filter(Boolean);
-    }
-  }
-  if (parsed && typeof parsed === "object") {
-    const posts = (parsed as { posts?: unknown[] }).posts;
-    if (Array.isArray(posts)) {
-      return compactInventoryUrlsForJson(
-        posts.map((item) => {
-          if (typeof item === "string") return { url: item };
-          if (Array.isArray(item)) return { url: String(item[0] ?? "") };
-          return item as { url?: string };
-        }),
-      );
-    }
-  }
-  return [];
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+  const posts = (parsed as { posts?: unknown[] }).posts;
+  if (!Array.isArray(posts)) return [];
+  return compactInventoryUrlsForJson(
+    posts.map((item) => {
+      if (!item || typeof item !== "object") return { url: "" };
+      const record = item as { url?: string; link?: string };
+      return { url: record.link ?? record.url ?? "" };
+    }),
+  );
 }
 
 export function parseCompactInventoryUrls(block: string): string[] {
   const trimmed = block.trim();
   if (!trimmed) return [];
-  const first = trimmed[0];
-  if (first !== "[" && first !== "{") {
+  if (trimmed[0] !== "{") {
     return linesFromPlainTextBlock(trimmed);
   }
-  try {
-    return parseLegacyInventoryJson(trimmed);
-  } catch {
-    return linesFromPlainTextBlock(trimmed);
-  }
+  return parseContentBucketPostsJson(trimmed);
 }
 
 export function parseCompactInventoryKeywords(block: string): string[] {

@@ -94,7 +94,7 @@ export type BacklinkTileEnrichment = {
   displayTitle: string;
   /** Plain-language checklist: what the user must do for this site's guest guidelines. */
   actionSummary: string;
-  /** Fields aligned with Flowbie bulk CSV / CSVRow. */
+  /** Fields aligned with NEO Pulse bulk CSV / CSVRow. */
   csv: Partial<CSVRow> & Pick<CSVRow, "keyword" | "title">;
   /** 5–10 distinct article ideas for this host; bulk-template columns. */
   blogPitchOptions?: BacklinkBlogPitchOption[];

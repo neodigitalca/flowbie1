@@ -5,7 +5,7 @@ section: Overview
 method: POST
 path: /api/overview/fetch-page-meta
 auth: open
-order: 850
+order: 840
 ---
 
 POST `/api/overview/fetch-page-meta`.
@@ -34,7 +34,7 @@ Runs the fetch page meta action in the Overview API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/overview/fetch-page-meta" \
+curl -X POST "https://neodigital.ca/api/overview/fetch-page-meta" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

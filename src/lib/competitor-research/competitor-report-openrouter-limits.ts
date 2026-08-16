@@ -106,7 +106,7 @@ const REPORT_OUTPUT_DEFAULT = 131_072;
  * Map OpenRouter model id to a requested `max_tokens` (completion), bounded by ceiling.
  */
 export function getCompetitorReportMaxOutputTokens(modelId: string): number {
-  const m = modelId.trim().toLowerCase();
+  const m = typeof modelId === "string" ? modelId.toLowerCase() : "";
 
   if (m.includes("gemini-2.5-flash-lite") || m.includes("flash-lite")) {
     return Math.min(OPENROUTER_GEMINI_MAX_COMPLETION, REPORT_OUTPUT_MAX_CEILING);

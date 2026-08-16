@@ -10,7 +10,7 @@ order: 40
 
 GET `/api/auth/me`.
 
-Reads me from the Authentication API. Requires a signed-in user with a valid flowbie_session cookie. On success, returns `username`, `user`, `id`, `email`, and related fields.
+Reads me from the Authentication API. Requires a signed-in user with a valid neo_pulse_session cookie. On success, returns `username`, `user`, `id`, `email`, and related fields.
 
 ## Request
 
@@ -44,7 +44,7 @@ Reads me from the Authentication API. Requires a signed-in user with a valid flo
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/auth/me" \
+curl -X GET "https://neodigital.ca/api/auth/me" \
   -H "Content-Type: application/json" \
 ```
 

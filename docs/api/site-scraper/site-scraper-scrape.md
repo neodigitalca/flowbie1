@@ -5,7 +5,7 @@ section: Site Scraper
 method: POST
 path: /api/site-scraper/scrape
 auth: open
-order: 1040
+order: 1030
 ---
 
 POST `/api/site-scraper/scrape`.
@@ -34,7 +34,7 @@ Runs the scrape action in the Site Scraper API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/site-scraper/scrape" \
+curl -X POST "https://neodigital.ca/api/site-scraper/scrape" \
   -H "Content-Type: application/json" \
   -d '{   "url": "..." }'
 ```

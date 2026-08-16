@@ -239,14 +239,8 @@ export const BulkAutoGeneratePanel: React.FC<BulkAutoGeneratePanelProps> = ({
 
     window.addEventListener('storage', handleStorageChange);
 
-    // Poll frequently to catch same-window changes (localStorage events don't fire in same window)
-    const intervalId = setInterval(() => {
-      updateToEnabledSite();
-    }, 500); // Check every 500ms for immediate updates
-
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      clearInterval(intervalId);
     };
   }, []); // Empty deps - effect manages its own state updates
 

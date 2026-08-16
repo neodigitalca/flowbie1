@@ -11,10 +11,12 @@ import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import HuddlePopupPage from "./pages/HuddlePopupPage";
 import { WordPressSitesProvider } from "@/hooks/use-wordpress-sites";
+import { SitesHydrate } from "@/components/integrations/SitesHydrate";
 import { ActiveWordPressSiteProvider } from "@/contexts/active-wordpress-site-context";
 import { HashAuthRedirect } from "@/components/HashAuthRedirect";
 import { TeamProvider } from "@/contexts/TeamContext";
 import { WordPressOptimizationProvider } from "@/contexts/wordpress-optimization-context";
+import { AgentRunOptimizerScopeProvider } from "@/contexts/agent-run-optimizer-scope-context";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,8 +47,10 @@ const App = () => {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <WordPressSitesProvider>
+            <SitesHydrate />
             <ActiveWordPressSiteProvider>
               <WordPressOptimizationProvider>
+                <AgentRunOptimizerScopeProvider>
           {/* Single column fills #root so nested routes can use flex-1 + min-h-0 + overflow */}
           <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -116,6 +120,7 @@ const App = () => {
               </BrowserRouter>
             </div>
           </div>
+                </AgentRunOptimizerScopeProvider>
               </WordPressOptimizationProvider>
             </ActiveWordPressSiteProvider>
           </WordPressSitesProvider>

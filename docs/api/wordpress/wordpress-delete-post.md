@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/delete-post
 auth: open
-order: 2260
+order: 2250
 ---
 
 POST `/api/wordpress/delete-post`.
@@ -34,7 +34,7 @@ Runs the delete post action in the WordPress API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/delete-post" \
+curl -X POST "https://neodigital.ca/api/wordpress/delete-post" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

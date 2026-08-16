@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/resolve-urls
 auth: open
-order: 2720
+order: 2710
 ---
 
 POST `/api/wordpress/resolve-urls`.
@@ -34,7 +34,7 @@ Runs the resolve urls action in the WordPress API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/resolve-urls" \
+curl -X POST "https://neodigital.ca/api/wordpress/resolve-urls" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

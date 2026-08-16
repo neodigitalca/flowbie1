@@ -1,5 +1,6 @@
 import { REPORT_TEMPERATURE } from "@/lib/competitor-research/competitor-report-openrouter-limits";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { readOpenRouterResponseJson } from "@/lib/openrouter-response-body";
 
 const OR = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -41,7 +42,7 @@ export async function callOpenRouterChatCompletion(args: {
     body: JSON.stringify(body),
   });
 
-  const j = (await res.json()) as {
+  const j = (await readOpenRouterResponseJson(res)) as {
     choices?: Array<{
       message?: { content?: string };
       finish_reason?: string;

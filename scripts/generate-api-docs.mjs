@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Scan Flowbie PHP route handlers and emit docs/api markdown + _manifest.json.
+ * Scan NEO Pulse PHP route handlers and emit docs/api markdown + _manifest.json.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
-const PLUGIN = path.join(ROOT, "wordpress-plugins/flowbie-app/includes");
+const PLUGIN = path.join(ROOT, "wordpress-plugins/neo-pulse-app/includes");
 const DOCS = path.join(ROOT, "docs/api");
 const OVERRIDES = path.join(DOCS, "_overrides");
 
@@ -26,7 +26,6 @@ const HANDLER_PREFIX = {
   "semrush/class-semrush-route-handlers.php": "semrush",
   "proposal/class-proposal-route-handlers.php": "proposal",
   "seo/class-seo-route-handlers.php": "seo",
-  "grid-local/class-grid-local-route-handlers.php": "grid-local",
   "vertical-benchmark/class-vertical-benchmark-route-handlers.php": "vertical-benchmarks",
   "site-scraper/class-site-scraper-route-handlers.php": "site-scraper",
   "knowledge-model/class-knowledge-model-route-handlers.php": "knowledge-model",
@@ -49,7 +48,6 @@ const SECTION_LABELS = {
   semrush: "Semrush",
   proposal: "Proposal",
   seo: "SEO",
-  "grid-local": "Grid Local",
   "vertical-benchmarks": "Vertical Benchmarks",
   "site-scraper": "Site Scraper",
   "knowledge-model": "Knowledge Model",
@@ -417,8 +415,8 @@ function overviewFromFunctionName(fn, route) {
   /** @type {Record<string, string>} */
   const known = {
     login:
-      "Authenticates a user with email and password, sets the flowbie_session cookie, and returns basic profile fields.",
-    logout: "Ends the current session and clears the flowbie_session cookie.",
+      "Authenticates a user with email and password, sets the neo_pulse_session cookie, and returns basic profile fields.",
+    logout: "Ends the current session and clears the neo_pulse_session cookie.",
     register: "Creates a user account from an invite token and signs the user in.",
     bootstrap: "Creates the first owner account when no users exist yet.",
     setup_admin: "Installs auth tables and creates the first agency owner on a fresh deploy.",
@@ -479,7 +477,7 @@ function genericOverview(route) {
 
 function authOverviewNote(auth) {
   if (auth === "public") return "No existing session is required.";
-  if (auth === "session") return "Requires a signed-in user with a valid flowbie_session cookie.";
+  if (auth === "session") return "Requires a signed-in user with a valid neo_pulse_session cookie.";
   if (auth === "session-team") return "Requires a signed-in user who belongs to the team id in the path.";
   if (auth === "team-rbac-communication") {
     return "Requires a signed-in team member with communication permissions.";
@@ -620,7 +618,7 @@ ${buildErrorTable(analysis)}
 ## Example
 
 \`\`\`bash
-curl -X ${route.method} "https://flowbie.ca/api/${route.path}" \\
+curl -X ${route.method} "https://neodigital.ca/api/${route.path}" \\
   -H "Content-Type: application/json" \\${hasBody ? `\n  -d '${exampleBody.replace(/\n/g, " ")}'` : ""}
 \`\`\`
 

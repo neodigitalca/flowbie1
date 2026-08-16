@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Copy, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,7 +8,6 @@ import {
   CONTENT_OPTIMIZER_MULTI_SITE_ROW_WRAPPER_CLASS,
 } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import { PressReleaseRowCompact } from "@/components/press-release/PressReleaseRowCompact";
-import type { PressReleaseDetailsPanelProps } from "@/components/press-release/PressReleaseDetailsPanel";
 import { notify } from "@/lib/app-notifications";
 import { NOTIFY_COULD_NOT_COPY_TO_CLIPBOARD, NOTIFY_MARKDOWN_COPIED } from "@/lib/notify-messages";
 import { cn } from "@/lib/utils";
@@ -29,39 +28,17 @@ function triggerDownloadMarkdown(filename: string, content: string) {
 
 export type PressReleaseWorkspaceBodyProps = {
   keyword: string;
-  onKeywordChange: (value: string) => void;
-  title: string;
-  onTitleChange: (value: string) => void;
-  workspaceBusy: boolean;
-  isProcessing: boolean;
-  canRun: boolean;
-  canOpenDetails: boolean;
-  onRun: () => void;
-  onClear: () => void;
   resultMarkdown: string | null;
-  detailsProps: PressReleaseDetailsPanelProps;
   placeholderRowCount?: number;
 };
 
 export function PressReleaseWorkspaceBody({
   keyword,
-  onKeywordChange,
-  title,
-  onTitleChange,
-  workspaceBusy,
-  isProcessing,
-  canRun,
-  canOpenDetails,
-  onRun,
-  onClear,
   resultMarkdown,
-  detailsProps,
   placeholderRowCount = BULK_GENERATOR_EMPTY_ROW_COUNT,
 }: PressReleaseWorkspaceBodyProps) {
-  const [detailsOpen, setDetailsOpen] = useState(false);
-
   const placeholderStripeCount = useMemo(
-    () => Math.max(0, placeholderRowCount - 1),
+    () => Math.max(0, placeholderRowCount),
     [placeholderRowCount],
   );
 
@@ -114,27 +91,9 @@ export function PressReleaseWorkspaceBody({
       aria-label="Press release rows"
     >
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className={CONTENT_OPTIMIZER_MULTI_SITE_ROW_WRAPPER_CLASS}>
-          <PressReleaseRowCompact
-            keyword={keyword}
-            onKeywordChange={onKeywordChange}
-            title={title}
-            onTitleChange={onTitleChange}
-            workspaceBusy={workspaceBusy}
-            isProcessing={isProcessing}
-            canRun={canRun}
-            canOpenDetails={canOpenDetails}
-            detailsOpen={detailsOpen}
-            onToggleDetails={() => setDetailsOpen((open) => !open)}
-            onRun={onRun}
-            onClear={onClear}
-            detailsProps={detailsProps}
-            stripeIndex={0}
-          />
-        </div>
         {Array.from({ length: placeholderStripeCount }, (_, offset) => (
           <div key={offset} className={CONTENT_OPTIMIZER_MULTI_SITE_ROW_WRAPPER_CLASS}>
-            <PressReleaseRowCompact placeholder stripeIndex={offset + 1} />
+            <PressReleaseRowCompact placeholder stripeIndex={offset} />
           </div>
         ))}
       </div>

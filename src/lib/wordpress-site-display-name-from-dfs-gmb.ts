@@ -1,5 +1,5 @@
 /**
- * Resolve a Flowbie property display name from DataForSEO Business Listings + Google Business Info,
+ * Resolve a NEO Pulse property display name from DataForSEO Business Listings + Google Business Info,
  * matching the citation pipeline where possible, with extra fallbacks when Listings omit website URLs.
  * Optional: DataForSEO Google organic SERP (same style query as google.com/search?q=…) to recover
  * place_id / cid or a matching organic title when Maps Listings + GMB keyword paths miss.

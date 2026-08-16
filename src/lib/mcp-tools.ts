@@ -5,7 +5,7 @@
  */
 
 import { BACKEND_CONNECTION_ERROR } from "@/lib/wordpress-api/connection";
-import { FLOWBIE_CA_DEPLOY } from "@/lib/flowbie-ca-deploy";
+import { NEO_PULSE_CA_DEPLOY } from "@/lib/neo-pulse-deploy";
 
 // Backend API endpoint for MCP calls
 // In development, this should point to your backend server (e.g., http://localhost:3001/api/mcp)
@@ -26,7 +26,7 @@ export function resolveMcpToolUrl(toolName: string): string {
 
 /** True when production build has no absolute API URL (Render static will hit wrong host). */
 export function isProductionBackendMisconfigured(): boolean {
-  if (import.meta.env.DEV || FLOWBIE_CA_DEPLOY) return false;
+  if (import.meta.env.DEV || NEO_PULSE_CA_DEPLOY) return false;
   if (import.meta.env.VITE_MCP_API_BASE) return false;
   const mcp = resolveMcpApiBase();
   if (mcp.startsWith("/")) return false;

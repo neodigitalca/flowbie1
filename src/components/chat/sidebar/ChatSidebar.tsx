@@ -1,199 +1,475 @@
 import React, { useMemo, useState } from "react";
-import { Hash, Lock, MessageCircle, Plus, Radio } from "lucide-react";
+
+import { Hash, Lock, MessageCircle, Plus, Radio, Star } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
+
 import { cn } from "@/lib/utils";
+
 import type { ChatChannel, ChatMentionInboxItem } from "@/lib/chat-types";
+
 import { ChannelCreateDialog } from "@/components/chat/sidebar/ChannelCreateDialog";
+
 import { DmMemberPicker } from "@/components/chat/sidebar/DmMemberPicker";
+
 import { ChatMentionsList } from "@/components/chat/sidebar/ChatMentionsList";
+
 import { ChatAlertsList } from "@/components/chat/sidebar/ChatAlertsList";
-import type { ChatAlertItem, ChatSidebarSections, ChatThemeId } from "@/lib/chat-preferences-types";
+
+import type { ChatAlertItem, ChatLayoutMode, ChatSidebarSections, ChatThemeId } from "@/lib/chat-preferences-types";
+
 import type { ActiveHuddleSummary } from "@/lib/chat-call-types";
+
+import { isChannelStarred } from "@/lib/chat-starred-channels";
+
 import {
+
   CHAT_SIDEBAR_CLASS,
+
   CHAT_SIDEBAR_ROW,
+
   CHAT_SIDEBAR_ROW_ACTIVE,
+
   CHAT_SIDEBAR_SECTION_LABEL,
+
   CHAT_UNREAD_BADGE,
+
   CHAT_TEXT_MUTED,
+
   CHAT_ICON_BTN_CLASS,
+
+  CHAT_ACCENT_PILL_CLASS,
+
+  CHAT_SCROLL_CLASS,
+
 } from "@/components/chat/chat-theme";
 
+
+
 function channelIcon(type: ChatChannel["type"]) {
+
   if (type === "private") return Lock;
+
   if (type === "dm") return MessageCircle;
+
   return Hash;
+
 }
 
+
+
 export type ChatSidebarProps = {
+
   channels: ChatChannel[];
+
   activeChannelId: number | null;
+
   canWrite: boolean;
+
   onSelectChannel: (channelId: number) => void;
+
   onChannelCreated: (channel: ChatChannel) => void;
+
   onDmOpened: (channel: ChatChannel) => void;
+
   mentions: ChatMentionInboxItem[];
+
   mentionUnreadCount: number;
+
   activeMentionMessageId: number | null;
+
   onOpenMention: (item: ChatMentionInboxItem) => void;
+
   alerts?: ChatAlertItem[];
+
   activeAlertId?: string | null;
+
   onOpenAlert?: (alert: ChatAlertItem) => void;
+
   onDismissAlert?: (alertId: string) => void;
+
   sidebarSections: ChatSidebarSections;
+
   activeHuddles?: ActiveHuddleSummary[];
+
+  layoutMode?: ChatLayoutMode;
+
+  starredChannelIds?: number[];
+
+  onToggleStarred?: (channelId: number) => void;
+
   zoneClassName?: string;
+
   zoneStyle?: React.CSSProperties;
+
   zoneTheme?: ChatThemeId;
+
 };
 
+
+
 export function ChatSidebar({
+
   channels,
+
   activeChannelId,
+
   canWrite,
+
   onSelectChannel,
+
   onChannelCreated,
+
   onDmOpened,
+
   mentions,
+
   mentionUnreadCount,
+
   activeMentionMessageId,
+
   onOpenMention,
+
   alerts = [],
+
   activeAlertId = null,
+
   onOpenAlert,
+
   onDismissAlert,
+
   sidebarSections,
+
   activeHuddles = [],
+
+  layoutMode = "default",
+
+  starredChannelIds = [],
+
+  onToggleStarred,
+
   zoneClassName,
+
   zoneStyle,
+
   zoneTheme,
+
 }: ChatSidebarProps): React.ReactElement {
+
   const [createOpen, setCreateOpen] = useState(false);
+
   const [dmOpen, setDmOpen] = useState(false);
 
+  const isMinimal = layoutMode === "minimal";
+
+
+
   const publicChannels = channels.filter((c) => c.type === "public" || c.type === "private");
+
   const dms = channels.filter((c) => c.type === "dm");
 
+
+
+  const starredChannels = useMemo(() => {
+
+    if (!isMinimal || starredChannelIds.length === 0) return [];
+
+    const byId = new Map(channels.map((c) => [c.id, c]));
+
+    return starredChannelIds.map((id) => byId.get(id)).filter((c): c is ChatChannel => c != null);
+
+  }, [channels, starredChannelIds, isMinimal]);
+
+
+
   const huddleByChannel = useMemo(() => {
+
     const map = new Map<number, ActiveHuddleSummary>();
+
     for (const h of activeHuddles) map.set(h.channelId, h);
+
     return map;
+
   }, [activeHuddles]);
 
+
+
   const renderRow = (channel: ChatChannel) => {
+
     const Icon = channelIcon(channel.type);
-    const active = channel.id === activeChannelId;
+
+    const active = Number(channel.id) === Number(activeChannelId);
+
+    const starred = isChannelStarred(starredChannelIds, channel.id);
+
     const huddle = huddleByChannel.get(channel.id);
+
     const label =
+
       channel.type === "public" || channel.type === "private"
+
         ? channel.slug ?? channel.name
+
         : channel.name;
+
+    const rowActiveClass = isMinimal
+
+      ? active
+
+        ? "chat-minimal-row-active font-semibold"
+
+        : ""
+
+      : active
+
+        ? CHAT_SIDEBAR_ROW_ACTIVE
+
+        : "";
+
+
+
     return (
-      <button
-        key={channel.id}
-        type="button"
-        onClick={() => onSelectChannel(channel.id)}
-        className={cn(CHAT_SIDEBAR_ROW, active && CHAT_SIDEBAR_ROW_ACTIVE)}
-      >
-        <Icon className={cn("h-4 w-4 shrink-0", active ? "text-[hsl(var(--chat-accent))]" : CHAT_TEXT_MUTED)} />
-        <span className="min-w-0 flex-1 truncate">{label}</span>
-        {huddle ? (
-          <span className="flex shrink-0 items-center gap-1 rounded-full bg-lime-500/20 px-2 py-0.5 text-base text-lime-400">
-            <Radio className="h-3 w-3" />
-            {huddle.participantCount}
+
+      <div key={channel.id} className="group flex items-center gap-0.5">
+
+        <button
+
+          type="button"
+
+          onClick={() => onSelectChannel(channel.id)}
+
+          className={cn(CHAT_SIDEBAR_ROW, rowActiveClass, "min-w-0 flex-1")}
+
+        >
+
+          <span
+
+            className={cn(
+
+              "inline-flex shrink-0 items-center",
+
+              !isMinimal && active && CHAT_ACCENT_PILL_CLASS,
+
+            )}
+
+          >
+
+            <Icon
+              className={cn(
+                "h-4 w-4",
+                active ? (isMinimal ? "text-white" : "text-[hsl(var(--chat-accent))]") : CHAT_TEXT_MUTED,
+              )}
+            />
+
           </span>
+
+          <span className="min-w-0 flex-1 truncate">{label}</span>
+
+          {huddle ? (
+
+            <span className="chat-huddle-badge flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-base">
+
+              <Radio className="h-3 w-3" />
+
+              {huddle.participantCount}
+
+            </span>
+
+          ) : null}
+
+          {(channel.unreadCount ?? 0) + (channel.threadUnreadCount ?? 0) > 0 ? (
+
+            <span className={cn("shrink-0", CHAT_UNREAD_BADGE)}>
+
+              {(channel.unreadCount ?? 0) + (channel.threadUnreadCount ?? 0)}
+
+            </span>
+
+          ) : null}
+
+        </button>
+
+        {isMinimal && onToggleStarred ? (
+
+          <Button
+
+            type="button"
+
+            variant="ghost"
+
+            size="icon"
+
+            className={cn(
+
+              "h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100",
+
+              starred && "opacity-100",
+
+              CHAT_ICON_BTN_CLASS,
+
+            )}
+
+            aria-label={starred ? "Unstar channel" : "Star channel"}
+
+            onClick={() => onToggleStarred(channel.id)}
+
+          >
+
+            <Star className={cn("h-3.5 w-3.5", starred && "fill-current text-amber-400")} />
+
+          </Button>
+
         ) : null}
-        {(channel.unreadCount ?? 0) + (channel.threadUnreadCount ?? 0) > 0 ? (
-          <span className={cn("shrink-0", CHAT_UNREAD_BADGE)}>
-            {(channel.unreadCount ?? 0) + (channel.threadUnreadCount ?? 0)}
-          </span>
-        ) : null}
-      </button>
+
+      </div>
+
     );
+
   };
+
+
 
   const addBtnClass = cn("h-8 w-8", CHAT_ICON_BTN_CLASS);
 
+  const starredSection =
+    isMinimal && starredChannels.length > 0 ? (
+      <>
+        <div className="flex items-center justify-between px-3 py-3">
+          <span className={CHAT_SIDEBAR_SECTION_LABEL}>Starred</span>
+        </div>
+        <div className="px-2 pb-2">{starredChannels.map(renderRow)}</div>
+      </>
+    ) : null;
+
+  const channelsSection = sidebarSections.channels ? (
+    <>
+      <div className="flex items-center justify-between px-3 py-3">
+        <span className={CHAT_SIDEBAR_SECTION_LABEL}>Channels</span>
+        {canWrite ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={addBtnClass}
+            aria-label="New channel"
+            onClick={() => setCreateOpen(true)}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        ) : null}
+      </div>
+      <div className="px-2 pb-2">{publicChannels.map(renderRow)}</div>
+    </>
+  ) : null;
+
+  const dmsSection = sidebarSections.dms ? (
+    <div>
+      <div className={cn("flex items-center justify-between px-1 py-2", !isMinimal && "mt-4")}>
+        <span className={CHAT_SIDEBAR_SECTION_LABEL}>DMs</span>
+        {canWrite ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={addBtnClass}
+            aria-label="New direct message"
+            onClick={() => setDmOpen(true)}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        ) : null}
+      </div>
+      {dms.map(renderRow)}
+    </div>
+  ) : null;
+
+  const mentionsSection = sidebarSections.mentions ? (
+    <div>
+      <ChatMentionsList
+        mentions={mentions}
+        unreadCount={mentionUnreadCount}
+        activeMentionMessageId={activeMentionMessageId}
+        onOpenMention={onOpenMention}
+      />
+    </div>
+  ) : null;
+
+  const alertsSection =
+    sidebarSections.alerts && onOpenAlert && onDismissAlert ? (
+      <div>
+        <ChatAlertsList
+          alerts={alerts}
+          activeAlertId={activeAlertId}
+          onOpenAlert={onOpenAlert}
+          onDismiss={onDismissAlert}
+        />
+      </div>
+    ) : null;
+
+  const lowerSections = (
+    <>
+      {dmsSection}
+      {mentionsSection}
+      {alertsSection}
+    </>
+  );
+
   return (
     <aside
-      className={cn(CHAT_SIDEBAR_CLASS, "h-full", zoneClassName)}
+      className={cn(CHAT_SIDEBAR_CLASS, "relative z-10 h-full min-h-0", zoneClassName)}
       style={zoneStyle}
       data-zone-theme={zoneTheme}
     >
-      {sidebarSections.channels ? (
+      {isMinimal ? (
+        <div className={cn(CHAT_SCROLL_CLASS, "min-h-0 flex-1 px-2 pb-2")}>
+          {starredSection}
+          {channelsSection}
+          {lowerSections}
+        </div>
+      ) : (
         <>
-          <div className="flex items-center justify-between px-3 py-3">
-            <span className={CHAT_SIDEBAR_SECTION_LABEL}>Channels</span>
-            {canWrite ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={addBtnClass}
-                aria-label="New channel"
-                onClick={() => setCreateOpen(true)}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            ) : null}
-          </div>
-          <div className="px-2 pb-2">{publicChannels.map(renderRow)}</div>
+          {starredSection}
+          {channelsSection}
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">{lowerSections}</div>
         </>
-      ) : null}
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-        {sidebarSections.dms ? (
-          <>
-            <div className="mt-4 flex items-center justify-between px-1 py-2">
-              <span className={CHAT_SIDEBAR_SECTION_LABEL}>DMs</span>
-              {canWrite ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={addBtnClass}
-                  aria-label="New direct message"
-                  onClick={() => setDmOpen(true)}
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              ) : null}
-            </div>
-            {dms.map(renderRow)}
-          </>
-        ) : null}
-        {sidebarSections.mentions ? (
-          <ChatMentionsList
-            mentions={mentions}
-            unreadCount={mentionUnreadCount}
-            activeMentionMessageId={activeMentionMessageId}
-            onOpenMention={onOpenMention}
-          />
-        ) : null}
-        {sidebarSections.alerts && onOpenAlert && onDismissAlert ? (
-          <ChatAlertsList
-            alerts={alerts}
-            activeAlertId={activeAlertId}
-            onOpenAlert={onOpenAlert}
-            onDismiss={onDismissAlert}
-          />
-        ) : null}
-      </div>
+      )}
+
       <ChannelCreateDialog
+
         open={createOpen}
+
         onOpenChange={setCreateOpen}
+
         onCreated={(channel) => {
+
           onChannelCreated(channel);
+
           onSelectChannel(channel.id);
+
         }}
+
       />
+
       <DmMemberPicker
+
         open={dmOpen}
+
         onOpenChange={setDmOpen}
+
         onOpened={(channel) => {
+
           onDmOpened(channel);
+
           onSelectChannel(channel.id);
+
         }}
+
       />
+
     </aside>
+
   );
+
 }
+
+

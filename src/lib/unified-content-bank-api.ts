@@ -3,7 +3,7 @@
  * One Supabase table per property: `content_bank_<site-id>` with content_type post | entity.
  */
 
-import contentBankMigrationSql from "@/fixtures/flowbie-content-bank-migration.sql?raw";
+import contentBankMigrationSql from "@/fixtures/neo-pulse-content-bank-migration.sql?raw";
 
 const UNIFIED_CONTENT_BANK_API_BASE = "";
 
@@ -33,24 +33,24 @@ function sqlTextParam(s: string): string {
 export function buildUnifiedContentBankEnsureSql(siteId: string, displayLabel: string): string {
   const id = siteId.trim();
   const label = displayLabel.trim() || id;
-  return `SELECT public.flowbie_ensure_content_bank(${sqlTextParam(id)}, ${sqlTextParam(label)});`;
+  return `SELECT public.neo_pulse_ensure_content_bank(${sqlTextParam(id)}, ${sqlTextParam(label)});`;
 }
 
-const CONTENT_BANK_MIGRATION_FILE = "src/fixtures/flowbie-content-bank-migration.sql";
+const CONTENT_BANK_MIGRATION_FILE = "src/fixtures/neo-pulse-content-bank-migration.sql";
 
 export function buildUnifiedContentBankProvisioningSqlBlock(siteId: string, displayLabel: string): string {
   const id = siteId.trim();
   const label = displayLabel.trim() || id;
   const ddl = contentBankMigrationSql.trim();
   return [
-    `-- Flowbie client content bank (one table: content_bank_<site> — no registry)`,
+    `-- NEO Pulse client content bank (one table: content_bank_<site> — no registry)`,
     `-- Source: ${CONTENT_BANK_MIGRATION_FILE}`,
     "",
     ddl,
     "",
     "NOTIFY pgrst, 'reload schema';",
     "",
-    `SELECT public.flowbie_ensure_content_bank(${sqlTextParam(id)}, ${sqlTextParam(label)})::text AS table_name, ${sqlTextParam(
+    `SELECT public.neo_pulse_ensure_content_bank(${sqlTextParam(id)}, ${sqlTextParam(label)})::text AS table_name, ${sqlTextParam(
       id,
     )}::text AS site_id;`,
   ].join("\n");

@@ -5,7 +5,7 @@ section: Knowledge Model
 method: GET
 path: /api/knowledge-model/progress/([a-zA-Z0-9-]+)
 auth: open
-order: 610
+order: 600
 ---
 
 GET `/api/knowledge-model/progress/([a-zA-Z0-9-]+)`.
@@ -34,7 +34,7 @@ Reads ([a za z0 9 ]+) from the Knowledge Model API. On success, returns `progres
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/knowledge-model/progress/([a-zA-Z0-9-]+)" \
+curl -X GET "https://neodigital.ca/api/knowledge-model/progress/([a-zA-Z0-9-]+)" \
   -H "Content-Type: application/json" \
 ```
 

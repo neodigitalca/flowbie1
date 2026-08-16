@@ -5,7 +5,7 @@ section: Manager Cloud Settings
 method: POST
 path: /api/manager-cloud-settings/save
 auth: open
-order: 630
+order: 620
 ---
 
 POST `/api/manager-cloud-settings/save`.
@@ -34,7 +34,7 @@ Runs the save action in the Manager Cloud Settings API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/manager-cloud-settings/save" \
+curl -X POST "https://neodigital.ca/api/manager-cloud-settings/save" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

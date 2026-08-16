@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/chat/preferences/avatar
 auth: team-rbac-communication
-order: 1530
+order: 1520
 ---
 
 POST `/api/teams/{teamId}/chat/preferences/avatar`.
@@ -34,7 +34,7 @@ Runs the avatar action in the Teams API from a JSON request body. Requires a sig
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/chat/preferences/avatar" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/chat/preferences/avatar" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

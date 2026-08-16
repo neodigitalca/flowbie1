@@ -34,7 +34,7 @@ Runs the report data action in the Google Analytics API from a JSON request body
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/ga/report-data" \
+curl -X POST "https://neodigital.ca/api/ga/report-data" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/invites/({id})/revoke
 auth: session-team
-order: 1600
+order: 1590
 ---
 
 POST `/api/teams/{teamId}/invites/({id})/revoke`.
@@ -34,7 +34,7 @@ Runs the revoke action in the Teams API from a JSON request body. Requires a sig
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/invites/({id})/revoke" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/invites/({id})/revoke" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

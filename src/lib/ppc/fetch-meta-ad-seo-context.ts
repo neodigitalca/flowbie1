@@ -11,19 +11,26 @@ export type MetaSeoContextInput = {
   focusKeyword?: string;
 };
 
+function seoText(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
 export function buildMetaSeoContextBlock(input: MetaSeoContextInput): string {
   const lines = [
     "SEO page context (DataForSEO on_page/content_parsing):",
-    `URL: ${input.url.trim()}`,
+    `URL: ${input.url}`,
   ];
-  if (input.title?.trim()) {
-    lines.push(`Title: ${input.title.trim()}`);
+  const title = seoText(input.title);
+  const focusKeyword = seoText(input.focusKeyword);
+  const bodyText = seoText(input.bodyText);
+  if (title.length > 0) {
+    lines.push(`Title: ${title}`);
   }
-  if (input.focusKeyword?.trim()) {
-    lines.push(`Focus keyword: ${input.focusKeyword.trim()}`);
+  if (focusKeyword.length > 0) {
+    lines.push(`Focus keyword: ${focusKeyword}`);
   }
-  if (input.bodyText?.trim()) {
-    lines.push(`Page content (excerpt): ${input.bodyText.trim()}`);
+  if (bodyText.length > 0) {
+    lines.push(`Page content (excerpt): ${bodyText}`);
   }
   return lines.join("\n");
 }
@@ -32,24 +39,26 @@ export async function fetchMetaAdSeoContext(
   url: string,
   options?: { focusKeyword?: string; signal?: AbortSignal },
 ): Promise<{ pageContext: string; title: string; bodyText: string }> {
-  const trimmedUrl = url.trim();
-  if (!/^https?:\/\//i.test(trimmedUrl)) {
+  if (typeof url !== "string") {
+    throw new Error("Context URL must be a string.");
+  }
+  if (!/^https?:\/\//i.test(url)) {
     throw new Error("Context URL must start with http:// or https://.");
   }
 
   const raw = await fetchOnPageContentParsing({
-    url: trimmedUrl,
+    url,
     signal: options?.signal,
   });
   const title = extractPageTitleFromOnPageDfsResponse(raw);
   const bodyText = extractPlainTextFromOnPageDfsResponse(raw);
 
   const pageContext = buildMetaSeoContextBlock({
-    url: trimmedUrl,
+    url,
     title,
-    bodyText: bodyText.trim(),
+    bodyText,
     focusKeyword: options?.focusKeyword,
   });
 
-  return { pageContext, title, bodyText: bodyText.trim() };
+  return { pageContext, title, bodyText };
 }

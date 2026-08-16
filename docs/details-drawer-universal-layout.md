@@ -59,7 +59,7 @@ UnifiedWorkspaceChrome (progress band)
 
 **Layer 3 — Drawer content** (page-specific)
 
-- Content Optimizer bulk (Opt): `OverviewContentDetailsPanel` → `BulkOptimizationPanel` with `displayMode="details-only"`
+- Content Optimizer bulk (Opt): `OverviewContentDetailsPanel` → `ContentOptimizerDetailsDrawer` → `BulkGeneratorDetailsDrawer` for all harness runs and micro bulk actions
 - Generator CSV/Prompt/Import: `BulkGeneratorDetailsDrawer` (compact `BlogIdeaRowCompact` rows + `BulkDetailsTileSections`)
 - Generator PR / Entity / Image: respective `*DetailsDrawer.tsx` modules using `CONTENT_OPTIMIZER_MULTI_SITE_ROW_STACK_CLASS`
 - Shared accordion tiles: `bulk-details-tile-sections.tsx` (`BulkDetailsTileSections`, `BulkDetailsPrepAccordion`)
@@ -143,21 +143,13 @@ No top border: the drawer visually continues from the zinc-900 progress band.
 
 ## Content Optimizer bulk drawer body
 
-File: `src/components/integrations/wordpress/BulkOptimizationPanel.tsx`  
-Entry: early return when `displayMode === "details-only"`.
+Files: [`OverviewContentDetailsPanel.tsx`](src/components/overview/overview-tab/OverviewContentDetailsPanel.tsx), [`ContentOptimizerDetailsDrawer.tsx`](src/components/overview/overview-tab/ContentOptimizerDetailsDrawer.tsx), [`overview-bulk-details-bindings.ts`](src/lib/overview/overview-bulk-details-bindings.ts)
 
-Mounted from: `OverviewContentDetailsPanel.tsx` with:
+Mounted via `ContentOptimizerDetailsDrawer` → `BulkGeneratorDetailsDrawer` with:
 
-```tsx
-<BulkOptimizationPanel
-  variant="page"
-  displayMode="details-only"
-  bulkState={batchBulkState}
-  overviewRows={c.rows}
-  wpTitlesByUrl={c.wpTitlesByUrl}
-  ...
-/>
-```
+- Sitemap page bucket (`BulkSitemapInventoryRunDetail`) from `useOverviewSiteWarmDetails`
+- Per-row `MetaOptimizerPageRowCompact` + `BulkDetailsTileSections` sequential pipeline
+- All AISEO harness run kinds and micro bulk actions via unified bindings
 
 ### DOM structure (top to bottom)
 
@@ -304,6 +296,9 @@ ISO format: `YYYY-MM-DD` from `overviewDateModifierTodayIso()`.
 | `src/components/overview/OverviewTabContent.tsx` | List dim overlay |
 | `src/components/overview/overview-tab/OverviewMetaWorkspaceBar.tsx` | Passes `detailsPanel`, `onDetailsOpenChange` |
 | `src/components/overview/overview-tab/OverviewContentDetailsPanel.tsx` | Chooses bulk vs single panel |
+| `src/components/overview/overview-tab/ContentOptimizerDetailsDrawer.tsx` | Opt universal drawer wrapper |
+| `src/lib/overview/overview-bulk-details-bindings.ts` | Pipeline titles + props for all AISEO runs |
+| `src/hooks/overview/use-overview-site-warm-details.ts` | Sitemap inventory + GSC hosted links |
 | `src/components/shared/bulk-details-tile-sections.tsx` | Shared Generated files + Sitemap prep accordions |
 | `src/components/keyword-research/bulk/BulkGeneratorDetailsDrawer.tsx` | Generator CSV/Prompt/Import drawer body |
 | `src/components/integrations/wordpress/BulkOptimizationPanel.tsx` | Opt `details-only` layout |

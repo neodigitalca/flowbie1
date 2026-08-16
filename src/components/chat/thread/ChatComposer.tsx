@@ -24,6 +24,7 @@ export type ChatComposerProps = {
   onTyping?: () => void;
   enterToSend?: boolean;
   showLinkPreviews?: boolean;
+  compactToolbar?: boolean;
 };
 
 type PendingFile = {
@@ -46,6 +47,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     onTyping,
     enterToSend = true,
     showLinkPreviews = true,
+    compactToolbar = false,
   },
   ref,
 ) {
@@ -133,30 +135,30 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
         }}
       >
         {!disabled ? (
-          <>
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              multiple
-              accept=".pdf,.txt,.csv,.json,.md,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp"
-              onChange={(e) => {
-                if (e.target.files?.length) void uploadFiles(e.target.files);
-                e.target.value = "";
-              }}
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={cn("absolute bottom-2 left-2 z-10 h-8 w-8", CHAT_ICON_BTN_CLASS)}
-              disabled={uploading || sending}
-              onClick={() => fileInputRef.current?.click()}
-              aria-label="Attach file"
-            >
-              <Paperclip className="h-4 w-4" />
-            </Button>
-          </>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            multiple
+            accept=".pdf,.txt,.csv,.json,.md,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp"
+            onChange={(e) => {
+              if (e.target.files?.length) void uploadFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
+        ) : null}
+        {!disabled && !compactToolbar ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn("absolute bottom-2 left-2 z-10 h-8 w-8", CHAT_ICON_BTN_CLASS)}
+            disabled={uploading || sending}
+            onClick={() => fileInputRef.current?.click()}
+            aria-label="Attach file"
+          >
+            <Paperclip className="h-4 w-4" />
+          </Button>
         ) : null}
         <ChatRichEditor
           ref={editorRef}
@@ -168,6 +170,22 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
           showAiToolbar={!disabled && !sending}
           allowEmptySubmit={pending.length > 0}
           submitOnEnter={enterToSend}
+          compactToolbar={compactToolbar}
+          toolbarStart={
+            !disabled && compactToolbar ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn("chat-editor-attach-btn h-8 w-8 shrink-0", CHAT_ICON_BTN_CLASS)}
+                disabled={uploading || sending}
+                onClick={() => fileInputRef.current?.click()}
+                aria-label="Attach file"
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+            ) : undefined
+          }
         />
         {showLinkPreviews ? <ChatDraftLinkPreviews teamId={teamId} html={draftHtml} /> : null}
       </div>

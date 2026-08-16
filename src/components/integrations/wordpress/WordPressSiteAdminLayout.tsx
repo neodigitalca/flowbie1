@@ -3,7 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import { PanelLeft, PanelLeftClose } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const PROPERTY_NAV_COLLAPSED_KEY = "flowbie-property-admin-nav-collapsed";
+const PROPERTY_NAV_COLLAPSED_KEY = "neo-pulse-property-admin-nav-collapsed";
 
 export type WordPressSiteAdminSectionId =
   | "overview"
@@ -13,6 +13,7 @@ export type WordPressSiteAdminSectionId =
   | "sitemaps"
   | "post-bank"
   | "site-settings"
+  | "wp-engine"
   | "ai-models"
   | "history";
 
@@ -341,7 +342,7 @@ export function WordPressSiteAdminLayout<T extends string = WordPressSiteAdminSe
                           : "px-4 pt-4 pb-4 sm:px-6 sm:pt-5 sm:pb-5 md:px-8 md:pt-6 md:pb-6",
                       )}
                     >
-                      <div className="flowbie-property-panel-pane flex w-full flex-col overflow-x-hidden text-foreground">
+                      <div className="neo-pulse-property-panel-pane flex w-full flex-col overflow-x-hidden text-foreground">
                         {s.content}
                       </div>
                     </div>
@@ -368,7 +369,7 @@ export function WordPressSiteAdminLayout<T extends string = WordPressSiteAdminSe
                 "flex min-h-0 flex-col overflow-hidden overflow-x-hidden",
               displayViewportHeight &&
                 !propertyShell &&
-                "flowbie-manager-tab-scroll min-h-0 overflow-y-auto overflow-x-hidden",
+                "neo-pulse-manager-tab-scroll min-h-0 overflow-y-auto overflow-x-hidden",
               !displayViewportHeight &&
                 layoutFlex &&
                 propertyShell &&
@@ -379,7 +380,7 @@ export function WordPressSiteAdminLayout<T extends string = WordPressSiteAdminSe
               !displayViewportHeight &&
                 layoutFlex &&
                 !propertyShell &&
-                "flowbie-manager-tab-scroll flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain",
+                "neo-pulse-manager-tab-scroll flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain",
               !displayViewportHeight && !layoutFlex && "h-full overflow-hidden"
             )}
             style={
@@ -428,7 +429,7 @@ export function WordPressSiteAdminLayout<T extends string = WordPressSiteAdminSe
                         : "px-4 pt-4 pb-4 sm:px-6 sm:pt-5 sm:pb-5 md:px-8 md:pt-6 md:pb-6",
                     )}
                   >
-                    <div className="flowbie-property-panel-pane flowbie-hide-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden text-foreground">
+                    <div className="neo-pulse-property-panel-pane neo-pulse-hide-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden text-foreground">
                       {activeContent}
                     </div>
                   </div>

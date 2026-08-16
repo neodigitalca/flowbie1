@@ -46,6 +46,38 @@ class Neo_Pulse_App_Pulse_Assist_Automation_Intent {
 			);
 		}
 
+		if ( self::is_gsc_reporting( $lower, $manager_tab, $body ) ) {
+			$preset = str_contains( $lower, 'yoy' ) || str_contains( $lower, 'year over year' ) ? 'yoy' : 'mom';
+			return self::plan(
+				'gsc_reporting',
+				$preset === 'yoy' ? 'GSC YoY report' : 'GSC MoM report',
+				array(
+					'comparePreset' => $preset,
+					'saveToDisk'      => true,
+				),
+				$body
+			);
+		}
+
+		if ( self::is_post_creator( $lower, $manager_tab, $body ) ) {
+			$post_count = self::extract_post_count( $lower );
+			return self::plan(
+				'post_creator',
+				$post_count > 1 ? "Create {$post_count} posts" : 'Create post',
+				array(
+					'postCount'              => $post_count,
+					'keywordSource'          => 'prompt',
+					'featuredImage'          => true,
+					'postDestination'        => 'wordpress',
+					'scheduleTimesPerMonth'  => $post_count,
+					'scheduleStartDay'       => self::extract_schedule_start_day( $lower ),
+					'scheduleStartTime'      => '09:00',
+					'scheduleStaggerOptimized' => true,
+				),
+				$body
+			);
+		}
+
 		return null;
 	}
 
@@ -111,6 +143,103 @@ class Neo_Pulse_App_Pulse_Assist_Automation_Intent {
 
 		unset( $body );
 		return false;
+	}
+
+	/**
+	 * @param array<string,mixed> $body
+	 */
+	private static function is_gsc_reporting( string $lower, string $manager_tab, array $body ): bool {
+		if ( $manager_tab !== 'generator' && $manager_tab !== 'report' && $manager_tab !== 'gsc-reporting' ) {
+			$report_tab = str_contains( $lower, 'gsc report' )
+				|| str_contains( $lower, 'monthly report' )
+				|| str_contains( $lower, 'generate report' )
+				|| str_contains( $lower, 'mom report' )
+				|| str_contains( $lower, 'yoy report' );
+			if ( ! $report_tab ) {
+				return false;
+			}
+		}
+
+		$needles = array(
+			'gsc report',
+			'generate report',
+			'monthly report',
+			'mom report',
+			'yoy report',
+			'year over year report',
+			'run reporting',
+		);
+		foreach ( $needles as $needle ) {
+			if ( str_contains( $lower, $needle ) ) {
+				return true;
+			}
+		}
+
+		if ( str_contains( $lower, 'run automation' ) && ( str_contains( $lower, 'report' ) || str_contains( $lower, 'gsc' ) ) ) {
+			return true;
+		}
+
+		unset( $body );
+		return $manager_tab === 'generator' || $manager_tab === 'report';
+	}
+
+	/**
+	 * @param array<string,mixed> $body
+	 */
+	private static function is_post_creator( string $lower, string $manager_tab, array $body ): bool {
+		if ( $manager_tab !== 'generator' && $manager_tab !== 'bulk-prompt' && $manager_tab !== 'bulk-csv' ) {
+			$post_tab = str_contains( $lower, 'create post' )
+				|| str_contains( $lower, 'generate post' )
+				|| str_contains( $lower, 'monthly post' )
+				|| str_contains( $lower, 'blog creator' );
+			if ( ! $post_tab ) {
+				return false;
+			}
+		}
+
+		$needles = array(
+			'create post',
+			'create posts',
+			'generate post',
+			'generate posts',
+			'monthly post',
+			'monthly posts',
+			'blog creator',
+			'post creator',
+			'scheduled post',
+		);
+		foreach ( $needles as $needle ) {
+			if ( str_contains( $lower, $needle ) ) {
+				return true;
+			}
+		}
+
+		if ( str_contains( $lower, 'run automation' ) && str_contains( $lower, 'post' ) ) {
+			return true;
+		}
+
+		unset( $body );
+		return $manager_tab === 'generator';
+	}
+
+	private static function extract_post_count( string $lower ): int {
+		if ( preg_match( '/\b(\d{1,2})\s+posts?\b/', $lower, $m ) ) {
+			return max( 1, min( 31, (int) $m[1] ) );
+		}
+		if ( str_contains( $lower, 'three posts' ) || str_contains( $lower, 'three post' ) ) {
+			return 3;
+		}
+		return 1;
+	}
+
+	private static function extract_schedule_start_day( string $lower ): int {
+		if ( str_contains( $lower, 'first of' ) || str_contains( $lower, '1st of' ) ) {
+			return 1;
+		}
+		if ( preg_match( '/\bon the (\d{1,2})(?:st|nd|rd|th)?\b/', $lower, $m ) ) {
+			return max( 1, min( 28, (int) $m[1] ) );
+		}
+		return 1;
 	}
 
 	/**

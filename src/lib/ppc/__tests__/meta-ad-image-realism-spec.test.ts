@@ -28,7 +28,10 @@ describe("meta-ad-image-realism-spec", () => {
 
   it("builds scene spec from creative brief not white desk template", () => {
     const spec = buildMetaImageRealismSceneSpec({
-      creativeBrief: withToolPalette(briefBase, DEVICE_PALETTE),
+      creativeBrief: {
+        ...withToolPalette(briefBase, DEVICE_PALETTE),
+        deviceScreenLayout: "elementor_editor",
+      },
       placement: "feed_1x1",
       localityCity: "Edmonton",
       visualReferenceElements: [
@@ -46,8 +49,18 @@ describe("meta-ad-image-realism-spec", () => {
     expect(spec).toContain("Warm co-working loft with walnut desk");
     expect(spec).not.toContain("one laptop on a clean desk");
     expect(spec).toContain(META_DEVICE_SCREEN_ABSTRACT_RULE);
+    expect(spec).toContain("DEVICE SCREEN LAYOUT");
+    expect(spec).toContain("Elementor-style page builder");
     expect(spec).toContain("Locality: Edmonton");
     expect(spec).toContain("Visual tool palette (degree):");
+  });
+
+  it("includes on-image text dedupe in scene spec", () => {
+    const spec = buildMetaImageRealismSceneSpec({
+      creativeBrief: withToolPalette(briefBase, TYPOGRAPHY_PALETTE),
+      placement: "feed_1x1",
+    });
+    expect(spec).toContain("No duplicate lines");
   });
 
   it("omits device abstract rule when no device tool or refs", () => {
@@ -57,5 +70,21 @@ describe("meta-ad-image-realism-spec", () => {
     });
     expect(spec).toContain("SCENE SPEC");
     expect(spec).not.toContain(META_DEVICE_SCREEN_ABSTRACT_RULE);
+  });
+
+  it("includes icon cluster cap rules when icon_cluster is active", () => {
+    const spec = buildMetaImageRealismSceneSpec({
+      creativeBrief: withToolPalette(briefBase, TYPOGRAPHY_PALETTE),
+      placement: "feed_1x1",
+    });
+    expect(spec).toContain("at most 2 to 3 distinct icons");
+  });
+
+  it("omits icon cluster cap rules when icon_cluster is off", () => {
+    const spec = buildMetaImageRealismSceneSpec({
+      creativeBrief: withToolPalette(briefBase, SKYLINE_PALETTE),
+      placement: "feed_1x1",
+    });
+    expect(spec).not.toContain("at most 2 to 3 distinct icons");
   });
 });

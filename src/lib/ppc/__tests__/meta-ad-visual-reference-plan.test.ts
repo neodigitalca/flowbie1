@@ -230,13 +230,13 @@ describe("meta-ad-visual-reference-plan", () => {
     ).not.toThrow();
   });
 
-  it("adds Flowbie product rules to system prompt", () => {
+  it("adds NEO Pulse product rules to system prompt", () => {
     const prompt = buildMetaVisualReferencePlanSystemPrompt({
-      contextSource: "flowbie_app",
+      contextSource: "neo-pulse_app",
       creativeMode: "product_saas",
       creativeBrief: designedBrief,
     });
-    expect(prompt).toContain("FlowbieONE product ad rules");
+    expect(prompt).toContain("NEO Pulse product ad rules");
     expect(prompt).toContain("visualToolPalette");
     expect(prompt).not.toContain("visualElementKinds");
     expect(prompt).not.toContain("white-background product photography queries only");
@@ -248,19 +248,19 @@ describe("meta-ad-visual-reference-plan", () => {
         creativeBrief: designedBrief,
         goal: {
           visualDirection: "Designed feed graphic",
-          primaryTopic: "FlowbieONE",
+          primaryTopic: "NEO Pulse",
           creativeMode: "product_saas",
         },
         placement: "feed_1x1",
         placementLabel: "Square feed",
         currentYear: 2026,
-        contextSource: "flowbie_app",
-        programBrief: "# FlowbieONE program brief",
+        contextSource: "neo-pulse_app",
+        programBrief: "# NEO Pulse program brief",
       }),
     );
     expect(payload.creativeBrief.creativeStyle).toBe("designed_graphic");
     expect(payload.creativeBrief.visualToolPalette.typography.chance).toBe(0.9);
-    expect(payload.programBrief).toContain("FlowbieONE program brief");
+    expect(payload.programBrief).toContain("NEO Pulse program brief");
     expect(payload.outputSchema.elements[0].kind).toContain("map");
   });
 });

@@ -27,13 +27,13 @@ describe("fetchMetaAdSeoContext", () => {
 
   it("returns URL-only context when DataForSEO body is empty", async () => {
     const block = buildMetaSeoContextBlock({
-      url: "https://flowbie.ca/flowbie",
-      title: "FlowbieONE",
+      url: "https://neodigital.ca/neo-pulse",
+      title: "NEO Pulse",
       bodyText: "",
       focusKeyword: "seo audit",
     });
-    expect(block).toContain("https://flowbie.ca/flowbie");
-    expect(block).toContain("FlowbieONE");
+    expect(block).toContain("https://neodigital.ca/neo-pulse");
+    expect(block).toContain("NEO Pulse");
     expect(block).not.toContain("Page content (excerpt)");
   });
 });

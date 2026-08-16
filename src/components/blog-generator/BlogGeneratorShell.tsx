@@ -1,6 +1,8 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { BulkBlogGenerationTab } from "@/components/keyword-research/BulkBlogGenerationTab";
 import { FlowGeneratorSection } from "@/components/generator/FlowGeneratorSection";
+import { ResearchGeneratorSection } from "@/components/generator/ResearchGeneratorSection";
+import { ReportingTab } from "@/components/research/reporting/ReportingTab";
 import { ImageGeneratorSection } from "@/components/generator/ImageGeneratorSection";
 import type { GeneratorFreeFlowBindings } from "@/components/generator/generator-free-flow-bindings";
 import { CompetitorGeneratorShell } from "@/components/competitor-generator/CompetitorGeneratorShell";
@@ -9,6 +11,8 @@ import { ContentOptimizerTabContent } from "@/components/content-optimizer/Conte
 import {
   type BlogGeneratorSectionId,
   readStoredBlogGeneratorSection,
+  registerBlogGeneratorSectionListener,
+  unregisterBlogGeneratorSectionListener,
   writeStoredBlogGeneratorSection,
 } from "./blog-generator-sections";
 
@@ -45,6 +49,14 @@ export const BlogGeneratorShell: React.FC<BlogGeneratorShellProps> = ({
     writeStoredBlogGeneratorSection(id);
   }, []);
 
+  useEffect(() => {
+    const onExternalSection = (id: BlogGeneratorSectionId) => {
+      setSectionState(id);
+    };
+    registerBlogGeneratorSectionListener(onExternalSection);
+    return () => unregisterBlogGeneratorSectionListener(onExternalSection);
+  }, []);
+
   const sharedTabProps = useMemo(
     () => ({
       openRouterApiKey,
@@ -76,7 +88,24 @@ export const BlogGeneratorShell: React.FC<BlogGeneratorShellProps> = ({
     );
   }
 
-  if (section === "flow" && freeFlowBindings) {
+  if (section === "research") {
+    return (
+      <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
+        <ResearchGeneratorSection activeSection={section} onSectionChange={setSection} />
+      </div>
+    );
+  }
+
+  if (section === "report") {
+    return (
+      <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
+        <ReportingTab activeSection={section} onSectionChange={setSection} />
+      </div>
+    );
+  }
+
+  if (section === "flow") {
+    if (!freeFlowBindings) return null;
     return (
       <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
         <FlowGeneratorSection
@@ -89,7 +118,8 @@ export const BlogGeneratorShell: React.FC<BlogGeneratorShellProps> = ({
     );
   }
 
-  if (section === "image" && freeFlowBindings) {
+  if (section === "image") {
+    if (!freeFlowBindings) return null;
     return (
       <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
         <ImageGeneratorSection

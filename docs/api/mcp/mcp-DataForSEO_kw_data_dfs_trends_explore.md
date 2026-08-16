@@ -5,7 +5,7 @@ section: DataForSEO MCP
 method: POST
 path: /api/mcp/DataForSEO_kw_data_dfs_trends_explore
 auth: open
-order: 760
+order: 750
 ---
 
 POST `/api/mcp/DataForSEO_kw_data_dfs_trends_explore`.
@@ -34,7 +34,7 @@ Runs the dataforseo_kw_data_dfs_trends_explore action in the DataForSEO MCP API 
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/mcp/DataForSEO_kw_data_dfs_trends_explore" \
+curl -X POST "https://neodigital.ca/api/mcp/DataForSEO_kw_data_dfs_trends_explore" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

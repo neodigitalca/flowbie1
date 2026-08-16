@@ -12,7 +12,7 @@ import type {
 import { buildVisualReferencePlanMarkdown } from "@/lib/ppc/meta-ad-visual-reference-plan";
 
 export const META_RESEARCH_SECTION_IDS = {
-  flowbieAppContext: "flowbie-app-context",
+  neoPulseAppContext: "neo-pulse-app-context",
   contextUrl: "context-url-research",
   landingPage: "landing-page-research",
   gscQueries: "gsc-queries",
@@ -30,7 +30,7 @@ export const META_RESEARCH_SECTION_IDS = {
 export const META_INTERNAL_RESEARCH_SECTION_IDS = new Set<string>([
   META_RESEARCH_SECTION_IDS.copyChecklist,
   META_RESEARCH_SECTION_IDS.imageChecklist,
-  META_RESEARCH_SECTION_IDS.flowbieAppContext,
+  META_RESEARCH_SECTION_IDS.neoPulseAppContext,
   META_RESEARCH_SECTION_IDS.contextUrl,
   META_RESEARCH_SECTION_IDS.landingPage,
   META_RESEARCH_SECTION_IDS.gscQueries,
@@ -41,7 +41,7 @@ export const META_INTERNAL_RESEARCH_SECTION_IDS = new Set<string>([
 ]);
 
 export const META_RESEARCH_SECTION_TITLES: Record<string, string> = {
-  [META_RESEARCH_SECTION_IDS.flowbieAppContext]: "FlowbieONE program brief",
+  [META_RESEARCH_SECTION_IDS.neoPulseAppContext]: "NEO Pulse program brief",
   [META_RESEARCH_SECTION_IDS.contextUrl]: "Context URL research",
   [META_RESEARCH_SECTION_IDS.landingPage]: "Landing page research",
   [META_RESEARCH_SECTION_IDS.gscQueries]: "GSC queries",
@@ -152,7 +152,7 @@ function collectSectionMarkdown(sections: MetaAdResearchSection[], ids: string[]
 
 export function buildMergedContextResearchMarkdown(sections: MetaAdResearchSection[]): string {
   const body = collectSectionMarkdown(sections, [
-    META_RESEARCH_SECTION_IDS.flowbieAppContext,
+    META_RESEARCH_SECTION_IDS.neoPulseAppContext,
     META_RESEARCH_SECTION_IDS.contextUrl,
     META_RESEARCH_SECTION_IDS.landingPage,
     META_RESEARCH_SECTION_IDS.gscQueries,

@@ -75,6 +75,7 @@ export type BulkGeneratorDetailsPanelProps = {
   selectedCount?: number;
   sitemapInventoryLinks?: PromptBulkSitemapInventoryLink[];
   siteKwHostedLink?: import("@/lib/bulk/prompt-bulk-site-kw-scrape").PromptBulkSiteKwHostedLink | null;
+  sitemapInventoryLoading?: boolean;
   filesByRow?: Map<number, BulkGeneratedFile[]>;
   downloadFile?: (file: BulkGeneratedFile) => void;
   canDownloadBlog?: boolean;
@@ -84,6 +85,8 @@ export type BulkGeneratorDetailsPanelProps = {
   directionsSiteName?: string;
   prepAccordionTitle?: string;
   pipelineSectionTitles?: string[];
+  liveMessage?: string | null;
+  entitySapRowDisplay?: boolean;
 };
 
 export function bulkGeneratorDetailsCanOpen(

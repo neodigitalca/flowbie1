@@ -33,12 +33,12 @@ export function SitemapApproveProgressPanel({ progress }: Props) {
         aria-label="Approve plan progress"
         aria-busy={indeterminate}
       >
-        <div className="flowbie-competitor-progress-track h-5">
+        <div className="neo-pulse-competitor-progress-track h-5">
           {indeterminate ? (
-            <div className="flowbie-competitor-progress-indeterminate" aria-hidden />
+            <div className="neo-pulse-competitor-progress-indeterminate" aria-hidden />
           ) : (
             <div
-              className="flowbie-competitor-progress-fill h-full transition-[width] duration-300 ease-out"
+              className="neo-pulse-competitor-progress-fill h-full transition-[width] duration-300 ease-out"
               style={{ width: `${overallPct}%` }}
               aria-hidden
             />

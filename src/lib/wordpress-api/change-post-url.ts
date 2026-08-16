@@ -48,7 +48,7 @@ export async function changeWordPressPostUrl(
           ok: false,
           error:
             data.error ||
-            "WordPress slug route not found. Restart the Flowbie backend server, then try Update WP again.",
+            "WordPress slug route not found. Restart the NEO Pulse backend server, then try Update WP again.",
         };
       }
       return { ok: false, error: data.error || `HTTP ${response.status}` };

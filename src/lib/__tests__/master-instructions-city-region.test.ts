@@ -2,12 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   cityRegionFromMasterInstructions,
   clearMasterInstructionsTestCache,
-  formatGbpMasterRulesAddressForGeocode,
   gbpCoordsFromMasterInstructions,
-  gbpGridContextFromMasterInstructions,
   gbpGroundingFromMasterInstructions,
-  gbpPlaceHintFromMasterInstructions,
-  hasGbpMasterRulesAddressForGeocode,
   seedMasterInstructionsForTests,
 } from "../master-instructions-storage";
 
@@ -116,96 +112,5 @@ describe("cityRegionFromMasterInstructions", () => {
     });
     expect(gbpGroundingFromMasterInstructions(siteId)).toBeNull();
     expect(gbpCoordsFromMasterInstructions(siteId)?.latitude).toBe(49.8951);
-  });
-
-  it("gbpGridContextFromMasterInstructions reads Advance Blinds GBP format", () => {
-    seedMasterInstructionsForTests(siteId, {
-      sources: [
-        {
-          name: "GBP-business-gbp.txt",
-          uploadedAt: 1,
-          content: `[Advance Blinds: Blinds, Shades & Drapery In Manitoba] - entity/topic
-[Advance Blinds & Drapery] - entity/topic
-street_address\t303A Main Avenue
-city\tPlum Coulee
-region\tMB
-postal_code\tR0G 1R0
-country\tCA`,
-        },
-      ],
-    });
-    expect(gbpGridContextFromMasterInstructions(siteId)).toEqual({
-      businessName: "Advance Blinds & Drapery",
-      city: "Plum Coulee",
-      region: "MB",
-      postalCode: "R0G 1R0",
-      address: "303A Main Avenue",
-      country: "CA",
-      placeId: null,
-      cid: null,
-    });
-  });
-
-  it("gbpPlaceHintFromMasterInstructions reads city and postal for offline centroid", () => {
-    seedMasterInstructionsForTests(siteId, {
-      sources: [
-        {
-          name: "GBP-business-gbp.txt",
-          uploadedAt: 1,
-          content: "[Business]\nname\tTailored Interiors\ncity\tSherwood Park\nregion\tAlberta\npostal_code\tT8A 4M5",
-        },
-      ],
-    });
-    expect(gbpPlaceHintFromMasterInstructions(siteId)).toEqual({
-      city: "Sherwood Park",
-      region: "Alberta",
-      postalCode: "T8A 4M5",
-      address: "",
-    });
-  });
-
-  it("formatGbpMasterRulesAddressForGeocode joins street + city region postal + country", () => {
-    expect(
-      formatGbpMasterRulesAddressForGeocode({
-        address: "10615 170 St NW",
-        city: "Edmonton",
-        region: "Alberta",
-        postalCode: "T5P 4W2",
-        country: "CA",
-      }),
-    ).toBe("10615 170 St NW, Edmonton Alberta T5P 4W2, CA");
-  });
-
-  it("formatGbpMasterRulesAddressForGeocode keeps formatted_address when already complete", () => {
-    expect(
-      formatGbpMasterRulesAddressForGeocode({
-        address: "303A Main Avenue, Plum Coulee MB R0G 1R0",
-        city: "Plum Coulee",
-        region: "MB",
-        postalCode: "R0G 1R0",
-        country: "CA",
-      }),
-    ).toBe("303A Main Avenue, Plum Coulee MB R0G 1R0, CA");
-  });
-
-  it("hasGbpMasterRulesAddressForGeocode requires street plus locality", () => {
-    expect(
-      hasGbpMasterRulesAddressForGeocode({
-        address: "10615 170 St NW",
-        city: "Edmonton",
-        region: "",
-        postalCode: "",
-        country: "CA",
-      }),
-    ).toBe(true);
-    expect(
-      hasGbpMasterRulesAddressForGeocode({
-        address: "",
-        city: "Edmonton",
-        region: "Alberta",
-        postalCode: "T5P 4W2",
-        country: "CA",
-      }),
-    ).toBe(false);
   });
 });

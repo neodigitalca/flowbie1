@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { pickFirstExternalOrganicUrl } from "../serp-first-external-url";
 
-/** Minimal DataForSEO-style root ([extractDataForSeoSerpBrief](b:/USE THIS/Flowbie/src/lib/overview-seo-content-brief.ts)). */
+/** Minimal DataForSEO-style root ([extractDataForSeoSerpBrief](b:/USE THIS/NEO Pulse/src/lib/overview-seo-content-brief.ts)). */
 function serpRootWithOrganics(urls: Array<{ url: string }>) {
   return {
     tasks: [

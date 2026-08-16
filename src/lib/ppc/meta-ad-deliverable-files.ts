@@ -38,7 +38,7 @@ export function buildMetaAdDeliverableFiles(
 
   const contextResearch = mergeMarkdown(
     [
-      sectionMarkdown(sections, META_RESEARCH_SECTION_IDS.flowbieAppContext),
+      sectionMarkdown(sections, META_RESEARCH_SECTION_IDS.neoPulseAppContext),
       sectionMarkdown(sections, META_RESEARCH_SECTION_IDS.contextUrl),
       sectionMarkdown(sections, META_RESEARCH_SECTION_IDS.landingPage),
       sectionMarkdown(sections, META_RESEARCH_SECTION_IDS.gscQueries),

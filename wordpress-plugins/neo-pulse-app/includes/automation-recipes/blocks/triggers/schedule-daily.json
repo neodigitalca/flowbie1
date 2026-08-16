@@ -1,0 +1,11 @@
+{
+  "keyword": "schedule-daily",
+  "name": "Daily schedule",
+  "kind": "calendar",
+  "description": "Run every day on or after the start date at a set time (Edmonton).",
+  "defaults": {
+    "frequency": "daily",
+    "startDate": "2026-09-01",
+    "time": "09:00"
+  }
+}

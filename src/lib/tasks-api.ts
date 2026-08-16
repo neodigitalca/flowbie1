@@ -1,4 +1,5 @@
 import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
+import type { TeamContextPulseTask } from "@/lib/pulse-assist/types";
 import type {
   TaskNote,
   TaskFile,
@@ -8,7 +9,15 @@ import type {
   TaskTemplate,
   TeamTask,
   TaskStatus,
+  TaskRecurrenceRule,
+  TaskExecution,
+  TaskExecutionKind,
+  TaskExecutionPayload,
+  DefaultTaskCreatePayload,
+  TaskScheduleMode,
+  TaskTriggerConfig,
 } from "@/lib/tasks-types";
+import type { TaskTriggerEvaluateResult, TaskTriggerPendingDispatch } from "@/lib/task-trigger-types";
 
 function baseUrl(): string {
   return (import.meta.env.VITE_MCP_API_BASE?.replace(/\/api\/mcp\/?$/, "") || BACKEND_API_BASE || "").replace(
@@ -17,9 +26,13 @@ function baseUrl(): string {
   );
 }
 
-function api(path: string, options?: RequestInit): Promise<Response> {
+export function tasksApi(path: string, options?: RequestInit): Promise<Response> {
   const p = path.startsWith("/") ? path : `/${path}`;
   return fetch(`${baseUrl()}/api${p}`, { ...options, credentials: "include" });
+}
+
+function api(path: string, options?: RequestInit): Promise<Response> {
+  return tasksApi(path, options);
 }
 
 export async function fetchTaskProjects(
@@ -38,7 +51,13 @@ export async function createTaskProject(
     keyword?: string;
     title: string;
     description?: string;
-    defaultTasks?: Array<{ keyword?: string; title: string; status?: TaskStatus }>;
+    wordpressSiteId?: string | null;
+    templateKeyword?: string;
+    taskClients?: Array<{ taskKeyword?: string; keyword?: string; clientSiteId?: string }>;
+    wordpressSites?: Array<{ id: string; name: string }>;
+    defaultTasks?: DefaultTaskCreatePayload[];
+    isAutomation?: boolean;
+    sourceTemplateKeyword?: string;
   },
 ): Promise<{ ok: boolean; project?: TaskProject; error?: string }> {
   const res = await api(`/teams/${teamId}/tasks/projects`, {
@@ -53,7 +72,7 @@ export async function createTaskProject(
 export async function updateTaskProject(
   teamId: number,
   projectId: number,
-  payload: { keyword?: string; title?: string; description?: string },
+  payload: { keyword?: string; title?: string; description?: string; wordpressSiteId?: string | null },
 ): Promise<{ ok: boolean; project?: TaskProject; error?: string }> {
   const res = await api(`/teams/${teamId}/tasks/projects/${projectId}`, {
     method: "PATCH",
@@ -134,6 +153,18 @@ export async function fetchMyTasks(
   return { tasks: data.tasks ?? [], completedToday: data.completedToday ?? 0 };
 }
 
+export async function fetchPulseAssignedTasks(teamId: number): Promise<TeamContextPulseTask[]> {
+  const res = await api(`/teams/${teamId}/tasks/pulse-assigned`);
+  const data = (await res.json()) as { ok?: boolean; tasks?: TeamContextPulseTask[] };
+  return data.tasks ?? [];
+}
+
+export async function fetchCalendarAutomationTasks(teamId: number): Promise<TeamContextPulseTask[]> {
+  const res = await api(`/teams/${teamId}/tasks/calendar-automations`);
+  const data = (await res.json()) as { ok?: boolean; tasks?: TeamContextPulseTask[] };
+  return data.tasks ?? [];
+}
+
 export async function searchTasks(teamId: number, query: string): Promise<TeamTask[]> {
   const params = new URLSearchParams({ q: query });
   const res = await api(`/teams/${teamId}/tasks/search?${params.toString()}`);
@@ -157,9 +188,16 @@ export async function createProjectTask(
     status?: TaskStatus;
     assigneeIds?: number[];
     dueDate?: string;
+    dueTime?: string;
     sectionId?: number;
     tagIds?: string[];
     parentTaskId?: number;
+    wordpressSiteId?: string | null;
+    recurrenceRule?: TaskRecurrenceRule;
+    scheduleMode?: TaskScheduleMode;
+    triggerConfig?: TaskTriggerConfig;
+    executionKind?: TaskExecutionKind;
+    executionPayload?: TaskExecutionPayload;
   },
 ): Promise<{ ok: boolean; task?: TeamTask; error?: string }> {
   const res = await api(`/teams/${teamId}/tasks/projects/${projectId}/tasks`, {
@@ -201,9 +239,16 @@ export async function updateTask(
     status?: TaskStatus;
     assigneeIds?: number[];
     dueDate?: string;
+    dueTime?: string;
     sectionId?: number;
     sortOrder?: number;
     tagIds?: string[];
+    wordpressSiteId?: string | null;
+    recurrenceRule?: TaskRecurrenceRule;
+    scheduleMode?: TaskScheduleMode;
+    triggerConfig?: TaskTriggerConfig;
+    executionKind?: TaskExecutionKind;
+    executionPayload?: TaskExecutionPayload;
   },
 ): Promise<{ ok: boolean; task?: TeamTask; error?: string }> {
   const res = await api(`/teams/${teamId}/tasks/tasks/${taskId}`, {
@@ -293,9 +338,210 @@ export async function fetchTaskTemplates(teamId: number): Promise<TaskTemplate[]
   return data.templates ?? [];
 }
 
+export async function saveTaskTemplate(
+  teamId: number,
+  template: TaskTemplate,
+): Promise<{ ok: boolean; template?: TaskTemplate; templates?: TaskTemplate[]; error?: string }> {
+  const res = await api(`/teams/${teamId}/tasks/templates/upsert`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ template }),
+  });
+  const data = (await res.json()) as {
+    ok?: boolean;
+    template?: TaskTemplate;
+    templates?: TaskTemplate[];
+    error?: string;
+  };
+  return { ok: Boolean(data.ok), template: data.template, templates: data.templates, error: data.error };
+}
+
+export async function deleteTaskTemplate(
+  teamId: number,
+  keyword: string,
+): Promise<{ ok: boolean; templates?: TaskTemplate[]; error?: string }> {
+  const res = await api(`/teams/${teamId}/tasks/templates/${encodeURIComponent(keyword)}`, {
+    method: "DELETE",
+  });
+  const data = (await res.json()) as { ok?: boolean; templates?: TaskTemplate[]; error?: string };
+  return { ok: Boolean(data.ok), templates: data.templates, error: data.error };
+}
+
+export async function saveTemplateFromProject(
+  teamId: number,
+  payload: { projectId: number; name: string; keyword?: string },
+): Promise<{ ok: boolean; template?: TaskTemplate; templates?: TaskTemplate[]; error?: string }> {
+  const res = await api(`/teams/${teamId}/tasks/templates/from-project`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json()) as {
+    ok?: boolean;
+    template?: TaskTemplate;
+    templates?: TaskTemplate[];
+    error?: string;
+  };
+  return { ok: Boolean(data.ok), template: data.template, templates: data.templates, error: data.error };
+}
+
 export async function createTaskProjectFromTemplate(
   teamId: number,
   payload: Parameters<typeof createTaskProject>[1],
 ): Promise<{ ok: boolean; project?: TaskProject; error?: string }> {
   return createTaskProject(teamId, payload);
+}
+
+export async function startTaskExecution(
+  teamId: number,
+  taskId: number,
+  payload?: {
+    executionKind?: TaskExecutionKind;
+    executionPayload?: TaskExecutionPayload;
+    wordpressSiteId?: string;
+  },
+): Promise<{ ok: boolean; execution?: TaskExecution; error?: string }> {
+  const res = await api(`/teams/${teamId}/tasks/tasks/${taskId}/execute`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload ?? {}),
+  });
+  const data = (await res.json()) as { ok?: boolean; execution?: TaskExecution; error?: string };
+  return { ok: Boolean(data.ok), execution: data.execution, error: data.error };
+}
+
+export async function fetchTaskExecution(
+  teamId: number,
+  executionId: number,
+): Promise<{ ok: boolean; execution?: TaskExecution; error?: string }> {
+  const res = await api(`/teams/${teamId}/tasks/executions/${executionId}`);
+  const data = (await res.json()) as { ok?: boolean; execution?: TaskExecution; error?: string };
+  return { ok: Boolean(data.ok), execution: data.execution, error: data.error };
+}
+
+export async function listTaskExecutions(
+  teamId: number,
+  taskId: number,
+): Promise<{ ok: boolean; executions?: TaskExecution[]; error?: string }> {
+  const res = await api(`/teams/${teamId}/tasks/tasks/${taskId}/executions`);
+  const data = (await res.json()) as { ok?: boolean; executions?: TaskExecution[]; error?: string };
+  return { ok: Boolean(data.ok), executions: data.executions, error: data.error };
+}
+
+export async function patchTaskExecutionProgress(
+  teamId: number,
+  executionId: number,
+  patch: {
+    stepId?: string;
+    subProgress?: number;
+    progress?: number;
+    message?: string;
+    error?: string;
+  },
+): Promise<{ ok: boolean; execution?: TaskExecution; error?: string }> {
+  const res = await api(`/teams/${teamId}/tasks/executions/${executionId}/progress`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  const data = (await res.json()) as { ok?: boolean; execution?: TaskExecution; error?: string };
+  return { ok: Boolean(data.ok), execution: data.execution, error: data.error };
+}
+
+export async function completeTaskExecution(
+  teamId: number,
+  executionId: number,
+  payload: { ok: boolean; result?: unknown; error?: string },
+): Promise<{ ok: boolean; execution?: TaskExecution; error?: string }> {
+  const res = await api(`/teams/${teamId}/tasks/executions/${executionId}/complete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json()) as { ok?: boolean; execution?: TaskExecution; error?: string };
+  return { ok: Boolean(data.ok), execution: data.execution, error: data.error };
+}
+
+export async function cancelTaskExecution(
+  teamId: number,
+  executionId: number,
+): Promise<{ ok: boolean; execution?: TaskExecution; error?: string }> {
+  const res = await api(`/teams/${teamId}/tasks/executions/${executionId}/cancel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  const data = (await res.json()) as { ok?: boolean; execution?: TaskExecution; error?: string };
+  return { ok: Boolean(data.ok), execution: data.execution, error: data.error };
+}
+
+export async function reopenTaskExecutionForResume(
+  teamId: number,
+  executionId: number,
+): Promise<{ ok: boolean; execution?: TaskExecution; error?: string }> {
+  const res = await api(`/teams/${teamId}/tasks/executions/${executionId}/reopen`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  const data = (await res.json()) as { ok?: boolean; execution?: TaskExecution; error?: string };
+  return { ok: Boolean(data.ok), execution: data.execution, error: data.error };
+}
+
+export async function evaluateTaskTrigger(
+  teamId: number,
+  taskId: number,
+  options?: { simulate?: boolean },
+): Promise<TaskTriggerEvaluateResult> {
+  const res = await api(`/teams/${teamId}/tasks/tasks/${taskId}/trigger/evaluate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ simulate: Boolean(options?.simulate) }),
+  });
+  return (await res.json()) as TaskTriggerEvaluateResult;
+}
+
+export async function testFireTaskTrigger(
+  teamId: number,
+  taskId: number,
+): Promise<TaskTriggerEvaluateResult & { queued?: boolean }> {
+  const res = await api(`/teams/${teamId}/tasks/tasks/${taskId}/trigger/test-fire`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  return (await res.json()) as TaskTriggerEvaluateResult & { queued?: boolean };
+}
+
+/** Manual run for a saved automation task; queues Pulse even when trigger conditions are not met. */
+export async function executeAutomationTaskTrigger(
+  teamId: number,
+  taskId: number,
+): Promise<TaskTriggerEvaluateResult & { queued?: boolean }> {
+  return testFireTaskTrigger(teamId, taskId);
+}
+
+export async function fetchPendingTaskTriggers(
+  teamId: number,
+): Promise<{ ok: boolean; pending?: TaskTriggerPendingDispatch[]; error?: string }> {
+  const res = await api(`/teams/${teamId}/tasks/trigger-pending`);
+  const data = (await res.json()) as {
+    ok?: boolean;
+    pending?: TaskTriggerPendingDispatch[];
+    error?: string;
+  };
+  return { ok: Boolean(data.ok), pending: data.pending ?? [], error: data.error };
+}
+
+export async function ackPendingTaskTrigger(
+  teamId: number,
+  taskId: number,
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await api(`/teams/${teamId}/tasks/trigger-pending/${taskId}/ack`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  const data = (await res.json()) as { ok?: boolean; error?: string };
+  return { ok: Boolean(data.ok), error: data.error };
 }

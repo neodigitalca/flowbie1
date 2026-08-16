@@ -1,0 +1,110 @@
+{
+  "keyword": "local-pages-watch",
+  "name": "Local Pages Watch",
+  "description": "Meta and extra text on high-traffic local landing pages when ranking slips.",
+  "notes": [
+    "Polls Google Search Console every 24 hours.",
+    "Scope: local landing pages in the Pages bucket (not SAP entity grids).",
+    "Runs when average ranking position worsened by at least 2 spots, with at least 200 impressions.",
+    "Lower position threshold (2 spots) because local SERPs move quickly.",
+    "Updates title, meta description, and SEO extra text. Page body content is not rewritten.",
+    "Same URL waits 72 hours before it can run again."
+  ],
+  "category": "local-seo",
+  "verticals": [
+    "local-seo",
+    "home-services"
+  ],
+  "tags": [
+    "gsc",
+    "pages",
+    "local",
+    "meta"
+  ],
+  "prerequisites": [
+    "gsc",
+    "wordpress"
+  ],
+  "filters": {
+    "executionKinds": [
+      "content_optimizer_meta"
+    ],
+    "targetBuckets": [
+      "pages"
+    ],
+    "triggerSignals": [
+      "position_drop"
+    ],
+    "actionCount": 1
+  },
+  "defaultTasks": [
+    {
+      "keyword": "local-pages",
+      "title": "Meta + extra text on local pages on position drop",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "pages",
+        "updateMode": "update"
+      },
+      "scheduleMode": "trigger",
+      "recurrenceRule": "none",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "position_drop",
+            "operator": "gte",
+            "value": 2,
+            "minImpressions": 200
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    }
+  ],
+  "isAutomation": true,
+  "kind": "template",
+  "triggerBlock": {
+    "keyword": "gsc-position-drop",
+    "kind": "gsc",
+    "source": "gsc",
+    "targetBucket": "pages",
+    "triggerConfig": {
+      "sources": [
+        "gsc"
+      ],
+      "match": "any",
+      "conditions": [
+        {
+          "signal": "position_drop",
+          "operator": "gte",
+          "value": 2,
+          "minImpressions": 200
+        }
+      ],
+      "lookbackDays": 28,
+      "compareDays": 28,
+      "pollHours": 24,
+      "cooldownHours": 72,
+      "maxUrls": 5
+    }
+  },
+  "actionBlock": {
+    "keyword": "content-optimizer-meta",
+    "executionKind": "content_optimizer_meta",
+    "executionPayload": {
+      "targetBucket": "pages",
+      "updateMode": "update"
+    },
+    "title": "Meta + extra text on local pages on position drop"
+  }
+}

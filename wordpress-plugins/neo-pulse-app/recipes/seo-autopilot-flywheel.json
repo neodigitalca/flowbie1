@@ -1,0 +1,183 @@
+{
+  "keyword": "seo-autopilot-flywheel",
+  "name": "SEO Autopilot Flywheel",
+  "description": "Meta-optimize pages and run full AISEO on posts when GSC metrics slip.",
+  "notes": [
+    "Polls Google Search Console every 24 hours.",
+    "Covers static pages and blog posts in one installed automation.",
+    "Pages: updates title, meta, and SEO extra text when ranking worsens 3+ spots or the URL leaves positions 4–10.",
+    "Posts: full rewrite when click-through rate falls 15%+ vs the prior 28 days (snippet or body no longer matches what searchers want).",
+    "Same URL waits 72 hours before it can run again."
+  ],
+  "category": "reactive",
+  "verticals": [
+    "general"
+  ],
+  "tags": [
+    "gsc",
+    "meta",
+    "posts",
+    "pages",
+    "multi"
+  ],
+  "prerequisites": [
+    "gsc",
+    "wordpress"
+  ],
+  "filters": {
+    "executionKinds": [
+      "content_optimizer_meta",
+      "content_optimizer"
+    ],
+    "targetBuckets": [
+      "pages",
+      "posts"
+    ],
+    "triggerSignals": [
+      "position_drop",
+      "quick_win_slipped",
+      "ctr_drop"
+    ],
+    "actionCount": 2
+  },
+  "defaultTasks": [
+    {
+      "keyword": "meta-pages",
+      "title": "Meta optimize pages on trigger",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "pages",
+        "updateMode": "update"
+      },
+      "scheduleMode": "trigger",
+      "recurrenceRule": "none",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "position_drop",
+            "operator": "gte",
+            "value": 3,
+            "minImpressions": 100
+          },
+          {
+            "signal": "quick_win_slipped",
+            "operator": "gte",
+            "value": 0,
+            "minImpressions": 50
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    },
+    {
+      "keyword": "aiseo-posts",
+      "title": "Full AISEO on posts on trigger",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "targetBucket": "posts",
+        "updateMode": "update"
+      },
+      "scheduleMode": "trigger",
+      "recurrenceRule": "none",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "position_drop",
+            "operator": "gte",
+            "value": 3,
+            "minImpressions": 100
+          },
+          {
+            "signal": "quick_win_slipped",
+            "operator": "gte",
+            "value": 0,
+            "minImpressions": 50
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    }
+  ],
+  "isAutomation": true,
+  "kind": "template",
+  "triggerBlock": {
+    "keyword": "gsc-position-drop",
+    "kind": "gsc",
+    "source": "gsc",
+    "targetBucket": "pages",
+    "triggerConfig": {
+      "sources": [
+        "gsc"
+      ],
+      "match": "any",
+      "conditions": [
+        {
+          "signal": "position_drop",
+          "operator": "gte",
+          "value": 3,
+          "minImpressions": 100
+        },
+        {
+          "signal": "quick_win_slipped",
+          "operator": "gte",
+          "value": 0,
+          "minImpressions": 50
+        }
+      ],
+      "lookbackDays": 28,
+      "compareDays": 28,
+      "pollHours": 24,
+      "cooldownHours": 72,
+      "maxUrls": 5
+    }
+  },
+  "actionBlock": {
+    "keyword": "content-optimizer-meta",
+    "executionKind": "content_optimizer_meta",
+    "executionPayload": {
+      "targetBucket": "pages",
+      "updateMode": "update"
+    },
+    "title": "Meta optimize pages on trigger"
+  },
+  "actionBlocks": [
+    {
+      "keyword": "content-optimizer-meta",
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "pages",
+        "updateMode": "update"
+      },
+      "title": "Meta optimize pages on trigger"
+    },
+    {
+      "keyword": "content-optimizer-full",
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "targetBucket": "posts",
+        "updateMode": "update"
+      },
+      "title": "Full AISEO on posts on trigger"
+    }
+  ]
+}

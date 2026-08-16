@@ -46,7 +46,7 @@ export function TasksFilterToolbar({
       <select
         value={filterMode}
         onChange={(e) => onFilterChange(e.target.value as TasksFilterMode)}
-        className={`${BULK_HEADER_SELECT} h-8 text-base`}
+        className={`${BULK_HEADER_SELECT} h-8 text-base [color-scheme:dark]`}
       >
         <option value="incomplete">Incomplete tasks</option>
         <option value="all">All tasks</option>
@@ -55,7 +55,7 @@ export function TasksFilterToolbar({
       <select
         value={sortMode}
         onChange={(e) => onSortChange(e.target.value as TasksSortMode)}
-        className={`${BULK_HEADER_SELECT} h-8 text-base`}
+        className={`${BULK_HEADER_SELECT} h-8 text-base [color-scheme:dark]`}
       >
         <option value="dueDate">Sort: Due date</option>
         <option value="created">Sort: Created</option>

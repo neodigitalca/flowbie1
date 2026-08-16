@@ -1,4 +1,5 @@
 import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
+import { getSessionToken } from "@/lib/auth-device";
 import { loadApiKey } from "@/lib/api";
 import type { ChatActivityLogEntry } from "@/lib/chat-activity-log";
 import type {
@@ -21,11 +22,15 @@ function baseUrl(): string {
 function api(path: string, options?: RequestInit): Promise<Response> {
   const p = path.startsWith("/") ? path : `/${path}`;
   const headers = new Headers(options?.headers);
+  const token = getSessionToken();
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
   const openRouterKey = loadApiKey().trim();
   if (openRouterKey && !headers.has("X-OpenRouter-Api-Key")) {
     headers.set("X-OpenRouter-Api-Key", openRouterKey);
   }
-  return fetch(`${baseUrl()}/api${p}`, { ...options, headers, credentials: "include" });
+  return fetch(`${baseUrl()}/api${p}`, { ...options, headers, credentials: "include", cache: "no-store" });
 }
 
 export async function fetchChatChannels(teamId: number): Promise<ChatChannel[]> {

@@ -10,7 +10,7 @@ order: 20
 
 POST `/api/auth/login`.
 
-Authenticates a user with email and password, sets the flowbie_session cookie, and returns basic profile fields.
+Authenticates a user with email and password, sets the neo_pulse_session cookie, and returns basic profile fields.
 
 ## Request
 
@@ -40,7 +40,7 @@ Authenticates a user with email and password, sets the flowbie_session cookie, a
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/auth/login" \
+curl -X POST "https://neodigital.ca/api/auth/login" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

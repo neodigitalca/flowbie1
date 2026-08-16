@@ -15,7 +15,7 @@ import {
 import {
   compactInventoryUrlsForJson,
   parseCompactInventoryUrls,
-  stringifyCompactInventoryJson,
+  stringifyContentBucketPostsJson,
   stringifyInventoryUrlList,
 } from "@/lib/bulk/inventory-json-slim";
 
@@ -129,7 +129,7 @@ export async function fetchPromptBulkSitemapInventory(
   for (const source of sources) {
     const rows = parallel.bySource[source] ?? [];
     const urls = compactInventoryUrlsForJson(rows);
-    const json = stringifyCompactInventoryJson(rows);
+    const json = stringifyContentBucketPostsJson(source, rows);
     buckets[source] = { json, rowCount: urls.length };
     totalRows += rows.length;
     links.push(createBucketHostedLink(site.siteUrl, source, urls));

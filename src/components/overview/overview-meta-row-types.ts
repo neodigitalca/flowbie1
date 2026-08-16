@@ -47,7 +47,7 @@ export interface OverviewRow {
   aiSuggestedPath?: string;
   /** Live URL before a verified slug change (for Rank Math redirect CSV). */
   slugRedirectSourceUrl?: string;
-  /** Content audit JSON `{flowbieContentAuditV1:{issues:[{title,rationale,rationaleAspects,...,htmlReference,...}]}}` or legacy markdown bullets */
+  /** Content audit JSON `{neoPulseContentAuditV1:{issues:[{title,rationale,rationaleAspects,...,htmlReference,...}]}}` or legacy markdown bullets */
   contentAnalyzeBulletsMarkdown?: string;
   contentAnalyzeRanAtIso?: string;
   contentAnalyzeFixRanAtIso?: string;

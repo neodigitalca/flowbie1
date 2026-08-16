@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/invites/({id})/copy-link
 auth: session-team
-order: 1580
+order: 1570
 ---
 
 POST `/api/teams/{teamId}/invites/({id})/copy-link`.
@@ -34,7 +34,7 @@ Runs the copy link action in the Teams API from a JSON request body. Requires a 
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/invites/({id})/copy-link" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/invites/({id})/copy-link" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

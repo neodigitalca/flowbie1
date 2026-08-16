@@ -1,4 +1,4 @@
-const STORAGE_KEY = "flowbie-image-prompt-shortcuts";
+const STORAGE_KEY = "neo-pulse-image-prompt-shortcuts";
 
 export interface SavedPrompt {
   id: string;

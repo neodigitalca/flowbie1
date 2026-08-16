@@ -5,7 +5,7 @@ section: Google Search Console
 method: POST
 path: /api/gsc/url-inventory
 auth: open
-order: 510
+order: 500
 ---
 
 POST `/api/gsc/url-inventory`.
@@ -34,7 +34,7 @@ Runs the url inventory action in the Google Search Console API from a JSON reque
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/gsc/url-inventory" \
+curl -X POST "https://neodigital.ca/api/gsc/url-inventory" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

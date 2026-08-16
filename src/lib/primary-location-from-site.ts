@@ -55,7 +55,7 @@ export function getPrimaryCityStateLabel(site: WordPressSite): string | undefine
 
 /**
  * Primary label for radius / “distance from”: **LocalBusiness JSON-LD on the live homepage first**,
- * then saved NAP / locations in Flowbie.
+ * then saved NAP / locations in NEO Pulse.
  */
 export async function resolvePrimaryLocationLabel(site: WordPressSite): Promise<string | null> {
   const disc = await fetchLocationDiscovery(site.siteUrl, {

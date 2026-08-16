@@ -14,7 +14,7 @@ import { DETAILS_DRAWER_PANEL, DETAILS_DRAWER_SHELL } from "@/components/integra
 export const UNIFIED_TITLE_BAND_CLASS =
   "flex h-12 shrink-0 items-center bg-zinc-900 px-3 sm:px-3.5";
 export const UNIFIED_TOOLBAR_CLASS =
-  "flex h-11 w-full min-w-0 shrink-0 min-h-11 flex-nowrap items-center justify-start gap-1.5 overflow-x-hidden bg-black px-3 sm:px-3.5";
+  "flex h-11 w-full min-w-0 shrink-0 min-h-11 flex-nowrap items-center justify-start gap-1.5 overflow-x-auto bg-black px-3 sm:px-3.5";
 export const UNIFIED_PROGRESS_BAND_CLASS =
   "relative z-20 flex h-11 w-full shrink-0 items-center overflow-visible bg-zinc-900 px-3 sm:px-3.5";
 

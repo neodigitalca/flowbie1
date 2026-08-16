@@ -1,6 +1,6 @@
 export type ContentOptimizerSectionId = "content" | "multi-site";
 
-export const CONTENT_OPTIMIZER_SECTION_STORAGE_KEY = "flowbie-content-optimizer-section";
+export const CONTENT_OPTIMIZER_SECTION_STORAGE_KEY = "neo-pulse-content-optimizer-section";
 
 export function readStoredContentOptimizerSection(): ContentOptimizerSectionId {
   try {

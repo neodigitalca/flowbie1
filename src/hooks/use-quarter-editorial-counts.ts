@@ -5,7 +5,7 @@ import { isEntitySitemapDisabled } from "@/lib/entity-endpoint-extractor";
 import { fetchQuarterEditorialCounts } from "@/lib/wordpress-api/post-quarter-counts";
 import type { QuarterEditorialCountsResult, QuarterEditorialTileStats } from "@/lib/wordpress-api/types";
 
-const CACHE_PREFIX = "flowbie-quarter-editorial:v2";
+const CACHE_PREFIX = "neo-pulse-quarter-editorial:v2";
 
 type CachedQuarterPayload = Pick<
   QuarterEditorialCountsResult,

@@ -1,0 +1,22 @@
+{
+  "keyword": "gsc-dual-decay",
+  "name": "GSC dual decay",
+  "kind": "gsc",
+  "description": "Fire when multiple GSC decay signals match (ALL).",
+  "defaults": {
+    "source": "gsc",
+    "triggerConfig": {
+      "sources": ["gsc"],
+      "match": "all",
+      "conditions": [
+        { "signal": "impressions_up_ctr_down", "operator": "gte", "value": 0, "minImpressions": 100 },
+        { "signal": "clicks_drop", "operator": "gte", "value": 10, "minImpressions": 100 }
+      ],
+      "lookbackDays": 28,
+      "compareDays": 28,
+      "pollHours": 24,
+      "cooldownHours": 72,
+      "maxUrls": 5
+    }
+  }
+}

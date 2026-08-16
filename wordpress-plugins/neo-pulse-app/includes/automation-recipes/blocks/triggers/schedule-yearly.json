@@ -1,0 +1,11 @@
+{
+  "keyword": "schedule-yearly",
+  "name": "Yearly schedule",
+  "kind": "calendar",
+  "description": "Run every year on the anchor month and day at a set time (Edmonton).",
+  "defaults": {
+    "frequency": "yearly",
+    "startDate": "2026-09-01",
+    "time": "09:00"
+  }
+}

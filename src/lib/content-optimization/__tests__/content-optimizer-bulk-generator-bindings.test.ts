@@ -115,6 +115,7 @@ describe("buildContentOptimizerBulkGeneratorDetailsProps", () => {
     expect(props.totalRows).toBe(2);
     expect(props.displayRows[1]?.destination_url).toBe("https://example.com/b");
     expect(props.harnessSections).toHaveLength(1);
+    expect(props.batchPrepHarnessSections).toEqual([]);
   });
 });
 

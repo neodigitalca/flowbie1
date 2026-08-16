@@ -1,5 +1,5 @@
 /**
- * Live entity map test: POST flowbie.ca API, save JPEG + metadata to test-output/.
+ * Live entity map test: POST neodigital.ca API, save JPEG + metadata to test-output/.
  *
  * Usage (from repo root):
  *   node scripts/test-entity-maps-live.mjs
@@ -42,10 +42,10 @@ const jsonOut = join(outDir, `${slug}-map-result.json`);
 const imageOut = join(outDir, `${slug}-map.jpg`);
 
 console.log("Entity:", entity);
-console.log("Calling https://flowbie.ca/api/entity-maps-image/generate ...");
+console.log("Calling https://neodigital.ca/api/entity-maps-image/generate ...");
 
 const started = Date.now();
-const response = await fetch("https://flowbie.ca/api/entity-maps-image/generate", {
+const response = await fetch("https://neodigital.ca/api/entity-maps-image/generate", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",

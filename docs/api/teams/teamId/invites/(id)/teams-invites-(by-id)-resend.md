@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/invites/({id})/resend
 auth: session-team
-order: 1590
+order: 1580
 ---
 
 POST `/api/teams/{teamId}/invites/({id})/resend`.
@@ -34,7 +34,7 @@ Runs the resend action in the Teams API from a JSON request body. Requires a sig
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/invites/({id})/resend" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/invites/({id})/resend" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

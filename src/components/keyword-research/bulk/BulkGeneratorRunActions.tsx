@@ -1,9 +1,7 @@
 import { Play, Square, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  BULK_HEADER_ICON_RUN_BTN,
-} from "@/components/keyword-research/bulk/bulk-workspace-header-styles";
+import { BULK_HEADER_ICON_RUN_BTN } from "@/components/keyword-research/bulk/bulk-workspace-header-styles";
 import { cn } from "@/lib/utils";
 
 export type BulkGeneratorRunActionsProps = {
@@ -17,8 +15,7 @@ export type BulkGeneratorRunActionsProps = {
   /** Prompt tab: run lives on generated rows, not the header play icon. */
   hideRunButton?: boolean;
   trailing?: ReactNode;
-  /** Override run/clear cluster layout (e.g. prompt toolbar uses even spacing). */
-  groupClassName?: string;
+  className?: string;
 };
 
 export function BulkGeneratorRunActions({
@@ -31,20 +28,10 @@ export function BulkGeneratorRunActions({
   runLabel = "Run",
   hideRunButton = false,
   trailing,
-  groupClassName,
+  className,
 }: BulkGeneratorRunActionsProps) {
-  const hoisted = groupClassName === "contents";
-
   return (
-    <div
-      className={
-        hoisted
-          ? "contents"
-          : cn("ml-auto flex shrink-0 flex-nowrap items-center gap-2", groupClassName)
-      }
-      role="group"
-      aria-label="Run and clear"
-    >
+    <div className={cn("flex shrink-0 flex-nowrap items-center gap-1.5", className)} role="group" aria-label="Run and clear">
       {isProcessing ? (
         <Button
           type="button"

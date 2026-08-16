@@ -231,7 +231,7 @@ function hello_elementor_child_filter_faq_entries( $entries ) {
 
 /**
  * Plain FAQ blocks: question line, answer line(s), blank line between pairs (no Q:/A: prefixes).
- * Matches Flowbie faqPlainTextForWpStorage / serializeFaqEntriesPlain.
+ * Matches NEO Pulse faqPlainTextForWpStorage / serializeFaqEntriesPlain.
  */
 function hello_elementor_child_parse_faq_plain_paragraphs( $raw ) {
 	$text = trim( (string) $raw );

@@ -82,14 +82,30 @@ class Neo_Pulse_App_Pulse_Assist_Ask {
 		$research = null;
 		$data_research = null;
 
-		$emit(
-			array(
-				'status' => 'phase',
-				'phase'  => 'modules',
-				'label'  => $submode === 'plan' ? 'Researching modules for plan…' : 'Researching modules…',
-			)
-		);
-		$research = self::research_modules_for_message( $message, $history, $body );
+		$skip_modules = Neo_Pulse_App_Platform_Data_Intent_Checklist::wants_inventory_listing( $message )
+			|| Neo_Pulse_App_Platform_Data_Intent_Checklist::wants_scheduled_listing( $message )
+			|| Neo_Pulse_App_Platform_Data_Intent_Checklist::wants_draft_listing( $message );
+		if ( ! $skip_modules ) {
+			$emit(
+				array(
+					'status' => 'phase',
+					'phase'  => 'modules',
+					'label'  => $submode === 'plan' ? 'Researching modules for plan…' : 'Researching modules…',
+				)
+			);
+			$research = self::research_modules_for_message( $message, $history, $body );
+		} else {
+			$research = array(
+				'block'            => '',
+				'label'            => '',
+				'moduleIds'        => array(),
+				'primaryModuleIds' => array(),
+				'featureIds'       => array(),
+				'modules'          => array(),
+				'primaryModules'   => array(),
+				'features'         => array(),
+			);
+		}
 
 		$data_research = Neo_Pulse_App_Pulse_Assist_Data_Tools::research_for_message(
 			$message,
@@ -315,6 +331,11 @@ class Neo_Pulse_App_Pulse_Assist_Ask {
 	 * @return array<string,mixed>
 	 */
 	private static function run_ask( string $message, array $history, array $body, ?array $research = null, ?array $data_research = null ) {
+		$listing_card = self::try_inventory_listing_card( $message, $data_research );
+		if ( is_array( $listing_card ) ) {
+			return $listing_card;
+		}
+
 		$card = self::llm_card(
 			$message,
 			$history,
@@ -327,6 +348,78 @@ class Neo_Pulse_App_Pulse_Assist_Ask {
 			$card['type'] = 'answer';
 		}
 		return $card;
+	}
+
+	/**
+	 * @param array<string,mixed>|null $data_research
+	 * @return array<string,mixed>|null
+	 */
+	private static function try_inventory_listing_card( string $message, ?array $data_research ) {
+		if ( $data_research === null || empty( $data_research['leadAgentUsed'] ) ) {
+			return null;
+		}
+
+		$slice_team = isset( $data_research['sliceTeam'] ) && is_array( $data_research['sliceTeam'] ) ? $data_research['sliceTeam'] : array();
+		if ( count( $slice_team ) !== 1 || sanitize_key( (string) ( $slice_team[0]['slice'] ?? '' ) ) !== 'inventory' ) {
+			return null;
+		}
+
+		$tool_ids = isset( $data_research['toolIds'] ) && is_array( $data_research['toolIds'] ) ? $data_research['toolIds'] : array();
+		$inventory_tool = '';
+		foreach ( $tool_ids as $tool_id ) {
+			$id = sanitize_key( (string) $tool_id );
+			if ( str_starts_with( $id, 'inventory_' ) ) {
+				$inventory_tool = $id;
+				break;
+			}
+		}
+		if ( $inventory_tool === '' || in_array( $inventory_tool, array( 'inventory_grade', 'inventory_audit', 'inventory_grep', 'inventory_meta' ), true ) ) {
+			return null;
+		}
+
+		$rows = isset( $data_research['rows'] ) && is_array( $data_research['rows'] ) ? $data_research['rows'] : array();
+		$kind = 'default';
+		if ( $inventory_tool === 'inventory_scheduled' || Neo_Pulse_App_Platform_Data_Intent_Checklist::wants_scheduled_listing( $message ) ) {
+			$kind = 'scheduled';
+		} elseif ( Neo_Pulse_App_Platform_Data_Intent_Checklist::wants_draft_listing( $message ) ) {
+			$kind = 'draft';
+		}
+
+		$body_text = Neo_Pulse_App_Platform_Data_Lead_Agent::inventory_listing_markdown( $rows, $kind );
+		if ( $kind === 'scheduled' && count( $rows ) > 0 ) {
+			$body_text = "Here are the next scheduled posts:\n\n" . $body_text;
+		} elseif ( $kind === 'draft' && count( $rows ) > 0 ) {
+			$body_text = "Here are the draft posts:\n\n" . $body_text;
+		}
+
+		$related = array();
+		if ( $kind === 'scheduled' ) {
+			$related = array(
+				'Show draft posts',
+				'List recently published posts',
+				'How do I schedule posts in WordPress?',
+			);
+		} elseif ( $kind === 'draft' ) {
+			$related = array(
+				'Show scheduled posts',
+				'List recently published posts',
+				'How do I publish a draft?',
+			);
+		} else {
+			$related = array(
+				'Show scheduled posts',
+				'Show draft posts',
+				'List recently published posts',
+			);
+		}
+
+		return array(
+			'type'          => 'answer',
+			'title'         => '',
+			'body'          => $body_text,
+			'confidence'    => 'high',
+			'relatedTopics' => $related,
+		);
 	}
 
 	/**

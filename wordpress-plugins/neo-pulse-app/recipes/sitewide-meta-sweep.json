@@ -1,0 +1,107 @@
+{
+  "keyword": "sitewide-meta-sweep",
+  "name": "Sitewide Meta Sweep",
+  "description": "Meta-only sweep across all content types when ranking worsens.",
+  "notes": [
+    "Polls Google Search Console every 24 hours.",
+    "Scope: pages, posts, and entity URLs (all buckets).",
+    "Runs when average ranking position worsened by at least 4 spots, with at least 80 impressions.",
+    "Updates title and meta only, capped at 3 URLs per cycle.",
+    "Same URL waits 72 hours before it can run again."
+  ],
+  "category": "maintenance",
+  "verticals": [
+    "general"
+  ],
+  "tags": [
+    "gsc",
+    "meta",
+    "all"
+  ],
+  "prerequisites": [
+    "gsc",
+    "wordpress"
+  ],
+  "filters": {
+    "executionKinds": [
+      "content_optimizer_meta"
+    ],
+    "targetBuckets": [
+      "all"
+    ],
+    "triggerSignals": [
+      "position_drop"
+    ],
+    "actionCount": 1
+  },
+  "defaultTasks": [
+    {
+      "keyword": "sitewide-meta",
+      "title": "Meta sweep all buckets on position drop",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "all",
+        "updateMode": "update"
+      },
+      "scheduleMode": "trigger",
+      "recurrenceRule": "none",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "position_drop",
+            "operator": "gte",
+            "value": 4,
+            "minImpressions": 80
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 3
+      }
+    }
+  ],
+  "isAutomation": true,
+  "kind": "template",
+  "triggerBlock": {
+    "keyword": "gsc-position-drop",
+    "kind": "gsc",
+    "source": "gsc",
+    "targetBucket": "all",
+    "triggerConfig": {
+      "sources": [
+        "gsc"
+      ],
+      "match": "any",
+      "conditions": [
+        {
+          "signal": "position_drop",
+          "operator": "gte",
+          "value": 4,
+          "minImpressions": 80
+        }
+      ],
+      "lookbackDays": 28,
+      "compareDays": 28,
+      "pollHours": 24,
+      "cooldownHours": 72,
+      "maxUrls": 3
+    }
+  },
+  "actionBlock": {
+    "keyword": "content-optimizer-meta",
+    "executionKind": "content_optimizer_meta",
+    "executionPayload": {
+      "targetBucket": "all",
+      "updateMode": "update"
+    },
+    "title": "Meta sweep all buckets on position drop"
+  }
+}

@@ -18,6 +18,7 @@ Use these rules for every Meta ad creative and caption in this workspace.
 - Tools: typography, icon_cluster, accent_shapes, city_skyline, device_screen, people, map_overlay, gradient_panel, photo_focal.
 - Vary degree values each generate for the same keyword. No tool is mandatory.
 - `visualConcept` describes only tools with degree > 0 and their degrees.
+- **icon_cluster**: when degree > 0, use at most 2 to 3 distinct icons in one small cluster. Never repeat the same motif. Degree controls prominence, not icon count.
 
 ## Focus keyword
 
@@ -32,7 +33,17 @@ Use these rules for every Meta ad creative and caption in this workspace.
 - Every headline must include a concrete outcome, benefit, or next step. Never stop at setup alone (e.g. bad: "We help Edmonton businesses"; good: "We help Edmonton get found" or headline "We help Edmonton" plus subline "Rank higher locally").
 - Never paste the focus keyword verbatim on the image.
 - Never duplicate the headline on the image.
+- Never duplicate the subline or repeat any on-image phrase a second time (including footer slogans).
+- Maximum two on-image text lines: headline plus optional subline only.
 - Do not paint caption, primary text, description, CTA, URLs, or checklist items into the image.
+- Never render design-spec or platform labels as visible text ("Designed", "Instagram Feed", aspect ratios, "Sponsored Ad", placement/format headers).
+
+## Device screens
+
+- When `device_screen.degree > 0`, pick `deviceScreenLayout` from post context (Elementor editor, WordPress admin, published homepage/service page, or NEO Pulse dashboard).
+- Screens show realistic WordPress or page-builder layout structure with gray placeholder bars only. No readable words on screens.
+- No abstract dashboards, holographic UI, neon wireframes, or chart-only screens.
+- When device_screen is active, do not add duplicate chart or growth icons in icon_cluster.
 
 ## Caption (primaryText)
 

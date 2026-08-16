@@ -676,7 +676,7 @@ export async function extractNAPFromSite(
       console.warn('[NAP Extractor] No sources for extraction:', {
         hasMainSitemapUrl: Boolean(site.sitemaps?.mainSitemapUrl),
         hasEntitySitemapUrl: Boolean(site.entitySitemapUrl?.trim()),
-        hint: 'Run Detect sitemaps in Flowbie, or ensure a published Contact page exists.',
+        hint: 'Run Detect sitemaps in NEO Pulse, or ensure a published Contact page exists.',
       });
       return {
         success: false,

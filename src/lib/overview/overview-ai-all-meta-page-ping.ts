@@ -167,8 +167,8 @@ export async function pingOverviewPageForMeta(
     let acfSeoResearch = acfStringField(
       post.fullData?.acf && typeof post.fullData.acf === "object"
         ? (post.fullData.acf as Record<string, unknown>)
-        : post.fullData?.flowbie_fields && typeof post.fullData.flowbie_fields === "object"
-          ? (post.fullData.flowbie_fields as Record<string, unknown>)
+        : post.fullData?.neo_pulse_fields && typeof post.fullData.neo_pulse_fields === "object"
+          ? (post.fullData.neo_pulse_fields as Record<string, unknown>)
           : undefined,
       "seo_research",
     );

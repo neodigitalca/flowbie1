@@ -1,5 +1,5 @@
 /** Persisted active section inside the manager Dashboard tab (Properties + keys + services). */
-export const MANAGER_SETTINGS_CLUSTER_KEY = "flowbie-manager-settings-cluster";
+export const MANAGER_SETTINGS_CLUSTER_KEY = "neo-pulse-manager-settings-cluster";
 
 export type ManagerSettingsClusterId =
   | "properties"
@@ -7,7 +7,7 @@ export type ManagerSettingsClusterId =
   | "master-rules"
   | "ai-generation"
   | "google"
-  | "email-agent-admin";
+  | "wp-engine";
 
 const CLUSTER_IDS: readonly ManagerSettingsClusterId[] = [
   "properties",
@@ -15,7 +15,7 @@ const CLUSTER_IDS: readonly ManagerSettingsClusterId[] = [
   "master-rules",
   "ai-generation",
   "google",
-  "email-agent-admin",
+  "wp-engine",
 ];
 
 export function readStoredManagerSettingsCluster(): ManagerSettingsClusterId {

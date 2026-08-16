@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MetaOptimizerPageRowCompact } from "@/components/overview/MetaOptimizerPageRowCompact";
 import { BulkSitemapInventoryRunDetail } from "@/components/keyword-research/bulk/BulkSitemapInventoryRunDetail";
 import {
+  csvRowToEntitySapOverviewRowDisplay,
   csvRowToOverviewRowDisplay,
   publishDateLabelForRow,
   rowFilesToDownloadables,
@@ -49,10 +50,13 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
     downloadFile,
     sitemapInventoryLinks,
     siteKwHostedLink,
+    sitemapInventoryLoading = false,
     publishDateLabelByIndex,
     draftOnly,
     prepAccordionTitle,
     pipelineSectionTitles,
+    liveMessage,
+    entitySapRowDisplay = false,
   } = props;
 
   const [expandedRows, setExpandedRows] = useState<Set<number>>(() => new Set());
@@ -90,7 +94,31 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
     });
   }, []);
 
+  const prepSections =
+    batchPrepHarnessSections?.length ? batchPrepHarnessSections : null;
+
+  const rows = displayRows.length > 0 ? displayRows : [];
+
+  const entityRowExpandSignature = useMemo(() => {
+    if (!entitySapRowDisplay) return "";
+    return displayRows
+      .map((row) => {
+        const entityRow = row as { entity?: string; keyword?: string };
+        return `${entityRow.entity?.trim() ?? ""}|${entityRow.keyword?.trim() ?? ""}`;
+      })
+      .join("\n");
+  }, [displayRows, entitySapRowDisplay]);
+
   useEffect(() => {
+    if (entitySapRowDisplay) {
+      if (isProcessing && currentRow >= 0 && currentRow < displayRows.length) {
+        commitAutoExpandedRows(new Set([currentRow]));
+      } else {
+        commitAutoExpandedRows(new Set());
+      }
+      return;
+    }
+
     if (!isProcessing) {
       commitAutoExpandedRows(new Set());
       return;
@@ -100,7 +128,14 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
       next.add(currentRow);
     }
     commitAutoExpandedRows(next);
-  }, [commitAutoExpandedRows, currentRow, displayRows.length, isProcessing]);
+  }, [
+    commitAutoExpandedRows,
+    currentRow,
+    displayRows.length,
+    entityRowExpandSignature,
+    isProcessing,
+    entitySapRowDisplay,
+  ]);
 
   const handleDownloadFile = (file: BulkDetailsDownloadable) => {
     if (downloadFile) {
@@ -121,16 +156,14 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
   };
 
   const showInventory =
-    variant === "prompt" &&
-    ((sitemapInventoryLinks?.length ?? 0) > 0 || Boolean(siteKwHostedLink));
-
-  const prepSections =
-    batchPrepHarnessSections?.length ? batchPrepHarnessSections : null;
-
-  const rows = displayRows.length > 0 ? displayRows : [];
+    sitemapInventoryLoading ||
+    (sitemapInventoryLinks?.length ?? 0) > 0 ||
+    Boolean(siteKwHostedLink);
 
   return (
     <BulkDetailsDrawerStack
+      liveMessage={liveMessage}
+      showLiveMessage={!isProcessing || Boolean(liveMessage?.trim())}
       prepSections={prepSections}
       prepOpen={detailsPrepOpen}
       onPrepOpenChange={setDetailsPrepOpen}
@@ -146,6 +179,7 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
                 <BulkSitemapInventoryRunDetail
                   links={sitemapInventoryLinks ?? []}
                   gscHostedLink={siteKwHostedLink ?? null}
+                  loading={sitemapInventoryLoading}
                 />
               </div>
             ) : null}
@@ -156,7 +190,9 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
               const isExpanded = expandedRows.has(index);
               const rowFiles = filesByRow?.get(index) ?? [];
               const previewUrl = publishedLinkFromRowFiles(rowFiles) ?? undefined;
-              const displayRow = csvRowToOverviewRowDisplay(row, index, previewUrl);
+              const displayRow = entitySapRowDisplay
+                ? csvRowToEntitySapOverviewRowDisplay(row, index, previewUrl)
+                : csvRowToOverviewRowDisplay(row, index, previewUrl);
               const dateLabelOverride = publishDateLabelForRow(
                 index,
                 publishDateLabelByIndex,
@@ -165,17 +201,30 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
               const persistedHarness = harnessByRow?.get(index);
               const liveHarness: BulkHarnessSectionUi[] | undefined =
                 isActive && isProcessing ? harnessSections : undefined;
+              const hasGeneratingHarness = persistedHarness?.some(
+                (section) => section.status === "generating",
+              );
+              const rowPipelineTitles =
+                pipelineSectionTitles?.length
+                  ? pipelineSectionTitles
+                  : persistedHarness?.length
+                    ? persistedHarness.map((section) => section.title)
+                    : undefined;
               const rowHarnessSectionsList = resolveDetailsPipelineSections(
                 persistedHarness,
                 liveHarness,
-                pipelineSectionTitles,
+                rowPipelineTitles,
               );
               const panelId = `bulk-generator-details-row-${index}`;
               const toggleRow = () => setRowExpanded(index, !isExpanded);
               const activeStatus = isActive && livePhase ? livePhase : "";
               const activeProgressLabel =
                 isActive && rows.length > 0 ? `${index + 1}/${rows.length}` : "";
-              const useRowShell = isExpanded || isActive;
+              const useRowShell =
+                isExpanded ||
+                isActive ||
+                hasGeneratingHarness ||
+                (entitySapRowDisplay && Boolean(row.entity?.trim() || row.keyword?.trim()));
 
               if (useRowShell) {
                 return (
@@ -198,9 +247,8 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
                       />
                       {isExpanded || activeStatus || activeProgressLabel ? (
                         <BulkDetailsTileSections
-                          harnessSections={
-                            pipelineSectionTitles?.length ? [] : rowHarnessSectionsList
-                          }
+                          harnessSections={rowHarnessSectionsList}
+                          pipelineSectionTitles={rowPipelineTitles}
                           files={rowFilesToDownloadables(rowFiles)}
                           onDownloadFile={handleDownloadFile}
                           onDownloadAll={handleDownloadAll}

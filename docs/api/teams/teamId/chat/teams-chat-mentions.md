@@ -5,7 +5,7 @@ section: Teams
 method: GET
 path: /api/teams/{teamId}/chat/mentions
 auth: team-rbac-communication
-order: 1440
+order: 1430
 ---
 
 GET `/api/teams/{teamId}/chat/mentions`.
@@ -34,7 +34,7 @@ Reads mentions from the Teams API. Requires a signed-in team member with communi
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/teams/{teamId}/chat/mentions" \
+curl -X GET "https://neodigital.ca/api/teams/{teamId}/chat/mentions" \
   -H "Content-Type: application/json" \
 ```
 

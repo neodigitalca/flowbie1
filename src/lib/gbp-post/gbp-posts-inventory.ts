@@ -1,4 +1,5 @@
 import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
+import { readGbpApiError } from "@/lib/gbp-post/gbp-api-error";
 
 export type GbpInventoryRow = {
   name: string;
@@ -41,9 +42,13 @@ function siteSlugForInventoryFile(siteName: string): string {
 }
 
 /**
- * One Flowbie call; server paginates Google localPosts until complete.
+ * One NEO Pulse call; server paginates Google localPosts until complete.
  */
-export async function fetchGbpPostsInventory(gbpLocationId: string): Promise<GbpPostsInventoryResult> {
+export async function fetchGbpPostsInventory(
+  gbpLocationId: string,
+  siteName?: string,
+  siteUrl?: string,
+): Promise<GbpPostsInventoryResult> {
   const id = gbpLocationId.trim();
   if (!id) {
     throw new Error("Google Business Profile Location ID is required.");
@@ -52,15 +57,15 @@ export async function fetchGbpPostsInventory(gbpLocationId: string): Promise<Gbp
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ gbpLocationId: id }),
+    body: JSON.stringify({
+      gbpLocationId: id,
+      ...(siteName?.trim() ? { siteName: siteName.trim() } : {}),
+      ...(siteUrl?.trim() ? { siteUrl: siteUrl.trim() } : {}),
+    }),
   });
-  const data = await res.json().catch(() => ({}));
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok || !data.success) {
-    throw new Error(
-      typeof data.error === "string"
-        ? data.error
-        : res.statusText || "Failed to load existing GBP posts",
-    );
+    throw new Error(readGbpApiError(data, res, "Failed to load existing GBP posts"));
   }
   const posts = Array.isArray(data.posts) ? (data.posts as GbpInventoryRow[]) : [];
   const excludeCtaUrls = Array.isArray(data.excludeCtaUrls)

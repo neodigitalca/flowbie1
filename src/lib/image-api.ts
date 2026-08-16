@@ -1,5 +1,6 @@
 import { DEFAULT_IMAGE_MODEL } from "@/lib/image-model-defaults";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { readOpenRouterResponseJson } from "@/lib/openrouter-response-body";
 
 export type AspectRatio = '1:1' | '16:9' | '9:16' | '4:3' | '3:4' | '21:9' | '9:19';
 
@@ -86,7 +87,7 @@ export const generateImage = async ({
       throw new Error(`Image generation failed: ${response.status} ${response.statusText}. ${errorText.substring(0, 200)}`);
     }
 
-    const data = await response.json();
+    const data = (await readOpenRouterResponseJson(response)) as Record<string, unknown>;
 
     
     // Log the full response structure for debugging

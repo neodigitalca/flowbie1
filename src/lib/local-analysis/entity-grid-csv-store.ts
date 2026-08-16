@@ -1,6 +1,6 @@
 /** Persist Local Dominator grid CSV in IndexedDB so Neighbourhood AdGroups survive refresh. */
 
-const DB_NAME = "flowbie-entity-grid-csv";
+const DB_NAME = "neo-pulse-entity-grid-csv";
 const DB_VERSION = 1;
 const STORE = "grids";
 

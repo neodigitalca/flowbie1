@@ -22,8 +22,8 @@ import {
   getWordPressPostContent,
   type IndexingProgress,
 } from "@/lib/wordpress-api";
-import { normalizeGbpLocationIdInput } from "@/lib/gbp-post/normalize-gbp-location-id";
-import { getStoredSites, mergeServerGbpLocationIdsIntoLocalSites, saveSites } from "@/components/integrations/storage";
+import { persistGbpLocationIdInput } from "@/lib/gbp-post/normalize-gbp-location-id";
+import { getStoredSites, mergeServerGbpLocationIdsIntoLocalSites, mergeServerWpEngineCredentialsIntoLocalSites, restoreSitesFromServerMirrorIfEmpty, saveSites } from "@/components/integrations/storage";
 import { type WordPressSite } from "@/components/integrations/types";
 import { isOptimizationPackageTier } from "@/lib/wordpress-optimization-package";
 import { scrapeChildSitemap } from "@/lib/wordpress-sitemap-scraper";
@@ -69,7 +69,13 @@ function useWordPressSitesState() {
   );
 
   useEffect(() => {
+    void restoreSitesFromServerMirrorIfEmpty().then((restored) => {
+      if (restored.length > 0) setSites(restored);
+    });
     void mergeServerGbpLocationIdsIntoLocalSites().then((merged) => {
+      if (merged) setSites(getStoredSites());
+    });
+    void mergeServerWpEngineCredentialsIntoLocalSites().then((merged) => {
       if (merged) setSites(getStoredSites());
     });
   }, []);
@@ -495,8 +501,8 @@ function useWordPressSitesState() {
       sitemaps: editingSite?.sitemaps,
       ga4PropertyId: formGa4PropertyId?.trim() || undefined,
       gbpLocationId: (() => {
-        const normalized = normalizeGbpLocationIdInput(formGbpLocationId);
-        return normalized || undefined;
+        const persisted = persistGbpLocationIdInput(formGbpLocationId);
+        return persisted || undefined;
       })(),
       semrushSiteAuditProjectId: formSemrushSiteAuditProjectId?.trim() || undefined,
       editorialCountsPeriodStartYmd: formEditorialCountsPeriodStartYmd?.trim() || undefined,

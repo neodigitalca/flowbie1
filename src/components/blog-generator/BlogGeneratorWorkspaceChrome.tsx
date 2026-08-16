@@ -1,14 +1,14 @@
 import type { ReactNode } from "react";
-import type { LucideIcon } from "lucide-react";
 import { UnifiedWorkspaceChrome } from "@/components/shared/UnifiedWorkspaceChrome";
 import { BlogGeneratorSectionPills } from "@/components/blog-generator/BlogGeneratorSectionPills";
-import type { BlogGeneratorSectionId } from "@/components/blog-generator/blog-generator-sections";
+import {
+  getBlogGeneratorSectionMeta,
+  type BlogGeneratorSectionId,
+} from "@/components/blog-generator/blog-generator-sections";
 import type { MetaBulkMicroSnapshot } from "@/components/overview/OverviewBulkMicroProgress";
 import type { MetaBulkActionKey, BulkProgressSlice } from "@/components/overview/overview-tab-constants";
 
 export type BlogGeneratorWorkspaceChromeProps = {
-  icon: LucideIcon;
-  title: string;
   activeSection: BlogGeneratorSectionId;
   onSectionChange: (id: BlogGeneratorSectionId) => void;
   sectionSwitchDisabled?: boolean;
@@ -32,8 +32,6 @@ export type BlogGeneratorWorkspaceChromeProps = {
 };
 
 export function BlogGeneratorWorkspaceChrome({
-  icon,
-  title,
   activeSection,
   onSectionChange,
   sectionSwitchDisabled = false,
@@ -54,11 +52,14 @@ export function BlogGeneratorWorkspaceChrome({
   toolbar,
   hideToolbar = false,
 }: BlogGeneratorWorkspaceChromeProps) {
+  const sectionMeta = getBlogGeneratorSectionMeta(activeSection);
+  const SectionIcon = sectionMeta.icon;
+
   const sectionPills = (
     <BlogGeneratorSectionPills
       activeSection={activeSection}
       onSectionChange={onSectionChange}
-      disabled={sectionSwitchDisabled || workspaceBusy}
+      disabled={sectionSwitchDisabled}
       showOpt={showOpt}
     />
   );
@@ -66,8 +67,8 @@ export function BlogGeneratorWorkspaceChrome({
   if (progressBand === "empty") {
     return (
       <UnifiedWorkspaceChrome
-        icon={icon}
-        title={title}
+        icon={SectionIcon}
+        title={sectionMeta.label}
         titleRowMenu={titleRowMenu}
         titleRowEnd={sectionPills}
         toolbar={toolbar}
@@ -80,8 +81,8 @@ export function BlogGeneratorWorkspaceChrome({
 
   return (
     <UnifiedWorkspaceChrome
-      icon={icon}
-      title={title}
+      icon={SectionIcon}
+      title={sectionMeta.label}
       titleRowMenu={titleRowMenu}
       titleRowEnd={sectionPills}
       toolbar={toolbar}

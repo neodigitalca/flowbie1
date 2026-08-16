@@ -1,0 +1,19 @@
+{
+  "keyword": "gsc-ctr-drop",
+  "name": "GSC CTR drop",
+  "kind": "gsc",
+  "description": "Fire when click-through rate falls vs prior period.",
+  "defaults": {
+    "source": "gsc",
+    "triggerConfig": {
+      "sources": ["gsc"],
+      "match": "any",
+      "conditions": [{ "signal": "ctr_drop", "operator": "gte", "value": 15, "minImpressions": 100 }],
+      "lookbackDays": 28,
+      "compareDays": 28,
+      "pollHours": 24,
+      "cooldownHours": 72,
+      "maxUrls": 5
+    }
+  }
+}

@@ -16,6 +16,11 @@ import {
   buildSapFilteredPagesChunkText,
   isPagesMomReportingFile,
 } from "@/lib/gsc-reporting/gsc-reporting-sap-entity-context";
+import {
+  buildCompareSignalsPinChunk,
+  COMPARE_SIGNALS_SECTION_KINDS,
+  ensureCompareSignalsFile,
+} from "@/lib/gsc-reporting/gsc-reporting-compare-signals";
 import { runGscReportingOutline } from "@/lib/gsc-reporting/gsc-reporting-outline";
 import { applyGscReportingMarkdownPost } from "@/lib/gsc-reporting/gsc-reporting-markdown-post";
 import {
@@ -54,11 +59,16 @@ export async function runGscReportingPipeline(args: RunGscReportingPipelineArgs)
     siteUrl,
     files,
     sapEntityGrounding,
+    compareKind = "mom",
+    compareLabel = "",
     signal,
     onProgress,
     onOutlineReady,
     onSectionStart,
     onSectionReady,
+    priorSectionResults = [],
+    savedOutline,
+    savedOutlineRequestBodyJson,
   } = args;
   if (!apiKey.trim()) throw new Error("OpenRouter API key is required.");
   if (files.length === 0) throw new Error("No GSC data loaded.");
@@ -66,25 +76,54 @@ export async function runGscReportingPipeline(args: RunGscReportingPipelineArgs)
   const nonEmpty = files.filter((f) => f.content.trim().length > 0);
   if (nonEmpty.length === 0) throw new Error("All GSC files are empty.");
 
-  const { outline, truncatedInput, filenames, outlineRequestBodyJson } = await runGscReportingOutline({
-    apiKey,
-    model,
-    siteName,
-    siteUrl,
-    files: nonEmpty,
-    signal,
-  });
+  const bundledFiles =
+    compareLabel.trim().length > 0
+      ? ensureCompareSignalsFile(nonEmpty, compareKind, compareLabel)
+      : nonEmpty;
 
-  onOutlineReady?.({ outline, outlineRequestBodyJson });
+  const { outline, truncatedInput, filenames, outlineRequestBodyJson } = savedOutline
+    ? {
+        outline: savedOutline,
+        truncatedInput: false,
+        filenames: bundledFiles.map((f) => f.name),
+        outlineRequestBodyJson: savedOutlineRequestBodyJson ?? "",
+      }
+    : await runGscReportingOutline({
+        apiKey,
+        model,
+        siteName,
+        siteUrl,
+        files: bundledFiles,
+        compareKind,
+        signal,
+      });
+
+  if (!savedOutline) {
+    onOutlineReady?.({ outline, outlineRequestBodyJson });
+  }
 
   const totalSteps = 1 + outline.sections.length;
   onProgress?.({ step: 1, total: totalSteps, label: "Outline complete" });
-  const chunks = splitGscFilesIntoChunks(nonEmpty);
-  const sectionResults: GscReportingSectionResult[] = [];
+  const chunks = splitGscFilesIntoChunks(bundledFiles);
+  const compareSignalsPin = buildCompareSignalsPinChunk(bundledFiles);
+  const priorByIndex = new Map(priorSectionResults.map((row) => [row.index, row]));
+  const sectionResults: GscReportingSectionResult[] = [...priorSectionResults];
 
   const plans = outline.sections;
   const sectionTotal = plans.length;
   for (let i = 0; i < plans.length; i++) {
+    const prior = priorByIndex.get(i);
+    if (prior) {
+      onSectionStart?.(i, prior.plan);
+      onProgress?.({
+        step: 2 + i,
+        total: totalSteps,
+        label: `Section ${i + 1}/${sectionTotal}: ${prior.plan.h2Title.slice(0, 48)}…`,
+      });
+      onSectionReady?.(prior);
+      continue;
+    }
+
     const plan = plans[i]!;
     onSectionStart?.(i, plan);
     onProgress?.({
@@ -115,7 +154,18 @@ export async function runGscReportingPipeline(args: RunGscReportingPipelineArgs)
           ]
         : [];
 
-    const pinnedMerged = [...sapPins, ...pinned];
+    const compareSignalPins: GscReportingChunk[] =
+      compareSignalsPin && COMPARE_SIGNALS_SECTION_KINDS.has(plan.kind)
+        ? [
+            {
+              id: compareSignalsPin.id,
+              sourceFile: compareSignalsPin.sourceFile,
+              text: compareSignalsPin.text,
+            },
+          ]
+        : [];
+
+    const pinnedMerged = [...compareSignalPins, ...sapPins, ...pinned];
 
     const chunksForRag =
       plan.kind === "sap_local_seo" && sapEntityGrounding
@@ -147,7 +197,7 @@ export async function runGscReportingPipeline(args: RunGscReportingPipelineArgs)
       retrievedContext,
     });
 
-    const system = getGscReportingSectionSystemPrompt(plan.kind);
+    const system = getGscReportingSectionSystemPrompt(plan.kind, compareKind);
     const maxTokens = Math.min(16_000, getCompetitorReportMaxOutputTokens(model));
 
     const requestBodyJson = buildOpenRouterChatPostBodyJson({
@@ -187,7 +237,8 @@ export async function runGscReportingPipeline(args: RunGscReportingPipelineArgs)
     `Prepared for: ${siteName}`,
     "",
   ].join("\n");
-  const markdown = [title, ...sectionResults.map((s) => s.markdownBlock)].join("\n");
+  const orderedSections = [...sectionResults].sort((a, b) => a.index - b.index);
+  const markdown = [title, ...orderedSections.map((s) => s.markdownBlock)].join("\n");
 
   onProgress?.({ step: totalSteps, total: totalSteps, label: "Done" });
 
@@ -196,7 +247,7 @@ export async function runGscReportingPipeline(args: RunGscReportingPipelineArgs)
     outline,
     truncatedInput,
     filenames,
-    sectionResults,
+    sectionResults: orderedSections,
     outlineRequestBodyJson,
   };
 }

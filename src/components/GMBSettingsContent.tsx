@@ -9,14 +9,14 @@ import { NOTIFY_CLIENT_ID_SHOULD_BE_THE_FULL_VALUE_FROM_, NOTIFY_GMB_STATS_ADDED
 import { KB_FILES_STORAGE_KEY, type StoredFile } from "./integrations/types";
 import { getGMBPullDateRanges } from "@/lib/gmb-date-helpers";
 import { BACKEND_API_BASE as MCP_DERIVED_BACKEND } from "@/lib/wordpress-api/connection";
-import { FLOWBIE_CA_DEPLOY } from "@/lib/flowbie-ca-deploy";
+import { NEO_PULSE_CA_DEPLOY } from "@/lib/neo-pulse-deploy";
 
-const GMB_CALLBACK_EXAMPLE = FLOWBIE_CA_DEPLOY
-  ? "https://flowbie.ca/api/gmb/callback"
+const GMB_CALLBACK_EXAMPLE = NEO_PULSE_CA_DEPLOY
+  ? "https://neodigital.ca/api/gmb/callback"
   : "http://localhost:3001/api/gmb/callback";
 
-const GMB_FRONTEND_URL_EXAMPLE = FLOWBIE_CA_DEPLOY
-  ? "https://flowbie.ca/flowbie/"
+const GMB_FRONTEND_URL_EXAMPLE = NEO_PULSE_CA_DEPLOY
+  ? "https://neodigital.ca/neo-pulse/"
   : "http://localhost:5173/";
 
 /** Same base as WordPress/AgentMail: VITE_MCP_API_BASE minus /api/mcp, unless overridden. */
@@ -275,14 +275,14 @@ ${footnote}`;
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            {FLOWBIE_CA_DEPLOY ? (
+            {NEO_PULSE_CA_DEPLOY ? (
               <>
                 Production reads credentials from{" "}
-                <code className="bg-muted px-1 rounded">FLOWBIE_APP_GMB_CLIENT_ID</code>,{" "}
-                <code className="bg-muted px-1 rounded">FLOWBIE_APP_GMB_CLIENT_SECRET</code>,{" "}
-                <code className="bg-muted px-1 rounded">FLOWBIE_APP_GMB_REDIRECT_URI</code>, and{" "}
-                <code className="bg-muted px-1 rounded">FLOWBIE_APP_FRONTEND_URL</code> in wp-config or{" "}
-                <code className="bg-muted px-1 rounded">flowbie-app-secrets.php</code>.
+                <code className="bg-muted px-1 rounded">NEO_PULSE_APP_GMB_CLIENT_ID</code>,{" "}
+                <code className="bg-muted px-1 rounded">NEO_PULSE_APP_GMB_CLIENT_SECRET</code>,{" "}
+                <code className="bg-muted px-1 rounded">NEO_PULSE_APP_GMB_REDIRECT_URI</code>, and{" "}
+                <code className="bg-muted px-1 rounded">NEO_PULSE_APP_FRONTEND_URL</code> in wp-config or{" "}
+                <code className="bg-muted px-1 rounded">neo-pulse-app-secrets.php</code>.
               </>
             ) : (
               <>
@@ -376,12 +376,12 @@ ${footnote}`;
             </div>
           )}
           <p className="text-xs text-muted-foreground">
-            {FLOWBIE_CA_DEPLOY ? (
+            {NEO_PULSE_CA_DEPLOY ? (
               <>
-                On flowbie.ca, GBP uses the same-origin API at{" "}
+                On neodigital.ca, GBP uses the same-origin API at{" "}
                 <code className="bg-muted px-1 rounded">/api/gmb/*</code>. Set OAuth credentials in{" "}
-                <code className="bg-muted px-1 rounded">flowbie-app-secrets.php</code> or wp-config (
-                <code className="bg-muted px-1 rounded">FLOWBIE_APP_GMB_*</code>).
+                <code className="bg-muted px-1 rounded">neo-pulse-app-secrets.php</code> or wp-config (
+                <code className="bg-muted px-1 rounded">NEO_PULSE_APP_GMB_*</code>).
               </>
             ) : (
               <>
@@ -409,7 +409,7 @@ ${footnote}`;
               In the OAuth client, under <strong className="text-white">Authorized redirect URIs</strong>, add exactly <code className="bg-muted px-1 rounded">{GMB_CALLBACK_EXAMPLE}</code>.
             </p>
             <p className="text-foreground">
-              After sign-in, Flowbie returns to <code className="bg-muted px-1 rounded">{GMB_FRONTEND_URL_EXAMPLE}</code> (Settings).
+              After sign-in, NEO Pulse returns to <code className="bg-muted px-1 rounded">{GMB_FRONTEND_URL_EXAMPLE}</code> (Settings).
             </p>
             <p className="text-foreground">
               Then use <strong className="text-white">Connect Google Business</strong> on SEO → GBP Post and <strong className="text-white">Test connection</strong> here.

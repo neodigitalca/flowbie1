@@ -6,7 +6,7 @@ import { CONTENT_OPTIMIZER_BULK_PAGE_SIZE } from "@/lib/content-optimizer/conten
 
 /** Lato + 1rem floor for Content / Overview tab (see typography-min-1rem rule). */
 export const OVERVIEW_TAB_TYPO_CLASS =
-  "flowbie-overview-tab font-sans text-base [&_input]:font-sans [&_input]:text-base [&_textarea]:font-sans [&_textarea]:text-base [&_button]:font-sans [&_button]:text-base [&_label]:font-sans [&_label]:text-base";
+  "neo-pulse-overview-tab font-sans text-base [&_input]:font-sans [&_input]:text-base [&_textarea]:font-sans [&_textarea]:text-base [&_button]:font-sans [&_button]:text-base [&_label]:font-sans [&_label]:text-base";
 
 /** Shared Content single + multi shell (same padding, typography, width). */
 export const CONTENT_OPTIMIZER_SQUARE_CONTROLS_CLASS =
@@ -138,7 +138,7 @@ export function contentOptimizerCopyableCellProps(): {
   };
 }
 
-/** Flowbie logo tile only (green square + black spark). */
+/** NEO Pulse logo tile only (green square + black spark). */
 export const CONTENT_OPTIMIZER_MULTI_SITE_OPTIMIZE_ROW_BTN =
   "h-7 w-7 shrink-0 rounded-none p-0 sm:h-8 sm:w-8";
 

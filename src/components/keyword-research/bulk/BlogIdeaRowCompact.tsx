@@ -90,6 +90,8 @@ export type BlogIdeaRowCompactProps = {
   previewUrl?: string;
   /** Drawer expanded row: skip outer stripe shell (parent provides it). */
   embedded?: boolean;
+  /** Pre-Clusters entity SAP: title column shows entity location, keyword column shows base keyword. */
+  entityPreloadMode?: boolean;
 };
 
 function sapUrlPathFromRow(row: CSVRow): string {
@@ -172,12 +174,15 @@ function TitleCell({
   drag,
   titleLabel,
   placeholder = false,
+  wikiUrl,
 }: {
   drag?: BlogIdeaRowDragProps;
   titleLabel: string;
   placeholder?: boolean;
+  wikiUrl?: string;
 }) {
   const { className: copyableClassName, ...copyableProps } = contentOptimizerCopyableCellProps();
+  const wiki = wikiUrl?.trim() ?? "";
   return (
     <div
       className={cn(CONTENT_OPTIMIZER_PAGE_ROW_TITLE_CELL, copyableClassName)}
@@ -192,6 +197,18 @@ function TitleCell({
       >
         {titleLabel}
       </span>
+      {wiki ? (
+        <a
+          href={wiki}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-1.5 inline-flex shrink-0 items-center text-lime-400 hover:text-lime-300"
+          aria-label="Wikipedia"
+          onClick={stopFieldBubble}
+        >
+          <ExternalLink className="h-4 w-4" aria-hidden />
+        </a>
+      ) : null}
     </div>
   );
 }
@@ -533,6 +550,7 @@ export function BlogIdeaRowCompact({
   slotMode = false,
   previewUrl,
   embedded = false,
+  entityPreloadMode = false,
 }: BlogIdeaRowCompactProps) {
   const gridClass = slotMode
     ? BLOG_IDEA_ROW_SLOT_GRID_CLASS
@@ -563,7 +581,10 @@ export function BlogIdeaRowCompact({
   }
 
   const keywordLabel = keywordDisplay?.trim() || row.keyword?.trim() || "";
-  const titleLabel = row.title?.trim() ?? "";
+  const titleLabel = entityPreloadMode
+    ? row.entity?.trim() ?? ""
+    : row.title?.trim() ?? "";
+  const preloadWikiUrl = entityPreloadMode ? row.wikipedia_url?.trim() : undefined;
   const fieldId = (name: string) => `blog-idea-${index}-${name}`;
 
   const rowShell = (header: ReactNode) => (
@@ -658,7 +679,12 @@ export function BlogIdeaRowCompact({
         />
       ) : null}
 
-      <TitleCell drag={drag} titleLabel={titleLabel} placeholder={placeholder} />
+      <TitleCell
+        drag={drag}
+        titleLabel={titleLabel}
+        placeholder={placeholder}
+        wikiUrl={preloadWikiUrl}
+      />
 
       <KeywordCell keywordLabel={keywordLabel} placeholder={placeholder} />
 
@@ -707,7 +733,12 @@ export function BlogIdeaRowCompact({
         />
       ) : null}
 
-      <TitleCell drag={drag} titleLabel={titleLabel} placeholder={placeholder} />
+      <TitleCell
+        drag={drag}
+        titleLabel={titleLabel}
+        placeholder={placeholder}
+        wikiUrl={preloadWikiUrl}
+      />
 
       <KeywordCell keywordLabel={keywordLabel} placeholder={placeholder} />
 

@@ -5,7 +5,7 @@ section: Manager Cloud Settings
 method: GET
 path: /api/manager-cloud-settings/status
 auth: open
-order: 640
+order: 630
 ---
 
 GET `/api/manager-cloud-settings/status`.
@@ -34,7 +34,7 @@ File-backed manager settings (replaces Supabase cloud settings).
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/manager-cloud-settings/status" \
+curl -X GET "https://neodigital.ca/api/manager-cloud-settings/status" \
   -H "Content-Type: application/json" \
 ```
 

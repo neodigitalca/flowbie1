@@ -477,6 +477,49 @@ function uploadNeedsAcfWrite(opts: {
   );
 }
 
+function todayDateModifierIso(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+/** Always stamp ACF date_modifier after Pulse/content optimizer writes (revision progress). */
+async function stampWordPressDateModifierAcf(
+  site: WordPressSite,
+  postId: number,
+  postType: string,
+  postTypeEndpoint: string,
+): Promise<void> {
+  if (!site.siteUrl?.trim() || !site.username?.trim() || !site.appPassword?.trim()) return;
+  const todayDate = todayDateModifierIso();
+  const dateFields = { date_modifier: todayDate, seo_date_modifier: todayDate };
+  try {
+    const acfResult = await updateACFFields(
+      site.siteUrl,
+      site.username,
+      site.appPassword,
+      postId,
+      dateFields,
+      postType,
+      postTypeEndpoint,
+    );
+    if (acfResult.success) return;
+    console.warn(
+      "[WordPress Uploader] date_modifier ACF stamp failed:",
+      acfResult.error || acfResult.failed,
+    );
+    await updateWordPressPostMeta(
+      site.siteUrl,
+      site.username,
+      site.appPassword,
+      postId,
+      postType,
+      postTypeEndpoint,
+      dateFields,
+    );
+  } catch (err) {
+    console.warn("[WordPress Uploader] date_modifier stamp error:", err);
+  }
+}
+
 export interface WordPressUploaderOptions {
   context: {
     site: WordPressSite;
@@ -1453,6 +1496,15 @@ result = await createWordPressPost(
     title: result.title,
     finalTitle
   });
+
+  const postTypeForDateStamp =
+    context.existingPost?.post_type || context.resolved?.subtype || "post";
+  await stampWordPressDateModifierAcf(
+    site,
+    result.postId!,
+    postTypeForDateStamp,
+    entityEndpoint,
+  );
 
   // Origin is now extracted fresh via AI in updateACFOriginField, not preserved from existing post
   return {

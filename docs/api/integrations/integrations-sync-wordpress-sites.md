@@ -5,7 +5,7 @@ section: Integrations
 method: POST
 path: /api/integrations/sync-wordpress-sites
 auth: open
-order: 560
+order: 550
 ---
 
 POST `/api/integrations/sync-wordpress-sites`.
@@ -34,7 +34,7 @@ Runs the sync wordpress sites action in the Integrations API from a JSON request
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/integrations/sync-wordpress-sites" \
+curl -X POST "https://neodigital.ca/api/integrations/sync-wordpress-sites" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

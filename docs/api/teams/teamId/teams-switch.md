@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/switch
 auth: session-team
-order: 1700
+order: 1690
 ---
 
 POST `/api/teams/{teamId}/switch`.
@@ -34,7 +34,7 @@ Runs the switch action in the Teams API from a JSON request body. Requires a sig
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/switch" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/switch" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

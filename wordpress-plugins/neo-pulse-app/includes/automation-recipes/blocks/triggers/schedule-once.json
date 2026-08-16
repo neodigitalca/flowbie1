@@ -1,0 +1,11 @@
+{
+  "keyword": "schedule-once",
+  "name": "One-time schedule",
+  "kind": "calendar",
+  "description": "Run once on a specific date and time (Edmonton).",
+  "defaults": {
+    "frequency": "once",
+    "startDate": "2026-09-01",
+    "time": "09:00"
+  }
+}

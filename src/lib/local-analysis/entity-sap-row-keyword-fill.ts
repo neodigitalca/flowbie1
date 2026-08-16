@@ -472,6 +472,7 @@ export type FillEntitySapRowKeywordsArgs = {
   entityTypeFocus?: string[];
   temperature?: number;
   topP?: number;
+  onGroupComplete?: (rows: CSVRow[], doneGroups: number, totalGroups: number) => void;
 };
 
 export async function fetchEntitySapKeywordSources(
@@ -811,7 +812,9 @@ export async function fillEntitySapRowKeywordsFromInventoryAndGsc(
   const sections = buildEntityAdGroupSections(rows);
   const allFills = new Map<number, string>();
 
-  const groupResults = await Promise.all(
+  const totalGroups = sections.length;
+  let doneGroups = 0;
+  await Promise.all(
     sections.map(async (section) => {
       const groupRows: GroupRowRequest[] = section.rowIndices.map((globalRowIndex, localRowIndex) => ({
         localRowIndex,
@@ -834,15 +837,13 @@ export async function fillEntitySapRowKeywordsFromInventoryAndGsc(
         fillTemperature,
         topP,
       });
-      return { localFills };
+      for (const [idx, kw] of localFills) {
+        allFills.set(idx, kw);
+      }
+      doneGroups += 1;
+      args.onGroupComplete?.(applyKeywordFillsToSapRows(rows, allFills), doneGroups, totalGroups);
     }),
   );
-  for (const { localFills } of groupResults) {
-    for (const [idx, kw] of localFills) {
-      allFills.set(idx, kw);
-    }
-  }
-
   const filledPairs = [...allFills.entries()].filter(([, kw]) => kw.trim());
   if (filledPairs.length > 0) {
     const rejected = await aiRejectBrandOrBlockedTexts({

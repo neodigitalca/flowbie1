@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/chat/channels/({id})/typing
 auth: team-rbac-communication
-order: 1420
+order: 1410
 ---
 
 POST `/api/teams/{teamId}/chat/channels/({id})/typing`.
@@ -34,7 +34,7 @@ Runs the typing action in the Teams API from a JSON request body. Requires a sig
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/chat/channels/({id})/typing" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/chat/channels/({id})/typing" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

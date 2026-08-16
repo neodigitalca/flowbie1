@@ -5,7 +5,7 @@ section: Teams
 method: GET
 path: /api/teams/{teamId}/chat/calls/incoming
 auth: team-rbac-communication
-order: 1240
+order: 1230
 ---
 
 GET `/api/teams/{teamId}/chat/calls/incoming`.
@@ -34,7 +34,7 @@ Reads incoming from the Teams API. Requires a signed-in team member with communi
 ## Example
 
 ```bash
-curl -X GET "https://flowbie.ca/api/teams/{teamId}/chat/calls/incoming" \
+curl -X GET "https://neodigital.ca/api/teams/{teamId}/chat/calls/incoming" \
   -H "Content-Type: application/json" \
 ```
 

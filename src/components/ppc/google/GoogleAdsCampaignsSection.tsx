@@ -40,7 +40,7 @@ export function GoogleAdsCampaignsSection({ ctrl }: GoogleAdsCampaignsSectionPro
     row: PpcGoogleWorkspaceController["campaigns"][number],
     stripeIndex: number,
   ) => {
-    const panelId = `flowbie-ppc-campaign-${row.id || stripeIndex}`;
+    const panelId = `neo-pulse-ppc-campaign-${row.id || stripeIndex}`;
     const isExpanded = ctrl.expandedCampaignId === row.id;
     const deleteDisabled = ctrl.isGenerating || row.status === "generating";
     const nameReadOnly = row.status === "generating";

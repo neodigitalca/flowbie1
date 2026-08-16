@@ -1,6 +1,6 @@
 /**
  * Silent mature-content intent detection for Image Generator prompts.
- * Removes Flowbie prompt safety suffixes when the user explicitly requests mature imagery.
+ * Removes NEO Pulse prompt safety suffixes when the user explicitly requests mature imagery.
  * Provider-side model safety (OpenRouter/Gemini) may still refuse generation.
  */
 

@@ -115,7 +115,7 @@ export function GoogleAnalyticsSettingsContent() {
           </Button>
         )}
         <p className="text-base text-muted-foreground">
-          Upload the JSON key file from Google Cloud (Credentials → Service account → Keys → Add key → JSON). On flowbie.ca it is stored on the WordPress server via the flowbie-app plugin.
+          Upload the JSON key file from Google Cloud (Credentials → Service account → Keys → Add key → JSON). On neodigital.ca it is stored on the WordPress server via the neo-pulse-app plugin.
         </p>
       </div>
 
@@ -126,7 +126,7 @@ export function GoogleAnalyticsSettingsContent() {
             className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-foreground hover:bg-muted/50 rounded-t-md transition-colors"
           >
             <ChevronRight className={`h-4 w-4 shrink-0 transition-transform ${instructionsOpen ? "rotate-90" : ""}`} />
-            Setup instructions (Google Cloud, GA4, flowbie.ca)
+            Setup instructions (Google Cloud, GA4, neodigital.ca)
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent>
@@ -156,11 +156,11 @@ export function GoogleAnalyticsSettingsContent() {
               <span className="text-foreground"> - In GA4: Admin → Property settings. Copy the numeric <strong className="text-white">Property ID</strong>. When adding or editing a WordPress site, paste it in the <strong className="text-white">GA4 Property ID</strong> field for that site.</span>
             </div>
             <div>
-              <span className="font-semibold text-white">5. flowbie.ca (production)</span>
+              <span className="font-semibold text-white">5. neodigital.ca (production)</span>
               <span className="text-foreground"> - Upload the JSON here in Settings, or set </span>
-              <code className="bg-muted px-1 rounded text-foreground">FLOWBIE_APP_GA_SERVICE_ACCOUNT_JSON</code>
+              <code className="bg-muted px-1 rounded text-foreground">NEO_PULSE_APP_GA_SERVICE_ACCOUNT_JSON</code>
               <span className="text-foreground"> in wp-config or </span>
-              <code className="bg-muted px-1 rounded text-foreground">flowbie-app-secrets.php</code>
+              <code className="bg-muted px-1 rounded text-foreground">neo-pulse-app-secrets.php</code>
               <span className="text-foreground"> on the WordPress host.</span>
             </div>
             <div>

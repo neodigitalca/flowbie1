@@ -5,7 +5,7 @@ section: Teams
 method: PATCH
 path: /api/teams/{teamId}/chat/preferences
 auth: team-rbac-communication
-order: 1520
+order: 1510
 ---
 
 PATCH `/api/teams/{teamId}/chat/preferences`.
@@ -34,7 +34,7 @@ Updates preferences through the Teams API. Requires a signed-in team member with
 ## Example
 
 ```bash
-curl -X PATCH "https://flowbie.ca/api/teams/{teamId}/chat/preferences" \
+curl -X PATCH "https://neodigital.ca/api/teams/{teamId}/chat/preferences" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

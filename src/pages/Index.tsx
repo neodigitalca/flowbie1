@@ -13,13 +13,24 @@ import type { FlowFreeformClarifyQuestion, FlowFreeformSectionPlan } from "@/lib
 import { ManagerWorkspace } from "@/components/manager/ManagerWorkspace";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { GeneratorFreeFlowBindings } from "@/components/generator/generator-free-flow-bindings";
-import { FlowbieAppBrand } from "@/components/manager/FlowbieAppBrand";
+import { NeoPulseAppBrand } from "@/components/manager/NeoPulseAppBrand";
 import { ManagerAppFooter } from "@/components/manager/ManagerAppFooter";
 import {
   readStoredManagerSettingsCluster,
   writeStoredManagerSettingsCluster,
   type ManagerSettingsClusterId,
 } from "@/components/manager/manager-settings-cluster";
+import { executeAssistNavigation } from "@/lib/pulse-assist/navigation";
+import { registerAgentRunOptimizerNavigation, useAgentRunOptimizerScope } from "@/contexts/agent-run-optimizer-scope-context";
+import { useTeam } from "@/contexts/TeamContext";
+import { fetchAgentRun } from "@/lib/agent-runs-api";
+import {
+  isAgentRunOptimizerLocationHash,
+  isGeneratorHash,
+  parseAgentRunIdFromLocationHash,
+  parseGeneratorSectionFromHash,
+  writeGeneratorSectionHash,
+} from "@/lib/agent-runs/agent-run-optimizer-url";
 import { reassembleChunkedFiles } from "../lib/utils";
 import { DEFAULT_THEME_PRIMARY_HEX } from "../lib/theme-defaults";
 import { StoredFile } from "../components/KnowledgeBaseTab";
@@ -29,6 +40,7 @@ import { CONTENT_OPTIMIZER_SECTION_STORAGE_KEY } from "@/components/content-opti
 import {
   BLOG_GENERATOR_SECTION_STORAGE_KEY,
   type BlogGeneratorSectionId,
+  readStoredBlogGeneratorSection,
   writeStoredBlogGeneratorSection,
 } from "@/components/blog-generator/blog-generator-sections";
 import {
@@ -44,14 +56,14 @@ import { GenerationProgress } from "../components/GenerationProgress";
 // Import to ensure NAP auto-trigger initializes on page load
 import "@/lib/knowledge-graph-auto-trigger";
 import {
-  FLOWBIE_LLM_MAX_TOKENS_KEY,
-  FLOWBIE_LLM_MODEL_KEY,
-  FLOWBIE_LLM_TEMPERATURE_KEY,
-  FLOWBIE_LLM_TOP_P_KEY,
+  NEO_PULSE_LLM_MAX_TOKENS_KEY,
+  NEO_PULSE_LLM_MODEL_KEY,
+  NEO_PULSE_LLM_TEMPERATURE_KEY,
+  NEO_PULSE_LLM_TOP_P_KEY,
   readStoredLlmModelForIndex,
   readStoredLlmNumberForIndex,
 } from "@/lib/manager-cloud-settings-snapshot";
-import { FLOWBIE_OPEN_MASTER_RULES_EVENT } from "@/lib/open-master-rules-settings";
+import { NEO_PULSE_OPEN_MASTER_RULES_EVENT } from "@/lib/open-master-rules-settings";
 import { isApiTabHash } from "@/lib/api-docs/api-docs-hash";
 
 const OPENROUTER_API_KEY_STORAGE_KEY = "openrouter-api-key";
@@ -71,8 +83,8 @@ const INITIAL_GENERATION_RESULT: GenerationResult = {
   planApproved: undefined,
 };
 
-const LEGACY_WORKSPACE_STORAGE_KEY = "flowbie-workspace";
-const MANAGER_TAB_STORAGE_KEY = "flowbie-manager-tab";
+const LEGACY_WORKSPACE_STORAGE_KEY = "neo-pulse-workspace";
+const MANAGER_TAB_STORAGE_KEY = "neo-pulse-manager-tab";
 
 const VALID_MANAGER_TABS = new Set([
   "integrations",
@@ -81,14 +93,16 @@ const VALID_MANAGER_TABS = new Set([
   "dashboard",
   "free-flow",
   "content-optimizer",
-  "communication",
   "chat",
   "tasks",
+  "support",
+  "users",
   "research",
   "gsc-reporting",
   "sitemap-optimizer",
-  "grid-local",
   "gbp-post",
+  "content-calendar",
+  "social-creator",
   "vertical-benchmarks",
   "ppc-google",
   "ppc-meta",
@@ -145,16 +159,40 @@ function normalizeLegacyGeneratorTab(tab: string): string {
   if (tab === "api-docs") {
     return "api";
   }
+  if (tab === "research") {
+    try {
+      writeStoredBlogGeneratorSection("research");
+      localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "generator");
+    } catch {
+      /* ignore */
+    }
+    return "generator";
+  }
+  if (tab === "gsc-reporting") {
+    try {
+      writeStoredBlogGeneratorSection("report");
+      localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "generator");
+    } catch {
+      /* ignore */
+    }
+    return "generator";
+  }
   return tab;
 }
 
 const Index = () => {
+  const { teamId } = useTeam();
+  const { hydrateScopeFromRun, clearAgentRunOptimizerScope, scope: agentRunOptimizerScope } =
+    useAgentRunOptimizerScope();
   const [apiKey, setApiKey] = useState<string>(loadApiKey());
   // const [showApiDialog, setShowApiDialog] = useState(false); // Removed
   // const [showKnowledgeBase, setShowKnowledgeBase] = useState(false); // Removed
   const [managerTab, setManagerTab] = useState<string>(() => {
     try {
       const hashTab = window.location.hash.replace(/^#/, "").trim();
+      if (parseAgentRunIdFromLocationHash() !== null || isGeneratorHash(window.location.hash)) {
+        return "generator";
+      }
       if (isApiTabHash(hashTab)) {
         return "api";
       }
@@ -171,6 +209,12 @@ const Index = () => {
           /* ignore */
         }
         return "sitemap-optimizer";
+      }
+      if (hashTab === "content-creator") {
+        return "content-calendar";
+      }
+      if (hashTab === "grid-local") {
+        return "generator";
       }
       if (hashTab && VALID_MANAGER_TABS.has(hashTab)) {
         return normalizeLegacyGeneratorTab(hashTab);
@@ -232,13 +276,13 @@ const Index = () => {
         }
         return "dashboard";
       }
-      if (t === "communication-activity") {
+      if (t === "communication" || t === "communication-activity") {
         try {
-          localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "integrations");
+          localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "dashboard");
         } catch {
           /* ignore */
         }
-        return "integrations";
+        return "dashboard";
       }
       if (t === LEGACY_SITEMAP_RESEARCH_SECTION_ID) {
         try {
@@ -260,13 +304,33 @@ const Index = () => {
       if (t && isLegacyResearchManagerTab(t)) {
         try {
           writeStoredResearchSection(normalizeLegacyResearchSection(t));
-          localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "research");
+          writeStoredBlogGeneratorSection("research");
+          localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "generator");
         } catch {
           /* ignore */
         }
-        return "research";
+        return "generator";
+      }
+      if (t === "gsc-reporting") {
+        try {
+          writeStoredBlogGeneratorSection("report");
+          localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "generator");
+        } catch {
+          /* ignore */
+        }
+        return "generator";
+      }
+      if (t === "research") {
+        try {
+          writeStoredBlogGeneratorSection("research");
+          localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "generator");
+        } catch {
+          /* ignore */
+        }
+        return "generator";
       }
       if (t === "api-docs") return "api";
+      if (t === "grid-local") return "generator";
       if (t && VALID_MANAGER_TABS.has(t)) return normalizeLegacyGeneratorTab(t);
       const w = localStorage.getItem(LEGACY_WORKSPACE_STORAGE_KEY);
       if (w === "freeflow") {
@@ -298,23 +362,19 @@ const Index = () => {
       setManagerTab("dashboard");
       handleManagerDashboardClusterChange("master-rules");
     };
-    window.addEventListener(FLOWBIE_OPEN_MASTER_RULES_EVENT, onOpenMasterRules as EventListener);
+    window.addEventListener(NEO_PULSE_OPEN_MASTER_RULES_EVENT, onOpenMasterRules as EventListener);
     return () => {
-      window.removeEventListener(FLOWBIE_OPEN_MASTER_RULES_EVENT, onOpenMasterRules as EventListener);
+      window.removeEventListener(NEO_PULSE_OPEN_MASTER_RULES_EVENT, onOpenMasterRules as EventListener);
     };
   }, [handleManagerDashboardClusterChange]);
-
-  /** Remount BlogGeneratorShell when mega menu changes blog section while already on blog-generator */
-  const [blogGeneratorShellKey, setBlogGeneratorShellKey] = useState(0);
 
   const handleManagerTabChange = useCallback(
     (tab: string) => {
       const normalized = normalizeLegacyGeneratorTab(tab);
       if (normalized === "generator") {
-        const alreadyOnGenerator = managerTab === "generator";
         setManagerTab("generator");
-        if (alreadyOnGenerator) setBlogGeneratorShellKey((k) => k + 1);
       } else {
+        clearAgentRunOptimizerScope();
         setManagerTab(normalized);
       }
       try {
@@ -334,7 +394,7 @@ const Index = () => {
         /* ignore */
       }
     },
-    [managerTab]
+    [clearAgentRunOptimizerScope]
   );
 
   const handleNavigateToSapGenerator = useCallback(
@@ -345,7 +405,6 @@ const Index = () => {
         /* ignore */
       }
       setManagerTab("generator");
-      setBlogGeneratorShellKey((k) => k + 1);
       try {
         if (window.location.hash.replace(/^#/, "") !== "generator") {
           window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#generator`);
@@ -359,25 +418,93 @@ const Index = () => {
   );
 
   const navigateToGeneratorSection = useCallback(
-    (section: BlogGeneratorSectionId) => {
+    (section: BlogGeneratorSectionId, options?: { keepAgentScope?: boolean }) => {
       try {
         writeStoredBlogGeneratorSection(section);
         localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "generator");
       } catch {
         /* ignore */
       }
-      const alreadyOnGenerator = managerTab === "generator";
+      if (!options?.keepAgentScope) {
+        clearAgentRunOptimizerScope();
+      }
       setManagerTab("generator");
-      if (alreadyOnGenerator) setBlogGeneratorShellKey((k) => k + 1);
-      try {
-        if (window.location.hash.replace(/^#/, "") !== "generator") {
-          window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#generator`);
+      if (!options?.keepAgentScope) {
+        try {
+          writeGeneratorSectionHash(section);
+        } catch {
+          /* ignore */
         }
-      } catch {
-        /* ignore */
       }
     },
-    [managerTab],
+    [clearAgentRunOptimizerScope],
+  );
+
+  const syncAgentRunScopeFromHash = useCallback(async () => {
+    const runId = parseAgentRunIdFromLocationHash();
+    if (runId && teamId) {
+      const section = parseGeneratorSectionFromHash(window.location.hash);
+      if (section && readStoredBlogGeneratorSection() !== section) {
+        try {
+          writeStoredBlogGeneratorSection(section as BlogGeneratorSectionId);
+        } catch {
+          /* ignore */
+        }
+      }
+      if (agentRunOptimizerScope?.runId === runId) {
+        if (managerTab !== "generator") setManagerTab("generator");
+        return;
+      }
+      const run = await fetchAgentRun(teamId, runId);
+      if (run) {
+        hydrateScopeFromRun(run);
+        if (managerTab !== "generator") setManagerTab("generator");
+        return;
+      }
+    }
+    if (!isAgentRunOptimizerLocationHash()) {
+      clearAgentRunOptimizerScope();
+    }
+  }, [
+    teamId,
+    hydrateScopeFromRun,
+    clearAgentRunOptimizerScope,
+    agentRunOptimizerScope?.runId,
+    managerTab,
+  ]);
+
+  useLayoutEffect(() => {
+    void syncAgentRunScopeFromHash();
+  }, [syncAgentRunScopeFromHash]);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      void syncAgentRunScopeFromHash();
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, [syncAgentRunScopeFromHash]);
+
+  useEffect(() => {
+    registerAgentRunOptimizerNavigation({
+      onManagerTabChange: handleManagerTabChange,
+      onGeneratorSectionChange: (section, options) =>
+        navigateToGeneratorSection(section as BlogGeneratorSectionId, options),
+    });
+    return () => registerAgentRunOptimizerNavigation(null);
+  }, [handleManagerTabChange, navigateToGeneratorSection]);
+
+  const handleAssistNavigate = useCallback(
+    (target: Parameters<typeof executeAssistNavigation>[0]) => {
+      executeAssistNavigation(target, {
+        onManagerTabChange: handleManagerTabChange,
+        onGeneratorSectionChange: (section) =>
+          navigateToGeneratorSection(section as BlogGeneratorSectionId),
+        onDashboardClusterChange: (cluster) =>
+          handleManagerDashboardClusterChange(cluster as ManagerSettingsClusterId),
+      });
+    },
+    [handleManagerTabChange, navigateToGeneratorSection, handleManagerDashboardClusterChange],
   );
 
   const [knowledgeFiles, setKnowledgeFiles] = useState<StoredFile[]>([]);
@@ -391,12 +518,12 @@ const Index = () => {
   const [flowSectionBodies, setFlowSectionBodies] = useState<Record<string, string>>({});
   const [selectedModel, setSelectedModel] = useState(() => readStoredLlmModelForIndex(DEFAULT_MODEL));
   const [temperature, setTemperature] = useState(() =>
-    readStoredLlmNumberForIndex(FLOWBIE_LLM_TEMPERATURE_KEY, DEFAULT_TEMPERATURE),
+    readStoredLlmNumberForIndex(NEO_PULSE_LLM_TEMPERATURE_KEY, DEFAULT_TEMPERATURE),
   );
   const [maxTokens, setMaxTokens] = useState(() =>
-    readStoredLlmNumberForIndex(FLOWBIE_LLM_MAX_TOKENS_KEY, DEFAULT_MAX_TOKENS),
+    readStoredLlmNumberForIndex(NEO_PULSE_LLM_MAX_TOKENS_KEY, DEFAULT_MAX_TOKENS),
   );
-  const [topP, setTopP] = useState(() => readStoredLlmNumberForIndex(FLOWBIE_LLM_TOP_P_KEY, DEFAULT_TOP_P));
+  const [topP, setTopP] = useState(() => readStoredLlmNumberForIndex(NEO_PULSE_LLM_TOP_P_KEY, DEFAULT_TOP_P));
   const agentsForOutput = flowFreeformSectionsToAgents(flowFreeformSections);
   const [showDraftRecovery, setShowDraftRecovery] = useState(false);
   const [draftToRecover, setDraftToRecover] = useState<ReturnType<typeof loadDraft>>(null);
@@ -483,10 +610,10 @@ const Index = () => {
 
   useEffect(() => {
     try {
-      localStorage.setItem(FLOWBIE_LLM_MODEL_KEY, selectedModel);
-      localStorage.setItem(FLOWBIE_LLM_TEMPERATURE_KEY, String(temperature));
-      localStorage.setItem(FLOWBIE_LLM_MAX_TOKENS_KEY, String(maxTokens));
-      localStorage.setItem(FLOWBIE_LLM_TOP_P_KEY, String(topP));
+      localStorage.setItem(NEO_PULSE_LLM_MODEL_KEY, selectedModel);
+      localStorage.setItem(NEO_PULSE_LLM_TEMPERATURE_KEY, String(temperature));
+      localStorage.setItem(NEO_PULSE_LLM_MAX_TOKENS_KEY, String(maxTokens));
+      localStorage.setItem(NEO_PULSE_LLM_TOP_P_KEY, String(topP));
     } catch {
       /* ignore */
     }
@@ -679,8 +806,8 @@ try {
       <ManagerWorkspace
         variant="embedded"
         embeddedTopBarStart={
-          <FlowbieAppBrand
-            variant="compact"
+          <NeoPulseAppBrand
+            variant="default"
             showVersion
             onClick={() => {
               writeStoredManagerSettingsCluster("properties");
@@ -712,7 +839,7 @@ try {
         onNavigateToSapGenerator={handleNavigateToSapGenerator}
         managerDashboardCluster={managerDashboardCluster}
         onManagerDashboardClusterChange={handleManagerDashboardClusterChange}
-        blogGeneratorShellKey={blogGeneratorShellKey}
+        onAssistNavigate={handleAssistNavigate}
         currentKBFiles={knowledgeFiles}
         onFilesUpdate={setKnowledgeFiles}
         onManualContentUpdate={setManualKnowledgeText}

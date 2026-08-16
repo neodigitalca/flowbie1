@@ -1,4 +1,3 @@
-import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
 import { openRouterWebAppHeaders, resolveOpenRouterWebReferer } from "@/lib/openrouter-attribution";
 import { clampOpenRouterMaxTokens, streamOpenRouterChatCompletionCore } from "@/lib/openrouter-stream-chat-core";
 
@@ -24,18 +23,14 @@ interface ChatCompletionRequest {
 
 const OPENROUTER_API_KEY_STORAGE_KEY = "openrouter-api-key";
 const DATAFORSEO_API_KEY_STORAGE_KEY = "dataforseo-api-key";
-const AGENTMAIL_API_KEY_STORAGE_KEY = "agentmail-api-key";
-const AGENTMAIL_GENERAL_EMAIL_STORAGE_KEY = "agentmail-general-email";
-const HARDCODED_AGENTMAIL_API_KEY = "am_us_6335fbc83ea1cc86d1690a72cef8f85f1c5a649123f8b5cdf90be15504f2ed8c";
-/** Local Vite dev only; production build uses flowbie@ for deployed UI. */
-const HARDCODED_AGENTMAIL_GENERAL_EMAIL = import.meta.env.DEV
-  ? "seowithflo@agentmail.to"
-  : "flowbie@agentmail.to";
 const SLACK_BOT_TOKEN_STORAGE_KEY = "slack-bot-token";
 const SLACK_GLOBAL_SETTINGS_STORAGE_KEY = "slack-global-settings";
 
 export const loadApiKey = () => {
-    return localStorage.getItem(OPENROUTER_API_KEY_STORAGE_KEY) || "";
+    const stored = localStorage.getItem(OPENROUTER_API_KEY_STORAGE_KEY) || "";
+    if (stored.trim()) return stored;
+    const baked = (import.meta.env.VITE_OPENROUTER_API_KEY as string | undefined)?.trim() ?? "";
+    return baked;
 };
 
 export const saveApiKey = (key: string) => {
@@ -58,54 +53,6 @@ export const saveDataForSEOApiKey = (key: string) => {
     }
 };
 
-export const loadAgentMailApiKey = () => {
-    return localStorage.getItem(AGENTMAIL_API_KEY_STORAGE_KEY) || HARDCODED_AGENTMAIL_API_KEY;
-};
-
-export const saveAgentMailApiKey = (key: string) => {
-    if (key) {
-        localStorage.setItem(AGENTMAIL_API_KEY_STORAGE_KEY, key);
-    } else {
-        localStorage.removeItem(AGENTMAIL_API_KEY_STORAGE_KEY);
-    }
-};
-
-export const loadAgentMailGeneralEmail = () => {
-    return localStorage.getItem(AGENTMAIL_GENERAL_EMAIL_STORAGE_KEY) || HARDCODED_AGENTMAIL_GENERAL_EMAIL;
-};
-
-export const saveAgentMailGeneralEmail = (email: string) => {
-    const t = (email || "").trim();
-    if (t) {
-        localStorage.setItem(AGENTMAIL_GENERAL_EMAIL_STORAGE_KEY, t);
-    } else {
-        localStorage.removeItem(AGENTMAIL_GENERAL_EMAIL_STORAGE_KEY);
-    }
-};
-
-/** Persist OpenRouter + AgentMail keys to the API server so the embedded email poller can run (localStorage alone is not visible to the server). */
-export async function syncEmailWorkerKeysToServer(partial: {
-  agentmailApiKey?: string;
-  openRouterApiKey?: string;
-}): Promise<void> {
-  const base = (BACKEND_API_BASE || "").replace(/\/$/, "");
-  const path = "/api/integrations/sync-email-worker-keys";
-  const url = base ? `${base}${path}` : path;
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(partial),
-    });
-    if (!res.ok) {
-      console.warn("[Email worker keys] Server sync failed:", res.status);
-    }
-  } catch (e) {
-    console.warn("[Email worker keys] Server sync error:", e);
-  }
-}
-
 export interface SlackGlobalSettings {
   /** Slack API → App Credentials → App ID */
   slackAppId?: string;
@@ -121,11 +68,11 @@ export interface SlackGlobalSettings {
   verificationToken?: string;
   /** From auth.test or manual label. */
   workspaceLabel?: string;
-  /** When false, Flowbie does not send Slack messages. Default true when unset. */
+  /** When false, NEO Pulse does not send Slack messages. Default true when unset. */
   notificationsEnabled?: boolean;
   /** Fallback channel when a site has no channel ID. */
   defaultChannelId?: string;
-  /** Prepended to outbound messages (e.g. [Flowbie][prod]). */
+  /** Prepended to outbound messages (e.g. [NEO Pulse][prod]). */
   messagePrefix?: string;
   /** Mirror Slack → OAuth & Permissions → Redirect URLs (paste the same into Slack). */
   redirectUrls?: string[];

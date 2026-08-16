@@ -7,6 +7,7 @@ import {
   buildMetaImagePromptPreview,
   buildMetaCopySystemPrompt,
   META_IMAGE_ANTI_PATTERNS,
+  META_IMAGE_NO_SPEC_FRAME_RULE,
   META_VALUE_PROPOSITION_RULES,
   META_IMAGE_LAYOUT_RULES,
   META_IMAGE_NO_PEOPLE_RULES,
@@ -104,12 +105,12 @@ describe("buildMetaImageChecklistSystemPrompt", () => {
       siteName: "Acme Windows",
     });
     expect(prompt).toContain("physically plausible");
-    expect(prompt).toContain("exact headline");
+    expect(prompt).toContain("ON-IMAGE TEXT LOCK");
   });
 });
 
 describe("buildMetaImagePromptDescription", () => {
-  it("includes exact brief headline and bans focus keyword", () => {
+  it("references text lock once and bans focus keyword", () => {
     const description = buildMetaImagePromptDescription({
       creativeBrief: sampleBrief,
       focusKeyword: "AI SEO Edmonton",
@@ -125,7 +126,8 @@ describe("buildMetaImagePromptDescription", () => {
         },
       ],
     });
-    expect(description).toContain('On-image headline (render exactly once): "Get Found Locally"');
+    expect(description).toContain("Apply ON-IMAGE TEXT LOCK only");
+    expect(description).not.toContain('On-image headline (render exactly once): "Get Found Locally"');
     expect(description).toContain('DO NOT render focus keyword on image: "AI SEO Edmonton"');
     expect(description).not.toContain("Primary topic:");
     expect(description).toContain("Layout ref");
@@ -133,7 +135,16 @@ describe("buildMetaImagePromptDescription", () => {
     expect(description).not.toContain("Forbidden on image");
   });
 
-  it("includes locality context and tool palette", () => {
+  it("does not repeat on-image strings in the description", () => {
+    const description = buildMetaImagePromptDescription({
+      creativeBrief: sampleBrief,
+      placement: "feed_1x1",
+    });
+    expect(description).not.toContain('"Get Found Locally"');
+    expect(description).not.toContain('"SEO that works"');
+  });
+
+  it("includes tool palette and scene spec without duplicate locality line", () => {
     const description = buildMetaImagePromptDescription({
       creativeBrief: sampleBrief,
       focusKeyword: "AI SEO Edmonton",
@@ -141,7 +152,7 @@ describe("buildMetaImagePromptDescription", () => {
       localityCity: "Edmonton",
       typographyStyle: "montserrat",
     });
-    expect(description).toContain("Locality context: Edmonton");
+    expect(description).not.toContain("Locality context: Edmonton");
     expect(description).toContain("Visual tool palette (degree):");
     expect(description).toContain("Warm co-working loft");
     expect(description).not.toContain("Scene composition:");
@@ -241,7 +252,7 @@ describe("buildMetaImagePromptPreview", () => {
 });
 
 describe("buildMetaImagePrompt", () => {
-  it("uses brief exact text and omits ad copy strings", () => {
+  it("uses brief exact text once in text lock and omits ad copy strings", () => {
     const prompt = buildMetaImagePrompt({
       creativeBrief: sampleBrief,
       focusKeyword: "AI SEO Edmonton",
@@ -261,9 +272,17 @@ describe("buildMetaImagePrompt", () => {
     });
     expect(prompt).toContain("PROMPT DESCRIPTION");
     expect(prompt).toContain("Get Found Locally");
+    expect(prompt).toContain("ON-IMAGE TEXT LOCK");
+    expect(prompt).toContain(META_IMAGE_NO_SPEC_FRAME_RULE);
+    expect(prompt).toContain("Feed 4:5");
+    expect(prompt).toContain("Designed Instagram feed graphic");
     expect(prompt).toContain("DO NOT render focus keyword");
     expect(prompt).not.toContain("Primary topic:");
     expect(prompt).not.toContain("Customers search before they call.");
     expect(prompt).not.toContain("Hard reject visuals");
+    const headlineCount = prompt.split("Get Found Locally").length - 1;
+    expect(headlineCount).toBe(1);
+    const sublineCount = prompt.split("SEO that works").length - 1;
+    expect(sublineCount).toBe(1);
   });
 });

@@ -129,18 +129,18 @@ export {
   type ResolvedAuthorForDisplay
 } from './wordpress-api/author-resolver';
 
-// Flowbie WP tools + unified fields client (ACF / Flowbie Fields)
+// NEO Pulse WP tools + unified fields client (ACF / NEO Pulse Fields)
 export {
-  executeFlowbieWpTool,
-  listFlowbieWpTools,
-  getFlowbieSiteIndex,
-  searchFlowbieSiteIndex,
-  getFlowbieFields,
-  resolveFlowbieUrl,
-  getFlowbiePostContent,
-  siteHasFlowbieWp,
-  FLOWBIE_WP_TOOL_CATALOG,
-} from './wordpress-api/flowbie-wp-tools';
+  executeNeoPulseWpTool,
+  listNeoPulseWpTools,
+  getNeoPulseSiteIndex,
+  searchNeoPulseSiteIndex,
+  getNeoPulseFields,
+  resolveNeoPulseUrl,
+  getNeoPulsePostContent,
+  siteHasNeoPulseWp,
+  NEO_PULSE_WP_TOOL_CATALOG,
+} from './wordpress-api/neo-pulse-wp-tools';
 
 export {
   discoverFieldGroups,
@@ -152,6 +152,6 @@ export {
   resolvePostUrlViaMirror,
   mergeMirrorIndexIntoInventoryKeyword,
   restAcfFromFullPost,
-  siteUsesFlowbieFieldsBackend,
+  siteUsesNeoPulseFieldsBackend,
   siteSupportsSeoExtraTextAcf,
 } from './wordpress-api/fields-client';

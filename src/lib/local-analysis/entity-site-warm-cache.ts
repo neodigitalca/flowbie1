@@ -61,6 +61,8 @@ export type EntitySiteWarmBundle = {
 
 export type EnsureSitePrefetchOptions = {
   force?: boolean;
+  /** Keyword fill: wait for GSC leg; never return sitemap-only partial bundle. */
+  requireGsc?: boolean;
 };
 
 const cacheBySiteId = new Map<string, EntitySiteWarmBundle>();
@@ -82,10 +84,10 @@ function resolveInventoryLeg(siteId: string): void {
 }
 
 /** Matches `ACTIVE_WP_SITE_STORAGE_KEY` in active-wordpress-site-context. */
-const ACTIVE_WP_SITE_STORAGE_KEY = "flowbie-active-wp-site-id";
+const ACTIVE_WP_SITE_STORAGE_KEY = "neo-pulse-active-wp-site-id";
 
 /** Fired after top-bar "Refresh site data" finishes a forced warm recrawl. Content Opt listens and force-reloads. */
-export const FLOWBIE_SITE_DATA_REFRESHED_EVENT = "flowbie-site-data-refreshed";
+export const NEO_PULSE_SITE_DATA_REFRESHED_EVENT = "neo-pulse-site-data-refreshed";
 
 function notifyEntitySiteWarmInflightChanged(): void {
   warmCacheEpoch += 1;
@@ -192,8 +194,10 @@ function isUsableBundle(
   bundle: EntitySiteWarmBundle | undefined | null,
   credKey: string,
   site: WordPressSite,
+  requireGsc = false,
 ): bundle is EntitySiteWarmBundle {
   if (!bundle || bundle.error || bundle.credentialsKey !== credKey) return false;
+  if (requireGsc && canWarmEntitySite(site) && bundle.counts.gscQueries === 0) return false;
   // Partial GSC-first commits can land with 0 URLs and no error; never treat that as ready for WP sites.
   if (bundle.counts.inventoryTotal > 0) return true;
   return !canWarmEntitySite(site) && bundle.counts.gscQueries > 0;
@@ -475,6 +479,11 @@ export function gscQueriesFromWarmBundleForSapBudget(
   return sortGscQueriesByStats(warm.gsc.queries).slice(0, entityGscRowLimitForSapBudget(sapRowBudget));
 }
 
+/** Full GSC query export for Details prep hosted link (not capped to SAP row budget). */
+export function gscAllQueriesFromWarmBundle(warm: EntitySiteWarmBundle): GscSiteQueryRow[] {
+  return sortGscQueriesByStats(warm.gsc.queries.filter((q) => q.query?.trim()));
+}
+
 async function hydrateSitePrefetchFromPersist(site: WordPressSite): Promise<EntitySiteWarmBundle | null> {
   const credKey = siteWarmCredentialsKey(site);
   const persisted = await readSitePrefetchPersist(site.id, credKey);
@@ -497,6 +506,7 @@ export async function ensureEntitySiteWarmCache(
 
   const credKey = siteWarmCredentialsKey(site);
   const force = options?.force === true;
+  const requireGsc = options?.requireGsc === true;
 
   if (force) {
     // Cancel in-flight only. Keep memory + persist until commit overwrites (stale-while-revalidate)
@@ -505,17 +515,22 @@ export async function ensureEntitySiteWarmCache(
     backgroundInflightBySiteId.delete(site.id);
   }
 
+  let inflight = coldInflightBySiteId.get(site.id);
+  if (!force && inflight) {
+    return inflight;
+  }
+
   const cached = cacheBySiteId.get(site.id);
-  if (!force && isUsableBundle(cached, credKey, site)) {
+  if (!force && isUsableBundle(cached, credKey, site, requireGsc)) {
     if (isSitePrefetchStale(cached)) {
       startBackgroundRefresh(site);
     }
     return cached;
   }
 
-  if (!force && !isUsableBundle(cached, credKey, site)) {
+  if (!force && !isUsableBundle(cached, credKey, site, requireGsc)) {
     const fromPersist = await hydrateSitePrefetchFromPersist(site);
-    if (fromPersist) {
+    if (fromPersist && isUsableBundle(fromPersist, credKey, site, requireGsc)) {
       if (isSitePrefetchStale(fromPersist)) {
         startBackgroundRefresh(site);
       }
@@ -523,7 +538,7 @@ export async function ensureEntitySiteWarmCache(
     }
   }
 
-  let inflight = coldInflightBySiteId.get(site.id);
+  inflight = coldInflightBySiteId.get(site.id);
   if (!inflight) {
     inflight = (async () => {
       try {
@@ -617,7 +632,7 @@ export async function refreshSitePrefetch(site: WordPressSite): Promise<EntitySi
     const finalReady = getEntitySiteWarmCacheIfReady(site.id) ?? ready;
     if (typeof window !== "undefined") {
       window.dispatchEvent(
-        new CustomEvent(FLOWBIE_SITE_DATA_REFRESHED_EVENT, {
+        new CustomEvent(NEO_PULSE_SITE_DATA_REFRESHED_EVENT, {
           detail: {
             siteId: site.id,
             inventoryTotal: finalReady.counts.inventoryTotal,

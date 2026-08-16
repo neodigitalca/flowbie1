@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Writes wordpress-plugins/flowbie-wp/includes/flowbie-wp-supabase-config.php
- * from server/data/flowbie-supabase-post-bank.json.
+ * Writes wordpress-plugins/neo-pulse-wp/includes/neo-pulse-wp-supabase-config.php
+ * from server/data/neo-pulse-supabase-post-bank.json.
  *
  * Usage:
  *   node scripts/embed-wp-supabase-config.cjs
@@ -14,13 +14,13 @@ const path = require('path');
 
 const internalBuild = process.argv.includes('--internal-build');
 const ROOT = path.join(__dirname, '..');
-const CRED = path.join(ROOT, 'server', 'data', 'flowbie-supabase-post-bank.json');
+const CRED = path.join(ROOT, 'server', 'data', 'neo-pulse-supabase-post-bank.json');
 const OUT = path.join(
   ROOT,
   'wordpress-plugins',
-  'flowbie-wp',
+  'neo-pulse-wp',
   'includes',
-  'flowbie-wp-supabase-config.php',
+  'neo-pulse-wp-supabase-config.php',
 );
 
 function loadDotEnv(filePath) {
@@ -55,7 +55,7 @@ if ( ! defined( '${name}' ) ) {
 function main() {
   const dotenv = loadDotEnv(path.join(ROOT, '.env'));
   let url = '';
-  let anon = (process.env.SUPABASE_ANON_KEY || process.env.FLOWBIE_WP_SUPABASE_ANON_KEY || '').trim();
+  let anon = (process.env.SUPABASE_ANON_KEY || process.env.NEO_PULSE_WP_SUPABASE_ANON_KEY || '').trim();
   if (fs.existsSync(CRED)) {
     const j = JSON.parse(fs.readFileSync(CRED, 'utf8'));
     if (j.supabaseUrl) url = String(j.supabaseUrl).trim();
@@ -73,50 +73,50 @@ function main() {
     process.exit(1);
   }
   const apiBase = (
-    process.env.FLOWBIE_WP_DEFAULT_API_BASE ||
+    process.env.NEO_PULSE_WP_DEFAULT_API_BASE ||
     (process.env.VITE_MCP_API_BASE || '').replace(/\/api\/mcp\/?$/, '') ||
     ''
   ).trim().replace(/\/$/, '');
   const dfsLogin = (
-    process.env.FLOWBIE_WP_DATAFORSEO_LOGIN ||
+    process.env.NEO_PULSE_WP_DATAFORSEO_LOGIN ||
     process.env.DATAFORSEO_API_LOGIN ||
-    dotenv.FLOWBIE_WP_DATAFORSEO_LOGIN ||
+    dotenv.NEO_PULSE_WP_DATAFORSEO_LOGIN ||
     dotenv.DATAFORSEO_API_LOGIN ||
     ''
   ).trim();
   const dfsPassword = (
-    process.env.FLOWBIE_WP_DATAFORSEO_PASSWORD ||
+    process.env.NEO_PULSE_WP_DATAFORSEO_PASSWORD ||
     process.env.DATAFORSEO_API_PASSWORD ||
-    dotenv.FLOWBIE_WP_DATAFORSEO_PASSWORD ||
+    dotenv.NEO_PULSE_WP_DATAFORSEO_PASSWORD ||
     dotenv.DATAFORSEO_API_PASSWORD ||
     ''
   ).trim();
   const semrushKey = (
-    process.env.FLOWBIE_WP_SEMRUSH_API_KEY ||
+    process.env.NEO_PULSE_WP_SEMRUSH_API_KEY ||
     process.env.SEMRUSH_API_KEY ||
-    dotenv.FLOWBIE_WP_SEMRUSH_API_KEY ||
+    dotenv.NEO_PULSE_WP_SEMRUSH_API_KEY ||
     dotenv.SEMRUSH_API_KEY ||
     ''
   ).trim();
   const extraDefines =
-    defineBlock('FLOWBIE_WP_DEFAULT_API_BASE', apiBase) +
-    defineBlock('FLOWBIE_WP_DATAFORSEO_LOGIN', dfsLogin) +
-    defineBlock('FLOWBIE_WP_DATAFORSEO_PASSWORD', dfsPassword) +
-    defineBlock('FLOWBIE_WP_SEMRUSH_API_KEY', semrushKey);
+    defineBlock('NEO_PULSE_WP_DEFAULT_API_BASE', apiBase) +
+    defineBlock('NEO_PULSE_WP_DATAFORSEO_LOGIN', dfsLogin) +
+    defineBlock('NEO_PULSE_WP_DATAFORSEO_PASSWORD', dfsPassword) +
+    defineBlock('NEO_PULSE_WP_SEMRUSH_API_KEY', semrushKey);
   const php = `<?php
 /**
- * Flowbie Supabase credentials (generated — do not edit by hand).
+ * NEO Pulse Supabase credentials (generated — do not edit by hand).
  *
- * @package Flowbie_Wp
+ * @package Neo_Pulse_Wp
  */
 
 defined( 'ABSPATH' ) || exit;
 
-if ( ! defined( 'FLOWBIE_WP_SUPABASE_URL' ) ) {
-\tdefine( 'FLOWBIE_WP_SUPABASE_URL', ${JSON.stringify(url)} );
+if ( ! defined( 'NEO_PULSE_WP_SUPABASE_URL' ) ) {
+\tdefine( 'NEO_PULSE_WP_SUPABASE_URL', ${JSON.stringify(url)} );
 }
-if ( ! defined( 'FLOWBIE_WP_SUPABASE_ANON_KEY' ) ) {
-\tdefine( 'FLOWBIE_WP_SUPABASE_ANON_KEY', ${JSON.stringify(anon)} );
+if ( ! defined( 'NEO_PULSE_WP_SUPABASE_ANON_KEY' ) ) {
+\tdefine( 'NEO_PULSE_WP_SUPABASE_ANON_KEY', ${JSON.stringify(anon)} );
 }${extraDefines}
 `;
   fs.writeFileSync(OUT, php, 'utf8');

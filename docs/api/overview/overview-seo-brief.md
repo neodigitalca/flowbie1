@@ -5,7 +5,7 @@ section: Overview
 method: POST
 path: /api/overview/seo-brief
 auth: open
-order: 870
+order: 860
 ---
 
 POST `/api/overview/seo-brief`.
@@ -34,7 +34,7 @@ Runs the seo brief action in the Overview API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/overview/seo-brief" \
+curl -X POST "https://neodigital.ca/api/overview/seo-brief" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

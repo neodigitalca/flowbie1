@@ -9,6 +9,7 @@ import {
   PiggyBank,
   ScrollText,
   Settings,
+  Server,
 } from "lucide-react";
 import type { WordPressSite } from "../types";
 import { WordPressCardActions } from "./WordPressCardActions";
@@ -21,6 +22,7 @@ import { NEO_PULSE_CA_DEPLOY } from "@/lib/neo-pulse-deploy";
 import { MasterInstructionsSection } from "./MasterInstructionsSection";
 import { FunctionsUpdaterPanel } from "./FunctionsUpdaterPanel";
 import { RedirectMatcherPanel } from "./RedirectMatcherPanel";
+import { WpEnginePropertyPanel } from "./WpEnginePropertyPanel";
 
 export type BuildWordPressPropertySectionsParams = {
   site: WordPressSite;
@@ -233,5 +235,13 @@ export function buildWordPressPropertySections(
           },
         ]
       : []),
+    {
+      id: "wp-engine",
+      label: "WP Engine",
+      icon: Server,
+      content: (
+        <WpEnginePropertyPanel site={site} onPatchSite={onPatchSite} />
+      ),
+    },
   ];
 }

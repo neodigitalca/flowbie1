@@ -3,12 +3,13 @@
  * Period A = last full calendar month; period B = the full month before that (standard MoM).
  */
 
-import { calculateMonthToMonth, formatDateForAPI } from "@/lib/gsc-date-helpers";
+import { calculateMonthToMonth, calculateYearOverYear, formatDateForAPI } from "@/lib/gsc-date-helpers";
 
-export type GscReportingComparePresetId = "mom" | "custom_compare";
+export type GscReportingComparePresetId = "mom" | "yoy" | "custom_compare";
 
 export const GSC_REPORTING_COMPARE_PRESET_OPTIONS: { id: GscReportingComparePresetId; label: string }[] = [
   { id: "mom", label: "Month vs month (last full month vs previous)" },
+  { id: "yoy", label: "Year over year (last full month vs same month last year)" },
   { id: "custom_compare", label: "Custom period ranges…" },
 ];
 
@@ -32,6 +33,31 @@ export function computeMomCompareRanges(reference: Date = new Date()): GscCompar
       endDate: formatDateForAPI(r.comparison.endDate),
     },
   };
+}
+
+/** Last complete calendar month vs the same calendar month one year earlier. */
+export function computeYoyCompareRanges(reference: Date = new Date()): GscCompareRanges {
+  const mom = calculateMonthToMonth(reference);
+  const r = calculateYearOverYear(mom.current.startDate, mom.current.endDate);
+  return {
+    primary: {
+      startDate: formatDateForAPI(r.current.startDate),
+      endDate: formatDateForAPI(r.current.endDate),
+    },
+    compare: {
+      startDate: formatDateForAPI(r.comparison.startDate),
+      endDate: formatDateForAPI(r.comparison.endDate),
+    },
+  };
+}
+
+export function computeCompareRangesForPreset(
+  preset: GscReportingComparePresetId,
+  reference: Date = new Date(),
+): GscCompareRanges {
+  if (preset === "yoy") return computeYoyCompareRanges(reference);
+  if (preset === "mom") return computeMomCompareRanges(reference);
+  return computeMomCompareRanges(reference);
 }
 
 export function formatLocalYmd(d: Date): string {

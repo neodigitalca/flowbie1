@@ -1,6 +1,6 @@
 /**
- * Unified fields client — routes reads/discovery by site capabilities (ACF vs Flowbie Fields).
- * Keeps existing /get-acf-fields REST routes for batch performance; uses Flowbie WP tools when needed.
+ * Unified fields client — routes reads/discovery by site capabilities (ACF vs NEO Pulse Fields).
+ * Keeps existing /get-acf-fields REST routes for batch performance; uses NEO Pulse WP tools when needed.
  */
 
 import type { WordPressSite } from '@/components/integrations/types';
@@ -14,20 +14,20 @@ import {
   type WpPostSnapshotFromAcfByUrl,
 } from './acf-discovery';
 import {
-  getFlowbieSiteIndex,
-  resolveFlowbieUrl,
-  siteHasFlowbieWp,
-  type FlowbieSiteIndexItem,
-} from './flowbie-wp-tools';
+  getNeoPulseSiteIndex,
+  resolveNeoPulseUrl,
+  siteHasNeoPulseWp,
+  type NeoPulseSiteIndexItem,
+} from './neo-pulse-wp-tools';
 
 export type { ACFDiscoveryResult, WpPostSnapshotFromAcfByUrl };
 
 export {
   siteSupportsSeoExtraTextAcf,
-  siteHasFlowbieWp,
+  siteHasNeoPulseWp,
 };
 
-/** Extract custom fields from a WP REST full post (acf or flowbie_fields). */
+/** Extract custom fields from a WP REST full post (acf or neo_pulse_fields). */
 export function restAcfFromFullPost(
   fullPost: Record<string, unknown> | null | undefined,
 ): Record<string, unknown> {
@@ -36,21 +36,21 @@ export function restAcfFromFullPost(
   if (acf && typeof acf === 'object' && !Array.isArray(acf)) {
     return { ...(acf as Record<string, unknown>) };
   }
-  const flowbieFields = fullPost.flowbie_fields;
-  if (flowbieFields && typeof flowbieFields === 'object' && !Array.isArray(flowbieFields)) {
-    return { ...(flowbieFields as Record<string, unknown>) };
+  const neoPulseFields = fullPost.neo_pulse_fields;
+  if (neoPulseFields && typeof neoPulseFields === 'object' && !Array.isArray(neoPulseFields)) {
+    return { ...(neoPulseFields as Record<string, unknown>) };
   }
   return {};
 }
 
-export function siteUsesFlowbieFieldsBackend(site: WordPressSite): boolean {
+export function siteUsesNeoPulseFieldsBackend(site: WordPressSite): boolean {
   return (
-    site.capabilities?.fieldsBackend === 'flowbie_fields' ||
-    (siteHasFlowbieWp(site) && site.capabilities?.acfRestObjectPresent !== false)
+    site.capabilities?.fieldsBackend === 'neo_pulse_fields' ||
+    (siteHasNeoPulseWp(site) && site.capabilities?.acfRestObjectPresent !== false)
   );
 }
 
-/** Discover field groups — server picks Flowbie export vs ACF REST vs sample scan. */
+/** Discover field groups — server picks NEO Pulse export vs ACF REST vs sample scan. */
 export async function discoverFieldGroups(
   site: WordPressSite,
   postType?: string,
@@ -83,23 +83,23 @@ export async function getFieldsForUrlsBatch(
   return getACFFieldsForUrlsBatch(site, items);
 }
 
-let __siteIndexCache = new Map<string, { at: number; items: FlowbieSiteIndexItem[] }>();
+let __siteIndexCache = new Map<string, { at: number; items: NeoPulseSiteIndexItem[] }>();
 const SITE_INDEX_TTL_MS = 5 * 60 * 1000;
 
 /**
- * Cached wp_site_index for Flowbie WP sites (Content Optimizer / Overview mirror).
+ * Cached wp_site_index for NEO Pulse WP sites (Content Optimizer / Overview mirror).
  */
 export async function getSiteMirrorIndex(
   site: WordPressSite,
   options?: { limit?: number; forceRefresh?: boolean },
-): Promise<FlowbieSiteIndexItem[]> {
-  if (!siteHasFlowbieWp(site)) return [];
+): Promise<NeoPulseSiteIndexItem[]> {
+  if (!siteHasNeoPulseWp(site)) return [];
   const key = site.id || site.siteUrl;
   const cached = __siteIndexCache.get(key);
   if (!options?.forceRefresh && cached && Date.now() - cached.at < SITE_INDEX_TTL_MS) {
     return cached.items;
   }
-  const result = await getFlowbieSiteIndex(site, { limit: options?.limit ?? 500 });
+  const result = await getNeoPulseSiteIndex(site, { limit: options?.limit ?? 500 });
   if (result.ok && result.items.length) {
     __siteIndexCache.set(key, { at: Date.now(), items: result.items });
     return result.items;
@@ -117,15 +117,15 @@ export function clearSiteMirrorIndexCache(siteId?: string): void {
 }
 
 /**
- * Resolve URL → post id using Flowbie WP when available, else null (caller uses REST resolve).
+ * Resolve URL → post id using NEO Pulse WP when available, else null (caller uses REST resolve).
  */
 export async function resolvePostUrlViaMirror(
   site: WordPressSite,
   url: string,
 ): Promise<number | null> {
-  if (!siteHasFlowbieWp(site)) return null;
+  if (!siteHasNeoPulseWp(site)) return null;
   try {
-    const resolved = await resolveFlowbieUrl(site, url);
+    const resolved = await resolveNeoPulseUrl(site, url);
     if (resolved?.postId) return resolved.postId;
   } catch {
     // fall through to index lookup
@@ -146,10 +146,10 @@ export function mergeMirrorIndexIntoInventoryKeyword(
   site: WordPressSite,
   url: string,
   existingKeyword: string,
-  index: FlowbieSiteIndexItem[],
+  index: NeoPulseSiteIndexItem[],
 ): string {
   if (existingKeyword.trim()) return existingKeyword;
-  if (!siteHasFlowbieWp(site) || !index.length) return existingKeyword;
+  if (!siteHasNeoPulseWp(site) || !index.length) return existingKeyword;
   const norm = url.trim().replace(/\/+$/, '').toLowerCase();
   for (const item of index) {
     const itemUrl = typeof item.url === 'string' ? item.url.replace(/\/+$/, '').toLowerCase() : '';

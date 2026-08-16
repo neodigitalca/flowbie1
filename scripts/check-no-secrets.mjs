@@ -12,9 +12,9 @@ import { readFileSync, statSync } from "node:fs";
 import { basename } from "node:path";
 
 const SECRET_BASENAMES = new Set([
-  "flowbie-app-secrets.php",
-  "flowbie-wp-secrets.php",
-  "flowbie-wp-gsc-config.php",
+  "neo-pulse-app-secrets.php",
+  "neo-pulse-wp-secrets.php",
+  "neo-pulse-wp-gsc-config.php",
   ".env",
 ]);
 
@@ -24,19 +24,19 @@ const BLOCKED_PATH_PATTERNS = [
   /^\.env(\.|$)/,
   /-credentials.*\.json$/i,
   /\.credentials\.json$/i,
-  /flowbie-wpengine\.config\.json$/i,
+  /neo-pulse-wpengine\.config\.json$/i,
   /^gsc-config\.local\.js$/i,
 ];
 
 const CONTENT_PATTERNS = [
   { re: /GOCSPX-[A-Za-z0-9_-]{10,}/, label: "Google OAuth client secret (GOCSPX-)" },
   {
-    re: /define\s*\(\s*['"]FLOWBIE_APP_GMB_CLIENT_SECRET['"]\s*,\s*['"][^'"]{8,}['"]/,
-    label: "non-empty FLOWBIE_APP_GMB_CLIENT_SECRET",
+    re: /define\s*\(\s*['"]NEO_PULSE_APP_GMB_CLIENT_SECRET['"]\s*,\s*['"][^'"]{8,}['"]/,
+    label: "non-empty NEO_PULSE_APP_GMB_CLIENT_SECRET",
   },
   {
-    re: /define\s*\(\s*['"]FLOWBIE_WP_GMB_CLIENT_SECRET['"]\s*,\s*['"][^'"]{8,}['"]/,
-    label: "non-empty FLOWBIE_WP_GMB_CLIENT_SECRET",
+    re: /define\s*\(\s*['"]NEO_PULSE_WP_GMB_CLIENT_SECRET['"]\s*,\s*['"][^'"]{8,}['"]/,
+    label: "non-empty NEO_PULSE_WP_GMB_CLIENT_SECRET",
   },
   { re: /\bsk-or-[A-Za-z0-9_-]{20,}/, label: "OpenRouter API key (sk-or-)" },
   { re: /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----/, label: "PEM private key" },

@@ -71,7 +71,7 @@ export function ApiDocsTabContent() {
   const article = getApiDocArticle(resolved);
 
   return (
-    <div className={cn("flowbie-api-tab flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden font-sans text-base", SEO_WORKSPACE_TYPO_CLASS)}>
+    <div className={cn("neo-pulse-api-tab flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden font-sans text-base", SEO_WORKSPACE_TYPO_CLASS)}>
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <ApiDocsSidebar />
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 py-6 text-white">

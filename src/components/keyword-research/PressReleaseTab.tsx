@@ -128,8 +128,6 @@ export function PressReleaseTab({
 
   useEffect(() => {
     refreshSite();
-    const id = setInterval(refreshSite, 3000);
-    return () => clearInterval(id);
   }, [refreshSite]);
 
   useEffect(() => () => clearInventoryJsonLink(), [clearInventoryJsonLink]);

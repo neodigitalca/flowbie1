@@ -1,5 +1,5 @@
 /**
- * Browser calls to Flowbie SAP / entity bank API (session cookie, proxied in dev).
+ * Browser calls to NEO Pulse SAP / entity bank API (session cookie, proxied in dev).
  */
 
 const SAP_BANK_API_BASE =

@@ -1,0 +1,9 @@
+{
+  "keyword": "content-optimizer-full",
+  "name": "Full AISEO",
+  "executionKind": "content_optimizer",
+  "description": "Rewrite title, meta, headings, and body.",
+  "defaults": {
+    "executionPayload": { "updateMode": "update" }
+  }
+}

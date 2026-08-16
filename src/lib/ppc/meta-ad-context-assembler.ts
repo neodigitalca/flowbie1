@@ -1,11 +1,11 @@
 import { buildMetaSeoContextBlock, fetchMetaAdSeoContext } from "@/lib/ppc/fetch-meta-ad-seo-context";
 import {
-  findFlowbieMetaStaticLandingPage,
-  FLOWBIE_PRODUCT_URL,
+  findNeoPulseMetaStaticLandingPage,
+  NEO_PULSE_PRODUCT_URL,
   getNeoDigitalAgencyPovContextBlock,
   isNeoDigitalAgencyTeam,
-} from "@/lib/ppc/flowbie-meta-marketing-context";
-import { getFlowbieMetaProgramBriefMarkdown } from "@/lib/ppc/load-flowbie-meta-program-brief";
+} from "@/lib/ppc/neo-pulse-meta-marketing-context";
+import { getNeoPulseMetaProgramBriefMarkdown } from "@/lib/ppc/load-neo-pulse-meta-program-brief";
 import type { PpcGscPageContext, PpcWpPageContext } from "@/lib/ppc/google-ads-types";
 import type { MetaAdColorPalette, MetaAdContextSource } from "@/lib/ppc/meta-ads-types";
 import { formatMetaColorPaletteBlock } from "@/lib/ppc/meta-ad-color-palette";
@@ -29,9 +29,12 @@ export async function loadMetaContextResearch(
   url: string,
   options?: { focusKeyword?: string; signal?: AbortSignal },
 ): Promise<MetaContextResearch> {
+  if (typeof url !== "string") {
+    throw new Error("Context URL must be a string.");
+  }
   const seo = await fetchMetaAdSeoContext(url, options);
   return {
-    url: url.trim(),
+    url,
     pageContext: seo.pageContext,
     title: seo.title,
     bodyText: seo.bodyText,
@@ -39,24 +42,24 @@ export async function loadMetaContextResearch(
   };
 }
 
-export function loadMetaFlowbieAppContextResearch(): MetaContextResearch {
-  const markdown = getFlowbieMetaProgramBriefMarkdown();
+export function loadMetaNeoPulseAppContextResearch(): MetaContextResearch {
+  const markdown = getNeoPulseMetaProgramBriefMarkdown();
   return {
     url: "",
     pageContext: markdown,
-    title: "FlowbieONE app",
+    title: "NEO Pulse app",
     bodyText: markdown,
     markdown,
   };
 }
 
-export function metaFlowbieAppLandingPage(focusKeyword?: string): PpcWpPageContext {
-  const page = findFlowbieMetaStaticLandingPage(FLOWBIE_PRODUCT_URL);
+export function metaNeoPulseAppLandingPage(focusKeyword?: string): PpcWpPageContext {
+  const page = findNeoPulseMetaStaticLandingPage(NEO_PULSE_PRODUCT_URL);
   return {
     url: page?.url ?? "",
-    title: page?.title ?? "FlowbieONE app",
+    title: page?.title ?? "NEO Pulse app",
     keyword: focusKeyword?.trim() || page?.keyword,
-    excerpt: page?.excerpt ?? getFlowbieMetaProgramBriefMarkdown().slice(0, 600),
+    excerpt: page?.excerpt ?? getNeoPulseMetaProgramBriefMarkdown().slice(0, 600),
     metaDescription: page?.metaDescription ?? "",
   };
 }
@@ -85,8 +88,8 @@ export function buildMetaUnifiedContextBlock(options: {
 }): string {
   const sections: string[] = [];
 
-  if (options.contextSource === "flowbie_app") {
-    sections.push(`=== FlowbieONE program brief ===\n${getFlowbieMetaProgramBriefMarkdown()}`);
+  if (options.contextSource === "neo-pulse_app") {
+    sections.push(`=== NEO Pulse program brief ===\n${getNeoPulseMetaProgramBriefMarkdown()}`);
   } else if (options.contextResearch?.pageContext.trim()) {
     sections.push(`=== Context URL research ===\n${options.contextResearch.pageContext.trim()}`);
   }
@@ -103,7 +106,7 @@ export function buildMetaUnifiedContextBlock(options: {
   if (options.gscMarkdown?.trim()) {
     sections.push(options.gscMarkdown.trim());
   }
-  if (isNeoDigitalAgencyTeam(options.teamName) && options.contextSource !== "flowbie_app") {
+  if (isNeoDigitalAgencyTeam(options.teamName) && options.contextSource !== "neo-pulse_app") {
     sections.push(`=== Agency voice ===\n${getNeoDigitalAgencyPovContextBlock()}`);
   }
   if (options.imagePromptModifier?.trim()) {

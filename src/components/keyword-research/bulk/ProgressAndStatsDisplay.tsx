@@ -95,9 +95,9 @@ export function ProgressAndStatsDisplay({
               {status}
             </span>
           </div>
-          <div className="flowbie-competitor-progress-track">
+          <div className="neo-pulse-competitor-progress-track">
             <div
-              className="flowbie-competitor-progress-fill transition-[width] duration-300 ease-out"
+              className="neo-pulse-competitor-progress-fill transition-[width] duration-300 ease-out"
               style={{ width: `${clampedRowPct}%` }}
               role="progressbar"
               aria-valuenow={clampedRowPct}

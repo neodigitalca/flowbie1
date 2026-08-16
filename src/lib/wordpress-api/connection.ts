@@ -3,16 +3,16 @@
  * Functions for testing connections and managing sitemaps
  */
 
-import { FLOWBIE_CA_DEPLOY } from '@/lib/flowbie-ca-deploy';
+import { NEO_PULSE_CA_DEPLOY } from '@/lib/neo-pulse-deploy';
 import type {
   WordPressConnectionResult,
   SitemapDetectionResult,
   SitemapParseResult
 } from './types';
 
-/** Empty string = same-origin `/api/*` (flowbie.ca WP plugin). */
+/** Empty string = same-origin `/api/*` (neodigital.ca WP plugin). */
 export function resolveBackendApiBase(): string {
-  if (FLOWBIE_CA_DEPLOY) return '';
+  if (NEO_PULSE_CA_DEPLOY) return '';
   const fromEnv = (import.meta.env.VITE_MCP_API_BASE ?? '')
     .replace(/\/api\/mcp\/?$/, '')
     .trim();

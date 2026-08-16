@@ -85,12 +85,12 @@ export function MetaAdsColorColumnCell({
       return <div className="min-w-0" aria-hidden />;
     }
     return (
-      <div className="flex min-h-0 items-center">
+      <div className="flex min-h-0 items-center justify-end">
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          className={cn("h-8 w-full px-2 text-base", META_VISUAL_CONTROL_SURFACE_CLASS)}
+          className={cn("h-8 w-auto shrink-0 px-2 text-base", META_VISUAL_CONTROL_SURFACE_CLASS)}
           disabled={disabled}
           onClick={onResetToWorkspace}
         >

@@ -5,7 +5,7 @@ section: Google Search Console
 method: POST
 path: /api/gsc/fetch-site-pages-performance
 auth: open
-order: 420
+order: 410
 ---
 
 POST `/api/gsc/fetch-site-pages-performance`.
@@ -34,7 +34,7 @@ Runs the fetch site pages performance action in the Google Search Console API fr
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/gsc/fetch-site-pages-performance" \
+curl -X POST "https://neodigital.ca/api/gsc/fetch-site-pages-performance" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

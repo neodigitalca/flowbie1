@@ -6,7 +6,6 @@ import {
   rebuildOverviewWithScrollLinkBullets,
   stripOverviewBulletList,
   verifyOverviewHarnessScrollLinks,
-  reconcileOverviewScrollLinksToBodyH2Ids,
   extractBodyH2AnchorsFromHtml,
 } from "@/lib/overview/overview-harness-scroll-links";
 
@@ -215,52 +214,5 @@ describe("applyOverviewHarnessScrollLinksToStitchedHtml", () => {
     });
     expect(out).toBe(bodyOnly);
     expect(callOpenRouterChatCompletion).not.toHaveBeenCalled();
-  });
-});
-
-describe("reconcileOverviewScrollLinksToBodyH2Ids", () => {
-  // Legacy upload / content-generation-upload path only. Bulk harness (generateMarkdownContentHarnessed)
-  // Model writes contextual scroll-link <ul>; enforceOverviewScrollLinkHrefs fixes #ids. Bulk path does not call reconcile.
-  const article = `<div class="flo-overview">
-<h2 id="overview">Overview</h2>
-<p>Lead paragraph.</p>
-<ul>
-<li><strong>Wrong</strong>: see <a href="#wrong-id">bad link</a>.</li>
-</ul>
-</div>
-
-<h2 id="2026-bc-pst-expansion-business-impact">2026 BC PST Expansion: Business Impact</h2>
-<p>Body one.</p>
-
-<h2 id="5-new-pst-categories-explained">5 New PST Categories</h2>
-<p>Body two.</p>`;
-
-  it("extracts body H2 ids in order", () => {
-    const anchors = extractBodyH2AnchorsFromHtml(article);
-    expect(anchors).toHaveLength(2);
-    expect(anchors[0]?.anchorId).toBe("2026-bc-pst-expansion-business-impact");
-    expect(anchors[1]?.anchorId).toBe("5-new-pst-categories-explained");
-  });
-
-  it("rebuilds overview bullets to match body H2 ids", () => {
-    const out = reconcileOverviewScrollLinksToBodyH2Ids(article);
-    expect(out).toContain('href="#2026-bc-pst-expansion-business-impact"');
-    expect(out).toContain('href="#5-new-pst-categories-explained"');
-    expect(out).not.toContain("#wrong-id");
-    expect(out).not.toContain(" for more.");
-  });
-
-  it("leaves html unchanged when overview hrefs already match body H2 ids", () => {
-    const matched = `<div class="flo-overview">
-<h2 id="overview">Overview</h2>
-<p>Lead.</p>
-<ul>
-<li><strong>A</strong>: <a href="#policy-context">policy shifts</a>.</li>
-<li><strong>B</strong>: <a href="#financial-impact">cost pressures</a>.</li>
-</ul>
-</div>
-<h2 id="policy-context">Policy Context</h2><p>x</p>
-<h2 id="financial-impact">Financial Impact</h2><p>y</p>`;
-    expect(reconcileOverviewScrollLinksToBodyH2Ids(matched)).toBe(matched);
   });
 });

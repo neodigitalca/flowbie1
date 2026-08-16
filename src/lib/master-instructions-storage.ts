@@ -1,4 +1,4 @@
-const STORAGE_KEY_PREFIX = "flowbie_wp_master_instructions_";
+const STORAGE_KEY_PREFIX = "neo_pulse_wp_master_instructions_";
 
 export interface MasterInstructionsFileMeta {
   name: string;
@@ -37,7 +37,7 @@ const GBP_ADDRESS_JSON_HINT =
 function joinSources(sources: MasterInstructionSource[]): string {
   return sources
     .map((s) => {
-      const body = s.content.trim();
+      const body = typeof s.content === "string" ? s.content : "";
       const head = `=== FILE: ${s.name} ===\n`;
       if (s.kind === "semantic-triples") {
         return `${head}${TRIPLE_BLOCK_HINT}\n\n${body}\n`;
@@ -47,8 +47,7 @@ function joinSources(sources: MasterInstructionSource[]): string {
       }
       return `${head}${body}\n`;
     })
-    .join("\n")
-    .trim();
+    .join("\n");
 }
 
 /** Normalize sources for persistence (no content truncation). */
@@ -708,116 +707,6 @@ export function gbpCoordsFromMasterInstructions(
   const gbpFile = findGbpMasterRulesSource(sources);
   if (!gbpFile) return null;
   return groundingFromParsedAllowMissingName(parseGbpTriplesBody(gbpFile.content));
-}
-
-export type GbpGridAddressFields = {
-  address: string;
-  city: string;
-  region: string;
-  postalCode: string;
-  country: string;
-};
-
-function addressLineLooksComplete(street: string, city: string, postal: string): boolean {
-  const norm = street.toLowerCase();
-  const cityTrim = city.trim();
-  if (cityTrim && norm.includes(cityTrim.toLowerCase())) return true;
-  const pc = postal.trim().replace(/\s+/g, "").toLowerCase();
-  if (pc && norm.replace(/\s+/g, "").includes(pc)) return true;
-  return street.includes(",") && street.split(",").length >= 2;
-}
-
-/** Build one full address line from GBP Master Rules for OpenRouter geocoding (any site). */
-export function formatGbpMasterRulesAddressForGeocode(gbp: GbpGridAddressFields): string {
-  const street = gbp.address?.trim() ?? "";
-  const city = gbp.city?.trim() ?? "";
-  const region = gbp.region?.trim() ?? "";
-  const postal = gbp.postalCode?.trim() ?? "";
-  const country = gbp.country?.trim() ?? "";
-
-  if (street && addressLineLooksComplete(street, city, postal)) {
-    if (country && !street.toLowerCase().includes(country.toLowerCase())) {
-      return `${street}, ${country}`;
-    }
-    return street;
-  }
-
-  const locality = [city, region, postal].filter(Boolean).join(" ");
-  return [street, locality, country].filter(Boolean).join(", ");
-}
-
-export function hasGbpMasterRulesAddressForGeocode(gbp: GbpGridAddressFields): boolean {
-  const street = gbp.address?.trim();
-  if (!street) return false;
-  if (gbp.city?.trim() || gbp.postalCode?.trim() || gbp.region?.trim()) return true;
-  return addressLineLooksComplete(street, "", gbp.postalCode);
-}
-
-/** City, region, postal, address, and business name from GBP-business-gbp.txt for Grid Local. */
-export function gbpGridContextFromMasterInstructions(
-  siteId: string | undefined | null,
-): {
-  businessName: string;
-  city: string;
-  region: string;
-  postalCode: string;
-  address: string;
-  country: string;
-  placeId: string | null;
-  cid: string | null;
-} | null {
-  const { sources } = getMasterInstructionsPayload(siteId);
-  const gbpFile = findGbpMasterRulesSource(sources);
-  if (!gbpFile?.content.trim()) return null;
-  const parsed = parseGbpTriplesBody(gbpFile.content);
-  if (!parsed.city && !parsed.region && !parsed.postalCode && !parsed.address) return null;
-  return {
-    businessName: parsed.businessName,
-    city: parsed.city,
-    region: parsed.region,
-    postalCode: parsed.postalCode,
-    address: parsed.address,
-    country: parsed.country,
-    placeId: parsed.placeId,
-    cid: parsed.cid,
-  };
-}
-
-/** @deprecated Use gbpGridContextFromMasterInstructions */
-export function gbpPlaceHintFromMasterInstructions(
-  siteId: string | undefined | null,
-): { city: string; region: string; postalCode: string; address: string } | null {
-  const ctx = gbpGridContextFromMasterInstructions(siteId);
-  if (!ctx) return null;
-  return {
-    city: ctx.city,
-    region: ctx.region,
-    postalCode: ctx.postalCode,
-    address: ctx.address,
-  };
-}
-
-export function gbpGridPlaceFailureReason(siteId: string | undefined | null): string {
-  const { sources } = getMasterInstructionsPayload(siteId);
-  const gbp = findGbpMasterRulesSource(sources);
-  if (!gbp) {
-    return `No GBP-business-gbp.txt on this property (${sources.length} Master Rules file(s)). Upload it in Dashboard → Master Rules.`;
-  }
-  const parsed = parseGbpTriplesBody(gbp.content);
-  const hasCoords = parsed.latitude != null && parsed.longitude != null;
-  const fields = {
-    address: parsed.address,
-    city: parsed.city,
-    region: parsed.region,
-    postalCode: parsed.postalCode,
-    country: parsed.country,
-  };
-  const hasAddress = hasGbpMasterRulesAddressForGeocode(fields);
-  if (!hasCoords && !hasAddress) {
-    return `GBP-business-gbp.txt found (${gbp.content.length} chars) but missing street address + city/postal (or latitude/longitude) for grid center.`;
-  }
-  const label = formatGbpMasterRulesAddressForGeocode(fields) || parsed.address?.trim() || parsed.city;
-  return `GBP-business-gbp.txt address (${label}) could not be geocoded. Check Master Rules and your OpenRouter API key.`;
 }
 
 export function hasMasterInstructions(siteId?: string | null): boolean {

@@ -5,7 +5,7 @@ section: Knowledge Model
 method: POST
 path: /api/knowledge-model/generate-graph
 auth: open
-order: 590
+order: 580
 ---
 
 POST `/api/knowledge-model/generate-graph`.
@@ -34,7 +34,7 @@ Runs the generate graph action in the Knowledge Model API from a JSON request bo
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/knowledge-model/generate-graph" \
+curl -X POST "https://neodigital.ca/api/knowledge-model/generate-graph" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

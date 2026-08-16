@@ -1,4 +1,4 @@
-const HUDDLE_POPUP_STORAGE_KEY = "flowbie-huddle-popup";
+const HUDDLE_POPUP_STORAGE_KEY = "neo-pulse-huddle-popup";
 
 export type HuddlePopupState = {
   callId: number;
@@ -14,7 +14,7 @@ export function huddlePopupUrl(teamId: number, callId: number): string {
 
 export function openHuddlePopup(teamId: number, callId: number): Window | null {
   const url = huddlePopupUrl(teamId, callId);
-  const name = `flowbie-huddle-${callId}`;
+  const name = `neo-pulse-huddle-${callId}`;
   const popup = window.open(url, name, "width=440,height=620,resizable=yes");
   if (popup) {
     saveHuddlePopupState({ callId, teamId, minimized: false });

@@ -1,0 +1,11 @@
+{
+  "keyword": "schedule-weekly",
+  "name": "Weekly schedule",
+  "kind": "calendar",
+  "description": "Run every week on the anchor weekday at a set time (Edmonton).",
+  "defaults": {
+    "frequency": "weekly",
+    "startDate": "2026-09-01",
+    "time": "09:00"
+  }
+}

@@ -1,7 +1,7 @@
 import type { ScheduleFrequency } from '@/lib/wordpress-scheduler';
 import type { WordPressPostDestination } from '@/lib/bulk-auto-generate';
 
-const STORAGE_KEY = 'flowbie_sap_bulk_schedule_v1';
+const STORAGE_KEY = 'neo-pulse_sap_bulk_schedule_v1';
 
 import type { BulkSitemapMode } from "@/lib/bulk/bulk-sitemap-mode";
 

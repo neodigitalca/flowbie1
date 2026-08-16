@@ -54,6 +54,9 @@ export type ChatMessageListProps = {
   onAiCorrect?: (message: ChatMessage) => void;
   onReplyInThread?: (message: ChatMessage) => void;
   searchActive?: boolean;
+  userCardLayout?: boolean;
+  hideDayPills?: boolean;
+  onVisibleDayChange?: (day: string) => void;
 };
 
 export function ChatMessageList({
@@ -72,15 +75,39 @@ export function ChatMessageList({
   onDelete,
   onAiCorrect,
   onReplyInThread,
+  userCardLayout = false,
+  hideDayPills = false,
+  onVisibleDayChange,
 }: ChatMessageListProps): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = useState(true);
+  const onVisibleDayChangeRef = useRef(onVisibleDayChange);
+  onVisibleDayChangeRef.current = onVisibleDayChange;
+
+  const reportVisibleDay = React.useCallback(() => {
+    const root = scrollRef.current;
+    if (!root || !hideDayPills) return;
+    const sentinels = root.querySelectorAll("[data-chat-day]");
+    if (sentinels.length === 0) {
+      onVisibleDayChangeRef.current?.("");
+      return;
+    }
+    const rootTop = root.getBoundingClientRect().top + 12;
+    let active = sentinels[0]?.getAttribute("data-chat-day") ?? "";
+    sentinels.forEach((el) => {
+      if (el.getBoundingClientRect().top <= rootTop + 48) {
+        active = el.getAttribute("data-chat-day") ?? active;
+      }
+    });
+    onVisibleDayChangeRef.current?.(active);
+  }, [hideDayPills]);
 
   const checkAtBottom = () => {
     const el = scrollRef.current;
     if (!el) return;
     setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+    reportVisibleDay();
   };
 
   useEffect(() => {
@@ -106,7 +133,13 @@ export function ChatMessageList({
     }
   }, [messages]);
 
+  useEffect(() => {
+    if (!hideDayPills) return;
+    reportVisibleDay();
+  }, [messages, hideDayPills, reportVisibleDay]);
+
   let lastDay = "";
+  let rowIndex = 0;
   const groups = groupMessages(messages);
 
   return (
@@ -129,14 +162,19 @@ export function ChatMessageList({
           const compact = idx > 0;
           const threadCount = message.threadReplyCount ?? 0;
           const threadUnread = threadUnreadMap?.get(message.id) ?? message.threadUnreadCount ?? 0;
+          const hasThreadActivity = threadCount > 0 || threadUnread > 0;
+          const altRow = rowIndex % 2 === 1;
+          rowIndex += 1;
           return (
             <React.Fragment key={message.id}>
               {showDay ? (
-                <div className="sticky top-0 z-10 flex justify-center py-4">
-                  <span className={CHAT_DAY_PILL_CLASS}>
-                    {day}
-                  </span>
-                </div>
+                hideDayPills ? (
+                  <div data-chat-day={day} className="chat-day-sentinel h-px w-full shrink-0" aria-hidden />
+                ) : (
+                  <div className="sticky top-0 z-10 flex justify-center py-4">
+                    <span className={CHAT_DAY_PILL_CLASS}>{day}</span>
+                  </div>
+                )
               ) : null}
               <ChatMessageBubble
                 message={message}
@@ -150,14 +188,17 @@ export function ChatMessageList({
                 onDelete={onDelete}
                 onAiCorrect={onAiCorrect}
                 onReplyInThread={onReplyInThread}
-                threadSummary={{
-                  label:
-                    threadCount > 0
-                      ? threadReplyLabel(threadCount, message.threadLastReplyAt)
-                      : "Reply in thread",
-                  unread: threadUnread > 0,
-                  hasReplies: threadCount > 0,
-                }}
+                userCardLayout={userCardLayout}
+                altRow={userCardLayout ? altRow : undefined}
+                threadSummary={
+                  hasThreadActivity
+                    ? {
+                        label: threadReplyLabel(threadCount, message.threadLastReplyAt),
+                        unread: threadUnread > 0,
+                        hasReplies: threadCount > 0,
+                      }
+                    : undefined
+                }
               />
             </React.Fragment>
           );

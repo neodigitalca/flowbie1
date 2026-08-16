@@ -5,7 +5,7 @@ section: WordPress
 method: POST
 path: /api/wordpress/change-post-url
 auth: open
-order: 2200
+order: 2190
 ---
 
 POST `/api/wordpress/change-post-url`.
@@ -34,7 +34,7 @@ Runs the change post url action in the WordPress API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/wordpress/change-post-url" \
+curl -X POST "https://neodigital.ca/api/wordpress/change-post-url" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

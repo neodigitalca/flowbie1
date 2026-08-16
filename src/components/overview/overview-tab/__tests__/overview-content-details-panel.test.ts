@@ -50,15 +50,24 @@ describe("overviewContentDetailsCanOpen", () => {
     ).toBe(true);
   });
 
-  it("returns true when single-page run failed but progress remains", () => {
+  it("returns true when warm inventory is loading", () => {
     expect(
-      overviewContentDetailsCanOpen(site, {}, undefined, {
-        siteId: "1",
-        isOptimizingContent: {},
-        optimizationProgress: {
-          "1": { step: "Optimization failed", progress: 70, message: "Blueprint failed" },
-        },
-        optimizationFileManagers: {},
+      overviewContentDetailsCanOpen(site, {}, undefined, undefined, {
+        sitemapInventoryLinks: [],
+        gscHostedLink: null,
+        sitemapInventoryLoading: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("returns true when warm inventory links exist", () => {
+    expect(
+      overviewContentDetailsCanOpen(site, {}, undefined, undefined, {
+        sitemapInventoryLinks: [
+          { label: "Pages", href: "blob:1", filename: "pages.json", rowCount: 1, source: "pages" },
+        ],
+        gscHostedLink: null,
+        sitemapInventoryLoading: false,
       }),
     ).toBe(true);
   });
@@ -110,7 +119,6 @@ describe("buildSinglePageOptimizationSnapshot", () => {
     expect(snapshot).toMatchObject({
       label: expect.stringContaining("https://example.com/page"),
       progressPct: 75,
-      statusMessage: "Building content outline",
     });
   });
 

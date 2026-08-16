@@ -41,6 +41,7 @@ import {
 import { isFaqStyleHeadingTitle } from "@/lib/content-generation/faq-heading-policy";
 import { parseJsonWithRepair } from "@/lib/json-repair-utility";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { parseBlogTemplateChecklist as parseBlogTemplateChecklistFromModule } from "@/lib/post-creator/post-creator-checklist-post-process";
 
 const LINK_FEATURE_PLACEHOLDER = `[LINK]: ${INTERNAL_LINK_PLACEHOLDER_FEATURE_SUFFIX}`;
 
@@ -443,29 +444,8 @@ export const buildBlogTemplateUserPrompt = (
 /**
  * Parses checklist from AI response
  */
-export function parseBlogTemplateChecklist(aiResponse: string, keywords: string[] = []): string[] {
-  // Extract numbered list items
-  const lines = aiResponse.split("\n");
-  const checklist: string[] = [];
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    // Match numbered list items (1., 2., etc.) or bullet points
-    const match = trimmed.match(/^(?:\d+\.|\-|\*)\s+(.+)$/);
-    if (match && match[1]) {
-      checklist.push(match[1].trim());
-    }
-  }
-
-  // If no numbered items found, try splitting by lines and filtering
-  if (checklist.length === 0) {
-    const items = lines
-      .map((line) => line.trim())
-      .filter((line) => line.length > 10 && !line.startsWith("#"));
-    return validateAndEnforceMandatoryElements(items.slice(0, 10)).map(sanitizeForbiddenWordsInChecklistItem);
-  }
-
-  return validateAndEnforceMandatoryElements(checklist).map(sanitizeForbiddenWordsInChecklistItem);
+export function parseBlogTemplateChecklist(aiResponse: string, _keywords: string[] = []): string[] {
+  return parseBlogTemplateChecklistFromModule(aiResponse);
 }
 
 /**

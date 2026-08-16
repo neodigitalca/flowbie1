@@ -24,7 +24,7 @@ import { useQuarterEditorialCounts } from "@/hooks/use-quarter-editorial-counts"
 import { useOptimizationActivityCounts } from "@/hooks/use-optimization-activity-counts";
 import { OPTIMIZATION_TILE_COUNTS_ENABLED } from "@/lib/wordpress-optimization-tile-counts";
 import type { WordPressSite } from "./types";
-import { sortWordPressSitesByName, mergeServerGbpLocationIdsIntoLocalSites } from "./storage";
+import { sortWordPressSitesByName, mergeServerGbpLocationIdsIntoLocalSites, mergeServerWpEngineCredentialsIntoLocalSites } from "./storage";
 import { normalizeGbpLocationIdInput } from "@/lib/gbp-post/normalize-gbp-location-id";
 import { getManagerCloudSettingsStatus } from "@/lib/manager-cloud-settings-api";
 import { saveWordPressPropertiesToSupabase, getWordPressPropertiesCloudStatus, syncOpenRouterToSupabaseProperties } from "@/lib/manager-wordpress-properties-api";
@@ -298,6 +298,9 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
       const site = sites.find((s) => s.id === siteId);
       if (!site) return;
       void mergeServerGbpLocationIdsIntoLocalSites().then((merged) => {
+        if (merged) reloadSitesFromStorage();
+      });
+      void mergeServerWpEngineCredentialsIntoLocalSites().then((merged) => {
         if (merged) reloadSitesFromStorage();
       });
       populateFormFromSite(site);

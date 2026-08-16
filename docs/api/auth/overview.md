@@ -10,7 +10,7 @@ The **auth** namespace manages sign-in, sessions, and first-time setup.
 ## Lifecycle
 
 1. **Setup or bootstrap** — Create the first owner (`setup-admin` or `bootstrap`).
-2. **Login or register** — Obtain the `flowbie_session` cookie.
+2. **Login or register** — Obtain the `neo_pulse_session` cookie.
 3. **Me** — Read user, teams, and permissions.
 4. **Logout** — Clear the session.
 
@@ -19,7 +19,7 @@ The **auth** namespace manages sign-in, sessions, and first-time setup.
 | Auth badge | Meaning |
 | --- | --- |
 | Public | No existing session required |
-| Session | Valid `flowbie_session` cookie required |
+| Session | Valid `neo_pulse_session` cookie required |
 
 All routes in this section except login, register, bootstrap, and setup-admin require a session.
 

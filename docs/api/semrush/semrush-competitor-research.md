@@ -5,7 +5,7 @@ section: Semrush
 method: POST
 path: /api/semrush/competitor-research
 auth: open
-order: 930
+order: 920
 ---
 
 POST `/api/semrush/competitor-research`.
@@ -38,7 +38,7 @@ Runs the competitor research action in the Semrush API from a JSON request body.
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/semrush/competitor-research" \
+curl -X POST "https://neodigital.ca/api/semrush/competitor-research" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

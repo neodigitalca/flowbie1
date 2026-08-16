@@ -174,6 +174,12 @@ class Neo_Pulse_App_Api_Dispatcher {
 			return;
 		}
 
+		if ( 0 === strpos( $route, 'push/' ) || $route === 'push' ) {
+			$push_route = $route === 'push' ? '' : substr( $route, 5 );
+			Neo_Pulse_App_Push_Route_Handlers::dispatch_http( $push_route, $method, $body );
+			return;
+		}
+
 		if ( 0 === strpos( $route, 'agent-runs/' ) || $route === 'agent-runs' ) {
 			$agent_runs_route = $route === 'agent-runs' ? '' : substr( $route, 11 );
 			Neo_Pulse_App_Agent_Runs_Route_Handlers::dispatch_http( $agent_runs_route, $method, $body );
@@ -204,6 +210,11 @@ class Neo_Pulse_App_Api_Dispatcher {
 
 		if ( 0 === strpos( $route, 'manager-wordpress-properties/' ) ) {
 			Neo_Pulse_App_Manager_Route_Handlers::dispatch_properties( substr( $route, 28 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'wpengine/' ) ) {
+			Neo_Pulse_App_Wpengine_Route_Handlers::dispatch_http( substr( $route, 9 ), $method, $body );
 			return;
 		}
 

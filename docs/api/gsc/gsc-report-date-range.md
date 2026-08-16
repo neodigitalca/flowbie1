@@ -5,7 +5,7 @@ section: Google Search Console
 method: POST
 path: /api/gsc/report-date-range
 auth: open
-order: 460
+order: 450
 ---
 
 POST `/api/gsc/report-date-range`.
@@ -37,7 +37,7 @@ Runs the report date range action in the Google Search Console API from a JSON r
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/gsc/report-date-range" \
+curl -X POST "https://neodigital.ca/api/gsc/report-date-range" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

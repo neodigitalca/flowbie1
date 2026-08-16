@@ -16,12 +16,12 @@ import { getPublicSiteUrl } from "@/lib/wordpress-site-public-url";
 
 export const GBP_ADDRESS_MASTER_RULES_FILENAME = "GBP-business-gbp.txt";
 
-export const FLOWBIE_MASTER_INSTRUCTIONS_CHANGED_EVENT = "flowbie-master-instructions-changed";
+export const NEO_PULSE_MASTER_INSTRUCTIONS_CHANGED_EVENT = "neo-pulse-master-instructions-changed";
 
 export function notifyMasterInstructionsChanged(siteId: string): void {
   if (typeof window === "undefined" || typeof window.dispatchEvent !== "function") return;
   window.dispatchEvent(
-    new CustomEvent(FLOWBIE_MASTER_INSTRUCTIONS_CHANGED_EVENT, { detail: { siteId } }),
+    new CustomEvent(NEO_PULSE_MASTER_INSTRUCTIONS_CHANGED_EVENT, { detail: { siteId } }),
   );
 }
 
@@ -71,7 +71,7 @@ function dfsBlobForOpenRouter(
     `Property site URL (Integrations tile): ${siteUrl}`,
     `DataForSEO keyword: ${keyword}`,
     "",
-    "Flowbie saved NAP / locations for this property:",
+    "NEO Pulse saved NAP / locations for this property:",
     nap,
     "",
     "DataForSEO google_my_business_info response (full JSON, including empty or no-match tasks):",

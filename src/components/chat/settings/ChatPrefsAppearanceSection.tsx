@@ -1,7 +1,7 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 import { CHAT_ACCENT_OPTIONS } from "@/lib/chat-preferences-presets";
-import type { ChatUserPreferences } from "@/lib/chat-preferences-types";
+import type { ChatLayoutMode, ChatUserPreferences } from "@/lib/chat-preferences-types";
 
 type Props = {
   draft: ChatUserPreferences;
@@ -39,9 +39,39 @@ export function ChatPrefsAppearanceSection({ draft, onChange }: Props): React.Re
     });
   };
 
+  const setLayoutMode = (mode: ChatLayoutMode) => {
+    if (mode === "minimal") {
+      onChange({
+        layoutMode: "minimal",
+        zoneThemes: { left: "slack", main: "slack", right: "slack" },
+        headingTheme: "slack",
+      });
+    } else {
+      onChange({ layoutMode: "default" });
+    }
+  };
+
   return (
     <section className="space-y-4">
       <h3 className="text-base font-semibold">Layout</h3>
+      <div className="space-y-2">
+        <p className="text-base text-muted-foreground">Layout mode</p>
+        <div className="flex gap-2">
+          {(["default", "minimal"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setLayoutMode(mode)}
+              className={cn(
+                "flex-1 rounded-md px-3 py-2 text-base capitalize",
+                appearance.layoutMode === mode ? "bg-primary/20" : "bg-zinc-900/50 text-muted-foreground",
+              )}
+            >
+              {mode === "default" ? "Default" : "Minimal"}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="space-y-2">
         <p className="text-base text-muted-foreground">Accent</p>
         <div className="flex flex-wrap gap-2">

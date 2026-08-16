@@ -1,0 +1,87 @@
+{
+  "keyword": "monthly-3-posts-editorial",
+  "name": "Monthly 3 Posts Editorial",
+  "description": "Create 3 full blog posts on the 1st of each month, scheduled across the month with body, meta, and AI featured images.",
+  "notes": [
+    "Runs on the 1st of each month at 9:00 Edmonton time.",
+    "Creates 3 posts per run, spread across the calendar month.",
+    "AI blog ideas from site inventory and optional topic prompt.",
+    "Requires WordPress, OpenRouter, and DataForSEO keys."
+  ],
+  "category": "editorial",
+  "verticals": [
+    "general",
+    "editorial"
+  ],
+  "tags": [
+    "posts",
+    "editorial",
+    "generator",
+    "monthly",
+    "3-posts"
+  ],
+  "prerequisites": [
+    "wordpress"
+  ],
+  "filters": {
+    "executionKinds": [
+      "post_creator"
+    ],
+    "targetBuckets": [
+      "posts"
+    ],
+    "actionCount": 1
+  },
+  "defaultTasks": [
+    {
+      "keyword": "monthly-3-posts-run",
+      "title": "Create 3 scheduled blog posts",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "post_creator",
+      "executionPayload": {
+        "postCount": 3,
+        "keywordSource": "prompt",
+        "featuredImage": true,
+        "sitemapType": "post",
+        "postDestination": "wordpress",
+        "scheduleTimesPerMonth": 3,
+        "scheduleStartDay": 1,
+        "scheduleStartTime": "09:00",
+        "scheduleStaggerOptimized": true,
+        "targetBucket": "posts"
+      },
+      "scheduleMode": "calendar",
+      "dueDate": "2026-09-01",
+      "dueTime": "09:00",
+      "recurrenceRule": "monthly"
+    }
+  ],
+  "isAutomation": true,
+  "kind": "template",
+  "triggerBlock": {
+    "keyword": "schedule-monthly",
+    "kind": "calendar",
+    "frequency": "monthly",
+    "startDate": "2026-09-01",
+    "time": "09:00",
+    "targetBucket": "posts"
+  },
+  "actionBlock": {
+    "keyword": "post-creator-monthly",
+    "executionKind": "post_creator",
+    "executionPayload": {
+      "postCount": 3,
+      "keywordSource": "prompt",
+      "featuredImage": true,
+      "sitemapType": "post",
+      "postDestination": "wordpress",
+      "scheduleTimesPerMonth": 3,
+      "scheduleStartDay": 1,
+      "scheduleStartTime": "09:00",
+      "scheduleStaggerOptimized": true,
+      "targetBucket": "posts"
+    },
+    "title": "Create 3 scheduled blog posts"
+  }
+}

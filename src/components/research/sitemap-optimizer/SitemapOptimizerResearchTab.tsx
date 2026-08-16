@@ -55,8 +55,14 @@ import {
   buildSitemapPlanMicroSnapshot,
   sitemapPlanHeaderProgressFromState,
 } from "@/lib/sitemap-optimizer/sitemap-plan-header-progress";
+import {
+  buildSitemapMergePublishMicroSnapshot,
+  sitemapMergePublishDetailsCanOpen,
+} from "@/lib/sitemap-optimizer/sitemap-merge-publish-bulk-details-bindings";
+import { sitemapPlanDetailsCanOpen } from "@/lib/sitemap-optimizer/sitemap-plan-bulk-details-bindings";
 import { collectMergeSourcePosts } from "@/lib/sitemap-optimizer/trash-merge-source-posts";
 import { WorkspaceEmptyRowStripes } from "@/components/shared/WorkspaceEmptyRowStripes";
+import { WORKSPACE_DETAILS_DIM_OVERLAY_CLASS } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import { cn } from "@/lib/utils";
 function triggerDownload(filename: string, content: string, mime: string) {
   const blob = new Blob([content], { type: mime });
@@ -77,6 +83,7 @@ export function SitemapOptimizerResearchTab() {
   const [gscFileName, setGscFileName] = useState<string | null>(null);
   const [gridResultTab, setGridResultTab] = useState<"redirects" | "content">("redirects");
   const [publishWorkspaceActive, setPublishWorkspaceActive] = useState(false);
+  const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false);
   const [workspaceSubMode, setWorkspaceSubMode] = useState<SitemapOptimizerWorkspaceMode>(
     () => readStoredSitemapOptimizerSection(),
   );
@@ -486,13 +493,16 @@ export function SitemapOptimizerResearchTab() {
 
   const planCanOpenDetails = useMemo(
     () =>
-      busy ||
-      Boolean(gscFileName) ||
-      Boolean(rankMathImport.importSummary) ||
-      Boolean(error) ||
-      Boolean(rankMathImport.error),
+      sitemapPlanDetailsCanOpen({
+        busy,
+        gscFileName,
+        rankMathImportSummary: rankMathImport.importSummary,
+        error,
+        rankMathError: rankMathImport.error,
+      }),
     [busy, gscFileName, rankMathImport.importSummary, error, rankMathImport.error],
   );
+
   const resultSummaryLine = useMemo(() => {
     if (!result) return "";
     return replacementPlanSummaryLine({
@@ -512,6 +522,26 @@ export function SitemapOptimizerResearchTab() {
       }),
     );
   }, [result, entityPrimary]);
+  const mergePublishActive = inPublishWorkspace || approving;
+  const mergePublishDetailsInput = useMemo(
+    () => ({
+      approving,
+      approveProgress: approving ? approveProgress : null,
+      bulkState: null,
+      workspaceBusy: approving,
+      pageSubtitle: resultSummaryLine || undefined,
+      entityPrimary,
+    }),
+    [approving, approveProgress, resultSummaryLine, entityPrimary],
+  );
+  const mergePublishCanOpenDetails = useMemo(
+    () => sitemapMergePublishDetailsCanOpen(mergePublishDetailsInput),
+    [mergePublishDetailsInput],
+  );
+  const mergePublishProgressSnapshot = useMemo(
+    () => buildSitemapMergePublishMicroSnapshot(mergePublishDetailsInput),
+    [mergePublishDetailsInput],
+  );
   const gscUploadCount = result?.gscUploadRowCount ?? gscPagesUpload?.length;
   const isGridResult = result?.runMode === "grid_csv";
   const siteReady =
@@ -537,6 +567,7 @@ export function SitemapOptimizerResearchTab() {
         onWorkspaceSubModeChange={handleWorkspaceSubModeChange}
         modeSwitchDisabled={modeSwitchDisabled}
         workspaceBusy={workspaceBusy}
+        onDetailsOpenChange={setDetailsDrawerOpen}
         planToolbarProps={{
           busy,
           workspaceBusy: busy,
@@ -589,6 +620,12 @@ export function SitemapOptimizerResearchTab() {
         planProgressSnapshot={planProgressSnapshot}
         planCanOpenDetails={planCanOpenDetails}
         planIsProcessing={busy}
+        planBusy={busy}
+        mergePublishActive={mergePublishActive}
+        mergePublishCanOpenDetails={mergePublishCanOpenDetails}
+        mergePublishProgressSnapshot={mergePublishProgressSnapshot}
+        mergePublishIsProcessing={approving}
+        mergePublishDetailsInput={mergePublishDetailsInput}
         planDetailsProps={{
           workspaceBusy: busy,
           headerProgress: planHeaderProgress,
@@ -612,9 +649,13 @@ export function SitemapOptimizerResearchTab() {
       <div
         className={cn(
           SEO_WORKSPACE_BODY_SCROLL_CLASS,
+          "relative",
           placeholderOnlyBody && "overflow-y-hidden",
         )}
       >
+        {detailsDrawerOpen ? (
+          <div className={WORKSPACE_DETAILS_DIM_OVERLAY_CLASS} aria-hidden />
+        ) : null}
       {workspaceSubMode === "legacy_redirects" ? (
         <SitemapLegacyRedirectPanel
           site={site ?? null}

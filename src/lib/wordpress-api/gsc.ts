@@ -30,7 +30,7 @@ export function formatGscResolutionError(
   let message = body.error || body.message || `HTTP ${httpStatus}`;
   if (body.detail) message += `\n\n${body.detail}`;
   if (body.requestedDomain) {
-    message += `\n\nRequested hostname from Flowbie: ${body.requestedDomain}`;
+    message += `\n\nRequested hostname from NEO Pulse: ${body.requestedDomain}`;
   }
   if (
     typeof body.accessiblePropertyCount === 'number' &&

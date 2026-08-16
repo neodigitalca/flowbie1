@@ -37,7 +37,7 @@ export function filterOverviewRowsWithPostBinding(
 }
 
 /**
- * UTF-8 BOM + CRLF for Excel. Columns match Flowbie Overview → WordPress (SEO meta + ACF) for CSV import workflows.
+ * UTF-8 BOM + CRLF for Excel. Columns match NEO Pulse Overview → WordPress (SEO meta + ACF) for CSV import workflows.
  */
 export function buildOverviewWordPressExportCsv(
   rows: OverviewRow[],

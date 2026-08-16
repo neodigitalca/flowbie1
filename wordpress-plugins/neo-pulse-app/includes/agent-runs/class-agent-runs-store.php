@@ -52,13 +52,16 @@ class Neo_Pulse_App_Agent_Runs_Store {
 				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 				run_id bigint(20) unsigned NOT NULL,
 				step_index int(11) NOT NULL DEFAULT 0,
+				step_key varchar(128) NOT NULL DEFAULT '',
 				label varchar(255) NOT NULL DEFAULT '',
 				status varchar(32) NOT NULL DEFAULT 'pending',
 				payload_json longtext NULL,
 				created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 				PRIMARY KEY (id),
 				KEY run_id (run_id),
-				KEY run_step (run_id, step_index)
+				KEY run_step (run_id, step_index),
+				KEY run_step_key (run_id, step_key)
 			) {$charset};"
 		);
 	}
@@ -99,6 +102,9 @@ class Neo_Pulse_App_Agent_Runs_Store {
 		$plan    = isset( $body['plan'] ) && is_array( $body['plan'] ) ? $body['plan'] : array();
 		if ( isset( $body['planJson'] ) && is_array( $body['planJson'] ) ) {
 			$plan = $body['planJson'];
+		}
+		if ( $recipe_key === 'post_creator' && empty( $plan['executionMode'] ) ) {
+			$plan['executionMode'] = 'server';
 		}
 
 		global $wpdb;
@@ -240,6 +246,8 @@ class Neo_Pulse_App_Agent_Runs_Store {
 			return null;
 		}
 
+		$previous_status = (string) ( $row['status'] ?? '' );
+
 		$updates = array(
 			'updated_at' => current_time( 'mysql', true ),
 		);
@@ -269,7 +277,22 @@ class Neo_Pulse_App_Agent_Runs_Store {
 		}
 
 		if ( isset( $patch['result'] ) && is_array( $patch['result'] ) ) {
-			$updates['result_json'] = wp_json_encode( $patch['result'] );
+			$existing_result = array();
+			if ( ! empty( $row['result_json'] ) ) {
+				$decoded = json_decode( (string) $row['result_json'], true );
+				if ( is_array( $decoded ) ) {
+					$existing_result = $decoded;
+				}
+			}
+			$incoming_result = $patch['result'];
+			if ( isset( $incoming_result['checkpoint'] ) && is_array( $incoming_result['checkpoint'] ) ) {
+				$existing_checkpoint = isset( $existing_result['checkpoint'] ) && is_array( $existing_result['checkpoint'] )
+					? $existing_result['checkpoint']
+					: array();
+				$incoming_result['checkpoint'] = array_merge( $existing_checkpoint, $incoming_result['checkpoint'] );
+			}
+			$merged_result = array_merge( $existing_result, $incoming_result );
+			$updates['result_json'] = wp_json_encode( $merged_result );
 			$formats[]              = '%s';
 		}
 
@@ -280,8 +303,20 @@ class Neo_Pulse_App_Agent_Runs_Store {
 			$formats[] = '%s';
 		}
 
+		if ( isset( $patch['plan'] ) && is_array( $patch['plan'] ) ) {
+			$existing_plan = array();
+			if ( ! empty( $row['plan_json'] ) ) {
+				$decoded = json_decode( (string) $row['plan_json'], true );
+				if ( is_array( $decoded ) ) {
+					$existing_plan = $decoded;
+				}
+			}
+			$updates['plan_json'] = wp_json_encode( array_merge( $existing_plan, $patch['plan'] ) );
+			$formats[]            = '%s';
+		}
+
 		if ( isset( $patch['step'] ) && is_array( $patch['step'] ) ) {
-			self::append_step( $run_id, $patch['step'] );
+			self::upsert_step( $run_id, $patch['step'] );
 		}
 
 		$wpdb->update(
@@ -295,7 +330,11 @@ class Neo_Pulse_App_Agent_Runs_Store {
 			array( '%d', '%d' )
 		);
 
-		return self::get_run( $team_id, $run_id );
+		$updated = self::get_run( $team_id, $run_id );
+		if ( $updated && class_exists( 'Neo_Pulse_App_Push_Events' ) ) {
+			Neo_Pulse_App_Push_Events::on_agent_run_terminal( $updated, $previous_status );
+		}
+		return $updated;
 	}
 
 	/**
@@ -318,6 +357,178 @@ class Neo_Pulse_App_Agent_Runs_Store {
 		);
 	}
 
+	public static function delete_run( int $team_id, int $run_id ): bool {
+		global $wpdb;
+		$table = $wpdb->prefix . 'neo_pulse_agent_runs';
+		$steps = $wpdb->prefix . 'neo_pulse_agent_run_steps';
+
+		$exists = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT id FROM {$table} WHERE id = %d AND team_id = %d",
+				$run_id,
+				$team_id
+			)
+		);
+		if ( $exists <= 0 ) {
+			return false;
+		}
+
+		$wpdb->delete( $steps, array( 'run_id' => $run_id ), array( '%d' ) );
+		$wpdb->delete(
+			$table,
+			array(
+				'id'      => $run_id,
+				'team_id' => $team_id,
+			),
+			array( '%d', '%d' )
+		);
+
+		return true;
+	}
+
+	/**
+	 * @param array<int,string> $statuses
+	 */
+	public static function clear_runs( int $team_id, array $statuses ): int {
+		global $wpdb;
+		if ( $team_id <= 0 ) {
+			return 0;
+		}
+
+		$allowed = array();
+		foreach ( $statuses as $status ) {
+			$key = sanitize_key( (string) $status );
+			if ( in_array( $key, array( 'done', 'failed', 'cancelled' ), true ) ) {
+				$allowed[] = $key;
+			}
+		}
+		if ( empty( $allowed ) ) {
+			$allowed = array( 'done', 'failed', 'cancelled' );
+		}
+
+		$table = $wpdb->prefix . 'neo_pulse_agent_runs';
+		$steps = $wpdb->prefix . 'neo_pulse_agent_run_steps';
+		$placeholders = implode( ',', array_fill( 0, count( $allowed ), '%s' ) );
+
+		$ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT id FROM {$table} WHERE team_id = %d AND status IN ({$placeholders})",
+				array_merge( array( $team_id ), $allowed )
+			)
+		);
+
+		if ( ! is_array( $ids ) || empty( $ids ) ) {
+			return 0;
+		}
+
+		foreach ( $ids as $run_id ) {
+			$wpdb->delete( $steps, array( 'run_id' => (int) $run_id ), array( '%d' ) );
+		}
+
+		$deleted = $wpdb->query(
+			$wpdb->prepare(
+				"DELETE FROM {$table} WHERE team_id = %d AND status IN ({$placeholders})",
+				array_merge( array( $team_id ), $allowed )
+			)
+		);
+
+		return is_numeric( $deleted ) ? (int) $deleted : 0;
+	}
+
+	/**
+	 * @param array<string,mixed> $step
+	 */
+	public static function upsert_step( int $run_id, array $step ): void {
+		self::install_tables();
+		global $wpdb;
+		$table    = $wpdb->prefix . 'neo_pulse_agent_run_steps';
+		$step_key = sanitize_key( (string) ( $step['stepKey'] ?? $step['step_key'] ?? '' ) );
+
+		if ( $step_key !== '' ) {
+			$existing_id = (int) $wpdb->get_var(
+				$wpdb->prepare(
+					"SELECT id FROM {$table} WHERE run_id = %d AND step_key = %s ORDER BY id DESC LIMIT 1",
+					$run_id,
+					$step_key
+				)
+			);
+			if ( $existing_id > 0 ) {
+				self::update_step( $existing_id, $step );
+				return;
+			}
+		}
+
+		self::append_step( $run_id, $step );
+	}
+
+	/**
+	 * @param array<string,mixed> $step
+	 */
+	private static function update_step( int $step_id, array $step ): void {
+		global $wpdb;
+		$table = $wpdb->prefix . 'neo_pulse_agent_run_steps';
+
+		$row = $wpdb->get_row(
+			$wpdb->prepare( "SELECT payload_json FROM {$table} WHERE id = %d LIMIT 1", $step_id ),
+			ARRAY_A
+		);
+		$existing_payload = array();
+		if ( is_array( $row ) && ! empty( $row['payload_json'] ) ) {
+			$decoded = json_decode( (string) $row['payload_json'], true );
+			if ( is_array( $decoded ) ) {
+				$existing_payload = $decoded;
+			}
+		}
+
+		$label  = sanitize_text_field( (string) ( $step['label'] ?? '' ) );
+		$status = sanitize_key( (string) ( $step['status'] ?? 'running' ) );
+		if ( ! in_array( $status, array( 'pending', 'running', 'done', 'error' ), true ) ) {
+			$status = 'running';
+		}
+
+		$incoming_payload = isset( $step['payload'] ) && is_array( $step['payload'] ) ? $step['payload'] : array();
+		$payload          = self::merge_step_payload( $existing_payload, $incoming_payload );
+
+		$wpdb->update(
+			$table,
+			array(
+				'label'        => $label,
+				'status'       => $status,
+				'payload_json' => wp_json_encode( $payload ),
+				'updated_at'   => current_time( 'mysql', true ),
+			),
+			array( 'id' => $step_id ),
+			array( '%s', '%s', '%s', '%s' ),
+			array( '%d' )
+		);
+	}
+
+	/**
+	 * @param array<string,mixed> $existing
+	 * @param array<string,mixed> $incoming
+	 * @return array<string,mixed>
+	 */
+	private static function merge_step_payload( array $existing, array $incoming ): array {
+		if ( empty( $incoming ) ) {
+			return $existing;
+		}
+		$merged = array_merge( $existing, $incoming );
+		if ( isset( $incoming['artifacts'] ) && is_array( $incoming['artifacts'] ) ) {
+			$prev = isset( $existing['artifacts'] ) && is_array( $existing['artifacts'] ) ? $existing['artifacts'] : array();
+			$by_name = array();
+			foreach ( array_merge( $prev, $incoming['artifacts'] ) as $artifact ) {
+				if ( ! is_array( $artifact ) ) {
+					continue;
+				}
+				$name = sanitize_file_name( (string) ( $artifact['name'] ?? '' ) );
+				$key  = $name !== '' ? $name : (string) ( $artifact['id'] ?? wp_generate_uuid4() );
+				$by_name[ $key ] = $artifact;
+			}
+			$merged['artifacts'] = array_values( $by_name );
+		}
+		return $merged;
+	}
+
 	/**
 	 * @param array<string,mixed> $step
 	 */
@@ -336,25 +547,29 @@ class Neo_Pulse_App_Agent_Runs_Store {
 			$step_index = $max + 1;
 		}
 
-		$label  = sanitize_text_field( (string) ( $step['label'] ?? '' ) );
-		$status = sanitize_key( (string) ( $step['status'] ?? 'running' ) );
+		$label     = sanitize_text_field( (string) ( $step['label'] ?? '' ) );
+		$status    = sanitize_key( (string) ( $step['status'] ?? 'running' ) );
+		$step_key  = sanitize_key( (string) ( $step['stepKey'] ?? $step['step_key'] ?? '' ) );
 		if ( ! in_array( $status, array( 'pending', 'running', 'done', 'error' ), true ) ) {
 			$status = 'running';
 		}
 
 		$payload = isset( $step['payload'] ) && is_array( $step['payload'] ) ? $step['payload'] : array();
+		$now     = current_time( 'mysql', true );
 
 		$wpdb->insert(
 			$table,
 			array(
 				'run_id'       => $run_id,
 				'step_index'   => $step_index,
+				'step_key'     => $step_key,
 				'label'        => $label,
 				'status'       => $status,
 				'payload_json' => wp_json_encode( $payload ),
-				'created_at'   => current_time( 'mysql', true ),
+				'created_at'   => $now,
+				'updated_at'   => $now,
 			),
-			array( '%d', '%d', '%s', '%s', '%s', '%s' )
+			array( '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s' )
 		);
 	}
 
@@ -389,13 +604,69 @@ class Neo_Pulse_App_Agent_Runs_Store {
 			$out[] = array(
 				'id'         => (int) $row['id'],
 				'stepIndex'  => (int) $row['step_index'],
+				'stepKey'    => (string) ( $row['step_key'] ?? '' ),
 				'label'      => (string) $row['label'],
 				'status'     => (string) $row['status'],
 				'payload'    => $payload,
 				'createdAt'  => (string) $row['created_at'],
+				'updatedAt'  => (string) ( $row['updated_at'] ?? $row['created_at'] ),
 			);
 		}
 		return $out;
+	}
+
+	/**
+	 * Runs eligible for the server worker (all teams).
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	public static function list_server_worker_runs( int $limit = 5 ): array {
+		global $wpdb;
+		$table = $wpdb->prefix . 'neo_pulse_agent_runs';
+		$limit = max( 1, min( 20, $limit ) );
+
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE status IN ('queued','running') ORDER BY updated_at ASC LIMIT %d",
+				$limit
+			),
+			ARRAY_A
+		);
+
+		if ( ! is_array( $rows ) ) {
+			return array();
+		}
+
+		$out = array();
+		foreach ( $rows as $row ) {
+			if ( ! is_array( $row ) ) {
+				continue;
+			}
+			$formatted = self::format_run_row( $row );
+			if ( ! $formatted ) {
+				continue;
+			}
+			if ( ! self::run_uses_server_execution( $formatted ) ) {
+				continue;
+			}
+			$out[] = $formatted;
+		}
+		return $out;
+	}
+
+	/**
+	 * @param array<string,mixed> $run
+	 */
+	public static function run_uses_server_execution( array $run ): bool {
+		$plan   = is_array( $run['plan'] ?? null ) ? $run['plan'] : array();
+		$result = is_array( $run['result'] ?? null ) ? $run['result'] : array();
+		$plan_mode   = sanitize_key( (string) ( $plan['executionMode'] ?? '' ) );
+		$result_mode = sanitize_key( (string) ( $result['executionMode'] ?? '' ) );
+		if ( $plan_mode === 'server' || $result_mode === 'server' ) {
+			return true;
+		}
+		$recipe = sanitize_key( (string) ( $run['recipeKey'] ?? '' ) );
+		return $recipe === 'post_creator';
 	}
 
 	/**

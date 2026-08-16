@@ -1,13 +1,11 @@
-import { TrendingUp } from "lucide-react";
+import { useMemo } from "react";
 import { BlogGeneratorWorkspaceChrome } from "@/components/blog-generator/BlogGeneratorWorkspaceChrome";
-import {
-  GENERATOR_WORKSPACE_TITLE,
-  type BlogGeneratorSectionId,
-} from "@/components/blog-generator/blog-generator-sections";
-import { ImageDetailsDrawer } from "@/components/generator/image/ImageDetailsDrawer";
+import type { BlogGeneratorSectionId } from "@/components/blog-generator/blog-generator-sections";
+import { BulkGeneratorDetailsDrawer } from "@/components/keyword-research/bulk/BulkGeneratorDetailsDrawer";
 import { ImageGeneratorToolbar } from "@/components/generator/image/ImageGeneratorToolbar";
 import type { UseImageGeneratorResult } from "@/components/generator/image/image-generator-types";
 import type { MetaBulkMicroSnapshot } from "@/components/overview/OverviewBulkMicroProgress";
+import { buildImageBulkGeneratorDetailsProps } from "@/lib/generator/image/image-bulk-details-bindings";
 
 export type ImageGeneratorWorkspaceHeaderProps = {
   activeSection: BlogGeneratorSectionId;
@@ -27,6 +25,32 @@ export function ImageGeneratorWorkspaceHeader({
   const imageBusy = generator.isGenerating || generator.isGeneratingChecklist;
   const hasRefs = Boolean(generator.referenceResearch);
   const canOpenDetails = true;
+
+  const detailsPanelProps = useMemo(
+    () =>
+      buildImageBulkGeneratorDetailsProps({
+        workspaceBusy,
+        isGenerating: generator.isGenerating,
+        isGeneratingChecklist: generator.isGeneratingChecklist,
+        hasGeneratedChecklist: generator.hasGeneratedChecklist,
+        referenceResearch: generator.referenceResearch,
+        imageDisplayUrl: generator.imageDisplayUrl,
+        userPrompt: generator.userPrompt,
+        imageSourceMode: generator.imageSourceMode,
+        error: generator.error,
+      }),
+    [
+      workspaceBusy,
+      generator.isGenerating,
+      generator.isGeneratingChecklist,
+      generator.hasGeneratedChecklist,
+      generator.referenceResearch,
+      generator.imageDisplayUrl,
+      generator.userPrompt,
+      generator.imageSourceMode,
+      generator.error,
+    ],
+  );
 
   let progressSnapshot: MetaBulkMicroSnapshot = {
     label: "Image",
@@ -61,8 +85,6 @@ export function ImageGeneratorWorkspaceHeader({
 
   return (
     <BlogGeneratorWorkspaceChrome
-      icon={TrendingUp}
-      title={GENERATOR_WORKSPACE_TITLE}
       activeSection={activeSection}
       onSectionChange={onSectionChange}
       sectionSwitchDisabled={workspaceBusy || imageBusy}
@@ -75,12 +97,11 @@ export function ImageGeneratorWorkspaceHeader({
       detailsPanelId="image-generator-details-panel"
       onDetailsOpenChange={onDetailsOpenChange}
       detailsPanel={
-        <ImageDetailsDrawer
-          isGenerating={generator.isGenerating}
-          isGeneratingChecklist={generator.isGeneratingChecklist}
-          error={generator.error}
-          imageSourceMode={generator.imageSourceMode}
-          referenceResearch={generator.referenceResearch}
+        <BulkGeneratorDetailsDrawer
+          variant="csv"
+          postDestination="local"
+          wpConfig={null}
+          {...detailsPanelProps}
         />
       }
       toolbar={

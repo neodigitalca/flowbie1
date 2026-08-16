@@ -1,4 +1,4 @@
-# Stop processes listening on Flowbie dev ports (one shot, no spam).
+# Stop processes listening on NEO Pulse dev ports (one shot, no spam).
 param(
     [string]$PortList = '3001,3002,8000,8080'
 )

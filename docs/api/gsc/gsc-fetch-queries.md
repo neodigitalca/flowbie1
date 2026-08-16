@@ -5,7 +5,7 @@ section: Google Search Console
 method: POST
 path: /api/gsc/fetch-queries
 auth: open
-order: 400
+order: 390
 ---
 
 POST `/api/gsc/fetch-queries`.
@@ -34,7 +34,7 @@ Runs the fetch queries action in the Google Search Console API from a JSON reque
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/gsc/fetch-queries" \
+curl -X POST "https://neodigital.ca/api/gsc/fetch-queries" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

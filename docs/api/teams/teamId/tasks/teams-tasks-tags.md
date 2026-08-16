@@ -5,7 +5,7 @@ section: Teams
 method: POST
 path: /api/teams/{teamId}/tasks/tags
 auth: session-team
-order: 1930
+order: 1920
 ---
 
 POST `/api/teams/{teamId}/tasks/tags`.
@@ -34,7 +34,7 @@ Runs the tags action in the Teams API from a JSON request body. Requires a signe
 ## Example
 
 ```bash
-curl -X POST "https://flowbie.ca/api/teams/{teamId}/tasks/tags" \
+curl -X POST "https://neodigital.ca/api/teams/{teamId}/tasks/tags" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

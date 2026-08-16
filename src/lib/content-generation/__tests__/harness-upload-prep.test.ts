@@ -1,16 +1,6 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { AgentConfig } from "@/types/agent-config";
 import { prepareHarnessContentForUpload } from "../harness-upload-prep";
-
-vi.mock("@/lib/competitor-research/competitor-report-openrouter", () => ({
-  callOpenRouterChatCompletion: vi.fn(),
-}));
-
-import { callOpenRouterChatCompletion } from "@/lib/competitor-research/competitor-report-openrouter";
-
-beforeEach(() => {
-  vi.mocked(callOpenRouterChatCompletion).mockReset();
-});
 
 const BODY_AGENTS: AgentConfig[] = [
   {
@@ -34,31 +24,12 @@ const OVERVIEW_AGENT: AgentConfig = {
   features: [],
 };
 
-function mockScrollLinkBullets() {
-  vi.mocked(callOpenRouterChatCompletion).mockResolvedValueOnce({
-    content: JSON.stringify({
-      bullets: [
-        {
-          anchorId: "sliding-glass-door-blinds-your-options",
-          bulletLabel: "Options",
-          sentenceHtml:
-            'Review several <a href="#sliding-glass-door-blinds-your-options">blind options</a> for sliding doors.',
-        },
-        {
-          anchorId: "exploring-styles-for-sliding-doors",
-          bulletLabel: "Styles",
-          sentenceHtml:
-            'Explore <a href="#exploring-styles-for-sliding-doors">popular styles</a> in this guide.',
-        },
-      ],
-    }),
-  });
+function countBodyH2(html: string): number {
+  return (html.match(/<h2[^>]+id="(?!overview)[^"]+"/gi) ?? []).length;
 }
 
 describe("prepareHarnessContentForUpload", () => {
-  it("expands Overview scroll links and strips orphan ]. artifacts", async () => {
-    mockScrollLinkBullets();
-
+  it("aligns Overview scroll links to injected body H2 ids without OpenRouter", async () => {
     const markdown = `## Overview
 
 Lead paragraph about blinds for sliding glass doors.
@@ -78,7 +49,6 @@ More body content about roller shades.
     const html = await prepareHarnessContentForUpload({
       markdownContent: markdown,
       blueprintAgents: [OVERVIEW_AGENT, ...BODY_AGENTS],
-      apiKey: "test-key",
       keyword: "sliding glass door blinds",
       articleTitle: "Sliding Glass Door Blinds Guide",
     });
@@ -87,54 +57,51 @@ More body content about roller shades.
     expect(html).toContain('href="#exploring-styles-for-sliding-doors"');
     expect(html).not.toContain("[[SCROLL:");
     expect(html).not.toContain("].");
-    expect(html).not.toContain("Families can review");
-    expect(html).not.toContain("This guide walks through");
-    expect(callOpenRouterChatCompletion).toHaveBeenCalledTimes(1);
+    expect(countBodyH2(html)).toBe(2);
   });
 
-  it("repairs broken bracket fragments in Overview bullets via AI rebuild", async () => {
-    vi.mocked(callOpenRouterChatCompletion).mockResolvedValueOnce({
-      content: JSON.stringify({
-        bullets: [
-          {
-            anchorId: "sliding-glass-door-blinds-your-options",
-            bulletLabel: "Options",
-            sentenceHtml:
-              'Review <a href="#sliding-glass-door-blinds-your-options">blind options</a> for your doors.',
-          },
-        ],
-      }),
-    });
-
+  it("does not duplicate body sections (server-style overview without flo-overview wrapper)", async () => {
     const markdown = `## Overview
 
-<p>Intro text.</p>
+Lead about smart blinds.
 
-<ul>
-<li><strong>Options</strong>: Review several ].</li>
-</ul>
+- **What Are Smart Blinds?:** Learn [[SCROLL:#what-are-smart-blinds|smart blind basics]] in this guide.
+- **Benefits:** Review [[SCROLL:#benefits-of-smart-blinds-for-your-home|key home benefits]] in this section.
 
-## Sliding Glass Door Blinds: Your Options
+## What Are Smart Blinds?
 
-Body section.
+Body one paragraph.
+
+## Benefits of Smart Blinds for Your Home
+
+Body two paragraph.
 `;
 
     const html = await prepareHarnessContentForUpload({
       markdownContent: markdown,
-      blueprintAgents: [OVERVIEW_AGENT, BODY_AGENTS[0]!],
-      apiKey: "test-key",
-      keyword: "sliding glass door blinds",
-      articleTitle: "Sliding Glass Door Blinds Guide",
+      blueprintAgents: [
+        OVERVIEW_AGENT,
+        { id: "section-1", title: "What Are Smart Blinds?", description: "", features: [] },
+        {
+          id: "section-2",
+          title: "Benefits of Smart Blinds for Your Home",
+          description: "",
+          features: [],
+        },
+      ],
     });
 
-    expect(html).not.toContain("].");
-    expect(html).toContain('href="#sliding-glass-door-blinds-your-options"');
+    expect(html).toContain('href="#what-are-smart-blinds"');
+    expect(html).toContain('href="#benefits-of-smart-blinds-for-your-home"');
+    expect(countBodyH2(html)).toBe(2);
+    expect(html.match(/Body one paragraph/g)?.length).toBe(1);
+    expect(html.match(/Body two paragraph/g)?.length).toBe(1);
   });
 
-  it("throws when Overview exists but apiKey is missing", async () => {
+  it("throws when Overview is missing scroll-link bullets", async () => {
     const markdown = `## Overview
 
-Lead paragraph.
+Lead paragraph only.
 
 ## Sliding Glass Door Blinds: Your Options
 
@@ -146,6 +113,6 @@ Body section.
         markdownContent: markdown,
         blueprintAgents: [OVERVIEW_AGENT, BODY_AGENTS[0]!],
       }),
-    ).rejects.toThrow(/OpenRouter API key/);
+    ).rejects.toThrow(/missing bullet|scroll link/i);
   });
 });

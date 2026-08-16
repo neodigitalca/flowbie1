@@ -5,7 +5,7 @@ section: Teams
 order: 5
 ---
 
-The **teams** namespace covers agencies (teams), seats, invites, workspace settings, chat, and tasks.
+The **teams** namespace covers agencies (teams), seats, invites, workspace settings, chat, tasks, and support tickets.
 
 ## Concepts
 
@@ -21,6 +21,6 @@ The **teams** namespace covers agencies (teams), seats, invites, workspace setti
 1. Authenticate (see [Authentication overview](../auth/overview)).
 2. List teams with `GET /api/teams`.
 3. Switch to the agency you need with `POST /api/teams/{teamId}/switch`.
-4. Call nested routes: `/api/teams/{teamId}/chat/...`, `/api/teams/{teamId}/tasks/...`, etc.
+4. Call nested routes: `/api/teams/{teamId}/chat/...`, `/api/teams/{teamId}/tasks/...`, `/api/teams/{teamId}/support/...`, etc.
 
 Communication features (chat) require the **communication** permission on the active team.

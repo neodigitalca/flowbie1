@@ -1,11 +1,14 @@
 import { notify } from "@/lib/app-notifications";
 import { NOTIFY_COULD_NOT_SAVE_SITES_TO_LOCAL_STORAGE } from "@/lib/notify-messages";
+import { loadManagerSettingsFromCloud } from "@/lib/manager-cloud-settings-api";
+import { applyManagerCloudSnapshotToLocalStorage } from "@/lib/manager-cloud-settings-snapshot";
 import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
 import { isOptimizationPackageTier } from "@/lib/wordpress-optimization-package";
 import { wordPressSiteHostKey } from "@/lib/wordpress-site-host-key";
-import { WORDPRESS_SITES_STORAGE_KEY, type WordPressSite } from "./types";
+import type { WordPressSite } from "./types";
+import { WORDPRESS_SITES_STORAGE_KEY } from "./types";
 
-const ACTIVE_WP_SITE_STORAGE_KEY = "flowbie-active-wp-site-id";
+const ACTIVE_WP_SITE_STORAGE_KEY = "neo-pulse-active-wp-site-id";
 
 /** Shallow-sorted copy for cloud backup; preserves each site `id` and does not mutate the live list order. */
 export function sortWordPressSitesByName(sites: WordPressSite[]): WordPressSite[] {
@@ -23,7 +26,7 @@ function readActiveSiteIdFromStorage(): string | null {
 }
 
 /**
- * Writes the same WordPress credentials the app uses (Integrations) to server/data/flowbie-wordpress-sites.json
+ * Writes the same WordPress credentials the app uses (Integrations) to server/data/neo-pulse-wordpress-sites.json
  * so the Flo email worker can use them without a manual file or CLI.
  */
 export async function syncWordPressSitesToServer(sites: WordPressSite[]): Promise<void> {
@@ -81,14 +84,12 @@ export async function syncActiveWordPressSiteToServer(activeSiteId: string | nul
   }
 }
 
-/** Drop sitemap payloads that can exceed localStorage quota (~5MB). Kept in React state until reload. */
+/** Drop large sitemap payloads (urls, postMetadata) that can exceed localStorage quota. Keeps childSitemaps + endpoints. */
 export function slimSiteForLocalStorage(site: WordPressSite): WordPressSite {
   if (!site.sitemaps) return site;
   const {
     urls: _urls,
     postMetadata: _postMetadata,
-    childSitemaps: _childSitemaps,
-    endpoints: _endpoints,
     ...sitemapRest
   } = site.sitemaps;
   return { ...site, sitemaps: sitemapRest };
@@ -127,12 +128,20 @@ export function minimalSiteForLocalStorage(site: WordPressSite): WordPressSite {
     slackConnectionStatus: slim.slackConnectionStatus,
     slackLastTestAt: slim.slackLastTestAt,
     postBankEnabled: slim.postBankEnabled,
+    wpEngineHost: slim.wpEngineHost,
+    wpEnginePort: slim.wpEnginePort,
+    wpEngineUsername: slim.wpEngineUsername,
+    wpEnginePassword: slim.wpEnginePassword,
+    wpEngineDomain: slim.wpEngineDomain,
+    wpEngineIsStaging: slim.wpEngineIsStaging,
     sitemaps: slim.sitemaps
       ? {
           mainSitemapUrl: slim.sitemaps.mainSitemapUrl,
           detectedAt: slim.sitemaps.detectedAt,
           type: slim.sitemaps.type,
           disabledChildSitemapUrls: slim.sitemaps.disabledChildSitemapUrls,
+          childSitemaps: slim.sitemaps.childSitemaps,
+          endpoints: slim.sitemaps.endpoints,
         }
       : undefined,
     scheduledPosts: slim.scheduledPosts,
@@ -275,5 +284,90 @@ export async function mergeServerGbpLocationIdsIntoLocalSites(): Promise<boolean
   if (!changed) return false;
   saveSites(merged);
   return true;
+}
+
+/** Merge server-mirrored WP Engine SFTP credentials onto local sites. */
+export async function mergeServerWpEngineCredentialsIntoLocalSites(): Promise<boolean> {
+  const serverSites = await fetchWordPressSitesMirror();
+  if (serverSites.length === 0) return false;
+
+  const local = getStoredSites();
+  if (local.length === 0) return false;
+
+  let changed = false;
+  const merged = local.map((site) => {
+    const row = findMirrorSiteRow(site, serverSites);
+    if (!row?.wpEngineHost?.trim()) return site;
+    const patch = {
+      wpEngineHost: row.wpEngineHost,
+      wpEnginePort: row.wpEnginePort,
+      wpEngineUsername: row.wpEngineUsername,
+      wpEnginePassword: row.wpEnginePassword,
+      wpEngineDomain: row.wpEngineDomain,
+      wpEngineIsStaging: row.wpEngineIsStaging,
+    };
+    const same =
+      site.wpEngineHost === patch.wpEngineHost &&
+      site.wpEnginePort === patch.wpEnginePort &&
+      site.wpEngineUsername === patch.wpEngineUsername &&
+      site.wpEnginePassword === patch.wpEnginePassword &&
+      site.wpEngineDomain === patch.wpEngineDomain &&
+      site.wpEngineIsStaging === patch.wpEngineIsStaging;
+    if (same) return site;
+    changed = true;
+    return { ...site, ...patch };
+  });
+  if (!changed) return false;
+  saveSites(merged);
+  return true;
+}
+
+export function hasUsableLocalSites(sites: WordPressSite[]): boolean {
+  return sites.some((s) => Boolean(s.siteUrl?.trim() && s.username?.trim()));
+}
+
+/** Restore properties from server mirror when local is empty or stale vs server. */
+export async function restoreSitesFromServerMirrorIfEmpty(): Promise<WordPressSite[]> {
+  const local = getStoredSites();
+  const mirror = await fetchWordPressSitesMirror();
+  if (mirror.length === 0) return local;
+  if (hasUsableLocalSites(local) && local.length >= mirror.length) return local;
+  saveSites(mirror);
+  const persisted = getStoredSites();
+  return hasUsableLocalSites(persisted) ? persisted : mirror;
+}
+
+/** First visit on a new origin: pull server sites.json into localStorage when empty. */
+export async function hydrateLocalSitesFromServerMirrorIfEmpty(): Promise<boolean> {
+  const before = hasUsableLocalSites(getStoredSites());
+  const restored = await restoreSitesFromServerMirrorIfEmpty();
+  return restored.length > 0 && !before;
+}
+
+/** After sites hydrate, restore manager cloud snapshot when browser storage is fresh. Never overwrites properties. */
+export async function hydrateManagerCloudSettingsIfEmpty(): Promise<boolean> {
+  if (!hasUsableLocalSites(getStoredSites())) return false;
+  try {
+    if (localStorage.getItem(WORDPRESS_SITES_STORAGE_KEY) == null) return false;
+  } catch {
+    return false;
+  }
+  const { snapshot } = await loadManagerSettingsFromCloud();
+  if (!snapshot) return false;
+  const keys = { ...snapshot.keys };
+  delete keys[WORDPRESS_SITES_STORAGE_KEY];
+  const result = applyManagerCloudSnapshotToLocalStorage({ ...snapshot, keys });
+  return result.keyCount > 0 && !result.error;
+}
+
+/** Boot hook for new domains (e.g. neodigital.ca/app). */
+export async function hydrateLocalAppStateFromServerIfEmpty(): Promise<{
+  sitesHydrated: boolean;
+  cloudHydrated: boolean;
+}> {
+  await restoreSitesFromServerMirrorIfEmpty();
+  const sitesHydrated = getStoredSites().length > 0;
+  const cloudHydrated = sitesHydrated ? await hydrateManagerCloudSettingsIfEmpty() : false;
+  return { sitesHydrated, cloudHydrated };
 }
 
