@@ -21,6 +21,7 @@ import {
   TaskFormInfieldSelect,
 } from "@/components/manager/tasks/TaskFormLayout";
 import { PulseForgePostSchedulePanel } from "@/components/manager/tasks/planner/PulseForgePostSchedulePanel";
+import { ensurePostCreatorPayload } from "@/lib/post-creator/post-creator-defaults";
 import type { TaskExecutionPayload } from "@/lib/tasks-types";
 
 const INLINE_INPUT_CLASS = "h-9 min-h-9 rounded-none border-0 bg-transparent p-0 text-base text-white shadow-none outline-none ring-0 focus-visible:ring-0";
