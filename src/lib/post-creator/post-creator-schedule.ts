@@ -48,23 +48,36 @@ export function buildPostCreatorWordPressPosting(
   site: WordPressSite,
   rowCount: number,
   schedule: ResolvedPostCreatorSchedule,
+  payload?: PostCreatorExecutionPayload,
 ): WordPressPostingOptions | undefined {
-  const draftOnly = schedule.postDestination === "draft";
+  const draftOnly =
+    schedule.postDestination === "draft" || payload?.scheduleDraftOnly === true;
   const postDestination =
     schedule.postDestination === "bank" ? "bank" : draftOnly ? "wordpress" : "wordpress";
 
   const selectedSiteIds = new Set([site.id]);
   const siteConfigs = { [site.id]: { sitemapType: schedule.sitemapType } };
 
+  const scheduleFrequency = payload?.scheduleFrequency ?? "custom";
+  const customInterval =
+    payload?.scheduleCustomInterval ??
+    (scheduleFrequency === "custom" ? schedule.timesPerMonth : 1);
+  const dayOfWeek = payload?.scheduleDayOfWeek ?? 0;
+  const startDateOption = payload?.scheduleStartDateOption ?? "custom";
+  const startTime = schedule.startTime;
+  const customStartDate = payload?.scheduleCustomStartDate
+    ? new Date(`${payload.scheduleCustomStartDate.slice(0, 10)}T12:00:00`)
+    : postCreatorRunStartDate(schedule.startDay, startTime);
+
   return buildWordPressPostingFromSelection({
     selectedSiteIds,
     siteConfigs,
-    scheduleFrequency: "custom",
-    customInterval: schedule.timesPerMonth,
-    dayOfWeek: 0,
-    startDateOption: "custom",
-    customStartDate: postCreatorRunStartDate(schedule.startDay, schedule.startTime),
-    startTime: schedule.startTime,
+    scheduleFrequency,
+    customInterval,
+    dayOfWeek,
+    startDateOption,
+    customStartDate,
+    startTime,
     totalRows: rowCount,
     useCsvPublishDates: false,
     postDestination,

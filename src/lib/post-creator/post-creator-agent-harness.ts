@@ -212,6 +212,7 @@ export async function runPostCreatorAgentHarness(
     args.site,
     checklistRows.length,
     schedule,
+    args.payload,
   );
 
   const bulkResult = await runPostCreatorBulkRows({

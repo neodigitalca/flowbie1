@@ -53,6 +53,14 @@ export type PostCreatorExecutionPayload = {
   scheduleStartDay?: number;
   scheduleStartTime?: string;
   scheduleStaggerOptimized?: boolean;
+  /** Full WordPress publish schedule (same model as Generator bulk). */
+  scheduleFrequency?: import("@/lib/wordpress-scheduler").ScheduleFrequency;
+  scheduleCustomInterval?: number;
+  scheduleDayOfWeek?: number;
+  scheduleStartDateOption?: "immediate" | "custom";
+  /** Local calendar date YYYY-MM-DD for pick-date / anchor starts. */
+  scheduleCustomStartDate?: string;
+  scheduleDraftOnly?: boolean;
 };
 
 export type TaskExecutionTargetBucket = "pages" | "posts" | "sap" | "all";
@@ -80,6 +88,12 @@ export type TaskExecutionPayload = {
   scheduleStartDay?: number;
   scheduleStartTime?: string;
   scheduleStaggerOptimized?: boolean;
+  scheduleFrequency?: import("@/lib/wordpress-scheduler").ScheduleFrequency;
+  scheduleCustomInterval?: number;
+  scheduleDayOfWeek?: number;
+  scheduleStartDateOption?: "immediate" | "custom";
+  scheduleCustomStartDate?: string;
+  scheduleDraftOnly?: boolean;
   optimizationOptions?: {
     optimizeTitle?: boolean;
     optimizeMeta?: boolean;

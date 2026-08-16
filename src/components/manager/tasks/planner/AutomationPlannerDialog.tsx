@@ -8,18 +8,27 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
   TASK_FORM_DIALOG_BUTTON_CLASS,
   TASK_FORM_FLAT_CONTROL_CLASS,
+  TASK_FORM_SELECT_CONTENT_CLASS,
+  TASK_FORM_SELECT_ITEM_CLASS,
+  TASK_FORM_SELECT_TRIGGER_CLASS,
+  TaskFormCompactCell,
   TaskFormFlatGrid,
-  TaskFormFlatSelectPlaceholder,
-  TaskFormPlaceholderCell,
   TaskFormSideSection,
 } from "@/components/manager/tasks/TaskFormLayout";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AutomationWhenPanel } from "@/components/manager/tasks/planner/AutomationWhenPanel";
 import { AutomationThenPanel } from "@/components/manager/tasks/planner/AutomationThenPanel";
+import { PulseForgePostSchedulePanel } from "@/components/manager/tasks/planner/PulseForgePostSchedulePanel";
 import { AutomationJsonPanel } from "@/components/manager/tasks/planner/AutomationJsonPanel";
 import { AutomationTaskExecuteButton } from "@/components/manager/tasks/AutomationTaskExecuteButton";
 import { buildRecipeGuideBlocks } from "@/lib/automation-recipe-copy";
@@ -308,46 +317,75 @@ export function AutomationPlannerDialog({
           <DialogTitle className="text-base font-semibold text-white">{titleLabel}</DialogTitle>
         </DialogHeader>
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as "visual" | "json")} className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="mx-4 h-9 shrink-0 rounded-none bg-zinc-900">
-            <TabsTrigger value="visual" className="rounded-none text-base">
-              Visual
-            </TabsTrigger>
-            <TabsTrigger value="json" className="rounded-none text-base">
-              JSON
-            </TabsTrigger>
-          </TabsList>
+        <div className="mx-4 flex shrink-0 gap-0 bg-zinc-900">
+          {(["visual", "json"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setTab(value)}
+              className={cn(
+                "h-9 px-4 text-base capitalize",
+                tab === value ? "bg-black text-white" : "text-muted-foreground hover:text-white",
+              )}
+            >
+              {value}
+            </button>
+          ))}
+        </div>
 
-          <TabsContent value="visual" className="mt-0 min-h-0 flex-1 overflow-y-auto px-4 pb-4 data-[state=inactive]:hidden">
+        <div className="relative min-h-[min(58vh,640px)] flex-1 overflow-hidden px-4 pb-2">
+          <div
+            className={cn(
+              "absolute inset-0 overflow-y-auto pb-2",
+              tab !== "visual" && "pointer-events-none invisible",
+            )}
+          >
             <TaskFormSideSection title="Automation">
-              <TaskFormFlatGrid className={sites.length > 0 ? "grid-cols-2 md:grid-cols-4" : "grid-cols-1 md:grid-cols-3"}>
+              <TaskFormFlatGrid
+                className={
+                  sites.length > 0
+                    ? "grid-cols-2 lg:grid-cols-4"
+                    : "grid-cols-1 lg:grid-cols-3"
+                }
+              >
                 {sites.length > 0 ? (
-                  <TaskFormFlatSelectPlaceholder
-                    placeholder="Client site"
-                    value={clientId}
-                    onChange={setClientId}
-                    disabled={saving || mode === "edit"}
-                    options={sites.map((s) => ({ value: s.id, label: s.name }))}
-                  />
+                  <TaskFormCompactCell label="Client site">
+                    <Select
+                      value={clientId || "__empty__"}
+                      onValueChange={(v) => setClientId(v === "__empty__" ? "" : v)}
+                      disabled={saving || mode === "edit"}
+                    >
+                      <SelectTrigger className={TASK_FORM_SELECT_TRIGGER_CLASS}>
+                        <SelectValue placeholder="Select site" />
+                      </SelectTrigger>
+                      <SelectContent className={TASK_FORM_SELECT_CONTENT_CLASS}>
+                        {sites.map((s) => (
+                          <SelectItem key={s.id} value={s.id} className={TASK_FORM_SELECT_ITEM_CLASS}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TaskFormCompactCell>
                 ) : null}
-                <TaskFormPlaceholderCell>
+                <TaskFormCompactCell label="Keyword">
                   <Input
                     value={plan.keyword}
                     onChange={(e) => setPlan((p) => ({ ...p, keyword: e.target.value }))}
-                    placeholder="Keyword"
+                    placeholder="automation-keyword"
                     disabled={saving}
                     className={TASK_FORM_FLAT_CONTROL_CLASS}
                   />
-                </TaskFormPlaceholderCell>
-                <TaskFormPlaceholderCell>
+                </TaskFormCompactCell>
+                <TaskFormCompactCell label="Name">
                   <Input
                     value={plan.name}
                     onChange={(e) => setPlan((p) => ({ ...p, name: e.target.value }))}
-                    placeholder="Name"
+                    placeholder="Automation name"
                     disabled={saving}
                     className={TASK_FORM_FLAT_CONTROL_CLASS}
                   />
-                </TaskFormPlaceholderCell>
+                </TaskFormCompactCell>
               </TaskFormFlatGrid>
             </TaskFormSideSection>
 
@@ -368,19 +406,40 @@ export function AutomationPlannerDialog({
               />
             </TaskFormSideSection>
 
-            {previewBlocks.length > 0 ? (
-              <TaskFormSideSection title="Preview">
-                <ul className="flex flex-col gap-2 px-1">
-                  {previewBlocks.flatMap((block) =>
-                    block.steps.map((line) => (
-                      <li key={`${block.title ?? "step"}-${line}`} className="text-base text-muted-foreground">
-                        {line}
-                      </li>
-                    )),
-                  )}
-                </ul>
-              </TaskFormSideSection>
-            ) : null}
+            <TaskFormSideSection title="Post schedule">
+              <div
+                className={cn(
+                  "min-h-[22rem]",
+                  plan.action.executionKind !== "post_creator" && "pointer-events-none invisible",
+                )}
+              >
+                <PulseForgePostSchedulePanel
+                  executionPayload={plan.action.executionPayload}
+                  disabled={saving || plan.action.executionKind !== "post_creator"}
+                  onChange={(executionPayload) =>
+                    setPlan((p) => ({ ...p, action: { ...p.action, executionPayload } }))
+                  }
+                />
+              </div>
+            </TaskFormSideSection>
+
+            <TaskFormSideSection title="Preview">
+              <div className="min-h-[4.5rem] px-1">
+                {previewBlocks.length > 0 ? (
+                  <ul className="flex flex-col gap-1">
+                    {previewBlocks.flatMap((block) =>
+                      block.steps.map((line) => (
+                        <li key={`${block.title ?? "step"}-${line}`} className="text-base text-muted-foreground">
+                          {line}
+                        </li>
+                      )),
+                    )}
+                  </ul>
+                ) : (
+                  <p className="text-base text-muted-foreground">Preview appears for recipe installs.</p>
+                )}
+              </div>
+            </TaskFormSideSection>
 
             {mode === "edit" && editTask ? (
               <div className="flex justify-end py-2">
@@ -396,27 +455,27 @@ export function AutomationPlannerDialog({
             ) : null}
 
             {mode === "edit" ? (
-              <TaskFormSideSection title="Save as team template">
-                <TaskFormFlatGrid className="grid-cols-3">
-                  <TaskFormPlaceholderCell>
+              <TaskFormSideSection title="Template">
+                <TaskFormFlatGrid className="grid-cols-1 lg:grid-cols-3">
+                  <TaskFormCompactCell label="Template name">
                     <Input
                       value={saveFromName}
                       onChange={(e) => setSaveFromName(e.target.value)}
-                      placeholder="Template name"
+                      placeholder="Team template name"
                       disabled={saving}
                       className={TASK_FORM_FLAT_CONTROL_CLASS}
                     />
-                  </TaskFormPlaceholderCell>
-                  <TaskFormPlaceholderCell>
+                  </TaskFormCompactCell>
+                  <TaskFormCompactCell label="Template keyword">
                     <Input
                       value={saveFromKeyword}
                       onChange={(e) => setSaveFromKeyword(e.target.value)}
-                      placeholder="Template keyword"
+                      placeholder="template-keyword"
                       disabled={saving}
                       className={TASK_FORM_FLAT_CONTROL_CLASS}
                     />
-                  </TaskFormPlaceholderCell>
-                  <TaskFormPlaceholderCell className="flex items-center">
+                  </TaskFormCompactCell>
+                  <TaskFormCompactCell label="Save">
                     <Button
                       type="button"
                       className={cn("h-9 w-full text-base", TASK_FORM_DIALOG_BUTTON_CLASS)}
@@ -425,16 +484,21 @@ export function AutomationPlannerDialog({
                     >
                       Save template
                     </Button>
-                  </TaskFormPlaceholderCell>
+                  </TaskFormCompactCell>
                 </TaskFormFlatGrid>
               </TaskFormSideSection>
             ) : null}
-          </TabsContent>
+          </div>
 
-          <TabsContent value="json" className="mt-0 min-h-0 flex-1 overflow-y-auto px-4 pb-4 data-[state=inactive]:hidden">
+          <div
+            className={cn(
+              "absolute inset-0 overflow-hidden pb-2",
+              tab !== "json" && "pointer-events-none invisible",
+            )}
+          >
             <AutomationJsonPanel plan={plan} disabled={saving} onPlanChange={setPlan} />
-          </TabsContent>
-        </Tabs>
+          </div>
+        </div>
 
         {error ? <p className="shrink-0 px-4 text-base text-red-400">{error}</p> : null}
 

@@ -48,7 +48,7 @@ export function AutomationJsonPanel({
   }, [dirty, onPlanChange, text]);
 
   return (
-    <div className="flex min-h-[320px] flex-col gap-2">
+    <div className="flex h-full min-h-0 flex-col gap-1 pt-1">
       <Textarea
         value={text}
         onChange={(e) => {
@@ -56,12 +56,12 @@ export function AutomationJsonPanel({
           setText(e.target.value);
         }}
         disabled={disabled}
-        className="min-h-[280px] flex-1 resize-y rounded-none border-0 bg-zinc-950 font-mono text-base text-white"
+        className="min-h-0 flex-1 resize-none rounded-none border-0 bg-zinc-950 font-mono text-base text-white"
         spellCheck={false}
       />
-      {parseError ? <p className="text-base text-red-400">{parseError}</p> : null}
+      {parseError ? <p className="shrink-0 text-base text-red-400">{parseError}</p> : null}
       {validationErrors.length > 0 && !parseError ? (
-        <ul className="text-base text-red-400">
+        <ul className="shrink-0 text-base text-red-400">
           {validationErrors.map((err) => (
             <li key={err}>{err}</li>
           ))}

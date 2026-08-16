@@ -37,10 +37,19 @@ import {
 } from "@/lib/wordpress-scheduler";
 import { cn } from "@/lib/utils";
 
-const BULK_FIELD_TRIGGER =
+const fieldTrigger =
   "h-9 w-full min-w-0 border-0 bg-muted/55 text-foreground text-base font-medium shadow-none ring-0 outline-none focus:ring-2 focus:ring-primary/45 focus:ring-offset-0 [&>span]:text-foreground";
-const BULK_FIELD_INPUT =
+const fieldInput =
   "h-9 w-full min-w-0 border-0 bg-muted/55 text-foreground text-base font-medium shadow-none ring-0 outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-0";
+
+const FORGE_FIELD_TRIGGER =
+  "h-9 w-full min-w-0 border-0 bg-black text-white text-base font-medium shadow-none ring-0 outline-none focus:ring-2 focus:ring-primary/45 focus:ring-offset-0 [&>span]:text-white";
+const FORGE_FIELD_INPUT =
+  "h-9 w-full min-w-0 border-0 bg-black text-white text-base font-medium shadow-none ring-0 outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-0";
+const FORGE_PRESET_BTN =
+  "h-auto min-h-9 whitespace-normal border-0 bg-primary/20 px-2 py-2 text-base font-medium text-white shadow-none hover:bg-primary/30";
+const FORGE_SECONDARY_BTN =
+  "h-9 shrink-0 border-0 bg-zinc-900 px-3 text-base font-medium text-white shadow-none hover:bg-zinc-800";
 
 export type WordPressScheduleFieldsProps = {
   scheduleFrequency: ScheduleFrequency;
@@ -64,6 +73,7 @@ export type WordPressScheduleFieldsProps = {
   useGapScheduling?: boolean;
   scheduleOccupancyLoading?: boolean;
   layout?: "grid" | "stack";
+  variant?: "bulk" | "forge";
 };
 
 export function WordPressScheduleFields({
@@ -88,7 +98,20 @@ export function WordPressScheduleFields({
   useGapScheduling = false,
   scheduleOccupancyLoading = false,
   layout = "grid",
+  variant = "bulk",
 }: WordPressScheduleFieldsProps) {
+  const fieldTrigger = variant === "forge" ? FORGE_FIELD_TRIGGER : fieldTrigger;
+  const fieldInput = variant === "forge" ? FORGE_FIELD_INPUT : fieldInput;
+  const presetBtnClass =
+    variant === "forge"
+      ? FORGE_PRESET_BTN
+      : "h-auto min-h-9 whitespace-normal border-0 bg-primary/15 px-2 py-2 text-base font-medium text-foreground shadow-none hover:bg-primary/25";
+  const secondaryBtnClass =
+    variant === "forge"
+      ? FORGE_SECONDARY_BTN
+      : "h-9 shrink-0 border-0 bg-muted/55 px-3 text-base font-medium shadow-none hover:bg-muted/70";
+  const popoverContentClass =
+    variant === "forge" ? "w-auto border-0 bg-black p-0 text-white" : "w-auto p-0";
   const [namedPresets, setNamedPresets] = useState<BulkNamedSchedulePreset[]>(() =>
     listBulkSchedulePresets(),
   );
@@ -193,7 +216,7 @@ export function WordPressScheduleFields({
           onValueChange={(value) => setWordpressDraftOnly(value === "draft")}
           disabled={isDisabled}
         >
-          <SelectTrigger className={BULK_FIELD_TRIGGER} aria-label="WordPress post status">
+          <SelectTrigger className={fieldTrigger} aria-label="WordPress post status">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -210,7 +233,7 @@ export function WordPressScheduleFields({
             key={preset.id}
             type="button"
             variant="secondary"
-            className="h-auto min-h-9 whitespace-normal border-0 bg-primary/15 px-2 py-2 text-base font-medium text-foreground shadow-none hover:bg-primary/25"
+            className={presetBtnClass}
             disabled={isDisabled}
             onClick={() => applyNamedPreset(preset)}
           >
@@ -226,7 +249,7 @@ export function WordPressScheduleFields({
           }}
           disabled={isDisabled}
         >
-          <SelectTrigger className={BULK_FIELD_TRIGGER} aria-label="Saved schedule presets">
+          <SelectTrigger className={fieldTrigger} aria-label="Saved schedule presets">
             <SelectValue placeholder="Saved presets" />
           </SelectTrigger>
           <SelectContent>
@@ -240,7 +263,7 @@ export function WordPressScheduleFields({
         <Button
           type="button"
           variant="secondary"
-          className="h-9 shrink-0 border-0 bg-muted/55 px-3 text-base font-medium shadow-none hover:bg-muted/70"
+          className={secondaryBtnClass}
           disabled={isDisabled}
           onClick={saveCurrentPreset}
         >
@@ -253,7 +276,7 @@ export function WordPressScheduleFields({
           onValueChange={(value: ScheduleFrequency) => handleFrequencyChange(value)}
           disabled={isDisabled}
         >
-          <SelectTrigger className={BULK_FIELD_TRIGGER} aria-label="Post frequency">
+          <SelectTrigger className={fieldTrigger} aria-label="Post frequency">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -279,7 +302,7 @@ export function WordPressScheduleFields({
               setCustomInterval(clampEveryNDays(Number.isNaN(value) ? 1 : value));
             }}
             disabled={isDisabled}
-            className={BULK_FIELD_INPUT}
+            className={fieldInput}
             aria-label="Every N days"
           />
         </div>
@@ -292,7 +315,7 @@ export function WordPressScheduleFields({
             onValueChange={(value) => setDayOfWeek(parseInt(value, 10))}
             disabled={isDisabled}
           >
-            <SelectTrigger className={BULK_FIELD_TRIGGER} aria-label="Day of week">
+            <SelectTrigger className={fieldTrigger} aria-label="Day of week">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -320,7 +343,7 @@ export function WordPressScheduleFields({
               setCustomInterval(clampTimesPerMonth(Number.isNaN(value) ? 1 : value));
             }}
             disabled={isDisabled}
-            className={BULK_FIELD_INPUT}
+            className={fieldInput}
             aria-label="Times per month"
           />
         </div>
@@ -334,7 +357,7 @@ export function WordPressScheduleFields({
               onValueChange={(v) => handleStartPresetChange(v as BulkScheduleStartPreset)}
               disabled={isDisabled}
             >
-              <SelectTrigger className={BULK_FIELD_TRIGGER} aria-label="Start date preset">
+              <SelectTrigger className={fieldTrigger} aria-label="Start date preset">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -351,7 +374,7 @@ export function WordPressScheduleFields({
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
               disabled={isDisabled}
-              className={cn(BULK_FIELD_INPUT, "tabular-nums")}
+              className={cn(fieldInput, "tabular-nums")}
               aria-label="Post time"
             />
           </div>
@@ -365,8 +388,9 @@ export function WordPressScheduleFields({
               <Button
                 variant="secondary"
                 className={cn(
-                  BULK_FIELD_TRIGGER,
-                  "justify-start border-0 text-left font-medium shadow-none hover:bg-muted/65",
+                  fieldTrigger,
+                  "justify-start border-0 text-left font-medium shadow-none",
+                  variant === "forge" ? "hover:bg-zinc-900" : "hover:bg-muted/65",
                 )}
                 disabled={isDisabled}
                 aria-label="Pick start date"
@@ -375,12 +399,13 @@ export function WordPressScheduleFields({
                 {customStartDate ? format(customStartDate, "PPP") : "Pick a date"}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
+            <PopoverContent className={popoverContentClass} align="start">
               <Calendar
                 mode="single"
                 selected={customStartDate}
                 onSelect={(date) => date && setCustomStartDate(date)}
                 initialFocus
+                className={cn("rounded-none text-base", variant === "forge" && "bg-black text-white")}
               />
             </PopoverContent>
           </Popover>

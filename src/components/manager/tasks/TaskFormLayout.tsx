@@ -24,6 +24,11 @@ export const TASK_FORM_BAND_CLASS = "flex flex-col gap-0.5 rounded-none bg-[#090
 export const TASK_FORM_BAND_FIELDS_CLASS =
   "flex w-full min-w-0 flex-col gap-0.5 rounded-none bg-[#09090B] p-1";
 
+export const TASK_FORM_COMPACT_CELL_CLASS =
+  "flex min-h-10 min-w-0 flex-col justify-center rounded-none bg-[#000] px-2 py-1";
+
+export const TASK_FORM_COMPACT_INFIELD_LABEL_CLASS = "text-base leading-tight text-muted-foreground";
+
 export const TASK_FORM_CELL_CLASS =
   "flex min-h-12 min-w-0 flex-col justify-center rounded-none bg-[#000] px-2 py-1.5";
 
@@ -316,6 +321,31 @@ export function TaskFormSideSection({
       </div>
       <div className={TASK_FORM_BAND_FIELDS_CLASS}>{children}</div>
     </section>
+  );
+}
+
+export function TaskFormCompactCell({
+  label,
+  children,
+  className,
+  hidden = false,
+}: {
+  label?: string;
+  children: React.ReactNode;
+  className?: string;
+  hidden?: boolean;
+}): React.ReactElement {
+  return (
+    <div
+      className={cn(
+        TASK_FORM_COMPACT_CELL_CLASS,
+        hidden && "pointer-events-none invisible",
+        className,
+      )}
+    >
+      {label ? <span className={TASK_FORM_COMPACT_INFIELD_LABEL_CLASS}>{label}</span> : null}
+      <div className="min-w-0">{children}</div>
+    </div>
   );
 }
 

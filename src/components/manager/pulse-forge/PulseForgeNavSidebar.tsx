@@ -1,5 +1,4 @@
 import React from "react";
-import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TaskProjectNavRow } from "@/components/manager/tasks/TaskProjectNavRow";
 import type { TaskProject } from "@/lib/tasks-types";
@@ -29,29 +28,30 @@ export function PulseForgeNavSidebar({
 }: PulseForgeNavSidebarProps): React.ReactElement {
   return (
     <aside className="flex h-full min-h-0 w-52 shrink-0 flex-col bg-zinc-950">
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-3">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <button
           type="button"
           onClick={onSelectRecipes}
           className={cn(
-            "w-full px-2 py-2 text-left text-base font-medium",
-            navMode === "recipes" ? "bg-zinc-800 text-white" : "text-muted-foreground hover:bg-zinc-900 hover:text-white",
+            "w-full px-3 py-2 text-left text-base font-semibold",
+            navMode === "recipes"
+              ? "bg-zinc-900 text-muted-foreground"
+              : "text-muted-foreground hover:bg-zinc-900 hover:text-white",
           )}
         >
           Recipes
         </button>
-        <div className="mt-4 flex items-center justify-between gap-2 px-2">
-          <p className="text-base font-semibold text-white">My Forge</p>
+        <div className="mt-0 flex items-center justify-between gap-2 px-3 py-2">
+          <p className="text-base font-semibold text-muted-foreground">My Forge</p>
           <button
             type="button"
             onClick={onNewAutomation}
-            className="flex h-8 w-8 shrink-0 items-center justify-center text-primary hover:opacity-90"
-            aria-label="New automation"
+            className="text-base text-muted-foreground hover:text-white"
           >
-            <Plus className="h-4 w-4" />
+            New
           </button>
         </div>
-        <ul className="mt-2 flex flex-col gap-0.5">
+        <ul className="flex flex-col gap-0.5 px-2 pb-3">
           {automationProjects.map((project) => (
             <li key={project.id}>
               <TaskProjectNavRow

@@ -1,5 +1,6 @@
 import React from "react";
 import { cn } from "@/lib/utils";
+import { TaskFormCompactCell } from "@/components/manager/tasks/TaskFormLayout";
 import type { AutomationBlockCatalogItem } from "@/lib/automation-blocks-api";
 
 export type AutomationBlockPickerProps = {
@@ -24,9 +25,8 @@ export function AutomationBlockPicker({
     : blocks;
 
   return (
-    <div className="flex flex-col gap-2">
-      <p className="text-base font-medium text-white">{label}</p>
-      <div className="flex flex-wrap gap-2">
+    <TaskFormCompactCell label={label}>
+      <div className="-mx-1 flex h-9 min-w-0 items-center gap-1 overflow-x-auto px-1 [scrollbar-width:thin]">
         {filtered.map((block) => {
           const selected = block.keyword === selectedKeyword;
           return (
@@ -36,7 +36,7 @@ export function AutomationBlockPicker({
               disabled={disabled}
               onClick={() => onSelect(block.keyword)}
               className={cn(
-                "px-3 py-2 text-left text-base transition-colors",
+                "h-8 shrink-0 whitespace-nowrap px-2 text-base transition-colors",
                 selected
                   ? "bg-primary text-black"
                   : "bg-zinc-900 text-white hover:bg-zinc-800",
@@ -47,6 +47,6 @@ export function AutomationBlockPicker({
           );
         })}
       </div>
-    </div>
+    </TaskFormCompactCell>
   );
 }

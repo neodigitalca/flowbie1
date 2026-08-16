@@ -7,6 +7,10 @@ export function defaultPostCreatorExecutionPayload(): TaskExecutionPayload {
     featuredImage: true,
     sitemapType: "post",
     postDestination: "wordpress",
+    scheduleFrequency: "custom",
+    scheduleCustomInterval: 1,
+    scheduleDayOfWeek: 0,
+    scheduleStartDateOption: "custom",
     scheduleTimesPerMonth: 1,
     scheduleStartDay: 1,
     scheduleStartTime: "09:00",
@@ -22,6 +26,7 @@ export function defaultPostCreatorExecutionPayloadForRecipe(
     return {
       ...defaultPostCreatorExecutionPayload(),
       postCount: 3,
+      scheduleCustomInterval: 3,
       scheduleTimesPerMonth: 3,
     };
   }

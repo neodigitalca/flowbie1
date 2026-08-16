@@ -3,7 +3,6 @@ import { useTeam } from "@/contexts/TeamContext";
 import { useActiveWordPressSite } from "@/contexts/active-wordpress-site-context";
 import { useWordPressSites } from "@/hooks/use-wordpress-sites";
 import { PulseForgeNavSidebar } from "@/components/manager/pulse-forge/PulseForgeNavSidebar";
-import { PulseForgeWorkspaceHeader } from "@/components/manager/pulse-forge/PulseForgeWorkspaceHeader";
 import { AutomationRecipeLibrary } from "@/components/manager/tasks/recipes/AutomationRecipeLibrary";
 import { AutomationPlannerDialog } from "@/components/manager/tasks/planner/AutomationPlannerDialog";
 import { TasksListView } from "@/components/manager/tasks/TasksListView";
@@ -170,14 +169,8 @@ export function PulseForgeShell(): React.ReactElement {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-black">
-      <PulseForgeWorkspaceHeader
-        navMode={navMode}
-        onNavModeChange={setNavMode}
-        onNewAutomation={openCreate}
-      />
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <PulseForgeNavSidebar
+    <div className="flex h-full min-h-0 w-full flex-1 overflow-hidden bg-black">
+      <PulseForgeNavSidebar
           navMode={navMode}
           activeProjectId={activeProjectId}
           automationProjects={automationProjects}
@@ -188,8 +181,6 @@ export function PulseForgeShell(): React.ReactElement {
           onSelectAutomation={(id) => {
             setNavMode("forge");
             setActiveProjectId(id);
-            const project = automationProjects.find((p) => p.id === id);
-            if (project) openEdit(project);
           }}
           onNewAutomation={openCreate}
           onEditAutomation={openEdit}
@@ -248,7 +239,7 @@ export function PulseForgeShell(): React.ReactElement {
               <p className="text-base text-muted-foreground">No automations installed yet.</p>
               <button
                 type="button"
-                className="text-base text-primary hover:underline"
+                className="text-base text-muted-foreground hover:text-white hover:underline"
                 onClick={() => setNavMode("recipes")}
               >
                 Browse recipes
@@ -256,7 +247,6 @@ export function PulseForgeShell(): React.ReactElement {
             </div>
           )}
         </main>
-      </div>
 
       <AutomationPlannerDialog
         open={plannerOpen}

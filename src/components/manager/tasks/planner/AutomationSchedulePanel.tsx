@@ -1,12 +1,20 @@
 import React, { useMemo } from "react";
 import {
-  TASK_FORM_FLAT_CONTROL_CLASS,
+  TASK_FORM_SELECT_CONTENT_CLASS,
+  TASK_FORM_SELECT_ITEM_CLASS,
+  TASK_FORM_SELECT_TRIGGER_CLASS,
+  TaskFormCompactCell,
   TaskFormDatePicker,
   TaskFormFlatGrid,
-  TaskFormFlatSelectPlaceholder,
-  TaskFormPlaceholderCell,
   TaskFormTimePicker,
 } from "@/components/manager/tasks/TaskFormLayout";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { AutomationScheduleBlock, ScheduleFrequency } from "@/lib/automation-planner-types";
 
 const FREQUENCY_OPTIONS: { value: ScheduleFrequency; label: string }[] = [
@@ -58,38 +66,51 @@ export function AutomationSchedulePanel({
     if (block.frequency === "daily" && date) {
       return `Runs daily on or after ${date}`;
     }
-    return "";
+    return " ";
   }, [block.frequency, block.startDate]);
 
   return (
     <div className="flex flex-col gap-1">
-      <TaskFormFlatGrid className="grid-cols-2 md:grid-cols-3">
-        <TaskFormFlatSelectPlaceholder
-          placeholder="Frequency"
-          value={block.frequency}
-          onChange={(v) =>
-            onChange({
-              frequency: v as ScheduleFrequency,
-              keyword: `schedule-${v}`,
-            })
-          }
-          disabled={disabled}
-          options={FREQUENCY_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-        />
+      <TaskFormFlatGrid className="grid-cols-3">
+        <TaskFormCompactCell label="Frequency">
+          <Select
+            value={block.frequency}
+            onValueChange={(v) =>
+              onChange({
+                frequency: v as ScheduleFrequency,
+                keyword: `schedule-${v}`,
+              })
+            }
+            disabled={disabled}
+          >
+            <SelectTrigger className={TASK_FORM_SELECT_TRIGGER_CLASS}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className={TASK_FORM_SELECT_CONTENT_CLASS}>
+              {FREQUENCY_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value} className={TASK_FORM_SELECT_ITEM_CLASS}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </TaskFormCompactCell>
         <TaskFormDatePicker
           placeholder={block.frequency === "once" ? "Run date" : "Start date"}
           value={block.startDate}
           onChange={(startDate) => onChange({ startDate })}
           disabled={disabled}
+          className="min-h-10 py-1"
         />
         <TaskFormTimePicker
           placeholder="Time (Edmonton)"
           value={block.time}
           onChange={(time) => onChange({ time })}
           disabled={disabled}
+          className="min-h-10 py-1"
         />
       </TaskFormFlatGrid>
-      {helper ? <p className="px-1 text-base text-muted-foreground">{helper}</p> : null}
+      <p className="min-h-[1.25rem] px-1 text-base text-muted-foreground">{helper}</p>
     </div>
   );
 }

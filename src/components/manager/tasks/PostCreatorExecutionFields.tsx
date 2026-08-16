@@ -3,17 +3,27 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  TASK_FORM_FLAT_CONTROL_CLASS,
+  TASK_FORM_SELECT_CONTENT_CLASS,
+  TASK_FORM_SELECT_ITEM_CLASS,
+  TASK_FORM_SELECT_TRIGGER_CLASS,
+  TaskFormCompactCell,
   TaskFormFieldGrid,
   TaskFormFlatGrid,
-  TaskFormFlatSelectPlaceholder,
   TaskFormInfield,
   TaskFormInfieldSelect,
-  TaskFormPlaceholderCell,
 } from "@/components/manager/tasks/TaskFormLayout";
-import { ensurePostCreatorPayload } from "@/lib/post-creator/post-creator-defaults";
+import { PulseForgePostSchedulePanel } from "@/components/manager/tasks/planner/PulseForgePostSchedulePanel";
 import type { TaskExecutionPayload } from "@/lib/tasks-types";
 
-const INLINE_INPUT_CLASS = "h-9 min-h-9 rounded-none border-0 bg-zinc-900 text-base";
+const INLINE_INPUT_CLASS = "h-9 min-h-9 rounded-none border-0 bg-transparent p-0 text-base text-white shadow-none outline-none ring-0 focus-visible:ring-0";
 
 export type PostCreatorExecutionFieldsProps = {
   executionPayload?: TaskExecutionPayload | null;
@@ -36,16 +46,13 @@ export function PostCreatorExecutionFields({
   };
 
   const postCount = payload.postCount ?? 1;
-  const timesPerMonth = payload.scheduleTimesPerMonth ?? postCount;
-  const startDay = payload.scheduleStartDay ?? 1;
   const keywordSource = payload.keywordSource ?? "prompt";
 
   if (inline) {
     return (
       <div className="flex w-full min-w-0 flex-col gap-1">
-        <TaskFormFlatGrid className="grid-cols-2 md:grid-cols-4">
-          <TaskFormPlaceholderCell className="min-w-0">
-            <span className="whitespace-normal leading-tight text-base text-muted-foreground">Posts per run</span>
+        <TaskFormFlatGrid className="grid-cols-4">
+          <TaskFormCompactCell label="Posts per run">
             <Input
               type="number"
               min={1}
@@ -55,91 +62,76 @@ export function PostCreatorExecutionFields({
               className={INLINE_INPUT_CLASS}
               onChange={(e) => patch({ postCount: Math.max(1, Math.min(31, Number(e.target.value) || 1)) })}
             />
-          </TaskFormPlaceholderCell>
-          <TaskFormPlaceholderCell className="min-w-0">
-            <span className="whitespace-normal leading-tight text-base text-muted-foreground">Times per month</span>
-            <Input
-              type="number"
-              min={1}
-              max={31}
-              value={timesPerMonth}
+          </TaskFormCompactCell>
+          <TaskFormCompactCell label="Keyword source">
+            <Select
+              value={keywordSource}
+              onValueChange={(v) => patch({ keywordSource: v as TaskExecutionPayload["keywordSource"] })}
               disabled={disabled}
-              className={INLINE_INPUT_CLASS}
-              onChange={(e) =>
-                patch({ scheduleTimesPerMonth: Math.max(1, Math.min(31, Number(e.target.value) || 1)) })
-              }
-            />
-          </TaskFormPlaceholderCell>
-          <TaskFormPlaceholderCell className="min-w-0">
-            <span className="whitespace-normal leading-tight text-base text-muted-foreground">Start day</span>
-            <Input
-              type="number"
-              min={1}
-              max={28}
-              value={startDay}
+            >
+              <SelectTrigger className={TASK_FORM_SELECT_TRIGGER_CLASS}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className={TASK_FORM_SELECT_CONTENT_CLASS}>
+                <SelectItem value="prompt" className={TASK_FORM_SELECT_ITEM_CLASS}>
+                  AI ideas
+                </SelectItem>
+                <SelectItem value="gsc" className={TASK_FORM_SELECT_ITEM_CLASS}>
+                  GSC performers
+                </SelectItem>
+                <SelectItem value="manual" className={TASK_FORM_SELECT_ITEM_CLASS}>
+                  Manual list
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </TaskFormCompactCell>
+          <TaskFormCompactCell label="Destination">
+            <Select
+              value={payload.postDestination ?? "wordpress"}
+              onValueChange={(v) => patch({ postDestination: v as TaskExecutionPayload["postDestination"] })}
               disabled={disabled}
-              className={INLINE_INPUT_CLASS}
-              onChange={(e) => patch({ scheduleStartDay: Math.max(1, Math.min(28, Number(e.target.value) || 1)) })}
-            />
-          </TaskFormPlaceholderCell>
-          <TaskFormPlaceholderCell className="min-w-0">
-            <span className="whitespace-normal leading-tight text-base text-muted-foreground">Start time</span>
-            <Input
-              type="time"
-              value={payload.scheduleStartTime ?? "09:00"}
-              disabled={disabled}
-              className={INLINE_INPUT_CLASS}
-              onChange={(e) => patch({ scheduleStartTime: e.target.value.slice(0, 5) })}
-            />
-          </TaskFormPlaceholderCell>
-        </TaskFormFlatGrid>
-        <TaskFormFlatGrid className="grid-cols-2 md:grid-cols-3">
-          <TaskFormFlatSelectPlaceholder
-            placeholder="Keyword source"
-            value={keywordSource}
-            onChange={(v) => patch({ keywordSource: v as TaskExecutionPayload["keywordSource"] })}
-            disabled={disabled}
-            options={[
-              { value: "prompt", label: "AI ideas" },
-              { value: "gsc", label: "GSC performers" },
-              { value: "manual", label: "Manual list" },
-            ]}
-          />
-          <TaskFormFlatSelectPlaceholder
-            placeholder="Destination"
-            value={payload.postDestination ?? "wordpress"}
-            onChange={(v) => patch({ postDestination: v as TaskExecutionPayload["postDestination"] })}
-            disabled={disabled}
-            options={[
-              { value: "wordpress", label: "WordPress schedule" },
-              { value: "draft", label: "Draft only" },
-              { value: "bank", label: "Content bank" },
-            ]}
-          />
-          <TaskFormPlaceholderCell className="flex min-w-0 items-center gap-2">
-            <Checkbox
-              id="post-creator-featured-inline"
-              checked={payload.featuredImage !== false}
-              disabled={disabled}
-              onCheckedChange={(checked) => patch({ featuredImage: checked === true })}
-            />
-            <label htmlFor="post-creator-featured-inline" className="text-base text-white">
-              AI featured image
+            >
+              <SelectTrigger className={TASK_FORM_SELECT_TRIGGER_CLASS}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className={TASK_FORM_SELECT_CONTENT_CLASS}>
+                <SelectItem value="wordpress" className={TASK_FORM_SELECT_ITEM_CLASS}>
+                  WordPress schedule
+                </SelectItem>
+                <SelectItem value="draft" className={TASK_FORM_SELECT_ITEM_CLASS}>
+                  Draft only
+                </SelectItem>
+                <SelectItem value="bank" className={TASK_FORM_SELECT_ITEM_CLASS}>
+                  Content bank
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </TaskFormCompactCell>
+          <TaskFormCompactCell label="Featured image">
+            <label className="flex h-9 min-w-0 items-center gap-2">
+              <Checkbox
+                id="post-creator-featured-inline"
+                checked={payload.featuredImage !== false}
+                disabled={disabled}
+                onCheckedChange={(checked) => patch({ featuredImage: checked === true })}
+              />
+              <span className="text-base text-white">AI featured image</span>
             </label>
-          </TaskFormPlaceholderCell>
+          </TaskFormCompactCell>
         </TaskFormFlatGrid>
-        {keywordSource === "prompt" ? (
-          <TaskFormPlaceholderCell className="min-w-0">
-            <span className="text-base text-muted-foreground">Topic prompt</span>
-            <Textarea
-              value={payload.optionalPrompt ?? ""}
-              disabled={disabled}
-              rows={2}
-              className="min-h-[2.5rem] rounded-none border-0 bg-zinc-900 p-2 text-base text-white"
-              onChange={(e) => patch({ optionalPrompt: e.target.value })}
-            />
-          </TaskFormPlaceholderCell>
-        ) : null}
+        <TaskFormCompactCell
+          label="Topic prompt"
+          hidden={keywordSource !== "prompt"}
+          className="min-h-[4.5rem]"
+        >
+          <Textarea
+            value={payload.optionalPrompt ?? ""}
+            disabled={disabled || keywordSource !== "prompt"}
+            rows={2}
+            className="min-h-[2.5rem] resize-none rounded-none border-0 bg-transparent p-0 text-base text-white shadow-none outline-none ring-0 focus-visible:ring-0"
+            onChange={(e) => patch({ optionalPrompt: e.target.value })}
+          />
+        </TaskFormCompactCell>
       </div>
     );
   }
@@ -158,42 +150,8 @@ export function PostCreatorExecutionFields({
             onChange={(e) => patch({ postCount: Math.max(1, Math.min(31, Number(e.target.value) || 1)) })}
           />
         </TaskFormInfield>
-        <TaskFormInfield label="Times per month">
-          <Input
-            type="number"
-            min={1}
-            max={31}
-            value={timesPerMonth}
-            disabled={disabled}
-            className="bg-zinc-900 text-base"
-            onChange={(e) =>
-              patch({ scheduleTimesPerMonth: Math.max(1, Math.min(31, Number(e.target.value) || 1)) })
-            }
-          />
-        </TaskFormInfield>
       </TaskFormFieldGrid>
-      <TaskFormFieldGrid>
-        <TaskFormInfield label="Start day of month">
-          <Input
-            type="number"
-            min={1}
-            max={28}
-            value={startDay}
-            disabled={disabled}
-            className="bg-zinc-900 text-base"
-            onChange={(e) => patch({ scheduleStartDay: Math.max(1, Math.min(28, Number(e.target.value) || 1)) })}
-          />
-        </TaskFormInfield>
-        <TaskFormInfield label="Start time">
-          <Input
-            type="time"
-            value={payload.scheduleStartTime ?? "09:00"}
-            disabled={disabled}
-            className="bg-zinc-900 text-base"
-            onChange={(e) => patch({ scheduleStartTime: e.target.value.slice(0, 5) })}
-          />
-        </TaskFormInfield>
-      </TaskFormFieldGrid>
+      <PulseForgePostSchedulePanel executionPayload={payload} disabled={disabled} onChange={onChange} />
       <TaskFormFieldGrid>
         <TaskFormInfieldSelect
           label="Keyword source"

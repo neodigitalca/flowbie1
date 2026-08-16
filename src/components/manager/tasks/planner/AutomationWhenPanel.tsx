@@ -5,10 +5,19 @@ import { AutomationSchedulePanel } from "@/components/manager/tasks/planner/Auto
 import { AutomationBlockPicker } from "@/components/manager/tasks/planner/AutomationBlockPicker";
 import {
   TASK_FORM_FLAT_CONTROL_CLASS,
+  TASK_FORM_SELECT_CONTENT_CLASS,
+  TASK_FORM_SELECT_ITEM_CLASS,
+  TASK_FORM_SELECT_TRIGGER_CLASS,
+  TaskFormCompactCell,
   TaskFormFlatGrid,
-  TaskFormFlatSelectPlaceholder,
-  TaskFormPlaceholderCell,
 } from "@/components/manager/tasks/TaskFormLayout";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { AutomationBlockCatalogItem } from "@/lib/automation-blocks-api";
 import type {
   AutomationGscTriggerBlock,
@@ -17,6 +26,10 @@ import type {
   AutomationTriggerBlock,
 } from "@/lib/automation-planner-types";
 import { defaultTaskTriggerConfig, partsToPollHours, pollHoursToParts } from "@/lib/task-trigger-types";
+import { cn } from "@/lib/utils";
+
+/** Reserve space for the tallest WHEN variant (GSC) so preset switches do not shift layout. */
+const WHEN_DETAIL_MIN_H = "min-h-[19rem]";
 
 export type AutomationWhenPanelProps = {
   trigger: AutomationTriggerBlock;
@@ -86,8 +99,10 @@ export function AutomationWhenPanel({
     onChange(applyTriggerBlockDefaults(block, trigger));
   };
 
+  const pollParts = pollHoursToParts(trigger.kind === "poll" ? trigger.pollHours : 24);
+
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-1">
       <AutomationBlockPicker
         label="WHEN preset"
         blocks={[...scheduleBlocks, ...gscBlocks, ...pollBlocks]}
@@ -96,73 +111,115 @@ export function AutomationWhenPanel({
         onSelect={handleSelect}
       />
 
-      {trigger.kind === "calendar" ? (
-        <AutomationSchedulePanel
-          block={trigger}
-          disabled={disabled}
-          onChange={(patch) => onChange({ ...trigger, ...patch })}
-        />
-      ) : null}
+      <div className={cn("relative w-full", WHEN_DETAIL_MIN_H)}>
+        <div
+          className={cn(
+            "absolute inset-0 flex flex-col gap-1",
+            trigger.kind !== "calendar" && "pointer-events-none invisible",
+          )}
+        >
+          <AutomationSchedulePanel
+            block={
+              trigger.kind === "calendar"
+                ? trigger
+                : {
+                    keyword: "schedule-monthly",
+                    kind: "calendar",
+                    frequency: "monthly",
+                    startDate: "2026-09-01",
+                    time: "09:00",
+                  }
+            }
+            disabled={disabled || trigger.kind !== "calendar"}
+            onChange={(patch) => {
+              if (trigger.kind !== "calendar") return;
+              onChange({ ...trigger, ...patch });
+            }}
+          />
+        </div>
 
-      {trigger.kind === "gsc" ? (
-        <TaskTriggerFields
-          layout="inline"
-          triggerConfig={trigger.triggerConfig}
-          executionPayload={{ targetBucket: trigger.targetBucket }}
-          disabled={disabled}
-          onChange={(triggerConfig) => onChange({ ...trigger, triggerConfig })}
-          onExecutionPayloadChange={(executionPayload) =>
-            onChange({ ...trigger, targetBucket: executionPayload.targetBucket })
-          }
-        />
-      ) : null}
+        <div
+          className={cn(
+            "absolute inset-0 overflow-y-auto",
+            trigger.kind !== "gsc" && "pointer-events-none invisible",
+          )}
+        >
+          <TaskTriggerFields
+            layout="inline"
+            triggerConfig={
+              trigger.kind === "gsc" ? trigger.triggerConfig : defaultTaskTriggerConfig()
+            }
+            executionPayload={{
+              targetBucket: trigger.kind === "gsc" ? trigger.targetBucket : undefined,
+            }}
+            disabled={disabled || trigger.kind !== "gsc"}
+            onChange={(triggerConfig) => {
+              if (trigger.kind !== "gsc") return;
+              onChange({ ...trigger, triggerConfig });
+            }}
+            onExecutionPayloadChange={(executionPayload) => {
+              if (trigger.kind !== "gsc") return;
+              onChange({ ...trigger, targetBucket: executionPayload.targetBucket });
+            }}
+          />
+        </div>
 
-      {trigger.kind === "poll" ? (
-        <TaskFormFlatGrid className="grid-cols-2 md:grid-cols-3">
-          {(() => {
-            const parts = pollHoursToParts(trigger.pollHours);
-            return (
-              <>
-                <TaskFormPlaceholderCell>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={parts.value}
-                    disabled={disabled}
-                    className={TASK_FORM_FLAT_CONTROL_CLASS}
-                    onChange={(e) => {
-                      const value = Math.max(1, Number(e.target.value) || 1);
-                      const pollHours = partsToPollHours(value, parts.unit);
-                      onChange({
-                        ...trigger,
-                        pollHours,
-                        triggerConfig: { ...trigger.triggerConfig, pollHours },
-                      });
-                    }}
-                  />
-                </TaskFormPlaceholderCell>
-                <TaskFormFlatSelectPlaceholder
-                  placeholder="Unit"
-                  value={parts.unit}
-                  disabled={disabled}
-                  onChange={(unit) => {
-                    const pollHours = partsToPollHours(parts.value, unit as typeof parts.unit);
-                    onChange({
-                      ...trigger,
-                      pollHours,
-                      triggerConfig: { ...trigger.triggerConfig, pollHours },
-                    });
-                  }}
-                  options={[
-                    { value: "hours", label: "Hours" },
-                    { value: "days", label: "Days" },
-                  ]}
-                />
-              </>
-            );
-          })()}
-        </TaskFormFlatGrid>
-      ) : null}
+        <div
+          className={cn(
+            "absolute inset-0",
+            trigger.kind !== "poll" && "pointer-events-none invisible",
+          )}
+        >
+          <TaskFormFlatGrid className="grid-cols-2">
+            <TaskFormCompactCell label="Poll every">
+              <Input
+                type="number"
+                min={1}
+                value={trigger.kind === "poll" ? pollParts.value : 1}
+                disabled={disabled || trigger.kind !== "poll"}
+                className={TASK_FORM_FLAT_CONTROL_CLASS}
+                onChange={(e) => {
+                  if (trigger.kind !== "poll") return;
+                  const value = Math.max(1, Number(e.target.value) || 1);
+                  const pollHours = partsToPollHours(value, pollParts.unit);
+                  onChange({
+                    ...trigger,
+                    pollHours,
+                    triggerConfig: { ...trigger.triggerConfig, pollHours },
+                  });
+                }}
+              />
+            </TaskFormCompactCell>
+            <TaskFormCompactCell label="Unit">
+              <Select
+                value={trigger.kind === "poll" ? pollParts.unit : "days"}
+                onValueChange={(unit) => {
+                  if (trigger.kind !== "poll") return;
+                  const pollHours = partsToPollHours(pollParts.value, unit as typeof pollParts.unit);
+                  onChange({
+                    ...trigger,
+                    pollHours,
+                    triggerConfig: { ...trigger.triggerConfig, pollHours },
+                  });
+                }}
+                disabled={disabled || trigger.kind !== "poll"}
+              >
+                <SelectTrigger className={TASK_FORM_SELECT_TRIGGER_CLASS}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className={TASK_FORM_SELECT_CONTENT_CLASS}>
+                  <SelectItem value="hours" className={TASK_FORM_SELECT_ITEM_CLASS}>
+                    Hours
+                  </SelectItem>
+                  <SelectItem value="days" className={TASK_FORM_SELECT_ITEM_CLASS}>
+                    Days
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </TaskFormCompactCell>
+          </TaskFormFlatGrid>
+        </div>
+      </div>
     </div>
   );
 }
