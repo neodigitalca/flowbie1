@@ -16,6 +16,10 @@ export type PulseForgePostSchedulePanelProps = {
   onChange: (payload: TaskExecutionPayload) => void;
 };
 
+type ScheduleStateUpdater =
+  | PostCreatorScheduleUiState
+  | ((prev: PostCreatorScheduleUiState) => PostCreatorScheduleUiState);
+
 export function PulseForgePostSchedulePanel({
   executionPayload,
   disabled = false,
@@ -30,9 +34,12 @@ export function PulseForgePostSchedulePanel({
   }, [derived]);
 
   const commit = useCallback(
-    (next: PostCreatorScheduleUiState) => {
-      setState(next);
-      onChange(ensurePostCreatorPayload(scheduleStateToPostCreatorPayload(next, base)));
+    (updater: ScheduleStateUpdater) => {
+      setState((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater;
+        onChange(ensurePostCreatorPayload(scheduleStateToPostCreatorPayload(next, base)));
+        return next;
+      });
     },
     [base, onChange],
   );
@@ -58,21 +65,35 @@ export function PulseForgePostSchedulePanel({
         variant="forge"
         layout="stack"
         scheduleFrequency={state.scheduleFrequency}
-        setScheduleFrequency={(scheduleFrequency) => commit({ ...state, scheduleFrequency })}
+        setScheduleFrequency={(scheduleFrequency) =>
+          commit((prev) => ({ ...prev, scheduleFrequency }))
+        }
         customInterval={state.customInterval}
-        setCustomInterval={(customInterval) => commit({ ...state, customInterval })}
+        setCustomInterval={(customInterval) => commit((prev) => ({ ...prev, customInterval }))}
         dayOfWeek={state.dayOfWeek}
-        setDayOfWeek={(dayOfWeek) => commit({ ...state, dayOfWeek })}
+        setDayOfWeek={(dayOfWeek) => commit((prev) => ({ ...prev, dayOfWeek }))}
         startDateOption={state.startDateOption}
-        setStartDateOption={(startDateOption) => commit({ ...state, startDateOption })}
+        setStartDateOption={(startDateOption) =>
+          commit((prev) => ({ ...prev, startDateOption }))
+        }
         customStartDate={state.customStartDate}
-        setCustomStartDate={(customStartDate) => commit({ ...state, customStartDate })}
+        setCustomStartDate={(customStartDate) =>
+          commit((prev) => ({
+            ...prev,
+            customStartDate:
+              typeof customStartDate === "function"
+                ? customStartDate(prev.customStartDate)
+                : customStartDate,
+          }))
+        }
         startTime={state.startTime}
-        setStartTime={(startTime) => commit({ ...state, startTime })}
+        setStartTime={(startTime) => commit((prev) => ({ ...prev, startTime }))}
         useCsvPublishDates={false}
         setUseCsvPublishDates={() => {}}
         wordpressDraftOnly={state.wordpressDraftOnly}
-        setWordpressDraftOnly={(wordpressDraftOnly) => commit({ ...state, wordpressDraftOnly })}
+        setWordpressDraftOnly={(wordpressDraftOnly) =>
+          commit((prev) => ({ ...prev, wordpressDraftOnly }))
+        }
         isDisabled={disabled}
       />
     </div>

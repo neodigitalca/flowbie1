@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -61,7 +61,7 @@ export type WordPressScheduleFieldsProps = {
   startDateOption: "immediate" | "custom";
   setStartDateOption: (value: "immediate" | "custom") => void;
   customStartDate: Date;
-  setCustomStartDate: (value: Date) => void;
+  setCustomStartDate: Dispatch<SetStateAction<Date>>;
   startTime: string;
   setStartTime: (value: string) => void;
   useCsvPublishDates: boolean;

@@ -31,6 +31,12 @@ function parseIsoDateLocal(value: string | undefined, fallback: Date): Date {
   return Number.isNaN(parsed.getTime()) ? fallback : parsed;
 }
 
+function ensureScheduleDate(value: unknown, fallback: Date): Date {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === "string") return parseIsoDateLocal(value, fallback);
+  return fallback;
+}
+
 export function postCreatorPayloadToScheduleState(
   payload: PostCreatorExecutionPayload,
 ): PostCreatorScheduleUiState {
@@ -78,7 +84,16 @@ export function scheduleStateToPostCreatorPayload(
   base: PostCreatorExecutionPayload,
 ): PostCreatorExecutionPayload {
   const postCount = Math.max(1, Math.min(31, Math.floor(Number(base.postCount ?? 1) || 1)));
-  const startDay = Math.max(1, Math.min(28, state.customStartDate.getDate()));
+  const startTime = state.startTime?.trim() || "09:00";
+  const startDayFallback = Math.max(
+    1,
+    Math.min(28, Math.floor(Number(base.scheduleStartDay ?? 1) || 1)),
+  );
+  const customStartDate = ensureScheduleDate(
+    state.customStartDate,
+    postCreatorRunStartDate(startDayFallback, startTime),
+  );
+  const startDay = Math.max(1, Math.min(28, customStartDate.getDate()));
 
   let scheduleTimesPerMonth = postCount;
   if (state.scheduleFrequency === "custom") {
@@ -99,10 +114,10 @@ export function scheduleStateToPostCreatorPayload(
     scheduleCustomInterval: state.customInterval,
     scheduleDayOfWeek: state.dayOfWeek,
     scheduleStartDateOption: state.startDateOption,
-    scheduleCustomStartDate: toIsoDateLocal(state.customStartDate),
+    scheduleCustomStartDate: toIsoDateLocal(customStartDate),
     scheduleDraftOnly: state.wordpressDraftOnly,
     scheduleTimesPerMonth,
     scheduleStartDay: startDay,
-    scheduleStartTime: state.startTime,
+    scheduleStartTime: startTime,
   };
 }
