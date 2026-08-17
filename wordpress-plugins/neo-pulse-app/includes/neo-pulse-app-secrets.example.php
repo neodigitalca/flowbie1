@@ -40,3 +40,15 @@ if ( ! defined( 'NEO_PULSE_APP_CHEKKIT_EVENTS_WEBHOOK_URL' ) ) {
 if ( ! defined( 'NEO_PULSE_APP_CHEKKIT_FORM_EMAIL' ) ) {
 	define( 'NEO_PULSE_APP_CHEKKIT_FORM_EMAIL', '' );
 }
+if ( ! defined( 'NEO_PULSE_APP_GITHUB_TOKEN' ) ) {
+	define( 'NEO_PULSE_APP_GITHUB_TOKEN', '' );
+}
+if ( ! defined( 'NEO_PULSE_APP_GITHUB_REPO' ) ) {
+	define( 'NEO_PULSE_APP_GITHUB_REPO', '' );
+}
+if ( ! defined( 'NEO_PULSE_APP_GITHUB_REF' ) ) {
+	define( 'NEO_PULSE_APP_GITHUB_REF', 'main' );
+}
+if ( ! defined( 'NEO_PULSE_APP_RESEARCH_CALLBACK_SECRET' ) ) {
+	define( 'NEO_PULSE_APP_RESEARCH_CALLBACK_SECRET', '' );
+}

@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { handleOptimizeContent } from "@/hooks/content-optimization/handle-optimize-content";
 import { handleOptimizeMultipleContent } from "@/hooks/content-optimization/bulk-optimization";
 import { humanizeSlugFromUrl } from "@/hooks/content-optimization/bulk-optimization-constants";
+import { getStoredSites } from "@/components/integrations/storage";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { AgentRunHarnessContext } from "@/lib/agent-runs/harness-registry";
 import {
@@ -16,6 +17,7 @@ import { resolveAgentRunBatchKey } from "@/lib/agent-runs/agent-run-batch-key";
 import { resolveAgentRunRecipeKey } from "@/lib/agent-runs/agent-run-navigation";
 import { getAgentRunOptimizationBridge } from "@/lib/agent-runs/agent-run-optimization-bridge";
 import { runGscReportingClientHarness } from "@/lib/agent-runs/run-gsc-reporting-client-harness";
+import { runLocalDominatorExportClientHarness } from "@/lib/agent-runs/run-local-dominator-export-client-harness";
 import {
   runPostCreatorClientHarness,
   shouldRunPostCreatorHarness,
@@ -31,12 +33,69 @@ import {
   patchTaskExecutionProgress,
   reopenTaskExecutionForResume,
 } from "@/lib/tasks-api";
+import { buildExecutionCompletePayload } from "@/lib/task-execution-archive";
 import { agentRunHasResumeProgress } from "@/lib/agent-runs/agent-run-resume";
+import { effectiveSaveLocalArchive } from "@/lib/schedule-output-destination";
+import {
+  automationTitleFromRun,
+  executionKindFromRun,
+  sendAutomationEmailIfConfigured,
+  type AutomationEmailDeliveryResult,
+} from "@/lib/automation-email-delivery";
 import type { OptimizationProgressState } from "@/hooks/content-optimization/use-optimization-state";
 import type { OptimizationFileManager } from "@/lib/optimization-file-manager";
 
 function noopSetState<T>(_value: SetStateAction<T>): void {
   /* agent run harness uses API steps only */
+}
+
+async function completeOptimizerWithOptionalEmail(args: {
+  run: AgentRun;
+  site: WordPressSite;
+  contract: NonNullable<AgentRun["plan"]>["clientRunContract"] & object;
+  executionId: number;
+  saveLocalArchive: boolean;
+  ok: boolean;
+  result: Record<string, unknown>;
+  summaryText: string;
+  summary?: string;
+  onStep?: AgentRunHarnessContext["onStep"];
+}): Promise<AutomationEmailDeliveryResult> {
+  const executionKind = executionKindFromRun(args.run) || "content_optimizer";
+  const emailResult = await sendAutomationEmailIfConfigured({
+    teamId: args.run.teamId,
+    executionId: args.executionId,
+    contract: args.contract,
+    tokenContext: {
+      siteName: args.site.name,
+      automationTitle: automationTitleFromRun(args.run),
+      executionKind,
+      summary: args.summary,
+    },
+    summaryText: args.summaryText,
+    runOk: args.ok,
+    onStep: (label, status) => args.onStep?.(label, status ?? "running"),
+  });
+  await completeTaskExecution(
+    args.run.teamId,
+    args.executionId,
+    buildExecutionCompletePayload({
+      ok: args.ok,
+      run: args.run,
+      saveLocalArchive: args.saveLocalArchive,
+      result: { ...args.result, ...emailResult },
+    }),
+  );
+  return emailResult;
+}
+
+function resolveHarnessSite(siteId: string, sites: WordPressSite[]): WordPressSite {
+  const id = siteId.trim();
+  const fromHook = sites.find((s) => s.id === id);
+  if (fromHook) return fromHook;
+  const fromStorage = getStoredSites().find((s) => s.id === id);
+  if (fromStorage) return fromStorage;
+  throw new Error("WordPress site not found for this task.");
 }
 
 async function resolveTaskExecutionTerminalState(
@@ -154,10 +213,7 @@ export async function runTaskExecutionClientHarness(
     return terminalResult;
   }
 
-  const site = sites.find((s) => s.id === contract.siteId);
-  if (!site) {
-    throw new Error("WordPress site not found for this task.");
-  }
+  const site = resolveHarnessSite(contract.siteId, sites);
 
   const batchKey = resolveAgentRunBatchKey(run, site.id);
   const effectiveRecipe = resolveAgentRunRecipeKey(run);
@@ -171,6 +227,10 @@ export async function runTaskExecutionClientHarness(
           : "mom",
     };
     return runGscReportingClientHarness(run, site, reportingContract, executionId, ctx, batchKey);
+  }
+
+  if (effectiveRecipe === "local_dominator_export") {
+    return runLocalDominatorExportClientHarness(run, site, contract, executionId, ctx, batchKey);
   }
 
   if (effectiveRecipe === "post_creator" || shouldRunPostCreatorHarness(contract)) {
@@ -189,14 +249,28 @@ export async function runTaskExecutionClientHarness(
     throw new Error("Task execution contract is missing resolved post.");
   }
 
+  const executionKind = executionKindFromRun(run) || "content_optimizer";
+  const saveLocalArchive = effectiveSaveLocalArchive(executionKind, contract);
   const resumePayload = ctx.resumePoint?.payload ?? readAgentRunCheckpoint(run).lastStepPayload ?? {};
   if (resumePayload.uploaded === true && typeof resumePayload.url === "string") {
-    await completeTaskExecution(run.teamId, executionId, { ok: true, result: { url: resumePayload.url } });
+    const emailResult = await completeOptimizerWithOptionalEmail({
+      run,
+      site,
+      contract,
+      executionId,
+      saveLocalArchive,
+      ok: true,
+      result: { url: resumePayload.url },
+      summaryText: `Optimized ${resumePayload.url}`,
+      summary: `Optimized ${resumePayload.url}`,
+      onStep: ctx.onStep,
+    });
     await ctx.onStep?.("Complete", "done", resumePayload);
     return {
       updated: 1,
       message: `Optimized ${resumePayload.url}`,
       batchKey,
+      ...emailResult,
     };
   }
 
@@ -283,12 +357,24 @@ export async function runTaskExecutionClientHarness(
   };
   await ctx.onStep?.("Uploaded to WordPress", "running", singleDonePayload);
 
-  await completeTaskExecution(run.teamId, executionId, { ok: true, result: { url: contract.url } });
+  const emailResult = await completeOptimizerWithOptionalEmail({
+    run,
+    site,
+    contract,
+    executionId,
+    saveLocalArchive,
+    ok: true,
+    result: { url: contract.url },
+    summaryText: `Optimized ${contract.url}`,
+    summary: `Optimized ${contract.url}`,
+    onStep: ctx.onStep,
+  });
 
   return {
     updated: 1,
     message: `Optimized ${contract.url}`,
     batchKey,
+    ...emailResult,
   };
 }
 
@@ -468,9 +554,20 @@ async function runTaskExecutionBulkClientHarness(
     );
   }
 
-  await completeTaskExecution(run.teamId, executionId, {
+  const executionKind = executionKindFromRun(run) || "content_optimizer";
+  const saveLocalArchive = effectiveSaveLocalArchive(executionKind, contract);
+  const bulkMessage = `Optimized ${uploadedUrls.length} URLs`;
+  const emailResult = await completeOptimizerWithOptionalEmail({
+    run,
+    site,
+    contract,
+    executionId,
+    saveLocalArchive,
     ok: true,
-    result: { targetBucket: bucket, count: workUrls.length },
+    result: { targetBucket: bucket, count: workUrls.length, optimized: uploadedUrls.length },
+    summaryText: `${bulkMessage}\n${uploadedUrls.slice(0, 12).join("\n")}`,
+    summary: bulkMessage,
+    onStep: ctx.onStep,
   });
   await ctx.onStep?.("Complete", "done");
 
@@ -478,5 +575,6 @@ async function runTaskExecutionBulkClientHarness(
     updated: uploadedUrls.length,
     message: `Optimized ${uploadedUrls.length} URLs`,
     batchKey,
+    ...emailResult,
   };
 }

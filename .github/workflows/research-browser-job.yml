@@ -1,0 +1,62 @@
+name: Research browser job
+
+on:
+  workflow_dispatch:
+    inputs:
+      jobKey:
+        description: Research job registry key
+        required: true
+        default: local_dominator_export
+        type: string
+      payload:
+        description: JSON payload (teamId, executionId, agentRunId, businessName, keyword, siteId)
+        required: true
+        type: string
+  schedule:
+    - cron: "0 14 * * 1"
+
+jobs:
+  research-browser-job:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RESEARCH_JOB_KEY: ${{ github.event.inputs.jobKey || 'local_dominator_export' }}
+      RESEARCH_JOB_PAYLOAD: ${{ github.event.inputs.payload || '{"businessName":"Advance Blinds & Drapery","keyword":"blinds near me"}' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run research browser job
+        id: run_job
+        continue-on-error: true
+        env:
+          LOCAL_DOMINATOR_EMAIL: ${{ secrets.LOCAL_DOMINATOR_EMAIL }}
+          LOCAL_DOMINATOR_PASSWORD: ${{ secrets.LOCAL_DOMINATOR_PASSWORD }}
+        run: node scripts/research/github/run-job.mjs
+
+      - name: Callback to Neo Pulse
+        if: ${{ github.event.inputs.payload != '' }}
+        env:
+          NEOPULSE_API_BASE: ${{ secrets.NEOPULSE_API_BASE }}
+          NEOPULSE_RESEARCH_CALLBACK_SECRET: ${{ secrets.NEOPULSE_RESEARCH_CALLBACK_SECRET }}
+          RESEARCH_JOB_SUCCEEDED: ${{ steps.run_job.outcome == 'success' }}
+        run: node scripts/research/github/neopulse-callback.mjs
+
+      - name: Fail job when export failed
+        if: ${{ steps.run_job.outcome != 'success' }}
+        run: exit 1
+
+      - name: Upload job result on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-job-result
+          path: .research-job-result.json
+          if-no-files-found: ignore

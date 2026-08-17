@@ -26,6 +26,7 @@ export type TaskExecutionKind =
   | "content_optimizer_meta"
   | "gsc_reporting"
   | "post_creator"
+  | "local_dominator_export"
   | "";
 
 export type GscReportingComparePreset = "mom" | "yoy";
@@ -36,7 +37,7 @@ export type PostCreatorEntityMode = "auto" | "manual" | "blank";
 
 export type PostCreatorSitemapType = "post" | "entity";
 
-export type PostCreatorPostDestination = "wordpress" | "bank" | "draft";
+export type PostCreatorPostDestination = "wordpress" | "draft";
 
 export type PostCreatorExecutionPayload = {
   postCount?: number;
@@ -61,6 +62,7 @@ export type PostCreatorExecutionPayload = {
   /** Local calendar date YYYY-MM-DD for pick-date / anchor starts. */
   scheduleCustomStartDate?: string;
   scheduleDraftOnly?: boolean;
+  saveLocalArchive?: boolean;
 };
 
 export type TaskExecutionTargetBucket = "pages" | "posts" | "sap" | "all";
@@ -73,6 +75,8 @@ export type TaskExecutionPayload = {
   postId?: number | null;
   updateMode?: "update" | "draft";
   comparePreset?: GscReportingComparePreset;
+  businessName?: string;
+  keyword?: string;
   saveToDisk?: boolean;
   postCount?: number;
   keywordSource?: PostCreatorKeywordSource;
@@ -94,12 +98,22 @@ export type TaskExecutionPayload = {
   scheduleStartDateOption?: "immediate" | "custom";
   scheduleCustomStartDate?: string;
   scheduleDraftOnly?: boolean;
+  /** When true, each run saves outputs to the team task archive on the server. */
+  saveLocalArchive?: boolean;
+  /** Then tab Email delivery (AgentMail). */
+  sendAutomationEmail?: boolean;
+  automationEmailTo?: string;
+  automationEmailSubject?: string;
+  automationEmailMessage?: string;
+  automationEmailAiIntro?: boolean;
   optimizationOptions?: {
     optimizeTitle?: boolean;
     optimizeMeta?: boolean;
     optimizeExcerpt?: boolean;
     optimizeContent?: boolean;
     optimizeFeaturedImage?: boolean;
+    optimizeExtraText?: boolean;
+    optimizeExtraImage?: boolean;
     useAcfKeyword?: boolean;
     manualKeyword?: string;
     testMode?: boolean;
@@ -139,7 +153,16 @@ export type TaskExecutionClientRunContract = {
   updateMode?: "update" | "draft";
   optimizationOptions?: NonNullable<TaskExecutionPayload["optimizationOptions"]>;
   comparePreset?: GscReportingComparePreset;
+  businessName?: string;
+  keyword?: string;
   saveToDisk?: boolean;
+  saveLocalArchive?: boolean;
+  executionMode?: "client" | "server" | "github";
+  sendAutomationEmail?: boolean;
+  automationEmailTo?: string;
+  automationEmailSubject?: string;
+  automationEmailMessage?: string;
+  automationEmailAiIntro?: boolean;
   postCount?: number;
   keywordSource?: PostCreatorKeywordSource;
   optionalPrompt?: string;
@@ -174,7 +197,7 @@ export type TaskExecution = {
   updatedAt: string;
   completedAt: string | null;
   clientRunContract?: TaskExecutionClientRunContract | null;
-  executionMode?: "client" | "server" | null;
+  executionMode?: "client" | "server" | "github" | null;
   result?: unknown;
   error?: string;
   progress?: TaskExecutionProgress | null;
@@ -251,6 +274,8 @@ export type TaskSection = {
   title: string;
 };
 
+export type ForgeAutomationVisibility = "public" | "private";
+
 export type TaskProject = {
   id: number;
   teamId: number;
@@ -266,6 +291,8 @@ export type TaskProject = {
   wordpressSiteId?: string;
   isAutomation?: boolean;
   sourceTemplateKeyword?: string;
+  createdBy?: number;
+  automationVisibility?: ForgeAutomationVisibility;
 };
 
 export type TeamTask = {

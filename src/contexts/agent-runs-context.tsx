@@ -15,6 +15,7 @@ import { usePulseTaskScheduleRunner } from "@/hooks/use-pulse-task-schedule-runn
 import { usePulseTaskTriggerRunner } from "@/hooks/use-pulse-task-trigger-runner";
 import {
   createAgentRun,
+  cancelAgentRun,
   clearAgentRuns,
   fetchAgentRun,
   fetchAgentRuns,
@@ -32,8 +33,10 @@ import {
 import { registerAgentRunListPatcher, type AgentRunListPatch } from "@/lib/agent-runs/agent-runs-local-patch";
 import { isAgentRunInterrupted } from "@/lib/agent-runs/agent-run-checkpoint";
 import type { AgentRun, StartAgentRunPayload } from "@/lib/agent-runs-types";
-import { isAgentRunTerminal, taskExecutionKindToRecipe } from "@/lib/agent-runs-types";
-import { resolveEffectiveExecutionKind } from "@/lib/task-automation-ui";
+import { isAgentRunTerminal, resolveTaskExecuteSiteId, taskExecutionKindToRecipe } from "@/lib/agent-runs-types";
+import { prepareTaskForAutomationExecute, resolveEffectiveExecutionKind } from "@/lib/task-automation-ui";
+import { readCachedExecutionPayload } from "@/lib/forge-automation-plan-cache";
+import { mergeExecutionPayloadForSave } from "@/lib/post-creator/post-creator-schedule-payload";
 import { writeAgentRunsSidebarOpen } from "@/lib/agent-runs/storage";
 import { writeSidebarOpen, writeSidebarPanel, type SidebarPanel } from "@/lib/pulse-assist/storage";
 import { startTaskExecution, reopenTaskExecutionForResume } from "@/lib/tasks-api";
@@ -157,11 +160,20 @@ export function AgentRunsContextProvider({
     );
     setRuns((prev) => {
       const prevById = new Map(prev.map((run) => [run.id, run]));
-      return hydrated.map((incoming) => {
+      const mergedById = new Map<number, AgentRun>();
+
+      for (const incoming of hydrated) {
         const existing = prevById.get(incoming.id);
-        if (!existing) return incoming;
-        return mergeAgentRunListRow(existing, incoming);
-      });
+        mergedById.set(incoming.id, existing ? mergeAgentRunListRow(existing, incoming) : incoming);
+      }
+
+      for (const run of prev) {
+        if (mergedById.has(run.id)) continue;
+        if (isAgentRunTerminal(run.status)) continue;
+        mergedById.set(run.id, run);
+      }
+
+      return [...mergedById.values()].sort((a, b) => b.id - a.id);
     });
   }, [teamId]);
 
@@ -230,14 +242,25 @@ export function AgentRunsContextProvider({
   const startRunFromTask = useCallback(
     async (task: TeamTask, options?: StartRunOptions) => {
       if (!teamId) return { ok: false, error: "No active team" };
-      const kind = resolveEffectiveExecutionKind(task);
+      const prepared = prepareTaskForAutomationExecute(task, null, activeWordPressSiteId);
+      const kind =
+        (prepared.executionKind ?? "").trim() || resolveEffectiveExecutionKind(prepared);
       const recipeKey = taskExecutionKindToRecipe(kind);
       if (!recipeKey) return { ok: false, error: "Task has no execution recipe" };
 
-      const exec = await startTaskExecution(teamId, task.id, {
+      const siteId =
+        prepared.wordpressSiteId?.trim() || resolveTaskExecuteSiteId(prepared, activeWordPressSiteId);
+      if (!siteId) {
+        return { ok: false, error: "Set a client on the project." };
+      }
+
+      const exec = await startTaskExecution(teamId, prepared.id, {
         executionKind: kind as TeamTask["executionKind"],
-        executionPayload: task.executionPayload,
-        wordpressSiteId: task.wordpressSiteId?.trim() || undefined,
+        executionPayload: mergeExecutionPayloadForSave(
+          prepared.executionPayload,
+          readCachedExecutionPayload(prepared.projectId),
+        ),
+        wordpressSiteId: siteId,
       });
       if (!exec.ok || !exec.execution) {
         return { ok: false, error: exec.error ?? "Could not start task execution" };
@@ -249,13 +272,13 @@ export function AgentRunsContextProvider({
             teamId,
             source: "task_manager",
             recipeKey,
-            title: task.title,
-            taskId: task.id,
+            title: prepared.title,
+            taskId: prepared.id,
             context: {
-              siteId: task.wordpressSiteId,
-              taskKeyword: task.keyword,
-              taskTitle: task.title,
-              projectId: task.projectId,
+              siteId,
+              taskKeyword: prepared.keyword,
+              taskTitle: prepared.title,
+              projectId: prepared.projectId,
             },
             plan: {
               taskExecutionId: exec.execution.id,
@@ -267,20 +290,24 @@ export function AgentRunsContextProvider({
       }
 
       const executionMode =
-        exec.execution.executionMode === "server" ? ("server" as const) : undefined;
+        exec.execution.executionMode === "server"
+          ? ("server" as const)
+          : exec.execution.executionMode === "github"
+            ? ("github" as const)
+            : undefined;
 
       return startRun(
         {
           teamId,
           source: "task_manager",
           recipeKey,
-          title: task.title,
-          taskId: task.id,
+          title: prepared.title,
+          taskId: prepared.id,
           context: {
-            siteId: task.wordpressSiteId,
-            taskKeyword: task.keyword,
-            taskTitle: task.title,
-            projectId: task.projectId,
+            siteId,
+            taskKeyword: prepared.keyword,
+            taskTitle: prepared.title,
+            projectId: prepared.projectId,
           },
           plan: {
             taskExecutionId: exec.execution.id,
@@ -291,7 +318,7 @@ export function AgentRunsContextProvider({
         options,
       );
     },
-    [startRun, teamId],
+    [activeWordPressSiteId, startRun, teamId],
   );
 
   usePulseTaskScheduleRunner({
@@ -369,10 +396,13 @@ export function AgentRunsContextProvider({
 
   const clearHistory = useCallback(async () => {
     if (!teamId) return;
+    const list = runs.length > 0 ? runs : await fetchAgentRuns(teamId);
+    const active = list.filter((run) => !isAgentRunTerminal(run.status));
+    await Promise.all(active.map((run) => cancelAgentRun(teamId, run.id)));
     await clearAgentRuns(teamId);
     setSelectedRunId(null);
     setRuns([]);
-  }, [teamId]);
+  }, [runs, teamId]);
 
   useEffect(() => {
     if (!teamId) {

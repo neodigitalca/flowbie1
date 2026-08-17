@@ -1,0 +1,18 @@
+{
+  "keyword": "local-dominator-grid-export",
+  "name": "Local Dominator grid export",
+  "executionKind": "local_dominator_export",
+  "description": "Export a Local Dominator grid scan as CSV to the automation Archive.",
+  "filters": {
+    "categories": ["research"],
+    "verticals": ["general", "local-seo", "home-services"]
+  },
+  "defaults": {
+    "executionPayload": {
+      "businessName": "Advance Blinds & Drapery",
+      "keyword": "blinds near me",
+      "saveLocalArchive": true,
+      "saveToDisk": true
+    }
+  }
+}

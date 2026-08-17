@@ -27,6 +27,10 @@ class Neo_Pulse_App_Agent_Runs_Recipe_Registry {
 			'title'       => 'Post creator',
 			'managerTabs' => array( 'generator' ),
 		),
+		'local_dominator_export'    => array(
+			'title'       => 'Local Dominator grid export',
+			'managerTabs' => array( 'generator' ),
+		),
 	);
 
 	public static function is_valid( string $recipe_key ): bool {

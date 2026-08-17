@@ -14,6 +14,12 @@ export function resolveAgentRunRecipeKey(
     return "gsc_reporting";
   }
 
+  const businessName = String(run.plan?.clientRunContract?.businessName ?? "").trim();
+  const keyword = String(run.plan?.clientRunContract?.keyword ?? "").trim();
+  if (businessName && keyword) {
+    return "local_dominator_export";
+  }
+
   const taskKw = (run.context?.taskKeyword ?? "").trim();
   if (GSC_TASK_KEYWORDS.has(taskKw)) return "gsc_reporting";
   if (POST_CREATOR_TASK_KEYWORDS.has(taskKw)) return "post_creator";
@@ -21,6 +27,7 @@ export function resolveAgentRunRecipeKey(
   if (
     key === "gsc_reporting" ||
     key === "post_creator" ||
+    key === "local_dominator_export" ||
     key === "content_optimizer_bulk" ||
     key === "overview_pages_meta_batch"
   ) {
@@ -38,14 +45,22 @@ export function agentRunGeneratorSection(recipeKey: string): BlogGeneratorSectio
 
 export function agentRunProgressHeading(recipeKey: string): string {
   if (recipeKey === "gsc_reporting") return "Report";
+  if (recipeKey === "local_dominator_export") return "Grid export";
   if (recipeKey === "post_creator") return "";
   return "Current post";
 }
 
 export function agentRunOpenViewLabel(recipeKey: string): string {
-  if (recipeKey === "gsc_reporting") return "Open report";
   if (recipeKey === "post_creator") return "Open posts";
   return "Open optimizer";
+}
+
+export function agentRunShowsOpenView(recipeKey: string): boolean {
+  return (
+    recipeKey !== "post_creator" &&
+    recipeKey !== "gsc_reporting" &&
+    recipeKey !== "local_dominator_export"
+  );
 }
 
 export function agentRunShowsUrlProgress(recipeKey: string): boolean {
@@ -60,6 +75,7 @@ function isKnownNonOptimizerRecipe(recipeKey: string): recipeKey is AgentRunReci
   return (
     recipeKey === "gsc_reporting" ||
     recipeKey === "post_creator" ||
+    recipeKey === "local_dominator_export" ||
     recipeKey === "content_optimizer_bulk" ||
     recipeKey === "overview_pages_meta_batch"
   );

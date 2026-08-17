@@ -13,6 +13,7 @@ import { formatAgentRunLogTimeline } from "@/lib/agent-runs/agent-run-log-format
 import {
   agentRunOpenViewLabel,
   agentRunProgressHeading,
+  agentRunShowsOpenView,
   agentRunShowsUrlProgress,
   resolveAgentRunRecipeKey,
 } from "@/lib/agent-runs/agent-run-navigation";
@@ -227,7 +228,7 @@ export function AgentRunsDetailsDrawer({
               Resume
             </Button>
           ) : null}
-          {runSiteId && recipeKey !== "post_creator" ? (
+          {runSiteId && agentRunShowsOpenView(recipeKey) ? (
             <Button
               type="button"
               variant="ghost"

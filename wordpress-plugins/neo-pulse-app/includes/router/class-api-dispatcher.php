@@ -233,6 +233,17 @@ class Neo_Pulse_App_Api_Dispatcher {
 			return;
 		}
 
+		if ( 0 === strpos( $route, 'local-dominator/' ) ) {
+			Neo_Pulse_App_Local_Dominator_Route_Handlers::dispatch_http( substr( $route, 16 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'research-jobs/' ) || $route === 'research-jobs' ) {
+			$research_route = $route === 'research-jobs' ? '' : substr( $route, 14 );
+			Neo_Pulse_App_Research_Route_Handlers::dispatch_http( $research_route, $method, $body );
+			return;
+		}
+
 		if ( $route === 'bulk/abort-dataforseo' && $method === 'POST' ) {
 			self::send_json( array( 'success' => true, 'aborted' => true ) );
 			return;

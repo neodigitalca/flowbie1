@@ -38,6 +38,11 @@ class Neo_Pulse_App_Task_Execution_Coordinator {
 				Neo_Pulse_App_Tasks_Store::sanitize_execution_payload( $body['executionPayload'] )
 			);
 		}
+		$payload = Neo_Pulse_App_Tasks_Store::sanitize_execution_payload( $payload );
+		if ( ! empty( $payload['automationEmailTo'] ) ) {
+			$payload['sendAutomationEmail'] = true;
+			$payload['saveLocalArchive']    = true;
+		}
 
 		$site_id = trim( (string) ( $body['wordpressSiteId'] ?? $task['wordpressSiteId'] ?? '' ) );
 		if ( $site_id === '' ) {
@@ -47,7 +52,7 @@ class Neo_Pulse_App_Task_Execution_Coordinator {
 		$target_url = trim( (string) ( $payload['targetUrl'] ?? '' ) );
 		$target_bucket = Neo_Pulse_App_Tasks_Store::sanitize_execution_target_bucket( $payload['targetBucket'] ?? '' );
 		$target_urls = isset( $payload['targetUrls'] ) && is_array( $payload['targetUrls'] ) ? $payload['targetUrls'] : array();
-		if ( $kind !== 'gsc_reporting' && $kind !== 'post_creator' ) {
+		if ( $kind !== 'gsc_reporting' && $kind !== 'post_creator' && $kind !== 'local_dominator_export' ) {
 			if ( Neo_Pulse_App_Tasks_Store::is_execution_target_all( $target_url ) && $target_bucket === '' ) {
 				$target_bucket = 'all';
 			}
@@ -66,6 +71,12 @@ class Neo_Pulse_App_Task_Execution_Coordinator {
 			$post_count = (int) ( $payload['postCount'] ?? 0 );
 			if ( $post_count < 1 ) {
 				return array( 'ok' => false, 'error' => 'executionPayload.postCount must be at least 1.' );
+			}
+		} elseif ( $kind === 'local_dominator_export' ) {
+			$business_name = trim( (string) ( $payload['businessName'] ?? '' ) );
+			$ld_keyword    = trim( (string) ( $payload['keyword'] ?? '' ) );
+			if ( $business_name === '' || $ld_keyword === '' ) {
+				return array( 'ok' => false, 'error' => 'executionPayload.businessName and keyword are required.' );
 			}
 		}
 
@@ -152,7 +163,9 @@ class Neo_Pulse_App_Task_Execution_Coordinator {
 				? 'Ready for client GSC reporting harness.'
 				: ( $kind === 'post_creator'
 					? 'Ready for client post creator harness.'
-					: 'Ready for client content optimizer harness.' );
+					: ( $kind === 'local_dominator_export'
+						? 'Ready for client Local Dominator export harness.'
+						: 'Ready for client content optimizer harness.' ) );
 			Neo_Pulse_App_Task_Execution_Progress::update(
 				$team_id,
 				$execution_id,
@@ -284,6 +297,15 @@ class Neo_Pulse_App_Task_Execution_Coordinator {
 			);
 			Neo_Pulse_App_Task_Execution_Progress::complete( $team_id, $execution_id, $result );
 			Neo_Pulse_App_Tasks_Store::patch_task_execution_meta( $team_id, $task_id, $execution_id, 'completed' );
+
+			$task = Neo_Pulse_App_Tasks_Store::get_task( $team_id, $task_id );
+			if ( self::should_archive_execution_outputs( $task, $body ) ) {
+				$user_id = (int) ( $execution['startedBy'] ?? 0 );
+				if ( $user_id <= 0 ) {
+					$user_id = Neo_Pulse_App_Tasks_Store::pulse_bot_user_id();
+				}
+				Neo_Pulse_App_Tasks_Assets::archive_execution_outputs( $team_id, $task_id, $user_id, $body );
+			}
 		} else {
 			$error = sanitize_text_field( (string) ( $body['error'] ?? 'Execution failed.' ) );
 			Neo_Pulse_App_Task_Execution_Store::update(
@@ -338,6 +360,31 @@ class Neo_Pulse_App_Task_Execution_Coordinator {
 			'ok'        => true,
 			'execution' => self::format_with_progress( $team_id, $execution_id ),
 		);
+	}
+
+	/**
+	 * @param array<string,mixed>|null $task
+	 * @param array<string,mixed>      $body
+	 */
+	private static function should_archive_execution_outputs( ?array $task, array $body ): bool {
+		if ( ! is_array( $task ) ) {
+			return false;
+		}
+		if ( ! empty( $body['archiveFiles'] ) && is_array( $body['archiveFiles'] ) ) {
+			return true;
+		}
+		$payload = is_array( $task['executionPayload'] ?? null ) ? $task['executionPayload'] : array();
+		$kind    = (string) ( $task['executionKind'] ?? '' );
+		if ( $kind === 'gsc_reporting' ) {
+			return ! array_key_exists( 'saveLocalArchive', $payload ) || ! empty( $payload['saveLocalArchive'] );
+		}
+		if (
+			( $kind === 'content_optimizer' || $kind === 'content_optimizer_meta' )
+			&& (string) ( $payload['updateMode'] ?? '' ) === 'draft'
+		) {
+			return ! array_key_exists( 'saveLocalArchive', $payload ) || ! empty( $payload['saveLocalArchive'] );
+		}
+		return ! empty( $payload['saveLocalArchive'] );
 	}
 
 	/**
