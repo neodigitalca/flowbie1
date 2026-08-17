@@ -102,7 +102,13 @@ class Neo_Pulse_App_Api_Dispatcher {
 	 */
 	public static function dispatch( string $route ): void {
 		$method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( (string) $_SERVER['REQUEST_METHOD'] ) : 'GET';
-		$body   = self::read_json_body();
+		if ( $method === 'OPTIONS' ) {
+			self::apply_cors_headers();
+			status_header( 204 );
+			exit;
+		}
+
+		$body = self::read_json_body();
 
 		if ( preg_match( '#^wordpress/(bulk-update-overview-seo|get-site-inventory-bulk|get-site-post-inventory)#', $route ) ) {
 			@set_time_limit( 300 );
@@ -342,8 +348,46 @@ class Neo_Pulse_App_Api_Dispatcher {
 		while ( ob_get_level() > 0 ) {
 			ob_end_clean();
 		}
+		self::apply_cors_headers();
 		status_header( $status );
 		header( 'Content-Type: ' . $content_type );
 		echo wp_json_encode( $data );
+	}
+
+	private static function apply_cors_headers(): void {
+		$origin = isset( $_SERVER['HTTP_ORIGIN'] ) ? trim( (string) wp_unslash( $_SERVER['HTTP_ORIGIN'] ) ) : '';
+		if ( $origin === '' ) {
+			return;
+		}
+
+		$allowed = array(
+			'https://neodigital.ca',
+			'https://www.neodigital.ca',
+			'https://app.neodigital.ca',
+			'https://ld.neodigital.ca',
+		);
+
+		if ( defined( 'NEO_PULSE_APP_CORS_ORIGINS' ) && is_string( NEO_PULSE_APP_CORS_ORIGINS ) ) {
+			foreach ( explode( ',', NEO_PULSE_APP_CORS_ORIGINS ) as $item ) {
+				$item = trim( $item );
+				if ( $item !== '' ) {
+					$allowed[] = $item;
+				}
+			}
+		}
+
+		$host = (string) wp_parse_url( $origin, PHP_URL_HOST );
+		$ok   = in_array( $origin, $allowed, true )
+			|| ( $host !== '' && ( str_ends_with( $host, '.onrender.com' ) || str_ends_with( $host, '.neodigital.ca' ) ) );
+
+		if ( ! $ok ) {
+			return;
+		}
+
+		header( 'Access-Control-Allow-Origin: ' . $origin );
+		header( 'Vary: Origin' );
+		header( 'Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS' );
+		header( 'Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With' );
+		header( 'Access-Control-Allow-Credentials: true' );
 	}
 }

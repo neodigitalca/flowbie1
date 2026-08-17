@@ -1,0 +1,76 @@
+# Render Blueprint: Flowbie demo + production (static UI + LD worker).
+# Apply from Render Dashboard → Blueprints, or sync after pushing this file to GitHub.
+
+services:
+  - type: web
+    name: flowbie-demo-static
+    runtime: static
+    repo: https://github.com/neodigitalca/flowbie1
+    branch: cursor/meta-ads-visual-settings-layout
+    buildCommand: npm ci && npm run build:render-static
+    staticPublishPath: dist
+    pullRequestPreviewsEnabled: true
+    envVars:
+      - key: RENDER_PROFILE
+        value: demo
+      - key: VITE_BASE_PATH
+        value: /
+      - key: VITE_MCP_API_BASE
+        value: https://neodigital.ca/api/mcp
+      - key: VITE_OPENROUTER_API_KEY
+        sync: false
+
+  - type: web
+    name: flowbie-demo-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile.ld-worker
+    repo: https://github.com/neodigitalca/flowbie1
+    branch: cursor/meta-ads-visual-settings-layout
+    plan: standard
+    envVars:
+      - key: LD_WORKER_AUTH_TOKEN
+        sync: false
+      - key: LOCAL_DOMINATOR_EMAIL
+        sync: false
+      - key: LOCAL_DOMINATOR_PASSWORD
+        sync: false
+      - key: LOCAL_DOMINATOR_LOGIN_URL
+        value: https://app.localdominator.co/login/
+
+  - type: web
+    name: flowbie-prod-static
+    runtime: static
+    repo: https://github.com/neodigitalca/flowbie1
+    branch: main
+    buildCommand: npm ci && npm run build:render-static
+    staticPublishPath: dist
+    envVars:
+      - key: RENDER_PROFILE
+        value: prod
+      - key: VITE_BASE_PATH
+        value: /
+      - key: VITE_MCP_API_BASE
+        value: https://neodigital.ca/api/mcp
+      - key: VITE_OPENROUTER_API_KEY
+        sync: false
+    domains:
+      - app.neodigital.ca
+
+  - type: web
+    name: flowbie-prod-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile.ld-worker
+    repo: https://github.com/neodigitalca/flowbie1
+    branch: main
+    plan: standard
+    envVars:
+      - key: LD_WORKER_AUTH_TOKEN
+        sync: false
+      - key: LOCAL_DOMINATOR_EMAIL
+        sync: false
+      - key: LOCAL_DOMINATOR_PASSWORD
+        sync: false
+      - key: LOCAL_DOMINATOR_LOGIN_URL
+        value: https://app.localdominator.co/login/
+    domains:
+      - ld.neodigital.ca

@@ -50,7 +50,9 @@
     "localdominator:export": "node scripts/research/local-dominator/export-grid.mjs --headed",
     "localdominator:export:json": "node scripts/research/local-dominator/export-grid.mjs --json",
     "setup:local-dominator": "node scripts/setup-local-dominator.mjs",
-    "setup:local-dominator:smoke": "node scripts/setup-local-dominator.mjs --smoke"
+    "setup:local-dominator:smoke": "node scripts/setup-local-dominator.mjs --smoke",
+    "build:render-static": "node scripts/render-build-static.mjs",
+    "start:ld-worker": "node scripts/local-dominator-worker-server.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.8",
