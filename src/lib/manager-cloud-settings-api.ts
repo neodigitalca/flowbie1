@@ -1,23 +1,16 @@
-import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
+import { backendApiUrl } from "@/lib/wordpress-api/connection";
 import type { ManagerCloudSnapshotV1 } from "@/lib/manager-cloud-settings-snapshot";
 import { loadTeamWorkspace, saveTeamWorkspace } from "@/lib/teams-api";
 import { AUTH_DISABLED } from "@/lib/auth-disabled";
 
-function baseUrl(): string {
-  return (import.meta.env.VITE_MCP_API_BASE?.replace(/\/api\/mcp\/?$/, "") || BACKEND_API_BASE || "").replace(
-    /\/$/,
-    "",
-  );
-}
-
 function url(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
-  return `${baseUrl()}/api/manager-cloud-settings${p}`;
+  return backendApiUrl(`/manager-cloud-settings${p}`);
 }
 
 export type ManagerCloudSettingsStatus = {
   ok: boolean;
-  supabaseConfigured?: boolean;
+  workspaceConfigured?: boolean;
   urlHost?: string | null;
   canAutoCreateTable?: boolean;
 };

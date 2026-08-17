@@ -6,9 +6,11 @@ import { cn } from "@/lib/utils";
 import { TASK_FORM_DIALOG_BUTTON_CLASS } from "@/components/manager/tasks/TaskFormLayout";
 import {
   automationExecuteUsesTriggerRun,
-  resolveTaskForAutomationExecute,
+  prepareTaskForAutomationExecute,
 } from "@/lib/task-automation-ui";
-import { executeAutomationTaskTrigger } from "@/lib/tasks-api";
+import { executeAutomationTaskTrigger, fetchTaskDetail } from "@/lib/tasks-api";
+import { useActiveWordPressSite } from "@/contexts/active-wordpress-site-context";
+import { resolveTaskExecuteSiteId } from "@/lib/agent-runs-types";
 import type { TaskTriggerEvaluateResult } from "@/lib/task-trigger-types";
 import type { TaskProject, TeamTask } from "@/lib/tasks-types";
 
@@ -29,7 +31,7 @@ export type AutomationTaskExecuteButtonProps = {
     | "dueDate"
     | "dueTime"
   > | null;
-  project?: Pick<TaskProject, "keyword" | "sourceTemplateKeyword"> | null;
+  project?: Pick<TaskProject, "keyword" | "sourceTemplateKeyword" | "wordpressSiteId"> | null;
   disabled?: boolean;
   variant?: "button" | "icon";
   className?: string;
@@ -46,7 +48,8 @@ export function AutomationTaskExecuteButton({
   className,
   onExecuted,
 }: AutomationTaskExecuteButtonProps): React.ReactElement {
-  const { startRunFromTask } = useAgentRunsContext();
+  const { startRunFromTask, refreshRuns } = useAgentRunsContext();
+  const { activeWordPressSiteId } = useActiveWordPressSite();
   const [executing, setExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,9 +58,14 @@ export function AutomationTaskExecuteButton({
     setExecuting(true);
     setError(null);
     try {
-      const taskRow = task ?? ({ id: taskId } as TeamTask);
-      const resolved = resolveTaskForAutomationExecute(taskRow as TeamTask, project);
-      const usesTrigger = automationExecuteUsesTriggerRun(resolved, project);
+      const detail = await fetchTaskDetail(teamId, taskId);
+      const taskRow = detail.task ?? task ?? ({ id: taskId } as TeamTask);
+      const prepared = prepareTaskForAutomationExecute(
+        taskRow as TeamTask,
+        project,
+        activeWordPressSiteId,
+      );
+      const usesTrigger = automationExecuteUsesTriggerRun(prepared, project);
 
       if (usesTrigger) {
         const result = await executeAutomationTaskTrigger(teamId, taskId);
@@ -69,38 +77,52 @@ export function AutomationTaskExecuteButton({
         return;
       }
 
-      const result = await startRunFromTask(resolved, { openSidebar: true });
+      if (!resolveTaskExecuteSiteId(prepared, activeWordPressSiteId)) {
+        setError("Set a client on the project.");
+        return;
+      }
+
+      const result = await startRunFromTask(prepared, { openSidebar: true });
       if (!result.ok) {
         setError(result.error ?? "Execute failed.");
         return;
       }
       onExecuted?.();
+      void refreshRuns();
     } finally {
       setExecuting(false);
     }
-  }, [executing, onExecuted, project, startRunFromTask, task, taskId, teamId]);
+  }, [
+    activeWordPressSiteId,
+    executing,
+    onExecuted,
+    project,
+    refreshRuns,
+    startRunFromTask,
+    task,
+    taskId,
+    teamId,
+  ]);
 
   if (variant === "icon") {
     return (
-      <>
-        <button
-          type="button"
-          aria-label="Execute automation action"
-          disabled={disabled || executing || !teamId}
-          onClick={(e) => {
-            e.stopPropagation();
-            void handleExecute();
-          }}
-          className={cn(
-            "flex h-8 w-8 items-center justify-center rounded-none text-muted-foreground hover:bg-zinc-800 hover:text-primary disabled:opacity-50",
-            className,
-          )}
-          title={executing ? "Running…" : error ?? "Execute"}
-        >
-          <Play className="h-4 w-4" />
-        </button>
-        {error ? <span className="sr-only">{error}</span> : null}
-      </>
+      <button
+        type="button"
+        aria-label={error ? error : "Execute automation now"}
+        disabled={disabled || executing || !teamId}
+        onClick={(e) => {
+          e.stopPropagation();
+          void handleExecute();
+        }}
+        className={cn(
+          "flex h-8 w-8 items-center justify-center rounded-none text-muted-foreground hover:bg-zinc-800 hover:text-primary disabled:opacity-50",
+          error && "text-red-400 hover:text-red-400",
+          className,
+        )}
+        title={executing ? "Running…" : error ?? "Execute automation now"}
+      >
+        <Play className={cn("h-4 w-4", executing && "animate-pulse")} />
+      </button>
     );
   }
 

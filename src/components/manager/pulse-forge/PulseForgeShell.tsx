@@ -1,95 +1,166 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTeam } from "@/contexts/TeamContext";
+import { useAgentRunsContext } from "@/contexts/agent-runs-context";
 import { useActiveWordPressSite } from "@/contexts/active-wordpress-site-context";
 import { useWordPressSites } from "@/hooks/use-wordpress-sites";
 import { PulseForgeNavSidebar } from "@/components/manager/pulse-forge/PulseForgeNavSidebar";
+import { PulseForgeDashboard } from "@/components/manager/pulse-forge/PulseForgeDashboard";
+import { PulseForgeBreadcrumbs } from "@/components/manager/pulse-forge/PulseForgeBreadcrumbs";
 import { AutomationRecipeLibrary } from "@/components/manager/tasks/recipes/AutomationRecipeLibrary";
-import { AutomationPlannerDialog } from "@/components/manager/tasks/planner/AutomationPlannerDialog";
-import { TasksListView } from "@/components/manager/tasks/TasksListView";
-import {
-  createTaskProject,
-  deleteTaskProject,
-  updateTask,
-  updateTaskProject,
-} from "@/lib/tasks-api";
+import { TaskBuilderView } from "@/components/manager/pulse-forge/TaskBuilderView";
+import { WorkflowEditorView } from "@/components/manager/workflow/WorkflowEditorView";
+import { WorkflowList } from "@/components/manager/workflow/WorkflowList";
+import { createTaskProject } from "@/lib/tasks-api";
+import { fetchAutomationRecipe } from "@/lib/automation-recipes-api";
+import { fetchWorkflow, createWorkflow } from "@/lib/workflow/workflow-api";
+import { automationPlanToWorkflowGraph } from "@/lib/workflow/workflow-migrate-from-planner";
+import { recipeToPlan } from "@/lib/automation-planner-compile";
 import { isAutomationProject } from "@/lib/task-automation-templates";
 import type { AutomationRecipeCatalogItem } from "@/lib/automation-recipes-types";
-import type { DefaultTaskCreatePayload, TaskProject, TeamTask } from "@/lib/tasks-types";
+import type { TaskProject } from "@/lib/tasks-types";
 import type { WordPressSiteOption } from "@/components/manager/tasks/NewProjectDialog";
 import type { PulseForgeNavMode } from "@/components/manager/pulse-forge/PulseForgeNavSidebar";
-import { isNeoPulseBotMember } from "@/lib/chat-neo-pulse";
+import {
+  pulseForgeNavModeFromRoute,
+  setPulseForgeHash,
+  usePulseForgeRoute,
+  type PulseForgeRoute,
+} from "@/lib/pulse-forge/pulse-forge-hash";
+import { useAuth } from "@/contexts/AuthContext";
+import { filterVisibleAutomationProjects } from "@/lib/pulse-forge/forge-automation-visibility";
 
 export function PulseForgeShell(): React.ReactElement {
   const {
     activeTeam,
     members,
     taskProjects,
-    taskTemplates,
     projectBundles,
     refreshTasksWorkspace,
     refreshProjectBundle,
     setTaskProjects,
     setTaskTemplates,
-    updateProjectBundle,
-    purgeProjectBundle,
   } = useTeam();
+  const { user } = useAuth();
+  const { runs, refreshRuns } = useAgentRunsContext();
   const { sites: wpSites } = useWordPressSites();
   const { activeWordPressSiteId } = useActiveWordPressSite();
   const teamId = activeTeam?.id ?? null;
+  const route = usePulseForgeRoute();
+  const navMode = pulseForgeNavModeFromRoute(route);
 
-  const [navMode, setNavMode] = useState<PulseForgeNavMode>("recipes");
-  const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
-  const [plannerOpen, setPlannerOpen] = useState(false);
-  const [plannerMode, setPlannerMode] = useState<"recipe" | "create" | "edit">("create");
-  const [plannerRecipe, setPlannerRecipe] = useState<AutomationRecipeCatalogItem | null>(null);
-  const [editingAutomation, setEditingAutomation] = useState<TaskProject | null>(null);
+  const [recipeForRoute, setRecipeForRoute] = useState<AutomationRecipeCatalogItem | null>(null);
+  const [workflowName, setWorkflowName] = useState<string | null>(null);
+  const [draftWorkflowName, setDraftWorkflowName] = useState<string>("Untitled workflow");
+  const [workflowSaveError, setWorkflowSaveError] = useState<string | null>(null);
+  const [workflowListError, setWorkflowListError] = useState<string | null>(null);
 
   const siteOptions: WordPressSiteOption[] = useMemo(
     () => wpSites.map((s) => ({ id: s.id, name: s.name || s.siteUrl || s.id })),
     [wpSites],
   );
 
-  const automationProjects = useMemo(
-    () =>
-      taskProjects.filter((p) =>
-        isAutomationProject(p, projectBundles[p.id]?.tasks, members),
-      ),
-    [members, projectBundles, taskProjects],
+  const automationProjects = useMemo(() => {
+    const automations = taskProjects.filter((p) =>
+      isAutomationProject(p, projectBundles[p.id]?.tasks, members),
+    );
+    return filterVisibleAutomationProjects(automations, user?.id ?? null);
+  }, [members, projectBundles, taskProjects, user?.id]);
+
+  const workflowEditorOpen = useMemo(() => {
+    if (route.section === "recipes" && "view" in route && route.view === "builder") return true;
+    if (route.section === "workflows" && "view" in route) return true;
+    return false;
+  }, [route]);
+
+  useEffect(() => {
+    if (route.section !== "workflows") {
+      setWorkflowSaveError(null);
+      setWorkflowListError(null);
+      return;
+    }
+    if ("view" in route) {
+      setWorkflowListError(null);
+      return;
+    }
+    setWorkflowSaveError(null);
+  }, [route]);
+
+  useEffect(() => {
+    if (route.section !== "recipes" || !("view" in route) || route.view !== "builder") {
+      setRecipeForRoute(null);
+      return;
+    }
+    if (!teamId) {
+      setRecipeForRoute(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchAutomationRecipe(teamId, route.recipeKeyword).then((recipe) => {
+      if (cancelled) return;
+      setRecipeForRoute(recipe);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [route, teamId]);
+
+  useEffect(() => {
+    if (route.section !== "workflows" || !("view" in route) || route.view !== "edit" || !teamId) {
+      setWorkflowName(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchWorkflow(teamId, route.workflowId).then((workflow) => {
+      if (!cancelled) setWorkflowName(workflow?.name ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [route, teamId]);
+
+  const navigate = useCallback((next: PulseForgeRoute) => {
+    setPulseForgeHash(next);
+  }, []);
+
+  const navigateSection = useCallback(
+    (section: PulseForgeNavMode) => {
+      navigate({ section });
+    },
+    [navigate],
   );
 
-  const activeBundleTasks = activeProjectId != null ? projectBundles[activeProjectId]?.tasks ?? [] : [];
-  const editingTasks =
-    editingAutomation != null ? projectBundles[editingAutomation.id]?.tasks ?? [] : [];
+  const openRecipe = useCallback(
+    (recipe: AutomationRecipeCatalogItem) => {
+      navigate({ section: "recipes", view: "builder", recipeKeyword: recipe.keyword });
+    },
+    [navigate],
+  );
 
-  const openCreate = useCallback(() => {
-    setPlannerMode("create");
-    setPlannerRecipe(null);
-    setEditingAutomation(null);
-    setPlannerOpen(true);
-  }, []);
+  const openWorkflow = useCallback(
+    (workflowId: number) => {
+      navigate({ section: "workflows", view: "edit", workflowId });
+    },
+    [navigate],
+  );
 
-  const openRecipe = useCallback((recipe: AutomationRecipeCatalogItem) => {
-    setPlannerMode("recipe");
-    setPlannerRecipe(recipe);
-    setEditingAutomation(null);
-    setPlannerOpen(true);
-  }, []);
+  const openCreateWorkflow = useCallback(() => {
+    navigate({ section: "workflows", view: "new" });
+  }, [navigate]);
 
-  const openEdit = useCallback((project: TaskProject) => {
-    setPlannerMode("edit");
-    setPlannerRecipe(null);
-    setEditingAutomation(project);
-    setPlannerOpen(true);
-  }, []);
+  const closeEditor = useCallback(() => {
+    if (route.section === "recipes") {
+      navigate({ section: "recipes" });
+      return;
+    }
+    navigate({ section: "workflows" });
+  }, [navigate, route.section]);
 
-  const handleCreate = useCallback(
+  const handleCreateFromRecipe = useCallback(
     async (payload: Parameters<typeof createTaskProject>[1]) => {
       if (!teamId) return false;
       const result = await createTaskProject(teamId, payload);
       if (result.ok && result.project) {
         setTaskProjects((prev) => [...prev, result.project!]);
-        setNavMode("forge");
-        setActiveProjectId(result.project.id);
         void refreshProjectBundle(result.project.id);
         return true;
       }
@@ -98,67 +169,21 @@ export function PulseForgeShell(): React.ReactElement {
     [refreshProjectBundle, setTaskProjects, teamId],
   );
 
-  const handleUpdate = useCallback(
-    async (
-      projectId: number,
-      payload: { keyword: string; title: string; description?: string; wordpressSiteId?: string | null },
-    ) => {
-      if (!teamId) return false;
-      const result = await updateTaskProject(teamId, projectId, payload);
-      if (result.ok && result.project) {
-        setTaskProjects((prev) => prev.map((p) => (p.id === projectId ? result.project! : p)));
-        void refreshTasksWorkspace();
-        void refreshProjectBundle(projectId);
-        return true;
-      }
-      return false;
-    },
-    [refreshProjectBundle, refreshTasksWorkspace, setTaskProjects, teamId],
-  );
-
-  const handleUpdateTask = useCallback(
-    async (taskId: number, payload: DefaultTaskCreatePayload) => {
-      if (!teamId) return false;
-      const pulse = members.find((m) => isNeoPulseBotMember(m));
-      const result = await updateTask(teamId, taskId, {
-        ...payload,
-        assigneeIds: pulse?.userId != null ? [pulse.userId] : payload.assigneeIds,
-      });
-      if (result.ok && result.task && editingAutomation) {
-        const currentTasks = projectBundles[editingAutomation.id]?.tasks ?? [];
-        updateProjectBundle(editingAutomation.id, {
-          tasks: currentTasks.map((t) => (t.id === taskId ? result.task! : t)),
-        });
-        void refreshTasksWorkspace();
-        return true;
-      }
-      return false;
-    },
-    [editingAutomation, members, projectBundles, refreshTasksWorkspace, teamId, updateProjectBundle],
-  );
-
-  const handleDeleteProject = useCallback(
-    async (projectId: number) => {
+  const handleRecipeInstallAsWorkflow = useCallback(
+    async (recipe: AutomationRecipeCatalogItem) => {
       if (!teamId) return;
-      const result = await deleteTaskProject(teamId, projectId);
-      if (result.ok) {
-        setTaskProjects((prev) => prev.filter((p) => p.id !== projectId));
-        purgeProjectBundle(projectId);
-        if (activeProjectId === projectId) {
-          setActiveProjectId(null);
-          setNavMode("forge");
-        }
-        void refreshTasksWorkspace();
+      const plan = recipeToPlan(recipe);
+      const graph = automationPlanToWorkflowGraph(plan, {
+        teamId,
+        siteId: activeWordPressSiteId,
+      });
+      const created = await createWorkflow(teamId, graph);
+      if (created.workflow) {
+        openWorkflow(created.workflow.id);
       }
     },
-    [activeProjectId, purgeProjectBundle, refreshTasksWorkspace, setTaskProjects, teamId],
+    [activeWordPressSiteId, openWorkflow, teamId],
   );
-
-  useEffect(() => {
-    if (navMode === "forge" && activeProjectId == null && automationProjects[0]) {
-      setActiveProjectId(automationProjects[0].id);
-    }
-  }, [activeProjectId, automationProjects, navMode]);
 
   if (!teamId || !activeTeam) {
     return (
@@ -169,108 +194,113 @@ export function PulseForgeShell(): React.ReactElement {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-1 overflow-hidden bg-black">
+    <div className="neo-pulse-forge-shell flex h-full min-h-0 w-full flex-1 overflow-hidden bg-black font-sans">
       <PulseForgeNavSidebar
-          navMode={navMode}
-          activeProjectId={activeProjectId}
-          automationProjects={automationProjects}
-          onSelectRecipes={() => {
-            setNavMode("recipes");
-            setActiveProjectId(null);
-          }}
-          onSelectAutomation={(id) => {
-            setNavMode("forge");
-            setActiveProjectId(id);
-          }}
-          onNewAutomation={openCreate}
-          onEditAutomation={openEdit}
-          onDeleteAutomation={(id) => void handleDeleteProject(id)}
-        />
+        navMode={navMode}
+        workflowEditorOpen={workflowEditorOpen}
+        onSelectMyForge={() => navigateSection("forge")}
+        onSelectRecipes={() => navigateSection("recipes")}
+        onSelectWorkflows={() => {
+          navigateSection("workflows");
+          void refreshRuns();
+        }}
+      />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {route.section === "workflows" ? null : (
+          <div className="shrink-0 border-b border-white/10 bg-black">
+            <PulseForgeBreadcrumbs
+              route={route}
+              recipeName={recipeForRoute?.name}
+              workflowName={
+                route.section === "workflows" && "view" in route && route.view === "new"
+                  ? draftWorkflowName
+                  : workflowName
+              }
+              statusMessage={
+                route.section === "workflows"
+                  ? "view" in route
+                    ? workflowSaveError
+                    : workflowListError
+                  : null
+              }
+              className="px-4 py-3"
+            />
+          </div>
+        )}
         <main className="min-h-0 min-w-0 flex-1 overflow-hidden">
-          {navMode === "recipes" ? (
+          {route.section === "recipes" && "view" in route && route.view === "builder" ? (
+            recipeForRoute ? (
+              <TaskBuilderView
+                mode="recipe"
+                teamId={teamId}
+                sites={siteOptions}
+                members={members}
+                defaultSiteId={activeWordPressSiteId}
+                recipe={recipeForRoute}
+                onCancel={closeEditor}
+                onCreate={handleCreateFromRecipe}
+                onTemplatesChange={setTaskTemplates}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center px-6">
+                <p className="text-base text-muted-foreground">Agent not found.</p>
+              </div>
+            )
+          ) : route.section === "workflows" && "view" in route && route.view === "edit" ? (
+            <WorkflowEditorView
+              teamId={teamId}
+              workflowId={route.workflowId}
+              sites={siteOptions}
+              defaultSiteId={activeWordPressSiteId}
+              route={route}
+              statusMessage={workflowSaveError}
+              onCreated={(workflowId) => openWorkflow(workflowId)}
+              onCancel={closeEditor}
+              onNameChange={setWorkflowName}
+              onSaveErrorChange={setWorkflowSaveError}
+            />
+          ) : route.section === "workflows" && "view" in route && route.view === "new" ? (
+            <WorkflowEditorView
+              teamId={teamId}
+              workflowId={null}
+              sites={siteOptions}
+              defaultSiteId={activeWordPressSiteId}
+              route={route}
+              statusMessage={workflowSaveError}
+              onCreated={(workflowId) => openWorkflow(workflowId)}
+              onCancel={closeEditor}
+              onNameChange={setDraftWorkflowName}
+              onSaveErrorChange={setWorkflowSaveError}
+            />
+          ) : navMode === "recipes" ? (
             <AutomationRecipeLibrary
               teamId={teamId}
               sites={siteOptions}
               defaultSiteId={activeWordPressSiteId}
               onRecipeClick={openRecipe}
-              onRecipeInstall={openRecipe}
-              onInstalled={(projectId) => {
-                setNavMode("forge");
-                setActiveProjectId(projectId);
-              }}
+              onRecipeInstall={(recipe) => void handleRecipeInstallAsWorkflow(recipe)}
+              onInstalled={() => navigate({ section: "workflows" })}
             />
-          ) : activeProjectId != null ? (
-            <TasksListView
-              sections={[]}
-              tasks={activeBundleTasks}
-              tags={[]}
-              filterMode="all"
-              selectedTaskId={null}
-              memberNames={{}}
-              members={members}
-              siteOptions={siteOptions}
-              myTasksMode={false}
-              automationMode
-              scheduleColumnLabel="Trigger"
-              showExecuteAction
-              canExecuteTask={() => true}
-              automationProjectForTask={() =>
-                automationProjects.find((p) => p.id === activeProjectId) ?? null
-              }
+          ) : navMode === "workflows" ? (
+            <WorkflowList
               teamId={teamId}
-              onSelectTask={() => {}}
-              onStatusChange={() => {}}
-              onAddTask={() => {}}
-              onMoveTask={() => {}}
-              onEditSection={() => {}}
-              onDeleteSection={() => {}}
-              onEditTask={() => {
-                const project = automationProjects.find((p) => p.id === activeProjectId);
-                if (project) openEdit(project);
-              }}
-              onDeleteTask={(taskId) => {
-                const task = activeBundleTasks.find((t: TeamTask) => t.id === taskId);
-                if (task) void handleDeleteProject(task.projectId);
-              }}
-              onExecuteTask={() => void refreshProjectBundle(activeProjectId)}
+              sites={siteOptions}
+              route={route}
+              statusMessage={workflowListError}
+              onOpenWorkflow={openWorkflow}
+              onNewWorkflow={openCreateWorkflow}
+              onLoadErrorChange={setWorkflowListError}
             />
           ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-3 px-6">
-              <p className="text-base text-muted-foreground">No automations installed yet.</p>
-              <button
-                type="button"
-                className="text-base text-muted-foreground hover:text-white hover:underline"
-                onClick={() => setNavMode("recipes")}
-              >
-                Browse recipes
-              </button>
-            </div>
+            <PulseForgeDashboard
+              automationProjects={automationProjects}
+              projectBundles={projectBundles}
+              onEditAutomation={(project: TaskProject) => openCreateWorkflow()}
+              onRefreshProject={(projectId) => void refreshProjectBundle(projectId)}
+            />
           )}
         </main>
-
-      <AutomationPlannerDialog
-        open={plannerOpen}
-        onOpenChange={setPlannerOpen}
-        mode={plannerMode}
-        teamId={teamId}
-        sites={siteOptions}
-        members={members}
-        defaultSiteId={activeWordPressSiteId}
-        recipe={plannerRecipe}
-        editAutomation={editingAutomation}
-        editAutomationTasks={editingTasks}
-        onCreate={handleCreate}
-        onUpdate={handleUpdate}
-        onUpdateTask={handleUpdateTask}
-        onTemplatesChange={setTaskTemplates}
-        onTaskExecuted={() => {
-          if (editingAutomation) void refreshProjectBundle(editingAutomation.id);
-        }}
-        onInstalled={(projectId) => {
-          setNavMode("forge");
-          setActiveProjectId(projectId);
-        }}
-      />
+      </div>
     </div>
   );
 }

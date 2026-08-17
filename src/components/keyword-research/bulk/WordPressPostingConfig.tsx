@@ -1,13 +1,8 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import type { ScheduleOccupancy } from '@/lib/bulk-schedule-gap';
-import { gapScheduleStartDate } from '@/lib/bulk-schedule-gap';
-import {
-  resolveBulkWordPressPublishDate,
-  resolveHybridEffectiveDestination,
-  type ScheduleFrequency,
-} from '@/lib/wordpress-scheduler';
+import type { ScheduleFrequency } from '@/lib/wordpress-scheduler';
 import { getStoredSites, type WordPressSite } from '@/components/IntegrationsTab';
 import type { ConnectedSiteSummary } from '@/components/integrations/types';
 import { cn } from '@/lib/utils';
@@ -63,7 +58,7 @@ interface WordPressPostingConfigProps {
   gbpMode?: boolean;
   postDestination: WordPressPostDestination;
   setPostDestination: (value: WordPressPostDestination) => void;
-  /** Which export radios to show (default: wordpress, bank, hybrid, local). */
+  /** Which export radios to show (default: wordpress, local). */
   postDestinationChoices?: WordPressPostDestination[];
   /** Post inventory occupancy for Next available slot (gap scheduling). */
   scheduleOccupancy?: ScheduleOccupancy | null;
@@ -78,8 +73,6 @@ interface WordPressPostingConfigProps {
 
 const POST_DESTINATION_LABELS: Record<WordPressPostDestination, string> = {
   wordpress: 'Post to WordPress',
-  bank: 'Bank posts',
-  hybrid: 'Hybrid (first month → WP)',
   local: 'Local only (files)',
 };
 
@@ -104,8 +97,8 @@ export function WordPressPostingConfig({
   setUseCsvPublishDates,
   wordpressDraftOnly,
   setWordpressDraftOnly,
-  previewRows,
-  rowOrder,
+  previewRows: _previewRows,
+  rowOrder: _rowOrder,
   isDisabled = false,
   connectedSite,
   sapMode = false,
@@ -164,63 +157,6 @@ export function WordPressPostingConfig({
     scheduleFrequency !== 'immediately' &&
     Boolean(scheduleOccupancy);
 
-  const hybridSlotCounts = useMemo(() => {
-    const n = previewRows.length;
-    if (n === 0) return { wordpress: 0, bank: 0 };
-    const startDate =
-      startDateOption === 'immediate' ? gapScheduleStartDate(startTime) : customStartDate;
-    const order =
-      rowOrder.length === n ? rowOrder : Array.from({ length: n }, (_, i) => i);
-    const priorDates: Date[] = [];
-    let d0 = new Date();
-    for (let slotIdx = 0; slotIdx < n; slotIdx++) {
-      const srcIdx = order[slotIdx] ?? slotIdx;
-      const row = previewRows[srcIdx];
-      const schedule = {
-        frequency: scheduleFrequency,
-        customInterval:
-          scheduleFrequency === 'custom' || scheduleFrequency === 'everyNDays' ? customInterval : undefined,
-        customStaggerOptimized: scheduleFrequency === 'custom' ? true : undefined,
-        dayOfWeek: scheduleFrequency === 'weekly' ? dayOfWeek : undefined,
-        startDate,
-        startTime,
-        totalRows: n,
-        useGapScheduling,
-        scheduleOccupancy: scheduleOccupancy ?? undefined,
-        priorInBatchDates: [...priorDates],
-      };
-      const { date } = resolveBulkWordPressPublishDate({
-        rowPublishDateGmt: row?.publish_date_gmt,
-        rowIndex: slotIdx,
-        schedule,
-        useCsvPublishDates,
-      });
-      if (slotIdx === 0) d0 = date;
-      priorDates.push(date);
-    }
-    const anchor = { year: d0.getUTCFullYear(), month: d0.getUTCMonth() };
-    let wordpress = 0;
-    let bank = 0;
-    for (let slotIdx = 0; slotIdx < n; slotIdx++) {
-      const eff = resolveHybridEffectiveDestination('hybrid', priorDates[slotIdx]!, anchor);
-      if (eff === 'wordpress') wordpress += 1;
-      else bank += 1;
-    }
-    return { wordpress, bank };
-  }, [
-    previewRows,
-    rowOrder,
-    useCsvPublishDates,
-    scheduleFrequency,
-    customInterval,
-    dayOfWeek,
-    startDateOption,
-    startTime,
-    customStartDate,
-    useGapScheduling,
-    scheduleOccupancy,
-  ]);
-
   return (
     <div className={cn('space-y-1.5', sapMode ? 'mt-1' : 'mt-2')}>
       {targetSite && (
@@ -254,22 +190,10 @@ export function WordPressPostingConfig({
                       </div>
                     ))}
                   </RadioGroup>
-                  {postDestination === 'bank' ? (
-                    <p className="text-base text-muted-foreground">
-                      Rows go to your Supabase Post Bank first. Publish to WordPress from Properties, Bank tab.
-                    </p>
-                  ) : null}
-                  {postDestination === 'hybrid' ? (
-                    <p className="text-base text-muted-foreground">
-                      Rows in the same UTC calendar month as the first scheduled slot are created as future WordPress
-                      posts. Later months are saved to the Supabase content bank with the same scheduled dates (publish
-                      from Properties when ready). No automatic cron—bank rows stay queued until you publish.
-                    </p>
-                  ) : null}
                   {postDestination === 'local' ? (
                     <p className="text-base text-muted-foreground">
                       Full harness and SEO pipeline run locally. Download JSON, blueprint, and post-body CSV from the
-                      files panel — nothing is sent to WordPress or the content bank.
+                      files panel. Nothing is sent to WordPress.
                     </p>
                   ) : null}
                 </div>
@@ -333,13 +257,6 @@ export function WordPressPostingConfig({
               </div>
             );
           })()}
-
-          {!gbpMode && postDestination === 'hybrid' && previewRows.length > 0 ? (
-            <p className="text-base text-muted-foreground">
-              This batch preview: {hybridSlotCounts.wordpress} row(s) → WordPress, {hybridSlotCounts.bank} row(s) →
-              content bank (by UTC month of each scheduled date vs. slot 0).
-            </p>
-          ) : null}
         </div>
       )}
     </div>

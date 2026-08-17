@@ -5,6 +5,7 @@ import {
 } from "@/lib/agent-runs/harness-registry";
 import type { AgentRunHarnessContext } from "@/lib/agent-runs/harness-registry";
 import { runGscReportingDirectHarness } from "@/lib/agent-runs/run-gsc-reporting-client-harness";
+import { runLocalDominatorExportDirectHarness } from "@/lib/agent-runs/run-local-dominator-export-client-harness";
 import { runPostCreatorDirectHarness } from "@/lib/agent-runs/run-post-creator-client-harness";
 import type { AgentRun, AgentRunResult } from "@/lib/agent-runs-types";
 
@@ -21,11 +22,13 @@ export function useDefaultAgentRunHarnesses(): void {
     registerAgentRunHarness("content_optimizer_bulk", stubHarness);
     registerAgentRunHarness("gsc_reporting", runGscReportingDirectHarness);
     registerAgentRunHarness("post_creator", runPostCreatorDirectHarness);
+    registerAgentRunHarness("local_dominator_export", runLocalDominatorExportDirectHarness);
     return () => {
       unregisterAgentRunHarness("overview_pages_meta_batch");
       unregisterAgentRunHarness("content_optimizer_bulk");
       unregisterAgentRunHarness("gsc_reporting");
       unregisterAgentRunHarness("post_creator");
+      unregisterAgentRunHarness("local_dominator_export");
     };
   }, []);
 }

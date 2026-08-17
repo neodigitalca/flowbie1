@@ -1,18 +1,11 @@
-import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
+import { backendApiUrl } from "@/lib/wordpress-api/connection";
 import { loadApiKey } from "@/lib/api";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import type { WordPressSite } from "@/components/integrations/types";
 
-function baseUrl(): string {
-  return (import.meta.env.VITE_MCP_API_BASE?.replace(/\/api\/mcp\/?$/, "") || BACKEND_API_BASE || "").replace(
-    /\/$/,
-    "",
-  );
-}
-
 function url(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
-  return `${baseUrl()}/api/manager-wordpress-properties${p}`;
+  return backendApiUrl(`/manager-wordpress-properties${p}`);
 }
 
 function openRouterPayload(overrides?: { openRouterApiKey?: string; openRouterModel?: string }) {
@@ -22,22 +15,26 @@ function openRouterPayload(overrides?: { openRouterApiKey?: string; openRouterMo
   };
 }
 
-export type WordPressPropertiesCloudStatus = {
+export type WordPressPropertiesWorkspaceStatus = {
   ok?: boolean;
-  supabaseConfigured?: boolean;
+  workspaceConfigured?: boolean;
   urlHost?: string | null;
-  supabaseUrl?: string | null;
   canAutoCreateTable?: boolean;
 };
 
-export async function getWordPressPropertiesCloudStatus(): Promise<WordPressPropertiesCloudStatus | null> {
+export async function getWordPressPropertiesWorkspaceStatus(): Promise<WordPressPropertiesWorkspaceStatus | null> {
   try {
     const res = await fetch(url("/status"), { credentials: "include" });
     if (!res.ok) return null;
-    return (await res.json()) as WordPressPropertiesCloudStatus;
+    return (await res.json()) as WordPressPropertiesWorkspaceStatus;
   } catch {
     return null;
   }
+}
+
+/** @deprecated Use getWordPressPropertiesWorkspaceStatus */
+export async function getWordPressPropertiesCloudStatus(): Promise<WordPressPropertiesWorkspaceStatus | null> {
+  return getWordPressPropertiesWorkspaceStatus();
 }
 
 export async function loadWordPressPropertyPluginTokens(): Promise<
@@ -45,7 +42,7 @@ export async function loadWordPressPropertyPluginTokens(): Promise<
 > {
   try {
     const res = await fetch(url("/load"), { credentials: "include" });
-    const data = (await res.json().catch(() => ({}))) as {
+    const data = (await res.json()) as {
       ok?: boolean;
       tokens?: { siteId: string; pluginAccessToken: string }[];
       error?: string;
@@ -59,7 +56,7 @@ export async function loadWordPressPropertyPluginTokens(): Promise<
   }
 }
 
-export async function syncOpenRouterToSupabaseProperties(
+export async function syncOpenRouterToWorkspace(
   overrides?: { openRouterApiKey?: string; openRouterModel?: string },
 ): Promise<{ ok: boolean; updated?: number; error?: string }> {
   try {
@@ -69,7 +66,7 @@ export async function syncOpenRouterToSupabaseProperties(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(openRouterPayload(overrides)),
     });
-    const data = (await res.json().catch(() => ({}))) as {
+    const data = (await res.json()) as {
       ok?: boolean;
       updated?: number;
       error?: string;
@@ -83,7 +80,7 @@ export async function syncOpenRouterToSupabaseProperties(
   }
 }
 
-export async function saveWordPressPropertiesToSupabase(
+export async function saveWordPressProperties(
   sites: WordPressSite[],
   overrides?: { openRouterApiKey?: string; openRouterModel?: string },
 ): Promise<{
@@ -104,7 +101,7 @@ export async function saveWordPressPropertiesToSupabase(
         ...openRouterPayload(overrides),
       }),
     });
-    const data = (await res.json().catch(() => ({}))) as {
+    const data = (await res.json()) as {
       ok?: boolean;
       error?: string;
       code?: string;

@@ -704,42 +704,7 @@ isAnalyzingRef.current = isAnalyzing;
 
     const postingBase = wordPressPostingOverride || wordPressPosting;
 
-    const postingForLoop: WordPressPostingOptions | undefined = (() => {
-      const p = postingBase;
-      if (!p?.enabled || p.postDestination !== 'hybrid' || csvRows.length === 0) return p;
-      const scheduleOpts = {
-        frequency: p.frequency,
-        customInterval: p.customInterval,
-        customStaggerOptimized: p.customStaggerOptimized,
-        dayOfWeek: p.dayOfWeek,
-        startDate: p.startDate,
-        startTime: p.startTime,
-        totalRows: csvRows.length,
-      };
-      const useCsvPublishDates = p.useCsvPublishDates !== false;
-      const d0 =
-        p.gapDatesBySlot?.[0] ??
-        resolveBulkWordPressPublishDate({
-          rowPublishDateGmt: csvRows[0]?.publish_date_gmt,
-          rowIndex: 0,
-          schedule: {
-            ...scheduleOpts,
-            useGapScheduling: p.useGapScheduling,
-            scheduleOccupancy: p.scheduleOccupancy,
-          },
-          useCsvPublishDates,
-        }).date;
-      return {
-        ...p,
-        totalRows: csvRows.length,
-        hybridAnchorUtc: { year: d0.getUTCFullYear(), month: d0.getUTCMonth() },
-      };
-    })();
-
-    const contentBundleId =
-      postingForLoop?.enabled && postingForLoop.postDestination === 'hybrid'
-        ? crypto.randomUUID()
-        : undefined;
+    const postingForLoop = postingBase;
 
     const selectedSiteId = Array.from(selectedWordPressSites)[0];
     const entitySitemapAvailable = Boolean(matchedWpSite?.entitySitemapUrl?.trim());
@@ -901,7 +866,6 @@ isAnalyzingRef.current = isAnalyzing;
           wordPressPostsByKeyword: wordPressPostsByKeyword.size > 0 ? wordPressPostsByKeyword : undefined,
           portfolioBlockedHosts: portfolioBlockedHostsOpt,
           bulkScheduleSlotIndex: i,
-          contentBundleId,
           sapMapsMediaBank,
           sapMapsEntityRowCounts,
           peerSites: peerSitesForRun.length > 0 ? peerSitesForRun : undefined,
@@ -950,11 +914,7 @@ isAnalyzingRef.current = isAnalyzing;
       if (!runHadFailure) {
         recordRunStatus('All rows processed');
       }
-      const bundleNote =
-        contentBundleId != null
-          ? ` Content bundle id: ${contentBundleId} (bank rows tagged in source_row).`
-          : '';
-      notify.success(notifyBulkProcessingCompleteXFilesGenerat(fileManager.getStats().completed, bundleNote));
+      notify.success(notifyBulkProcessingCompleteXFilesGenerat(fileManager.getStats().completed, ''));
     } catch (error) {
       if (error instanceof Error && error.message === 'Processing cancelled') {
         notify.warning(NOTIFY_PROCESSING_CANCELLED_BY_USER);

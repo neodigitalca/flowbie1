@@ -1,0 +1,101 @@
+/**
+ * NEO Pulse WP — buttons: high contrast, no borders.
+ * Loaded after typography enforce.
+ */
+
+body.neo-pulse-wp-admin-screen #wpbody-content .wp-core-ui .button,
+body.neo-pulse-wp-admin-screen #wpbody-content .button,
+body.neo-pulse-wp-admin-screen #wpbody-content .button-secondary,
+body.neo-pulse-wp-admin-screen #wpbody-content .wp-core-ui .button-secondary,
+.neo-pulse-fields-root .button,
+.neo-pulse-fields-root .button-secondary,
+.neo-pulse-fields-root .wp-core-ui .button {
+	font-family: var(--fc-font, 'Lato', sans-serif) !important;
+	font-size: 1rem !important;
+	font-weight: 600;
+	line-height: 1.4;
+	padding: 8px 16px;
+	border: none !important;
+	border-radius: 6px;
+	box-shadow: none !important;
+	outline: none;
+	background: #2c3338 !important;
+	color: #f8fafc !important;
+	-webkit-text-fill-color: #f8fafc !important;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .wp-core-ui .button:hover,
+body.neo-pulse-wp-admin-screen #wpbody-content .wp-core-ui .button:focus,
+body.neo-pulse-wp-admin-screen #wpbody-content .button:hover,
+body.neo-pulse-wp-admin-screen #wpbody-content .button:focus,
+body.neo-pulse-wp-admin-screen #wpbody-content .button-secondary:hover,
+body.neo-pulse-wp-admin-screen #wpbody-content .button-secondary:focus,
+.neo-pulse-fields-root .button:hover,
+.neo-pulse-fields-root .button:focus {
+	background: #3c434a !important;
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+	border: none !important;
+	box-shadow: none !important;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .wp-core-ui .button-primary,
+body.neo-pulse-wp-admin-screen #wpbody-content .button-primary,
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-settings__btn,
+.neo-pulse-fields-root .button-primary,
+.neo-pulse-fields-root .wp-core-ui .button-primary {
+	background: #16a34a !important;
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+	border: none !important;
+	box-shadow: none !important;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .wp-core-ui .button-primary:hover,
+body.neo-pulse-wp-admin-screen #wpbody-content .wp-core-ui .button-primary:focus,
+body.neo-pulse-wp-admin-screen #wpbody-content .button-primary:hover,
+body.neo-pulse-wp-admin-screen #wpbody-content .button-primary:focus,
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-settings__btn:hover,
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-settings__btn:focus,
+.neo-pulse-fields-root .button-primary:hover,
+.neo-pulse-fields-root .button-primary:focus {
+	background: #15803d !important;
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+	border: none !important;
+	box-shadow: none !important;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .button-primary[disabled],
+body.neo-pulse-wp-admin-screen #wpbody-content .wp-core-ui .button-primary[disabled],
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-settings__btn[disabled] {
+	opacity: 0.55;
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .button-link,
+body.neo-pulse-wp-admin-screen #wpbody-content .button-link-delete,
+body.neo-pulse-wp-admin-screen #wpbody-content .wp-core-ui .button-link {
+	background: transparent !important;
+	color: var(--fc-link, #72aee6) !important;
+	-webkit-text-fill-color: currentColor !important;
+	border: none !important;
+	box-shadow: none !important;
+	padding-left: 0;
+	padding-right: 0;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .button-link:hover,
+body.neo-pulse-wp-admin-screen #wpbody-content .button-link:focus,
+body.neo-pulse-wp-admin-screen #wpbody-content .button-link-delete:hover,
+body.neo-pulse-wp-admin-screen #wpbody-content .button-link-delete:focus {
+	color: var(--fc-link-hover, #9ecaff) !important;
+	-webkit-text-fill-color: currentColor !important;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .page-title-action,
+body.neo-pulse-wp-admin-screen #wpbody-content .wp-core-ui .page-title-action {
+	border: none !important;
+	box-shadow: none !important;
+}

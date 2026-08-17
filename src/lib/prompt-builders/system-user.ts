@@ -235,6 +235,7 @@ export async function buildSystemPrompt(
   portfolioBlockedHosts?: string[],
   contentKind?: "press_release",
   generationMode: BuildSystemPromptGenerationMode = "full_article",
+  workflowContextBlock = "",
 ): Promise<string> {
   const normalizedSiteUrl = connectedSite?.siteUrl ? connectedSite.siteUrl.replace(/\/+$/, "") : "";
   const normalizedCurrentPageUrl = currentPageUrl ? currentPageUrl.replace(/\/+$/, "").toLowerCase() : "";
@@ -310,6 +311,8 @@ export async function buildSystemPrompt(
     ? `\n=== KNOWLEDGE BASE ===\n${knowledgeBaseContext}\n=== END KNOWLEDGE BASE ===`
     : "";
 
+  const workflowBlock = workflowContextBlock.trim() ? `\n${workflowContextBlock.trim()}` : "";
+
   const pk = primaryKeyword?.trim() ?? "";
   const writingKw = pk ? resolveWritingKeyword(pk) : "";
   const keywordPunctuationBlock = pk ? buildKeywordPunctuationPromptBlock(pk, writingKw) : "";
@@ -369,7 +372,7 @@ ${firstParagraphRuleFull}${exactPrimaryPerH2Block}`
       : HTML_FORMAT_RULES_FULL_ARTICLE;
   const core = `You are an expert SEO content AI. Use the API key for content tasks. Output must be optimized, on-topic, and structurally correct.
 ${formatRules}${generalFocusRule}${keywordPunctuationBlock}
-${knowledgeBlock}${entityContext}${targetSiteContext}${semrushExternalBlock}${wordPressPostsContext}${linkRuleBlock}${semrushOverridesWikipediaOnly}`;
+${knowledgeBlock}${workflowBlock}${entityContext}${targetSiteContext}${semrushExternalBlock}${wordPressPostsContext}${linkRuleBlock}${semrushOverridesWikipediaOnly}`;
   await ensureMasterInstructionsInMemory(siteId);
   return appendUniversalContentRulesToSystemPrompt(
     appendMasterInstructionsToSystemPrompt(core, siteId),

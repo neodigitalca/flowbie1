@@ -89,8 +89,9 @@ export function PulseAssistSidebarShell({
   const panelRef = useRef<HTMLDivElement>(null);
   const { width, isResizing, isMobile, handleProps } = usePulseAssistSidebarResize(open);
   const panelLabel = panel === "agents" ? RUNNING_AGENTS_LABEL : NEO_PULSE_ASSIST_LABEL;
-  const { clearHistory, hasTerminalHistory } = useAgentRunsContext();
+  const { clearHistory, runs } = useAgentRunsContext();
   const [clearingHistory, setClearingHistory] = useState(false);
+  const canClearAgents = runs.length > 0;
   const docked = layout === "docked";
 
   useEffect(() => {
@@ -172,12 +173,14 @@ export function PulseAssistSidebarShell({
               active={panel === "assist"}
               square
               onClick={() => onPanelChange("assist")}
+              className="h-8 min-w-[4.5rem]"
             />
             <WorkspacePill
               label="Agents"
               active={panel === "agents"}
               square
               onClick={() => onPanelChange("agents")}
+              className="h-8 min-w-[4.5rem]"
             />
             <PulseAssistClock className="ml-auto" />
             {panel === "agents" ? (
@@ -185,16 +188,16 @@ export function PulseAssistSidebarShell({
                 type="button"
                 variant="ghost"
                 className={cn(
-                  "h-9 shrink-0 px-3 text-base text-muted-foreground hover:text-foreground",
-                  !hasTerminalHistory && "pointer-events-none invisible",
+                  "h-10 shrink-0 px-3 text-lg font-semibold text-muted-foreground hover:text-foreground",
+                  !canClearAgents && "pointer-events-none invisible",
                 )}
-                disabled={clearingHistory || !hasTerminalHistory}
+                disabled={clearingHistory || !canClearAgents}
                 onClick={() => {
                   setClearingHistory(true);
                   void clearHistory().finally(() => setClearingHistory(false));
                 }}
               >
-                Clear history
+                {clearingHistory ? "Clearing…" : "Clear all"}
               </Button>
             ) : null}
           </div>

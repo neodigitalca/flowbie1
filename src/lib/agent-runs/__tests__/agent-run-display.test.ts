@@ -96,4 +96,23 @@ describe("agentRunCollapsedHint", () => {
       "Blueprint generation failed: Blueprint missing agents.",
     );
   });
+
+  it("shows result message instead of duplicate Done status label", () => {
+    const run = {
+      id: 83,
+      recipeKey: "gsc_reporting",
+      status: "done",
+      recipeTitle: "GSC reporting",
+      source: "task_manager",
+      taskId: 1,
+      context: {},
+      plan: {},
+      result: { message: "GSC MoM report generated" },
+      createdAt: "",
+      updatedAt: "",
+    } as AgentRun;
+    expect(
+      agentRunCollapsedHint(run, { progressLabel: "Done", progress: 1, stepLabel: "Done" }, 0, null),
+    ).toBe("GSC MoM report generated");
+  });
 });

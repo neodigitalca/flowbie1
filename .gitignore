@@ -15,6 +15,8 @@ android/local.properties
 .env
 .env.local
 .env.*.local
+.env.localdominator
+.localdominator-session.json
 
 # WP Engine deploy config (contains credentials)
 wordpress-plugins/flowbie-wpengine.config.json
@@ -37,6 +39,9 @@ wordpress-plugins/neo-pulse-wp/includes/credentials/
 # Deploy build artifacts (may embed local secrets)
 wordpress-plugins/.deploy/*.zip
 wordpress-plugins/*.zip
+
+# Local WP Staging paths (machine-specific)
+scripts/local-wp-staging.config.json
 
 # Report date range (AI agents read this; per-user local state)
 REPORT_DATE_RANGE.md

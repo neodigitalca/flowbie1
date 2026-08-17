@@ -1,0 +1,152 @@
+/* NEO Pulse Voice — PTT button and recording states */
+.neo-pulse-voice-ptt {
+  position: relative;
+  overflow: visible;
+}
+
+.neo-pulse-voice-ptt .neo-pulse-voice__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.neo-pulse-voice-ptt .neo-pulse-voice__icon--mic {
+  opacity: 1;
+  color: #ffffff;
+}
+
+.neo-pulse-voice-ptt .neo-pulse-voice__svg {
+  color: #ffffff;
+  stroke: currentColor;
+}
+
+.neo-pulse-voice-ptt .neo-pulse-voice__icon--send,
+.neo-pulse-voice-ptt .fba-send__icon--send,
+.neo-pulse-voice-ptt .fcwd-send__icon--send,
+.neo-pulse-voice-ptt .fcw-send__icon--send {
+  opacity: 0;
+  transform: scale(0.85);
+}
+
+.neo-pulse-voice-ptt--has-text .neo-pulse-voice__icon--mic,
+.neo-pulse-voice-ptt--has-text .fba-send__icon--mic,
+.neo-pulse-voice-ptt--has-text .fcwd-send__icon--mic,
+.neo-pulse-voice-ptt--has-text .fcw-send__icon--mic {
+  opacity: 0;
+  transform: scale(0.85);
+}
+
+.neo-pulse-voice-ptt--has-text .neo-pulse-voice__icon--send,
+.neo-pulse-voice-ptt--has-text .fba-send__icon--send,
+.neo-pulse-voice-ptt--has-text .fcwd-send__icon--send,
+.neo-pulse-voice-ptt--has-text .fcw-send__icon--send {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.neo-pulse-voice-ptt--recording,
+.neo-pulse-voice--recording {
+  animation: neo-pulseVoicePulse 1.2s ease-in-out infinite;
+}
+
+.neo-pulse-voice-ptt--recording {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fcw-mic-recording, #22c55e) 35%, transparent);
+  background: var(--fcw-mic-recording, #22c55e) !important;
+}
+
+.neo-pulse-voice-ptt:not(.neo-pulse-voice-ptt--has-text):not(.neo-pulse-voice-ptt--recording) {
+  background: var(--fcw-mic-idle, var(--fcw-send-bg, #3b82f6));
+  color: #ffffff;
+}
+
+@keyframes neo-pulseVoicePulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neo-pulse-voice-ptt--recording,
+  .neo-pulse-voice--recording {
+    animation: none;
+  }
+}
+
+.neo-pulse-voice-toast {
+  align-self: center;
+  max-width: 90%;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: rgba(248, 113, 113, 0.15);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  color: #fca5a5;
+  font-size: 0.875rem;
+  animation: neo-pulseVoiceToastIn 0.2s ease;
+}
+
+@keyframes neo-pulseVoiceToastIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fba-mode-toggle {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  justify-content: center;
+}
+
+.fba-mode-btn {
+  padding: 6px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.875rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.fba-mode-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.fba-mode-btn--active {
+  background: rgba(74, 222, 128, 0.12);
+  border-color: rgba(74, 222, 128, 0.35);
+  color: #86efac;
+}
+
+.fba-send,
+.fcwd-send,
+.fcw-send {
+  position: relative;
+}
+
+.fba-send .fba-send__icon,
+.fcw-send .fcw-send__icon,
+.fcwd-send .fcwd-send__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}

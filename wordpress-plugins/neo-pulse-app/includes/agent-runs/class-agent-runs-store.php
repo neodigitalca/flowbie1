@@ -11,7 +11,7 @@ class Neo_Pulse_App_Agent_Runs_Store {
 
 	const STATUSES = array( 'queued', 'running', 'done', 'failed', 'cancelled' );
 
-	const SOURCES = array( 'pulse_assist', 'task_manager' );
+	const SOURCES = array( 'pulse_assist', 'task_manager', 'workflow' );
 
 	public static function install_tables(): void {
 		global $wpdb;
@@ -333,6 +333,9 @@ class Neo_Pulse_App_Agent_Runs_Store {
 		$updated = self::get_run( $team_id, $run_id );
 		if ( $updated && class_exists( 'Neo_Pulse_App_Push_Events' ) ) {
 			Neo_Pulse_App_Push_Events::on_agent_run_terminal( $updated, $previous_status );
+		}
+		if ( $updated && class_exists( 'Neo_Pulse_App_Workflow_Trigger_Agent_Done' ) ) {
+			Neo_Pulse_App_Workflow_Trigger_Agent_Done::on_agent_run_terminal( $updated, $previous_status );
 		}
 		return $updated;
 	}

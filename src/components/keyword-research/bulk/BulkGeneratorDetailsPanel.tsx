@@ -38,8 +38,6 @@ export type BulkGeneratorDetailsVariant = "csv" | "prompt" | "blog-import";
 
 const POST_DESTINATION_LABEL: Record<WordPressPostDestination, string> = {
   wordpress: "WordPress",
-  bank: "Bank",
-  hybrid: "Hybrid",
   local: "Local files",
 };
 
@@ -370,17 +368,6 @@ function BulkGeneratorIdleDetail(props: BulkGeneratorDetailsPanelProps): ReactNo
         </p>
       ) : null}
 
-      {postDestination === "bank" && !workspaceBusy ? (
-        <p className="px-2.5 py-1.5 text-base text-muted-foreground sm:px-3">
-          Rows go to your Supabase Post Bank first. Publish to WordPress from Properties, Bank tab.
-        </p>
-      ) : null}
-
-      {postDestination === "hybrid" && !workspaceBusy ? (
-        <p className="px-2.5 py-1.5 text-base text-muted-foreground sm:px-3">
-          First calendar month posts to WordPress; later months queue in the content bank.
-        </p>
-      ) : null}
 
       {wpConfig && postDestination !== "local" && variant !== "prompt" ? (
         <div className="px-2.5 py-2 sm:px-3">

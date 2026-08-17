@@ -9,7 +9,7 @@ import {
 } from "@/lib/task-execution-bucket";
 import { isTaskExecutionTargetAll } from "@/lib/task-execution-target";
 
-export type AgentRunRecipeBucketKey = "reporting" | "editorial" | "meta";
+export type AgentRunRecipeBucketKey = "reporting" | "editorial" | "meta" | "research";
 
 export type AgentRunBucketKey = TaskExecutionTargetBucket | AgentRunRecipeBucketKey | "other";
 
@@ -34,6 +34,7 @@ export const AGENT_RUN_BUCKET_ORDER: AgentRunBucketKey[] = [
   "sap",
   "all",
   "reporting",
+  "research",
   "editorial",
   "meta",
   "other",
@@ -51,6 +52,7 @@ function isActiveRun(run: AgentRun): boolean {
 function bucketLabel(key: AgentRunBucketKey): string {
   if (key === "other") return "Other";
   if (key === "reporting") return "Reporting";
+  if (key === "research") return "Research";
   if (key === "editorial") return "Editorial";
   if (key === "meta") return "Meta";
   return TASK_EXECUTION_TARGET_BUCKET_LABELS[key];
@@ -59,6 +61,7 @@ function bucketLabel(key: AgentRunBucketKey): string {
 function recipeBucketKey(run: AgentRun): AgentRunRecipeBucketKey | null {
   const recipe = resolveAgentRunRecipeKey(run);
   if (recipe === "gsc_reporting") return "reporting";
+  if (recipe === "local_dominator_export") return "research";
   if (recipe === "post_creator") return "editorial";
   if (recipe === "overview_pages_meta_batch") return "meta";
   return null;

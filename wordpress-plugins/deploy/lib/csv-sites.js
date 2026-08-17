@@ -19,6 +19,9 @@ function menuLabel(row, domainCounts) {
   return row.site;
 }
 
+/** App hosts — not client WP plugin deploy targets */
+const WP_CLIENT_DEPLOY_EXCLUDED = new Set(["flowbie.ca", "neodigital.ca"]);
+
 export function isStagingSite(row) {
   const username = (row.username || "").toLowerCase();
   const host = (row.host || "").toLowerCase();
@@ -46,9 +49,11 @@ export function loadSites(csvPath) {
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
-/** Production clients only (staging rows excluded). */
+/** Production clients only (staging rows and app hosts excluded). */
 export function loadProductionSites(csvPath) {
-  return loadSites(csvPath).filter((row) => !isStagingSite(row));
+  return loadSites(csvPath).filter(
+    (row) => !isStagingSite(row) && !WP_CLIENT_DEPLOY_EXCLUDED.has(row.site.toLowerCase()),
+  );
 }
 
 /** Staging rows only (1stg in host or username). */

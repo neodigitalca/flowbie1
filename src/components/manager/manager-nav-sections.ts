@@ -70,7 +70,7 @@ export const MANAGER_NAV_SECTIONS: ManagerNavSection[] = [
       {
         value: "dashboard-master-rules",
         label: "Master Rules",
-        description: "Per-site client instructions in Supabase",
+        description: "Per-site client instructions stored in the workspace for AI generation.",
         icon: ScrollText,
         dashboardCluster: "master-rules",
       },
@@ -121,16 +121,23 @@ export const MANAGER_NAV_SECTIONS: ManagerNavSection[] = [
         icon: CheckSquare,
       },
       {
-        value: "pulse-forge",
-        label: "Pulse Forge",
-        description: "WHEN/THEN SEO automations, recipes, and schedules",
-        icon: Zap,
-      },
-      {
         value: "support",
         label: "Support",
         description: "Pulse Assist tickets, chat logs, and export",
         icon: LifeBuoy,
+      },
+    ],
+  },
+  {
+    id: "forge",
+    label: "Forge",
+    icon: Zap,
+    items: [
+      {
+        value: "pulse-forge",
+        label: "Task Builder",
+        description: "Workflow automations, recipes, and schedules",
+        icon: Zap,
       },
     ],
   },

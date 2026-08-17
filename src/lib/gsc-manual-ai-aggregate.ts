@@ -140,6 +140,34 @@ export function extractJsonObjectFromModelText(raw: string): string {
   return t;
 }
 
+/** Parse model JSON with fence extraction and truncated-object repair. */
+export function parseJsonObjectFromModelText(raw: string): unknown {
+  const extracted = extractJsonObjectFromModelText(raw);
+  try {
+    return JSON.parse(extracted);
+  } catch (firstError) {
+    let trimmed = extracted;
+    for (let attempt = 0; attempt < 48; attempt++) {
+      try {
+        return JSON.parse(trimmed);
+      } catch {
+        const lastBrace = trimmed.lastIndexOf("}");
+        if (lastBrace > 0) {
+          trimmed = trimmed.slice(0, lastBrace);
+          continue;
+        }
+        trimmed = `${trimmed}}`;
+      }
+    }
+    throw firstError;
+  }
+}
+
+export const GSC_JSON_OPENROUTER_OPTS = {
+  responseFormat: { type: "json_object" as const },
+  temperature: 0.2,
+};
+
 function isNonEmptyString(x: unknown): x is string {
   return typeof x === "string" && x.trim().length > 0;
 }
@@ -206,7 +234,7 @@ export function gscManualAiPayloadToMarkdown(args: {
 export function parseAndValidateGscManualAiJson(raw: string): GscManualAiPayload {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(extractJsonObjectFromModelText(raw));
+    parsed = parseJsonObjectFromModelText(raw);
   } catch {
     throw new Error("AI response was not valid JSON.");
   }
@@ -343,21 +371,46 @@ ${text}`;
 
   const maxTokens = Math.min(24_000, getCompetitorReportMaxOutputTokens(model));
 
-  const { content } = await callOpenRouterChatCompletion({
-    apiKey,
-    model,
-    system: SYSTEM_PROMPT,
-    user: userMessage,
-    maxTokens,
-    signal,
-  });
+  const request = async (user: string) =>
+    callOpenRouterChatCompletion({
+      apiKey,
+      model,
+      system: SYSTEM_PROMPT,
+      user,
+      maxTokens,
+      signal,
+      ...GSC_JSON_OPENROUTER_OPTS,
+    });
 
-  const payload = parseAndValidateGscManualAiJson(content);
-  return gscManualAiPayloadToMarkdown({
-    siteName,
-    siteUrl,
-    filenames,
-    truncatedInput: truncated,
-    payload,
-  });
+  let { content, finishReason } = await request(userMessage);
+  try {
+    const payload = parseAndValidateGscManualAiJson(content);
+    return gscManualAiPayloadToMarkdown({
+      siteName,
+      siteUrl,
+      filenames,
+      truncatedInput: truncated,
+      payload,
+    });
+  } catch (firstError) {
+    const retryUser = `${userMessage}
+
+Your previous reply was invalid or truncated JSON. Return one complete JSON object only. Escape double quotes inside strings as \\". Keep evidence arrays short.`;
+    ({ content, finishReason } = await request(retryUser));
+    try {
+      const payload = parseAndValidateGscManualAiJson(content);
+      return gscManualAiPayloadToMarkdown({
+        siteName,
+        siteUrl,
+        filenames,
+        truncatedInput: truncated,
+        payload,
+      });
+    } catch {
+      const truncatedHint =
+        finishReason === "length" ? " Model output was truncated; retry the run." : "";
+      const detail = firstError instanceof Error ? firstError.message : "AI response was not valid JSON.";
+      throw new Error(`${detail}${truncatedHint}`);
+    }
+  }
 }

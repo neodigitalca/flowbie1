@@ -9,7 +9,7 @@
     "NEO Pulse rewrites title, meta, headings, and body when the snippet underperforms.",
     "Same URL waits 72 hours before it can run again."
   ],
-  "category": "reactive",
+  "category": "maintenance",
   "verticals": [
     "editorial",
     "general"

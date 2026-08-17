@@ -1,5 +1,6 @@
 import type { ScheduleFrequency } from '@/lib/wordpress-scheduler';
 import type { WordPressPostDestination } from '@/lib/bulk-auto-generate';
+import { normalizeBulkPostDestination } from '@/lib/bulk-post-destination-normalize';
 
 const STORAGE_KEY = 'neo-pulse_sap_bulk_schedule_v1';
 
@@ -17,7 +18,7 @@ export type SapBulkSchedulePrefsV1 = {
   sitemapType: BulkSitemapMode;
   /** When false, ignore CSV `publish_date_gmt` for scheduling. */
   useCsvPublishDates?: boolean;
-  /** After generation: WordPress, bank, or hybrid (first UTC month → WP, rest → bank). */
+  /** After generation: WordPress or local files only. */
   postDestination?: WordPressPostDestination;
 };
 
@@ -39,9 +40,10 @@ export function loadSapBulkSchedulePrefs(): SapBulkSchedulePrefsV1 | null {
     if (typeof parsed.customInterval !== 'number' || parsed.customInterval < 1) return null;
     const d = new Date(parsed.customStartDateIso);
     if (Number.isNaN(d.getTime())) return null;
-    const pd = parsed.postDestination;
-    const postDestination: WordPressPostDestination | undefined =
-      pd === 'wordpress' || pd === 'bank' || pd === 'hybrid' || pd === 'local' ? pd : undefined;
+    const postDestination =
+      parsed.postDestination != null
+        ? normalizeBulkPostDestination(parsed.postDestination)
+        : undefined;
     return {
       v: 1,
       scheduleFrequency: parsed.scheduleFrequency!,

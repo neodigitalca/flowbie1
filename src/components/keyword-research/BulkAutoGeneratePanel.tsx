@@ -22,6 +22,7 @@ import {
 import { computePublishDateLabelsByGeneratedIndex } from '@/lib/bulk/bulk-slot-publish-dates';
 import { getFirstOfThisMonthDate, type ScheduleFrequency } from '@/lib/wordpress-scheduler';
 import { loadSapBulkSchedulePrefs, saveSapBulkSchedulePrefs } from '@/lib/bulk-schedule-prefs';
+import { normalizeBulkPostDestination } from '@/lib/bulk-post-destination-normalize';
 import { useBulkProcessing } from './bulk/useBulkProcessing';
 import { useBulkAutoGenerate } from '@/hooks/use-bulk-auto-generate';
 import { usePromptBulkGenerate } from '@/hooks/use-prompt-bulk-generate';
@@ -144,10 +145,9 @@ export const BulkAutoGeneratePanel: React.FC<BulkAutoGeneratePanelProps> = ({
   const [startTime, setStartTime] = useState<string>('09:00');
   const [useCsvPublishDates, setUseCsvPublishDates] = useState(false);
   const [wordpressDraftOnly, setWordpressDraftOnly] = useState(false);
-  /** SAP / local analysis runs should queue in Supabase (Post Bank or SAP bank) by default; blog generator stays WordPress-first. */
   const [bulkPostDestination, setBulkPostDestination] = useState<WordPressPostDestination>(() => {
-    if (initialBulkPostDestination) return initialBulkPostDestination;
-    return sapMode ? 'bank' : 'wordpress';
+    if (initialBulkPostDestination) return normalizeBulkPostDestination(initialBulkPostDestination);
+    return 'wordpress';
   });
 
   // Legacy single site state for backward compatibility
@@ -256,13 +256,8 @@ export const BulkAutoGeneratePanel: React.FC<BulkAutoGeneratePanelProps> = ({
       setCustomStartDate(new Date(stored.customStartDateIso));
       setStartTime(stored.startTime);
       setUseCsvPublishDates(false);
-      if (
-        stored.postDestination === 'wordpress' ||
-        stored.postDestination === 'bank' ||
-        stored.postDestination === 'hybrid' ||
-        stored.postDestination === 'local'
-      ) {
-        setBulkPostDestination(stored.postDestination);
+      if (stored.postDestination != null) {
+        setBulkPostDestination(normalizeBulkPostDestination(stored.postDestination));
       }
     } else {
       setScheduleFrequency('custom');

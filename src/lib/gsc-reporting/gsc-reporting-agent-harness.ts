@@ -1,5 +1,5 @@
 import type { WordPressSite } from "@/components/integrations/types";
-import { loadApiKey } from "@/lib/api";
+import { resolveOpenRouterApiKeyForHarness } from "@/lib/openrouter-api-key-resolve";
 import { listSiteUrlsForMode } from "@/lib/local-analysis-site-context";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { getPublicSiteUrl } from "@/lib/wordpress-site-public-url";
@@ -75,7 +75,7 @@ export async function runGscReportingAgentHarness(
   args: RunGscReportingAgentHarnessArgs,
 ): Promise<GscReportingAgentHarnessResult> {
   const comparePreset = args.comparePreset ?? "mom";
-  const apiKey = loadApiKey()?.trim();
+  const apiKey = (await resolveOpenRouterApiKeyForHarness())?.trim();
   if (!apiKey) {
     throw new Error("Add an OpenRouter API key in Settings.");
   }

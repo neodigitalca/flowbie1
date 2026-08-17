@@ -13,6 +13,7 @@ import { useActiveWordPressSite } from "@/contexts/active-wordpress-site-context
 import { useWordPressSites } from "@/hooks/use-wordpress-sites";
 import { usePulseTaskScheduleRunner } from "@/hooks/use-pulse-task-schedule-runner";
 import { usePulseTaskTriggerRunner } from "@/hooks/use-pulse-task-trigger-runner";
+import { useWorkflowTriggerRunner } from "@/hooks/use-workflow-trigger-runner";
 import {
   createAgentRun,
   cancelAgentRun,
@@ -335,6 +336,41 @@ export function AgentRunsContextProvider({
     startRunFromTask,
     onTriggerRun: () => {
       void refreshTasksWorkspace();
+      void refreshRuns();
+    },
+  });
+
+  useWorkflowTriggerRunner({
+    teamId,
+    startRun: async (payload, options) => {
+      const result = await startRun(payload, options);
+      return {
+        ok: result.ok,
+        run: result.run
+          ? {
+              id: result.run.id,
+              status: result.run.status,
+              result: result.run.result as Record<string, unknown> | undefined,
+            }
+          : undefined,
+        error: result.error,
+      };
+    },
+    startRunFromTask: async (task, options) => {
+      const result = await startRunFromTask(task, options);
+      return {
+        ok: result.ok,
+        run: result.run
+          ? {
+              id: result.run.id,
+              status: result.run.status,
+              result: result.run.result as Record<string, unknown> | undefined,
+            }
+          : undefined,
+        error: result.error,
+      };
+    },
+    onWorkflowRun: () => {
       void refreshRuns();
     },
   });

@@ -100,6 +100,8 @@ export type TaskExecutionPayload = {
   scheduleDraftOnly?: boolean;
   /** When true, each run saves outputs to the team task archive on the server. */
   saveLocalArchive?: boolean;
+  /** Injected upstream workflow RAG context for downstream agents. */
+  workflowContextBlock?: string;
   /** Then tab Email delivery (AgentMail). */
   sendAutomationEmail?: boolean;
   automationEmailTo?: string;

@@ -1,0 +1,774 @@
+/**
+ * NEO Pulse WP admin — design tokens & typography
+ * @layer neo-pulse-wp-admin
+ */
+
+/* Typography: Lato, 1rem minimum — dark shell, white text */
+.neo-pulse-wp-app,
+.neo-pulse-wp-settings,
+.neo-pulse-wp-analytics,
+.neo-pulse-wp-dashboard,
+.neo-pulse-wp-panel-page,
+.neo-pulse-wp-tool-library,
+.neo-pulse-wp-redirects,
+.neo-pulse-wp-forms,
+.neo-pulse-wp-agent-hub,
+.neo-pulse-wp-chat-logs,
+.neo-pulse-wp-chat,
+.neo-pulse-wp-overseer,
+.neo-pulse-wp-script-manager,
+.neo-pulse-wp-image-seo,
+.neo-pulse-fields-admin {
+	--fc-font: 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	--fc-page-bg: #000000;
+	--fc-border: rgba(255, 255, 255, 0.12);
+	--fc-border-strong: rgba(255, 255, 255, 0.2);
+	--fc-surface: #141619;
+	--fc-surface-muted: #101114;
+	--fc-surface-elevated: #181b21;
+	--fc-table-header-bg: #161920;
+	--fc-table-row-hover: #1c2129;
+	--fc-success-bg: rgba(34, 197, 94, 0.16);
+	--fc-success-border: rgba(74, 222, 128, 0.35);
+	--fc-text: #f8fafc;
+	--fc-text-muted: #e5e7eb;
+	--fc-on-dark-text: #ffffff;
+	--fc-on-dark-muted: #e5e7eb;
+	--fc-on-dark-placeholder: #9ca3af;
+	--fc-link: #72aee6;
+	--fc-link-hover: #9ecaff;
+	--fc-input-bg: #141619;
+	--fc-input-border: rgba(255, 255, 255, 0.16);
+	/* Readable text inputs: dark text on light field surfaces */
+	--fc-field-bg: #f6f7f7;
+	--fc-field-text: #1d2327;
+	--fc-field-text-muted: #646970;
+	--fc-field-border: #8c8f94;
+	--fc-field-focus-border: #2271b1;
+	--fc-frame-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+	--fc-radius: 8px;
+	--fc-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+	/* Dashboard + metrics: one unique neon hue per module (HSL components) */
+	--fc-neon-settings: 199 100% 61%;
+	--fc-neon-analytics: 142 100% 58%;
+	--fc-neon-schema: 280 100% 72%;
+	--fc-neon-sitemap: 43 100% 58%;
+	--fc-neon-redirects: 330 100% 65%;
+	--fc-neon-chat-logs: 199 100% 61%;
+	--fc-neon-forms: 199 100% 61%;
+	--fc-neon-field-gallery: 217 100% 65%;
+	--fc-neon-agent-hub: 199 100% 61%;
+	--fc-neon-scripts: 22 100% 58%;
+	--fc-neon-overseer: 262 100% 68%;
+	--fc-neon-speed: 82 100% 52%;
+	--fc-neon-image-seo: 338 92% 68%;
+	--fc-neon-field-groups: 217 100% 65%;
+	--fc-neon-field-post-types: 187 100% 52%;
+	--fc-neon-field-taxonomies: 168 100% 48%;
+	--fc-neon-field-options: 265 95% 72%;
+	--fc-neon-field-tools: 210 80% 72%;
+	--fc-neon-search: 220 100% 88%;
+	--fc-neon-backend-assist: 45 100% 55%;
+	--fc-neon-tool-library: 75 100% 50%;
+	--fc-neon-default: 0 0% 62%;
+	--fc-neon-metric-post-bank: 32 100% 55%;
+	--fc-neon-metric-sap-bank: 52 100% 50%;
+	--fc-neon-metric-optimization: 187 92% 55%;
+	--fc-neon-metric-quarter: 0 0% 98%;
+	--fc-neon-metric-posts: 142 76% 58%;
+	--fc-neon-metric-entities: 158 100% 50%;
+	--fs-border: rgba(255, 255, 255, 0.12);
+	--fs-muted: #e5e7eb;
+	font-family: var(--fc-font);
+	font-size: 1rem;
+	line-height: 1.5;
+	color: var(--fc-text);
+}
+
+.neo-pulse-wp-app input,
+.neo-pulse-wp-app textarea,
+.neo-pulse-wp-app select,
+.neo-pulse-wp-app button,
+.neo-pulse-wp-app label,
+.neo-pulse-wp-app p,
+.neo-pulse-wp-app li,
+.neo-pulse-wp-app td,
+.neo-pulse-wp-app th,
+.neo-pulse-wp-settings input,
+.neo-pulse-wp-settings textarea,
+.neo-pulse-wp-settings select,
+.neo-pulse-wp-settings button,
+.neo-pulse-wp-settings label,
+.neo-pulse-wp-settings p,
+.neo-pulse-wp-settings li,
+.neo-pulse-wp-settings td,
+.neo-pulse-wp-settings th,
+.neo-pulse-wp-analytics input,
+.neo-pulse-wp-analytics textarea,
+.neo-pulse-wp-analytics select,
+.neo-pulse-wp-analytics button,
+.neo-pulse-wp-analytics label,
+.neo-pulse-wp-analytics p,
+.neo-pulse-wp-analytics li,
+.neo-pulse-wp-analytics td,
+.neo-pulse-wp-analytics th,
+.neo-pulse-wp-redirects input,
+.neo-pulse-wp-redirects textarea,
+.neo-pulse-wp-redirects select,
+.neo-pulse-wp-redirects button,
+.neo-pulse-wp-redirects label,
+.neo-pulse-wp-redirects p,
+.neo-pulse-wp-redirects li,
+.neo-pulse-wp-redirects td,
+.neo-pulse-wp-redirects th,
+.neo-pulse-wp-forms input,
+.neo-pulse-wp-forms textarea,
+.neo-pulse-wp-forms select,
+.neo-pulse-wp-forms button,
+.neo-pulse-wp-forms label,
+.neo-pulse-wp-forms p,
+.neo-pulse-wp-forms li,
+.neo-pulse-wp-forms td,
+.neo-pulse-wp-forms th,
+.neo-pulse-wp-agent-hub input,
+.neo-pulse-wp-agent-hub textarea,
+.neo-pulse-wp-agent-hub select,
+.neo-pulse-wp-agent-hub button,
+.neo-pulse-wp-agent-hub label,
+.neo-pulse-wp-agent-hub p,
+.neo-pulse-wp-agent-hub li,
+.neo-pulse-wp-agent-hub td,
+.neo-pulse-wp-agent-hub th,
+.neo-pulse-wp-chat-logs input,
+.neo-pulse-wp-chat-logs textarea,
+.neo-pulse-wp-chat-logs select,
+.neo-pulse-wp-chat-logs button,
+.neo-pulse-wp-chat-logs label,
+.neo-pulse-wp-chat-logs p,
+.neo-pulse-wp-chat-logs li,
+.neo-pulse-wp-chat-logs td,
+.neo-pulse-wp-chat-logs th,
+.neo-pulse-wp-chat input,
+.neo-pulse-wp-chat textarea,
+.neo-pulse-wp-chat select,
+.neo-pulse-wp-chat button,
+.neo-pulse-wp-chat label,
+.neo-pulse-wp-chat p,
+.neo-pulse-wp-chat li,
+.neo-pulse-wp-chat td,
+.neo-pulse-wp-chat th,
+.neo-pulse-wp-overseer input,
+.neo-pulse-wp-overseer textarea,
+.neo-pulse-wp-overseer select,
+.neo-pulse-wp-overseer button,
+.neo-pulse-wp-overseer label,
+.neo-pulse-wp-overseer p,
+.neo-pulse-wp-overseer li,
+.neo-pulse-wp-overseer td,
+.neo-pulse-wp-overseer th,
+.neo-pulse-wp-overseer h1,
+.neo-pulse-wp-overseer h2,
+.neo-pulse-wp-overseer h3,
+.neo-pulse-wp-overseer h4,
+.neo-pulse-wp-overseer a,
+.neo-pulse-wp-overseer code,
+.neo-pulse-wp-overseer span,
+.neo-pulse-wp-overseer strong,
+.neo-pulse-wp-overseer .description,
+.neo-pulse-wp-overseer .tablenav,
+.neo-pulse-wp-overseer .tablenav-pages,
+.neo-pulse-wp-overseer .wp-list-table,
+.neo-pulse-wp-script-manager input,
+.neo-pulse-wp-script-manager textarea,
+.neo-pulse-wp-script-manager select,
+.neo-pulse-wp-script-manager button,
+.neo-pulse-wp-script-manager label,
+.neo-pulse-wp-script-manager p,
+.neo-pulse-wp-script-manager li,
+.neo-pulse-wp-script-manager td,
+.neo-pulse-wp-script-manager th,
+.neo-pulse-fields-admin input,
+.neo-pulse-fields-admin textarea,
+.neo-pulse-fields-admin select,
+.neo-pulse-fields-admin button,
+.neo-pulse-fields-admin label,
+.neo-pulse-fields-admin p,
+.neo-pulse-fields-admin li,
+.neo-pulse-fields-admin td,
+.neo-pulse-fields-admin th,
+.neo-pulse-fields-admin h1,
+.neo-pulse-fields-admin h2,
+.neo-pulse-fields-admin h3,
+.neo-pulse-fields-admin h4,
+.neo-pulse-fields-admin a,
+.neo-pulse-fields-admin code,
+.neo-pulse-fields-admin span,
+.neo-pulse-fields-admin strong,
+.neo-pulse-fields-admin .button,
+.neo-pulse-fields-admin .description,
+.neo-pulse-fields-admin .tablenav,
+.neo-pulse-fields-admin .tablenav-pages,
+.neo-pulse-fields-admin .row-title,
+.neo-pulse-fields-admin .wp-list-table,
+.neo-pulse-fields-admin .search-box {
+	font-family: var(--fc-font);
+	font-size: 1rem;
+}
+
+.neo-pulse-fields-root input,
+.neo-pulse-fields-root textarea,
+.neo-pulse-fields-root select,
+.neo-pulse-fields-root button,
+.neo-pulse-fields-root label,
+.neo-pulse-fields-root p,
+.neo-pulse-fields-root li,
+.neo-pulse-fields-root td,
+.neo-pulse-fields-root th,
+.neo-pulse-fields-root span,
+.neo-pulse-fields-root a,
+.neo-pulse-fields-root .description {
+	font-family: var(--fc-font);
+	font-size: 1rem;
+}
+
+.neo-pulse-wp-app,
+.neo-pulse-wp-settings,
+.neo-pulse-wp-analytics,
+.neo-pulse-wp-panel-page,
+.neo-pulse-wp-redirects,
+.neo-pulse-wp-forms,
+.neo-pulse-wp-agent-hub,
+.neo-pulse-wp-chat-logs,
+.neo-pulse-wp-chat,
+.neo-pulse-wp-overseer,
+.neo-pulse-wp-script-manager,
+.neo-pulse-fields-admin {
+	max-width: none;
+	width: 100%;
+	margin-left: 0;
+	margin-right: 0;
+}
+
+.wrap.neo-pulse-wp-settings,
+.wrap.neo-pulse-wp-app,
+.wrap.neo-pulse-wp-redirects,
+.wrap.neo-pulse-wp-forms,
+.wrap.neo-pulse-wp-agent-hub,
+.wrap.neo-pulse-wp-chat-logs,
+.wrap.neo-pulse-wp-overseer,
+.wrap.neo-pulse-wp-script-manager,
+.wrap.neo-pulse-fields-admin {
+	background: var(--fc-page-bg);
+	color: var(--fc-text);
+	padding: 16px 20px 40px;
+	border-radius: 0;
+	box-sizing: border-box;
+	margin: 0;
+}
+
+/* Dashboard + panel shells: one centered column — body matches header bar width */
+.wrap.neo-pulse-wp-app.neo-pulse-wp-app--dashboard {
+	width: 100%;
+	max-width: calc(var(--fc-layout-max) + (var(--fc-layout-gutter) * 2));
+	margin-left: auto;
+	margin-right: auto;
+	padding: 16px 0 40px;
+	box-sizing: border-box;
+}
+
+.wrap.neo-pulse-wp-settings.neo-pulse-wp-settings--shell,
+.wrap.neo-pulse-wp-acf-shell {
+	padding: 0;
+	margin: 0;
+	width: 100%;
+}
+
+.neo-pulse-wp-acf-shell-app {
+	width: 100%;
+	max-width: calc(var(--fc-layout-max) + (var(--fc-layout-gutter) * 2));
+	margin-left: auto;
+	margin-right: auto;
+}
+
+/* Full-bleed black canvas on NEO Pulse admin screens */
+body.neo-pulse-wp-admin-screen {
+	overflow-x: clip;
+	--fc-layout-max: 1400px;
+	--fc-layout-gutter: 24px;
+}
+
+body.neo-pulse-wp-admin-screen #wpcontent {
+	padding-left: 20px;
+	padding-right: 20px;
+	box-sizing: border-box;
+}
+
+body.neo-pulse-wp-admin-screen #wpcontent,
+body.neo-pulse-wp-admin-screen #wpbody,
+body.neo-pulse-wp-admin-screen #wpbody-content {
+	background: #000;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody {
+	display: flex;
+	flex-direction: column;
+	min-height: calc(100vh - 32px);
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content {
+	flex: 1 1 auto;
+	min-height: 0;
+	padding-left: 0;
+	padding-right: 0;
+	padding-bottom: 0;
+}
+
+body.neo-pulse-wp-admin-screen #wpfooter {
+	flex-shrink: 0;
+	margin-top: auto;
+	background: #000;
+	color: var(--fc-on-dark-muted, #e5e7eb);
+}
+
+body.neo-pulse-wp-admin-screen #wpfooter a {
+	color: var(--fc-link);
+}
+
+@media screen and (max-width: 782px) {
+	body.neo-pulse-wp-admin-screen #wpbody {
+		min-height: calc(100vh - 46px);
+	}
+
+	body.neo-pulse-wp-admin-screen #wpcontent {
+		padding-left: 10px;
+		padding-right: 10px;
+	}
+}
+
+.neo-pulse-wp-app a:not(.button):not(.neo-pulse-wp-dashboard-tile),
+.neo-pulse-wp-settings a:not(.button):not(.neo-pulse-wp-panel-nav__item),
+.neo-pulse-wp-analytics a:not(.button):not(.neo-pulse-wp-panel-nav__item),
+.neo-pulse-wp-panel-page a:not(.button):not(.neo-pulse-wp-panel-nav__item):not(.neo-pulse-wp-dashboard-tile),
+.neo-pulse-wp-tool-library a:not(.button),
+.neo-pulse-wp-redirects a:not(.button),
+.neo-pulse-wp-forms a:not(.button),
+.neo-pulse-wp-agent-hub a:not(.button),
+.neo-pulse-wp-chat-logs a:not(.button),
+.neo-pulse-wp-chat a:not(.button):not(.neo-pulse-wp-panel-nav__item):not(.neo-pulse-chat-widget a),
+.neo-pulse-wp-overseer a:not(.button),
+.neo-pulse-wp-script-manager a:not(.button),
+.neo-pulse-fields-admin a:not(.button) {
+	color: var(--fc-link);
+}
+
+.neo-pulse-wp-app a:not(.button):hover,
+.neo-pulse-wp-app a:not(.button):focus,
+.neo-pulse-wp-settings a:not(.button):hover,
+.neo-pulse-wp-settings a:not(.button):focus,
+.neo-pulse-wp-analytics a:not(.button):hover,
+.neo-pulse-wp-analytics a:not(.button):focus,
+.neo-pulse-wp-panel-page a:not(.button):not(.neo-pulse-wp-panel-nav__item):hover,
+.neo-pulse-wp-panel-page a:not(.button):not(.neo-pulse-wp-panel-nav__item):focus,
+.neo-pulse-wp-redirects a:not(.button):hover,
+.neo-pulse-wp-redirects a:not(.button):focus,
+.neo-pulse-wp-forms a:not(.button):hover,
+.neo-pulse-wp-forms a:not(.button):focus,
+.neo-pulse-wp-chat-logs a:not(.button):hover,
+.neo-pulse-wp-chat-logs a:not(.button):focus,
+.neo-pulse-wp-chat a:not(.button):not(.neo-pulse-wp-panel-nav__item):not(.neo-pulse-chat-widget a):hover,
+.neo-pulse-wp-chat a:not(.button):not(.neo-pulse-wp-panel-nav__item):not(.neo-pulse-chat-widget a):focus,
+.neo-pulse-wp-overseer a:not(.button):hover,
+.neo-pulse-wp-overseer a:not(.button):focus,
+.neo-pulse-wp-script-manager a:not(.button):hover,
+.neo-pulse-wp-script-manager a:not(.button):focus,
+.neo-pulse-fields-admin a:not(.button):hover,
+.neo-pulse-fields-admin a:not(.button):focus {
+	color: var(--fc-link-hover);
+}
+
+.neo-pulse-wp-settings .widefat,
+.neo-pulse-wp-settings__input.widefat,
+.neo-pulse-wp-analytics .widefat,
+.neo-pulse-wp-redirects .widefat,
+.neo-pulse-wp-forms .widefat,
+.neo-pulse-wp-agent-hub .widefat,
+.neo-pulse-wp-chat-logs .widefat,
+.neo-pulse-wp-chat .widefat,
+.neo-pulse-wp-overseer .widefat,
+.neo-pulse-wp-script-manager .widefat,
+.neo-pulse-wp-app .widefat,
+.neo-pulse-fields-admin .widefat {
+	border: none;
+	background: var(--fc-input-bg);
+	color: var(--fc-text);
+	box-shadow: none;
+}
+
+.neo-pulse-wp-settings .widefat::placeholder,
+.neo-pulse-wp-analytics .widefat::placeholder,
+.neo-pulse-wp-redirects .widefat::placeholder,
+.neo-pulse-wp-forms .widefat::placeholder,
+.neo-pulse-wp-chat-logs .widefat::placeholder,
+.neo-pulse-wp-chat .widefat::placeholder,
+.neo-pulse-wp-chat .neo-pulse-field__control::placeholder,
+.neo-pulse-wp-overseer .widefat::placeholder,
+.neo-pulse-wp-script-manager .widefat::placeholder,
+.neo-pulse-fields-admin .widefat::placeholder {
+	color: var(--fc-text-muted);
+}
+
+.neo-pulse-wp-settings code,
+.neo-pulse-wp-analytics code,
+.neo-pulse-wp-panel-page code,
+.neo-pulse-wp-redirects code,
+.neo-pulse-wp-forms code,
+.neo-pulse-wp-chat-logs code,
+.neo-pulse-wp-chat code,
+.neo-pulse-wp-overseer code,
+.neo-pulse-wp-script-manager code,
+.neo-pulse-fields-admin code {
+	background: var(--fc-input-bg);
+	color: var(--fc-text);
+}
+
+.neo-pulse-wp-settings .description,
+.neo-pulse-wp-analytics .description,
+.neo-pulse-wp-redirects .description,
+.neo-pulse-wp-forms .description,
+.neo-pulse-wp-agent-hub .description,
+.neo-pulse-wp-chat-logs .description,
+.neo-pulse-wp-chat .description,
+.neo-pulse-wp-overseer .description,
+.neo-pulse-wp-script-manager .description,
+.neo-pulse-fields-admin .description {
+	color: var(--fc-text-muted);
+}
+
+.neo-pulse-wp-settings h1,
+.neo-pulse-wp-settings h2,
+.neo-pulse-wp-settings h3,
+.neo-pulse-wp-analytics h1,
+.neo-pulse-wp-analytics h2,
+.neo-pulse-wp-analytics h3,
+.neo-pulse-wp-panel-page h1,
+.neo-pulse-wp-panel-page h2,
+.neo-pulse-wp-panel-page h3,
+.neo-pulse-wp-redirects h1,
+.neo-pulse-wp-redirects h2,
+.neo-pulse-wp-redirects h3,
+.neo-pulse-wp-forms h1,
+.neo-pulse-wp-forms h2,
+.neo-pulse-wp-forms h3,
+.neo-pulse-wp-agent-hub h1,
+.neo-pulse-wp-agent-hub h2,
+.neo-pulse-wp-agent-hub h3,
+.neo-pulse-wp-chat-logs h1,
+.neo-pulse-wp-chat-logs h2,
+.neo-pulse-wp-chat-logs h3,
+.neo-pulse-wp-chat h1,
+.neo-pulse-wp-chat h2,
+.neo-pulse-wp-chat h3,
+.neo-pulse-wp-overseer h1,
+.neo-pulse-wp-overseer h2,
+.neo-pulse-wp-overseer h3,
+.neo-pulse-wp-script-manager h1,
+.neo-pulse-wp-script-manager h2,
+.neo-pulse-wp-script-manager h3,
+.neo-pulse-fields-admin h1,
+.neo-pulse-fields-admin h2,
+.neo-pulse-fields-admin h3,
+.neo-pulse-wp-app h2,
+.neo-pulse-wp-app h3 {
+	color: var(--fc-text);
+}
+
+.neo-pulse-wp-redirects .subsubsub a,
+.neo-pulse-wp-forms .subsubsub a,
+.neo-pulse-wp-script-manager .subsubsub a {
+	color: var(--fc-text-muted);
+}
+
+.neo-pulse-wp-redirects .subsubsub a.current,
+.neo-pulse-wp-forms .subsubsub a.current,
+.neo-pulse-wp-script-manager .subsubsub a.current {
+	color: var(--fc-text);
+	font-weight: 600;
+}
+
+.neo-pulse-wp-redirects .subsubsub a:hover,
+.neo-pulse-wp-redirects .subsubsub a:focus,
+.neo-pulse-wp-forms .subsubsub a:hover,
+.neo-pulse-wp-forms .subsubsub a:focus,
+.neo-pulse-wp-script-manager .subsubsub a:hover,
+.neo-pulse-wp-script-manager .subsubsub a:focus {
+	color: var(--fc-link-hover);
+}
+
+/* WordPress core chrome — black & grey only (no white surfaces) */
+body.neo-pulse-wp-admin-screen #wpbody-content > .notice,
+body.neo-pulse-wp-admin-screen #wpbody-content > .update-nag,
+body.neo-pulse-wp-admin-screen #wpbody-content > .updated,
+body.neo-pulse-wp-admin-screen #wpbody-content > .error {
+	display: none !important;
+}
+
+body.neo-pulse-wp-admin-screen .notice {
+	margin: 0 0 16px 20px;
+	padding: 12px 16px;
+	background: var(--fc-surface-muted);
+	color: var(--fc-text);
+	border: none;
+	box-shadow: none;
+}
+
+body.neo-pulse-wp-admin-screen .notice p {
+	margin: 0.5em 0;
+	color: inherit;
+}
+
+body.neo-pulse-wp-admin-screen .notice-info {
+	background: var(--fc-surface-elevated);
+}
+
+body.neo-pulse-wp-admin-screen .notice-success {
+	background: rgba(34, 197, 94, 0.2);
+	color: #dcfce7;
+}
+
+body.neo-pulse-wp-admin-screen .notice-error {
+	background: rgba(153, 27, 27, 0.4);
+	color: #fca5a5;
+}
+
+body.neo-pulse-wp-admin-screen .notice-warning {
+	background: rgba(120, 53, 15, 0.45);
+	color: #fef3c7;
+}
+
+body.neo-pulse-wp-admin-screen .wp-list-table {
+	background: var(--fc-surface);
+	color: var(--fc-text);
+	border: none;
+}
+
+body.neo-pulse-wp-admin-screen .wp-list-table thead th,
+body.neo-pulse-wp-admin-screen .wp-list-table tfoot th {
+	background: var(--fc-table-header-bg);
+	color: var(--fc-text);
+	border: none;
+}
+
+body.neo-pulse-wp-admin-screen .wp-list-table tbody tr {
+	background: #000;
+}
+
+body.neo-pulse-wp-admin-screen .wp-list-table tbody tr.alternate,
+body.neo-pulse-wp-admin-screen .wp-list-table.striped > tbody > :nth-child(odd),
+body.neo-pulse-wp-admin-screen .wp-list-table > tbody > tr:nth-child(odd) {
+	background: var(--fc-surface-muted);
+}
+
+body.neo-pulse-wp-admin-screen .wp-list-table tbody td,
+body.neo-pulse-wp-admin-screen .wp-list-table tbody th {
+	color: var(--fc-text);
+	border: none;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-fields-admin .wp-list-table {
+	background: var(--fc-surface);
+	color: var(--fc-text);
+	border: none;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-fields-admin .wp-list-table thead th,
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-fields-admin .wp-list-table tfoot th {
+	background: var(--fc-table-header-bg);
+	color: var(--fc-text);
+	border: none;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-fields-admin .wp-list-table tbody tr {
+	background: #000;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-fields-admin .wp-list-table tbody tr.alternate,
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-fields-admin .wp-list-table.striped > tbody > :nth-child(odd),
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-fields-admin .wp-list-table > tbody > tr:nth-child(odd) {
+	background: var(--fc-surface-muted);
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-fields-admin .wp-list-table tbody td,
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-fields-admin .wp-list-table tbody th {
+	color: var(--fc-text);
+	border: none;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-fields-admin .wp-list-table tbody td a.row-title,
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-fields-admin .wp-list-table tbody td a:not(.button) {
+	color: var(--fc-link);
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-fields-admin .wp-list-table tbody td a.row-title:hover,
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-fields-admin .wp-list-table tbody td a.row-title:focus,
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-fields-admin .wp-list-table tbody td a:not(.button):hover,
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-fields-admin .wp-list-table tbody td a:not(.button):focus {
+	color: var(--fc-link-hover);
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-fields-admin .wp-list-table code {
+	color: hsl(187 85% 48% / 0.92);
+	background: transparent;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-fields-admin .wp-list-table tbody tr:hover,
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-fields-admin .wp-list-table tbody tr:hover td,
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-fields-admin .wp-list-table tbody tr:hover th {
+	background: var(--fc-table-row-hover);
+}
+
+body.neo-pulse-wp-admin-screen .wp-list-table tbody tr:hover,
+body.neo-pulse-wp-admin-screen .wp-list-table tbody tr:hover td,
+body.neo-pulse-wp-admin-screen .wp-list-table tbody tr:hover th {
+	background: var(--fc-table-row-hover);
+	color: var(--fc-text);
+}
+
+body.neo-pulse-wp-admin-screen .wp-list-table .check-column {
+	background: inherit;
+}
+
+body.neo-pulse-wp-admin-screen .wp-list-table thead .check-column,
+body.neo-pulse-wp-admin-screen .wp-list-table tfoot .check-column {
+	background: var(--fc-table-header-bg);
+}
+
+body.neo-pulse-wp-admin-screen .wp-list-table input[type="checkbox"] {
+	appearance: none;
+	-webkit-appearance: none;
+	width: 1rem;
+	height: 1rem;
+	min-width: 1rem;
+	min-height: 1rem;
+	margin: 0;
+	vertical-align: middle;
+	background: var(--fc-surface-elevated);
+	border: 1px solid rgba(255, 255, 255, 0.38);
+	border-radius: 2px;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+body.neo-pulse-wp-admin-screen .wp-list-table input[type="checkbox"]:checked {
+	background-color: var(--fc-link);
+	border-color: var(--fc-link);
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill='%23ffffff' d='M14.83 4.89l1.34 1.34-9.19 9.19-4.24-4.24 1.41-1.41 2.83 2.83z'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: center;
+	background-size: 0.75rem 0.75rem;
+}
+
+body.neo-pulse-wp-admin-screen .wp-list-table input[type="checkbox"]:focus {
+	border-color: var(--fc-link);
+	box-shadow: 0 0 0 1px var(--fc-link);
+	outline: none;
+}
+
+body.neo-pulse-wp-admin-screen .tablenav {
+	color: var(--fc-text);
+}
+
+body.neo-pulse-wp-admin-screen .tablenav .actions select,
+body.neo-pulse-wp-admin-screen .tablenav .actions .button {
+	background: var(--fc-input-bg, #141619);
+	color: var(--fc-on-dark-text, #ffffff);
+	-webkit-text-fill-color: var(--fc-on-dark-text, #ffffff);
+	border: none;
+}
+
+body.neo-pulse-wp-admin-screen .tablenav .displaying-num {
+	color: var(--fc-on-dark-muted, #e5e7eb);
+}
+
+body.neo-pulse-wp-admin-screen .subsubsub,
+body.neo-pulse-wp-admin-screen .subsubsub a {
+	color: var(--fc-on-dark-muted, #e5e7eb);
+}
+
+body.neo-pulse-wp-admin-screen .subsubsub a.current {
+	color: var(--fc-on-dark-text, #ffffff);
+	font-weight: 600;
+}
+
+body.neo-pulse-wp-admin-screen .row-actions,
+body.neo-pulse-wp-admin-screen .row-actions a {
+	color: var(--fc-on-dark-muted, #e5e7eb);
+}
+
+body.neo-pulse-wp-admin-screen .tablenav-pages,
+body.neo-pulse-wp-admin-screen .tablenav-pages a,
+body.neo-pulse-wp-admin-screen .tablenav-pages span {
+	color: var(--fc-text-muted);
+}
+
+body.neo-pulse-wp-admin-screen .tablenav-pages .current-page {
+	background: var(--fc-input-bg);
+	color: var(--fc-text);
+	border: none;
+	-webkit-text-fill-color: var(--fc-text);
+}
+
+body.neo-pulse-wp-admin-screen select,
+body.neo-pulse-wp-admin-screen input[type="text"],
+body.neo-pulse-wp-admin-screen input[type="search"],
+body.neo-pulse-wp-admin-screen input[type="number"],
+body.neo-pulse-wp-admin-screen input[type="url"],
+body.neo-pulse-wp-admin-screen textarea:not(.fcw-textarea) {
+	background: var(--fc-input-bg);
+	color: var(--fc-text);
+	-webkit-text-fill-color: var(--fc-text);
+	border: none;
+}
+
+body.neo-pulse-wp-admin-screen select option {
+	background: var(--fc-input-bg, #141619);
+	color: var(--fc-on-dark-text, #ffffff);
+}
+
+body.neo-pulse-wp-admin-screen input::placeholder,
+body.neo-pulse-wp-admin-screen textarea:not(.fcw-textarea)::placeholder {
+	color: var(--fc-on-dark-placeholder, #9ca3af);
+	opacity: 1;
+	-webkit-text-fill-color: var(--fc-on-dark-placeholder, #9ca3af);
+}
+
+body.neo-pulse-wp-admin-screen .form-table th {
+	color: var(--fc-text-muted);
+}
+
+body.neo-pulse-wp-admin-screen .form-table td {
+	color: var(--fc-text);
+}
+
+body.neo-pulse-wp-admin-screen .neo-pulse-wp-script-manager .form-table th,
+body.neo-pulse-wp-admin-screen .neo-pulse-wp-script-manager .form-table th label,
+body.neo-pulse-wp-admin-screen .neo-pulse-wp-overseer .form-table th,
+body.neo-pulse-wp-admin-screen .neo-pulse-wp-overseer .form-table th label {
+	color: var(--fc-text, #f8fafc) !important;
+}
+
+body.neo-pulse-wp-admin-screen .neo-pulse-wp-script-manager .form-table td,
+body.neo-pulse-wp-admin-screen .neo-pulse-wp-overseer .form-table td {
+	color: var(--fc-text, #f8fafc);
+}
+
+body.neo-pulse-wp-admin-screen .page-title-action {
+	background: var(--fc-surface-muted);
+	color: var(--fc-link);
+	border: none;
+}
+
+body.neo-pulse-wp-admin-screen .page-title-action:hover,
+body.neo-pulse-wp-admin-screen .page-title-action:focus {
+	background: var(--fc-surface-elevated);
+	color: var(--fc-link-hover);
+}

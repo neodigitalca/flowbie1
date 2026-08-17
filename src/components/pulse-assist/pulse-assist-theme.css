@@ -1,7 +1,7 @@
 /* Pulse Flow Assist — dark theme (NEO Pulse manager) */
 
 :root {
-  --neo-pulse-shortcut-rail-width: 4rem;
+  --neo-pulse-shortcut-rail-width: 5rem;
 }
 
 .pulse-assist-scroll-lock {
@@ -92,7 +92,7 @@
   -webkit-appearance: none;
   line-height: 1;
   font-family: "Lato", ui-sans-serif, system-ui, sans-serif;
-  font-size: 1rem;
+  font-size: inherit;
 }
 
 .pulse-assist-root--docked button.pulse-assist-launcher--docked {
@@ -157,7 +157,7 @@
 
 .pulse-assist-launcher-brand__label {
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1;
   letter-spacing: 0.02em;
   color: #fff;
@@ -336,7 +336,7 @@
 }
 
 .fai-sidebar-panel__title {
-  font-size: 1rem;
+  font-size: inherit;
   font-weight: 600;
   min-width: 0;
 }
@@ -383,7 +383,7 @@
 }
 
 .pulse-assist-panel-header__title {
-  font-size: 1rem;
+  font-size: inherit;
   font-weight: 600;
   flex-shrink: 0;
   align-self: center;
@@ -444,7 +444,7 @@
 }
 
 .fcw-scope-btn {
-  font-size: 1rem;
+  font-size: inherit;
   padding: 6px 12px;
   border: none;
   border-radius: 0;
@@ -466,7 +466,7 @@
 }
 
 .fcw-toolbar-debug-btn {
-  font-size: 1rem;
+  font-size: inherit;
   padding: 6px 10px;
   border: none;
   border-radius: 0;
@@ -509,7 +509,7 @@
 }
 
 .fcw-harness-progress__label {
-  font-size: 1rem;
+  font-size: inherit;
   margin-bottom: 6px;
   color: hsl(var(--muted-foreground));
 }
@@ -544,12 +544,12 @@
 }
 
 .fcw-empty__title {
-  font-size: 1rem;
+  font-size: inherit;
   font-weight: 600;
 }
 
 .fcw-empty__sub {
-  font-size: 1rem;
+  font-size: inherit;
   color: hsl(var(--muted-foreground));
 }
 
@@ -568,7 +568,7 @@
   border-radius: 0;
   background: hsl(240 4% 12%);
   color: hsl(var(--foreground));
-  font-size: 1rem;
+  font-size: inherit;
   line-height: 1.45;
   cursor: pointer;
 }
@@ -588,7 +588,7 @@
   border-radius: 0;
   background: hsl(var(--primary));
   color: #0a0a0a;
-  font-size: 1rem;
+  font-size: inherit;
   line-height: 1.5;
 }
 
@@ -598,7 +598,7 @@
   border-radius: 0;
   background: hsl(240 4% 14%);
   color: hsl(var(--muted-foreground));
-  font-size: 1rem;
+  font-size: inherit;
 }
 
 .fcw-card {
@@ -608,7 +608,7 @@
 }
 
 .fcw-card__title {
-  font-size: 1rem;
+  font-size: inherit;
   font-weight: 600;
   margin-bottom: 12px;
 }
@@ -618,7 +618,7 @@
 }
 
 .fcw-card__body {
-  font-size: 1rem;
+  font-size: inherit;
   line-height: 1.7;
   color: hsl(var(--foreground));
 }
@@ -640,7 +640,7 @@
 .fcw-md-h2 {
   margin: 0;
   padding-top: 0.35rem;
-  font-size: 1rem;
+  font-size: inherit;
   font-weight: 700;
   line-height: 1.4;
   color: hsl(var(--foreground));
@@ -653,7 +653,7 @@
 .fcw-md-h3,
 .fcw-md-h4 {
   margin: 0;
-  font-size: 1rem;
+  font-size: inherit;
   font-weight: 600;
   line-height: 1.4;
   color: hsl(var(--foreground));
@@ -751,7 +751,7 @@
   border-radius: 0;
   background: hsl(240 4% 8%);
   font-family: ui-monospace, monospace;
-  font-size: 1rem;
+  font-size: inherit;
   line-height: 1.5;
 }
 
@@ -760,7 +760,7 @@
   border-radius: 0;
   background: hsl(240 4% 16%);
   font-family: ui-monospace, monospace;
-  font-size: 1rem;
+  font-size: inherit;
 }
 
 .fcw-md-table-wrap {
@@ -776,7 +776,7 @@
   width: 100%;
   table-layout: auto;
   border-collapse: collapse;
-  font-size: 1rem;
+  font-size: inherit;
 }
 
 .fcw-md-thead {
@@ -825,7 +825,7 @@
 }
 
 .fcw-card__step {
-  font-size: 1rem;
+  font-size: inherit;
   color: hsl(var(--muted-foreground));
   padding-left: 0;
   position: relative;
@@ -901,7 +901,7 @@
 }
 
 .fcw-card__link {
-  font-size: 1rem;
+  font-size: inherit;
   padding: 6px 12px;
   border-radius: 0;
   background: hsl(240 4% 16%);
@@ -927,7 +927,7 @@
   border-radius: 0;
   background: hsl(240 4% 14%);
   color: hsl(var(--foreground));
-  font-size: 1rem;
+  font-size: inherit;
   cursor: pointer;
 }
 
@@ -951,7 +951,7 @@
   border-radius: 0;
   background: hsl(var(--primary));
   color: #0a0a0a;
-  font-size: 1rem;
+  font-size: inherit;
   font-weight: 600;
   cursor: pointer;
 }
@@ -966,7 +966,7 @@
   border-radius: 0;
   background: hsl(240 4% 12%);
   color: hsl(var(--foreground));
-  font-size: 1rem;
+  font-size: inherit;
   font-family: inherit;
   line-height: 1.5;
 }
@@ -1025,7 +1025,7 @@
 }
 
 .pulse-assist-agents__trigger {
-  font-size: 1rem;
+  font-size: inherit;
   font-weight: 600;
   color: hsl(var(--muted-foreground));
   padding-left: 0;
@@ -1034,7 +1034,7 @@
 }
 
 .pulse-assist-agents__content {
-  font-size: 1rem;
+  font-size: inherit;
 }
 
 .pulse-assist-agents__list {
@@ -1059,7 +1059,7 @@
 .pulse-assist-agents__row-label {
   flex: 1;
   min-width: 0;
-  font-size: 1rem;
+  font-size: inherit;
   font-weight: 500;
   color: hsl(var(--foreground));
   white-space: nowrap;

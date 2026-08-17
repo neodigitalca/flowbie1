@@ -9,9 +9,20 @@ defined( 'ABSPATH' ) || exit;
 
 class Neo_Pulse_App_Secrets {
 
+	private static function gsc_json_is_legacy_flowbie( string $raw ): bool {
+		return str_contains( $raw, 'flowbie-483717' ) || str_contains( $raw, 'flowbie-812@' );
+	}
+
+	private static function openrouter_key_is_invalid( string $key ): bool {
+		return str_contains( $key, '0df04520eb8c0146e19f925295a5559b058f399917db3db7c0a3e3bb97361148' );
+	}
+
 	public static function gsc_service_account_json(): string {
 		if ( defined( 'NEO_PULSE_APP_GSC_SERVICE_ACCOUNT_JSON' ) && NEO_PULSE_APP_GSC_SERVICE_ACCOUNT_JSON !== '' ) {
-			return (string) NEO_PULSE_APP_GSC_SERVICE_ACCOUNT_JSON;
+			$app = (string) NEO_PULSE_APP_GSC_SERVICE_ACCOUNT_JSON;
+			if ( ! self::gsc_json_is_legacy_flowbie( $app ) ) {
+				return $app;
+			}
 		}
 		if ( defined( 'NEO_PULSE_WP_GSC_SERVICE_ACCOUNT_JSON' ) && NEO_PULSE_WP_GSC_SERVICE_ACCOUNT_JSON !== '' ) {
 			return (string) NEO_PULSE_WP_GSC_SERVICE_ACCOUNT_JSON;
@@ -172,10 +183,16 @@ class Neo_Pulse_App_Secrets {
 
 	public static function openrouter_api_key(): string {
 		if ( defined( 'NEO_PULSE_APP_OPENROUTER_API_KEY' ) && NEO_PULSE_APP_OPENROUTER_API_KEY !== '' ) {
-			return trim( (string) NEO_PULSE_APP_OPENROUTER_API_KEY );
+			$app = trim( (string) NEO_PULSE_APP_OPENROUTER_API_KEY );
+			if ( ! self::openrouter_key_is_invalid( $app ) ) {
+				return $app;
+			}
 		}
 		if ( defined( 'NEO_PULSE_WP_OPENROUTER_API_KEY' ) && NEO_PULSE_WP_OPENROUTER_API_KEY !== '' ) {
-			return trim( (string) NEO_PULSE_WP_OPENROUTER_API_KEY );
+			$wp = trim( (string) NEO_PULSE_WP_OPENROUTER_API_KEY );
+			if ( ! self::openrouter_key_is_invalid( $wp ) ) {
+				return $wp;
+			}
 		}
 		$env = self::env_string( 'OPEN_ROUTER_API_KEY', 'OPENROUTER_API_KEY', 'NEO_PULSE_APP_OPENROUTER_API_KEY' );
 		if ( $env !== '' ) {
@@ -204,7 +221,7 @@ class Neo_Pulse_App_Secrets {
 		$keys      = Neo_Pulse_App_Json_File_Store::read( $keys_path );
 		if ( is_array( $keys ) && ! empty( $keys['openRouterApiKey'] ) ) {
 			$key = trim( (string) $keys['openRouterApiKey'] );
-			if ( $key !== '' ) {
+			if ( $key !== '' && ! self::openrouter_key_is_invalid( $key ) ) {
 				return $key;
 			}
 		}
@@ -257,13 +274,13 @@ class Neo_Pulse_App_Secrets {
 	}
 
 	public static function agentmail_api_key(): string {
-		if ( defined( 'NEO_PULSE_APP_AGENTMAIL_API_KEY' ) && NEO_PULSE_APP_AGENTMAIL_API_KEY !== '' ) {
-			return trim( (string) NEO_PULSE_APP_AGENTMAIL_API_KEY );
-		}
 		$keys_path = Neo_Pulse_App_Data_Paths::root() . '/email-worker-keys.json';
 		$keys      = Neo_Pulse_App_Json_File_Store::read( $keys_path );
 		if ( is_array( $keys ) && ! empty( $keys['agentmailApiKey'] ) ) {
 			return trim( (string) $keys['agentmailApiKey'] );
+		}
+		if ( defined( 'NEO_PULSE_APP_AGENTMAIL_API_KEY' ) && NEO_PULSE_APP_AGENTMAIL_API_KEY !== '' ) {
+			return trim( (string) NEO_PULSE_APP_AGENTMAIL_API_KEY );
 		}
 		$mgr = Neo_Pulse_App_Json_File_Store::read( Neo_Pulse_App_Data_Paths::manager_settings_path() );
 		if ( is_array( $mgr ) && isset( $mgr['snapshot']['keys']['agentmail-api-key'] ) ) {
@@ -276,6 +293,14 @@ class Neo_Pulse_App_Secrets {
 	}
 
 	public static function agentmail_inbox(): string {
+		$keys_path = Neo_Pulse_App_Data_Paths::root() . '/email-worker-keys.json';
+		$keys      = Neo_Pulse_App_Json_File_Store::read( $keys_path );
+		if ( is_array( $keys ) && ! empty( $keys['agentmailGeneralEmail'] ) ) {
+			$inbox = sanitize_email( strtolower( trim( (string) $keys['agentmailGeneralEmail'] ) ) );
+			if ( $inbox !== '' ) {
+				return $inbox;
+			}
+		}
 		if ( defined( 'NEO_PULSE_APP_AGENTMAIL_INBOX' ) && NEO_PULSE_APP_AGENTMAIL_INBOX !== '' ) {
 			return sanitize_email( strtolower( trim( (string) NEO_PULSE_APP_AGENTMAIL_INBOX ) ) );
 		}

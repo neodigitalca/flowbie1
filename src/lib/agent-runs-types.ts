@@ -8,7 +8,7 @@ import {
 
 export type AgentRunStatus = "queued" | "running" | "done" | "failed" | "cancelled";
 
-export type AgentRunSource = "pulse_assist" | "task_manager";
+export type AgentRunSource = "pulse_assist" | "task_manager" | "workflow";
 
 export type AgentRunRecipeKey =
   | "overview_pages_meta_batch"
@@ -149,6 +149,7 @@ export const AGENT_RUN_STATUS_LABELS: Record<AgentRunStatus, string> = {
 export const AGENT_RUN_SOURCE_LABELS: Record<AgentRunSource, string> = {
   pulse_assist: "Pulse Assist",
   task_manager: "Task",
+  workflow: "Workflow",
 };
 
 export function isAgentRunTerminal(status: AgentRunStatus): boolean {

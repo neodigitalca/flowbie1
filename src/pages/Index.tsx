@@ -65,6 +65,7 @@ import {
 } from "@/lib/manager-cloud-settings-snapshot";
 import { NEO_PULSE_OPEN_MASTER_RULES_EVENT } from "@/lib/open-master-rules-settings";
 import { isApiTabHash } from "@/lib/api-docs/api-docs-hash";
+import { isPulseForgeHash } from "@/lib/pulse-forge/pulse-forge-hash";
 
 const OPENROUTER_API_KEY_STORAGE_KEY = "openrouter-api-key";
 
@@ -107,6 +108,7 @@ const VALID_MANAGER_TABS = new Set([
   "ppc-google",
   "ppc-meta",
   "api",
+  "pulse-forge",
   /** Legacy tab ids (hash / stored); normalized to `generator` at runtime */
   "blog-generator",
   "sap-generator",
@@ -195,6 +197,9 @@ const Index = () => {
       }
       if (isApiTabHash(hashTab)) {
         return "api";
+      }
+      if (isPulseForgeHash(hashTab)) {
+        return "pulse-forge";
       }
       if (hashTab === "settings") {
         return "dashboard";
@@ -384,6 +389,9 @@ const Index = () => {
         } else if (normalized === "api") {
           const current = window.location.hash.replace(/^#/, "").trim();
           hash = current.startsWith("api") ? current : "api";
+        } else if (normalized === "pulse-forge") {
+          const current = window.location.hash.replace(/^#/, "").trim();
+          hash = isPulseForgeHash(current) ? current : "pulse-forge/forge";
         } else {
           hash = normalized;
         }

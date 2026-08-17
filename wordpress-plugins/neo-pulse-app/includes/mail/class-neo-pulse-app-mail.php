@@ -10,9 +10,10 @@ defined( 'ABSPATH' ) || exit;
 class Neo_Pulse_App_Mail {
 
 	/**
+	 * @param array<int,array{fileName:string,mime:string,content:string}> $attachments
 	 * @return array{ok:bool,error?:string,transport?:string}
 	 */
-	public static function send( string $to, string $subject, string $message ): array {
+	public static function send( string $to, string $subject, string $message, array $attachments = array() ): array {
 		$to = sanitize_email( strtolower( trim( $to ) ) );
 		if ( $to === '' || ! is_email( $to ) ) {
 			return array( 'ok' => false, 'error' => 'Invalid email address' );
@@ -20,15 +21,15 @@ class Neo_Pulse_App_Mail {
 
 		$agentmail_key = Neo_Pulse_App_Secrets::agentmail_api_key();
 		if ( $agentmail_key !== '' ) {
-			return self::send_via_agentmail( $agentmail_key, $to, $subject, $message );
+			return self::send_via_agentmail( $agentmail_key, $to, $subject, $message, $attachments );
 		}
 
 		$smtp = Neo_Pulse_App_Secrets::smtp();
 		if ( $smtp['host'] !== '' ) {
-			return self::send_via_wp_mail( $to, $subject, $message, $smtp, 'smtp' );
+			return self::send_via_wp_mail( $to, $subject, $message, $smtp, 'smtp', $attachments );
 		}
 
-		$result = self::send_via_wp_mail( $to, $subject, $message, null, 'wp_mail' );
+		$result = self::send_via_wp_mail( $to, $subject, $message, null, 'wp_mail', $attachments );
 		if ( ! $result['ok'] ) {
 			$result['error'] = $result['error'] . ' Save AgentMail API key in Dashboard → API Keys, or set NEO_PULSE_APP_SMTP_HOST in wp-config.';
 		}
@@ -36,23 +37,28 @@ class Neo_Pulse_App_Mail {
 	}
 
 	/**
+	 * @param array<int,array{fileName:string,mime:string,content:string}> $attachments
 	 * @return array{ok:bool,error?:string,transport?:string}
 	 */
-	private static function send_via_agentmail( string $api_key, string $to, string $subject, string $message ): array {
+	private static function send_via_agentmail( string $api_key, string $to, string $subject, string $message, array $attachments = array() ): array {
 		$inbox = Neo_Pulse_App_Secrets::agentmail_inbox();
 		if ( $inbox === '' || ! is_email( $inbox ) ) {
 			return array( 'ok' => false, 'error' => 'AgentMail inbox not configured. Set general email in API Keys.' );
 		}
 
-		$url  = 'https://api.agentmail.to/v0/inboxes/' . rawurlencode( $inbox ) . '/messages/send';
-		$body = wp_json_encode(
-			array(
-				'to'      => $to,
-				'subject' => $subject,
-				'text'    => $message,
-				'html'    => '<p>' . nl2br( esc_html( $message ) ) . '</p>',
-			)
+		$url = 'https://api.agentmail.to/v0/inboxes/' . rawurlencode( $inbox ) . '/messages/send';
+		$payload = array(
+			'to'      => $to,
+			'subject' => $subject,
+			'text'    => $message,
+			'html'    => '<p>' . nl2br( esc_html( $message ) ) . '</p>',
 		);
+		$encoded_attachments = self::encode_attachments_for_agentmail( $attachments );
+		if ( count( $encoded_attachments ) > 0 ) {
+			$payload['attachments'] = $encoded_attachments;
+		}
+
+		$body = wp_json_encode( $payload );
 
 		$response = wp_remote_post(
 			$url,
@@ -96,13 +102,13 @@ class Neo_Pulse_App_Mail {
 	}
 
 	/**
-	 * @param array{host:string,port:int,user:string,password:string,fromEmail:string,fromName:string,secure:string}|null $smtp
+	 * @param array<int,array{fileName:string,mime:string,content:string}> $attachments
 	 * @return array{ok:bool,error?:string,transport?:string}
 	 */
-	private static function send_via_wp_mail( string $to, string $subject, string $message, ?array $smtp, string $transport ): array {
+	private static function send_via_wp_mail( string $to, string $subject, string $message, ?array $smtp, string $transport, array $attachments = array() ): array {
 		$configure = null;
 		if ( is_array( $smtp ) && $smtp['host'] !== '' ) {
-			$configure = static function ( $phpmailer ) use ( $smtp ) {
+			$configure = static function ( $phpmailer ) use ( $smtp, $attachments ) {
 				$phpmailer->isSMTP();
 				$phpmailer->Host       = $smtp['host'];
 				$phpmailer->Port       = $smtp['port'];
@@ -112,6 +118,26 @@ class Neo_Pulse_App_Mail {
 				$phpmailer->SMTPSecure = $smtp['secure'] !== '' ? $smtp['secure'] : 'tls';
 				if ( $smtp['fromEmail'] !== '' ) {
 					$phpmailer->setFrom( $smtp['fromEmail'], $smtp['fromName'] );
+				}
+				foreach ( $attachments as $attachment ) {
+					$phpmailer->addStringAttachment(
+						(string) $attachment['content'],
+						(string) $attachment['fileName'],
+						'base64',
+						(string) $attachment['mime']
+					);
+				}
+			};
+			add_action( 'phpmailer_init', $configure );
+		} elseif ( count( $attachments ) > 0 ) {
+			$configure = static function ( $phpmailer ) use ( $attachments ) {
+				foreach ( $attachments as $attachment ) {
+					$phpmailer->addStringAttachment(
+						(string) $attachment['content'],
+						(string) $attachment['fileName'],
+						'base64',
+						(string) $attachment['mime']
+					);
 				}
 			};
 			add_action( 'phpmailer_init', $configure );
@@ -144,5 +170,53 @@ class Neo_Pulse_App_Mail {
 			'ok'    => false,
 			'error' => $error_message !== '' ? $error_message : 'Mail could not be sent.',
 		);
+	}
+
+	/**
+	 * @param mixed $raw
+	 * @return array<int,array{fileName:string,mime:string,content:string}>
+	 */
+	public static function normalize_attachments( $raw ): array {
+		if ( ! is_array( $raw ) ) {
+			return array();
+		}
+		$out = array();
+		foreach ( $raw as $item ) {
+			if ( ! is_array( $item ) ) {
+				continue;
+			}
+			$file_name = isset( $item['fileName'] ) ? sanitize_file_name( (string) $item['fileName'] ) : '';
+			$mime      = isset( $item['mime'] ) ? sanitize_mime_type( (string) $item['mime'] ) : '';
+			$content   = isset( $item['content'] ) ? (string) $item['content'] : '';
+			if ( $file_name === '' || $content === '' ) {
+				continue;
+			}
+			if ( $mime === '' ) {
+				$mime = 'application/octet-stream';
+			}
+			$out[] = array(
+				'fileName' => $file_name,
+				'mime'     => $mime,
+				'content'  => $content,
+			);
+		}
+		return $out;
+	}
+
+	/**
+	 * @param array<int,array{fileName:string,mime:string,content:string}> $attachments
+	 * @return array<int,array<string,string>>
+	 */
+	private static function encode_attachments_for_agentmail( array $attachments ): array {
+		$out = array();
+		foreach ( $attachments as $attachment ) {
+			$out[] = array(
+				'filename'            => (string) $attachment['fileName'],
+				'content_type'        => (string) $attachment['mime'],
+				'content_disposition' => 'attachment',
+				'content'             => base64_encode( (string) $attachment['content'] ),
+			);
+		}
+		return $out;
 	}
 }

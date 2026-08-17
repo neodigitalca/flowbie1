@@ -48,6 +48,9 @@ function inferActionKeyword(kind: string, payload?: { targetBucket?: string }): 
       ? "gsc-report-yoy"
       : "gsc-report-mom";
   }
+  if (kind === "local_dominator_export") {
+    return "local-dominator-grid-export";
+  }
   return `action-${kind || "custom"}`;
 }
 
@@ -67,10 +70,11 @@ export function taskDefToTriggerBlock(task: AutomationPlanTaskInput): Automation
   const triggerConfig = task.triggerConfig ?? defaultTaskTriggerConfig();
   if (isScheduleOnlyTriggerSource(triggerConfig.sources)) {
     return {
-      keyword: "schedule-poll",
+      keyword: "schedule-external-platforms",
       kind: "poll",
       pollHours: triggerConfig.pollHours,
       targetBucket: task.executionPayload?.targetBucket,
+      watchSchedule: task.executionPayload,
       triggerConfig,
     };
   }
@@ -166,6 +170,16 @@ export function planToTaskDef(plan: AutomationPlan, taskKeyword?: string): TaskT
   const payload = { ...plan.action.executionPayload };
   if (plan.trigger.kind !== "calendar" && plan.trigger.targetBucket && !payload.targetBucket) {
     payload.targetBucket = plan.trigger.targetBucket;
+  }
+  if (plan.trigger.kind === "poll" && plan.trigger.watchSchedule) {
+    Object.assign(payload, plan.trigger.watchSchedule);
+  }
+  if (Boolean(String(payload.automationEmailTo ?? "").trim())) {
+    payload.sendAutomationEmail = true;
+    payload.saveLocalArchive = true;
+  }
+  if (payload.sendAutomationEmail === true) {
+    payload.saveLocalArchive = true;
   }
 
   return {

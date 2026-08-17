@@ -242,6 +242,9 @@ class Neo_Pulse_App_Task_Schedule_Cron {
 		if ( $kind === 'post_creator' ) {
 			return 'post_creator';
 		}
+		if ( $kind === 'local_dominator_export' ) {
+			return 'local_dominator_export';
+		}
 		return '';
 	}
 }

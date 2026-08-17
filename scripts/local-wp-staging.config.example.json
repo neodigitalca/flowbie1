@@ -1,0 +1,8 @@
+{
+  "siteHost": "neopulse.local",
+  "siteUrl": "https://neopulse.local",
+  "wpRoot": "C:/Users/Sean Craig/wpstaging/sites/neopulse.local/www",
+  "pluginsDir": "C:/Users/Sean Craig/wpstaging/sites/neopulse.local/www/wp-content/plugins",
+  "apiProxyTarget": "https://neopulse.local",
+  "viteDevUrl": "http://localhost:8080/"
+}

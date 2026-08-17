@@ -1,10 +1,10 @@
 import React from "react";
 import { cn } from "@/lib/utils";
-import { TaskFormCompactCell } from "@/components/manager/tasks/TaskFormLayout";
+import { TaskFormInlineRow } from "@/components/manager/tasks/TaskFormLayout";
 import type { AutomationBlockCatalogItem } from "@/lib/automation-blocks-api";
 
 export type AutomationBlockPickerProps = {
-  label: string;
+  label?: string;
   blocks: AutomationBlockCatalogItem[];
   selectedKeyword: string;
   disabled?: boolean;
@@ -24,29 +24,31 @@ export function AutomationBlockPicker({
     ? blocks.filter((b) => (b.kind ?? "") === filterKind || b.keyword.startsWith(filterKind))
     : blocks;
 
-  return (
-    <TaskFormCompactCell label={label}>
-      <div className="-mx-1 flex h-9 min-w-0 items-center gap-1 overflow-x-auto px-1 [scrollbar-width:thin]">
-        {filtered.map((block) => {
-          const selected = block.keyword === selectedKeyword;
-          return (
-            <button
-              key={block.keyword}
-              type="button"
-              disabled={disabled}
-              onClick={() => onSelect(block.keyword)}
-              className={cn(
-                "h-8 shrink-0 whitespace-nowrap px-2 text-base transition-colors",
-                selected
-                  ? "bg-primary text-black"
-                  : "bg-zinc-900 text-white hover:bg-zinc-800",
-              )}
-            >
-              {block.name}
-            </button>
-          );
-        })}
-      </div>
-    </TaskFormCompactCell>
+  const grid = (
+    <div className="grid grid-cols-2 gap-1 lg:grid-cols-3 xl:grid-cols-4">
+      {filtered.map((block) => {
+        const selected = block.keyword === selectedKeyword;
+        return (
+          <button
+            key={block.keyword}
+            type="button"
+            disabled={disabled}
+            onClick={() => onSelect(block.keyword)}
+            className={cn(
+              "min-h-9 whitespace-normal px-2 py-1.5 text-left text-base transition-colors",
+              selected
+                ? "bg-primary text-black"
+                : "bg-zinc-900 text-white hover:bg-zinc-800",
+            )}
+          >
+            {block.name}
+          </button>
+        );
+      })}
+    </div>
   );
+
+  if (!label) return grid;
+
+  return <TaskFormInlineRow label={label}>{grid}</TaskFormInlineRow>;
 }

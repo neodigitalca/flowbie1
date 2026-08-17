@@ -5,9 +5,10 @@ import {
 } from "@/lib/competitor-research/competitor-report-openrouter-limits";
 import {
   bundleGscManualFilesForPrompt,
-  extractJsonObjectFromModelText,
-  parseAndValidateGscManualAiJson,
+  GSC_JSON_OPENROUTER_OPTS,
+  parseJsonObjectFromModelText,
   type GscManualAiPayload,
+  type GscManualAiTopRow,
 } from "@/lib/gsc-manual-ai-aggregate";
 import type { GscReportingOutlineResult, GscReportingSectionKind, GscReportingSectionPlan } from "@/lib/gsc-reporting/gsc-reporting-types";
 import {
@@ -83,7 +84,8 @@ Data rules (same as manual GSC summary):
 - **Cross-metric rule (any period compare):** Do **not** infer visibility loss from average position alone when **Search queries** and **Total impressions** both rose vs the prior period.
 - **Formatting:** Do **not** wrap queries, keywords, page titles, or brands in \`"\` or \`'\` in **executiveSummary**, **topOpportunities** labels, **why**, or **metrics**. Use plain text only (downstream prose uses **bold** for emphasis, not quotes).
 - **executiveSummary** must be **factual synthesis** with numbers from the CSV only; keep it **thematic** (segments, demand patterns, branded vs non-brand) so downstream **### Key Insights** can stay **broad**, not a query-by-query inventory. Do **not** output prioritized action lists, "next steps", "priority" framing, or tactical blocks naming query themes as to-do items. Do **not** prescribe implementation checklists; keep interpretation concise. The report section **Executive Summary** will add a separate \`### Key Insights\` bullet list in the final markdown; this JSON field is a compact narrative hint only.
-- topOpportunities: at most 12 rows; rank by business impact and merge near-duplicates; evidence lines verbatim from CSV.
+- topOpportunities: at most 8 rows; rank by business impact and merge near-duplicates.
+- evidence: at most 3 strings per row, each under 200 characters. Escape double quotes inside strings as \\".
 
 Respond with valid JSON only.`;
 
@@ -154,6 +156,41 @@ function isNonEmptyString(x: unknown): x is string {
   return typeof x === "string" && x.trim().length > 0;
 }
 
+function parseOutlineTopOpportunities(raw: unknown): GscManualAiTopRow[] {
+  if (!Array.isArray(raw)) return [];
+  const out: GscManualAiTopRow[] = [];
+  for (let i = 0; i < raw.length && out.length < 12; i++) {
+    const row = raw[i];
+    if (!row || typeof row !== "object") continue;
+    const r = row as Record<string, unknown>;
+    const rank = typeof r.rank === "number" ? r.rank : Number(r.rank);
+    if (!Number.isFinite(rank)) continue;
+    if (!isNonEmptyString(r.label) || !isNonEmptyString(r.why) || !isNonEmptyString(r.metrics)) continue;
+    const evidence = Array.isArray(r.evidence)
+      ? r.evidence.filter(isNonEmptyString).map((line) => String(line).trim()).slice(0, 8)
+      : [];
+    out.push({
+      rank,
+      label: r.label.trim(),
+      why: r.why.trim(),
+      metrics: r.metrics.trim(),
+      evidence: evidence.length > 0 ? evidence : undefined,
+    });
+  }
+  return out;
+}
+
+function parseOutlineBasePayload(parsed: Record<string, unknown>): GscManualAiPayload {
+  if (!isNonEmptyString(parsed.executiveSummary)) {
+    throw new Error("AI JSON missing executiveSummary.");
+  }
+  return {
+    executiveSummary: parsed.executiveSummary.trim(),
+    topOpportunities: parseOutlineTopOpportunities(parsed.topOpportunities),
+    clusters: [],
+  };
+}
+
 function parseSections(raw: unknown): GscReportingSectionPlan[] | null {
   if (!Array.isArray(raw) || raw.length === 0) return null;
   const out: GscReportingSectionPlan[] = [];
@@ -186,13 +223,13 @@ export function parseGscReportingOutlineJson(
   raw: string,
   compareKind: GscCompareKind = "mom",
 ): GscReportingOutlineResult {
-  const base = parseAndValidateGscManualAiJson(raw);
   let parsed: Record<string, unknown>;
   try {
-    parsed = JSON.parse(extractJsonObjectFromModelText(raw)) as Record<string, unknown>;
+    parsed = parseJsonObjectFromModelText(raw) as Record<string, unknown>;
   } catch {
-    return { ...base, clusters: [], sections: defaultSectionsFromPayload(base, compareKind) };
+    throw new Error("AI response was not valid JSON.");
   }
+  const base = parseOutlineBasePayload(parsed);
   const parsedSections = parseSections(parsed.sections);
   let sections: GscReportingSectionPlan[];
   if (parsedSections && parsedSections.length > 0) {
@@ -237,17 +274,37 @@ ${text}`;
     maxTokensRequested: maxTokens,
     system: OUTLINE_SYSTEM,
     userMessage,
+    ...GSC_JSON_OPENROUTER_OPTS,
   });
 
-  const { content } = await callOpenRouterChatCompletion({
-    apiKey: args.apiKey,
-    model: args.model,
-    system: OUTLINE_SYSTEM,
-    user: userMessage,
-    maxTokens,
-    signal: args.signal,
-  });
+  const request = async (user: string) =>
+    callOpenRouterChatCompletion({
+      apiKey: args.apiKey,
+      model: args.model,
+      system: OUTLINE_SYSTEM,
+      user,
+      maxTokens,
+      signal: args.signal,
+      ...GSC_JSON_OPENROUTER_OPTS,
+    });
 
-  const outline = parseGscReportingOutlineJson(content, compareKind);
-  return { outline, truncatedInput: truncated, filenames, outlineRequestBodyJson };
+  let { content, finishReason } = await request(userMessage);
+  try {
+    const outline = parseGscReportingOutlineJson(content, compareKind);
+    return { outline, truncatedInput: truncated, filenames, outlineRequestBodyJson };
+  } catch (firstError) {
+    const retryUser = `${userMessage}
+
+Your previous reply was invalid or truncated JSON. Return one complete JSON object only. Escape double quotes inside strings as \\". Keep evidence arrays short.`;
+    ({ content, finishReason } = await request(retryUser));
+    try {
+      const outline = parseGscReportingOutlineJson(content, compareKind);
+      return { outline, truncatedInput: truncated, filenames, outlineRequestBodyJson };
+    } catch {
+      const truncatedHint =
+        finishReason === "length" ? " Model output was truncated; retry the run." : "";
+      const detail = firstError instanceof Error ? firstError.message : "AI response was not valid JSON.";
+      throw new Error(`${detail}${truncatedHint}`);
+    }
+  }
 }

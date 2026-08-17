@@ -87,7 +87,7 @@ export interface WordPressSite {
 
   /** @deprecated Use per-sitemap exclusions (`sitemaps.disabledChildSitemapUrls`) instead. */
   sitemapsEnabledForProperty?: boolean;
-  /** Supabase plugin token for NEO Pulse WP direct connect (from cloud save). */
+  /** Plugin token for NEO Pulse WP direct connect (from workspace save). */
   pluginAccessToken?: string;
   /** When false, no Slack posts for this property (global Slack must also be enabled). Default true when unset. */
   slackEnabledForProperty?: boolean;
@@ -102,7 +102,7 @@ export interface WordPressSite {
   /** Last Test Slack result for this site. */
   slackConnectionStatus?: 'not_configured' | 'ok' | 'error';
   slackLastTestAt?: number;
-  /** Legacy persisted flag; NEO Pulse always enables Supabase Post Bank for properties. */
+  /** Legacy persisted flag; ignored by current properties UI. */
   postBankEnabled?: boolean;
   /** WP Engine SFTP credentials (from Customer List CSV push). */
   wpEngineHost?: string;

@@ -34,7 +34,6 @@ import {
   type GscCompareRanges,
   type GscReportingComparePresetId,
 } from "@/lib/gsc-reporting/gsc-fetch-date-presets";
-import { getPublicSiteUrl } from "@/lib/wordpress-site-public-url";
 import { GscReportingSectionsPanel } from "@/components/research/reporting/GscReportingSectionsPanel";
 import { GscReportingWorkspaceHeader } from "@/components/research/reporting/GscReportingWorkspaceHeader";
 import { gscReportingDetailsCanOpen } from "@/components/research/reporting/GscReportingDetailsPanel";

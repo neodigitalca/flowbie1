@@ -3,9 +3,8 @@ import {
   TASK_FORM_SELECT_CONTENT_CLASS,
   TASK_FORM_SELECT_ITEM_CLASS,
   TASK_FORM_SELECT_TRIGGER_CLASS,
-  TaskFormCompactCell,
   TaskFormDatePicker,
-  TaskFormFlatGrid,
+  TaskFormInlineRow,
   TaskFormTimePicker,
 } from "@/components/manager/tasks/TaskFormLayout";
 import {
@@ -69,48 +68,52 @@ export function AutomationSchedulePanel({
     return " ";
   }, [block.frequency, block.startDate]);
 
+  const dateLabel = block.frequency === "once" ? "Run date" : "Start date";
+
   return (
-    <div className="flex flex-col gap-1">
-      <TaskFormFlatGrid className="grid-cols-3">
-        <TaskFormCompactCell label="Frequency">
-          <Select
-            value={block.frequency}
-            onValueChange={(v) =>
-              onChange({
-                frequency: v as ScheduleFrequency,
-                keyword: `schedule-${v}`,
-              })
-            }
-            disabled={disabled}
-          >
-            <SelectTrigger className={TASK_FORM_SELECT_TRIGGER_CLASS}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className={TASK_FORM_SELECT_CONTENT_CLASS}>
-              {FREQUENCY_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value} className={TASK_FORM_SELECT_ITEM_CLASS}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </TaskFormCompactCell>
+    <div className="flex flex-col gap-2">
+      <TaskFormInlineRow label="Frequency">
+        <Select
+          value={block.frequency}
+          onValueChange={(v) =>
+            onChange({
+              frequency: v as ScheduleFrequency,
+              keyword: `schedule-${v}`,
+            })
+          }
+          disabled={disabled}
+        >
+          <SelectTrigger className={TASK_FORM_SELECT_TRIGGER_CLASS}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className={TASK_FORM_SELECT_CONTENT_CLASS}>
+            {FREQUENCY_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value} className={TASK_FORM_SELECT_ITEM_CLASS}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </TaskFormInlineRow>
+      <TaskFormInlineRow label={dateLabel}>
         <TaskFormDatePicker
-          placeholder={block.frequency === "once" ? "Run date" : "Start date"}
+          placeholder={dateLabel}
           value={block.startDate}
           onChange={(startDate) => onChange({ startDate })}
           disabled={disabled}
-          className="min-h-10 py-1"
+          className="min-h-9 bg-transparent p-0"
         />
+      </TaskFormInlineRow>
+      <TaskFormInlineRow label="Time (Edmonton)">
         <TaskFormTimePicker
           placeholder="Time (Edmonton)"
           value={block.time}
           onChange={(time) => onChange({ time })}
           disabled={disabled}
-          className="min-h-10 py-1"
+          className="min-h-9 bg-transparent p-0"
         />
-      </TaskFormFlatGrid>
-      <p className="min-h-[1.25rem] px-1 text-base text-muted-foreground">{helper}</p>
+      </TaskFormInlineRow>
+      <p className="min-h-[1.25rem] pl-[calc(8rem+0.75rem)] text-base text-muted-foreground">{helper}</p>
     </div>
   );
 }

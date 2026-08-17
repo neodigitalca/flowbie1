@@ -1,6 +1,5 @@
 import {
   NOTIFY_ALL_VISIBLE_SITE_NAMES_ALREADY_MATCHED_G,
-  NOTIFY_CONFIGURE_SUPABASE_ON_THE_API_SERVER_FIR,
   NOTIFY_NO_SITES_TO_EXPORT,
   NOTIFY_SIGN_IN_TO_SAVE_SETTINGS_TO_THE_CLOUD,
   notifyExportedXSiteSToCsv,
@@ -26,14 +25,10 @@ import { OPTIMIZATION_TILE_COUNTS_ENABLED } from "@/lib/wordpress-optimization-t
 import type { WordPressSite } from "./types";
 import { sortWordPressSitesByName, mergeServerGbpLocationIdsIntoLocalSites, mergeServerWpEngineCredentialsIntoLocalSites } from "./storage";
 import { normalizeGbpLocationIdInput } from "@/lib/gbp-post/normalize-gbp-location-id";
-import { getManagerCloudSettingsStatus } from "@/lib/manager-cloud-settings-api";
-import { saveWordPressPropertiesToSupabase, getWordPressPropertiesCloudStatus, syncOpenRouterToSupabaseProperties } from "@/lib/manager-wordpress-properties-api";
+import { saveWordPressProperties, syncOpenRouterToWorkspace } from "@/lib/manager-wordpress-properties-api";
 import { loadApiKey } from "@/lib/api";
 import { extractNAPAndLinkGraph } from "@/lib/knowledge-graph-auto-trigger";
 import { buildWordPressSitesCsvForDownload } from "@/lib/export-wordpress-sites-csv";
-import { getPostBankCount } from "@/lib/post-bank-api";
-import { getSapBankCount } from "@/lib/sap-bank-api";
-import { getUnifiedContentBankCount } from "@/lib/unified-content-bank-api";
 import { applyGbpPropertyWand, bulkApplyGmbSuggestedDisplayNames } from "@/lib/wordpress-site-display-name-from-dfs-gmb";
 import { cn } from "@/lib/utils";
 import { useWordPressOptimization } from "@/contexts/wordpress-optimization-context";
@@ -82,27 +77,14 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
   } = useWordPressSites();
 
   const { user } = useAuth();
-  const [cloudStatus, setCloudStatus] = useState<Awaited<
-    ReturnType<typeof getManagerCloudSettingsStatus>
-  > | null>(null);
-  const [savingToSupabase, setSavingToSupabase] = useState(false);
-
-  const refreshCloudStatus = useCallback(async () => {
-    const s = await getManagerCloudSettingsStatus();
-    setCloudStatus(s);
-    await getWordPressPropertiesCloudStatus();
-  }, []);
+  const [savingProperties, setSavingProperties] = useState(false);
 
   useEffect(() => {
-    void refreshCloudStatus();
-  }, [refreshCloudStatus]);
-
-  useEffect(() => {
-    if (!user || !cloudStatus?.supabaseConfigured) return;
+    if (!user) return;
     const key = loadApiKey()?.trim();
     if (!key) return;
-    void syncOpenRouterToSupabaseProperties({ openRouterApiKey: key });
-  }, [user, cloudStatus?.supabaseConfigured]);
+    void syncOpenRouterToWorkspace({ openRouterApiKey: key });
+  }, [user]);
 
   const {
     bySiteId: quarterStatsBySite,
@@ -183,50 +165,6 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
   const [formEditorialCountsPeriodStartYmd, setFormEditorialCountsPeriodStartYmd] = useState("");
   const [formOptimizationPackage, setFormOptimizationPackage] = useState("basic");
   const [formBenchmarkCustomTag, setFormBenchmarkCustomTag] = useState("");
-  const postBankSiteIdsKey = useMemo(() => [...sites].map((s) => s.id).sort().join(","), [sites]);
-  const [postBankPendingBySiteId, setPostBankPendingBySiteId] = useState<Record<string, number>>({});
-  const [sapBankPendingBySiteId, setSapBankPendingBySiteId] = useState<Record<string, number>>({});
-  useEffect(() => {
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        const nextPost: Record<string, number> = {};
-        const nextSap: Record<string, number> = {};
-        const countErrorsBySite: Record<string, { pe?: string; se?: string }> = {};
-        await Promise.all(
-          sites.map(async (s) => {
-            const [pc, sc, uc] = await Promise.all([
-              getPostBankCount(s.id),
-              getSapBankCount(s.id),
-              getUnifiedContentBankCount(s.id),
-            ]);
-            if (cancelled) return;
-            if (pc.error || sc.error) {
-              countErrorsBySite[s.id] = {
-                ...(pc.error ? { pe: String(pc.error) } : {}),
-                ...(sc.error ? { se: String(sc.error) } : {}),
-              };
-            }
-            if (uc.ok) {
-              nextPost[s.id] = uc.data.byType.post.pending;
-              nextSap[s.id] = uc.data.byType.entity.pending;
-            } else {
-              if (!pc.error) nextPost[s.id] = pc.pending;
-              if (!sc.error) nextSap[s.id] = sc.pending;
-            }
-          }),
-        );
-        if (!cancelled) {
-          setPostBankPendingBySiteId((prev) => ({ ...prev, ...nextPost }));
-          setSapBankPendingBySiteId((prev) => ({ ...prev, ...nextSap }));
-        }
-      })();
-    }, 600);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [postBankSiteIdsKey, sites]);
 
   // NAP + Link graph extraction state
   const [isExtractingNAPAndGraph, setIsExtractingNAPAndGraph] = useState<Record<string, boolean>>({});
@@ -475,7 +413,7 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
     />
   ) : null;
 
-  const performSaveToSupabase = useCallback(
+  const performSaveProperties = useCallback(
     async (options?: { silent?: boolean }): Promise<boolean> => {
       const silent = Boolean(options?.silent);
       if (saveInFlightRef.current) {
@@ -485,49 +423,43 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
         if (!silent) notify.error(NOTIFY_SIGN_IN_TO_SAVE_SETTINGS_TO_THE_CLOUD);
         return false;
       }
-      if (!cloudStatus?.supabaseConfigured) {
-        if (!silent) {
-          notify.error(NOTIFY_CONFIGURE_SUPABASE_ON_THE_API_SERVER_FIR);
-        }
-        return false;
-      }
       saveInFlightRef.current = true;
-      setSavingToSupabase(true);
+      setSavingProperties(true);
       try {
         const sortedSites = sortWordPressSitesByName(sitesRef.current);
-        const r = await saveWordPressPropertiesToSupabase(sortedSites);
+        const r = await saveWordPressProperties(sortedSites);
         if (!r.ok) {
-          notify.error(r.error || "Supabase save failed");
+          notify.error(r.error || "Property save failed");
           return false;
         }
         if (!silent) {
           const n = r.count ?? sortedSites.length;
           notify.success(
             r.updatedAt
-              ? `Saved ${n} propert${n === 1 ? "y" : "ies"} to Supabase (${new Date(r.updatedAt).toLocaleString()})`
-              : `Saved ${n} propert${n === 1 ? "y" : "ies"} to Supabase`,
+              ? `Saved ${n} propert${n === 1 ? "y" : "ies"} to workspace (${new Date(r.updatedAt).toLocaleString()})`
+              : `Saved ${n} propert${n === 1 ? "y" : "ies"} to workspace`,
           );
         }
         return true;
       } finally {
         saveInFlightRef.current = false;
-        setSavingToSupabase(false);
+        setSavingProperties(false);
       }
     },
-    [user, cloudStatus?.supabaseConfigured, handlePatchSite],
+    [user],
   );
 
-  const handleSaveToSupabase = useCallback(() => {
-    void performSaveToSupabase({ silent: false });
-  }, [performSaveToSupabase]);
+  const handleSaveProperties = useCallback(() => {
+    void performSaveProperties({ silent: false });
+  }, [performSaveProperties]);
 
   useEffect(() => {
-    if (!user || !cloudStatus?.supabaseConfigured) return;
+    if (!user) return;
     if (credentialedSiteCount === 0) return;
     if (!quarterStatsAllLoaded) return;
 
     const t = window.setTimeout(() => {
-      void performSaveToSupabase({ silent: true });
+      void performSaveProperties({ silent: true });
     }, 2500);
     return () => window.clearTimeout(t);
   }, [
@@ -535,8 +467,7 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
     quarterStatsAllLoaded,
     credentialedSiteCount,
     user,
-    cloudStatus?.supabaseConfigured,
-    performSaveToSupabase,
+    performSaveProperties,
   ]);
 
   const handleExportAllSitesCsv = useCallback(() => {
@@ -613,14 +544,14 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
           type="button"
           variant="ghost"
           size="sm"
-          disabled={!user || !cloudStatus?.supabaseConfigured || savingToSupabase}
-          onClick={() => void handleSaveToSupabase()}
+          disabled={!user || savingProperties}
+          onClick={() => void handleSaveProperties()}
           className={cn(BULK_HEADER_TOOL_BTN, "gap-1.5")}
-          title="Writes one row per property (upsert on user + site id). Also runs automatically ~2.5s after quarter editorial counts finish loading or change. Errors still surface as toasts."
-          aria-busy={savingToSupabase}
+          title="Writes one row per property to workspace storage. Also runs automatically ~2.5s after quarter editorial counts finish loading or change."
+          aria-busy={savingProperties}
         >
           <CloudUpload className="h-4 w-4 shrink-0" aria-hidden />
-          {savingToSupabase ? "Saving…" : "Supabase"}
+          {savingProperties ? "Saving…" : "Save properties"}
         </Button>
         <Button
           type="button"
@@ -700,9 +631,8 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
     ),
     [
       user,
-      cloudStatus?.supabaseConfigured,
-      savingToSupabase,
-      handleSaveToSupabase,
+      savingProperties,
+      handleSaveProperties,
       credentialedSiteCount,
       isRefreshingAllQuarterCounts,
       isRefreshingAllOptimizationCounts,
@@ -778,8 +708,6 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
         onSiteSelectedChange={handleSiteSelectedChange}
         onDeleteSelected={handleDeleteSelected}
         onPatchSite={handlePatchSite}
-        postBankPendingBySiteId={postBankPendingBySiteId}
-        sapBankPendingBySiteId={sapBankPendingBySiteId}
         quarterStatsBySite={quarterStatsBySite}
         optimizationStatsBySite={optimizationStatsBySite}
         propertyRowDisplay="compact"

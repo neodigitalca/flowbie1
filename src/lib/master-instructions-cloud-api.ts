@@ -1,15 +1,8 @@
-import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
-
-function baseUrl(): string {
-  return (import.meta.env.VITE_MCP_API_BASE?.replace(/\/api\/mcp\/?$/, "") || BACKEND_API_BASE || "").replace(
-    /\/$/,
-    "",
-  );
-}
+import { backendApiUrl } from "@/lib/wordpress-api/connection";
 
 function url(siteId: string): string {
   const enc = encodeURIComponent(siteId);
-  return `${baseUrl()}/api/master-instructions/${enc}`;
+  return backendApiUrl(`/master-instructions/${enc}`);
 }
 
 export async function fetchMasterInstructionsFromApi(siteId: string): Promise<{

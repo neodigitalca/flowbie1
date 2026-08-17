@@ -3,9 +3,9 @@ import { join, posix } from "path";
 import SftpClient from "ssh2-sftp-client";
 import { isSecretRelPath } from "./secret-excludes.js";
 
-const REMOTE_ZIP = "./wp-content/plugins/flowbie-wp.zip";
-const PLUGIN_ROOT = "./wp-content/plugins/flowbie-wp";
-const PLUGIN_PHP = "./wp-content/plugins/flowbie-wp/flowbie-wp.php";
+const REMOTE_ZIP = "./wp-content/plugins/neo-pulse-wp.zip";
+const PLUGIN_ROOT = "./wp-content/plugins/neo-pulse-wp";
+const PLUGIN_PHP = "./wp-content/plugins/neo-pulse-wp/neo-pulse-wp.php";
 const CONCURRENCY = 8;
 const SKIP_DIRS = new Set(["tests", ".git", "node_modules"]);
 
@@ -84,7 +84,7 @@ async function installToRemote(siteRow, localDir, remoteRoot, onProgress) {
   await Promise.all(Array.from({ length: workers }, () => worker()));
 }
 
-/** Upload one zip, then install from local tree (same pattern as flowbie-wp clients). */
+/** Upload one zip, then install from local tree (same pattern as neo-pulse-wp clients). */
 export async function uploadZipAndInstall(siteRow, options) {
   const {
     zipPath,
@@ -132,7 +132,7 @@ export async function deployZip(siteRow, zipPath, pluginDir, onProgress) {
       localDir: pluginDir,
       remoteZipPath: REMOTE_ZIP,
       installRoot: PLUGIN_ROOT,
-      verifyRelPath: "flowbie-wp.php",
+      verifyRelPath: "neo-pulse-wp.php",
       onProgress,
     });
     return { ok: true, site: siteRow.label };

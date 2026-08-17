@@ -4,7 +4,6 @@ import { cn } from "@/lib/utils";
 type AgentRunsGroupFolderProps = {
   label: string;
   count: number;
-  activeCount?: number;
   open: boolean;
   depth: 0 | 1;
   onToggle: () => void;
@@ -13,13 +12,10 @@ type AgentRunsGroupFolderProps = {
 export function AgentRunsGroupFolder({
   label,
   count,
-  activeCount = 0,
   open,
   depth,
   onToggle,
 }: AgentRunsGroupFolderProps) {
-  const countLabel = activeCount > 0 ? `${label} · ${count} · ${activeCount} active` : `${label} · ${count}`;
-
   return (
     <button
       type="button"
@@ -32,7 +28,8 @@ export function AgentRunsGroupFolder({
       onClick={onToggle}
     >
       {open ? <ChevronDown className="agent-runs-folder__chevron" aria-hidden /> : <ChevronRight className="agent-runs-folder__chevron" aria-hidden />}
-      <span className="agent-runs-folder__label">{countLabel}</span>
+      <span className="agent-runs-folder__label">{label}</span>
+      <span className="agent-runs-folder__count">{count}</span>
     </button>
   );
 }

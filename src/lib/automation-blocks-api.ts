@@ -1,5 +1,12 @@
 import { tasksApi } from "@/lib/tasks-api";
 
+export type AutomationActionBlockFilters = {
+  categories?: string[];
+  verticals?: string[];
+  buckets?: string[];
+  execution?: string[];
+};
+
 export type AutomationBlockCatalogItem = {
   keyword: string;
   name: string;
@@ -7,6 +14,7 @@ export type AutomationBlockCatalogItem = {
   kind?: string;
   executionKind?: string;
   defaults?: Record<string, unknown>;
+  filters?: AutomationActionBlockFilters;
 };
 
 export async function fetchAutomationTriggerBlocks(

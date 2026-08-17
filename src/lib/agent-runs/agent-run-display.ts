@@ -5,7 +5,11 @@ import { postCreatorProofCollapsedHint } from "@/lib/agent-runs/agent-run-post-c
 import { resolveAgentRunRecipeKey } from "@/lib/agent-runs/agent-run-navigation";
 import { humanizeSlugFromUrl } from "@/hooks/content-optimization/bulk-optimization-constants";
 import type { AgentRun } from "@/lib/agent-runs-types";
-import { AGENT_RUN_SOURCE_LABELS, isAgentRunTerminal } from "@/lib/agent-runs-types";
+import {
+  AGENT_RUN_SOURCE_LABELS,
+  AGENT_RUN_STATUS_LABELS,
+  isAgentRunTerminal,
+} from "@/lib/agent-runs-types";
 import {
   isTaskExecutionTargetBucket,
   TASK_EXECUTION_TARGET_BUCKET_LABELS,
@@ -14,6 +18,11 @@ import { isTaskExecutionTargetAll } from "@/lib/task-execution-target";
 
 export function agentRunTargetLabel(run: AgentRun): string {
   const contract = run.plan?.clientRunContract;
+  if (resolveAgentRunRecipeKey(run) === "local_dominator_export") {
+    const business = contract?.businessName?.trim();
+    const keyword = contract?.keyword?.trim();
+    if (business && keyword) return `${business} · ${keyword}`;
+  }
   if (contract?.url && !isTaskExecutionTargetAll(contract.url)) {
     return contract.url;
   }
@@ -141,6 +150,10 @@ export function agentRunCollapsedHint(
   if (live) {
     const hint = agentRunStatusHint(live.progressLabel);
     if (hint) {
+      if (isAgentRunTerminal(run.status) && hint === AGENT_RUN_STATUS_LABELS[run.status]) {
+        const snippet = agentRunResultSnippet(run);
+        if (snippet) return snippet;
+      }
       if (hostedFileCount > 0 && !isAgentRunTerminal(run.status)) {
         return `${hint} · ${hostedFileCount} file${hostedFileCount === 1 ? "" : "s"} ready`;
       }

@@ -178,13 +178,6 @@ export function notifyFailedToLoadCsvX(_errorInstanceofErrorErrorMessageUnknownE
   return "CSV load failed";
 }
 
-export function notifySavingXSiteBankQueueNames(siteCount: number, _names?: string): string {
-  return `Saving ${siteCount} site bank queue`;
-}
-
-export function notifyHybridRunFirstUtcCalendarMonthWord(siteCount: number, _names?: string): string {
-  return `Hybrid run: ${siteCount} site(s), bank then WP`;
-}
 
 export function notifyPostingToXWordpressSiteSNames(siteCount: number, _names?: string): string {
   return `Posting to ${siteCount} WordPress site(s)`;

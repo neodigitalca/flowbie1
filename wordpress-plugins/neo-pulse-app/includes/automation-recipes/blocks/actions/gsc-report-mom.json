@@ -3,7 +3,15 @@
   "name": "GSC MoM report",
   "executionKind": "gsc_reporting",
   "description": "Month-over-month GSC report saved locally.",
+  "filters": {
+    "categories": ["reporting"],
+    "verticals": ["general"]
+  },
   "defaults": {
-    "executionPayload": { "comparePreset": "mom", "saveToDisk": true }
+    "executionPayload": {
+      "comparePreset": "mom",
+      "saveToDisk": true,
+      "saveLocalArchive": true
+    }
   }
 }

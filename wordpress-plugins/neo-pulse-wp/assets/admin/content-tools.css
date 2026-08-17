@@ -1,0 +1,23 @@
+.neo-pulse-content-tools-duplicate .button {
+	width: 100%;
+	text-align: center;
+}
+
+/* Column exists for bulk edit hook only; keep it off the list table. */
+.wp-list-table .column-neo-pulse_content_type {
+	display: none;
+}
+
+.neo-pulse-content-tools-bulk-edit .inline-edit-group {
+	display: block;
+	margin-top: 0.5rem;
+}
+
+.neo-pulse-content-tools-bulk-edit .inline-edit-group .title {
+	display: block;
+	margin-bottom: 0.25rem;
+}
+
+.neo-pulse-content-tools-bulk-edit select {
+	max-width: 100%;
+}

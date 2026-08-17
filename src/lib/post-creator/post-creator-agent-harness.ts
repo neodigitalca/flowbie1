@@ -286,9 +286,7 @@ export function postCreatorPayloadFromContract(
     featuredImage: contract.featuredImage !== false,
     sitemapType: contract.sitemapType === "entity" ? "entity" : "post",
     postDestination:
-      contract.postDestination === "draft" || contract.postDestination === "bank"
-        ? contract.postDestination
-        : "wordpress",
+      contract.postDestination === "draft" ? contract.postDestination : "wordpress",
     scheduleTimesPerMonth:
       typeof contract.scheduleTimesPerMonth === "number"
         ? contract.scheduleTimesPerMonth

@@ -24,6 +24,7 @@ class Neo_Pulse_App_Loader {
 		Neo_Pulse_App_Proposal_Route_Handlers::register();
 		Neo_Pulse_App_Task_Trigger_Cron::init();
 		Neo_Pulse_App_Task_Schedule_Cron::init();
+		Neo_Pulse_App_Workflow_Trigger_Cron::init();
 		Neo_Pulse_App_Agent_Run_Worker_Cron::init();
 		if ( class_exists( 'Neo_Pulse_App_Agent_Run_Worker_Cron' ) ) {
 			Neo_Pulse_App_Agent_Run_Worker_Cron::activate();
@@ -37,6 +38,7 @@ class Neo_Pulse_App_Loader {
 		Neo_Pulse_App_Tasks_Store::install_tables();
 		Neo_Pulse_App_Task_Execution_Store::install_tables();
 		Neo_Pulse_App_Agent_Runs_Store::install_tables();
+		Neo_Pulse_App_Workflows_Store::install_tables();
 		Neo_Pulse_App_Support_Store::install_tables();
 		if ( class_exists( 'Neo_Pulse_App_Chat_Flo' ) ) {
 			Neo_Pulse_App_Chat_Flo::ensure_global_user();
@@ -54,6 +56,7 @@ class Neo_Pulse_App_Loader {
 		Neo_Pulse_App_Api_Dispatcher::register_rewrites();
 		Neo_Pulse_App_Task_Trigger_Cron::activate();
 		Neo_Pulse_App_Task_Schedule_Cron::activate();
+		Neo_Pulse_App_Workflow_Trigger_Cron::activate();
 		Neo_Pulse_App_Agent_Run_Worker_Cron::activate();
 		flush_rewrite_rules();
 	}
@@ -61,6 +64,7 @@ class Neo_Pulse_App_Loader {
 	public static function deactivate(): void {
 		Neo_Pulse_App_Task_Trigger_Cron::deactivate();
 		Neo_Pulse_App_Task_Schedule_Cron::deactivate();
+		Neo_Pulse_App_Workflow_Trigger_Cron::deactivate();
 		Neo_Pulse_App_Agent_Run_Worker_Cron::deactivate();
 		flush_rewrite_rules();
 	}
@@ -195,6 +199,13 @@ class Neo_Pulse_App_Loader {
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-triggers/class-task-trigger-evaluator.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-triggers/class-task-trigger-cron.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-triggers/class-task-schedule-cron.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/workflows/class-workflows-store.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/workflows/class-workflow-trigger-pending-store.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/workflows/class-workflow-cron-expression.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/workflows/class-workflow-trigger-evaluator.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/workflows/class-workflow-trigger-agent-done.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/workflows/class-workflow-trigger-cron.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/workflows/class-workflows-route-handlers.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/support/class-support-store.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/support/class-support-ai.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/support/class-support-route-handlers.php';

@@ -420,7 +420,6 @@ Use this when creating `neodigital-mobile-app/` for the first time:
 - Play Store release signing (`assembleRelease`, keystore, AAB)
 - iOS / TestFlight shell
 - Modifying flowbie1 root `capacitor.config.ts` or bundled `android/`
-- Supabase content bank storage
 - Building or shipping the APK in CI
 
 ---

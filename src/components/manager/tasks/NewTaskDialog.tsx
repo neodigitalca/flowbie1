@@ -20,6 +20,7 @@ import { TaskAssigneePicker } from "@/components/manager/tasks/TaskAssigneePicke
 import { TaskTagPicker } from "@/components/manager/tasks/TaskTagPicker";
 import { TaskTriggerFields } from "@/components/manager/tasks/TaskTriggerFields";
 import { GscReportingExecutionFields } from "@/components/manager/tasks/GscReportingExecutionFields";
+import { LocalDominatorExportExecutionFields } from "@/components/manager/tasks/LocalDominatorExportExecutionFields";
 import { PostCreatorExecutionFields } from "@/components/manager/tasks/PostCreatorExecutionFields";
 import { ensurePostCreatorPayload } from "@/lib/post-creator/post-creator-defaults";
 import { automationUsesTriggerUi, resolveEditorialPostCreatorTask, resolveEffectiveExecutionKind } from "@/lib/task-automation-ui";
@@ -397,6 +398,14 @@ export function NewTaskDialog({
                 ) : null}
                 {uiExecutionKind === "gsc_reporting" || executionKind === "gsc_reporting" ? (
                   <GscReportingExecutionFields
+                    layout="stack"
+                    executionPayload={executionPayload}
+                    disabled={saving}
+                    onChange={setExecutionPayload}
+                  />
+                ) : null}
+                {uiExecutionKind === "local_dominator_export" || executionKind === "local_dominator_export" ? (
+                  <LocalDominatorExportExecutionFields
                     layout="stack"
                     executionPayload={executionPayload}
                     disabled={saving}

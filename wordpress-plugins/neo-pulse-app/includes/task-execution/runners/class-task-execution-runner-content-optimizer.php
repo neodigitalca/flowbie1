@@ -118,13 +118,17 @@ class Neo_Pulse_App_Task_Execution_Runner_Content_Optimizer {
 
 		$options = self::default_optimization_options( $payload );
 
-		$contract = array(
-			'executionId'         => $execution_id,
-			'siteId'              => $site_id,
-			'url'                 => $target_url,
-			'updateMode'          => $update_mode,
-			'optimizationOptions' => $options,
-			'resolvedPost'        => $resolved_post,
+		$contract = array_merge(
+			array(
+				'executionId'         => $execution_id,
+				'siteId'              => $site_id,
+				'url'                 => $target_url,
+				'updateMode'          => $update_mode,
+				'optimizationOptions' => $options,
+				'resolvedPost'        => $resolved_post,
+				'saveLocalArchive'    => ! empty( $payload['saveLocalArchive'] ) || ! empty( $payload['sendAutomationEmail'] ),
+			),
+			Neo_Pulse_App_Tasks_Store::automation_email_contract_fields( $payload )
 		);
 
 		return array(
@@ -163,7 +167,9 @@ class Neo_Pulse_App_Task_Execution_Runner_Content_Optimizer {
 			'targetBucket'        => $target_bucket,
 			'updateMode'          => $update_mode,
 			'optimizationOptions' => $options,
+			'saveLocalArchive'    => ! empty( $payload['saveLocalArchive'] ) || ! empty( $payload['sendAutomationEmail'] ),
 		);
+		$contract = array_merge( $contract, Neo_Pulse_App_Tasks_Store::automation_email_contract_fields( $payload ) );
 		if ( ! empty( $payload['targetUrls'] ) && is_array( $payload['targetUrls'] ) ) {
 			$urls = array();
 			foreach ( $payload['targetUrls'] as $url ) {

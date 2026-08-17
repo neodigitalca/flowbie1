@@ -38,7 +38,7 @@ export function resolvePostCreatorSchedule(
       payload.postDestination === "draft"
         ? "draft"
         : payload.postDestination === "bank"
-          ? "bank"
+          ? "wordpress"
           : "wordpress",
     featuredImage: payload.featuredImage !== false,
   };
@@ -52,8 +52,7 @@ export function buildPostCreatorWordPressPosting(
 ): WordPressPostingOptions | undefined {
   const draftOnly =
     schedule.postDestination === "draft" || payload?.scheduleDraftOnly === true;
-  const postDestination =
-    schedule.postDestination === "bank" ? "bank" : draftOnly ? "wordpress" : "wordpress";
+  const postDestination = "wordpress" as const;
 
   const selectedSiteIds = new Set([site.id]);
   const siteConfigs = { [site.id]: { sitemapType: schedule.sitemapType } };

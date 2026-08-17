@@ -13,7 +13,7 @@ class Neo_Pulse_App_Tasks_Store {
 
 	const RECURRENCE_RULES = array( 'none', 'daily', 'weekly', 'monthly', 'yearly' );
 
-	const EXECUTION_KINDS = array( 'content_optimizer', 'content_optimizer_meta', 'gsc_reporting', 'post_creator' );
+	const EXECUTION_KINDS = array( 'content_optimizer', 'content_optimizer_meta', 'gsc_reporting', 'post_creator', 'local_dominator_export' );
 	const EXECUTION_TARGET_BUCKETS = array( 'pages', 'posts', 'sap', 'all' );
 	const SCHEDULE_MODES = array( 'calendar', 'trigger' );
 	const TRIGGER_SOURCES = array( 'gsc', 'schedule', 'ga', 'semrush' );
@@ -536,7 +536,35 @@ class Neo_Pulse_App_Tasks_Store {
 	/**
 	 * @return array<int,array<string,mixed>>
 	 */
-	public static function list_projects( int $team_id, bool $include_archived = false ): array {
+	public static function normalize_automation_visibility( $value ): string {
+		$key = sanitize_key( (string) $value );
+		return $key === 'private' ? 'private' : 'public';
+	}
+
+	/**
+	 * @param array<string,mixed> $project
+	 */
+	public static function project_visible_to_user( array $project, int $viewer_user_id ): bool {
+		if ( empty( $project['isAutomation'] ) ) {
+			return true;
+		}
+		if ( $viewer_user_id <= 0 ) {
+			return true;
+		}
+		if ( self::normalize_automation_visibility( $project['automationVisibility'] ?? 'public' ) !== 'private' ) {
+			return true;
+		}
+		$created_by = (int) ( $project['createdBy'] ?? 0 );
+		if ( $created_by <= 0 ) {
+			return true;
+		}
+		return $created_by === $viewer_user_id;
+	}
+
+	/**
+	 * @return array<int,array<string,mixed>>
+	 */
+	public static function list_projects( int $team_id, bool $include_archived = false, int $viewer_user_id = 0 ): array {
 		global $wpdb;
 		$table = $wpdb->prefix . 'neo_pulse_team_task_projects';
 		$sql   = "SELECT * FROM {$table} WHERE team_id = %d";
@@ -551,7 +579,7 @@ class Neo_Pulse_App_Tasks_Store {
 		$out = array();
 		foreach ( $rows as $row ) {
 			$formatted = self::format_project( $row );
-			if ( $formatted ) {
+			if ( $formatted && self::project_visible_to_user( $formatted, $viewer_user_id ) ) {
 				$out[] = $formatted;
 			}
 		}
@@ -595,6 +623,9 @@ class Neo_Pulse_App_Tasks_Store {
 			$payload['sourceTemplateKeyword'] = sanitize_title( (string) $body['sourceTemplateKeyword'] );
 		} elseif ( ! empty( $body['templateKeyword'] ) ) {
 			$payload['sourceTemplateKeyword'] = sanitize_title( (string) $body['templateKeyword'] );
+		}
+		if ( ! empty( $payload['isAutomation'] ) ) {
+			$payload['automationVisibility'] = self::normalize_automation_visibility( $body['automationVisibility'] ?? 'private' );
 		}
 
 		global $wpdb;
@@ -680,6 +711,9 @@ class Neo_Pulse_App_Tasks_Store {
 		}
 		if ( array_key_exists( 'wordpressSiteId', $body ) ) {
 			$payload['wordpressSiteId'] = sanitize_text_field( (string) $body['wordpressSiteId'] );
+		}
+		if ( array_key_exists( 'automationVisibility', $body ) ) {
+			$payload['automationVisibility'] = self::normalize_automation_visibility( $body['automationVisibility'] );
 		}
 
 		global $wpdb;
@@ -797,7 +831,9 @@ class Neo_Pulse_App_Tasks_Store {
 			$payload['executionKind'] = self::sanitize_execution_kind( $body['executionKind'] );
 		}
 		if ( isset( $body['executionPayload'] ) && is_array( $body['executionPayload'] ) ) {
-			$payload['executionPayload'] = self::sanitize_execution_payload( $body['executionPayload'] );
+			$existing_ep = is_array( $payload['executionPayload'] ?? null ) ? $payload['executionPayload'] : array();
+			$merged_ep   = array_merge( $existing_ep, $body['executionPayload'] );
+			$payload['executionPayload'] = self::sanitize_execution_payload( $merged_ep );
 		}
 		if ( isset( $body['scheduleMode'] ) ) {
 			$payload['scheduleMode'] = self::sanitize_schedule_mode( $body['scheduleMode'] );
@@ -892,7 +928,9 @@ class Neo_Pulse_App_Tasks_Store {
 			$payload['executionKind'] = self::sanitize_execution_kind( $body['executionKind'] );
 		}
 		if ( isset( $body['executionPayload'] ) && is_array( $body['executionPayload'] ) ) {
-			$payload['executionPayload'] = self::sanitize_execution_payload( $body['executionPayload'] );
+			$existing_ep = is_array( $payload['executionPayload'] ?? null ) ? $payload['executionPayload'] : array();
+			$merged_ep   = array_merge( $existing_ep, $body['executionPayload'] );
+			$payload['executionPayload'] = self::sanitize_execution_payload( $merged_ep );
 		}
 		if ( isset( $body['scheduleMode'] ) ) {
 			$payload['scheduleMode'] = self::sanitize_schedule_mode( $body['scheduleMode'] );
@@ -972,8 +1010,11 @@ class Neo_Pulse_App_Tasks_Store {
 			foreach ( $file_rows as $fr ) {
 				$rel = (string) ( $fr['storage_path'] ?? '' );
 				if ( $rel !== '' ) {
-					$abs = Neo_Pulse_App_Data_Paths::root() . '/' . ltrim( $rel, '/' );
-					wp_delete_file( $abs );
+					foreach ( Neo_Pulse_App_Data_Paths::rel_abs_candidates( $rel ) as $abs ) {
+						if ( is_readable( $abs ) ) {
+							wp_delete_file( $abs );
+						}
+					}
 				}
 			}
 		}
@@ -1107,6 +1148,10 @@ class Neo_Pulse_App_Tasks_Store {
 			'wordpressSiteId' => (string) ( $payload['wordpressSiteId'] ?? '' ),
 			'isAutomation' => ! empty( $payload['isAutomation'] ),
 			'sourceTemplateKeyword' => (string) ( $payload['sourceTemplateKeyword'] ?? '' ),
+			'createdBy' => (int) ( $payload['createdBy'] ?? 0 ),
+			'automationVisibility' => ! empty( $payload['isAutomation'] )
+				? self::normalize_automation_visibility( $payload['automationVisibility'] ?? 'public' )
+				: 'public',
 		);
 	}
 
@@ -1136,6 +1181,52 @@ class Neo_Pulse_App_Tasks_Store {
 	 */
 	private static function gsc_reporting_task_keywords(): array {
 		return array( 'gsc-mom-report', 'gsc-yoy-report' );
+	}
+
+	/**
+	 * @return array<int,string>
+	 */
+	private static function research_local_dominator_recipe_keywords(): array {
+		return array( 'research-local-dominator-grid-export' );
+	}
+
+	/**
+	 * @return array<int,string>
+	 */
+	private static function research_local_dominator_task_keywords(): array {
+		return array( 'research-local-dominator-export' );
+	}
+
+	/**
+	 * @return array<string,mixed>
+	 */
+	private static function default_research_local_dominator_payload(): array {
+		return array(
+			'businessName'     => 'Advance Blinds & Drapery',
+			'keyword'          => 'blinds near me',
+			'saveLocalArchive' => true,
+			'saveToDisk'       => true,
+		);
+	}
+
+	/**
+	 * @param array<string,mixed> $payload
+	 * @return array<string,mixed>
+	 */
+	private static function ensure_research_local_dominator_payload( array $payload ): array {
+		if ( empty( $payload['businessName'] ) ) {
+			$payload['businessName'] = 'Advance Blinds & Drapery';
+		}
+		if ( empty( $payload['keyword'] ) ) {
+			$payload['keyword'] = 'blinds near me';
+		}
+		if ( ! isset( $payload['saveLocalArchive'] ) ) {
+			$payload['saveLocalArchive'] = true;
+		}
+		if ( ! isset( $payload['saveToDisk'] ) ) {
+			$payload['saveToDisk'] = true;
+		}
+		return $payload;
 	}
 
 	/**
@@ -1300,6 +1391,85 @@ class Neo_Pulse_App_Tasks_Store {
 		$task['triggerConfig'] = null;
 
 		return $task;
+	}
+
+	/**
+	 * @param array<string,mixed>      $task
+	 * @param array<string,mixed>|null $project
+	 * @return array<string,mixed>
+	 */
+	private static function normalize_research_local_dominator_task( array $task, ?array $project ): array {
+		$recipe_kw = '';
+		if ( is_array( $project ) ) {
+			$recipe_kw = sanitize_title( (string) ( $project['sourceTemplateKeyword'] ?? '' ) );
+			if ( $recipe_kw === '' ) {
+				$recipe_kw = sanitize_title( (string) ( $project['keyword'] ?? '' ) );
+			}
+		}
+		$task_kw = sanitize_title( (string) ( $task['keyword'] ?? '' ) );
+		$kind    = self::sanitize_execution_kind( $task['executionKind'] ?? '' );
+
+		$is_research = in_array( $recipe_kw, self::research_local_dominator_recipe_keywords(), true )
+			|| in_array( $task_kw, self::research_local_dominator_task_keywords(), true );
+
+		if ( ! $is_research && $kind !== 'local_dominator_export' ) {
+			return $task;
+		}
+
+		$defaults = self::default_research_local_dominator_payload();
+		$existing = is_array( $task['executionPayload'] ?? null ) ? $task['executionPayload'] : array();
+
+		$task['executionKind']    = 'local_dominator_export';
+		$task['scheduleMode']     = 'calendar';
+		$task['executionPayload'] = self::ensure_research_local_dominator_payload( array_merge( $defaults, $existing ) );
+		if ( ! isset( $task['recurrenceRule'] ) || (string) $task['recurrenceRule'] === '' ) {
+			$task['recurrenceRule'] = 'none';
+		}
+		$task['triggerConfig'] = null;
+
+		return $task;
+	}
+
+	/**
+	 * @param array<string,mixed> $stored_payload
+	 * @param array<string,mixed> $normalized_task
+	 */
+	private static function maybe_persist_research_local_dominator_task(
+		int $team_id,
+		int $task_id,
+		array $stored_payload,
+		array $normalized_task
+	): void {
+		if ( self::sanitize_execution_kind( $normalized_task['executionKind'] ?? '' ) !== 'local_dominator_export' ) {
+			return;
+		}
+		$stored_kind = self::sanitize_execution_kind( $stored_payload['executionKind'] ?? '' );
+		$stored_mode = self::sanitize_schedule_mode( $stored_payload['scheduleMode'] ?? 'calendar' );
+		if ( $stored_kind === 'local_dominator_export' && $stored_mode === 'calendar' ) {
+			return;
+		}
+
+		$stored_payload['executionKind']    = 'local_dominator_export';
+		$stored_payload['scheduleMode']     = 'calendar';
+		$stored_payload['executionPayload'] = $normalized_task['executionPayload'];
+		$stored_payload['recurrenceRule']   = 'none';
+		unset( $stored_payload['triggerConfig'] );
+
+		global $wpdb;
+		$table = $wpdb->prefix . 'neo_pulse_team_tasks';
+		$wpdb->update(
+			$table,
+			array(
+				'payload_json' => self::encode_payload( $stored_payload ),
+				'updated_at'   => gmdate( 'Y-m-d H:i:s' ),
+			),
+			array(
+				'id'      => $task_id,
+				'team_id' => $team_id,
+			),
+			array( '%s', '%s' ),
+			array( '%d', '%d' )
+		);
 	}
 
 	/**
@@ -1521,6 +1691,8 @@ class Neo_Pulse_App_Tasks_Store {
 		self::maybe_persist_post_creator_task( (int) $row['team_id'], (int) $row['id'], $payload, $task );
 		$task = self::normalize_gsc_reporting_task( $task, $project );
 		self::maybe_persist_gsc_reporting_task( (int) $row['team_id'], (int) $row['id'], $payload, $task );
+		$task = self::normalize_research_local_dominator_task( $task, $project );
+		self::maybe_persist_research_local_dominator_task( (int) $row['team_id'], (int) $row['id'], $payload, $task );
 		$task = self::normalize_automation_pulse_assignee( $task, $project, (int) $row['team_id'], (int) $row['id'] );
 		return $task;
 	}
@@ -1584,6 +1756,8 @@ class Neo_Pulse_App_Tasks_Store {
 				'optimizeExcerpt'        => ! empty( $opts['optimizeExcerpt'] ),
 				'optimizeContent'        => ! empty( $opts['optimizeContent'] ),
 				'optimizeFeaturedImage'  => ! empty( $opts['optimizeFeaturedImage'] ),
+				'optimizeExtraText'      => ! empty( $opts['optimizeExtraText'] ),
+				'optimizeExtraImage'     => ! empty( $opts['optimizeExtraImage'] ),
 				'useAcfKeyword'          => ! isset( $opts['useAcfKeyword'] ) || ! empty( $opts['useAcfKeyword'] ),
 				'testMode'               => ! empty( $opts['testMode'] ),
 				'autoOptimize'           => ! empty( $opts['autoOptimize'] ),
@@ -1611,6 +1785,9 @@ class Neo_Pulse_App_Tasks_Store {
 		if ( array_key_exists( 'saveToDisk', $raw ) ) {
 			$out['saveToDisk'] = ! empty( $raw['saveToDisk'] );
 		}
+		if ( array_key_exists( 'saveLocalArchive', $raw ) ) {
+			$out['saveLocalArchive'] = ! empty( $raw['saveLocalArchive'] );
+		}
 		if ( isset( $raw['postCount'] ) ) {
 			$out['postCount'] = max( 1, min( 31, (int) $raw['postCount'] ) );
 		}
@@ -1631,6 +1808,12 @@ class Neo_Pulse_App_Tasks_Store {
 		if ( ! empty( $raw['keywordValue'] ) ) {
 			$out['keywordValue'] = sanitize_text_field( (string) $raw['keywordValue'] );
 		}
+		if ( ! empty( $raw['businessName'] ) ) {
+			$out['businessName'] = sanitize_text_field( (string) $raw['businessName'] );
+		}
+		if ( ! empty( $raw['keyword'] ) ) {
+			$out['keyword'] = sanitize_text_field( (string) $raw['keyword'] );
+		}
 		if ( ! empty( $raw['titleTemplate'] ) ) {
 			$out['titleTemplate'] = sanitize_text_field( (string) $raw['titleTemplate'] );
 		}
@@ -1643,7 +1826,36 @@ class Neo_Pulse_App_Tasks_Store {
 		}
 		if ( ! empty( $raw['postDestination'] ) ) {
 			$pd = sanitize_key( (string) $raw['postDestination'] );
-			$out['postDestination'] = in_array( $pd, array( 'wordpress', 'bank', 'draft' ), true ) ? $pd : 'wordpress';
+			if ( 'bank' === $pd ) {
+				$pd = 'wordpress';
+			}
+			$out['postDestination'] = in_array( $pd, array( 'wordpress', 'draft' ), true ) ? $pd : 'wordpress';
+		}
+		if ( ! empty( $raw['scheduleFrequency'] ) ) {
+			$freq = sanitize_key( (string) $raw['scheduleFrequency'] );
+			$allowed_freq = array( 'immediately', 'daily', 'weekly', 'monthly', 'custom', 'everyNDays' );
+			if ( in_array( $freq, $allowed_freq, true ) ) {
+				$out['scheduleFrequency'] = $freq;
+			}
+		}
+		if ( isset( $raw['scheduleCustomInterval'] ) ) {
+			$out['scheduleCustomInterval'] = max( 1, min( 365, (int) $raw['scheduleCustomInterval'] ) );
+		}
+		if ( isset( $raw['scheduleDayOfWeek'] ) ) {
+			$out['scheduleDayOfWeek'] = max( 0, min( 6, (int) $raw['scheduleDayOfWeek'] ) );
+		}
+		if ( ! empty( $raw['scheduleStartDateOption'] ) ) {
+			$opt = sanitize_key( (string) $raw['scheduleStartDateOption'] );
+			$out['scheduleStartDateOption'] = $opt === 'immediate' ? 'immediate' : 'custom';
+		}
+		if ( ! empty( $raw['scheduleCustomStartDate'] ) ) {
+			$date = sanitize_text_field( (string) $raw['scheduleCustomStartDate'] );
+			if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ) {
+				$out['scheduleCustomStartDate'] = $date;
+			}
+		}
+		if ( array_key_exists( 'scheduleDraftOnly', $raw ) ) {
+			$out['scheduleDraftOnly'] = ! empty( $raw['scheduleDraftOnly'] );
 		}
 		if ( isset( $raw['scheduleTimesPerMonth'] ) ) {
 			$out['scheduleTimesPerMonth'] = max( 1, min( 31, (int) $raw['scheduleTimesPerMonth'] ) );
@@ -1659,6 +1871,53 @@ class Neo_Pulse_App_Tasks_Store {
 		}
 		if ( array_key_exists( 'scheduleStaggerOptimized', $raw ) ) {
 			$out['scheduleStaggerOptimized'] = ! empty( $raw['scheduleStaggerOptimized'] );
+		}
+		if ( array_key_exists( 'sendAutomationEmail', $raw ) ) {
+			$out['sendAutomationEmail'] = ! empty( $raw['sendAutomationEmail'] );
+		}
+		if ( array_key_exists( 'automationEmailTo', $raw ) ) {
+			$email = strtolower( trim( (string) $raw['automationEmailTo'] ) );
+			if ( $email !== '' && filter_var( $email, FILTER_VALIDATE_EMAIL ) ) {
+				$sanitized = sanitize_email( $email );
+				$out['automationEmailTo'] = ( $sanitized !== '' && is_email( $sanitized ) ) ? $sanitized : $email;
+			}
+		}
+		if ( ! empty( $raw['automationEmailSubject'] ) ) {
+			$out['automationEmailSubject'] = sanitize_text_field( (string) $raw['automationEmailSubject'] );
+		}
+		if ( ! empty( $raw['automationEmailMessage'] ) ) {
+			$out['automationEmailMessage'] = sanitize_textarea_field( (string) $raw['automationEmailMessage'] );
+		}
+		if ( array_key_exists( 'automationEmailAiIntro', $raw ) ) {
+			$out['automationEmailAiIntro'] = ! empty( $raw['automationEmailAiIntro'] );
+		}
+		if ( ! empty( $out['automationEmailTo'] ) ) {
+			$out['sendAutomationEmail'] = true;
+		}
+		if ( ! empty( $out['sendAutomationEmail'] ) ) {
+			$out['saveLocalArchive'] = true;
+		}
+		return $out;
+	}
+
+	/**
+	 * @param array<string,mixed> $payload
+	 * @return array<string,mixed>
+	 */
+	public static function automation_email_contract_fields( array $payload ): array {
+		$sanitized = self::sanitize_execution_payload( $payload );
+		$keys      = array(
+			'sendAutomationEmail',
+			'automationEmailTo',
+			'automationEmailSubject',
+			'automationEmailMessage',
+			'automationEmailAiIntro',
+		);
+		$out       = array();
+		foreach ( $keys as $key ) {
+			if ( array_key_exists( $key, $sanitized ) ) {
+				$out[ $key ] = $sanitized[ $key ];
+			}
 		}
 		return $out;
 	}

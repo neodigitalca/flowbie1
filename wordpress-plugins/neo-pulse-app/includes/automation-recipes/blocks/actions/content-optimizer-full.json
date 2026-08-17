@@ -3,6 +3,12 @@
   "name": "Full AISEO",
   "executionKind": "content_optimizer",
   "description": "Rewrite title, meta, headings, and body.",
+  "filters": {
+    "categories": ["maintenance", "local-seo"],
+    "buckets": ["pages", "posts", "sap", "all"],
+    "execution": ["full-aiseo"],
+    "verticals": ["general", "editorial", "local-seo", "home-services"]
+  },
   "defaults": {
     "executionPayload": { "updateMode": "update" }
   }

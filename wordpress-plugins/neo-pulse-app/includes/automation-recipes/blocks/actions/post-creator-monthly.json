@@ -3,6 +3,11 @@
   "name": "Post creator",
   "executionKind": "post_creator",
   "description": "Generate and schedule blog posts via the bulk pipeline.",
+  "filters": {
+    "categories": ["editorial"],
+    "buckets": ["posts"],
+    "verticals": ["editorial", "general"]
+  },
   "defaults": {
     "executionPayload": {
       "postCount": 1,

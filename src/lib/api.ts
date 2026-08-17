@@ -23,6 +23,8 @@ interface ChatCompletionRequest {
 
 const OPENROUTER_API_KEY_STORAGE_KEY = "openrouter-api-key";
 const DATAFORSEO_API_KEY_STORAGE_KEY = "dataforseo-api-key";
+const AGENTMAIL_API_KEY_STORAGE_KEY = "agentmail-api-key";
+const AGENTMAIL_INBOX_STORAGE_KEY = "agentmail-general-email";
 const SLACK_BOT_TOKEN_STORAGE_KEY = "slack-bot-token";
 const SLACK_GLOBAL_SETTINGS_STORAGE_KEY = "slack-global-settings";
 
@@ -50,6 +52,30 @@ export const saveDataForSEOApiKey = (key: string) => {
         localStorage.setItem(DATAFORSEO_API_KEY_STORAGE_KEY, key);
     } else {
         localStorage.removeItem(DATAFORSEO_API_KEY_STORAGE_KEY);
+    }
+};
+
+export const loadAgentMailApiKey = () => {
+    return localStorage.getItem(AGENTMAIL_API_KEY_STORAGE_KEY) || "";
+};
+
+export const saveAgentMailApiKey = (key: string) => {
+    if (key) {
+        localStorage.setItem(AGENTMAIL_API_KEY_STORAGE_KEY, key);
+    } else {
+        localStorage.removeItem(AGENTMAIL_API_KEY_STORAGE_KEY);
+    }
+};
+
+export const loadAgentMailInbox = () => {
+    return localStorage.getItem(AGENTMAIL_INBOX_STORAGE_KEY) || "";
+};
+
+export const saveAgentMailInbox = (inbox: string) => {
+    if (inbox) {
+        localStorage.setItem(AGENTMAIL_INBOX_STORAGE_KEY, inbox);
+    } else {
+        localStorage.removeItem(AGENTMAIL_INBOX_STORAGE_KEY);
     }
 };
 

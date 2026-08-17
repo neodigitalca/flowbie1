@@ -27,7 +27,7 @@ function collectFiles(root, rel = "") {
   return files;
 }
 
-/** Build a zip from a directory. Optional zipPrefix prepended to each entry (e.g. flowbie-app/). */
+/** Build a zip from a directory. Optional zipPrefix prepended to each entry (e.g. neo-pulse-app/). */
 export function buildDirZip(rootDir, zipPath, options = {}) {
   const { zipPrefix = "", onProgress } = options;
   const files = collectFiles(rootDir);

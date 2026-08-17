@@ -1,13 +1,6 @@
-import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
+import { backendApiUrl } from "@/lib/wordpress-api/connection";
 import { loadApiKey } from "@/lib/api";
 import type { ActiveHuddleSummary, ChatCall, ChatCallSignal, ChatCallTranscriptLine } from "@/lib/chat-call-types";
-
-function baseUrl(): string {
-  return (import.meta.env.VITE_MCP_API_BASE?.replace(/\/api\/mcp\/?$/, "") || BACKEND_API_BASE || "").replace(
-    /\/$/,
-    "",
-  );
-}
 
 function api(path: string, options?: RequestInit): Promise<Response> {
   const p = path.startsWith("/") ? path : `/${path}`;
@@ -16,7 +9,7 @@ function api(path: string, options?: RequestInit): Promise<Response> {
   if (openRouterKey && !headers.has("X-OpenRouter-Api-Key")) {
     headers.set("X-OpenRouter-Api-Key", openRouterKey);
   }
-  return fetch(`${baseUrl()}/api${p}`, { ...options, headers, credentials: "include" });
+  return fetch(backendApiUrl(p), { ...options, headers, credentials: "include", cache: "no-store" });
 }
 
 export async function startChatCall(

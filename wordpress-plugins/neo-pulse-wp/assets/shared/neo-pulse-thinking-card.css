@@ -1,0 +1,69 @@
+/* Thinking / workflow checklist (shared; hosts add prefix e.g. .fcw-thinking-card) */
+.neo-pulse-thinking-steps,
+.fcw-thinking-steps,
+.fcwd-thinking-steps {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.neo-pulse-thinking-step,
+.fcw-thinking-step,
+.fcwd-thinking-step {
+  display: block;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: rgba(240, 240, 240, 0.8);
+}
+
+.neo-pulse-thinking-step-label,
+.fcw-thinking-step-label,
+.fcwd-thinking-step-label {
+  display: block;
+  text-align: left;
+}
+
+.neo-pulse-thinking-step--running .neo-pulse-thinking-step-label,
+.fcw-thinking-step--running .fcw-thinking-step-label,
+.fcwd-thinking-step--running .fcwd-thinking-step-label {
+  color: #3b82f6;
+  font-weight: 600;
+  animation: neo-pulsePhaseBreathe 2s ease-in-out infinite;
+}
+
+.neo-pulse-thinking-step--done .neo-pulse-thinking-step-label,
+.fcw-thinking-step--done .fcw-thinking-step-label,
+.fcwd-thinking-step--done .fcwd-thinking-step-label {
+  color: rgba(240, 240, 240, 0.55);
+}
+
+.neo-pulse-thinking-step--pending .neo-pulse-thinking-step-label,
+.fcw-thinking-step--pending .fcw-thinking-step-label,
+.fcwd-thinking-step--pending .fcwd-thinking-step-label {
+  color: rgba(240, 240, 240, 0.45);
+}
+
+.neo-pulse-thinking-step-icon,
+.fcw-thinking-step-icon,
+.fcwd-thinking-step-icon {
+  display: none !important;
+}
+
+.neo-pulse-thinking-card--active,
+.fcw-card--thinking-active,
+.fcwd-card--thinking-active {
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+@keyframes neo-pulsePhaseBreathe {
+  0%,
+  100% {
+    text-shadow: 0 0 0 rgba(59, 130, 246, 0);
+  }
+  50% {
+    text-shadow: 0 0 16px rgba(59, 130, 246, 0.55);
+  }
+}

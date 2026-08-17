@@ -22,7 +22,19 @@ class Neo_Pulse_App_Data_Paths {
 	}
 
 	public static function subdir( string $name ): string {
-		$dir = self::root() . '/' . sanitize_file_name( $name );
+		$name  = str_replace( '\\', '/', trim( $name, '/' ) );
+		$parts = array_values(
+			array_filter(
+				array_map( 'sanitize_file_name', explode( '/', $name ) ),
+				static function ( $part ) {
+					return is_string( $part ) && $part !== '';
+				}
+			)
+		);
+		$dir   = self::root();
+		foreach ( $parts as $part ) {
+			$dir .= '/' . $part;
+		}
 		if ( ! is_dir( $dir ) ) {
 			wp_mkdir_p( $dir );
 			if ( ! file_exists( $dir . '/index.php' ) ) {
@@ -30,6 +42,41 @@ class Neo_Pulse_App_Data_Paths {
 			}
 		}
 		return $dir;
+	}
+
+	/**
+	 * Resolve a stored relative path to a readable absolute file (legacy flat dirs included).
+	 */
+	public static function resolve_readable_abs( string $rel ): ?string {
+		foreach ( self::rel_abs_candidates( $rel ) as $abs ) {
+			if ( is_readable( $abs ) ) {
+				return $abs;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * @return string[]
+	 */
+	public static function rel_abs_candidates( string $rel ): array {
+		$rel = ltrim( str_replace( '\\', '/', $rel ), '/' );
+		if ( $rel === '' ) {
+			return array();
+		}
+		$paths   = array( self::root() . '/' . $rel );
+		$legacy  = self::legacy_rel_abs( $rel );
+		if ( $legacy !== null ) {
+			$paths[] = $legacy;
+		}
+		return array_values( array_unique( $paths ) );
+	}
+
+	private static function legacy_rel_abs( string $rel ): ?string {
+		if ( preg_match( '#^tasks/teams/(\d+)/(.+)$#', $rel, $m ) ) {
+			return self::root() . '/tasksteams' . $m[1] . '/' . $m[2];
+		}
+		return null;
 	}
 
 	public static function file( string $subdir, string $filename ): string {

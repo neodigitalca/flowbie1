@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generatedAt": "2026-08-16T17:19:15.876Z",
+  "generatedAt": "2026-08-17T14:33:44.143Z",
   "modules": [
     {
       "id": "dashboard/properties",
@@ -66,7 +66,7 @@
       "pulseNav": "pulse:nav/dashboard/master-rules",
       "managerTab": "dashboard",
       "dashboardCluster": "master-rules",
-      "description": "Per-site client instructions stored in Supabase for AI generation.",
+      "description": "Per-site client instructions stored in the workspace for AI generation.",
       "aliases": [
         "master rules",
         "client rules",
@@ -74,7 +74,7 @@
       ],
       "features": [
         "per-site rules",
-        "supabase sync"
+        "workspace storage"
       ],
       "relatedModules": [
         "dashboard/properties"
@@ -776,18 +776,18 @@
       ]
     },
     {
-      "id": "dashboard/master-rules/supabase-sync",
+      "id": "dashboard/master-rules/workspace-storage",
       "moduleId": "dashboard/master-rules",
-      "label": "Supabase sync",
-      "question": "How do master rules sync to Supabase?",
+      "label": "Workspace storage",
+      "question": "Where are master rules stored?",
       "pulseNav": "pulse:nav/dashboard/master-rules",
       "steps": [
         "Open [Dashboard → Master Rules](pulse:nav/dashboard/master-rules).",
-        "Saved rules sync to Supabase for the selected property automatically on save."
+        "Saved rules are stored in browser localStorage per property. Use Dashboard workspace backup to persist settings on the server."
       ],
       "aliases": [
-        "supabase sync",
-        "supabase rules"
+        "workspace storage",
+        "master rules storage"
       ]
     },
     {

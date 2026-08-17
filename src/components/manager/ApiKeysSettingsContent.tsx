@@ -1,8 +1,7 @@
 import { Key } from "lucide-react";
 import { ApiKeyContent } from "@/components/ApiKeyContent";
 import { DataForSEOApiKeyContent } from "@/components/DataForSEOApiKeyContent";
-import { PostBankDashboardCard } from "@/components/manager/PostBankDashboardCard";
-import { NEO_PULSE_CA_DEPLOY } from "@/lib/neo-pulse-deploy";
+import { AgentMailApiKeyContent } from "@/components/AgentMailApiKeyContent";
 import { ManagerCloudSettingsCard } from "@/components/manager/ManagerCloudSettingsCard";
 import {
   DASHBOARD_SETTINGS_GROUP_CLASS,
@@ -59,10 +58,9 @@ export function ApiKeysSettingsContent({
             setApiKey={setDataForSEOApiKey}
             saveApiKey={saveDataForSEOApiKey}
           />
+          <AgentMailApiKeyContent />
         </div>
       </div>
-
-      {!NEO_PULSE_CA_DEPLOY ? <PostBankDashboardCard /> : null}
     </div>
   );
 }

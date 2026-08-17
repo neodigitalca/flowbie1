@@ -24,6 +24,7 @@ import { TaskCommentComposer } from "@/components/manager/tasks/TaskCommentCompo
 import { TaskFileUpload } from "@/components/manager/tasks/TaskFileUpload";
 import { TaskTriggerFields } from "@/components/manager/tasks/TaskTriggerFields";
 import { GscReportingExecutionFields } from "@/components/manager/tasks/GscReportingExecutionFields";
+import { LocalDominatorExportExecutionFields } from "@/components/manager/tasks/LocalDominatorExportExecutionFields";
 import { PostCreatorExecutionFields } from "@/components/manager/tasks/PostCreatorExecutionFields";
 import { ensurePostCreatorPayload } from "@/lib/post-creator/post-creator-defaults";
 import {
@@ -389,6 +390,14 @@ export function TaskDetailPane({
       ) : null}
       {executionKind === "gsc_reporting" ? (
         <GscReportingExecutionFields
+          layout="stack"
+          executionPayload={executionPayload}
+          disabled={saving}
+          onChange={(nextPayload) => onUpdate({ executionPayload: nextPayload })}
+        />
+      ) : null}
+      {executionKind === "local_dominator_export" ? (
+        <LocalDominatorExportExecutionFields
           layout="stack"
           executionPayload={executionPayload}
           disabled={saving}

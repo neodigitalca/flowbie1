@@ -29,8 +29,6 @@ import type { WordPressPostDestination } from "@/lib/bulk-auto-generate";
 
 const POST_DESTINATION_SHORT: Record<WordPressPostDestination, string> = {
   wordpress: "WordPress",
-  bank: "Bank",
-  hybrid: "Hybrid",
   local: "Local files",
 };
 

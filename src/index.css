@@ -385,6 +385,21 @@ All colors MUST be HSL.
     font-weight: 400;
   }
 
+  /** Pulse Forge: Lato + 1rem floor (same as Properties / API tab). */
+  .neo-pulse-forge-shell {
+    font-family: "Lato", sans-serif;
+    font-size: var(--font-size-min);
+    line-height: 1.5;
+  }
+
+  .neo-pulse-forge-shell :where(input, textarea, button, select, option, label, p, span, a, h1, h2, h3, h4, li) {
+    font-family: inherit;
+  }
+
+  .neo-pulse-forge-shell :where(input, textarea, button, select, option) {
+    font-size: inherit;
+  }
+
   /** Chrome autofill: keep black field + inherited text. */
   .local-analysis-panel input:-webkit-autofill,
   .local-analysis-panel input:-webkit-autofill:hover,

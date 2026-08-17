@@ -6,6 +6,19 @@ import { downloadGscReportingArtifacts } from "@/lib/gsc-reporting/gsc-reporting
 import type { AgentRun, AgentRunResult } from "@/lib/agent-runs-types";
 import type { GscReportingComparePreset, TaskExecutionClientRunContract } from "@/lib/tasks-types";
 import { completeTaskExecution, patchTaskExecutionProgress } from "@/lib/tasks-api";
+import {
+  effectiveSaveLocalArchive,
+  effectiveSaveToDisk,
+} from "@/lib/schedule-output-destination";
+import {
+  buildExecutionCompletePayload,
+  gscReportingArchiveFiles,
+  gscReportingFinalReportFile,
+} from "@/lib/task-execution-archive";
+import {
+  automationTitleFromRun,
+  sendAutomationEmailIfConfigured,
+} from "@/lib/automation-email-delivery";
 
 function resolveSite(siteId: string, sites: WordPressSite[]): WordPressSite {
   const fromList = sites.find((s) => s.id === siteId);
@@ -31,7 +44,8 @@ export async function runGscReportingClientHarness(
   batchKey: string,
 ): Promise<AgentRunResult> {
   const comparePreset = comparePresetFromContract(contract);
-  const saveToDisk = Boolean(contract.saveToDisk);
+  const saveToDisk = effectiveSaveToDisk("gsc_reporting", contract);
+  const saveLocalArchive = effectiveSaveLocalArchive("gsc_reporting", contract);
 
   await ctx.onStep?.("Preflight", "running");
   await patchTaskExecutionProgress(run.teamId, executionId, {
@@ -54,7 +68,7 @@ export async function runGscReportingClientHarness(
     },
   });
 
-  if (saveToDisk) {
+  if (saveToDisk && !saveLocalArchive) {
     downloadGscReportingArtifacts({
       markdown: result.markdown,
       files: result.files,
@@ -63,19 +77,68 @@ export async function runGscReportingClientHarness(
     });
   }
 
-  await completeTaskExecution(run.teamId, executionId, {
-    ok: true,
-    result: {
-      comparePreset,
-      compareLabel: result.compareLabel,
-      sectionCount: result.sectionResults.length,
-    },
+  const archiveStamp = Date.now();
+  const archiveFiles = gscReportingArchiveFiles({
+    markdown: result.markdown,
+    files: result.files,
+    siteName: site.name,
+    comparePreset,
+    dateStamp: archiveStamp,
   });
+
+  const emailResult = await sendAutomationEmailIfConfigured({
+    teamId: run.teamId,
+    executionId,
+    contract,
+    tokenContext: {
+      siteName: site.name,
+      automationTitle: automationTitleFromRun(run),
+      executionKind: "gsc_reporting",
+      compareLabel: result.compareLabel,
+      comparePreset,
+      attachmentDateStamp: archiveStamp,
+      summary: `GSC ${comparePreset === "yoy" ? "YoY" : "MoM"} report generated`,
+    },
+    summaryText: result.markdown,
+    attachments: [
+      gscReportingFinalReportFile({
+        markdown: result.markdown,
+        siteName: site.name,
+        comparePreset,
+        dateStamp: archiveStamp,
+      }),
+    ],
+    runOk: true,
+    onStep: (label, status) => ctx.onStep?.(label, status ?? "running"),
+  });
+
+  const archiveFilesWithScript =
+    saveLocalArchive && emailResult.meetingScriptFile
+      ? [emailResult.meetingScriptFile, ...archiveFiles]
+      : archiveFiles;
+
+  await completeTaskExecution(
+    run.teamId,
+    executionId,
+    buildExecutionCompletePayload({
+      ok: true,
+      run,
+      saveLocalArchive,
+      archiveFiles: saveLocalArchive ? archiveFilesWithScript : undefined,
+      result: {
+        comparePreset,
+        compareLabel: result.compareLabel,
+        sectionCount: result.sectionResults.length,
+        ...emailResult,
+      },
+    }),
+  );
 
   return {
     updated: 1,
     message: `GSC ${comparePreset === "yoy" ? "YoY" : "MoM"} report generated`,
     batchKey,
+    ...emailResult,
   };
 }
 

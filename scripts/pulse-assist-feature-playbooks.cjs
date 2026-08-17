@@ -108,16 +108,16 @@ const FEATURE_PLAYBOOKS = [
     ["master rules", "client rules", "instructions"],
   ),
   pb(
-    "dashboard/master-rules/supabase-sync",
+    "dashboard/master-rules/workspace-storage",
     "dashboard/master-rules",
-    "Supabase sync",
-    "How do master rules sync to Supabase?",
+    "Workspace storage",
+    "Where are master rules stored?",
     "pulse:nav/dashboard/master-rules",
     [
       "Open [Dashboard → Master Rules](pulse:nav/dashboard/master-rules).",
-      "Saved rules sync to Supabase for the selected property automatically on save.",
+      "Saved rules are stored in browser localStorage per property. Use Dashboard workspace backup to persist settings on the server.",
     ],
-    ["supabase sync", "supabase rules"],
+    ["workspace storage", "master rules storage"],
   ),
 
   // dashboard/ai-generation

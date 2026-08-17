@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['src/**/*.test.ts', 'wordpress-plugins/flowbie-app/tests/**/*.test.mjs'],
+    include: ['src/**/*.test.ts', 'wordpress-plugins/neo-pulse-app/tests/**/*.test.mjs'],
   },
   resolve: {
     alias: {

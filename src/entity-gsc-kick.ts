@@ -51,10 +51,12 @@ function resolveActiveSite(): { siteUrl: string | null; activeId: string | null;
 }
 
 function backendBase(): string {
-  const fromEnv = import.meta.env.VITE_MCP_API_BASE?.replace("/api/mcp", "");
-  if (fromEnv) return fromEnv.replace(/\/$/, "");
-  if (import.meta.env.DEV) return "http://127.0.0.1:3001";
-  return "";
+  const rawMcp = (import.meta.env.VITE_MCP_API_BASE ?? '').trim();
+  if (rawMcp !== '') {
+    return rawMcp.replace(/\/api\/mcp\/?$/, '').replace(/\/+$/, '');
+  }
+  if (import.meta.env.DEV) return '';
+  return '';
 }
 
 function syncDashboardMirrorToServer(activeId: string | null, sites: StoredSite[]) {

@@ -1,0 +1,19 @@
+{
+  "name": "NEOPulse Mobile",
+  "short_name": "NEOPulse",
+  "description": "Staff chat, assist, agents, tasks, and automations.",
+  "start_url": "/mobile/",
+  "scope": "/mobile/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/branding/neo-pulse-light.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -210,6 +210,20 @@ class Neo_Pulse_App_Teams_Route_Handlers {
 			return;
 		}
 
+		if ( $sub === 'mail/send' && $method === 'POST' ) {
+			if ( ! Neo_Pulse_App_Teams_Store::can_write( $member, 'communication' ) ) {
+				Neo_Pulse_App_Api_Dispatcher::send_json( array( 'ok' => false, 'error' => 'Forbidden' ), 403 );
+				return;
+			}
+			$to          = isset( $body['to'] ) ? (string) $body['to'] : '';
+			$subject     = isset( $body['subject'] ) ? (string) $body['subject'] : '';
+			$message     = isset( $body['message'] ) ? (string) $body['message'] : '';
+			$attachments = Neo_Pulse_App_Mail::normalize_attachments( $body['attachments'] ?? null );
+			$result      = Neo_Pulse_App_Mail::send( $to, $subject, $message, $attachments );
+			Neo_Pulse_App_Api_Dispatcher::send_json( $result, ! empty( $result['ok'] ) ? 200 : 502 );
+			return;
+		}
+
 		if ( preg_match( '#^invites/(\d+)/revoke$#', $sub, $im ) && $method === 'POST' ) {
 			if ( ! Neo_Pulse_App_Teams_Store::can_write( $member, 'teams' ) ) {
 				Neo_Pulse_App_Api_Dispatcher::send_json( array( 'ok' => false, 'error' => 'Forbidden' ), 403 );
@@ -282,6 +296,12 @@ class Neo_Pulse_App_Teams_Route_Handlers {
 		if ( $sub === 'tasks' || str_starts_with( $sub, 'tasks/' ) ) {
 			$tasks_sub = $sub === 'tasks' ? '' : substr( $sub, 6 );
 			Neo_Pulse_App_Tasks_Route_Handlers::dispatch( $team, $member, $tasks_sub, $method, $body, $user_id );
+			return;
+		}
+
+		if ( $sub === 'workflows' || str_starts_with( $sub, 'workflows/' ) ) {
+			$workflows_sub = $sub === 'workflows' ? '' : substr( $sub, 10 );
+			Neo_Pulse_App_Workflows_Route_Handlers::dispatch( $team, $member, $workflows_sub, $method, $body, $user_id );
 			return;
 		}
 

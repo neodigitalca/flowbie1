@@ -342,8 +342,9 @@ class Neo_Pulse_App_Agent_Run_Harness_Post_Creator {
 				$team_id,
 				$execution_id,
 				array(
-					'ok'     => true,
-					'result' => array(
+					'ok'          => true,
+					'agentRunId'  => $run_id,
+					'result'      => array(
 						'created'       => (int) ( $result['updated'] ?? 0 ),
 						'uploadedPosts' => $result['uploadedPosts'] ?? array(),
 					),

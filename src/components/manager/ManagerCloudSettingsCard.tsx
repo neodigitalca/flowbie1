@@ -3,7 +3,6 @@ import { CloudUpload, CloudDownload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { notify } from "@/lib/app-notifications";
 import {
-  NOTIFY_CONFIGURE_SUPABASE_ON_THE_API_SERVER_FIR,
   NOTIFY_SIGN_IN_TO_LOAD_SETTINGS_FROM_THE_CLOUD,
   NOTIFY_SIGN_IN_TO_SAVE_SETTINGS_TO_THE_CLOUD,
   notifyRestoredXKeysFromCloudReloading,
@@ -19,6 +18,7 @@ import {
   loadManagerSettingsFromCloud,
   saveManagerSettingsToCloud,
 } from "@/lib/manager-cloud-settings-api";
+import { loadAgentMailApiKey, loadAgentMailInbox } from "@/lib/api";
 
 export type ManagerCloudSettingsCardProps = {
   apiKey: string;
@@ -56,60 +56,45 @@ export function ManagerCloudSettingsCard({
       notify.error(NOTIFY_SIGN_IN_TO_SAVE_SETTINGS_TO_THE_CLOUD);
       return;
     }
-    if (!status?.supabaseConfigured) {
-      notify.error(NOTIFY_CONFIGURE_SUPABASE_ON_THE_API_SERVER_FIR);
-      return;
-    }
     setSaving(true);
     try {
       const snapshot = collectManagerCloudSettingsSnapshot(
         {
           "openrouter-api-key": apiKey,
           "dataforseo-api-key": dataForSEOApiKey,
+          "agentmail-api-key": loadAgentMailApiKey(),
+          "agentmail-general-email": loadAgentMailInbox(),
         },
         { selectedModel, temperature, maxTokens, topP },
       );
       const r = await saveManagerSettingsToCloud(snapshot, activeTeam?.id);
       if (!r.ok) {
-        notify.error(r.error || "Cloud save failed");
+        notify.error(r.error || "Workspace save failed");
         return;
       }
       notify.success(
         r.updatedAt
-          ? `Settings saved to cloud (${new Date(r.updatedAt).toLocaleString()})`
-          : "Settings saved to cloud",
+          ? `Settings saved to workspace (${new Date(r.updatedAt).toLocaleString()})`
+          : "Settings saved to workspace",
       );
     } finally {
       setSaving(false);
     }
-  }, [
-    user,
-    status?.supabaseConfigured,
-    apiKey,
-    dataForSEOApiKey,
-    selectedModel,
-    temperature,
-    maxTokens,
-    topP,
-  ]);
+  }, [user, apiKey, dataForSEOApiKey, selectedModel, temperature, maxTokens, topP, activeTeam?.id]);
 
   const handleLoadFromCloud = useCallback(async () => {
     if (!user) {
       notify.error(NOTIFY_SIGN_IN_TO_LOAD_SETTINGS_FROM_THE_CLOUD);
       return;
     }
-    if (!status?.supabaseConfigured) {
-      notify.error(NOTIFY_CONFIGURE_SUPABASE_ON_THE_API_SERVER_FIR);
-      return;
-    }
-    if (!window.confirm("Replace local settings with the last cloud backup? The page will reload.")) {
+    if (!window.confirm("Replace local settings with the last workspace backup? The page will reload.")) {
       return;
     }
     setLoading(true);
     try {
       const r = await loadManagerSettingsFromCloud(activeTeam?.id);
       if (!r.ok || !r.snapshot) {
-        notify.error(r.error || "No cloud backup found");
+        notify.error(r.error || "No workspace backup found");
         return;
       }
       const applied = applyManagerCloudSnapshotToLocalStorage(r.snapshot);
@@ -122,18 +107,18 @@ export function ManagerCloudSettingsCard({
     } finally {
       setLoading(false);
     }
-  }, [user, status?.supabaseConfigured]);
+  }, [user, activeTeam?.id]);
 
-  const disabled = !user || !status?.supabaseConfigured;
+  const disabled = !user || !status?.ok;
   const host = status?.urlHost;
 
   return (
     <div className={DASHBOARD_SETTINGS_GROUP_CLASS}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-2">
-          <p className="font-semibold text-white">Cloud backup</p>
+          <p className="font-semibold text-white">Workspace backup</p>
           <p className="text-base text-white">
-            Back up API keys, properties, model defaults, and master rules to Supabase
+            Back up API keys, properties, model defaults, and master rules to workspace storage on the API server
             {host ? (
               <>
                 {" "}
@@ -142,11 +127,7 @@ export function ManagerCloudSettingsCard({
             ) : null}
             .
           </p>
-          {!user ? (
-            <p className="text-base text-amber-200">Sign in to use cloud backup.</p>
-          ) : !status?.supabaseConfigured ? (
-            <p className="text-base text-amber-200">Connect Supabase under Post Bank first.</p>
-          ) : null}
+          {!user ? <p className="text-base text-amber-200">Sign in to use workspace backup.</p> : null}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           <Button
@@ -157,7 +138,7 @@ export function ManagerCloudSettingsCard({
             onClick={() => void handleSaveToCloud()}
           >
             <CloudUpload className="h-4 w-4" aria-hidden />
-            {saving ? "Saving…" : "Save to cloud"}
+            {saving ? "Saving…" : "Save to workspace"}
           </Button>
           <Button
             type="button"
@@ -167,7 +148,7 @@ export function ManagerCloudSettingsCard({
             onClick={() => void handleLoadFromCloud()}
           >
             <CloudDownload className="h-4 w-4" aria-hidden />
-            {loading ? "Loading…" : "Load from cloud"}
+            {loading ? "Loading…" : "Load from workspace"}
           </Button>
         </div>
       </div>

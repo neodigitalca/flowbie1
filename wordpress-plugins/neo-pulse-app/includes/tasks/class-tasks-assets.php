@@ -132,6 +132,103 @@ class Neo_Pulse_App_Tasks_Assets {
 		return is_array( $row ) ? $row : null;
 	}
 
+	/**
+	 * Persist execution archive files from a complete payload or agent run artifacts.
+	 *
+	 * @param array<string,mixed> $body
+	 */
+	public static function archive_execution_outputs(
+		int $team_id,
+		int $task_id,
+		int $user_id,
+		array $body
+	): void {
+		if ( ! Neo_Pulse_App_Tasks_Store::get_task( $team_id, $task_id ) ) {
+			return;
+		}
+
+		if ( ! empty( $body['archiveFiles'] ) && is_array( $body['archiveFiles'] ) ) {
+			foreach ( $body['archiveFiles'] as $file ) {
+				if ( ! is_array( $file ) ) {
+					continue;
+				}
+				$file_name   = sanitize_file_name( (string) ( $file['fileName'] ?? '' ) );
+				$mime        = sanitize_text_field( (string) ( $file['mime'] ?? 'application/octet-stream' ) );
+				$data_base64 = (string) ( $file['dataBase64'] ?? '' );
+				if ( $file_name === '' || $data_base64 === '' ) {
+					continue;
+				}
+				$binary = base64_decode( $data_base64, true );
+				if ( $binary === false || $binary === '' ) {
+					continue;
+				}
+				self::upload( $team_id, $task_id, $user_id, $file_name, $mime, $binary );
+			}
+		}
+
+		$run_id = (int) ( $body['agentRunId'] ?? $body['agent_run_id'] ?? 0 );
+		if ( $run_id > 0 ) {
+			self::archive_from_agent_run( $team_id, $task_id, $user_id, $run_id );
+		}
+	}
+
+	public static function archive_from_agent_run( int $team_id, int $task_id, int $user_id, int $run_id ): void {
+		if ( ! class_exists( 'Neo_Pulse_App_Agent_Runs_Artifacts' ) ) {
+			return;
+		}
+		$artifacts = Neo_Pulse_App_Agent_Runs_Artifacts::list_artifacts( $run_id );
+		if ( ! is_array( $artifacts ) || count( $artifacts ) === 0 ) {
+			return;
+		}
+
+		$dir = Neo_Pulse_App_Agent_Runs_Artifacts::run_dir( $run_id );
+		foreach ( $artifacts as $artifact ) {
+			if ( ! is_array( $artifact ) ) {
+				continue;
+			}
+			$name = sanitize_file_name( (string) ( $artifact['name'] ?? '' ) );
+			if ( $name === '' ) {
+				continue;
+			}
+			$step_key = sanitize_key( (string) ( $artifact['stepKey'] ?? 'artifact' ) );
+			$file_id  = sanitize_key( (string) ( $artifact['id'] ?? '' ) );
+			$filename = $step_key . '-' . $file_id . '-' . $name;
+			$path     = trailingslashit( $dir ) . $filename;
+			if ( ! is_readable( $path ) ) {
+				continue;
+			}
+			$binary = file_get_contents( $path );
+			if ( $binary === false || $binary === '' ) {
+				continue;
+			}
+			$mime = (string) ( $artifact['mime'] ?? 'application/octet-stream' );
+			if ( $mime === '' ) {
+				$mime = 'application/octet-stream';
+			}
+			self::upload( $team_id, $task_id, $user_id, $name, $mime, $binary );
+		}
+	}
+
+	public static function delete( int $team_id, int $task_id, int $asset_id ): bool {
+		$row = self::get_row( $asset_id );
+		if ( ! $row || (int) $row['team_id'] !== $team_id || (int) $row['task_id'] !== $task_id ) {
+			return false;
+		}
+
+		$rel = (string) $row['storage_path'];
+		foreach ( Neo_Pulse_App_Data_Paths::rel_abs_candidates( $rel ) as $abs ) {
+			if ( is_readable( $abs ) ) {
+				wp_delete_file( $abs );
+			}
+		}
+
+		global $wpdb;
+		$table   = $wpdb->prefix . 'neo_pulse_team_task_files';
+		$deleted = $wpdb->delete( $table, array( 'id' => $asset_id ), array( '%d' ) );
+
+		return $deleted !== false && $deleted > 0;
+	}
+
 	public static function serve( int $team_id, int $task_id, int $asset_id, bool $inline = false ): void {
 		$row = self::get_row( $asset_id );
 		if ( ! $row || (int) $row['team_id'] !== $team_id || (int) $row['task_id'] !== $task_id ) {
@@ -140,8 +237,8 @@ class Neo_Pulse_App_Tasks_Assets {
 		}
 
 		$rel = (string) $row['storage_path'];
-		$abs = Neo_Pulse_App_Data_Paths::root() . '/' . ltrim( $rel, '/' );
-		if ( ! is_readable( $abs ) ) {
+		$abs = Neo_Pulse_App_Data_Paths::resolve_readable_abs( $rel );
+		if ( $abs === null ) {
 			status_header( 404 );
 			exit;
 		}

@@ -1,5 +1,7 @@
 # Deploy to neodigital.ca (agent runbook)
 
+**Branching overview (local → Git → production):** [deploy-local-branching-pathway.md](deploy-local-branching-pathway.md)
+
 NEO Pulse One ships to **https://neodigital.ca/app/** as:
 
 | Piece | Local path | Remote path |
@@ -8,6 +10,8 @@ NEO Pulse One ships to **https://neodigital.ca/app/** as:
 | WordPress API plugin | `wordpress-plugins/neo-pulse-app/` | `/wp-content/plugins/neo-pulse-app` |
 
 The plugin serves `/api/*` on the same domain (auth, teams, manager settings, GSC, etc.).
+
+For **local offline development** on WP Staging Desktop (`neopulse.local`), see [local-wp-staging-dev.md](local-wp-staging-dev.md).
 
 ---
 

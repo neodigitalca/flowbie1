@@ -1,0 +1,354 @@
+/**
+ * NEO Pulse AI — meta editor modal (flat groups)
+ */
+
+.neo-pulse-wp-ai-modal {
+	position: fixed;
+	inset: 0;
+	z-index: 100000;
+	background: rgba(15, 23, 42, 0.6);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+}
+
+.neo-pulse-wp-ai-modal__panel--editor {
+	display: flex;
+	flex-direction: column;
+	width: min(720px, 100%);
+	max-height: min(90vh, 880px);
+	padding: 0;
+	overflow: hidden;
+	border: 0;
+	border-radius: 12px;
+	background: #ffffff;
+	opacity: 1;
+	isolation: isolate;
+	box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
+}
+
+.neo-pulse-wp-ai-modal__header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 18px 22px 12px;
+	border: 0;
+	background: #ffffff;
+}
+
+.neo-pulse-wp-ai-modal__title {
+	margin: 0;
+	font-size: 1.125rem;
+	font-weight: 700;
+	color: var(--fb-text);
+	line-height: 1.3;
+}
+
+.neo-pulse-wp-ai-modal__close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 8px;
+	background: var(--fb-surface-muted);
+	color: #50575e;
+	font-size: 1.25rem;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.neo-pulse-wp-ai-modal__close:hover {
+	background: #eef2f6;
+	color: var(--fb-text);
+}
+
+.neo-pulse-wp-ai-modal__body {
+	flex: 1 1 auto;
+	overflow: auto;
+	padding: 0 22px 16px;
+	background: #ffffff;
+}
+
+.neo-pulse-wp-ai-modal__group {
+	margin: 0 0 12px;
+	padding: 14px 16px;
+	border: 0;
+	border-radius: 8px;
+	background: var(--fb-surface-muted);
+	box-sizing: border-box;
+}
+
+.neo-pulse-wp-ai-modal__preview-section {
+	margin-bottom: 12px;
+}
+
+.neo-pulse-wp-ai-modal__preview-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 10px;
+}
+
+.neo-pulse-wp-ai-modal--editor .neo-pulse-wp-ai-snippet__heading,
+.neo-pulse-wp-ai-modal__section-title {
+	margin: 0 0 12px;
+	padding: 0;
+	font-size: 1rem;
+	font-weight: 700;
+	color: var(--fb-text-muted);
+}
+
+.neo-pulse-wp-ai-modal--editor .neo-pulse-wp-ai-snippet__box,
+.neo-pulse-wp-ai-modal--editor .neo-pulse-wp-ai-snippet__box--hero {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+.neo-pulse-wp-ai-modal__section {
+	margin-bottom: 12px;
+}
+
+.neo-pulse-wp-ai-modal__section-title {
+	margin-bottom: 10px;
+}
+
+.neo-pulse-wp-ai-modal--editor .neo-pulse-wp-ai-editor-row {
+	margin: 0 0 14px;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+.neo-pulse-wp-ai-modal--editor .neo-pulse-wp-ai-editor-row:last-child {
+	margin-bottom: 0;
+}
+
+.neo-pulse-wp-ai-modal--editor .neo-pulse-wp-ai-editor-row.is-dirty {
+	background: transparent;
+	box-shadow: none;
+}
+
+.neo-pulse-wp-ai-modal--editor .neo-pulse-wp-ai-editor-row.is-dirty .neo-pulse-wp-ai-editor-row__input {
+	background: var(--fb-warn-bg);
+}
+
+.neo-pulse-wp-ai-editor-row__head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 8px;
+}
+
+.neo-pulse-wp-ai-editor-row__label {
+	font-size: 1rem;
+	font-weight: 600;
+	color: var(--fb-text);
+	margin: 0;
+	line-height: 1.4;
+}
+
+.neo-pulse-wp-ai-editor-row__actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-shrink: 0;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+}
+
+.neo-pulse-wp-ai-editor-row__apply {
+	padding: 0 4px !important;
+	border: 0 !important;
+	font-size: 1rem !important;
+	font-weight: 600 !important;
+	min-height: auto !important;
+	box-shadow: none !important;
+}
+
+.neo-pulse-wp-ai-field-help {
+	margin: 8px 0 0;
+	font-size: 1rem;
+	line-height: 1.5;
+	color: var(--fb-text-muted);
+}
+
+.neo-pulse-wp-ai-modal--editor .neo-pulse-wp-ai-editor-row__input {
+	width: 100%;
+	box-sizing: border-box;
+	margin: 0;
+	padding: 10px 12px;
+	border: 0;
+	border-radius: 8px;
+	font-size: 1rem;
+	line-height: 1.5;
+	resize: vertical;
+	background: #ffffff;
+	color: var(--fb-text);
+	box-shadow: none;
+}
+
+.neo-pulse-wp-ai-modal--editor .neo-pulse-wp-ai-editor-row__input:focus {
+	outline: 2px solid rgba(19, 94, 150, 0.22);
+	outline-offset: 1px;
+	box-shadow: none;
+}
+
+.neo-pulse-wp-ai-modal__footer {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	padding: 14px 22px 18px;
+	border: 0;
+	background: #ffffff;
+}
+
+.neo-pulse-wp-ai-modal__save {
+	min-height: 44px;
+	padding-left: 20px !important;
+	padding-right: 20px !important;
+	border: 0 !important;
+	border-radius: 8px !important;
+	font-size: 1rem !important;
+	font-weight: 700 !important;
+	box-shadow: none !important;
+}
+
+.neo-pulse-wp-ai-modal__unsaved {
+	font-size: 1rem;
+	font-weight: 600;
+	color: var(--fb-warn);
+}
+
+.neo-pulse-wp-ai-modal__cap-notice {
+	flex: 1 1 100%;
+	margin: 0 0 4px;
+	padding: 10px 12px;
+	border: 0;
+	border-radius: 8px;
+	font-size: 1rem;
+	color: var(--fb-text-muted);
+	background: #eef2f6;
+}
+
+.neo-pulse-wp-ai-modal--editor .neo-pulse-wp-ai-editor-row__meter {
+	margin-top: 8px;
+	margin-bottom: 0;
+}
+
+.neo-pulse-wp-ai-modal--editor .neo-pulse-wp-ai-field-help {
+	margin-top: 10px;
+}
+
+.neo-pulse-wp-ai-modal__cap-notice--paused {
+	color: var(--fb-success);
+	background: var(--fb-success-bg);
+}
+
+.neo-pulse-wp-ai-modal--editor .neo-pulse-wp-ai-wand-btn,
+.neo-pulse-wp-ai-modal--editor .neo-pulse-wp-ai-spark-btn--bare,
+.neo-pulse-wp-ai-modal--editor .neo-pulse-wp-ai-modal__generate-all {
+	border: 0 !important;
+	border-radius: 6px !important;
+	background: #000 !important;
+	color: #fff !important;
+	box-shadow: none !important;
+}
+
+.neo-pulse-wp-ai-modal--editor .neo-pulse-wp-ai-wand-btn:hover,
+.neo-pulse-wp-ai-modal--editor .neo-pulse-wp-ai-spark-btn--bare:hover,
+.neo-pulse-wp-ai-modal--editor .neo-pulse-wp-ai-modal__generate-all:hover {
+	background: #09090b !important;
+}
+
+/* FAQ accordion (schema stripped in UI; full value kept in draft) */
+.neo-pulse-wp-ai-faq-editor .neo-pulse-wp-ai-faq-copy {
+	font-size: 1rem;
+	margin-right: 8px;
+}
+
+.neo-pulse-wp-ai-faq-accordion {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 4px;
+}
+
+.neo-pulse-wp-ai-faq-item {
+	border-radius: 8px;
+	background: var(--fb-surface-muted, #f4f6f8);
+	overflow: hidden;
+}
+
+.neo-pulse-wp-ai-faq-item__trigger {
+	display: flex;
+	align-items: center;
+	width: 100%;
+	padding: 12px 14px;
+	border: 0;
+	background: transparent;
+	text-align: left;
+	font-size: 1rem;
+	font-weight: 600;
+	color: var(--fb-text, #1d2327);
+	cursor: pointer;
+	line-height: 1.4;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.neo-pulse-wp-ai-faq-item__trigger:hover {
+	background: rgba(0, 0, 0, 0.03);
+}
+
+.neo-pulse-wp-ai-faq-item__trigger::after {
+	content: '';
+	flex-shrink: 0;
+	width: 8px;
+	height: 8px;
+	margin-left: auto;
+	border-right: 2px solid var(--fb-text-muted, #646970);
+	border-bottom: 2px solid var(--fb-text-muted, #646970);
+	transform: rotate(45deg);
+	transition: transform 0.15s ease;
+}
+
+.neo-pulse-wp-ai-faq-item.is-open .neo-pulse-wp-ai-faq-item__trigger::after {
+	transform: rotate(-135deg);
+}
+
+.neo-pulse-wp-ai-faq-item__panel {
+	display: none;
+	padding: 0 14px 14px;
+}
+
+.neo-pulse-wp-ai-faq-item.is-open .neo-pulse-wp-ai-faq-item__panel {
+	display: block;
+}
+
+.neo-pulse-wp-ai-faq-item__label {
+	display: block;
+	margin: 10px 0 6px;
+	font-size: 1rem;
+	font-weight: 600;
+	color: var(--fb-text-muted, #646970);
+}
+
+.neo-pulse-wp-ai-faq-item__panel .neo-pulse-wp-ai-editor-row__input {
+	margin-bottom: 0;
+}

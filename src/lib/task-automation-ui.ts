@@ -1,4 +1,5 @@
 import { isAutomationProject } from "@/lib/task-automation-templates";
+import { resolveTaskExecuteSiteId } from "@/lib/agent-runs-types";
 import type { TaskExecutionKind, TaskScheduleMode, TaskProject, TeamTask } from "@/lib/tasks-types";
 import type { TeamMember } from "@/lib/teams-types";
 import { ensurePostCreatorPayload, defaultPostCreatorExecutionPayloadForRecipe } from "@/lib/post-creator/post-creator-defaults";
@@ -19,6 +20,12 @@ export const GSC_REPORTING_RECIPE_KEYWORDS = [
 ] as const;
 
 export const GSC_REPORTING_TASK_KEYWORDS = ["gsc-mom-report", "gsc-yoy-report"] as const;
+
+export const RESEARCH_LOCAL_DOMINATOR_RECIPE_KEYWORDS = [
+  "research-local-dominator-grid-export",
+] as const;
+
+export const RESEARCH_LOCAL_DOMINATOR_TASK_KEYWORDS = ["research-local-dominator-export"] as const;
 
 const CALENDAR_AUTOMATION_KINDS = new Set<TaskExecutionKind>(["post_creator", "gsc_reporting"]);
 
@@ -65,9 +72,10 @@ export function resolveEffectiveExecutionKind(
   project?: Pick<TaskProject, "keyword" | "sourceTemplateKeyword"> | null,
 ): TaskExecutionKind {
   const kind = (task?.executionKind ?? "").trim();
-  if (kind === "post_creator" || kind === "gsc_reporting") return kind;
+  if (kind === "post_creator" || kind === "gsc_reporting" || kind === "local_dominator_export") return kind;
   if (isEditorialPostCreatorTask(task, project)) return "post_creator";
   if (isGscReportingTask(task, project)) return "gsc_reporting";
+  if (isResearchLocalDominatorTask(task, project)) return "local_dominator_export";
   return (kind || "content_optimizer") as TaskExecutionKind;
 }
 
@@ -134,6 +142,33 @@ export function isGscReportingTask(
   return GSC_REPORTING_TASK_KEYWORDS.includes(taskKw as (typeof GSC_REPORTING_TASK_KEYWORDS)[number]);
 }
 
+export function isResearchLocalDominatorProject(
+  project?: Pick<TaskProject, "keyword" | "sourceTemplateKeyword"> | null,
+): boolean {
+  const recipeKw = (project?.sourceTemplateKeyword ?? "").trim();
+  const projectKw = (project?.keyword ?? "").trim();
+  return (
+    RESEARCH_LOCAL_DOMINATOR_RECIPE_KEYWORDS.includes(
+      recipeKw as (typeof RESEARCH_LOCAL_DOMINATOR_RECIPE_KEYWORDS)[number],
+    ) ||
+    RESEARCH_LOCAL_DOMINATOR_RECIPE_KEYWORDS.includes(
+      projectKw as (typeof RESEARCH_LOCAL_DOMINATOR_RECIPE_KEYWORDS)[number],
+    )
+  );
+}
+
+export function isResearchLocalDominatorTask(
+  task?: Pick<TeamTask, "keyword" | "executionKind"> | null,
+  project?: Pick<TaskProject, "keyword" | "sourceTemplateKeyword"> | null,
+): boolean {
+  if ((task?.executionKind ?? "").trim() === "local_dominator_export") return true;
+  if (isResearchLocalDominatorProject(project)) return true;
+  const taskKw = (task?.keyword ?? "").trim();
+  return RESEARCH_LOCAL_DOMINATOR_TASK_KEYWORDS.includes(
+    taskKw as (typeof RESEARCH_LOCAL_DOMINATOR_TASK_KEYWORDS)[number],
+  );
+}
+
 export function gscReportingRecipeKeyword(
   project?: Pick<TaskProject, "keyword" | "sourceTemplateKeyword"> | null,
   task?: Pick<TeamTask, "keyword"> | null,
@@ -171,6 +206,31 @@ export function resolveGscReportingTask(
   };
 }
 
+export function resolveResearchLocalDominatorTask(
+  task: TeamTask,
+  project?: Pick<TaskProject, "keyword" | "sourceTemplateKeyword"> | null,
+): {
+  executionKind: TaskExecutionKind;
+  scheduleMode: TaskScheduleMode;
+  recurrenceRule: TeamTask["recurrenceRule"];
+  executionPayload: TeamTask["executionPayload"];
+} | null {
+  if (!isResearchLocalDominatorTask(task, project)) return null;
+
+  return {
+    executionKind: "local_dominator_export",
+    scheduleMode: "calendar",
+    recurrenceRule: task.recurrenceRule ?? "none",
+    executionPayload: {
+      businessName: task.executionPayload?.businessName ?? "Advance Blinds & Drapery",
+      keyword: task.executionPayload?.keyword ?? "blinds near me",
+      saveLocalArchive: task.executionPayload?.saveLocalArchive ?? true,
+      saveToDisk: task.executionPayload?.saveToDisk !== false,
+      ...task.executionPayload,
+    },
+  };
+}
+
 export function resolveTaskForAutomationExecute(
   task: TeamTask,
   project?: Pick<TaskProject, "keyword" | "sourceTemplateKeyword"> | null,
@@ -178,6 +238,10 @@ export function resolveTaskForAutomationExecute(
   const gscResolved = resolveGscReportingTask(task, project);
   if (gscResolved) {
     return { ...task, ...gscResolved };
+  }
+  const researchResolved = resolveResearchLocalDominatorTask(task, project);
+  if (researchResolved) {
+    return { ...task, ...researchResolved };
   }
   const editorial = resolveEditorialPostCreatorTask(task, project);
   if (editorial) {
@@ -212,6 +276,18 @@ export function taskSupportsManualAutomationExecute(
   if ((task.executionKind ?? "").trim()) return true;
   if (isEditorialPostCreatorTask(task, project)) return true;
   if (isGscReportingTask(task, project)) return true;
+  if (isResearchLocalDominatorTask(task, project)) return true;
   if (project && isAutomationProject(project, projectTasks, members)) return true;
   return false;
+}
+
+export function prepareTaskForAutomationExecute(
+  task: TeamTask,
+  project?: Pick<TaskProject, "keyword" | "sourceTemplateKeyword" | "wordpressSiteId"> | null,
+  activeWordPressSiteId?: string | null,
+): TeamTask {
+  const resolved = resolveTaskForAutomationExecute(task, project);
+  const siteId =
+    resolveTaskExecuteSiteId(resolved, activeWordPressSiteId) || project?.wordpressSiteId?.trim() || "";
+  return siteId ? { ...resolved, wordpressSiteId: siteId } : resolved;
 }

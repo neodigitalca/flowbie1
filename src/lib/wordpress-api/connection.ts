@@ -13,15 +13,34 @@ import type {
 /** Empty string = same-origin `/api/*` (neodigital.ca WP plugin). */
 export function resolveBackendApiBase(): string {
   if (NEO_PULSE_CA_DEPLOY) return '';
-  const fromEnv = (import.meta.env.VITE_MCP_API_BASE ?? '')
-    .replace(/\/api\/mcp\/?$/, '')
-    .trim();
-  if (fromEnv) return fromEnv.replace(/\/+$/, '');
-  if (import.meta.env.DEV) return 'http://localhost:3001';
+  const rawMcp = (import.meta.env.VITE_MCP_API_BASE ?? '').trim();
+  if (rawMcp !== '') {
+    return rawMcp.replace(/\/api\/mcp\/?$/, '').replace(/\/+$/, '');
+  }
+  const fromEnv = (import.meta.env.VITE_BACKEND_API_BASE ?? '')
+    .trim()
+    .replace(/\/+$/, '');
+  if (fromEnv) return fromEnv;
+  if (import.meta.env.DEV) return '';
   return '';
 }
 
 export const BACKEND_API_BASE = resolveBackendApiBase();
+
+/** Same-origin dev adds trailing slash so requests avoid cached WP 301 keys without `/`. */
+export function backendApiUrl(path: string): string {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  const apiPath = p.startsWith("/api/") || p === "/api" ? p : `/api${p}`;
+  const base = BACKEND_API_BASE.replace(/\/+$/, "");
+  const qIndex = apiPath.indexOf("?");
+  const pathname = qIndex >= 0 ? apiPath.slice(0, qIndex) : apiPath;
+  const search = qIndex >= 0 ? apiPath.slice(qIndex) : "";
+  let url = `${base}${pathname}${search}`;
+  if (import.meta.env.DEV && !base && !search && !pathname.endsWith("/")) {
+    url = `${url}/`;
+  }
+  return url;
+}
 
 export const BACKEND_CONNECTION_ERROR = "Can't connect to server";
 
@@ -36,7 +55,7 @@ export async function testWordPressConnection(
   username: string,
   appPassword: string
 ): Promise<WordPressConnectionResult> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/test-connection`;
+  const url = backendApiUrl("/wordpress/test-connection");
   
   try {
     const response = await fetch(url, {
@@ -83,7 +102,7 @@ export async function detectSitemaps(
   username?: string,
   appPassword?: string
 ): Promise<SitemapDetectionResult> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/detect-sitemaps`;
+  const url = backendApiUrl("/wordpress/detect-sitemaps");
   
   try {
     const response = await fetch(url, {
@@ -131,7 +150,7 @@ export async function parseSitemap(
   username?: string,
   appPassword?: string
 ): Promise<SitemapParseResult> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/parse-sitemap`;
+  const url = backendApiUrl("/wordpress/parse-sitemap");
   
   try {
     const response = await fetch(url, {

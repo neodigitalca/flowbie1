@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   Loader2,
   Map,
-  PiggyBank,
   ScrollText,
   Settings,
   Server,
@@ -17,8 +16,6 @@ import { SitemapSection } from "./SitemapSection";
 import { getCyberpunkTextClasses } from "./cyberpunk-theme";
 import type { WordPressSiteAdminSection } from "./WordPressSiteAdminLayout";
 import { openDashboardMasterRulesSettings } from "@/lib/open-master-rules-settings";
-import { BankPropertyPanel } from "./BankPropertyPanel";
-import { NEO_PULSE_CA_DEPLOY } from "@/lib/neo-pulse-deploy";
 import { MasterInstructionsSection } from "./MasterInstructionsSection";
 import { FunctionsUpdaterPanel } from "./FunctionsUpdaterPanel";
 import { RedirectMatcherPanel } from "./RedirectMatcherPanel";
@@ -177,8 +174,7 @@ export function buildWordPressPropertySections(
         ) : (
           <div className={`mt-2 space-y-3 pt-2 text-base ${getCyberpunkTextClasses("muted")}`}>
             <p className="leading-relaxed">
-              Master Rules (client instructions) are stored in{" "}
-              <span className={getCyberpunkTextClasses("secondary")}>Supabase</span>, not in the browser. Edit them
+              Master Rules (client instructions) are stored in workspace storage, not in the browser. Edit them
               under <span className="font-medium text-foreground">Dashboard → Master Rules</span> and select this
               property.
             </p>
@@ -213,16 +209,6 @@ export function buildWordPressPropertySections(
         />
       ),
     },
-    ...(NEO_PULSE_CA_DEPLOY
-      ? []
-      : [
-          {
-            id: "post-bank" as const,
-            label: "Bank",
-            icon: PiggyBank,
-            content: <BankPropertyPanel site={site} />,
-          },
-        ]),
     ...(siteSettingsPanel
       ? [
           {

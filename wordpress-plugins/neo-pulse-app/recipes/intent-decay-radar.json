@@ -9,7 +9,7 @@
     "Updates title, meta description, and SEO extra text. Page body content is not rewritten.",
     "Same URL waits 72 hours before it can run again."
   ],
-  "category": "reactive",
+  "category": "maintenance",
   "verticals": [
     "general",
     "editorial"

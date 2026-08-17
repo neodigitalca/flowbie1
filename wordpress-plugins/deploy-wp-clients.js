@@ -1,5 +1,5 @@
 /**
- * Interactive flowbie-wp zip deploy to WP Engine clients (production only).
+ * Interactive neo-pulse-wp zip deploy to WP Engine clients (production only).
  *
  * Run: npm run deploy:wp-clients
  * Or:  wordpress-plugins/deploy-wp-clients.bat
@@ -20,8 +20,8 @@ import { deployZip } from "./deploy/lib/deploy-zip.js";
 const dir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(dir, "..");
 const csvPath = join(dir, "Customer List", "SFTP Users_Clients List.csv");
-const zipPath = join(dir, "flowbie-wp.zip");
-const pluginDir = join(dir, "flowbie-wp");
+const zipPath = join(dir, "neo-pulse-wp.zip");
+const pluginDir = join(dir, "neo-pulse-wp");
 
 function renderProgress(label, done, total) {
   process.stdout.write("\r\x1b[2K  " + bold(label) + " " + bar(done / total) + " " + accent(pct(done, total)));
@@ -72,7 +72,7 @@ async function deploySite(site) {
 }
 
 async function main() {
-  header("Flowbie WP Deploy");
+  header("NEO Pulse WP Deploy");
 
   for (;;) {
     const sites = loadProductionSites(csvPath);

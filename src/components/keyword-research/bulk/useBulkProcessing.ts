@@ -4,7 +4,7 @@ import { applyRowOrder, buildBulkBaseRows } from '@/lib/bulk-processing-order';
 import type { BuildBulkBaseRowsFailureReason } from '@/lib/bulk-processing-order';
 import { loadApiKey } from '@/lib/api';
 import { notify } from '@/lib/app-notifications';
-import { NOTIFY_API_KEYS_ARE_REQUIRED, NOTIFY_LOCAL_EXPORT_GENERATING_FILES_ONLY_NO_WO, NOTIFY_SELECT_A_WORDPRESS_SITE_AND_SITEMAP_IN_T, notifyHybridRunFirstUtcCalendarMonthWord, notifyPostingToXWordpressSiteSNames, notifySavingXSiteBankQueueNames } from "@/lib/notify-messages";
+import { NOTIFY_API_KEYS_ARE_REQUIRED, NOTIFY_LOCAL_EXPORT_GENERATING_FILES_ONLY_NO_WO, NOTIFY_SELECT_A_WORDPRESS_SITE_AND_SITEMAP_IN_T, notifyPostingToXWordpressSiteSNames } from "@/lib/notify-messages";
 import type { ScheduleOccupancy } from '@/lib/bulk-schedule-gap';
 import { buildWordPressPostingFromSelection, precomputeGapDatesBySlot, resolveDefaultWordPressSiteSelection } from '@/lib/build-wordpress-bulk-posting';
 import type { ScheduleFrequency } from '@/lib/wordpress-scheduler';
@@ -161,15 +161,7 @@ export function useBulkProcessing({
     }
 
     const names = (postingForRun?.sites ?? []).map((x) => x.site.name).join(", ");
-    if (bulkPostDestination === 'bank') {
-      notify.info(
-        notifySavingXSiteBankQueueNames(postingForRun?.sites?.length ?? 0, names || undefined)
-      );
-    } else if (bulkPostDestination === 'hybrid') {
-      notify.info(
-        notifyHybridRunFirstUtcCalendarMonthWord(postingForRun?.sites?.length ?? 0, names || undefined)
-      );
-    } else {
+    if (bulkPostDestination !== 'local') {
       notify.info(
         notifyPostingToXWordpressSiteSNames(postingForRun?.sites?.length ?? 0, names || undefined)
       );

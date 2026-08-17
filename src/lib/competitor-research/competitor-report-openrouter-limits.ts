@@ -44,17 +44,23 @@ export function buildOpenRouterChatPostBodyJson(args: {
   maxTokensRequested: number;
   system: string;
   userMessage: string;
+  temperature?: number;
+  responseFormat?: { type: "json_object" };
 }): string {
-  return JSON.stringify({
+  const body: Record<string, unknown> = {
     model: args.model,
     messages: [
       { role: "system", content: args.system },
       { role: "user", content: args.userMessage },
     ],
-    temperature: REPORT_TEMPERATURE,
+    temperature: args.temperature ?? REPORT_TEMPERATURE,
     max_tokens: args.maxTokensRequested,
     stream: false,
-  });
+  };
+  if (args.responseFormat) {
+    body.response_format = args.responseFormat;
+  }
+  return JSON.stringify(body);
 }
 
 /**

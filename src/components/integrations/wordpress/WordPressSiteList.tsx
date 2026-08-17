@@ -1,5 +1,5 @@
 import React from "react";
-import { FileText, MapPin, PiggyBank, Sparkles } from "lucide-react";
+import { FileText, MapPin, Sparkles } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { CompactWordPressTile } from "./CompactWordPressTile";
@@ -96,8 +96,6 @@ function propertyMetricCellClass(compact: boolean): string {
 function propertyMetricCellWidths(rowDisplay: WordPressPropertyRowDisplay) {
   const c = rowDisplay === "compact";
   return {
-    post: c ? "min-w-[4rem] w-[4rem]" : "min-w-[4.5rem] w-[4.5rem]",
-    sap: c ? "min-w-[4rem] w-[4rem]" : "min-w-[4.5rem] w-[4.5rem]",
     opt: c ? "min-w-[6.5rem] w-[6.5rem]" : "min-w-[7rem] w-[7rem]",
     q: c ? "min-w-[2.5rem] w-[2.5rem]" : "min-w-[3rem] w-[3rem]",
     posts: c ? "min-w-[3.75rem] w-[3.75rem]" : "min-w-[4.25rem] w-[4.25rem]",
@@ -282,84 +280,8 @@ function QuarterEditorialCountsStrip({
 }
 
 /** Inner flex for metrics placed inside each black metric cell frame. */
-const POST_BANK_STRIP_CLASS =
-  "flex h-full w-full min-w-0 items-center justify-center gap-1 tabular-nums text-amber-100/95";
-
-const SAP_BANK_STRIP_CLASS =
-  "flex h-full w-full min-w-0 items-center justify-center gap-1 tabular-nums text-yellow-100/95";
-
 const OPT_ACTIVITY_STRIP_CLASS =
   "flex h-full w-full min-w-0 items-center justify-center gap-1.5 tabular-nums text-cyan-100";
-
-function PostBankPendingStrip({
-  pending,
-  rowDisplay = "compact",
-}: {
-  pending: number | undefined;
-  rowDisplay?: WordPressPropertyRowDisplay;
-}) {
-  const compact = rowDisplay === "compact";
-  const label = pending === undefined ? "0" : String(pending);
-  const title =
-    pending === undefined
-      ? "Loading pending post-type rows…"
-      : `Pending post-type rows (client content_bank table when provisioned, else legacy post bank): ${pending}`;
-  return (
-    <div
-      className={cn(POST_BANK_STRIP_CLASS)}
-      title={title}
-      onClick={(e) => e.stopPropagation()}
-      onPointerDown={(e) => e.stopPropagation()}
-      aria-label={title}
-    >
-      <PiggyBank className={cn("shrink-0 text-amber-400", compact ? "h-4 w-4" : "h-5 w-5")} aria-hidden />
-      <span
-        className={cn(
-          PROPERTY_METRIC_COUNT_SLOT_CLASS,
-          "shrink-0 font-light tracking-tight text-amber-100/95",
-          compact ? "text-lg leading-none" : "text-xl leading-none",
-        )}
-      >
-        {label}
-      </span>
-    </div>
-  );
-}
-
-function SapBankPendingStrip({
-  pending,
-  rowDisplay = "compact",
-}: {
-  pending: number | undefined;
-  rowDisplay?: WordPressPropertyRowDisplay;
-}) {
-  const compact = rowDisplay === "compact";
-  const label = pending === undefined ? "0" : String(pending);
-  const title =
-    pending === undefined
-      ? "Loading pending entity-type rows…"
-      : `Pending entity-type rows (client content_bank table when provisioned, else legacy SAP bank): ${pending}`;
-  return (
-    <div
-      className={cn(SAP_BANK_STRIP_CLASS)}
-      title={title}
-      onClick={(e) => e.stopPropagation()}
-      onPointerDown={(e) => e.stopPropagation()}
-      aria-label={title}
-    >
-      <MapPin className={cn("shrink-0 text-yellow-500", compact ? "h-4 w-4" : "h-5 w-5")} aria-hidden />
-      <span
-        className={cn(
-          PROPERTY_METRIC_COUNT_SLOT_CLASS,
-          "shrink-0 font-light tracking-tight text-yellow-100/95",
-          compact ? "text-lg leading-none" : "text-xl leading-none",
-        )}
-      >
-        {label}
-      </span>
-    </div>
-  );
-}
 
 function OptimizationActivityStrip({
   site,
@@ -441,10 +363,6 @@ interface WordPressSiteListProps {
   optimizationStatsBySite?: Record<string, OptimizationActivityTileStats>;
   /** Visual density for property rows only (local preference). */
   propertyRowDisplay?: WordPressPropertyRowDisplay;
-  /** Optional pending post bank row counts keyed by site id (Properties list). */
-  postBankPendingBySiteId?: Record<string, number | undefined>;
-  /** Optional pending SAP / entity bank row counts keyed by site id (Properties list). */
-  sapBankPendingBySiteId?: Record<string, number | undefined>;
 }
 
 export const WordPressSiteList: React.FC<WordPressSiteListProps> = ({
@@ -483,8 +401,6 @@ export const WordPressSiteList: React.FC<WordPressSiteListProps> = ({
   quarterStatsBySite,
   optimizationStatsBySite,
   propertyRowDisplay = "compact",
-  postBankPendingBySiteId,
-  sapBankPendingBySiteId,
 }) => {
   const renderPropertyRowTrailingControls = (site: WordPressSite) => {
     const compact = propertyRowDisplay === "compact";
@@ -498,12 +414,6 @@ export const WordPressSiteList: React.FC<WordPressSiteListProps> = ({
         onClick={stop}
         onPointerDown={stop}
       >
-        <div className={cn(metricCell, mw.post)}>
-          <PostBankPendingStrip pending={postBankPendingBySiteId?.[site.id]} rowDisplay={propertyRowDisplay} />
-        </div>
-        <div className={cn(metricCell, mw.sap)}>
-          <SapBankPendingStrip pending={sapBankPendingBySiteId?.[site.id]} rowDisplay={propertyRowDisplay} />
-        </div>
         {OPTIMIZATION_TILE_COUNTS_ENABLED ? (
           <div className={cn(metricCell, mw.opt)}>
             <OptimizationActivityStrip

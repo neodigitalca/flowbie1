@@ -68,12 +68,25 @@ export type WordPressScheduleFieldsProps = {
   setUseCsvPublishDates: (value: boolean) => void;
   wordpressDraftOnly: boolean;
   setWordpressDraftOnly: (value: boolean) => void;
+  localArchive?: boolean;
+  setLocalArchive?: (value: boolean) => void;
   isDisabled?: boolean;
   gbpMode?: boolean;
   useGapScheduling?: boolean;
   scheduleOccupancyLoading?: boolean;
   layout?: "grid" | "stack";
   variant?: "bulk" | "forge";
+  destinationModes?: ("scheduled" | "draft" | "local" | "email")[];
+  /** @deprecated Use emailDeliveryEnabled */
+  emailPlaceholder?: boolean;
+  emailDeliveryEnabled?: boolean;
+  automationEmailDelivery?: boolean;
+  setAutomationEmailDelivery?: (value: boolean) => void;
+  scheduledDestinationLabel?: string;
+  /** When set, destination changes apply in one update (avoids flicker between modes). */
+  setOutputDestinationMode?: (mode: "scheduled" | "draft" | "local" | "email") => void;
+  /** When set, overrides inferred destination for the select value. */
+  outputDestinationMode?: "scheduled" | "draft" | "local" | "email";
 };
 
 export function WordPressScheduleFields({
@@ -93,12 +106,22 @@ export function WordPressScheduleFields({
   setUseCsvPublishDates,
   wordpressDraftOnly,
   setWordpressDraftOnly,
+  localArchive = false,
+  setLocalArchive,
   isDisabled = false,
   gbpMode = false,
   useGapScheduling = false,
   scheduleOccupancyLoading = false,
   layout = "grid",
   variant = "bulk",
+  destinationModes,
+  emailPlaceholder = false,
+  emailDeliveryEnabled = false,
+  automationEmailDelivery = false,
+  setAutomationEmailDelivery,
+  scheduledDestinationLabel = "Scheduled publish",
+  setOutputDestinationMode,
+  outputDestinationMode,
 }: WordPressScheduleFieldsProps) {
   const fieldTrigger = variant === "forge" ? FORGE_FIELD_TRIGGER : fieldTrigger;
   const fieldInput = variant === "forge" ? FORGE_FIELD_INPUT : fieldInput;
@@ -112,6 +135,14 @@ export function WordPressScheduleFields({
       : "h-9 shrink-0 border-0 bg-muted/55 px-3 text-base font-medium shadow-none hover:bg-muted/70";
   const popoverContentClass =
     variant === "forge" ? "w-auto border-0 bg-black p-0 text-white" : "w-auto p-0";
+  const selectContentClass =
+    variant === "forge"
+      ? "z-[200] border-0 bg-zinc-900 text-white shadow-xl"
+      : undefined;
+  const selectItemClass =
+    variant === "forge"
+      ? "text-base focus:bg-zinc-800 focus:text-white data-[highlighted]:bg-zinc-800 data-[highlighted]:text-white"
+      : undefined;
   const [namedPresets, setNamedPresets] = useState<BulkNamedSchedulePreset[]>(() =>
     listBulkSchedulePresets(),
   );
@@ -208,24 +239,81 @@ export function WordPressScheduleFields({
       ? "flex flex-col gap-2"
       : "grid grid-cols-1 gap-1 sm:col-span-2 sm:grid-cols-2";
 
+  const showLocalArchive = typeof setLocalArchive === "function";
+  const modes =
+    destinationModes ??
+    (showLocalArchive ? (["scheduled", "draft", "local", "email"] as const) : (["scheduled", "draft"] as const));
+  const emailEnabled = emailDeliveryEnabled || emailPlaceholder;
+  const outputMode =
+    outputDestinationMode ??
+    (automationEmailDelivery
+      ? "email"
+      : localArchive
+        ? "local"
+        : wordpressDraftOnly
+          ? "draft"
+          : "scheduled");
+  const showPlatformSchedule = !automationEmailDelivery && !localArchive && !wordpressDraftOnly;
+
   return (
     <div className={gridClass}>
       <div className={cn("min-w-0", layout === "grid" && "sm:col-span-2")}>
         <Select
-          value={wordpressDraftOnly ? "draft" : "scheduled"}
-          onValueChange={(value) => setWordpressDraftOnly(value === "draft")}
+          value={outputMode}
+          onValueChange={(value) => {
+            const mode = value as "scheduled" | "draft" | "local" | "email";
+            if (setOutputDestinationMode) {
+              setOutputDestinationMode(mode);
+              return;
+            }
+            if (mode === "email") {
+              setAutomationEmailDelivery?.(true);
+              setLocalArchive?.(true);
+              setWordpressDraftOnly(false);
+              return;
+            }
+            setAutomationEmailDelivery?.(false);
+            if (mode === "local") {
+              setLocalArchive?.(true);
+              setWordpressDraftOnly(false);
+              return;
+            }
+            setLocalArchive?.(false);
+            setWordpressDraftOnly(mode === "draft");
+          }}
           disabled={isDisabled}
         >
-          <SelectTrigger className={fieldTrigger} aria-label="WordPress post status">
+          <SelectTrigger className={fieldTrigger} aria-label="Run output destination">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="scheduled">Scheduled publish</SelectItem>
-            <SelectItem value="draft">Draft only</SelectItem>
+          <SelectContent
+            side={variant === "forge" && layout === "stack" ? "top" : undefined}
+            className={selectContentClass}
+          >
+            {modes.includes("scheduled") ? (
+              <SelectItem value="scheduled" className={selectItemClass}>
+                {scheduledDestinationLabel}
+              </SelectItem>
+            ) : null}
+            {modes.includes("draft") ? (
+              <SelectItem value="draft" className={selectItemClass}>
+                Draft only
+              </SelectItem>
+            ) : null}
+            {modes.includes("local") && showLocalArchive ? (
+              <SelectItem value="local" className={selectItemClass}>
+                Local archive
+              </SelectItem>
+            ) : null}
+            {emailEnabled && modes.includes("email") ? (
+              <SelectItem value="email" className={selectItemClass}>
+                Email
+              </SelectItem>
+            ) : null}
           </SelectContent>
         </Select>
       </div>
-      {wordpressDraftOnly ? null : (
+      {!showPlatformSchedule ? null : (
         <>
       <div className={cn("grid min-w-0 grid-cols-2 gap-2", layout === "grid" && "sm:col-span-2")}>
         {namedPresets.slice(0, 2).map((preset) => (
@@ -252,9 +340,9 @@ export function WordPressScheduleFields({
           <SelectTrigger className={fieldTrigger} aria-label="Saved schedule presets">
             <SelectValue placeholder="Saved presets" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className={selectContentClass}>
             {namedPresets.map((preset) => (
-              <SelectItem key={preset.id} value={preset.id}>
+              <SelectItem key={preset.id} value={preset.id} className={selectItemClass}>
                 {preset.label}
               </SelectItem>
             ))}
@@ -279,13 +367,25 @@ export function WordPressScheduleFields({
           <SelectTrigger className={fieldTrigger} aria-label="Post frequency">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="immediately">Immediately</SelectItem>
-            <SelectItem value="daily">Daily</SelectItem>
-            <SelectItem value="weekly">Weekly</SelectItem>
-            <SelectItem value="monthly">Monthly</SelectItem>
-            <SelectItem value="everyNDays">Every N days</SelectItem>
-            <SelectItem value="custom">Times per month</SelectItem>
+          <SelectContent className={selectContentClass}>
+            <SelectItem value="immediately" className={selectItemClass}>
+              Immediately
+            </SelectItem>
+            <SelectItem value="daily" className={selectItemClass}>
+              Daily
+            </SelectItem>
+            <SelectItem value="weekly" className={selectItemClass}>
+              Weekly
+            </SelectItem>
+            <SelectItem value="monthly" className={selectItemClass}>
+              Monthly
+            </SelectItem>
+            <SelectItem value="everyNDays" className={selectItemClass}>
+              Every N days
+            </SelectItem>
+            <SelectItem value="custom" className={selectItemClass}>
+              Times per month
+            </SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -318,14 +418,14 @@ export function WordPressScheduleFields({
             <SelectTrigger className={fieldTrigger} aria-label="Day of week">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="0">Sunday</SelectItem>
-              <SelectItem value="1">Monday</SelectItem>
-              <SelectItem value="2">Tuesday</SelectItem>
-              <SelectItem value="3">Wednesday</SelectItem>
-              <SelectItem value="4">Thursday</SelectItem>
-              <SelectItem value="5">Friday</SelectItem>
-              <SelectItem value="6">Saturday</SelectItem>
+            <SelectContent className={selectContentClass}>
+              <SelectItem value="0" className={selectItemClass}>Sunday</SelectItem>
+              <SelectItem value="1" className={selectItemClass}>Monday</SelectItem>
+              <SelectItem value="2" className={selectItemClass}>Tuesday</SelectItem>
+              <SelectItem value="3" className={selectItemClass}>Wednesday</SelectItem>
+              <SelectItem value="4" className={selectItemClass}>Thursday</SelectItem>
+              <SelectItem value="5" className={selectItemClass}>Friday</SelectItem>
+              <SelectItem value="6" className={selectItemClass}>Saturday</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -360,11 +460,19 @@ export function WordPressScheduleFields({
               <SelectTrigger className={fieldTrigger} aria-label="Start date preset">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="immediate">Next available slot</SelectItem>
-                <SelectItem value="firstOfThisMonth">First of this month</SelectItem>
-                <SelectItem value="firstOfNextMonth">First of next month</SelectItem>
-                <SelectItem value="pickDate">Pick a date</SelectItem>
+              <SelectContent className={selectContentClass}>
+                <SelectItem value="immediate" className={selectItemClass}>
+                  Next available slot
+                </SelectItem>
+                <SelectItem value="firstOfThisMonth" className={selectItemClass}>
+                  First of this month
+                </SelectItem>
+                <SelectItem value="firstOfNextMonth" className={selectItemClass}>
+                  First of next month
+                </SelectItem>
+                <SelectItem value="pickDate" className={selectItemClass}>
+                  Pick a date
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -9,6 +9,7 @@ import {
   TaskFormTimePicker,
 } from "@/components/manager/tasks/TaskFormLayout";
 import { GscReportingExecutionFields } from "@/components/manager/tasks/GscReportingExecutionFields";
+import { LocalDominatorExportExecutionFields } from "@/components/manager/tasks/LocalDominatorExportExecutionFields";
 import { PostCreatorExecutionFields } from "@/components/manager/tasks/PostCreatorExecutionFields";
 import { TaskTriggerFields } from "@/components/manager/tasks/TaskTriggerFields";
 import { ensurePostCreatorPayload } from "@/lib/post-creator/post-creator-defaults";
@@ -68,6 +69,19 @@ function handleExecutionKindChange(
       },
     };
   }
+  if (kind === "local_dominator_export") {
+    return {
+      executionKind: kind,
+      scheduleMode: "calendar",
+      recurrenceRule: "none",
+      executionPayload: {
+        businessName: draft.executionPayload.businessName ?? "Advance Blinds & Drapery",
+        keyword: draft.executionPayload.keyword ?? "blinds near me",
+        saveLocalArchive: draft.executionPayload.saveLocalArchive ?? true,
+        saveToDisk: draft.executionPayload.saveToDisk !== false,
+      },
+    };
+  }
   return {
     executionKind: kind,
     scheduleMode: "trigger",
@@ -85,6 +99,7 @@ export function AutomationActionFlatRow({
   const showCalendar = !showTrigger;
   const isPostCreator = draft.executionKind === "post_creator";
   const isGscReporting = draft.executionKind === "gsc_reporting";
+  const isLocalDominatorExport = draft.executionKind === "local_dominator_export";
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-1">
@@ -151,6 +166,14 @@ export function AutomationActionFlatRow({
           ) : null}
           {isGscReporting ? (
             <GscReportingExecutionFields
+              layout="inline"
+              executionPayload={draft.executionPayload}
+              disabled={saving}
+              onChange={(executionPayload) => onChange({ executionPayload })}
+            />
+          ) : null}
+          {isLocalDominatorExport ? (
+            <LocalDominatorExportExecutionFields
               layout="inline"
               executionPayload={draft.executionPayload}
               disabled={saving}

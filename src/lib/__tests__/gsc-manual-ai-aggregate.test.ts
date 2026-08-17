@@ -1,10 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
   GSC_MANUAL_MAX_INPUT_CHARS,
   GSC_MANUAL_MAX_TOP_ROWS,
   bundleGscManualFilesForPrompt,
   extractJsonObjectFromModelText,
   parseAndValidateGscManualAiJson,
+  parseJsonObjectFromModelText,
   gscManualAiPayloadToMarkdown,
   runGscManualAiAggregate,
 } from "@/lib/gsc-manual-ai-aggregate";
@@ -32,6 +33,10 @@ const validPayloadJson = JSON.stringify({
 });
 
 describe("gsc-manual-ai-aggregate", () => {
+  beforeEach(() => {
+    vi.mocked(callOpenRouterChatCompletion).mockReset();
+  });
+
   it("bundleGscManualFilesForPrompt truncates when over cap", () => {
     const huge = "x".repeat(GSC_MANUAL_MAX_INPUT_CHARS + 5000);
     const { text, truncated } = bundleGscManualFilesForPrompt([{ name: "a.csv", content: huge }]);
@@ -45,6 +50,12 @@ describe("gsc-manual-ai-aggregate", () => {
     expect(JSON.parse(extractJsonObjectFromModelText(wrapped))).toMatchObject({
       executiveSummary: expect.any(String),
     });
+  });
+
+  it("parseJsonObjectFromModelText repairs truncated JSON objects", () => {
+    const truncated = '{"executiveSummary":"ok","topOpportunities":[],"clusters":[]';
+    const parsed = parseJsonObjectFromModelText(truncated) as { executiveSummary?: string };
+    expect(parsed.executiveSummary).toBe("ok");
   });
 
   it("parseAndValidateGscManualAiJson accepts valid payload", () => {
@@ -127,7 +138,7 @@ describe("gsc-manual-ai-aggregate", () => {
   });
 
   it("runGscManualAiAggregate throws when API returns invalid JSON", async () => {
-    vi.mocked(callOpenRouterChatCompletion).mockResolvedValueOnce({
+    vi.mocked(callOpenRouterChatCompletion).mockResolvedValue({
       raw: {},
       content: "not json",
     });
@@ -141,5 +152,6 @@ describe("gsc-manual-ai-aggregate", () => {
         files: [{ name: "f.csv", content: "x" }],
       }),
     ).rejects.toThrow();
+    expect(callOpenRouterChatCompletion).toHaveBeenCalledTimes(2);
   });
 });

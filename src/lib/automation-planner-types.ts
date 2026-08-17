@@ -32,6 +32,8 @@ export type AutomationPollTriggerBlock = {
   pollHours: number;
   targetBucket?: AutomationRecipeBucket;
   triggerConfig: TaskTriggerConfig;
+  /** WordPress-style schedule for external platform publish windows (WHEN). */
+  watchSchedule?: TaskExecutionPayload;
 };
 
 export type AutomationTriggerBlock =

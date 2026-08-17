@@ -13,6 +13,8 @@ const STORED_BLUEPRINTS_KEY = "stored-blueprints";
 const EXACT_LOCAL_KEYS = [
   "openrouter-api-key",
   "dataforseo-api-key",
+  "agentmail-api-key",
+  "agentmail-general-email",
   "slack-bot-token",
   "slack-global-settings",
   WORDPRESS_SITES_STORAGE_KEY,

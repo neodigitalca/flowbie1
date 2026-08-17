@@ -237,7 +237,7 @@ class Neo_Pulse_App_Tasks_Route_Handlers {
 			Neo_Pulse_App_Api_Dispatcher::send_json(
 				array(
 					'ok'       => true,
-					'projects' => Neo_Pulse_App_Tasks_Store::list_projects( $team_id, $include_archived ),
+					'projects' => Neo_Pulse_App_Tasks_Store::list_projects( $team_id, $include_archived, $user_id ),
 				)
 			);
 			return;
@@ -503,12 +503,23 @@ class Neo_Pulse_App_Tasks_Route_Handlers {
 			return;
 		}
 
-		if ( preg_match( '#^tasks/(\d+)/files/(\d+)$#', $sub, $m ) && $method === 'GET' ) {
+		if ( preg_match( '#^tasks/(\d+)/files/(\d+)$#', $sub, $m ) ) {
 			$task_id  = (int) $m[1];
 			$asset_id = (int) $m[2];
-			$inline   = isset( $_GET['inline'] ) && (string) wp_unslash( $_GET['inline'] ) === '1';
-			Neo_Pulse_App_Tasks_Assets::serve( $team_id, $task_id, $asset_id, $inline );
-			return;
+			if ( $method === 'GET' ) {
+				$inline = isset( $_GET['inline'] ) && (string) wp_unslash( $_GET['inline'] ) === '1';
+				Neo_Pulse_App_Tasks_Assets::serve( $team_id, $task_id, $asset_id, $inline );
+				return;
+			}
+			if ( $method === 'DELETE' ) {
+				$ok = Neo_Pulse_App_Tasks_Assets::delete( $team_id, $task_id, $asset_id );
+				if ( ! $ok ) {
+					Neo_Pulse_App_Api_Dispatcher::send_json( array( 'ok' => false, 'error' => 'Not found' ), 404 );
+					return;
+				}
+				Neo_Pulse_App_Api_Dispatcher::send_json( array( 'ok' => true ) );
+				return;
+			}
 		}
 
 		Neo_Pulse_App_Api_Dispatcher::send_json( array( 'ok' => false, 'error' => 'Not found' ), 404 );
@@ -618,6 +629,18 @@ class Neo_Pulse_App_Tasks_Route_Handlers {
 		if ( ! $file ) {
 			Neo_Pulse_App_Api_Dispatcher::send_json( array( 'ok' => false, 'error' => 'Upload failed' ), 400 );
 			return;
+		}
+		if ( class_exists( 'Neo_Pulse_App_Workflow_Trigger_Evaluator' ) ) {
+			Neo_Pulse_App_Workflow_Trigger_Evaluator::on_document_received(
+				$team_id,
+				array(
+					'source' => 'task_file',
+					'name'   => $file_name,
+					'mime'   => $mime,
+					'taskId' => $task_id,
+					'fileId' => (int) ( $file['id'] ?? 0 ),
+				)
+			);
 		}
 		Neo_Pulse_App_Api_Dispatcher::send_json( array( 'ok' => true, 'file' => $file ) );
 	}

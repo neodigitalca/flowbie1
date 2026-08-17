@@ -1,4 +1,4 @@
-import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
+import { backendApiUrl } from "@/lib/wordpress-api/connection";
 import type { TeamContextPulseTask } from "@/lib/pulse-assist/types";
 import type {
   TaskNote,
@@ -19,16 +19,9 @@ import type {
 } from "@/lib/tasks-types";
 import type { TaskTriggerEvaluateResult, TaskTriggerPendingDispatch } from "@/lib/task-trigger-types";
 
-function baseUrl(): string {
-  return (import.meta.env.VITE_MCP_API_BASE?.replace(/\/api\/mcp\/?$/, "") || BACKEND_API_BASE || "").replace(
-    /\/$/,
-    "",
-  );
-}
-
 export function tasksApi(path: string, options?: RequestInit): Promise<Response> {
   const p = path.startsWith("/") ? path : `/${path}`;
-  return fetch(`${baseUrl()}/api${p}`, { ...options, credentials: "include" });
+  return fetch(backendApiUrl(p), { ...options, credentials: "include", cache: "no-store" });
 }
 
 function api(path: string, options?: RequestInit): Promise<Response> {
@@ -58,6 +51,7 @@ export async function createTaskProject(
     defaultTasks?: DefaultTaskCreatePayload[];
     isAutomation?: boolean;
     sourceTemplateKeyword?: string;
+    automationVisibility?: "public" | "private";
   },
 ): Promise<{ ok: boolean; project?: TaskProject; error?: string }> {
   const res = await api(`/teams/${teamId}/tasks/projects`, {
@@ -72,7 +66,7 @@ export async function createTaskProject(
 export async function updateTaskProject(
   teamId: number,
   projectId: number,
-  payload: { keyword?: string; title?: string; description?: string; wordpressSiteId?: string | null },
+  payload: { keyword?: string; title?: string; description?: string; wordpressSiteId?: string | null; automationVisibility?: "public" | "private" },
 ): Promise<{ ok: boolean; project?: TaskProject; error?: string }> {
   const res = await api(`/teams/${teamId}/tasks/projects/${projectId}`, {
     method: "PATCH",
@@ -321,9 +315,61 @@ export async function uploadTaskFile(
   return { ok: Boolean(data.ok), file: data.file, error: data.error };
 }
 
+export async function uploadTaskFileContent(
+  teamId: number,
+  taskId: number,
+  input: { fileName: string; mime: string; content: string },
+): Promise<{ ok: boolean; file?: TaskFile; error?: string }> {
+  const bytes = new TextEncoder().encode(input.content);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]!);
+  }
+  const res = await api(`/teams/${teamId}/tasks/tasks/${taskId}/files`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fileName: input.fileName,
+      mime: input.mime || "application/octet-stream",
+      dataBase64: btoa(binary),
+      source: "execution_archive",
+    }),
+  });
+  const data = (await res.json()) as { ok?: boolean; file?: TaskFile; error?: string };
+  return { ok: Boolean(data.ok), file: data.file, error: data.error };
+}
+
 export function taskFileDownloadUrl(teamId: number, taskId: number, assetId: number, inline = false): string {
-  const base = `${baseUrl()}/api/teams/${teamId}/tasks/tasks/${taskId}/files/${assetId}`;
+  const base = backendApiUrl(`/teams/${teamId}/tasks/tasks/${taskId}/files/${assetId}`);
   return inline ? `${base}?inline=1` : base;
+}
+
+export async function fetchTaskFileText(
+  teamId: number,
+  taskId: number,
+  assetId: number,
+): Promise<{ ok: boolean; text?: string; error?: string }> {
+  try {
+    const res = await api(`/teams/${teamId}/tasks/tasks/${taskId}/files/${assetId}?inline=1`);
+    if (!res.ok) {
+      return { ok: false, error: "Could not load archive file." };
+    }
+    return { ok: true, text: await res.text() };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Request failed" };
+  }
+}
+
+export async function deleteTaskFile(
+  teamId: number,
+  taskId: number,
+  assetId: number,
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await api(`/teams/${teamId}/tasks/tasks/${taskId}/files/${assetId}`, {
+    method: "DELETE",
+  });
+  const data = (await res.json()) as { ok?: boolean; error?: string };
+  return { ok: Boolean(data.ok), error: data.error };
 }
 
 export async function fetchProjectFiles(teamId: number, projectId: number): Promise<TaskFile[]> {
@@ -448,10 +494,18 @@ export async function patchTaskExecutionProgress(
   return { ok: Boolean(data.ok), execution: data.execution, error: data.error };
 }
 
+export type TaskExecutionCompletePayload = {
+  ok: boolean;
+  result?: unknown;
+  error?: string;
+  agentRunId?: number;
+  archiveFiles?: Array<{ fileName: string; mime: string; dataBase64: string }>;
+};
+
 export async function completeTaskExecution(
   teamId: number,
   executionId: number,
-  payload: { ok: boolean; result?: unknown; error?: string },
+  payload: TaskExecutionCompletePayload,
 ): Promise<{ ok: boolean; execution?: TaskExecution; error?: string }> {
   const res = await api(`/teams/${teamId}/tasks/executions/${executionId}/complete`, {
     method: "POST",

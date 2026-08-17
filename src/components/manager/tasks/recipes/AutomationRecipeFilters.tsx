@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import {
   AUTOMATION_RECIPE_BUCKET_LABELS,
   AUTOMATION_RECIPE_CATEGORY_LABELS,
+  AUTOMATION_RECIPE_CATEGORY_ORDER,
   AUTOMATION_RECIPE_EXECUTION_LABELS,
   AUTOMATION_RECIPE_SIGNAL_LABELS,
   AUTOMATION_RECIPE_VERTICAL_LABELS,
@@ -16,11 +17,14 @@ import {
   BULK_HEADER_SELECT,
   BULK_TOOLBAR_GROUP_DIVIDER,
 } from "@/components/keyword-research/bulk/bulk-workspace-header-styles";
+import { cn } from "@/lib/utils";
 
 export type AutomationRecipeFiltersProps = {
   query: AutomationRecipeListQuery;
   filterOptions: AutomationRecipeFilterOptions;
   onChange: (patch: Partial<AutomationRecipeListQuery>) => void;
+  className?: string;
+  searchPlaceholder?: string;
 };
 
 function FilterSelect({
@@ -50,13 +54,15 @@ export function AutomationRecipeFilters({
   query,
   filterOptions,
   onChange,
+  className,
+  searchPlaceholder = "Search recipes",
 }: AutomationRecipeFiltersProps): React.ReactElement {
   return (
-    <div className="flex h-11 shrink-0 flex-wrap items-center gap-2 bg-black px-3">
+    <div className={cn("flex min-w-0 flex-1 flex-wrap items-center gap-2 bg-black", className)}>
       <Input
         value={query.q ?? ""}
         onChange={(e) => onChange({ q: e.target.value })}
-        placeholder="Search recipes"
+        placeholder={searchPlaceholder}
         className={`${BULK_HEADER_FIELD} h-8 min-w-[10rem] flex-1 text-base sm:max-w-xs`}
       />
       <span className={BULK_TOOLBAR_GROUP_DIVIDER} aria-hidden />
@@ -66,11 +72,13 @@ export function AutomationRecipeFilters({
         onChange={(category) => onChange({ category })}
       >
         <option value="">All categories</option>
-        {filterOptions.categories.map((cat) => (
-          <option key={cat} value={cat}>
-            {AUTOMATION_RECIPE_CATEGORY_LABELS[cat] ?? cat}
-          </option>
-        ))}
+        {AUTOMATION_RECIPE_CATEGORY_ORDER.filter((cat) => filterOptions.categories.includes(cat)).map(
+          (cat) => (
+            <option key={cat} value={cat}>
+              {AUTOMATION_RECIPE_CATEGORY_LABELS[cat] ?? cat}
+            </option>
+          ),
+        )}
       </FilterSelect>
       <FilterSelect
         aria-label="Bucket"

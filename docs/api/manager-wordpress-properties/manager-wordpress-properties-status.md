@@ -10,7 +10,7 @@ order: 660
 
 GET `/api/manager-wordpress-properties/status`.
 
-File-backed manager settings (replaces Supabase cloud settings).
+File-backed manager settings (workspace JSON on the API server).
 
 ## Request
 

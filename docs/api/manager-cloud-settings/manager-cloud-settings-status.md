@@ -10,7 +10,7 @@ order: 630
 
 GET `/api/manager-cloud-settings/status`.
 
-File-backed manager settings (replaces Supabase cloud settings).
+File-backed manager settings (workspace JSON on the API server).
 
 ## Request
 

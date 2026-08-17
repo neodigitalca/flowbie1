@@ -1,0 +1,224 @@
+/**
+ * Admin Flow Assist demo — inline layout + admin-only overrides.
+ * Shared Gemini chrome lives in neo-pulse-chat-chrome.css.
+ */
+
+.fcw-demo-wrap {
+	display: flex;
+	justify-content: flex-start;
+	align-items: stretch;
+	padding: 0;
+	width: 100%;
+	min-height: calc(100vh - 200px);
+}
+
+.neo-pulse-chat-widget.fcw-demo-inline {
+	position: relative;
+	top: auto;
+	right: auto;
+	bottom: auto;
+	left: auto;
+	inset: auto;
+	z-index: auto;
+	width: min(100%, 420px);
+	height: 100%;
+	font-size: 1rem;
+	font-family: "Lato", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.fcw-demo-inline .fcw-demo-panel,
+.fcw-demo-inline .fai-sidebar-panel.fcw-demo-panel {
+	position: relative;
+	top: auto;
+	right: auto;
+	bottom: auto;
+	left: auto;
+	inset: auto;
+	width: 100%;
+	max-width: 100%;
+	height: 100%;
+	min-height: calc(100vh - 200px);
+	max-height: calc(100vh - 200px);
+	display: flex;
+	flex-direction: column;
+	border-radius: 20px;
+	border: 1px solid #e2e8f0;
+	box-shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
+	background: #ffffff;
+	overflow: hidden;
+	z-index: auto;
+	pointer-events: auto;
+	transform: none;
+}
+
+.fcw-demo-inline .fcw-demo-toolbar-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-left: auto;
+}
+
+.fcw-demo-inline .fcw-demo-copy-log {
+	font-family: "Lato", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+	font-size: 1rem;
+	line-height: 1.25;
+	padding: 6px 12px;
+	border: none;
+	border-radius: 999px;
+	background: #f1f5f9;
+	color: #334155;
+	cursor: pointer;
+}
+
+.fcw-demo-inline .fcw-demo-copy-log:hover:not(:disabled) {
+	background: #e2e8f0;
+}
+
+.fcw-demo-inline .fcw-demo-copy-log:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.fcw-demo-inline .fcw-demo-toolbar-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	border: none;
+	border-radius: 999px;
+	background: transparent;
+	color: #64748b;
+	cursor: default;
+}
+
+.fcw-demo-inline .fcw-demo-clear-chat {
+	cursor: pointer;
+}
+
+.fcw-demo-inline .fcw-demo-clear-chat:hover:not(:disabled) {
+	color: #1e293b;
+	background: #f1f5f9;
+}
+
+.fcw-demo-inline .fcw-demo-clear-chat:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.fcw-demo-inline .fcw-sidebar-main {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+}
+
+.fcw-demo-inline .fcw-messages {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 16px 4px;
+}
+
+/* Block admin shell white-text bleed inside demo widget */
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .neo-pulse-chat-widget.fcw-demo-inline {
+	color: #1e293b !important;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .neo-pulse-chat-widget.fcw-demo-inline .fcw-card__title {
+	color: #0f172a !important;
+	-webkit-text-fill-color: #0f172a !important;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .neo-pulse-chat-widget.fcw-demo-inline .fcw-card__body,
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .neo-pulse-chat-widget.fcw-demo-inline .fcw-card__body p {
+	color: #1e293b !important;
+	-webkit-text-fill-color: #1e293b !important;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .neo-pulse-chat-widget.fcw-demo-inline .fcw-card__body a {
+	color: #2563eb !important;
+	-webkit-text-fill-color: #2563eb !important;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .neo-pulse-chat-widget.fcw-demo-inline .fcw-card__body a:hover {
+	color: #1d4ed8 !important;
+	-webkit-text-fill-color: #1d4ed8 !important;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .neo-pulse-chat-widget.fcw-demo-inline .fcw-card__body .fcw-md-list {
+	margin: 10px 0;
+	padding-left: 1.25rem;
+	list-style: disc;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .neo-pulse-chat-widget.fcw-demo-inline .fcw-card__body .fcw-md-list li {
+	color: #1e293b !important;
+	-webkit-text-fill-color: #1e293b !important;
+	margin: 8px 0;
+	line-height: 1.6;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .neo-pulse-chat-widget.fcw-demo-inline .fcw-card__body .fcw-md-p {
+	margin: 0 0 0.75rem;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .neo-pulse-chat-widget.fcw-demo-inline .fcw-card__body .fcw-md-heading {
+	font-size: 1rem;
+	font-weight: 600;
+	color: #0f172a !important;
+	-webkit-text-fill-color: #0f172a !important;
+	margin: 0.75rem 0 0.5rem;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .neo-pulse-chat-widget.fcw-demo-inline .fcw-card__body .fcw-md-table-wrap {
+	overflow-x: auto;
+	margin: 0.75rem 0;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .neo-pulse-chat-widget.fcw-demo-inline .fcw-card__body .fcw-md-table th {
+	background: #f1f5f9;
+	font-weight: 600;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .neo-pulse-chat-widget.fcw-demo-inline .fcw-card__body .fcw-md-table tbody tr:nth-child(even) td {
+	background: #f8fafc;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .neo-pulse-chat-widget.fcw-demo-inline .fcw-topic-chip {
+	color: #334155 !important;
+	-webkit-text-fill-color: #334155 !important;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .neo-pulse-chat-widget.fcw-demo-inline .fcw-cta-btn {
+	color: #ffffff !important;
+	-webkit-text-fill-color: #ffffff !important;
+	text-align: left !important;
+	width: 100%;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .neo-pulse-chat-widget.fcw-demo-inline textarea.fcw-textarea,
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .fcw-demo-inline textarea.fcw-textarea {
+	background: #ffffff !important;
+	background-color: #ffffff !important;
+	color: #1e293b !important;
+	-webkit-text-fill-color: #1e293b !important;
+	border: none !important;
+	box-shadow: none !important;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .neo-pulse-chat-widget.fcw-demo-inline textarea.fcw-textarea::placeholder,
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .fcw-demo-inline textarea.fcw-textarea::placeholder {
+	color: #94a3b8 !important;
+	-webkit-text-fill-color: #94a3b8 !important;
+	opacity: 1 !important;
+}
+
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .neo-pulse-chat-widget.fcw-demo-inline textarea.fcw-textarea:focus,
+body.neo-pulse-wp-admin-screen #wpbody-content .neo-pulse-wp-chat .fcw-demo-inline textarea.fcw-textarea:focus {
+	background: #ffffff !important;
+	background-color: #ffffff !important;
+	color: #1e293b !important;
+	-webkit-text-fill-color: #1e293b !important;
+}

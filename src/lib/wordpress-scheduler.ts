@@ -518,23 +518,3 @@ export function dateForPickDatePreset(postingTime = '09:00'): Date {
 export function isSameUtcYearMonth(a: Date, b: Date): boolean {
   return a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth();
 }
-
-export type HybridPostingMode = 'wordpress' | 'bank' | 'hybrid';
-
-/**
- * Resolves per-row destination for bulk posting: `bank` / `wordpress` stay global;
- * `hybrid` sends rows in the anchor UTC month to WordPress and later months to the content bank.
- */
-export function resolveHybridEffectiveDestination(
-  postDestination: HybridPostingMode,
-  scheduledDate: Date,
-  hybridAnchorUtc: { year: number; month: number } | undefined
-): 'wordpress' | 'bank' {
-  if (postDestination === 'bank') return 'bank';
-  if (postDestination === 'wordpress') return 'wordpress';
-  if (!hybridAnchorUtc) return 'bank';
-  const y = scheduledDate.getUTCFullYear();
-  const m = scheduledDate.getUTCMonth();
-  if (y === hybridAnchorUtc.year && m === hybridAnchorUtc.month) return 'wordpress';
-  return 'bank';
-}

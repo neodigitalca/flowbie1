@@ -20,7 +20,6 @@ import {
 import type { WordPressSite } from "../types";
 import { matchSemrushProjectForSite } from "@/lib/wordpress-api/semrush";
 import { isOptimizationPackageTier } from "@/lib/wordpress-optimization-package";
-import { buildUnifiedContentBankProvisioningSqlBlock } from "@/lib/unified-content-bank-api";
 import { persistGbpLocationIdInput } from "@/lib/gbp-post/normalize-gbp-location-id";
 import {
   WP_PANEL_INSET_BAND,
@@ -88,20 +87,6 @@ function inlineCodeClass(chrome: SitePropertyFormChrome): string {
     SITE_PROPERTY_COPY,
     "rounded-md px-1.5 py-0.5 font-mono font-medium",
     chrome === "dark" ? "bg-white/12 text-white/95" : "bg-background text-foreground ring-1 ring-border/60",
-  );
-}
-
-function supabaseStepRowClass(chrome: SitePropertyFormChrome): string {
-  return cn(
-    "flex gap-3 rounded-lg border px-3 py-2.5 sm:gap-3.5 sm:px-3.5 sm:py-3",
-    chrome === "dark" ? "border-white/10 bg-black/25" : "border-border/50 bg-background/80",
-  );
-}
-
-function supabaseStepBadgeClass(chrome: SitePropertyFormChrome): string {
-  return cn(
-    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-sans text-base font-semibold tabular-nums",
-    chrome === "dark" ? "bg-white/12 text-white" : "bg-muted text-foreground ring-1 ring-border/50",
   );
 }
 
@@ -308,21 +293,6 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
 
   const semrushBusy = semrushMatching || semrushActionsDisabled;
   const canPatchSemrush = Boolean(onPatchSite && patchSiteId);
-
-  const handleCopyUnifiedContentBankSql = useCallback(async () => {
-    if (!patchSiteId) {
-      notify.error(NOTIFY_SAVE_THE_PROPERTY_FIRST_SO_IT_HAS_A_STAB);
-      return;
-    }
-    const label = formName.trim() || "Display name";
-    const sql = buildUnifiedContentBankProvisioningSqlBlock(patchSiteId, label);
-    try {
-      await navigator.clipboard.writeText(sql);
-      notify.success(NOTIFY_COPIED);
-    } catch {
-      notify.error(NOTIFY_CLIPBOARD_UNAVAILABLE);
-    }
-  }, [patchSiteId, formName]);
 
   const handleCopySiteId = useCallback(async () => {
     if (!patchSiteId) {
@@ -597,21 +567,6 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
     const provisioningSection = (
       <TaskFormSideSection title="Provisioning">
         <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-base text-muted-foreground">
-              Copy the Supabase content bank SQL script for this property.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-9 shrink-0 border-0 bg-[#000] text-base text-white hover:bg-[#000] hover:text-white"
-              disabled={!patchSiteId}
-              onClick={() => void handleCopyUnifiedContentBankSql()}
-            >
-              <Copy className="h-4 w-4 shrink-0" aria-hidden />
-              Copy SQL
-            </Button>
-          </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0 space-y-1">
               <p className="text-base font-semibold text-white">WordPress plugin site ID</p>
@@ -1067,123 +1022,6 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
                 </div>
               ) : null}
             </div>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-
-        <AccordionItem value="client-content-bank-supabase" className={accordionItemClass(chrome)}>
-          <AccordionTrigger className={accordionTriggerClass(chrome)}>Supabase</AccordionTrigger>
-          <AccordionContent className={accordionContentClass(chrome)}>
-            <div className="flex flex-col gap-4 pt-0.5">
-              <div
-                className={cn(
-                  "rounded-xl border p-4 sm:p-5",
-                  chrome === "dark"
-                    ? "border-white/12 bg-gradient-to-b from-white/[0.07] to-white/[0.02] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]"
-                    : "border-border/70 bg-gradient-to-b from-muted/80 to-muted/30 shadow-sm",
-                )}
-              >
-                <div className="flex flex-col gap-1">
-                  <p
-                    className={cn(
-                      SITE_PROPERTY_COPY,
-                      "font-semibold uppercase tracking-[0.14em]",
-                      chrome === "dark" ? "text-white/45" : "text-muted-foreground",
-                    )}
-                  >
-                    Client content bank
-                  </p>
-                  <h4
-                    className={cn(
-                      SITE_PROPERTY_COPY,
-                      "font-semibold",
-                      chrome === "dark" ? "text-white" : "text-foreground",
-                    )}
-                  >
-                    Provision tables in Supabase
-                  </h4>
-                  <p className={cn("max-w-none", hc)}>
-                    Generates one paste-ready script for the SQL editor: required DDL, a PostgREST schema reload, and{" "}
-                    <code className={inlineCodeClass(chrome)}>neo-pulse_ensure_content_bank</code> so this property gets
-                    a per-site table named <code className={inlineCodeClass(chrome)}>{"content_bank_<site>"}</code>.
-                  </p>
-                </div>
-
-                <ol className="mt-4 list-none space-y-2.5 p-0">
-                  <li className={supabaseStepRowClass(chrome)}>
-                    <span className={supabaseStepBadgeClass(chrome)} aria-hidden>
-                      1
-                    </span>
-                    <div className="w-full flex-1 space-y-0.5">
-                      <p className={cn("font-medium", SITE_PROPERTY_COPY, chrome === "dark" ? "text-white" : "text-foreground")}>
-                        Save this property first
-                      </p>
-                      <p className={hc}>
-                        The script is keyed to the site id shown here. Saving locks that id before you copy.
-                      </p>
-                    </div>
-                  </li>
-                  <li className={supabaseStepRowClass(chrome)}>
-                    <span className={supabaseStepBadgeClass(chrome)} aria-hidden>
-                      2
-                    </span>
-                    <div className="w-full flex-1 space-y-0.5">
-                      <p className={cn("font-medium", SITE_PROPERTY_COPY, chrome === "dark" ? "text-white" : "text-foreground")}>
-                        Copy the provisioning script
-                      </p>
-                      <p className={hc}>
-                        Includes <code className={inlineCodeClass(chrome)}>NOTIFY pgrst</code> so PostgREST picks up new
-                        objects after the migration runs.
-                      </p>
-                    </div>
-                  </li>
-                  <li className={supabaseStepRowClass(chrome)}>
-                    <span className={supabaseStepBadgeClass(chrome)} aria-hidden>
-                      3
-                    </span>
-                    <div className="w-full flex-1 space-y-0.5">
-                      <p className={cn("font-medium", SITE_PROPERTY_COPY, chrome === "dark" ? "text-white" : "text-foreground")}>
-                        Run in Supabase SQL editor
-                      </p>
-                      <p className={hc}>
-                        Paste into the project database you use for NEO Pulse, execute, then verify the new table exists.
-                      </p>
-                    </div>
-                  </li>
-                </ol>
-              </div>
-
-              <div
-                className={cn(
-                  WP_PANEL_INSET_BAND,
-                  "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4",
-                  chrome === "dark" && "border border-white/10 bg-muted/25 shadow-none",
-                )}
-              >
-                <div className="w-full space-y-1">
-                  <p className={cn("font-semibold", SITE_PROPERTY_COPY, chrome === "dark" ? "text-white" : "text-foreground")}>
-                    SQL script
-                  </p>
-                  <p className={hc}>
-                    Copies the full block to your clipboard. Requires a saved property (site id).
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant={chrome === "light" ? "default" : "outline"}
-                  size="default"
-                  className={
-                    chrome === "dark"
-                      ? semrushBtnClass
-                      : "h-10 min-h-10 shrink-0 gap-2 px-4 text-base font-medium"
-                  }
-                  disabled={!patchSiteId}
-                  onClick={() => void handleCopyUnifiedContentBankSql()}
-                >
-                  <Copy className="h-4 w-4 shrink-0" aria-hidden />
-                  Copy SQL
-                </Button>
-              </div>
             </div>
           </AccordionContent>
         </AccordionItem>

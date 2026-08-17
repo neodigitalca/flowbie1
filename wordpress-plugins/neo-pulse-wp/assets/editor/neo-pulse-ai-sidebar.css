@@ -1,0 +1,235 @@
+/**
+ * NEO Pulse AI — sidebar launcher (flat groups)
+ */
+
+.interface-pinned-items [aria-label="NEO Pulse AI"] svg,
+.interface-complementary-area-header svg,
+.components-panel__header svg,
+[data-wp-component="DropdownMenu"] [aria-label="NEO Pulse AI"] svg {
+	stroke: #2271b1;
+}
+
+.neo-pulse-wp-ai-sidebar-wrap {
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 100%;
+	padding: 16px clamp(12px, 4%, 20px) 20px;
+}
+
+.interface-complementary-area .neo-pulse-wp-ai-sidebar-wrap,
+.edit-post-sidebar .neo-pulse-wp-ai-sidebar-wrap {
+	padding-inline: clamp(12px, 4%, 20px);
+}
+
+.neo-pulse-wp-ai-sidebar-wrap > .neo-pulse-wp-ai-root {
+	margin-inline: 0;
+	width: 100%;
+	max-width: 100%;
+}
+
+.neo-pulse-wp-ai-sidebar {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	width: 100%;
+	max-width: 100%;
+	box-sizing: border-box;
+}
+
+.neo-pulse-wp-ai-sidebar__toast {
+	margin: 0 0 10px;
+	padding: 10px 14px;
+	border: 0;
+	border-radius: 8px;
+	background: var(--fb-success-bg);
+	color: var(--fb-success);
+	font-size: 1rem;
+	font-weight: 600;
+}
+
+.neo-pulse-wp-ai-sidebar__group {
+	margin: 0;
+	padding: 12px 14px;
+	border: 0;
+	border-radius: 8px;
+	background: var(--fb-surface-muted);
+	box-sizing: border-box;
+}
+
+.neo-pulse-wp-ai-sidebar__label {
+	margin: 0 0 8px;
+	padding: 0;
+	font-size: 1rem;
+	font-weight: 700;
+	color: var(--fb-text-muted);
+}
+
+.neo-pulse-wp-ai-sidebar__usage-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 6px 8px;
+	margin: 0;
+}
+
+.neo-pulse-wp-ai-sidebar__usage-label {
+	font-size: 1rem;
+	font-weight: 600;
+	color: var(--fb-text);
+}
+
+.neo-pulse-wp-ai-sidebar__count {
+	font-size: 1rem;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	color: var(--fb-text);
+}
+
+.neo-pulse-wp-ai-sidebar__count--muted {
+	color: var(--fb-text-muted);
+}
+
+.neo-pulse-wp-ai-sidebar__count--over {
+	color: var(--fb-danger);
+}
+
+.neo-pulse-wp-ai-sidebar__cap-paused {
+	margin: 8px 0 0;
+	padding: 0;
+	font-size: 1rem;
+	font-weight: 600;
+	color: var(--fb-success);
+	line-height: 1.4;
+}
+
+.neo-pulse-wp-ai-sidebar .neo-pulse-wp-ai-snippet__box {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+.neo-pulse-wp-ai-snippet__url {
+	margin: 0 0 4px;
+	font-size: 1rem;
+	line-height: 1.35;
+	color: #006621;
+	word-break: break-all;
+}
+
+.neo-pulse-wp-ai-snippet__title {
+	margin: 0 0 4px;
+	font-size: 1.125rem;
+	line-height: 1.3;
+	color: #1a0dab;
+	word-break: break-word;
+}
+
+.neo-pulse-wp-ai-snippet__title--compact {
+	font-size: 1.125rem;
+	display: -webkit-box;
+	-webkit-line-clamp: 1;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.neo-pulse-wp-ai-snippet__desc {
+	margin: 0;
+	font-size: 1rem;
+	line-height: 1.45;
+	color: #545454;
+	word-break: break-word;
+}
+
+.neo-pulse-wp-ai-snippet__desc--compact {
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.neo-pulse-wp-ai-keyword-value {
+	margin: 0;
+	padding: 0;
+	font-size: 1rem;
+	font-weight: 600;
+	line-height: 1.4;
+	color: var(--fb-text);
+	word-break: break-word;
+}
+
+.neo-pulse-wp-ai-keyword-value--empty {
+	font-weight: 500;
+	color: var(--fb-text-muted);
+}
+
+.neo-pulse-wp-ai-edit-snippet {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	width: 100%;
+	min-height: 44px;
+	margin: 2px 0 0;
+	padding: 10px 16px;
+	border: 0;
+	border-radius: 8px;
+	box-shadow: none;
+	font-size: 1rem;
+	font-weight: 700;
+	line-height: 1.2;
+	color: #fff;
+	background: var(--fb-accent);
+	box-sizing: border-box;
+	cursor: pointer;
+}
+
+.neo-pulse-wp-ai-edit-snippet:hover,
+.neo-pulse-wp-ai-edit-snippet:focus {
+	color: #fff;
+	background: #0f4c78;
+	border: 0;
+	box-shadow: none;
+	outline: 2px solid rgba(19, 94, 150, 0.25);
+	outline-offset: 1px;
+}
+
+.neo-pulse-wp-ai-edit-snippet--dirty {
+	box-shadow: inset 0 0 0 2px #dba617;
+}
+
+.neo-pulse-wp-ai-sidebar__dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: #dba617;
+	flex-shrink: 0;
+}
+
+.neo-pulse-wp-ai-sidebar__hint {
+	margin: 0;
+	padding: 0 4px;
+	font-size: 1rem;
+	font-weight: 600;
+	color: var(--fb-warn);
+	text-align: center;
+}
+
+/* ── GMB / Create Social Post ── */
+
+.neo-pulse-wp-ai-edit-snippet--gmb {
+	background: #0d652d;
+}
+
+.neo-pulse-wp-ai-edit-snippet--gmb:hover,
+.neo-pulse-wp-ai-edit-snippet--gmb:focus {
+	background: #0a5425;
+	outline-color: rgba(13, 101, 45, 0.25);
+}
+
+.neo-pulse-wp-ai-edit-snippet--busy {
+	opacity: 0.7;
+	cursor: wait;
+}

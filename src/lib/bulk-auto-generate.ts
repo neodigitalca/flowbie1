@@ -65,15 +65,11 @@ import {
   type SapMapsMediaBank,
 } from './bulk/sap-maps-media-bank';
 import { entityAdGroupKey } from './local-analysis/sap-entity-ad-groups';
-import { insertBankPost } from '@/lib/post-bank-api';
-import { insertSapBankPost } from '@/lib/sap-bank-api';
 import { markdownToHtml, generateExcerpt } from './markdown-to-html';
 import {
   formatWordPressDate,
   resolveBulkWordPressPublishDate,
-  resolveHybridEffectiveDestination,
   resolveWordPressPostStatusForSchedule,
-  type HybridPostingMode,
 } from './wordpress-scheduler';
 import { sanitizeWordPressSlugSegment } from './rank-math-redirect-csv';
 import { buildSapSlugFromKeywordEntity } from '@/lib/sap-slug-from-keyword-entity';
@@ -253,20 +249,17 @@ export type { CSVRow } from './bulk/bulk-csv-parser';
 export { parseCSV, parseCsvStatic, parseBlogIdeasChecklist } from './bulk/bulk-csv-parser';
 export { generateEntityTitleFromSitemap } from './bulk/bulk-entity-handler';
 
-export type WordPressPostDestination = 'wordpress' | 'bank' | 'hybrid' | 'local';
+export type WordPressPostDestination = 'wordpress' | 'local';
 
 /** Default export destinations shown in bulk WordPress posting UI. */
 export const BULK_POST_DESTINATION_CHOICES: WordPressPostDestination[] = [
   'wordpress',
-  'bank',
-  'hybrid',
   'local',
 ];
 
-/** Blog import tab: WordPress, bank, or local files only (no hybrid). */
+/** Blog import tab: WordPress or local files only. */
 export const BLOG_IMPORT_POST_DESTINATION_CHOICES: WordPressPostDestination[] = [
   'wordpress',
-  'bank',
   'local',
 ];
 
@@ -291,19 +284,15 @@ export interface WordPressPostingOptions {
   useCsvPublishDates?: boolean;
   /**
    * `wordpress`: create scheduled posts on the site(s).
-   * `bank`: queue in Supabase content bank with `scheduled_date_gmt`.
-   * `hybrid`: same schedule; slot-0 anchor UTC month → WordPress, later months → bank (see `hybridAnchorUtc`).
-   * `local`: generate files only (JSON, harness HTML, run CSV) — no WordPress or bank upload.
+   * `local`: generate files only (JSON, harness HTML, run CSV) — no WordPress upload.
    */
   postDestination?: WordPressPostDestination;
-  /** Set for `hybrid` from slot 0’s scheduled instant: UTC `{ year, month }` where `month` is 0–11. */
-  hybridAnchorUtc?: { year: number; month: number };
   /** Inventory occupancy for Next available slot gap scheduling. */
   scheduleOccupancy?: import('@/lib/bulk-schedule-gap').ScheduleOccupancy;
   useGapScheduling?: boolean;
   /** Precomputed gap dates per batch slot (set at run start). */
   gapDatesBySlot?: Date[];
-  /** When true, save as WordPress/bank draft instead of publish or future. */
+  /** When true, save as WordPress draft instead of publish or future. */
   draftOnly?: boolean;
 }
 
@@ -363,8 +352,6 @@ export interface BulkProcessingOptions {
    * so prompt permutations match the schedule preview.
    */
   bulkScheduleSlotIndex?: number;
-  /** Hybrid-run bundle id merged into bank `source_row` as `neo_pulse_content_bundle_id`. */
-  contentBundleId?: string;
   /**
    * Run-scoped Google Maps media bank: one WP upload per site + location entity.
    * Created at bulk run start and shared across rows.
@@ -1700,7 +1687,6 @@ try {
       }
 
       const scheduleSlotIndex = options.bulkScheduleSlotIndex ?? rowIndex;
-      const postingMode: HybridPostingMode = (options.wordPressPosting.postDestination ?? 'wordpress') as HybridPostingMode;
 
       // Scheduled date for this row (shared across all sites): CSV `publish_date_gmt` when valid, else frequency-based
       const scheduleOpts = {
@@ -1748,12 +1734,6 @@ try {
         scheduledDate = resolved.date;
         bulkPublishDateSource = resolved.source;
       }
-      const effectiveDestination = resolveHybridEffectiveDestination(
-        postingMode,
-        scheduledDate,
-        options.wordPressPosting.hybridAnchorUtc
-      );
-
       const firstSite = sitesToPost[0]?.site;
       options.onProgress?.(rowIndex, 0, 'Preparing harness content for upload...');
       let htmlContent = await prepareHarnessContentForUpload({
@@ -1783,12 +1763,12 @@ try {
       // Upload featured image once per location entity (Maps) or once per row (AI) — skipped for post bank
       let featuredImageId: number | undefined;
       const imageFile = generatedFiles.find(f => f.fileName.endsWith('.png') || f.fileName.endsWith('.jpg') || f.fileName.endsWith('.jpeg'));
-      if (useGoogleMaps && entityForImage && effectiveDestination !== 'bank' && !imageFile) {
+      if (useGoogleMaps && entityForImage && !imageFile) {
         throw new Error(
           `Google Maps featured image missing for entity "${entityForImage}". Check OpenRouter API key in Settings and retry this row.`
         );
       }
-      if (effectiveDestination !== 'bank' && imageFile && imageFile.content) {
+      if (imageFile && imageFile.content) {
         try {
           const mapsEntity =
             useGoogleMaps && entityForImage ? entityForImage : undefined;
@@ -1878,14 +1858,7 @@ try {
         const { site, sitemapType } = sitesToPost[siteIndex];
         
         try {
-          const bankPhaseLabel = sitemapType === 'entity' ? 'SAP bank' : 'Post Bank';
-          options.onProgress?.(
-            rowIndex,
-            0,
-            effectiveDestination === 'bank'
-              ? `Preparing ${bankPhaseLabel} for ${site.name}...`
-              : `Uploading to WordPress (${site.name})...`
-          );
+          options.onProgress?.(rowIndex, 0, `Uploading to WordPress (${site.name})...`);
 
           // Always attempt upload for each row. (We no longer skip when an entity label appears in the entity
           // sitemap - titles/slugs differ per post; users asked to never skip scheduled rows for that reason.)
@@ -1900,7 +1873,7 @@ try {
 
           // Upload featured image to this site if not already uploaded (or re-upload for each site)
           let siteFeaturedImageId = featuredImageId;
-          if (effectiveDestination !== 'bank' && imageFile && imageFile.content && siteIndex > 0) {
+          if (imageFile && imageFile.content && siteIndex > 0) {
             try {
               const mapsEntity =
                 useGoogleMaps && entityForImage ? entityForImage : undefined;
@@ -2036,62 +2009,6 @@ try {
                 contentForUpload = appended.html;
               }
             }
-          }
-
-          if (effectiveDestination === 'bank') {
-            const bankLabel = sitemapType === 'entity' ? 'SAP bank' : 'Post Bank';
-            options.onProgress?.(rowIndex, 0, `Saving to Supabase ${bankLabel} (${site.name})...`);
-            const baseUrl = String(site.siteUrl).replace(/\/$/, '');
-            const provisionalLink =
-              contractDestination ||
-              (slug ? `${baseUrl}/${slug}/` : `${baseUrl}/`);
-            const optimizedMetaBootstrap = buildOptimizedMetaFromKeywordResearch(
-              rankMeta,
-              postTitle,
-              excerpt,
-              bulkPrimaryKw,
-              provisionalLink,
-              site.siteUrl
-            );
-            let sourceRow: Record<string, unknown> | undefined;
-            try {
-              sourceRow = JSON.parse(JSON.stringify(enrichedRow)) as Record<string, unknown>;
-            } catch {
-              sourceRow = { keyword: enrichedRow.keyword, title: enrichedRow.title };
-            }
-            const bundleId = options.contentBundleId?.trim();
-            if (bundleId) {
-              sourceRow = { ...sourceRow, neo_pulse_content_bundle_id: bundleId };
-            }
-            const bankPayload = {
-              siteId: site.id,
-              siteDisplayName: site.name,
-              title: postTitle,
-              htmlContent: contentForUpload,
-              markdownContent,
-              excerpt,
-              slug,
-              scheduledDateGmt: options.wordPressPosting.draftOnly
-                ? undefined
-                : scheduledDate.toISOString(),
-              wordpressStatus: (options.wordPressPosting.draftOnly ? 'draft' : 'future') as const,
-              postTypeEndpoint: entityEndpoint,
-              sitemapType,
-              acfPayload: { rank_math_meta: optimizedMetaBootstrap },
-              keyword: bulkPrimaryKw || undefined,
-              entity: enrichedRow.entity?.trim() || undefined,
-              sourceRow,
-            };
-            const ins =
-              sitemapType === 'entity'
-                ? await insertSapBankPost(bankPayload)
-                : await insertBankPost(bankPayload);
-            if (!ins.ok) {
-              options.onError?.(rowIndex, new Error(ins.error || `${bankLabel} insert failed`));
-            } else {
-              options.onProgress?.(rowIndex, 0, `Saved to Supabase ${bankLabel} (${site.name})`);
-            }
-            continue;
           }
 
           // Create WordPress post with sanitized + validated content (bad links stripped, never blocked)

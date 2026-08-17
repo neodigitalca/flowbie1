@@ -17,6 +17,8 @@ import {
   buildExecutionCompletePayload,
   localDominatorArchiveFiles,
 } from "@/lib/task-execution-archive";
+import { syncAgentRunHostedFilesFromBulk } from "@/lib/agent-runs/agent-run-hosted-files";
+import type { BulkGeneratedFile } from "@/lib/bulk-file-manager";
 
 function resolveSite(siteId: string, sites: WordPressSite[]): WordPressSite {
   const fromList = sites.find((s) => s.id === siteId);
@@ -33,6 +35,89 @@ function contractFields(contract: TaskExecutionClientRunContract | Record<string
     throw new Error("businessName and keyword are required for Local Dominator export.");
   }
   return { businessName, keyword };
+}
+
+function executionPayloadFromRun(run: AgentRun): TaskExecutionClientRunContract | Record<string, unknown> {
+  const plan = (run.plan ?? {}) as Record<string, unknown>;
+  return (plan.executionPayload ?? plan.clientRunContract ?? plan) as
+    | TaskExecutionClientRunContract
+    | Record<string, unknown>;
+}
+
+function syncLocalDominatorHostedFile(
+  runId: number,
+  fileName: string,
+  csvContent: string,
+  businessName: string,
+  keyword: string,
+): void {
+  const file: BulkGeneratedFile = {
+    id: `local-dominator-${runId}`,
+    rowIndex: 0,
+    fileName,
+    content: csvContent,
+    mimeType: "text/csv",
+    status: "completed",
+    timestamp: Date.now(),
+    rowData: {
+      keyword,
+      title: businessName,
+    },
+  };
+  syncAgentRunHostedFilesFromBulk(runId, [file]);
+}
+
+export async function runLocalDominatorExportDirectHarness(
+  run: AgentRun,
+  ctx: AgentRunHarnessContext,
+): Promise<AgentRunResult> {
+  const siteId = String(run.context?.siteId ?? "").trim();
+  if (!siteId) {
+    throw new Error("Set a client on the workflow before running.");
+  }
+
+  const site = resolveSite(siteId, getStoredSites());
+  const contract = executionPayloadFromRun(run);
+  const { businessName, keyword } = contractFields(contract);
+
+  await ctx.onStep?.("Preflight", "running");
+  await ctx.onStep?.("Export grid CSV", "running");
+
+  const response = await exportLocalDominatorGrid({ businessName, keyword });
+  if (!response.ok || !response.csvBase64 || !response.fileName) {
+    throw new Error(response.error ?? "Local Dominator export failed.");
+  }
+
+  const csvContent = decodeLocalDominatorCsvBase64(response.csvBase64);
+  const archiveFiles = localDominatorArchiveFiles({
+    fileName: response.fileName,
+    csvContent,
+    businessName,
+    keyword,
+  });
+
+  const saveToDisk = effectiveSaveToDisk("local_dominator_export", contract);
+  const saveLocalArchive = effectiveSaveLocalArchive("local_dominator_export", contract);
+
+  if (saveToDisk && !saveLocalArchive) {
+    downloadLocalDominatorCsv(archiveFiles[0]?.fileName ?? response.fileName, csvContent);
+  }
+
+  syncLocalDominatorHostedFile(
+    run.id,
+    archiveFiles[0]?.fileName ?? response.fileName,
+    csvContent,
+    businessName,
+    keyword,
+  );
+
+  await ctx.onStep?.("Complete", "done");
+
+  return {
+    updated: 1,
+    message: `Exported Local Dominator grid for ${businessName}`,
+    batchKey: run.clientBatchKey || undefined,
+  };
 }
 
 export async function runLocalDominatorExportClientHarness(
@@ -77,6 +162,14 @@ export async function runLocalDominatorExportClientHarness(
   if (saveToDisk && !saveLocalArchive) {
     downloadLocalDominatorCsv(archiveFiles[0]?.fileName ?? response.fileName, csvContent);
   }
+
+  syncLocalDominatorHostedFile(
+    run.id,
+    archiveFiles[0]?.fileName ?? response.fileName,
+    csvContent,
+    businessName,
+    keyword,
+  );
 
   await completeTaskExecution(
     run.teamId,

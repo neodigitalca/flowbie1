@@ -1,0 +1,174 @@
+{
+  "updatedAt": "2026-08-17T14:36:13.460Z",
+  "rows": [
+    {
+      "site": "advanceblindsanddrapery.com",
+      "host": "advanceblinds.sftp.wpengine.com",
+      "port": 2222,
+      "username": "advanceblinds-flowbiewp",
+      "password": "}}%t^WJW3",
+      "isStaging": false
+    },
+    {
+      "site": "blindmagic.com",
+      "host": "blindmagic.sftp.wpengine.com",
+      "port": 2222,
+      "username": "blindmagic-flowbiewp",
+      "password": "h)z]Ls:Ud{H,r@>{_R(j!vK(sK2",
+      "isStaging": false
+    },
+    {
+      "site": "blindmagic.com",
+      "host": "blindmagic1stg.sftp.wpengine.com",
+      "port": 2222,
+      "username": "blindmagic1stg-Flowbie",
+      "password": "s#tW>wXaP8",
+      "isStaging": true
+    },
+    {
+      "site": "blindswest.ca",
+      "host": "blindswestcgy.sftp.wpengine.com",
+      "port": 2222,
+      "username": "blindswestcgy-flowbiewp",
+      "password": "ip9tT(5+",
+      "isStaging": false
+    },
+    {
+      "site": "discoverysolut.wpenginepowered.com",
+      "host": "discoverysolut.sftp.wpengine.com",
+      "port": 2222,
+      "username": "discoverysolut-NEOPulse",
+      "password": "NEOPulse20261!",
+      "isStaging": false
+    },
+    {
+      "site": "dminteriorsanddesign.com",
+      "host": "dminteriors.sftp.wpengine.com",
+      "port": 2222,
+      "username": "dminteriors-flowbiewp",
+      "password": "VWUBi1eaH{",
+      "isStaging": false
+    },
+    {
+      "site": "drrebecca.ca",
+      "host": "drrebecca.sftp.wpengine.com",
+      "port": 2222,
+      "username": "drrebecca-flowbiewp",
+      "password": "8*42+JUk",
+      "isStaging": false
+    },
+    {
+      "site": "flowbie.ca",
+      "host": "flowbietest.sftp.wpengine.com",
+      "port": 2222,
+      "username": "flowbietest-flowbiewp",
+      "password": "cBVe?;_j:!rs6",
+      "isStaging": false
+    },
+    {
+      "site": "heritagedentaledmonton.ca",
+      "host": "hdedmonton.sftp.wpengine.com",
+      "port": 2222,
+      "username": "hdedmonton-flowbiewp",
+      "password": "L8KpY{Hp",
+      "isStaging": false
+    },
+    {
+      "site": "interiorsbylaura.com",
+      "host": "interiorsbyla.sftp.wpengine.com",
+      "port": 2222,
+      "username": "interiorsbyla-flowbiewp",
+      "password": "iQ^dLC)+^;R]sc]{CRP%*:@hQIWgm}Y*3",
+      "isStaging": false
+    },
+    {
+      "site": "intheshadeflorida.com",
+      "host": "intheshade.sftp.wpengine.com",
+      "port": 2222,
+      "username": "intheshade-flowbiewp",
+      "password": ":|;CQ}4Pi",
+      "isStaging": false
+    },
+    {
+      "site": "kwbllp.com",
+      "host": "kwbllp.sftp.wpengine.com",
+      "port": 2222,
+      "username": "kwbllp-flowbiewp",
+      "password": "vy0a$xIp",
+      "isStaging": false
+    },
+    {
+      "site": "neodigital.ca",
+      "host": "neodigital.sftp.wpengine.com",
+      "port": 2222,
+      "username": "neodigital-matt",
+      "password": "5EWv3itm?",
+      "isStaging": false
+    },
+    {
+      "site": "phoenixpainting.ca",
+      "host": "phoenixpaint.sftp.wpengine.com",
+      "port": 2222,
+      "username": "phoenixpaint-flowbiewp",
+      "password": ")<_7)iqod|[T",
+      "isStaging": false
+    },
+    {
+      "site": "ridgelinesolar.ca",
+      "host": "ridgelinesolar.sftp.wpengine.com",
+      "port": 2222,
+      "username": "ridgelinesolar-flowbiewp",
+      "password": "^o$!6f+u:rQ",
+      "isStaging": false
+    },
+    {
+      "site": "shutterspot.com",
+      "host": "shuterspot.sftp.wpengine.com",
+      "port": 2222,
+      "username": "shuterspot-flowbiewp",
+      "password": "DWk_%kGJ;Hg(Dpef9",
+      "isStaging": false
+    },
+    {
+      "site": "sunshadesblinds.ca",
+      "host": "sunshades.sftp.wpengine.com",
+      "port": 2222,
+      "username": "sunshades-flowbiewp",
+      "password": "Y&U;e*[e6",
+      "isStaging": false
+    },
+    {
+      "site": "superiorblinds.com",
+      "host": "superiorblinds.sftp.wpengine.com",
+      "port": 2222,
+      "username": "superiorblinds-flowbiewp",
+      "password": "f%t%w2nV",
+      "isStaging": false
+    },
+    {
+      "site": "tailoredinteriors.ca",
+      "host": "tailoredint.sftp.wpengine.com",
+      "port": 2222,
+      "username": "tailoredint-flowbiewp",
+      "password": "}4.tZWmF",
+      "isStaging": false
+    },
+    {
+      "site": "westx.ca",
+      "host": "westx.sftp.wpengine.com",
+      "port": 2222,
+      "username": "westx-flowbiewp",
+      "password": "!#5m+y,]+H",
+      "isStaging": false
+    },
+    {
+      "site": "youjunkit.ca",
+      "host": "youjunkit.sftp.wpengine.com",
+      "port": 2222,
+      "username": "youjunkit-flowbiewp",
+      "password": "lF2i6(?C",
+      "isStaging": false
+    }
+  ],
+  "count": 21
+}

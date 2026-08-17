@@ -16,6 +16,13 @@ import type { BulkGeneratedFile } from "@/lib/bulk-file-manager";
 import type { BulkHarnessSectionPayload } from "@/lib/bulk-auto-generate";
 import type { PostCreatorExecutionPayload, TaskExecutionClientRunContract } from "@/lib/tasks-types";
 import { completeTaskExecution, patchTaskExecutionProgress } from "@/lib/tasks-api";
+import { buildExecutionCompletePayload } from "@/lib/task-execution-archive";
+import { effectiveSaveLocalArchive } from "@/lib/schedule-output-destination";
+import {
+  automationTitleFromRun,
+  executionKindFromRun,
+  sendAutomationEmailIfConfigured,
+} from "@/lib/automation-email-delivery";
 
 function resolveSite(siteId: string, sites: WordPressSite[]): WordPressSite {
   const fromList = sites.find((s) => s.id === siteId);
@@ -159,18 +166,45 @@ export async function runPostCreatorClientHarness(
 
   const message = buildPostCreatorResultMessage(result);
   const ok = isPostCreatorRunOk(result);
+  const saveLocalArchive = effectiveSaveLocalArchive("post_creator", contract);
+  const summaryLines = [
+    message,
+    ...(result.urls?.length ? [`URLs: ${result.urls.slice(0, 8).join(", ")}`] : []),
+  ];
 
-  await completeTaskExecution(run.teamId, executionId, {
-    ok,
-    result: {
-      created: result.created,
-      failed: result.failed,
-      postCount: result.postCount,
-      urls: result.urls,
-      uploadedPosts: result.uploadedPosts,
-      blockedRows: result.blockedRows,
+  const emailResult = await sendAutomationEmailIfConfigured({
+    teamId: run.teamId,
+    executionId,
+    contract,
+    tokenContext: {
+      siteName: site.name,
+      automationTitle: automationTitleFromRun(run),
+      executionKind: executionKindFromRun(run) || "post_creator",
+      summary: message,
     },
+    summaryText: summaryLines.join("\n"),
+    runOk: ok,
+    onStep: (label, status) => ctx.onStep?.(label, status ?? "running"),
   });
+
+  await completeTaskExecution(
+    run.teamId,
+    executionId,
+    buildExecutionCompletePayload({
+      ok,
+      run,
+      saveLocalArchive,
+      result: {
+        created: result.created,
+        failed: result.failed,
+        postCount: result.postCount,
+        urls: result.urls,
+        uploadedPosts: result.uploadedPosts,
+        blockedRows: result.blockedRows,
+        ...emailResult,
+      },
+    }),
+  );
 
   return {
     updated: result.created,
@@ -180,6 +214,7 @@ export async function runPostCreatorClientHarness(
     batchKey,
     uploadedPosts: result.uploadedPosts,
     blockedRows: result.blockedRows,
+    ...emailResult,
   };
 }
 

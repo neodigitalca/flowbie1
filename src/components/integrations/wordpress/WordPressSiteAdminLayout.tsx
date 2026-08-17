@@ -11,7 +11,6 @@ export type WordPressSiteAdminSectionId =
   | "redirect-matcher"
   | "master-instructions"
   | "sitemaps"
-  | "post-bank"
   | "site-settings"
   | "wp-engine"
   | "ai-models"

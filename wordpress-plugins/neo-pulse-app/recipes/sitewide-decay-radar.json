@@ -9,7 +9,7 @@
     "NEO Pulse rewrites matched posts and entity URLs, capped at 3 per bucket per cycle.",
     "Same URL waits 72 hours before it can run again."
   ],
-  "category": "reactive",
+  "category": "maintenance",
   "verticals": [
     "general"
   ],

@@ -1,5 +1,5 @@
 /**
- * Deploy flowbie-wp zip to staging only (1stg SFTP rows in the client CSV).
+ * Deploy neo-pulse-wp zip to staging only (1stg SFTP rows in the client CSV).
  *
  * Run: npm run deploy:wp-staging
  * Or:  wordpress-plugins/deploy-wp-staging.bat
@@ -16,8 +16,8 @@ import { deployZip } from "./deploy/lib/deploy-zip.js";
 const dir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(dir, "..");
 const csvPath = join(dir, "Customer List", "SFTP Users_Clients List.csv");
-const zipPath = join(dir, "flowbie-wp.zip");
-const pluginDir = join(dir, "flowbie-wp");
+const zipPath = join(dir, "neo-pulse-wp.zip");
+const pluginDir = join(dir, "neo-pulse-wp");
 
 function renderProgress(label, done, total) {
   process.stdout.write("\r\x1b[2K  " + bold(label) + " " + bar(done / total) + " " + accent(pct(done, total)));
@@ -46,7 +46,7 @@ async function deploySite(site) {
 }
 
 async function main() {
-  header("Flowbie WP Staging Deploy");
+  header("NEO Pulse WP Staging Deploy");
 
   const sites = loadStagingSites(csvPath);
   if (sites.length === 0) {

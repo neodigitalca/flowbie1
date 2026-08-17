@@ -4,7 +4,7 @@ import type {
   AutomationTriggerBlock,
 } from "@/lib/automation-planner-types";
 
-export type AutomationRecipeCategory = "reactive" | "maintenance" | "local-seo" | "onboarding";
+export type AutomationRecipeCategory = "reactive" | "maintenance" | "local-seo" | "onboarding" | "research";
 
 export type AutomationRecipeExecutionFilter = "meta-only" | "full-aiseo";
 

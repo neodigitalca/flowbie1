@@ -43,15 +43,23 @@ class Neo_Pulse_App_Task_Execution_Runner_Gsc_Reporting {
 		}
 
 		$payload         = is_array( $context['payload'] ?? null ) ? $context['payload'] : array();
+		$sanitized       = Neo_Pulse_App_Tasks_Store::sanitize_execution_payload( $payload );
 		$compare_preset  = self::sanitize_compare_preset( $payload['comparePreset'] ?? 'mom' );
-		$save_to_disk    = ! empty( $payload['saveToDisk'] );
+		$save_to_disk    = ! array_key_exists( 'saveToDisk', $payload ) || ! empty( $payload['saveToDisk'] );
+		$save_local      = ! empty( $sanitized['saveLocalArchive'] )
+			|| ! array_key_exists( 'saveLocalArchive', $payload )
+			|| ! empty( $payload['saveLocalArchive'] );
 		$execution_id    = (int) ( $execution['id'] ?? 0 );
 
-		$contract = array(
-			'executionId'   => $execution_id,
-			'siteId'        => $site_id,
-			'comparePreset' => $compare_preset,
-			'saveToDisk'    => $save_to_disk,
+		$contract = array_merge(
+			array(
+				'executionId'      => $execution_id,
+				'siteId'           => $site_id,
+				'comparePreset'    => $compare_preset,
+				'saveToDisk'       => $save_to_disk,
+				'saveLocalArchive' => $save_local,
+			),
+			Neo_Pulse_App_Tasks_Store::automation_email_contract_fields( $payload )
 		);
 
 		return array(

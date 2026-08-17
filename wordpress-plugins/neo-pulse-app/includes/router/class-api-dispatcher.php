@@ -10,9 +10,38 @@ defined( 'ABSPATH' ) || exit;
 class Neo_Pulse_App_Api_Dispatcher {
 
 	public static function init(): void {
+		add_filter( 'redirect_canonical', array( __CLASS__, 'skip_api_redirect' ), 10, 2 );
 		add_action( 'init', array( __CLASS__, 'register_rewrites' ) );
+		add_action( 'init', array( __CLASS__, 'maybe_dispatch_early' ), 0 );
 		add_filter( 'query_vars', array( __CLASS__, 'query_vars' ) );
 		add_action( 'parse_request', array( __CLASS__, 'maybe_dispatch' ), 0 );
+	}
+
+	/**
+	 * WordPress adds trailing slashes to /api/* and breaks the headless dispatcher.
+	 *
+	 * @param string|false $redirect_url  Canonical redirect target.
+	 * @param string       $requested_url Original request URL.
+	 * @return string|false
+	 */
+	public static function skip_api_redirect( $redirect_url, string $requested_url ) {
+		$path = (string) parse_url( $requested_url, PHP_URL_PATH );
+		if ( $path === '/api' || str_starts_with( $path, '/api/' ) ) {
+			return false;
+		}
+		return $redirect_url;
+	}
+
+	public static function maybe_dispatch_early(): void {
+		$route = self::resolve_route_from_request();
+		if ( $route === null ) {
+			return;
+		}
+		while ( ob_get_level() > 0 ) {
+			ob_end_clean();
+		}
+		self::dispatch( $route );
+		exit;
 	}
 
 	public static function register_rewrites(): void {
@@ -59,7 +88,7 @@ class Neo_Pulse_App_Api_Dispatcher {
 		return null;
 	}
 
-	private static function resolve_route_from_request(): ?string {
+	public static function resolve_route_from_request(): ?string {
 		$uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : '';
 		$path = (string) parse_url( $uri, PHP_URL_PATH );
 		if ( preg_match( '#^/api/(.+)$#', $path, $m ) ) {

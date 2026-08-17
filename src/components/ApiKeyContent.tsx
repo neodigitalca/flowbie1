@@ -8,7 +8,7 @@ import {
   NOTIFY_API_KEY_SAVED_AND_UPDATED_FOR_CURRENT_SE,
 } from "@/lib/notify-messages";
 import { DASHBOARD_SETTINGS_FIELD_CLASS } from "@/components/manager/dashboard/dashboard-panel-styles";
-import { syncOpenRouterToSupabaseProperties } from "@/lib/manager-wordpress-properties-api";
+import { syncOpenRouterToWorkspace } from "@/lib/manager-wordpress-properties-api";
 
 interface ApiKeyContentProps {
   apiKey: string;
@@ -29,12 +29,12 @@ export const ApiKeyContent: React.FC<ApiKeyContentProps> = ({
     if (localApiKey.trim()) {
       saveKeyInLocalStorage(localApiKey.trim());
       setApiKey(localApiKey.trim());
-      void syncOpenRouterToSupabaseProperties({ openRouterApiKey: localApiKey.trim() });
+      void syncOpenRouterToWorkspace({ openRouterApiKey: localApiKey.trim() });
       notify.success(NOTIFY_API_KEY_SAVED_AND_UPDATED_FOR_CURRENT_SE);
     } else {
       saveKeyInLocalStorage("");
       setApiKey("");
-      void syncOpenRouterToSupabaseProperties({ openRouterApiKey: "" });
+      void syncOpenRouterToWorkspace({ openRouterApiKey: "" });
       notify.warning(NOTIFY_API_KEY_CLEARED_AI_GENERATION_IS_DISABLE);
     }
   }, [localApiKey, setApiKey, saveKeyInLocalStorage]);

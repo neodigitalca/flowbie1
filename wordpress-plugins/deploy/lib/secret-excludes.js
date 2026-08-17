@@ -1,9 +1,9 @@
 import { basename } from "path";
 
 const SECRET_BASENAMES = new Set([
-  "flowbie-app-secrets.php",
-  "flowbie-wp-secrets.php",
-  "flowbie-wp-gsc-config.php",
+  "neo-pulse-app-secrets.php",
+  "neo-pulse-wp-secrets.php",
+  "neo-pulse-wp-gsc-config.php",
   ".env",
 ]);
 

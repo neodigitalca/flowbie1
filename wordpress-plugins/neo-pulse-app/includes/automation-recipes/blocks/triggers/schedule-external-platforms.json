@@ -1,0 +1,28 @@
+{
+  "keyword": "schedule-external-platforms",
+  "name": "External platform schedule",
+  "kind": "poll",
+  "description": "Run when WordPress or other connected platforms have content scheduled to publish.",
+  "defaults": {
+    "pollHours": 24,
+    "watchSchedule": {
+      "scheduleFrequency": "daily",
+      "scheduleCustomInterval": 1,
+      "scheduleDayOfWeek": 0,
+      "scheduleStartDateOption": "custom",
+      "scheduleTimesPerMonth": 1,
+      "scheduleStartDay": 1,
+      "scheduleStartTime": "09:00"
+    },
+    "triggerConfig": {
+      "sources": ["schedule"],
+      "match": "any",
+      "conditions": [],
+      "lookbackDays": 28,
+      "compareDays": 28,
+      "pollHours": 24,
+      "cooldownHours": 72,
+      "maxUrls": 5
+    }
+  }
+}

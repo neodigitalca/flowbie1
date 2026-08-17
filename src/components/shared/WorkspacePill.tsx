@@ -1,8 +1,10 @@
 import type { LucideIcon } from "lucide-react";
 import {
   WORKSPACE_PILL_ACTIVE,
+  WORKSPACE_PILL_ACTIVE_FORGE,
   WORKSPACE_PILL_BASE,
   WORKSPACE_PILL_INACTIVE,
+  WORKSPACE_PILL_INACTIVE_FORGE,
   WORKSPACE_PILL_SQUARE_BASE,
 } from "@/components/shared/workspace-pill-styles";
 import { cn } from "@/lib/utils";
@@ -13,6 +15,8 @@ export type WorkspacePillProps = {
   disabled?: boolean;
   /** Square corners (Content Optimizer chrome). */
   square?: boolean;
+  /** Forge recipe tile styling instead of primary green or white active. */
+  tone?: "default" | "forge" | "monochrome";
   icon?: LucideIcon;
   /** Icon-only pill (label used for aria-label / title). */
   iconOnly?: boolean;
@@ -25,6 +29,7 @@ export function WorkspacePill({
   active,
   disabled = false,
   square = false,
+  tone = "default",
   icon: Icon,
   iconOnly = false,
   onClick,
@@ -48,7 +53,13 @@ export function WorkspacePill({
       className={cn(
         square ? WORKSPACE_PILL_SQUARE_BASE : WORKSPACE_PILL_BASE,
         iconOnly ? "h-8 w-8 min-w-0 shrink-0 px-0" : "h-8 min-w-[4.5rem]",
-        active ? WORKSPACE_PILL_ACTIVE : WORKSPACE_PILL_INACTIVE,
+        active
+          ? tone === "forge" || tone === "monochrome"
+            ? WORKSPACE_PILL_ACTIVE_FORGE
+            : WORKSPACE_PILL_ACTIVE
+          : tone === "forge" || tone === "monochrome"
+            ? WORKSPACE_PILL_INACTIVE_FORGE
+            : WORKSPACE_PILL_INACTIVE,
         disabled && !active && "pointer-events-none opacity-50",
         disabled && active && "pointer-events-none",
         className,

@@ -9,6 +9,13 @@ export const WORKSPACE_PILL_SQUARE_BASE = `${WORKSPACE_PILL_SHAPE} rounded-none`
 export const WORKSPACE_PILL_INACTIVE =
   "bg-black text-muted-foreground hover:bg-black hover:text-foreground";
 
+/** Forge Task Builder active pill: solid primary fill, no outline ring. */
+export const WORKSPACE_PILL_ACTIVE_FORGE =
+  "relative isolate overflow-hidden bg-primary text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.38)] hover:bg-primary hover:text-black after:pointer-events-none after:absolute after:inset-x-0 after:top-0 after:h-[48%] after:bg-gradient-to-b after:from-white/30 after:to-transparent";
+
+export const WORKSPACE_PILL_INACTIVE_FORGE =
+  "bg-zinc-950 text-muted-foreground hover:bg-zinc-950 hover:text-white";
+
 /** Neon green active tab with top gloss highlight. */
 export const WORKSPACE_PILL_ACTIVE =
   "relative isolate overflow-hidden bg-primary text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.38)] hover:bg-primary hover:text-black after:pointer-events-none after:absolute after:inset-x-0 after:top-0 after:h-[48%] after:bg-gradient-to-b after:from-white/30 after:to-transparent";

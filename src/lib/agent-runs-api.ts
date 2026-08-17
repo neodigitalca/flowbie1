@@ -1,4 +1,4 @@
-import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
+import { backendApiUrl } from "@/lib/wordpress-api/connection";
 import { neoPulseApiHeaders } from "@/lib/neo-pulse-api-headers";
 import type {
   AgentRun,
@@ -10,17 +10,10 @@ import type {
   StartAgentRunPayload,
 } from "@/lib/agent-runs-types";
 
-function baseUrl(): string {
-  return (import.meta.env.VITE_MCP_API_BASE?.replace(/\/api\/mcp\/?$/, "") || BACKEND_API_BASE || "").replace(
-    /\/$/,
-    "",
-  );
-}
-
 async function api(path: string, options?: RequestInit): Promise<Response> {
   const p = path.startsWith("/") ? path : `/${path}`;
   const headers = neoPulseApiHeaders(options?.headers);
-  return fetch(`${baseUrl()}/api${p}`, { ...options, headers, credentials: "include" });
+  return fetch(backendApiUrl(p), { ...options, headers, credentials: "include", cache: "no-store" });
 }
 
 export async function fetchAgentRuns(

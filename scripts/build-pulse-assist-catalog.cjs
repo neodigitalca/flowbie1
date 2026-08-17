@@ -49,9 +49,9 @@ const ASSIST_APP_MODULES = [
     pulseNav: "pulse:nav/dashboard/master-rules",
     managerTab: "dashboard",
     dashboardCluster: "master-rules",
-    description: "Per-site client instructions stored in Supabase for AI generation.",
+    description: "Per-site client instructions stored in the workspace for AI generation.",
     aliases: ["master rules", "client rules", "instructions"],
-    features: ["per-site rules", "supabase sync"],
+    features: ["per-site rules", "workspace storage"],
     relatedModules: ["dashboard/properties"],
   },
   {

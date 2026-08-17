@@ -46,6 +46,12 @@ export function taskExecutionPostCreatorIsConfigured(
   return Number.isFinite(count) && count >= 1 && count <= 31;
 }
 
+export function taskExecutionLocalDominatorIsConfigured(
+  payload?: Pick<TaskExecutionPayload, "businessName" | "keyword"> | null,
+): boolean {
+  return Boolean(payload?.businessName?.trim() && payload?.keyword?.trim());
+}
+
 export function resolveTaskExecutionBucket(
   payload?: TaskExecutionPayload | null,
 ): TaskExecutionTargetBucket | null {

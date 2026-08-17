@@ -1,0 +1,344 @@
+﻿/**
+
+ * NEO Pulse WP admin — shared sidebar panel & HTML sitemap
+
+ * @layer neo-pulse-wp-admin
+
+ */
+
+
+
+/* Depends on: admin-tokens.css, admin-settings.css */
+
+
+
+/* Shared panel layout (Sitemap, Schema, Analytics) */
+
+.neo-pulse-wp-panel-page.neo-pulse-wp-settings--wide {
+
+	max-width: none;
+
+	width: 100%;
+
+}
+
+
+
+.neo-pulse-wp-panel-layout {
+	display: grid;
+	grid-template-columns: 220px minmax(0, 1fr);
+	gap: 24px;
+	align-items: stretch;
+	min-height: calc(100vh - 32px - 120px);
+	width: 100%;
+	max-width: none;
+}
+
+
+
+.neo-pulse-wp-panel-content {
+
+	padding: 20px 22px;
+
+	background: var(--fc-surface);
+
+	border: none;
+
+	border-radius: 8px;
+
+	box-shadow: var(--fc-frame-shadow);
+
+}
+
+
+
+.neo-pulse-wp-panel-nav {
+
+	margin: 0;
+
+	padding: 16px 0;
+
+	background: var(--fc-surface-muted);
+
+	border: none;
+
+	border-radius: 8px;
+
+	box-shadow: var(--fc-frame-shadow);
+
+}
+
+
+
+.neo-pulse-wp-panel-nav__heading {
+
+	margin: 0;
+
+	padding: 8px 16px 6px;
+
+	font-size: 1rem;
+
+	font-weight: 600;
+
+	letter-spacing: 0.08em;
+
+	text-transform: uppercase;
+
+	color: #f8fafc;
+
+}
+
+
+
+.neo-pulse-wp-panel-nav__list {
+
+	margin: 0 0 8px;
+
+	padding: 0;
+
+	list-style: none;
+
+}
+
+
+
+.neo-pulse-wp-panel-nav__item {
+
+	display: block;
+
+	padding: 8px 16px;
+
+	color: #f8fafc;
+
+	text-decoration: none;
+
+	font-size: 1rem;
+
+	line-height: 1.4;
+
+	border: none;
+
+}
+
+
+
+.neo-pulse-wp-panel-nav__item:hover {
+
+	background: rgba(255, 255, 255, 0.06);
+
+	color: #f8fafc;
+
+}
+
+
+
+.neo-pulse-wp-panel-nav__item--active {
+
+	background: rgba(34, 211, 238, 0.18);
+
+	color: #f8fafc;
+
+	font-weight: 600;
+
+}
+
+
+
+.neo-pulse-wp-panel-content__title {
+
+	margin: 0 0 6px;
+
+	font-size: 20px;
+
+	font-weight: 600;
+
+	color: var(--fc-text);
+
+}
+
+
+
+.neo-pulse-wp-panel-content__desc {
+
+	margin: 0 0 16px;
+
+	color: #d1d5db;
+
+	font-size: 1rem;
+
+	line-height: 1.5;
+
+}
+
+
+
+.neo-pulse-wp-panel-info-box {
+
+	margin: 0 0 16px;
+
+	padding: 12px 16px;
+
+	background: var(--fc-surface-elevated);
+
+	border: none;
+
+	border-radius: 6px;
+
+	font-size: 1rem;
+
+	line-height: 1.5;
+
+	color: var(--fc-text);
+
+	box-shadow: none;
+
+}
+
+
+
+.neo-pulse-wp-panel-info-box p,
+
+.neo-pulse-wp-panel-info-box strong {
+
+	color: var(--fc-text);
+
+}
+
+
+
+.neo-pulse-wp-panel-info-box a {
+
+	word-break: break-all;
+
+}
+
+
+
+.neo-pulse-wp-panel-toggle {
+
+	display: flex;
+
+	align-items: center;
+
+	gap: 10px;
+
+	cursor: pointer;
+
+}
+
+
+
+.neo-pulse-wp-panel-toggle__label {
+
+	font-size: 1rem;
+
+	font-weight: 500;
+
+	color: var(--fc-text);
+
+}
+
+
+
+.neo-pulse-wp-panel-footer {
+
+	display: flex;
+
+	flex-wrap: wrap;
+
+	align-items: center;
+
+	justify-content: space-between;
+
+	gap: 12px;
+
+	margin-top: 16px;
+
+	padding-top: 16px;
+
+	border: none;
+
+}
+
+
+
+.neo-pulse-wp-panel-footer__left {
+
+	display: flex;
+
+	flex-wrap: wrap;
+
+	gap: 8px;
+
+	align-items: center;
+
+}
+
+
+
+.neo-pulse-wp-panel-footer__right {
+
+	margin: 0 !important;
+
+}
+
+
+
+.neo-pulse-wp-panel-inline-form {
+
+	margin: 0;
+
+	display: inline-block;
+
+}
+
+
+
+.neo-pulse-wp-html-sitemap {
+
+	margin: 1em 0;
+
+}
+
+
+
+.neo-pulse-wp-html-sitemap__group {
+
+	margin: 0 0 1.5em;
+
+}
+
+
+
+.neo-pulse-wp-html-sitemap__title {
+
+	margin: 0 0 0.5em;
+
+	font-size: 1.25rem;
+
+	color: var(--fc-text);
+
+}
+
+
+
+.neo-pulse-wp-html-sitemap__list {
+
+	margin: 0;
+
+	padding-left: 1.25em;
+
+}
+
+
+
+@media (max-width: 782px) {
+
+	.neo-pulse-wp-panel-layout {
+
+		grid-template-columns: 1fr;
+
+	}
+
+}
+

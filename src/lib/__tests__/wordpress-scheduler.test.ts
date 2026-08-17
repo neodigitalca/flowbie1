@@ -8,7 +8,6 @@ import {
   isSameLocalCalendarDay,
   isSameUtcYearMonth,
   resolveBulkWordPressPublishDate,
-  resolveHybridEffectiveDestination,
   resolveWordPressPostStatusForSchedule,
   OPTIMIZED_STAGGER_WINDOW_MINUTES,
   clampEveryNDays,
@@ -256,31 +255,6 @@ describe("isSameUtcYearMonth", () => {
     const a = new Date(Date.UTC(2026, 0, 31, 23, 0, 0));
     const b = new Date(Date.UTC(2026, 1, 1, 1, 0, 0));
     expect(isSameUtcYearMonth(a, b)).toBe(false);
-  });
-});
-
-describe("resolveHybridEffectiveDestination", () => {
-  const anchor = { year: 2026, month: 0 };
-
-  it("maps wordpress and bank without anchor", () => {
-    const d = new Date(Date.UTC(2026, 5, 15, 9, 0, 0));
-    expect(resolveHybridEffectiveDestination("wordpress", d, undefined)).toBe("wordpress");
-    expect(resolveHybridEffectiveDestination("bank", d, undefined)).toBe("bank");
-  });
-
-  it("sends hybrid same UTC month as anchor to wordpress", () => {
-    const d = new Date(Date.UTC(2026, 0, 31, 9, 0, 0));
-    expect(resolveHybridEffectiveDestination("hybrid", d, anchor)).toBe("wordpress");
-  });
-
-  it("sends hybrid later UTC month to bank", () => {
-    const d = new Date(Date.UTC(2026, 1, 1, 9, 0, 0));
-    expect(resolveHybridEffectiveDestination("hybrid", d, anchor)).toBe("bank");
-  });
-
-  it("treats missing anchor as bank for hybrid", () => {
-    const d = new Date(Date.UTC(2026, 0, 5, 9, 0, 0));
-    expect(resolveHybridEffectiveDestination("hybrid", d, undefined)).toBe("bank");
   });
 });
 

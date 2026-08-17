@@ -1,17 +1,10 @@
-import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
+import { backendApiUrl } from "@/lib/wordpress-api/connection";
 import type { ChatPreferencesPatch, ChatUserPreferences } from "@/lib/chat-preferences-types";
 import { normalizeChatPreferences } from "@/lib/chat-preferences-types";
 
-function baseUrl(): string {
-  return (import.meta.env.VITE_MCP_API_BASE?.replace(/\/api\/mcp\/?$/, "") || BACKEND_API_BASE || "").replace(
-    /\/$/,
-    "",
-  );
-}
-
 function api(path: string, options?: RequestInit): Promise<Response> {
   const p = path.startsWith("/") ? path : `/${path}`;
-  return fetch(`${baseUrl()}/api${p}`, { ...options, credentials: "include" });
+  return fetch(backendApiUrl(p), { ...options, credentials: "include", cache: "no-store" });
 }
 
 export async function fetchChatPreferences(teamId: number): Promise<ChatUserPreferences | null> {

@@ -1,4 +1,4 @@
-import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
+import { backendApiUrl } from "@/lib/wordpress-api/connection";
 import { getSessionToken } from "@/lib/auth-device";
 import type {
   AuthUser,
@@ -12,13 +12,6 @@ import type {
 } from "@/lib/teams-types";
 import type { ManagerCloudSnapshotV1 } from "@/lib/manager-cloud-settings-snapshot";
 
-function baseUrl(): string {
-  return (import.meta.env.VITE_MCP_API_BASE?.replace(/\/api\/mcp\/?$/, "") || BACKEND_API_BASE || "").replace(
-    /\/$/,
-    "",
-  );
-}
-
 function api(path: string, options?: RequestInit): Promise<Response> {
   const p = path.startsWith("/") ? path : `/${path}`;
   const headers = new Headers(options?.headers);
@@ -26,7 +19,7 @@ function api(path: string, options?: RequestInit): Promise<Response> {
   if (token && !headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${token}`);
   }
-  return fetch(`${baseUrl()}/api${p}`, { ...options, headers, credentials: "include", cache: "no-store" });
+  return fetch(backendApiUrl(p), { ...options, headers, credentials: "include", cache: "no-store" });
 }
 
 function stripJsonBom(raw: string): string {
@@ -312,6 +305,39 @@ export async function sendTeamMailTest(teamId: number, email: string): Promise<{
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: email.trim() }),
+    });
+    return await parseApiResult(res);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Request failed" };
+  }
+}
+
+export async function sendTeamMail(
+  teamId: number,
+  input: {
+    to: string;
+    subject: string;
+    message: string;
+    attachments?: Array<{ fileName: string; mime: string; content: string }>;
+  },
+): Promise<{ ok: boolean; error?: string; transport?: string }> {
+  try {
+    const attachments = (input.attachments ?? [])
+      .map((file) => ({
+        fileName: file.fileName.trim(),
+        mime: file.mime.trim() || "application/octet-stream",
+        content: file.content,
+      }))
+      .filter((file) => file.fileName && file.content);
+    const res = await api(`/teams/${teamId}/mail/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: input.to.trim(),
+        subject: input.subject.trim(),
+        message: input.message,
+        ...(attachments.length > 0 ? { attachments } : {}),
+      }),
     });
     return await parseApiResult(res);
   } catch (err) {

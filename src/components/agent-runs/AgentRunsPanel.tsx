@@ -120,7 +120,6 @@ export function AgentRunsPanel() {
                   <AgentRunsGroupFolder
                     label={client.label}
                     count={client.runCount}
-                    activeCount={client.activeCount}
                     open={clientOpen}
                     depth={0}
                     onToggle={() => toggleFolder(clientKey)}
@@ -136,7 +135,6 @@ export function AgentRunsPanel() {
                             <AgentRunsGroupFolder
                               label={bucket.label}
                               count={bucket.runs.length}
-                              activeCount={bucket.activeCount}
                               open={bucketOpen}
                               depth={1}
                               onToggle={() => toggleFolder(bucketKey)}

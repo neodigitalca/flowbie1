@@ -1,6 +1,6 @@
 <?php
 /**
- * File-backed manager settings (replaces Supabase cloud settings).
+ * File-backed manager settings (workspace JSON on the API server).
  *
  * @package Neo_Pulse_App
  */
@@ -12,7 +12,7 @@ class Neo_Pulse_App_Manager_Route_Handlers {
 	private static function file_store_status(): array {
 		return array(
 			'ok'                  => true,
-			'supabaseConfigured'  => true,
+			'workspaceConfigured' => true,
 			'urlHost'             => null,
 			'canAutoCreateTable'  => false,
 		);
@@ -76,12 +76,7 @@ class Neo_Pulse_App_Manager_Route_Handlers {
 		$method  = strtoupper( $method );
 
 		if ( $subpath === 'status' && $method === 'GET' ) {
-			Neo_Pulse_App_Api_Dispatcher::send_json(
-				array_merge(
-					self::file_store_status(),
-					array( 'supabaseUrl' => null )
-				)
-			);
+			Neo_Pulse_App_Api_Dispatcher::send_json( self::file_store_status() );
 			return;
 		}
 

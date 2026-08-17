@@ -9,7 +9,7 @@
     "NEO Pulse rewrites the full post to compete for the keyword again.",
     "Same URL waits 72 hours before it can run again."
   ],
-  "category": "reactive",
+  "category": "maintenance",
   "verticals": [
     "editorial",
     "general"

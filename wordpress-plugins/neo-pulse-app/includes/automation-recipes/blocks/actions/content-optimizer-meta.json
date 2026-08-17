@@ -3,6 +3,12 @@
   "name": "Meta + extra text",
   "executionKind": "content_optimizer_meta",
   "description": "Update title, meta description, and SEO extra text only.",
+  "filters": {
+    "categories": ["maintenance"],
+    "buckets": ["pages", "posts", "sap", "all"],
+    "execution": ["meta-only"],
+    "verticals": ["general", "editorial"]
+  },
   "defaults": {
     "executionPayload": { "updateMode": "update" }
   }

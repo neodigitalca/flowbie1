@@ -15,6 +15,7 @@ class Neo_Pulse_App_Task_Execution_Registry {
 		'content_optimizer_meta' => 'Neo_Pulse_App_Task_Execution_Runner_Content_Optimizer',
 		'gsc_reporting'          => 'Neo_Pulse_App_Task_Execution_Runner_Gsc_Reporting',
 		'post_creator'           => 'Neo_Pulse_App_Task_Execution_Runner_Post_Creator',
+		'local_dominator_export' => 'Neo_Pulse_App_Task_Execution_Runner_Local_Dominator_Export',
 	);
 
 	/**

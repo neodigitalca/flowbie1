@@ -20,7 +20,7 @@ const CHECKS = [
     name: "Manager cloud settings status",
     url: `${BASE}/api/manager-cloud-settings/status`,
     expectStatus: 200,
-    expectJson: (d) => typeof d === "object" && d !== null && /** @type {{ supabaseConfigured?: boolean }} */ (d).supabaseConfigured === true,
+    expectJson: (d) => typeof d === "object" && d !== null && /** @type {{ workspaceConfigured?: boolean }} */ (d).workspaceConfigured === true,
   },
   {
     name: "GSC service account email",

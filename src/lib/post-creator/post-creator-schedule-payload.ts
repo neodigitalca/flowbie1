@@ -1,4 +1,4 @@
-import type { PostCreatorExecutionPayload } from "@/lib/tasks-types";
+import type { PostCreatorExecutionPayload, TaskExecutionPayload } from "@/lib/tasks-types";
 import { postCreatorRunStartDate } from "@/lib/post-creator/post-creator-run-start-date";
 import {
   clampEveryNDays,
@@ -14,6 +14,8 @@ export type PostCreatorScheduleUiState = {
   customStartDate: Date;
   startTime: string;
   wordpressDraftOnly: boolean;
+  localArchive: boolean;
+  automationEmailDelivery: boolean;
 };
 
 function toIsoDateLocal(date: Date): string {
@@ -37,17 +39,50 @@ function ensureScheduleDate(value: unknown, fallback: Date): Date {
   return fallback;
 }
 
+const EXECUTION_SCHEDULE_DEFAULTS: Pick<
+  TaskExecutionPayload,
+  | "scheduleFrequency"
+  | "scheduleCustomInterval"
+  | "scheduleDayOfWeek"
+  | "scheduleStartDateOption"
+  | "scheduleTimesPerMonth"
+  | "scheduleStartDay"
+  | "scheduleStartTime"
+> = {
+  scheduleFrequency: "custom",
+  scheduleCustomInterval: 1,
+  scheduleDayOfWeek: 0,
+  scheduleStartDateOption: "custom",
+  scheduleTimesPerMonth: 1,
+  scheduleStartDay: 1,
+  scheduleStartTime: "09:00",
+};
+
+export function ensureExecutionSchedulePayload(
+  payload?: TaskExecutionPayload | null,
+): TaskExecutionPayload {
+  return {
+    ...EXECUTION_SCHEDULE_DEFAULTS,
+    ...(payload ?? {}),
+  };
+}
+
 export function postCreatorPayloadToScheduleState(
-  payload: PostCreatorExecutionPayload,
+  payload: TaskExecutionPayload | PostCreatorExecutionPayload,
 ): PostCreatorScheduleUiState {
   const postCount = Math.max(1, Math.min(31, Math.floor(Number(payload.postCount ?? 1) || 1)));
   const startTime = payload.scheduleStartTime?.trim() || "09:00";
   const startDay = Math.max(1, Math.min(28, Math.floor(Number(payload.scheduleStartDay ?? 1) || 1)));
   const anchor = postCreatorRunStartDate(startDay, startTime);
 
+  const localArchive = payload.saveLocalArchive === true || payload.sendAutomationEmail === true;
+  const automationEmailDelivery =
+    payload.sendAutomationEmail === true || Boolean(String(payload.automationEmailTo ?? "").trim());
   const draftOnly =
-    payload.scheduleDraftOnly === true ||
-    payload.postDestination === "draft";
+    !localArchive &&
+    !automationEmailDelivery &&
+    (payload.scheduleDraftOnly === true ||
+      (payload.postDestination != null && payload.postDestination === "draft"));
 
   if (payload.scheduleFrequency) {
     const freq = payload.scheduleFrequency;
@@ -64,6 +99,8 @@ export function postCreatorPayloadToScheduleState(
       customStartDate: parseIsoDateLocal(payload.scheduleCustomStartDate, anchor),
       startTime,
       wordpressDraftOnly: draftOnly,
+      localArchive,
+      automationEmailDelivery,
     };
   }
 
@@ -76,7 +113,54 @@ export function postCreatorPayloadToScheduleState(
     customStartDate: anchor,
     startTime,
     wordpressDraftOnly: draftOnly,
+    localArchive,
+    automationEmailDelivery,
   };
+}
+
+export function mergeExecutionPayloadForSave(
+  ...sources: Array<TaskExecutionPayload | null | undefined>
+): TaskExecutionPayload {
+  const merged: TaskExecutionPayload = {};
+  for (const source of sources) {
+    if (!source) continue;
+    Object.assign(merged, source);
+  }
+
+  const emailTo = String(merged.automationEmailTo ?? "").trim();
+  const wantsEmail =
+    merged.sendAutomationEmail === true ||
+    emailTo.length > 0 ||
+    sources.some(
+      (source) =>
+        source?.sendAutomationEmail === true || Boolean(String(source?.automationEmailTo ?? "").trim()),
+    );
+
+  if (wantsEmail) {
+    merged.sendAutomationEmail = true;
+    merged.saveLocalArchive = true;
+    if (emailTo) merged.automationEmailTo = emailTo;
+  }
+
+  return merged;
+}
+
+export function mergeTaskExecutionPayloadFromServer(
+  sent: TaskExecutionPayload | null | undefined,
+  server: TaskExecutionPayload | null | undefined,
+): TaskExecutionPayload {
+  return mergeExecutionPayloadForSave(server, sent);
+}
+
+export function scheduleStateToExecutionPayload(
+  state: PostCreatorScheduleUiState,
+  base: TaskExecutionPayload,
+): TaskExecutionPayload {
+  const merged = scheduleStateToPostCreatorPayload(
+    state,
+    ensureExecutionSchedulePayload(base) as PostCreatorExecutionPayload,
+  );
+  return { ...base, ...merged };
 }
 
 export function scheduleStateToPostCreatorPayload(
@@ -101,15 +185,24 @@ export function scheduleStateToPostCreatorPayload(
   }
 
   const postDestination =
-    state.wordpressDraftOnly
-      ? "draft"
-      : base.postDestination === "bank"
-        ? "bank"
-        : "wordpress";
+    base.postDestination != null
+      ? state.automationEmailDelivery || state.localArchive
+        ? base.postDestination
+        : state.wordpressDraftOnly
+          ? "draft"
+          : base.postDestination === "bank"
+            ? "wordpress"
+            : "wordpress"
+      : base.postDestination;
 
   return {
     ...base,
     postDestination,
+    saveLocalArchive: state.automationEmailDelivery || state.localArchive,
+    sendAutomationEmail:
+      state.automationEmailDelivery ||
+      Boolean(String(base.automationEmailTo ?? "").trim()) ||
+      base.sendAutomationEmail === true,
     scheduleFrequency: state.scheduleFrequency,
     scheduleCustomInterval: state.customInterval,
     scheduleDayOfWeek: state.dayOfWeek,

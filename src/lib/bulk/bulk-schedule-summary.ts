@@ -39,9 +39,28 @@ export function formatBulkScheduleSummary(params: {
   customStartDate: Date;
   startTime: string;
   draftOnly?: boolean;
+  emailDelivery?: boolean;
+  localArchive?: boolean;
 }): string {
-  const { scheduleFrequency, customInterval, dayOfWeek, startDateOption, customStartDate, startTime, draftOnly } =
-    params;
+  const {
+    scheduleFrequency,
+    customInterval,
+    dayOfWeek,
+    startDateOption,
+    customStartDate,
+    startTime,
+    draftOnly,
+    emailDelivery,
+    localArchive,
+  } = params;
+
+  if (emailDelivery) {
+    return "Email";
+  }
+
+  if (localArchive) {
+    return "Local archive";
+  }
 
   if (draftOnly) {
     return "Draft only";

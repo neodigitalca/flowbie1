@@ -201,6 +201,19 @@ export type AgentRunLogJsonExport = {
     errorMessage: string;
     result: AgentRun["result"];
   };
+  plan?: {
+    clientRunContract?: {
+      sendAutomationEmail?: boolean;
+      automationEmailTo?: string;
+    };
+  };
+  emailOutcome?: {
+    emailSent?: boolean;
+    emailError?: string;
+    emailSkipped?: boolean;
+    emailSkipReason?: string;
+    transport?: string;
+  };
   checkpoint: AgentRun["result"] extends infer R ? (R extends { checkpoint?: infer C } ? C : null) : null;
   uploadedPosts: AgentRunUploadedPost[];
   steps: Array<{
@@ -214,6 +227,33 @@ export type AgentRunLogJsonExport = {
     postUrl?: string;
   }>;
 };
+
+function exportEmailContractFromPlan(
+  plan: AgentRun["plan"] | undefined,
+): AgentRunLogJsonExport["plan"] | undefined {
+  const contract = plan?.clientRunContract;
+  if (!contract) return undefined;
+  return {
+    clientRunContract: {
+      sendAutomationEmail: contract.sendAutomationEmail,
+      automationEmailTo: contract.automationEmailTo,
+    },
+  };
+}
+
+function exportEmailOutcomeFromResult(
+  result: AgentRun["result"],
+): AgentRunLogJsonExport["emailOutcome"] | undefined {
+  if (!result || typeof result !== "object") return undefined;
+  const r = result as Record<string, unknown>;
+  const outcome: NonNullable<AgentRunLogJsonExport["emailOutcome"]> = {};
+  if (typeof r.emailSent === "boolean") outcome.emailSent = r.emailSent;
+  if (typeof r.emailError === "string") outcome.emailError = r.emailError;
+  if (typeof r.emailSkipped === "boolean") outcome.emailSkipped = r.emailSkipped;
+  if (typeof r.emailSkipReason === "string") outcome.emailSkipReason = r.emailSkipReason;
+  if (typeof r.transport === "string") outcome.transport = r.transport;
+  return Object.keys(outcome).length > 0 ? outcome : undefined;
+}
 
 export function formatAgentRunLogJson(run: AgentRun, steps: AgentRunStep[]): AgentRunLogJsonExport {
   const normalized = normalizeAgentRunStepsForDisplay(steps);
@@ -236,6 +276,8 @@ export function formatAgentRunLogJson(run: AgentRun, steps: AgentRunStep[]): Age
       errorMessage: run.errorMessage,
       result: sanitizedResult,
     },
+    plan: exportEmailContractFromPlan(run.plan),
+    emailOutcome: exportEmailOutcomeFromResult(run.result),
     checkpoint: sanitizeCheckpointForExport(run.result?.checkpoint ?? null),
     uploadedPosts: run.result?.uploadedPosts ?? [],
     steps: normalized.map((step) => ({

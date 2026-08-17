@@ -7,11 +7,11 @@ import { loadProductionSites } from "../deploy/lib/csv-sites.js";
 const dir = join(import.meta.dirname, "..");
 const repoRoot = join(dir, "..");
 const csvPath = join(dir, "Customer List", "SFTP Users_Clients List.csv");
-const zipPath = join(dir, "flowbie-wp.zip");
-const pluginDir = join(dir, "flowbie-wp");
+const zipPath = join(dir, "neo-pulse-wp.zip");
+const pluginDir = join(dir, "neo-pulse-wp");
 
 execSync("node scripts/embed-wp-secrets.mjs", { cwd: repoRoot, stdio: "inherit" });
-console.log("Building flowbie-wp zip...");
+console.log("Building neo-pulse-wp zip...");
 buildPluginZip(pluginDir, zipPath, (done, total) => {
   process.stdout.write(`\r zip ${Math.round((done / total) * 100)}%`);
 });

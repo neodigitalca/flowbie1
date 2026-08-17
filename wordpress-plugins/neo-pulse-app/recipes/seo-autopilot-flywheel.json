@@ -9,7 +9,7 @@
     "Posts: full rewrite when click-through rate falls 15%+ vs the prior 28 days (snippet or body no longer matches what searchers want).",
     "Same URL waits 72 hours before it can run again."
   ],
-  "category": "reactive",
+  "category": "maintenance",
   "verticals": [
     "general"
   ],

@@ -34,7 +34,7 @@ export function buildPluginZip(pluginDir, zipPath, onProgress) {
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
-    zip.addFile(`flowbie-wp/${file.rel}`, readFileSync(file.local));
+    zip.addFile(`neo-pulse-wp/${file.rel}`, readFileSync(file.local));
     onProgress?.(i + 1, files.length);
   }
 
