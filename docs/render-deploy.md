@@ -126,10 +126,18 @@ Enable custom domains in each Render service, then verify HTTPS.
 
 ## Demo validation
 
-1. Open demo static URL.
+1. Open demo static URL: https://flowbie-demo-static.onrender.com (200, SPA `_redirects` in `dist/`).
 2. Sign in; confirm API calls go to `neodigital.ca` (Network tab).
-3. Run Local Dominator grid export from a workflow or task.
-4. Check worker logs in Render dashboard or via MCP.
+3. CORS preflight from `*.onrender.com` is allowed on `neodigital.ca/api/*`.
+4. Run Local Dominator grid export from a workflow or task (WP proxies to prod worker when secrets are set).
+5. Check worker logs in Render dashboard or via MCP.
+
+## Provision / patch scripts
+
+| Script | Purpose |
+|--------|---------|
+| `node scripts/render-provision.mjs` | Create or update all four Render services |
+| `node scripts/render-patch-wp-worker-secrets.mjs` | Append LD worker URL + auth to WP Engine `neo-pulse-app-secrets.php` |
 
 ## Rollback
 

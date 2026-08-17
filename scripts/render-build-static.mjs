@@ -41,7 +41,7 @@ const result = spawnSync("node", [path.join(repoRoot, "scripts", "build-neo-puls
   cwd: repoRoot,
   stdio: "inherit",
   env: process.env,
-  shell: process.platform === "win32",
+  shell: false,
 });
 
 if ((result.status ?? 1) === 0) {
