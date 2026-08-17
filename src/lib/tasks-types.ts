@@ -157,7 +157,7 @@ export type TaskExecutionClientRunContract = {
   keyword?: string;
   saveToDisk?: boolean;
   saveLocalArchive?: boolean;
-  executionMode?: "client" | "server" | "github";
+  executionMode?: "client" | "server";
   sendAutomationEmail?: boolean;
   automationEmailTo?: string;
   automationEmailSubject?: string;
@@ -197,7 +197,7 @@ export type TaskExecution = {
   updatedAt: string;
   completedAt: string | null;
   clientRunContract?: TaskExecutionClientRunContract | null;
-  executionMode?: "client" | "server" | "github" | null;
+  executionMode?: "client" | "server" | null;
   result?: unknown;
   error?: string;
   progress?: TaskExecutionProgress | null;

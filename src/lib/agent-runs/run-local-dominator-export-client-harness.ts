@@ -2,7 +2,6 @@ import type { WordPressSite } from "@/components/integrations/types";
 import { getStoredSites } from "@/components/integrations/storage";
 import type { AgentRunHarnessContext } from "@/lib/agent-runs/harness-registry";
 import type { AgentRun, AgentRunResult } from "@/lib/agent-runs-types";
-import { runResearchGithubClientHarness } from "@/lib/agent-runs/run-research-github-client-harness";
 import {
   decodeLocalDominatorCsvBase64,
   downloadLocalDominatorCsv,
@@ -36,15 +35,6 @@ function contractFields(contract: TaskExecutionClientRunContract | Record<string
   return { businessName, keyword };
 }
 
-function usesGithubRunner(
-  contract: TaskExecutionClientRunContract,
-  run: AgentRun,
-): boolean {
-  if (contract.executionMode === "github") return true;
-  if (run.plan?.executionMode === "github") return true;
-  return false;
-}
-
 export async function runLocalDominatorExportClientHarness(
   run: AgentRun,
   site: WordPressSite,
@@ -54,22 +44,6 @@ export async function runLocalDominatorExportClientHarness(
   batchKey: string,
 ): Promise<AgentRunResult> {
   const { businessName, keyword } = contractFields(contract);
-
-  if (usesGithubRunner(contract, run)) {
-    return runResearchGithubClientHarness({
-      run,
-      site,
-      contract,
-      executionId,
-      ctx,
-      batchKey,
-      jobKey: "local_dominator_export",
-      dispatchPayload: { businessName, keyword },
-      preflightMessage: "Starting Local Dominator export…",
-      runningMessage: `Exporting ${businessName} on GitHub Actions…`,
-      successMessage: `Exported Local Dominator grid for ${businessName}`,
-    });
-  }
 
   await ctx.onStep?.("Preflight", "running");
   await patchTaskExecutionProgress(run.teamId, executionId, {
@@ -85,25 +59,6 @@ export async function runLocalDominatorExportClientHarness(
   });
 
   const response = await exportLocalDominatorGrid({ businessName, keyword });
-  if (
-    !response.ok &&
-    response.code === "LD_EXPORT_EXEC_BLOCKED"
-  ) {
-    return runResearchGithubClientHarness({
-      run,
-      site,
-      contract,
-      executionId,
-      ctx,
-      batchKey,
-      jobKey: "local_dominator_export",
-      dispatchPayload: { businessName, keyword },
-      preflightMessage: "Starting Local Dominator export…",
-      runningMessage: `Exporting ${businessName} on GitHub Actions…`,
-      successMessage: `Exported Local Dominator grid for ${businessName}`,
-    });
-  }
-
   if (!response.ok || !response.csvBase64 || !response.fileName) {
     throw new Error(response.error ?? "Local Dominator export failed.");
   }

@@ -54,16 +54,11 @@ class Neo_Pulse_App_Task_Execution_Runner_Local_Dominator_Export {
 			Neo_Pulse_App_Tasks_Store::automation_email_contract_fields( $payload )
 		);
 
-		if ( class_exists( 'Neo_Pulse_App_Research_Github' ) && Neo_Pulse_App_Research_Github::is_configured() ) {
-			$contract['executionMode'] = 'github';
-		}
-
 		return array(
 			'ok'      => true,
 			'status'  => 'awaiting_client',
 			'payload' => array(
 				'clientRunContract' => $contract,
-				'executionMode'     => isset( $contract['executionMode'] ) ? (string) $contract['executionMode'] : null,
 			),
 		);
 	}

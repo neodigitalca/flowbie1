@@ -1,5 +1,6 @@
 import type { AssistCardStep } from "@/lib/pulse-assist/types";
 import {
+  taskExecutionLocalDominatorIsConfigured,
   taskExecutionPostCreatorIsConfigured,
   taskExecutionReportingIsConfigured,
   taskExecutionTargetIsConfigured,
@@ -13,7 +14,8 @@ export type AgentRunRecipeKey =
   | "overview_pages_meta_batch"
   | "content_optimizer_bulk"
   | "gsc_reporting"
-  | "post_creator";
+  | "post_creator"
+  | "local_dominator_export";
 
 export type AgentRunStepArtifact = {
   id: string;
@@ -158,6 +160,7 @@ export function taskExecutionKindToRecipe(kind: string): AgentRunRecipeKey | nul
   if (kind === "content_optimizer_meta") return "overview_pages_meta_batch";
   if (kind === "gsc_reporting") return "gsc_reporting";
   if (kind === "post_creator") return "post_creator";
+  if (kind === "local_dominator_export") return "local_dominator_export";
   return null;
 }
 
@@ -168,10 +171,13 @@ function taskExecutionIsConfigured(
     targetBucket?: string;
     targetUrls?: string[];
     comparePreset?: string;
+    businessName?: string;
+    keyword?: string;
     postCount?: number;
   },
 ): boolean {
   if (kind === "gsc_reporting") return taskExecutionReportingIsConfigured(payload);
+  if (kind === "local_dominator_export") return taskExecutionLocalDominatorIsConfigured(payload);
   if (kind === "post_creator") return taskExecutionPostCreatorIsConfigured(payload);
   return taskExecutionTargetIsConfigured(payload);
 }

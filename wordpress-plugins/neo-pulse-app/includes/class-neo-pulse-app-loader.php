@@ -189,10 +189,6 @@ class Neo_Pulse_App_Loader {
 
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/local-dominator/class-local-dominator-export.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/local-dominator/class-local-dominator-route-handlers.php';
-		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/research/class-research-job-registry.php';
-		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/research/class-research-github.php';
-		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/research/class-research-job-callback.php';
-		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/research/class-research-route-handlers.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-triggers/class-task-trigger-inventory.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-triggers/class-task-trigger-gsc.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-triggers/class-task-trigger-pending-store.php';

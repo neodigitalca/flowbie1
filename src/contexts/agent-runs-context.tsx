@@ -290,11 +290,7 @@ export function AgentRunsContextProvider({
       }
 
       const executionMode =
-        exec.execution.executionMode === "server"
-          ? ("server" as const)
-          : exec.execution.executionMode === "github"
-            ? ("github" as const)
-            : undefined;
+        exec.execution.executionMode === "server" ? ("server" as const) : undefined;
 
       return startRun(
         {

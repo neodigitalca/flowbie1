@@ -48,7 +48,6 @@
     "localdominator:login:headed": "node scripts/research/local-dominator/login.mjs --headed",
     "localdominator:export": "node scripts/research/local-dominator/export-grid.mjs --headed",
     "localdominator:export:json": "node scripts/research/local-dominator/export-grid.mjs --json",
-    "research:run-job": "node scripts/research/github/run-job.mjs",
     "setup:local-dominator": "node scripts/setup-local-dominator.mjs",
     "setup:local-dominator:smoke": "node scripts/setup-local-dominator.mjs --smoke"
   },
