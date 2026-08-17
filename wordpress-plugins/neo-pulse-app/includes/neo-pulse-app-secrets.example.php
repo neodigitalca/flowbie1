@@ -40,3 +40,9 @@ if ( ! defined( 'NEO_PULSE_APP_CHEKKIT_EVENTS_WEBHOOK_URL' ) ) {
 if ( ! defined( 'NEO_PULSE_APP_CHEKKIT_FORM_EMAIL' ) ) {
 	define( 'NEO_PULSE_APP_CHEKKIT_FORM_EMAIL', '' );
 }
+if ( ! defined( 'NEO_PULSE_APP_LOCAL_DOMINATOR_WORKER_URL' ) ) {
+	define( 'NEO_PULSE_APP_LOCAL_DOMINATOR_WORKER_URL', 'https://flowbie-prod-worker.onrender.com' );
+}
+if ( ! defined( 'NEO_PULSE_APP_LOCAL_DOMINATOR_WORKER_AUTH' ) ) {
+	define( 'NEO_PULSE_APP_LOCAL_DOMINATOR_WORKER_AUTH', '' );
+}

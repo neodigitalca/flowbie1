@@ -63,10 +63,32 @@ async function getOwnerId() {
   return preferred.id;
 }
 
+async function updateStaticSiteConfig(serviceId) {
+  await api("PATCH", `/services/${serviceId}`, {
+    serviceDetails: {
+      buildCommand: "npm ci && npm run build:render-static",
+      publishPath: "dist",
+    },
+  });
+  console.log(`[static-config] ${serviceId}: build + publishPath=dist`);
+}
+
+async function getEnvVar(serviceId, key) {
+  try {
+    const rows = await api("GET", `/services/${serviceId}/env-vars?limit=100`);
+    const list = Array.isArray(rows) ? rows.map((row) => row.envVar ?? row) : [];
+    const hit = list.find((item) => item.key === key);
+    return hit?.value ? String(hit.value).trim() : "";
+  } catch {
+    return "";
+  }
+}
+
 async function ensureStaticSite(ownerId, spec) {
   const existing = (await listServices()).find((s) => s.name === spec.name);
   if (existing?.id) {
     console.log(`[skip] ${spec.name} exists: ${existing.id}`);
+    await updateStaticSiteConfig(existing.id);
     return existing;
   }
 
@@ -153,6 +175,11 @@ function readRepoEnv() {
   };
 }
 
+async function updateServiceBranch(serviceId, branch) {
+  await api("PATCH", `/services/${serviceId}`, { branch });
+  console.log(`[branch] ${serviceId} -> ${branch}`);
+}
+
 async function addCustomDomain(serviceId, domain) {
   try {
     const result = await api("POST", `/services/${serviceId}/custom-domains`, { name: domain });
@@ -176,6 +203,11 @@ async function main() {
   console.log("[owner]", ownerId);
 
   const secrets = readRepoEnv();
+  const demoWorkerExisting = (await listServices()).find((s) => s.name === "flowbie-demo-worker");
+  const savedToken =
+    process.env.LD_WORKER_AUTH_TOKEN?.trim() ||
+    (demoWorkerExisting?.id ? await getEnvVar(demoWorkerExisting.id, "LD_WORKER_AUTH_TOKEN") : "");
+  if (savedToken) secrets.workerToken = savedToken;
 
   const demoStatic = await ensureStaticSite(ownerId, {
     name: "flowbie-demo-static",
@@ -218,6 +250,9 @@ async function main() {
   if (prodStatic?.id) await putEnvVars(prodStatic.id, staticEnv("prod"));
   if (demoWorker?.id) await putEnvVars(demoWorker.id, workerSecrets);
   if (prodWorker?.id) await putEnvVars(prodWorker.id, workerSecrets);
+
+  if (prodStatic?.id) await updateServiceBranch(prodStatic.id, BRANCH_DEMO);
+  if (prodWorker?.id) await updateServiceBranch(prodWorker.id, BRANCH_DEMO);
 
   for (const svc of [demoStatic, demoWorker, prodStatic, prodWorker]) {
     const id = svc?.id;

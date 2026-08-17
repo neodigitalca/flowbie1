@@ -12,6 +12,50 @@ Flowbie One uses **Render** for the React UI (static site) and the **Local Domin
 | LD worker (demo) | Render Docker | `https://flowbie-demo-worker.onrender.com` |
 | LD worker (prod) | Render Docker | `https://ld.neodigital.ca` |
 
+## Production branch note
+
+Prod services in [`render.yaml`](../render.yaml) target `main`. Until Render infra is merged to `main`, `scripts/render-provision.mjs` temporarily points prod services at `cursor/meta-ads-visual-settings-layout` (same commit as demo).
+
+## DNS (production)
+
+Custom domains are registered on Render:
+
+| Host | Render service |
+|------|----------------|
+| `app.neodigital.ca` | `flowbie-prod-static` |
+| `ld.neodigital.ca` | `flowbie-prod-worker` |
+
+In your DNS provider, add CNAME records (targets shown in Render Dashboard → each service → **Custom Domains**):
+
+| Host | Type | Target (until dashboard shows a custom target) |
+|------|------|------------------------------------------------|
+| `app` | CNAME | `flowbie-prod-static.onrender.com` |
+| `ld` | CNAME | `flowbie-prod-worker.onrender.com` |
+
+Verify HTTPS after DNS propagates (`verificationStatus` → verified in Render API).
+
+## WP Engine worker constants
+
+Add to `neo-pulse-app-secrets.php` on WP Engine (use the token printed once by `node scripts/render-provision.mjs`):
+
+```php
+define( 'NEO_PULSE_APP_LOCAL_DOMINATOR_WORKER_URL', 'https://ld.neodigital.ca' );
+define( 'NEO_PULSE_APP_LOCAL_DOMINATOR_WORKER_AUTH', '<LD_WORKER_AUTH_TOKEN>' );
+```
+
+Until DNS is live, use `https://flowbie-prod-worker.onrender.com` as the worker URL.
+
+## Live URLs (Neo Digital team Render)
+
+| Service | URL |
+|---------|-----|
+| Demo static | https://flowbie-demo-static.onrender.com |
+| Demo worker | https://flowbie-demo-worker.onrender.com |
+| Prod static | https://flowbie-prod-static.onrender.com |
+| Prod worker | https://flowbie-prod-worker.onrender.com |
+| Prod static (DNS) | https://app.neodigital.ca |
+| Prod worker (DNS) | https://ld.neodigital.ca |
+
 ## Cursor Render MCP
 
 User-level config: `~/.cursor/mcp.json` (see [`.cursor/mcp.json.example`](../.cursor/mcp.json.example)).

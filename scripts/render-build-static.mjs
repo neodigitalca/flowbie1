@@ -3,6 +3,7 @@
  * Render static site build. Set RENDER_PROFILE=demo|prod and optional overrides.
  */
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -42,5 +43,12 @@ const result = spawnSync("node", [path.join(repoRoot, "scripts", "build-neo-puls
   env: process.env,
   shell: process.platform === "win32",
 });
+
+if ((result.status ?? 1) === 0) {
+  const redirectsPath = path.join(repoRoot, "dist", "_redirects");
+  fs.mkdirSync(path.dirname(redirectsPath), { recursive: true });
+  fs.writeFileSync(redirectsPath, "/*    /index.html   200\n", "utf8");
+  console.log("[render-build-static] wrote dist/_redirects");
+}
 
 process.exit(result.status ?? 1);
