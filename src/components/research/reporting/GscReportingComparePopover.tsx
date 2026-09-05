@@ -5,7 +5,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { BULK_HEADER_SELECT } from "@/components/keyword-research/bulk/bulk-workspace-header-styles";
 import {
   formatGscComparePeriodLabel,
+  formatTrailingMonthsTriggerLabel,
   GSC_REPORTING_COMPARE_PRESET_OPTIONS,
+  parseTrailingMonthCount,
   type GscCompareRanges,
   type GscReportingComparePresetId,
 } from "@/lib/gsc-reporting/gsc-fetch-date-presets";
@@ -13,6 +15,9 @@ import { cn } from "@/lib/utils";
 
 const PRESET_TRIGGER_LABEL: Record<GscReportingComparePresetId, string> = {
   mom: "Month vs month",
+  m3: "3 months vs 3",
+  m6: "6 months vs 6",
+  m12: "12 months vs 12",
   yoy: "Year over year",
   custom_compare: "Custom ranges",
 };
@@ -23,6 +28,10 @@ export type GscReportingComparePopoverProps = {
   onGscFetchPresetChange: (preset: GscReportingComparePresetId) => void;
   compareRangeDraft: GscCompareRanges;
   onCompareRangeDraftChange: (updater: (prev: GscCompareRanges) => GscCompareRanges) => void;
+  trailingMonthCount: number | null;
+  trailingMonthCountDraft: string;
+  onTrailingMonthCountDraftChange: (value: string) => void;
+  onApplyTrailingMonths: (monthCount: number) => void;
   todayYmdMax: string;
 };
 
@@ -32,6 +41,10 @@ export function GscReportingComparePopover({
   onGscFetchPresetChange,
   compareRangeDraft,
   onCompareRangeDraftChange,
+  trailingMonthCount,
+  trailingMonthCountDraft,
+  onTrailingMonthCountDraftChange,
+  onApplyTrailingMonths,
   todayYmdMax,
 }: GscReportingComparePopoverProps) {
   const periodALabel = formatGscComparePeriodLabel(
@@ -42,6 +55,13 @@ export function GscReportingComparePopover({
     compareRangeDraft.compare.startDate,
     compareRangeDraft.compare.endDate,
   );
+  const trailingActive = trailingMonthCount != null;
+  const triggerLabel = trailingActive
+    ? formatTrailingMonthsTriggerLabel(trailingMonthCount)
+    : PRESET_TRIGGER_LABEL[gscFetchPreset];
+  const triggerTitle = trailingActive
+    ? `${trailingMonthCount} months vs last ${trailingMonthCount} months (last ${trailingMonthCount} full months vs previous ${trailingMonthCount})`
+    : GSC_REPORTING_COMPARE_PRESET_OPTIONS.find((o) => o.id === gscFetchPreset)?.label;
 
   return (
     <Popover>
@@ -52,13 +72,13 @@ export function GscReportingComparePopover({
           id="gsc-fetch-preset"
           disabled={busy}
           aria-label="GSC compare period preset"
-          title={GSC_REPORTING_COMPARE_PRESET_OPTIONS.find((o) => o.id === gscFetchPreset)?.label}
+          title={triggerTitle}
           className={cn(
             BULK_HEADER_SELECT,
             "h-8 w-[9.5rem] shrink-0 justify-between gap-1 px-2 font-normal hover:bg-zinc-700",
           )}
         >
-          <span className="truncate">{PRESET_TRIGGER_LABEL[gscFetchPreset]}</span>
+          <span className="truncate">{triggerLabel}</span>
           <ChevronDown className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
         </Button>
       </PopoverTrigger>
@@ -72,11 +92,11 @@ export function GscReportingComparePopover({
               key={o.id}
               type="button"
               role="radio"
-              aria-checked={gscFetchPreset === o.id}
+              aria-checked={!trailingActive && gscFetchPreset === o.id}
               disabled={busy}
               className={cn(
                 "flex w-full rounded-none px-2.5 py-2 text-left text-base transition-colors",
-                gscFetchPreset === o.id
+                !trailingActive && gscFetchPreset === o.id
                   ? "bg-primary/15 text-foreground"
                   : "text-muted-foreground hover:bg-zinc-800 hover:text-foreground",
               )}
@@ -88,7 +108,36 @@ export function GscReportingComparePopover({
         </div>
 
         <div className="space-y-3 border-t border-white/10 pt-3">
-          {gscFetchPreset === "custom_compare" ? (
+          <div
+            className={cn(
+              "flex h-8 items-center gap-2 px-2.5",
+              trailingActive ? "bg-primary/15 text-foreground" : "text-muted-foreground",
+            )}
+          >
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={36}
+              step={1}
+              placeholder="Months"
+              aria-label="Months vs prior"
+              disabled={busy}
+              value={trailingMonthCountDraft}
+              onChange={(e) => {
+                const next = e.target.value;
+                onTrailingMonthCountDraftChange(next);
+                const parsed = parseTrailingMonthCount(next);
+                if (parsed != null) onApplyTrailingMonths(parsed);
+              }}
+              className={cn(
+                BULK_HEADER_SELECT,
+                "h-8 w-[4.5rem] shrink-0 px-2 tabular-nums",
+              )}
+            />
+            <span className="min-w-0 truncate text-base">months vs prior</span>
+          </div>
+          {gscFetchPreset === "custom_compare" && !trailingActive ? (
             <>
               <PeriodDateFields
                 label="Period A"

@@ -17,6 +17,27 @@ import { mergeGeneratedFilesByName } from "@/lib/overview/overview-peer-csv-deta
 import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
 import type { OptimizationFileManager } from "@/lib/optimization-file-manager";
 import { OptimizationFileManager as OptimizationFileManagerClass } from "@/lib/optimization-file-manager";
+import {
+  buildWaitingResearchHarnessSections,
+  RESEARCH_HARNESS_PIPELINE_TITLES,
+  RESEARCH_HARNESS_TOTAL_SECTIONS,
+} from "@/lib/overview/overview-research-harness-sections";
+import {
+  buildResearchRowIndexSet,
+  isResearchBatchState,
+  rowHarnessIsResearch,
+  type ResearchBatchSignals,
+} from "@/lib/overview/overview-bulk-pipeline-titles";
+import {
+  buildPredeterminedBlogBodyHarnessTitles,
+  buildWaitingContentOptimizeHarnessSections,
+  extractBodyHarnessTitlesFromSections,
+  extractBodyHarnessTitlesFromRowFiles,
+  isUrlLikeHarnessTitle,
+  resolveContentOptimizePipelineTitlesForRow,
+  sanitizeHarnessArticleTitle,
+} from "@/lib/overview/overview-content-optimize-pipeline";
+import { isOverviewResearchBatchInFlight } from "@/components/overview/overview-tab/overview-bulk-run-helpers";
 
 export type ContentOptimizerBulkGeneratorBindingsInput = {
   siteId: string;
@@ -52,13 +73,48 @@ export function contentOptimizerLiveStatus(
     "bulkState" | "batchProgress" | "siteProgress"
   >,
 ): string {
+  const researchRun =
+    !isContentOptimizerBulkRun(input.bulkState) &&
+    (isResearchBatchState(input.bulkState) || input.bulkState.runKind === "research");
+  if (researchRun) {
+    let bulkMsg = input.bulkState.currentStepProgress?.message?.trim();
+    if (
+      bulkMsg === "Initializing batch…" ||
+      bulkMsg === "Initializing batch..." ||
+      bulkMsg === "Initializing batch"
+    ) {
+      bulkMsg =
+        input.bulkState.currentStep?.trim() ||
+        input.batchProgress?.message?.trim() ||
+        "Researching…";
+    }
+    if (bulkMsg) return bulkMsg;
+    const batchMsg = input.batchProgress?.message?.trim();
+    if (batchMsg) return batchMsg;
+    const siteMsg = input.siteProgress?.message?.trim();
+    if (siteMsg) return siteMsg;
+    return "";
+  }
   const siteMsg = input.siteProgress?.message?.trim();
   if (siteMsg) return siteMsg;
+  const siteStep = input.siteProgress?.step?.trim();
+  if (siteStep && siteStep !== "Preparing…" && siteStep !== "Preparing...") return siteStep;
   const batchMsg = input.batchProgress?.message?.trim();
   if (batchMsg) return batchMsg;
   const bulkMsg = input.bulkState.currentStepProgress?.message?.trim();
   if (bulkMsg) return bulkMsg;
   return "";
+}
+
+function bulkStateUsesResearchPipeline(
+  bulkState: BulkOptimizationState,
+): boolean {
+  if (isContentOptimizerBulkRun(bulkState)) return false;
+  return (
+    bulkState.runKind === "research" ||
+    isResearchBatchState(bulkState) ||
+    bulkState.currentStepProgress?.harnessPlannedSectionCount === RESEARCH_HARNESS_TOTAL_SECTIONS
+  );
 }
 
 function overviewRowByUrl(rows: OverviewRow[]): Map<string, OverviewRow> {
@@ -70,7 +126,7 @@ function overviewRowByUrl(rows: OverviewRow[]): Map<string, OverviewRow> {
   return map;
 }
 
-function overviewRowToCsvRow(
+export function overviewRowToCsvRow(
   row: OverviewRow | undefined,
   url: string,
   bulkState: BulkOptimizationState,
@@ -79,16 +135,19 @@ function overviewRowToCsvRow(
     row?.focusKeyword?.trim() ||
     bulkState.urlKeywords?.[url]?.trim() ||
     "";
+  const entity =
+    bulkState.urlEntities?.[url] && bulkState.urlEntities[url] !== "N/A"
+      ? String(bulkState.urlEntities[url])
+      : undefined;
   return {
     keyword,
     title: row?.title?.trim() || row?.aiTitle?.trim() || url,
     meta_description: row?.metaDescription?.trim() || undefined,
     publish_date_gmt: row?.dateModifier?.trim() || row?.wpDateGmt?.trim() || undefined,
     destination_url: url,
-    entity:
-      bulkState.urlEntities?.[url] && bulkState.urlEntities[url] !== "N/A"
-        ? String(bulkState.urlEntities[url])
-        : undefined,
+    seo_research: row?.seoResearch?.trim() || undefined,
+    entity,
+    origin: entity,
   };
 }
 
@@ -125,7 +184,8 @@ function buildFilesByRow(input: ContentOptimizerBulkGeneratorBindingsInput): Map
 
   for (let index = 0; index < urls.length; index += 1) {
     const url = urls[index]!;
-    const row = overviewRowToCsvRow(rowByUrl.get(normalizePageUrlKey(url)), url, bulkState);
+    const overviewRow = rowByUrl.get(normalizePageUrlKey(url));
+    const csvRow = overviewRowToCsvRow(overviewRow, url, bulkState);
     const persisted = bulkState.urlGeneratedFiles?.[url] ?? [];
     const isActive = activeKey && normalizePageUrlKey(url) === activeKey;
     const live =
@@ -138,7 +198,7 @@ function buildFilesByRow(input: ContentOptimizerBulkGeneratorBindingsInput): Map
         : [];
     const merged = mergeGeneratedFilesByName(persisted, live);
     if (merged.length > 0) {
-      map.set(index, optimizationFilesToBulkGenerated(merged, index, row));
+      map.set(index, optimizationFilesToBulkGenerated(merged, index, csvRow));
     }
   }
 
@@ -146,11 +206,8 @@ function buildFilesByRow(input: ContentOptimizerBulkGeneratorBindingsInput): Map
   if (fm && fm.getFileCount() > 0 && activeUrl) {
     const activeIndex = urls.findIndex((u) => normalizePageUrlKey(u) === activeKey);
     if (activeIndex >= 0) {
-      const row = overviewRowToCsvRow(
-        rowByUrl.get(normalizePageUrlKey(urls[activeIndex]!)),
-        urls[activeIndex]!,
-        bulkState,
-      );
+      const overviewRow = rowByUrl.get(normalizePageUrlKey(urls[activeIndex]!));
+      const row = overviewRowToCsvRow(overviewRow, urls[activeIndex]!, bulkState);
       const fromFm = fm.getFiles().map((f) => ({
         name: f.name,
         content: f.content,
@@ -171,16 +228,109 @@ function buildFilesByRow(input: ContentOptimizerBulkGeneratorBindingsInput): Map
   return map;
 }
 
+function harnessSectionsForUrl(
+  byUrl: BulkOptimizationState["urlHarnessSections"] | undefined,
+  url: string,
+): BulkHarnessSectionUi[] | undefined {
+  const direct = byUrl?.[url] as BulkHarnessSectionUi[] | undefined;
+  if (direct?.length) return direct;
+  const key = normalizePageUrlKey(url);
+  if (!key || !byUrl) return undefined;
+  for (const [candidateUrl, sections] of Object.entries(byUrl)) {
+    if (normalizePageUrlKey(candidateUrl) === key && (sections as BulkHarnessSectionUi[])?.length) {
+      return sections as BulkHarnessSectionUi[];
+    }
+  }
+  return undefined;
+}
+
+function harnessBodyIntroLooksLikeUrl(title: string): boolean {
+  const trimmed = title.trim();
+  if (!trimmed) return false;
+  if (/^How https?:\/\//i.test(trimmed)) return true;
+  return isUrlLikeHarnessTitle(trimmed);
+}
+
+export function mergeContentOptimizeHarnessSections(
+  stored: BulkHarnessSectionUi[] | undefined,
+  rowFiles?: Array<{ name?: string; fileName?: string; content?: string }>,
+  articleTitle?: string,
+  pageUrl?: string,
+  keyword?: string,
+): BulkHarnessSectionUi[] {
+  const fromHarness = extractBodyHarnessTitlesFromSections(stored);
+  const fromFiles = extractBodyHarnessTitlesFromRowFiles(rowFiles);
+  const harnessHasBadIntro = Boolean(fromHarness[0] && harnessBodyIntroLooksLikeUrl(fromHarness[0]));
+  const safeArticleTitle = sanitizeHarnessArticleTitle(articleTitle ?? "", { pageUrl, keyword });
+  const bodyTitles =
+    fromHarness.length > 0 && !harnessHasBadIntro
+      ? fromHarness
+      : fromFiles.length > 0
+        ? fromFiles
+        : buildPredeterminedBlogBodyHarnessTitles(safeArticleTitle, undefined, { pageUrl, keyword });
+  const waiting = buildWaitingContentOptimizeHarnessSections(bodyTitles).map((section, sectionIndex) => ({
+    ...section,
+    sectionIndex,
+  })) as BulkHarnessSectionUi[];
+  if (!stored?.length) return waiting;
+  const statusByTitle = new Map<string, BulkHarnessSectionUi>();
+  for (const section of stored) {
+    const title = section.title?.trim();
+    if (title) statusByTitle.set(title, section);
+  }
+  return waiting.map((section) => {
+    const patch = statusByTitle.get(section.title);
+    return patch ? { ...patch, sectionIndex: section.sectionIndex, title: section.title } : section;
+  });
+}
+
+function mergeResearchHarnessSections(
+  stored: BulkHarnessSectionUi[] | undefined,
+): BulkHarnessSectionUi[] {
+  const waiting = buildWaitingResearchHarnessSections().map((section, sectionIndex) => ({
+    ...section,
+    sectionIndex,
+  })) as BulkHarnessSectionUi[];
+  if (!stored?.length || !rowHarnessIsResearch(stored)) return waiting;
+  const statusByTitle = new Map<string, BulkHarnessSectionUi>();
+  for (const section of stored) {
+    const title = section.title?.trim();
+    if (title) statusByTitle.set(title, section);
+  }
+  return waiting.map((section, sectionIndex) => {
+    const patch = statusByTitle.get(section.title);
+    return patch ? { ...patch, sectionIndex } : section;
+  });
+}
+
 function buildHarnessByRow(
   bulkState: BulkOptimizationState,
+  overviewRows: OverviewRow[],
 ): Map<number, BulkHarnessSectionUi[]> {
   const map = new Map<number, BulkHarnessSectionUi[]>();
   const urls = bulkState.urls ?? [];
   const byUrl = bulkState.urlHarnessSections ?? {};
+  const filesByUrl = bulkState.urlGeneratedFiles ?? {};
+  const researchBatch = bulkState.runKind === "research";
+  const rowByUrl = overviewRowByUrl(overviewRows);
+
   for (let index = 0; index < urls.length; index += 1) {
-    const sections = byUrl[urls[index]!];
-    if (sections?.length) {
-      map.set(index, sections as BulkHarnessSectionUi[]);
+    const url = urls[index]!;
+    const stored = harnessSectionsForUrl(byUrl, url);
+    const rowFiles = filesByUrl[url] ?? [];
+    const overviewRow = rowByUrl.get(normalizePageUrlKey(url));
+    const articleTitle =
+      sanitizeHarnessArticleTitle(
+        overviewRow?.title?.trim() ||
+          overviewRow?.aiTitle?.trim() ||
+          bulkState.urlKeywords?.[url]?.trim() ||
+          "",
+        { pageUrl: url, keyword: bulkState.urlKeywords?.[url] },
+      );
+    if (researchBatch) {
+      map.set(index, mergeResearchHarnessSections(stored));
+    } else {
+      map.set(index, mergeContentOptimizeHarnessSections(stored, rowFiles, articleTitle, url, bulkState.urlKeywords?.[url]));
     }
   }
   return map;
@@ -189,6 +339,11 @@ function buildHarnessByRow(
 function resolveCurrentRow(bulkState: BulkOptimizationState): number {
   const urls = bulkState.urls ?? [];
   if (urls.length === 0) return 0;
+
+  if (isResearchBatchState(bulkState)) {
+    const currentIndex = bulkState.currentIndex ?? 0;
+    if (currentIndex >= 0 && currentIndex < urls.length) return currentIndex;
+  }
 
   for (let i = 0; i < urls.length; i += 1) {
     if (bulkState.urlStatuses?.[urls[i]!] === "optimizing") return i;
@@ -209,9 +364,26 @@ function resolveCurrentRow(bulkState: BulkOptimizationState): number {
 function liveHarnessSections(
   input: ContentOptimizerBulkGeneratorBindingsInput,
 ): BulkHarnessSectionUi[] {
-  return toHarnessUi(
+  const fromProgress = toHarnessUi(
     input.siteProgress?.harnessSections ?? input.batchProgress?.harnessSections,
   );
+  const currentRow = resolveCurrentRow(input.bulkState);
+  const currentUrl = input.bulkState.urls?.[currentRow]?.trim();
+  const fromBulkUrl = currentUrl
+    ? toHarnessUi(harnessSectionsForUrl(input.bulkState.urlHarnessSections, currentUrl))
+    : [];
+  if (!fromBulkUrl.length) return fromProgress;
+  if (!fromProgress.length) return fromBulkUrl;
+  const byTitle = new Map<string, BulkHarnessSectionUi>();
+  for (const section of fromBulkUrl) {
+    const title = section.title?.trim();
+    if (title) byTitle.set(title, section);
+  }
+  for (const section of fromProgress) {
+    const title = section.title?.trim();
+    if (title) byTitle.set(title, section);
+  }
+  return [...byTitle.values()];
 }
 
 function harnessPlannedSectionCount(
@@ -227,14 +399,18 @@ function harnessPlannedSectionCount(
 export function contentOptimizerHeaderProgressFromRun(
   input: ContentOptimizerBulkGeneratorBindingsInput,
 ): BlogImportHeaderProgress | null {
-  const isProcessing = Boolean(
-    input.isOptimizingContent[input.batchKey] || input.isOptimizingContent[input.siteId],
-  );
+  const isProcessing = resolveBulkRunIsProcessing(input);
   const status = contentOptimizerLiveStatus(input);
   if (!isProcessing && !status) return null;
 
-  const totalRows = input.bulkState.urls?.length ?? 0;
+  const urls = input.bulkState.urls ?? [];
   const currentRow = resolveCurrentRow(input.bulkState);
+  const completedCount = urls.filter(
+    (u) => input.bulkState.urlStatuses?.[u] === "completed",
+  ).length;
+  const activeUrl = urls[currentRow];
+  const activeRowOptimizing =
+    Boolean(activeUrl) && input.bulkState.urlStatuses?.[activeUrl!] === "optimizing";
 
   return blogImportHeaderProgressFromBulk({
     status,
@@ -243,8 +419,12 @@ export function contentOptimizerHeaderProgressFromRun(
     harnessPlannedSectionCount: harnessPlannedSectionCount(input),
     currentRow,
     batchRowProgress:
-      isProcessing && totalRows > 0
-        ? { current: currentRow, total: totalRows }
+      isProcessing && urls.length > 0
+        ? {
+            current: completedCount,
+            total: urls.length,
+            activeRowOptimizing,
+          }
         : undefined,
   });
 }
@@ -257,6 +437,26 @@ export function buildContentOptimizerBulkMicroSnapshot(
   return buildBlogImportMicroSnapshot(headerProgress, `${CONTENT_OPTIMIZER_RUN_LABEL}${siteSuffix}`);
 }
 
+function isResearchBatchInFlight(bulkState: BulkOptimizationState): boolean {
+  return isOverviewResearchBatchInFlight(bulkState);
+}
+
+function resolveBulkRunIsProcessing(input: ContentOptimizerBulkGeneratorBindingsInput): boolean {
+  if (input.isOptimizingContent[input.batchKey] || input.isOptimizingContent[input.siteId]) {
+    return true;
+  }
+  return isResearchBatchInFlight(input.bulkState);
+}
+
+function researchBatchSignals(bulkState: BulkOptimizationState): ResearchBatchSignals {
+  return {
+    runKind: bulkState.runKind,
+    currentStep: bulkState.currentStep,
+    currentStepProgress: bulkState.currentStepProgress,
+    urlHarnessSections: bulkState.urlHarnessSections,
+  };
+}
+
 export function buildContentOptimizerBulkGeneratorDetailsProps(
   input: ContentOptimizerBulkGeneratorBindingsInput,
   workspaceBusy: boolean,
@@ -267,12 +467,35 @@ export function buildContentOptimizerBulkGeneratorDetailsProps(
     overviewRowToCsvRow(rowByUrl.get(normalizePageUrlKey(url)), url, input.bulkState),
   );
   const currentRow = resolveCurrentRow(input.bulkState);
-  const isProcessing = Boolean(
-    input.isOptimizingContent[input.batchKey] || input.isOptimizingContent[input.siteId],
-  );
+  const isProcessing = resolveBulkRunIsProcessing(input);
   const status = contentOptimizerLiveStatus(input);
   const headerProgress = contentOptimizerHeaderProgressFromRun(input);
   const downloadManager = new OptimizationFileManagerClass();
+  const researchRowIndices = buildResearchRowIndexSet(input.bulkState, input.overviewRows);
+  const usesResearchPipeline = bulkStateUsesResearchPipeline(input.bulkState);
+  const currentRowIndex = resolveCurrentRow(input.bulkState);
+  const currentUrl = input.bulkState.urls?.[currentRowIndex]?.trim();
+  const currentRowHarness = currentUrl
+    ? harnessSectionsForUrl(input.bulkState.urlHarnessSections, currentUrl)
+    : undefined;
+  const currentRowFiles = currentUrl ? input.bulkState.urlGeneratedFiles?.[currentUrl] ?? [] : [];
+  const currentOverviewRow = currentUrl
+    ? overviewRowByUrl(input.overviewRows).get(normalizePageUrlKey(currentUrl))
+    : undefined;
+  const currentArticleTitle = sanitizeHarnessArticleTitle(
+    currentOverviewRow?.title?.trim() ||
+      currentOverviewRow?.aiTitle?.trim() ||
+      (currentUrl ? input.bulkState.urlKeywords?.[currentUrl]?.trim() : "") ||
+      "",
+    { pageUrl: currentUrl, keyword: currentUrl ? input.bulkState.urlKeywords?.[currentUrl] : undefined },
+  );
+  const mergedCurrentHarness = mergeContentOptimizeHarnessSections(
+    currentRowHarness,
+    currentRowFiles,
+    currentArticleTitle,
+    currentUrl,
+    currentUrl ? input.bulkState.urlKeywords?.[currentUrl] : undefined,
+  );
 
   return {
     variant: "csv",
@@ -280,8 +503,14 @@ export function buildContentOptimizerBulkGeneratorDetailsProps(
     headerProgress,
     isProcessing,
     status,
+    runKind: usesResearchPipeline ? "research" : input.bulkState.runKind,
+    researchBatchSignals: researchBatchSignals(input.bulkState),
+    researchRowIndices,
+    pipelineSectionTitles: usesResearchPipeline
+      ? [...RESEARCH_HARNESS_PIPELINE_TITLES]
+      : [...resolveContentOptimizePipelineTitlesForRow(mergedCurrentHarness, currentRowFiles, currentArticleTitle)],
     harnessSections: liveHarnessSections(input),
-    harnessByRow: buildHarnessByRow(input.bulkState),
+    harnessByRow: buildHarnessByRow(input.bulkState, input.overviewRows),
     batchPrepHarnessSections: [],
     harnessPlannedSectionCount: harnessPlannedSectionCount(input),
     currentRow,
@@ -297,5 +526,6 @@ export function buildContentOptimizerBulkGeneratorDetailsProps(
         mimeType: file.mimeType,
       });
     },
+    urlStatuses: input.bulkState.urlStatuses,
   };
 }

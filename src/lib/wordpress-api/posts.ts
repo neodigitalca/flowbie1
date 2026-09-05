@@ -3,7 +3,7 @@
  * Functions for retrieving WordPress posts
  */
 
-import { BACKEND_API_BASE, BACKEND_CONNECTION_ERROR } from './connection';
+import { BACKEND_CONNECTION_ERROR, backendApiUrl } from './connection';
 import type {
   ScheduledPostsResult,
   PublishedPostsResult,
@@ -12,12 +12,6 @@ import type {
   SitePostInventoryResponse,
   SiteInventoryBulkResponse,
 } from './types';
-import {
-  shouldTryBrowserWpRestFirst,
-  getPublishedPostsFromBrowser,
-  getPublishedPagesFromBrowser,
-  isLikelyCorsOrNetworkError,
-} from './wp-rest-browser';
 
 /**
  * Get scheduled posts from WordPress REST API
@@ -61,7 +55,7 @@ export async function getScheduledPosts(
   year?: number,
   allScheduled?: boolean
 ): Promise<ScheduledPostsResult> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/get-scheduled-posts`;
+  const url = backendApiUrl('/wordpress/get-scheduled-posts');
   
   try {
     const response = await fetch(url, {
@@ -123,7 +117,7 @@ async function getPublishedPostsFromBackend(
   limit: number = 100,
   offset: number = 0,
 ): Promise<PublishedPostsResult> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/get-published-posts`;
+  const url = backendApiUrl('/wordpress/get-published-posts');
 
   try {
     const response = await fetch(url, {
@@ -162,10 +156,6 @@ async function getPublishedPostsFromBackend(
   }
 }
 
-/**
- * Published posts: browser REST first (same IP/TLS as the user) when running in the browser,
- * then backend if CORS blocks the browser.
- */
 export async function getPublishedPosts(
   siteUrl: string,
   username: string,
@@ -173,28 +163,6 @@ export async function getPublishedPosts(
   limit: number = 100,
   offset: number = 0,
 ): Promise<PublishedPostsResult> {
-  if (shouldTryBrowserWpRestFirst()) {
-    try {
-      return await getPublishedPostsFromBrowser(
-        siteUrl,
-        username,
-        appPassword,
-        limit,
-        offset,
-      );
-    } catch (e) {
-      if (isLikelyCorsOrNetworkError(e)) {
-        return getPublishedPostsFromBackend(
-          siteUrl,
-          username,
-          appPassword,
-          limit,
-          offset,
-        );
-      }
-      throw e;
-    }
-  }
   return getPublishedPostsFromBackend(
     siteUrl,
     username,
@@ -223,7 +191,7 @@ async function fetchSiteInventory(
     collection?: SiteInventoryCollection;
   },
 ): Promise<SitePostInventoryResponse> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/get-site-post-inventory`;
+  const url = backendApiUrl('/wordpress/get-site-post-inventory');
   const collection = options?.collection === 'pages' ? 'pages' : 'posts';
 
   try {
@@ -317,7 +285,7 @@ export async function getSiteInventoryBulk(
     includeIds?: number[];
   },
 ): Promise<SiteInventoryBulkResponse> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/get-site-inventory-bulk`;
+  const url = backendApiUrl("/wordpress/get-site-inventory-bulk");
   const includeIds = (options?.includeIds ?? [])
     .map((id) => Number(id))
     .filter((id) => Number.isFinite(id) && id > 0);
@@ -385,7 +353,7 @@ export async function getPublishedServiceAreas(
   limit: number = 100,
   offset: number = 0
 ): Promise<PublishedPostsResult> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/get-published-service-areas`;
+  const url = backendApiUrl('/wordpress/get-published-service-areas');
   
   try {
     const response = await fetch(url, {
@@ -446,7 +414,7 @@ async function getPublishedPagesFromBackend(
   limit: number = 100,
   offset: number = 0,
 ): Promise<PublishedPostsResult> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/get-posts-list`;
+  const url = backendApiUrl('/wordpress/get-posts-list');
 
   try {
     const page = Math.floor(offset / 100) + 1;
@@ -504,28 +472,6 @@ export async function getPublishedPages(
   limit: number = 100,
   offset: number = 0,
 ): Promise<PublishedPostsResult> {
-  if (shouldTryBrowserWpRestFirst()) {
-    try {
-      return await getPublishedPagesFromBrowser(
-        siteUrl,
-        username,
-        appPassword,
-        limit,
-        offset,
-      );
-    } catch (e) {
-      if (isLikelyCorsOrNetworkError(e)) {
-        return getPublishedPagesFromBackend(
-          siteUrl,
-          username,
-          appPassword,
-          limit,
-          offset,
-        );
-      }
-      throw e;
-    }
-  }
   return getPublishedPagesFromBackend(
     siteUrl,
     username,
@@ -557,7 +503,7 @@ export async function resolveWordPressUrls(
   entitySitemapUrl?: string,
   knownEndpoint?: string  // Known endpoint from URL pattern or post data
 ): Promise<ResolveUrlsResult> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/resolve-urls`;
+  const url = backendApiUrl('/wordpress/resolve-urls');
   
   try {
     const response = await fetch(url, {
@@ -622,7 +568,7 @@ export async function getWordPressPostContent(
   resolvedObjects?: Array<{ id: number; subtype: string }>,
   opts?: { entitySitemapUrl?: string; restEndpointHints?: string[] }
 ): Promise<PostContentResult> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/get-post-content`;
+  const url = backendApiUrl('/wordpress/get-post-content');
   
   try {
     const response = await fetch(url, {

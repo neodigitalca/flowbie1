@@ -74,6 +74,16 @@ export function pickPageSitemapUrlForSite(site: WordPressSite): string | null {
   return null;
 }
 
+/** Play always uses page-sitemap.xml even when Integrations has no page child listed. */
+export function pageSitemapXmlUrlForPlay(site: WordPressSite): string | null {
+  const listed = pickPageSitemapUrlForSite(site);
+  if (listed) return listed;
+  const origin = (site.siteUrl || "").trim().replace(/\/+$/, "");
+  if (!origin) return null;
+  const base = origin.startsWith("http") ? origin : `https://${origin}`;
+  return `${base}/page-sitemap.xml`;
+}
+
 function entitySitemapUrlForSite(site: WordPressSite): string | null {
   const url = site.entitySitemapUrl?.trim();
   return url || null;

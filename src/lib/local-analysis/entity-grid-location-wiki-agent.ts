@@ -1,14 +1,9 @@
 import type { GridKeywordWeight } from "@/lib/process-local-dominator-upload";
 import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
 import type { GscSiteQueryRow } from "@/lib/competitor-research/types";
-import { gscSapKeywordBasesForOpenRouter, brandExclusionPhrasesFromNames } from "@/lib/bulk/bulk-gsc-site-queries";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import type { SuggestedKeywordTarget } from "@/lib/local-analysis-suggest-keyword-targets";
 import { normalizeEntityHintCommaLabel } from "@/lib/comma-place-label";
-import {
-  sanitizeUniqueServiceKeywordsForAdGroup,
-  sapKeywordFromShortBaseAndEntity,
-} from "@/lib/local-analysis/entity-sap-row-keyword-fill";
 import { checkWikipediaPageExists } from "@/lib/wikipedia/mediawiki-search";
 import { fetchWikipediaIntroPlainText } from "@/lib/wikipedia/mediawiki-intro";
 import {
@@ -28,6 +23,7 @@ import {
   buildGridLocationBucketsFromRows,
   type GridLocationBucket,
 } from "@/lib/local-analysis/grid-location-buckets";
+import { pickGridLocationBucketsFromSummary } from "@/lib/local-analysis/pick-grid-location-buckets-from-summary";
 import { repairSapPageAllocationWeighted } from "@/lib/local-analysis-suggest-keyword-targets";
 import {
   firstCityStateLabelFromAddress,
@@ -40,15 +36,21 @@ import {
 } from "@/lib/local-analysis-target-constants";
 import { entityTypeFocusWantsNeighbourhoods } from "@/lib/entity-geographic-level";
 import { isCityLevelOnlyEntity } from "@/lib/local-analysis/entity-preload-suggested-keywords";
-import {
-  extractNonStreetPlaceLabelsFromCityRows,
-  syncAdGroupEntityLabelsFromGridRows,
-} from "@/lib/local-analysis/entity-sync-grid-preload";
+import { sapKeywordFromShortBaseAndEntity } from "@/lib/local-analysis/entity-sap-row-keyword-fill";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import {
+  bucketPlaceHints,
+  harvestWikiPlacesForCity,
+  isWikiTitleScopedToParentCity,
+  pickWikiEntriesFromPool,
+  wikiEntryToGridClusterWiki,
+  type WikiGeoEntry,
+} from "@/lib/wikipedia/wiki-entity-pool";
+import { filterWikipediaTitlesForCommunityEntity } from "@/lib/wikipedia/filter-wikipedia-titles-for-community-entity-openrouter";
+import { appendMasterInstructionsToSystemPrompt } from "@/lib/master-instructions-storage";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 export { isCityLevelOnlyEntity };
-
-const OR = "https://openrouter.ai/api/v1/chat/completions";
 
 const NEIGHBOURHOOD_PICK_SYSTEM = `Plan sub-ad neighbourhoods under one parent city ad group, ranked by POS (grid pin weakness).
 
@@ -58,11 +60,19 @@ Output **only** valid JSON:
 Rules:
 - \`parentCity\` must echo \`gridPlaceLabel\` (the parent MapPin city ad group).
 - Return **exactly** \`count\` distinct sub-ads in \`entities\` — each a **child neighbourhood inside parentCity**, not a different city.
-- **name:** real neighbourhood or district, then city, then province/state (e.g. "Millwood, Altona, MB").
+- **name:** first segment must be a **named community or landmark** (neighbourhood, district, park, mall, civic complex), then city, then province/state (e.g. "Millwood, Altona, MB", "Altona Community Centre, Altona, MB"). **Not** a street token, civic number, or ordinal route (\`2 St\`, \`130 Ave\`).
+- **Priority order for first segment:** (1) neighbourhoods and residential quarters; (2) business or historic districts; (3) parks, landmarks, malls, civic complexes; (4) only if nothing else fits from grid evidence, a named corridor — never numbered routes or bare address fragments.
 - **posWeight:** positive number from grid POS — higher when more/weaker pins in \`sampleAddresses\` fall in that neighbourhood.
 - **Forbidden:** parent city only (e.g. "Altona, MB"), directional composites ("South West Altona", "North East City"), street names, avenues, roads, highways, corridors, bare addresses.
 - Use \`sampleAddresses\` and \`gridLocations\` to pick neighbourhoods that contain those pins within parentCity.
-- Must **not** repeat any name in \`entitiesAlreadyUsed\` or within your own \`entities\` list.`;
+- Must **not** repeat any name in \`entitiesAlreadyUsed\` or within your own \`entities\` list.
+
+**Client-aware entity preference (when \`clientAudienceContextMarkdown\` or \`entityTypeFocus\` is present):**
+- Act as a **senior local SEO specialist**: prefer entities where this client's searchers **live, work, shop, commute, or book appointments**.
+- Read **Client & site context** from the user payload. When the client serves **professional / B2B services** (accounting, tax, legal, advisory, consulting), **prioritize** business districts, downtown cores, commercial corridors, business parks, and industrial pockets; **deprioritize** individual schools, school districts, school boards, and campus-only labels.
+- Grid pins near a school are **scan evidence only**; do not use the school as the entity unless client context is education-focused.
+- When \`entityTypeFocus\` includes business or industrial types, reorder priority accordingly (business districts before residential quarters when both fit grid evidence).
+- When no client context is provided, keep the default priority order above.`;
 
 const DIRECTIONAL_COMPASS_PREFIX = /^(North|South)\s+(East|West)\s+/i;
 
@@ -105,6 +115,41 @@ function maxClustersForBudget(totalSapBudget: number): number {
   return Math.max(1, Math.floor(totalSapBudget / minPer));
 }
 
+async function buildGridLocationBucketsWithSummaryFallback(args: {
+  gridRows: LocalDominatorRow[];
+  wantsNeighbourhoods: boolean;
+  apiKey: string;
+  siteId?: string;
+  gridSummaryMarkdown: string;
+  totalSapBudget: number;
+  entityAdGroupCount?: number;
+  businessName?: string;
+  clientAudienceContextMarkdown?: string;
+  entityTypeFocus?: readonly string[];
+}): Promise<GridLocationBucket[]> {
+  const fromRows = args.wantsNeighbourhoods
+    ? buildCityLocationBucketsFromRows(args.gridRows)
+    : buildGridLocationBucketsFromRows(args.gridRows);
+  if (fromRows.length > 0) return fromRows;
+
+  const bucketCount =
+    args.entityAdGroupCount != null && args.entityAdGroupCount >= 1
+      ? Math.floor(args.entityAdGroupCount)
+      : maxClustersForBudget(args.totalSapBudget);
+
+  return pickGridLocationBucketsFromSummary({
+    apiKey: args.apiKey,
+    siteId: args.siteId,
+    gridSummaryMarkdown: args.gridSummaryMarkdown,
+    gridRows: args.gridRows,
+    bucketCount,
+    wantsNeighbourhoods: args.wantsNeighbourhoods,
+    businessName: args.businessName,
+    clientAudienceContextMarkdown: args.clientAudienceContextMarkdown,
+    entityTypeFocus: args.entityTypeFocus,
+  });
+}
+
 function uniqueBucketsForClusters(buckets: GridLocationBucket[], clusterCap: number): GridLocationBucket[] {
   const cap = Math.max(1, clusterCap);
   const out: GridLocationBucket[] = [];
@@ -141,63 +186,46 @@ function sapPagesPerBucket(
   return counts;
 }
 
-/** Service-only GSC bases for SAP rows (no city — entity AdGroup holds the place). */
-function gscKeywordsForRows(
-  gscQueries: GscSiteQueryRow[],
-  rowCount: number,
-  excludeBrandPhrases: readonly string[],
-): string[] {
-  const pool = gscSapKeywordBasesForOpenRouter(
-    gscQueries,
-    Math.max(rowCount * 4, rowCount),
-    excludeBrandPhrases,
-  );
-  const unique: string[] = [];
-  const seen = new Set<string>();
-  for (const kw of pool) {
-    const t = kw.trim();
-    if (!t) continue;
-    const key = t.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(t);
-  }
-  return unique;
-}
-
-/** Pull `need` unique service keywords for one AdGroup from a shared GSC pool. */
-function takeUniqueServiceKeywordsForAdGroup(
-  pool: string[],
-  cursor: { i: number },
-  need: number,
-  entity: string,
-  placeCorpus: readonly string[],
-): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  const tryAdd = (raw: string) => {
-    if (out.length >= need) return;
-    const cleanedList = sanitizeUniqueServiceKeywordsForAdGroup([raw], entity, placeCorpus);
-    const cleaned = cleanedList[0];
-    if (!cleaned) return;
-    const key = cleaned.toLowerCase();
-    if (seen.has(key)) return;
-    seen.add(key);
-    out.push(cleaned);
-  };
-  while (out.length < need && cursor.i < pool.length) {
-    tryAdd(pool[cursor.i++]!);
-  }
-  if (out.length < need) {
-    for (const raw of pool) {
-      if (out.length >= need) break;
-      tryAdd(raw);
-    }
+/** Repeat items in order until rowCount rows (reuse places when picks < slots). */
+export function cycleItemsForRowCount<T>(items: readonly T[], rowCount: number): T[] {
+  const n = Math.max(0, Math.floor(rowCount));
+  if (n === 0 || items.length === 0) return [];
+  const out: T[] = [];
+  for (let i = 0; i < n; i++) {
+    out.push(items[i % items.length]!);
   }
   return out;
 }
 
+function assertNeighbourhoodSubAdEntity(
+  entity: string,
+  parentLabel: string,
+  usedKeys: Set<string>,
+): void {
+  if (!entity) {
+    throw new Error("Neighbourhood entity label is empty.");
+  }
+  if (isStreetCorridorPlaceLabel(entity)) {
+    throw new Error(`Neighbourhood entity "${entity}" is a street corridor.`);
+  }
+  if (isDirectionalCompassPlaceLabel(entity)) {
+    throw new Error(`Neighbourhood entity "${entity}" is a directional composite.`);
+  }
+  if (isCityLevelOnlyEntity(entity, parentLabel)) {
+    throw new Error(`Neighbourhood entity "${entity}" is city-level only for ${parentLabel}.`);
+  }
+  const key = entity.trim().toLowerCase();
+  if (usedKeys.has(key)) {
+    throw new Error(`Neighbourhood entity "${entity}" is already used in this run.`);
+  }
+}
+
 /** Neighbourhood / district entities for a city grid bucket (Clusters + Entity preload). */
+export type PickNeighbourhoodEntitiesOptions = {
+  clientAudienceContextMarkdown?: string;
+  entityTypeFocus?: readonly string[];
+};
+
 export async function pickNeighbourhoodEntitiesForCluster(
   bucket: GridLocationBucket,
   gridLocations: string[],
@@ -205,68 +233,82 @@ export async function pickNeighbourhoodEntitiesForCluster(
   count: number,
   apiKey: string,
   siteId: string | undefined,
+  options?: PickNeighbourhoodEntitiesOptions,
 ): Promise<NeighbourhoodPick[]> {
   const n = Math.max(1, Math.floor(count));
-  try {
-    const res = await fetch(OR, {
-      method: "POST",
-      headers: openRouterWebAppHeaders(apiKey),
-      body: JSON.stringify({
-        model: getResearchModel(siteId),
-        messages: [
-          { role: "system", content: NEIGHBOURHOOD_PICK_SYSTEM },
-          {
-            role: "user",
-            content: JSON.stringify({
-              count: n,
-              parentCity: bucket.placeLabel,
-              gridPlaceLabel: bucket.placeLabel,
-              sampleAddresses: bucket.sampleAddresses.slice(0, 8),
-              gridLocations,
-              entitiesAlreadyUsed,
-              bucketWeight: bucket.weight,
-              bucketAvgRank: bucket.avgRank,
-            }),
-          },
-        ],
-        temperature: 0.2,
-        response_format: { type: "json_object" },
-        stream: false,
-      }),
-    });
+  const clientCtx = options?.clientAudienceContextMarkdown?.trim();
+  const entityTypeFocus = options?.entityTypeFocus?.map((f) => f.trim()).filter(Boolean);
+  const userPayload: Record<string, unknown> = {
+    count: n,
+    parentCity: bucket.placeLabel,
+    gridPlaceLabel: bucket.placeLabel,
+    sampleAddresses: bucket.sampleAddresses.slice(0, 8),
+    gridLocations,
+    entitiesAlreadyUsed,
+    bucketWeight: bucket.weight,
+    bucketAvgRank: bucket.avgRank,
+  };
+  if (clientCtx) userPayload.clientAudienceContextMarkdown = clientCtx;
+  if (entityTypeFocus?.length) userPayload.entityTypeFocus = entityTypeFocus;
 
-    if (!res.ok) return [];
+  const systemPrompt = appendMasterInstructionsToSystemPrompt(NEIGHBOURHOOD_PICK_SYSTEM, siteId ?? null);
+  const res = await postOpenRouterAppChatFetch( {
+    method: "POST",
+    headers: openRouterWebAppHeaders(apiKey),
+    body: JSON.stringify({
+      model: getResearchModel(siteId),
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: JSON.stringify(userPayload),
+        },
+      ],
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      stream: false,
+    }),
+  });
 
-    const j = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const raw = j.choices?.[0]?.message?.content ?? "";
-    if (!raw.trim()) return [];
-
-    const parsed = JSON.parse(raw) as { entities?: unknown; entity?: unknown };
-    const list: NeighbourhoodPick[] = [];
-    if (Array.isArray(parsed.entities)) {
-      for (const item of parsed.entities) {
-        if (typeof item === "string" && item.trim()) {
-          list.push({ name: item.trim(), posWeight: 1 });
-          continue;
-        }
-        if (item && typeof item === "object") {
-          const rec = item as { name?: unknown; posWeight?: unknown; entity?: unknown };
-          const name = String(rec.name ?? rec.entity ?? "").trim();
-          if (!name) continue;
-          const w = Number(rec.posWeight);
-          list.push({
-            name,
-            posWeight: Number.isFinite(w) && w > 0 ? w : 1,
-          });
-        }
-      }
-    } else if (typeof parsed.entity === "string" && parsed.entity.trim()) {
-      list.push({ name: parsed.entity.trim(), posWeight: 1 });
-    }
-    return list.slice(0, n);
-  } catch {
-    return [];
+  if (!res.ok) {
+    throw new Error(`Neighbourhood pick request failed for ${bucket.placeLabel}.`);
   }
+
+  const j = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+  const raw = j.choices?.[0]?.message?.content ?? "";
+  if (!raw.trim()) {
+    throw new Error(`Neighbourhood pick returned empty content for ${bucket.placeLabel}.`);
+  }
+
+  const parsed = JSON.parse(raw) as { entities?: unknown; entity?: unknown };
+  const list: NeighbourhoodPick[] = [];
+  if (Array.isArray(parsed.entities)) {
+    for (const item of parsed.entities) {
+      if (typeof item === "string" && item.trim()) {
+        list.push({ name: item.trim(), posWeight: 1 });
+        continue;
+      }
+      if (item && typeof item === "object") {
+        const rec = item as { name?: unknown; posWeight?: unknown; entity?: unknown };
+        const name = String(rec.name ?? rec.entity ?? "").trim();
+        if (!name) {
+          throw new Error(`Neighbourhood pick returned an entity with no name for ${bucket.placeLabel}.`);
+        }
+        const w = Number(rec.posWeight);
+        list.push({
+          name,
+          posWeight: Number.isFinite(w) && w > 0 ? w : 1,
+        });
+      }
+    }
+  } else if (typeof parsed.entity === "string" && parsed.entity.trim()) {
+    list.push({ name: parsed.entity.trim(), posWeight: 1 });
+  }
+
+  if (list.length !== n) {
+    throw new Error(`Neighbourhood pick returned ${list.length}/${n} entities for ${bucket.placeLabel}.`);
+  }
+  return list;
 }
 
 /**
@@ -429,6 +471,10 @@ export type ResolveNeighbourhoodSapSlotsOptions = {
   apiKey: string;
   siteId?: string;
   gridLocations: string[];
+  gridSummaryMarkdown: string;
+  wikipediaSearchAugment?: string;
+  clientAudienceContextMarkdown?: string;
+  entityTypeFocus?: readonly string[];
   onProgress?: (phase: string, completed?: number, total?: number) => void;
 };
 
@@ -439,21 +485,36 @@ type FillDistinctNeighbourhoodSlotsOptions = {
   slotCount: number;
   gridRows: LocalDominatorRow[];
   gridLocations: string[];
+  gridSummaryMarkdown: string;
+  wikipediaSearchAugment?: string;
   apiKey: string;
   siteId?: string;
+  clientAudienceContextMarkdown?: string;
+  entityTypeFocus?: readonly string[];
   globalUsedKeys: Set<string>;
   globalUsedNames: string[];
-  requireWiki?: boolean;
   onProgress?: (phase: string, completed?: number, total?: number) => void;
   progressCompleted?: number;
   progressTotal?: number;
 };
 
-function cityRowsForBucket(gridRows: LocalDominatorRow[], bucket: GridLocationBucket): LocalDominatorRow[] {
-  const cityKey = bucket.placeLabel.trim().toLowerCase();
-  return gridRows.filter(
-    (r) => firstCityStateLabelFromAddress(r.address)?.toLowerCase() === cityKey,
-  );
+async function filterWikiPoolForClientContext(args: {
+  pool: WikiGeoEntry[];
+  apiKey: string;
+  siteId?: string;
+  clientAudienceContextMarkdown?: string;
+}): Promise<WikiGeoEntry[]> {
+  const ctx = args.clientAudienceContextMarkdown?.trim();
+  if (!ctx || args.pool.length === 0) return args.pool;
+  const kept = await filterWikipediaTitlesForCommunityEntity({
+    apiKey: args.apiKey,
+    siteId: args.siteId,
+    titles: args.pool.map((e) => e.wikipediaTitle),
+    clientAudienceContextMarkdown: ctx,
+  });
+  if (kept.length === 0) return [];
+  const keptSet = new Set(kept.map((t) => t.toLowerCase()));
+  return args.pool.filter((e) => keptSet.has(e.wikipediaTitle.toLowerCase()));
 }
 
 function isAcceptableSubAdEntity(
@@ -468,34 +529,45 @@ function isAcceptableSubAdEntity(
   return !usedKeys.has(key);
 }
 
-async function stampSubAdEntityWiki(
-  entity: string,
+/** Reuse the grid bucket place when Wikipedia neighbourhood harvest returns nothing. */
+async function buildBucketLocationFallbackSlot(
   bucket: GridLocationBucket,
   apiKey: string,
   siteId: string | undefined,
-  neighbourhoodOnly: boolean,
-): Promise<GridClusterWikipedia | null> {
-  if (neighbourhoodOnly) {
-    return resolveNeighbourhoodWikiOnly(entity, bucket, apiKey, siteId);
-  }
-  const nh = await resolveNeighbourhoodWikiOnly(entity, bucket, apiKey, siteId);
-  if (nh) return nh;
-  return resolveClusterWiki(entity, bucket, apiKey, siteId);
+): Promise<SubAdSlot | null> {
+  const entity =
+    normalizeEntityHintCommaLabel(bucket.placeLabel.trim()) || bucket.placeLabel.trim();
+  if (!entity) return null;
+  const wiki = await resolveClusterWiki(entity, bucket, apiKey, siteId);
+  return { entity, wiki };
 }
 
-/** One distinct sub-ad entity per slot under a parent city bucket. */
+function stampFallbackSlotUsage(
+  slot: SubAdSlot,
+  globalUsedKeys: Set<string>,
+  globalUsedNames: string[],
+): void {
+  const key = slot.entity.trim().toLowerCase();
+  if (!key || globalUsedKeys.has(key)) return;
+  globalUsedKeys.add(key);
+  globalUsedNames.push(slot.entity);
+}
+
+/** One distinct sub-ad entity per slot under a parent city bucket (Wikipedia harvest → AI pick). */
 async function fillDistinctNeighbourhoodSlotsForBucket(
   options: FillDistinctNeighbourhoodSlotsOptions,
 ): Promise<SubAdSlot[]> {
   const {
     bucket,
-    gridRows,
     gridLocations,
+    gridSummaryMarkdown,
+    wikipediaSearchAugment,
     apiKey,
     siteId,
+    clientAudienceContextMarkdown,
+    entityTypeFocus,
     globalUsedKeys,
     globalUsedNames,
-    requireWiki = true,
     onProgress,
     progressCompleted = 0,
     progressTotal,
@@ -504,135 +576,130 @@ async function fillDistinctNeighbourhoodSlotsForBucket(
   const parentLabel = normalizeEntityHintCommaLabel(
     cityFromBucket(bucket) ?? bucket.placeLabel.trim(),
   );
-  if (!parentLabel) return [];
+  if (!parentLabel) {
+    const fallback = await buildBucketLocationFallbackSlot(bucket, apiKey, siteId);
+    if (!fallback) return [];
+    stampFallbackSlotUsage(fallback, globalUsedKeys, globalUsedNames);
+    return [fallback];
+  }
+
+  const localHints = bucketPlaceHints(bucket);
+
+  onProgress?.(`Harvesting Wikipedia places for ${parentLabel}`, progressCompleted, progressTotal);
+
+  const { pool: rawPool } = await harvestWikiPlacesForCity({
+    bucket,
+    gridPlaceHints: localHints,
+    minCount: ads,
+    wikipediaSearchAugment,
+  });
+
+  const pool = await filterWikiPoolForClientContext({
+    pool: rawPool,
+    apiKey,
+    siteId,
+    clientAudienceContextMarkdown,
+  });
+
+  const excludeTitles = [
+    ...globalUsedNames,
+    ...[...globalUsedKeys].map((k) => k),
+  ];
+
+  onProgress?.(`Selecting ${ads} Wikipedia places for ${parentLabel}`, progressCompleted, progressTotal);
+
+  const picked = await pickWikiEntriesFromPool({
+    pool,
+    count: ads,
+    parentCity: parentLabel,
+    sampleAddresses: bucket.sampleAddresses,
+    gridLocations: localHints,
+    gridSummaryMarkdown,
+    excludeTitles,
+    apiKey,
+    siteId,
+    clientAudienceContextMarkdown,
+    entityTypeFocus,
+  });
 
   const slots: SubAdSlot[] = [];
-  const parentUsedKeys = new Set<string>();
-  const parentUsedNames = [...globalUsedNames];
-
-  const pushSlot = (entity: string, wiki: GridClusterWikipedia) => {
+  const addSlot = (entry: WikiGeoEntry) => {
+    if (!isWikiTitleScopedToParentCity(entry.wikipediaTitle, parentLabel)) return;
+    const entity = normalizeEntityHintCommaLabel(entry.entityLabel);
+    if (!entity || !isAcceptableSubAdEntity(entity, parentLabel, globalUsedKeys)) return;
     const key = entity.trim().toLowerCase();
-    parentUsedKeys.add(key);
-    parentUsedNames.push(entity);
     globalUsedKeys.add(key);
     globalUsedNames.push(entity);
-    slots.push({ entity, wiki });
+    slots.push({
+      entity,
+      wiki: wikiEntryToGridClusterWiki(entry, bucket.placeLabel),
+    });
   };
 
-  const tryEntityCandidate = async (
-    rawEntity: string,
-    neighbourhoodOnly: boolean,
-  ): Promise<boolean> => {
-    if (slots.length >= ads) return false;
-    const entity = normalizeEntityHintCommaLabel(rawEntity);
-    if (!isAcceptableSubAdEntity(entity, parentLabel, parentUsedKeys)) return false;
-    onProgress?.(`Verifying Wikipedia for ${entity}`, progressCompleted, progressTotal);
-    if (!requireWiki) {
-      const wiki = await resolveClusterWiki(entity, bucket, apiKey, siteId);
-      pushSlot(entity, wiki);
-      return true;
-    }
-    const wiki = await stampSubAdEntityWiki(entity, bucket, apiKey, siteId, neighbourhoodOnly);
-    if (!wiki) return false;
-    pushSlot(entity, wiki);
-    return true;
-  };
-
-  for (let attempt = 0; attempt < 5 && slots.length < ads; attempt++) {
-    const need = ads - slots.length;
-    const picked = await pickNeighbourhoodEntitiesForCluster(
-      bucket,
-      gridLocations,
-      parentUsedNames,
-      need + 3 + attempt,
-      apiKey,
-      siteId,
-    );
-    for (const pick of picked) {
-      if (slots.length >= ads) break;
-      await tryEntityCandidate(pick.name, true);
-    }
-  }
-
-  for (let attempt = 0; attempt < 4 && slots.length < ads; attempt++) {
-    const need = ads - slots.length;
-    const picked = await pickNeighbourhoodEntitiesForCluster(
-      bucket,
-      gridLocations,
-      parentUsedNames,
-      need + 4,
-      apiKey,
-      siteId,
-    );
-    for (const pick of picked) {
-      if (slots.length >= ads) break;
-      await tryEntityCandidate(pick.name, false);
-    }
-  }
-
-  const cityRows = cityRowsForBucket(gridRows, bucket);
-  for (const label of extractNonStreetPlaceLabelsFromCityRows(cityRows, parentLabel)) {
-    if (slots.length >= ads) break;
-    await tryEntityCandidate(label, false);
+  for (const entry of picked) {
+    addSlot(entry);
   }
 
   if (slots.length < ads) {
-    const syncLabels = syncAdGroupEntityLabelsFromGridRows(
-      cityRows.length > 0 ? cityRows : gridRows,
-      ads - slots.length + 2,
-      { wantsNeighbourhoods: true },
+    const need = ads - slots.length;
+    onProgress?.(
+      `Supplementing ${need} neighbourhood slots for ${parentLabel}`,
+      progressCompleted,
+      progressTotal,
     );
-    for (const label of syncLabels) {
-      if (slots.length >= ads) break;
-      await tryEntityCandidate(label, false);
+    try {
+      const nhPicks = await pickNeighbourhoodEntitiesForCluster(
+        bucket,
+        localHints,
+        globalUsedNames,
+        need,
+        apiKey,
+        siteId,
+        { clientAudienceContextMarkdown, entityTypeFocus },
+      );
+      for (const pick of nhPicks) {
+        if (slots.length >= ads) break;
+        const entity = normalizeEntityHintCommaLabel(pick.name);
+        if (!entity || !isAcceptableSubAdEntity(entity, parentLabel, globalUsedKeys)) continue;
+        const wiki = await resolveNeighbourhoodWikiOnly(entity, bucket, apiKey, siteId);
+        if (!wiki) continue;
+        if (!isWikiTitleScopedToParentCity(wiki.title, parentLabel)) continue;
+        const key = entity.trim().toLowerCase();
+        globalUsedKeys.add(key);
+        globalUsedNames.push(entity);
+        slots.push({ entity, wiki });
+      }
+    } catch {
+      // Keep wiki-pool slots when neighbourhood supplement fails.
     }
   }
 
-  let orRound = 0;
-  while (slots.length < ads && orRound < 8) {
-    orRound++;
-    const picked = await pickNeighbourhoodEntitiesForCluster(
-      bucket,
-      gridLocations,
-      parentUsedNames,
-      (ads - slots.length) * 3,
-      apiKey,
-      siteId,
-    );
-    for (const pick of picked) {
-      if (slots.length >= ads) break;
-      await tryEntityCandidate(pick.name, false);
+  if (slots.length === 0) {
+    const fallback = await buildBucketLocationFallbackSlot(bucket, apiKey, siteId);
+    if (fallback) {
+      stampFallbackSlotUsage(fallback, globalUsedKeys, globalUsedNames);
+      return [fallback];
     }
   }
 
-  if (slots.length < ads) {
-    for (const r of cityRows) {
-      if (slots.length >= ads) break;
-      const addr = r.address?.trim();
-      if (!addr) continue;
-      const city = firstCityStateLabelFromAddress(addr);
-      if (!city || city.toLowerCase() !== parentLabel.toLowerCase()) continue;
-      const idx = addr.toLowerCase().lastIndexOf(city.toLowerCase());
-      if (idx <= 0) continue;
-      let prefix = addr.slice(0, idx).trim().replace(/[,\s]+$/g, "");
-      prefix = prefix.replace(/^\d+[\w/-]*\s+/, "").trim();
-      if (prefix.length < 3) continue;
-      const entity =
-        normalizeEntityHintCommaLabel(`${prefix}, ${city}`) || `${prefix}, ${city}`;
-      if (!isAcceptableSubAdEntity(entity, parentLabel, parentUsedKeys)) continue;
-      const wiki = await resolveClusterWiki(entity, bucket, apiKey, siteId);
-      pushSlot(entity, wiki);
-    }
-  }
-
-  return slots.slice(0, ads);
+  return slots;
 }
 
 /** OpenRouter plans sub-ads per parent city; every slot gets a distinct entity and Wikipedia stamp. */
 export async function resolveNeighbourhoodSapSlotsForLayout(
   options: ResolveNeighbourhoodSapSlotsOptions,
 ): Promise<CSVRow[]> {
-  const { gridRows, apiKey, siteId, gridLocations, onProgress } = options;
+  const {
+    gridRows,
+    apiKey,
+    siteId,
+    gridLocations,
+    gridSummaryMarkdown,
+    wikipediaSearchAugment,
+    clientAudienceContextMarkdown,
+    entityTypeFocus,
+    onProgress,
+  } = options;
   const groups = Math.max(1, Math.floor(options.adGroupCount));
   const ads = Math.max(1, Math.floor(options.adsPerGroup));
   const total = groups * ads;
@@ -644,17 +711,28 @@ export async function resolveNeighbourhoodSapSlotsForLayout(
     throw new Error("Grid CSV has no rows for neighbourhood planning.");
   }
 
-  const allBuckets = buildCityLocationBucketsFromRows(gridRows);
+  const allBuckets = await buildGridLocationBucketsWithSummaryFallback({
+    gridRows,
+    wantsNeighbourhoods: true,
+    apiKey,
+    siteId,
+    gridSummaryMarkdown,
+    totalSapBudget: groups * ads,
+    entityAdGroupCount: groups,
+    clientAudienceContextMarkdown,
+    entityTypeFocus,
+  });
   if (allBuckets.length === 0) {
-    throw new Error("No city buckets found in grid. Check Address column.");
+    throw new Error("No city buckets found in grid. Check Address column or grid summary.");
   }
 
-  const bucketsToRun = uniqueBucketsForClusters(allBuckets, groups);
+  const rankedBuckets = uniqueBucketsForClusters(allBuckets, allBuckets.length);
+  const bucketsToRun = cycleItemsForRowCount(rankedBuckets, groups);
   const usedKeys = new Set<string>();
   const usedNames: string[] = [];
   const out: CSVRow[] = [];
 
-  for (let g = 0; g < bucketsToRun.length && out.length < total; g++) {
+  for (let g = 0; g < bucketsToRun.length; g++) {
     const bucket = bucketsToRun[g]!;
     const parentLabel = normalizeEntityHintCommaLabel(
       cityFromBucket(bucket) ?? bucket.placeLabel.trim(),
@@ -668,17 +746,20 @@ export async function resolveNeighbourhoodSapSlotsForLayout(
       slotCount: ads,
       gridRows,
       gridLocations,
+      gridSummaryMarkdown,
+      wikipediaSearchAugment,
       apiKey,
       siteId,
+      clientAudienceContextMarkdown,
+      entityTypeFocus,
       globalUsedKeys: usedKeys,
       globalUsedNames: usedNames,
-      requireWiki: true,
       onProgress,
       progressCompleted: out.length,
       progressTotal: total,
     });
 
-    for (const row of slots) {
+    for (const row of cycleItemsForRowCount(slots, ads)) {
       out.push({
         keyword: "",
         entity: row.entity,
@@ -692,13 +773,11 @@ export async function resolveNeighbourhoodSapSlotsForLayout(
     }
   }
 
-  if (out.length < total) {
-    throw new Error(
-      `Planned ${out.length} of ${total} sub-ad slots. Add more cities to the grid or lower Ad groups.`,
-    );
+  if (out.length === 0) {
+    throw new Error(`Planned 0 of ${total} sub-ad slots. Check grid Address column and entity type focus.`);
   }
 
-  return out.slice(0, total);
+  return cycleItemsForRowCount(out, total);
 }
 
 function buildWikiMarkdown(entries: GridClusterWikipedia[]): string {
@@ -771,8 +850,10 @@ export type EntityLocationClusterFromBucketsOptions = {
   apiKey: string;
   siteId?: string;
   buckets: GridLocationBucket[];
-  gscQueries: GscSiteQueryRow[];
+  gscQueries?: GscSiteQueryRow[];
   gridLocations: string[];
+  gridSummaryMarkdown: string;
+  wikipediaSearchAugment?: string;
   totalSapBudget: number;
   /** When set with entityAdsPerGroup, use explicit Ad groups × Ads layout instead of weighted split. */
   entityAdGroupCount?: number;
@@ -781,10 +862,11 @@ export type EntityLocationClusterFromBucketsOptions = {
   entityTypeFocus?: string[];
   businessName?: string;
   siteName?: string;
-  /** Grid rows for sync neighbourhood fallback when OpenRouter pick is empty. */
+  clientAudienceContextMarkdown?: string;
   gridRows?: LocalDominatorRow[];
-  /** Service-only keyword bases when GSC is empty (e.g. grid dominant keyword). */
   gridFallbackKeywordBases?: readonly string[];
+  /** Existing entity labels from entity sitemap / origin ACF to exclude during clustering. */
+  entitiesAlreadyUsedFromSitemap?: readonly string[];
   onClusterProgress?: (done: number, total: number, placeLabel: string, cumulativeSapRows: number) => void;
 };
 
@@ -793,20 +875,14 @@ export type EntityGridLocationClusterOptions = EntityLocationClusterFromBucketsO
   gridKeywordWeights: GridKeywordWeight[];
 };
 
-function explicitLayoutSapCounts(
-  bucketCount: number,
-  adGroupCount: number,
-  adsPerGroup: number,
-): number[] {
-  const groups = Math.max(1, Math.min(bucketCount, Math.floor(adGroupCount) || 1));
+function explicitLayoutSapCounts(adGroupCount: number, adsPerGroup: number): number[] {
+  const groups = Math.max(1, Math.floor(adGroupCount) || 1);
   const ads = Math.max(1, Math.floor(adsPerGroup) || 1);
-  const counts = Array.from({ length: groups }, () => ads);
-  const target = Math.max(1, Math.floor(adGroupCount) || 1) * ads;
-  let sum = counts.reduce((acc, n) => acc + n, 0);
-  if (sum !== target && counts.length > 0) {
-    counts[counts.length - 1]! += target - sum;
-  }
-  return counts;
+  return Array.from({ length: groups }, () => ads);
+}
+
+function explicitLayoutRowBudget(adGroupCount: number, adsPerGroup: number): number {
+  return explicitLayoutSapCounts(adGroupCount, adsPerGroup).reduce((sum, n) => sum + n, 0);
 }
 
 export async function runEntityLocationClusterFromBuckets(
@@ -816,16 +892,16 @@ export async function runEntityLocationClusterFromBuckets(
     apiKey,
     siteId,
     buckets: allBuckets,
-    gscQueries,
     gridLocations,
     totalSapBudget,
     entityAdGroupCount,
     entityAdsPerGroup,
     entityTypeFocus,
-    businessName,
-    siteName,
+    clientAudienceContextMarkdown,
     gridRows,
-    gridFallbackKeywordBases,
+    gridSummaryMarkdown,
+    wikipediaSearchAugment,
+    entitiesAlreadyUsedFromSitemap,
     onClusterProgress,
   } = options;
   if (!apiKey.trim()) {
@@ -833,10 +909,6 @@ export async function runEntityLocationClusterFromBuckets(
   }
   if (allBuckets.length === 0) {
     throw new Error("No location buckets found for clustering.");
-  }
-  const fallbackBases = (gridFallbackKeywordBases ?? []).map((k) => k.trim()).filter(Boolean);
-  if (gscQueries.length === 0 && fallbackBases.length === 0) {
-    throw new Error("GSC keywords are empty. Connect GSC before running Clusters.");
   }
 
   const wantsNeighbourhoods = entityTypeFocusWantsNeighbourhoods(entityTypeFocus);
@@ -849,38 +921,38 @@ export async function runEntityLocationClusterFromBuckets(
     ? Math.max(1, Math.floor(entityAdGroupCount))
     : maxClustersForBudget(totalSapBudget);
 
-  const candidateBuckets = uniqueBucketsForClusters(allBuckets, clusterCap);
+  const candidateBuckets = hasExplicitLayout
+    ? uniqueBucketsForClusters(allBuckets, allBuckets.length)
+    : uniqueBucketsForClusters(allBuckets, clusterCap);
   if (candidateBuckets.length === 0) {
     throw new Error("No unique grid locations for clusters.");
   }
 
   const sapCounts = hasExplicitLayout
-    ? explicitLayoutSapCounts(candidateBuckets.length, entityAdGroupCount!, entityAdsPerGroup!)
+    ? explicitLayoutSapCounts(entityAdGroupCount!, entityAdsPerGroup!)
     : sapPagesPerBucket(candidateBuckets, totalSapBudget);
-  const bucketsToRun = candidateBuckets.slice(0, sapCounts.length);
-  const totalRows = sapCounts.reduce((sum, n) => sum + n, 0);
-  const brandPhrases = brandExclusionPhrasesFromNames(businessName, siteName);
-  const gscKeywords =
-    gscQueries.length > 0
-      ? gscKeywordsForRows(gscQueries, totalRows, brandPhrases)
-      : [...new Set(fallbackBases.map((k) => k.toLowerCase()))].map(
-          (k) => fallbackBases.find((b) => b.toLowerCase() === k) ?? k,
-        );
-  const placeCorpus = [
-    ...gridLocations,
-    ...bucketsToRun.map((b) => b.placeLabel),
-  ];
+  const bucketsToRun = hasExplicitLayout
+    ? cycleItemsForRowCount(candidateBuckets, sapCounts.length)
+    : candidateBuckets.slice(0, sapCounts.length);
   const maxClusters = bucketsToRun.length;
   const entitiesUsed: string[] = [];
   const usedKeys = new Set<string>();
+  for (const label of entitiesAlreadyUsedFromSitemap ?? []) {
+    const trimmed = label.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (usedKeys.has(key)) continue;
+    usedKeys.add(key);
+    entitiesUsed.push(trimmed);
+  }
 
   const clusterPlans: Array<{
     bucket: GridLocationBucket;
     entity: string;
     baseKeywords: string[];
     sapPageCount: number;
+    wiki?: GridClusterWikipedia;
   }> = [];
-  const keywordCursor = { i: 0 };
   let cumulativeSapRows = 0;
 
   for (let i = 0; i < bucketsToRun.length; i++) {
@@ -890,51 +962,68 @@ export async function runEntityLocationClusterFromBuckets(
 
     if (wantsNeighbourhoods) {
       if (hasExplicitLayout) {
-        const slotCount = Math.max(1, Math.floor(entityAdsPerGroup!));
+        const parentLabel = normalizeEntityHintCommaLabel(cityLabel);
         const slots = await fillDistinctNeighbourhoodSlotsForBucket({
           bucket,
-          slotCount,
+          slotCount: sapPageCount,
           gridRows: gridRows ?? [],
           gridLocations,
+          gridSummaryMarkdown,
+          wikipediaSearchAugment,
           apiKey,
           siteId,
+          clientAudienceContextMarkdown,
+          entityTypeFocus,
           globalUsedKeys: usedKeys,
           globalUsedNames: entitiesUsed,
-          requireWiki: false,
         });
-        for (const slot of slots) {
-          const kws = takeUniqueServiceKeywordsForAdGroup(
-            gscKeywords,
-            keywordCursor,
-            1,
-            slot.entity,
-            placeCorpus,
-          );
-          if (kws.length === 0) continue;
+        const rowSlots = cycleItemsForRowCount(slots, sapPageCount);
+        for (const slot of rowSlots) {
           clusterPlans.push({
             bucket,
             entity: slot.entity,
-            baseKeywords: kws,
-            sapPageCount: kws.length,
+            baseKeywords: [""],
+            sapPageCount: 1,
+            wiki: slot.wiki,
           });
-          cumulativeSapRows += kws.length;
+          cumulativeSapRows += 1;
           onClusterProgress?.(i + 1, maxClusters, slot.entity, cumulativeSapRows);
         }
         continue;
       }
 
       const neighbourhoodPickCount = Math.max(1, maxClustersForBudget(sapPageCount));
-      const picked = await pickNeighbourhoodEntitiesForCluster(
+      const parentLabel = normalizeEntityHintCommaLabel(cityLabel);
+      const localHints = bucketPlaceHints(bucket);
+      const { pool: rawPool } = await harvestWikiPlacesForCity({
         bucket,
-        gridLocations,
-        entitiesUsed,
-        neighbourhoodPickCount,
+        gridPlaceHints: localHints,
+        minCount: neighbourhoodPickCount,
+        wikipediaSearchAugment,
+      });
+      const pool = await filterWikiPoolForClientContext({
+        pool: rawPool,
         apiKey,
         siteId,
-      );
+        clientAudienceContextMarkdown,
+      });
+      const picked = await pickWikiEntriesFromPool({
+        pool,
+        count: neighbourhoodPickCount,
+        parentCity: parentLabel,
+        sampleAddresses: bucket.sampleAddresses,
+        gridLocations: localHints,
+        gridSummaryMarkdown,
+        excludeTitles: entitiesUsed,
+        apiKey,
+        siteId,
+        clientAudienceContextMarkdown,
+        entityTypeFocus,
+      });
+      const wikiByEntity = new Map<string, GridClusterWikipedia>();
       const validPicks: NeighbourhoodPick[] = [];
-      for (const pick of picked) {
-        const entity = normalizeEntityHintCommaLabel(pick.name);
+      for (const entry of picked) {
+        const entity = normalizeEntityHintCommaLabel(entry.entityLabel);
         if (!entity || isStreetCorridorPlaceLabel(entity)) continue;
         if (isDirectionalCompassPlaceLabel(entity)) continue;
         if (isCityLevelOnlyEntity(entity, cityLabel)) continue;
@@ -942,71 +1031,51 @@ export async function runEntityLocationClusterFromBuckets(
         if (usedKeys.has(key)) continue;
         usedKeys.add(key);
         entitiesUsed.push(entity);
-        validPicks.push({ name: entity, posWeight: pick.posWeight });
+        wikiByEntity.set(entity, wikiEntryToGridClusterWiki(entry, bucket.placeLabel));
+        validPicks.push({ name: entity, posWeight: 1 });
       }
-      if (validPicks.length === 0 && gridRows?.length) {
-        const cityRows = gridRows.filter(
-          (r) =>
-            (cityFromBucket(bucket) ?? bucket.placeLabel).toLowerCase() ===
-            bucket.placeLabel.trim().toLowerCase(),
-        );
-        const syncLabels = syncAdGroupEntityLabelsFromGridRows(
-          cityRows.length > 0 ? cityRows : gridRows,
-          neighbourhoodPickCount,
-          { wantsNeighbourhoods: true },
-        );
-        for (const label of syncLabels) {
-          const entity = normalizeEntityHintCommaLabel(label);
-          if (!entity || isStreetCorridorPlaceLabel(entity)) continue;
-          if (isCityLevelOnlyEntity(entity, cityLabel)) continue;
-          const key = entity.trim().toLowerCase();
-          if (usedKeys.has(key)) continue;
-          usedKeys.add(key);
-          entitiesUsed.push(entity);
-          validPicks.push({ name: entity, posWeight: 1 });
+      if (validPicks.length === 0) {
+        const fallbackEntity =
+          normalizeEntityHintCommaLabel(bucket.placeLabel.trim()) || bucket.placeLabel.trim();
+        if (fallbackEntity) {
+          const wiki = await resolveClusterWiki(fallbackEntity, bucket, apiKey, siteId);
+          clusterPlans.push({
+            bucket,
+            entity: fallbackEntity,
+            baseKeywords: Array.from({ length: sapPageCount }, () => ""),
+            sapPageCount,
+            wiki,
+          });
+          cumulativeSapRows += sapPageCount;
+          onClusterProgress?.(i + 1, maxClusters, fallbackEntity, cumulativeSapRows);
         }
+        continue;
       }
       const allocations = allocatePagesAcrossNeighbourhoodPicks(validPicks, sapPageCount);
       for (const alloc of allocations) {
         const pages = Math.max(1, alloc.pages);
-        const kws = takeUniqueServiceKeywordsForAdGroup(
-          gscKeywords,
-          keywordCursor,
-          pages,
-          alloc.entity,
-          placeCorpus,
-        );
-        if (kws.length === 0) continue;
         clusterPlans.push({
           bucket,
           entity: alloc.entity,
-          baseKeywords: kws,
-          sapPageCount: kws.length,
+          baseKeywords: Array.from({ length: pages }, () => ""),
+          sapPageCount: pages,
+          wiki: wikiByEntity.get(alloc.entity),
         });
-        cumulativeSapRows += kws.length;
+        cumulativeSapRows += pages;
         onClusterProgress?.(i + 1, maxClusters, alloc.entity, cumulativeSapRows);
       }
       continue;
     }
 
-    const entity = normalizeEntityHintCommaLabel(bucket.placeLabel.trim());
-    if (!entity) continue;
+    const entity = normalizeEntityHintCommaLabel(bucket.placeLabel.trim()) || bucket.placeLabel.trim();
     entitiesUsed.push(entity);
-    const baseKeywords = takeUniqueServiceKeywordsForAdGroup(
-      gscKeywords,
-      keywordCursor,
-      sapPageCount,
-      entity,
-      placeCorpus,
-    );
-    if (baseKeywords.length === 0) continue;
     clusterPlans.push({
       bucket,
       entity,
-      baseKeywords,
-      sapPageCount: baseKeywords.length,
+      baseKeywords: Array.from({ length: sapPageCount }, () => ""),
+      sapPageCount,
     });
-    cumulativeSapRows += baseKeywords.length;
+    cumulativeSapRows += sapPageCount;
     onClusterProgress?.(i + 1, maxClusters, entity || bucket.placeLabel, cumulativeSapRows);
   }
 
@@ -1018,17 +1087,14 @@ export async function runEntityLocationClusterFromBuckets(
     );
   }
 
-  const resolvedClusters = await Promise.all(
-    clusterPlans.map(async (plan) => {
-      const wiki = await resolveGridCluster(plan.entity, plan.bucket, apiKey, siteId);
-      return {
-        bucket: plan.bucket,
-        entity: plan.entity,
-        baseKeywords: plan.baseKeywords,
-        wiki,
-      } satisfies ResolvedGridCluster;
-    }),
-  );
+  const resolvedClusters: ResolvedGridCluster[] = clusterPlans
+    .filter((plan): plan is typeof plan & { wiki: GridClusterWikipedia } => Boolean(plan.wiki))
+    .map((plan) => ({
+      bucket: plan.bucket,
+      entity: plan.entity,
+      baseKeywords: plan.baseKeywords,
+      wiki: plan.wiki,
+    }));
 
   const suggestedTargets: SuggestedKeywordTarget[] = resolvedClusters.map((c) => ({
     keyword: combineKeywordWithFullEntity(c.baseKeywords[0] ?? "", c.entity),
@@ -1039,9 +1105,18 @@ export async function runEntityLocationClusterFromBuckets(
   }));
 
   const clusterWikipedia = resolvedClusters.map((r) => r.wiki);
-  const sapRows = clusterSapRowsFromResolved(resolvedClusters);
+  let sapRows = clusterSapRowsFromResolved(resolvedClusters);
+  if (hasExplicitLayout) {
+    const targetRows = explicitLayoutRowBudget(entityAdGroupCount!, entityAdsPerGroup!);
+    if (sapRows.length === 0) {
+      throw new Error(`Grid clustering produced 0 of ${targetRows} configured entity rows.`);
+    }
+    if (sapRows.length !== targetRows) {
+      sapRows = cycleItemsForRowCount(sapRows, targetRows);
+    }
+  }
 
-  onClusterProgress?.(resolvedClusters.length, resolvedClusters.length, "", cumulativeSapRows);
+  onClusterProgress?.(resolvedClusters.length, resolvedClusters.length, "", sapRows.length);
 
   return {
     suggestedTargets,
@@ -1056,19 +1131,46 @@ export async function runEntityLocationClusterFromBuckets(
 export async function runEntityGridLocationClusterAgent(
   options: EntityGridLocationClusterOptions,
 ): Promise<EntityGridLocationClusterResult> {
-  const { gridRows, entityTypeFocus, ...rest } = options;
+  const {
+    gridRows,
+    entityTypeFocus,
+    apiKey,
+    siteId,
+    gridSummaryMarkdown,
+    totalSapBudget,
+    entityAdGroupCount,
+    businessName,
+    clientAudienceContextMarkdown,
+    ...rest
+  } = options;
   if (gridRows.length === 0) {
     throw new Error("Grid CSV has no rows for location clustering.");
   }
   const wantsNeighbourhoods = entityTypeFocusWantsNeighbourhoods(entityTypeFocus);
-  const allBuckets = wantsNeighbourhoods
-    ? buildCityLocationBucketsFromRows(gridRows)
-    : buildGridLocationBucketsFromRows(gridRows);
+  const allBuckets = await buildGridLocationBucketsWithSummaryFallback({
+    gridRows,
+    wantsNeighbourhoods,
+    apiKey,
+    siteId,
+    gridSummaryMarkdown,
+    totalSapBudget,
+    entityAdGroupCount,
+    businessName,
+    clientAudienceContextMarkdown,
+    entityTypeFocus,
+  });
   if (allBuckets.length === 0) {
-    throw new Error("No grid location buckets found. Check Address column in the CSV.");
+    throw new Error("No grid location buckets found from CSV or scan summary.");
   }
   return runEntityLocationClusterFromBuckets({
     ...rest,
+    apiKey,
+    siteId,
+    gridSummaryMarkdown,
+    totalSapBudget,
+    entityAdGroupCount,
+    businessName,
+    clientAudienceContextMarkdown,
     entityTypeFocus,
     buckets: allBuckets,
     gridRows,

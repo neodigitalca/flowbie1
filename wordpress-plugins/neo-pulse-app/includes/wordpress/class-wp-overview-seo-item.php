@@ -17,8 +17,10 @@ class Neo_Pulse_App_Wp_Overview_Seo_Item {
 	 */
 	public static function build_core_put_body( $item ) {
 		$put = array();
+		$acf = self::direct_acf_from_client( isset( $item['acf'] ) ? $item['acf'] : array() );
 		if ( ! empty( $item['postTitle'] ) && is_string( $item['postTitle'] ) && trim( $item['postTitle'] ) !== '' ) {
-			$put['title'] = Neo_Pulse_App_Wp_Url_Normalize::clean_placeholders_and_markdown( trim( $item['postTitle'] ) );
+			$title = self::aligned_title( trim( $item['postTitle'] ), $acf );
+			$put['title'] = Neo_Pulse_App_Wp_Url_Normalize::clean_placeholders_and_markdown( $title );
 		}
 		if ( ! empty( $item['postExcerpt'] ) && is_string( $item['postExcerpt'] ) && trim( $item['postExcerpt'] ) !== '' ) {
 			$put['excerpt'] = Neo_Pulse_App_Wp_Url_Normalize::clean_placeholders_and_markdown( trim( $item['postExcerpt'] ) );
@@ -211,5 +213,74 @@ class Neo_Pulse_App_Wp_Overview_Seo_Item {
 			}
 		}
 		return 'HTTP ' . (int) ( $resp['status'] ?? 0 );
+	}
+
+	/**
+	 * Use SEO research title when the incoming post title is not about this row's keyword.
+	 *
+	 * @param array<string,string> $acf ACF map.
+	 */
+	public static function aligned_title( $candidate, $acf ) {
+		$candidate = trim( (string) $candidate );
+		$kw        = '';
+		$raw       = '';
+		if ( is_array( $acf ) ) {
+			$kw  = trim( (string) ( $acf['keyword_focus'] ?? $acf['keyword_focu'] ?? '' ) );
+			$raw = trim( (string) ( $acf['seo_research'] ?? '' ) );
+		}
+		$research_title = '';
+		$primary        = '';
+		if ( $raw !== '' ) {
+			$decoded = json_decode( $raw, true );
+			if ( is_array( $decoded ) ) {
+				$research_title = trim( (string) ( $decoded['title'] ?? '' ) );
+				$primary        = trim( (string) ( $decoded['primary_keyword'] ?? '' ) );
+			}
+		}
+		$focus = $kw !== '' ? $kw : $primary;
+		if ( $focus === '' ) {
+			return $candidate;
+		}
+		if ( $candidate !== '' && self::title_covers_keyword( $candidate, $focus ) ) {
+			return $candidate;
+		}
+		if ( $research_title !== '' && self::title_covers_keyword( $research_title, $focus ) ) {
+			return $research_title;
+		}
+		return $candidate;
+	}
+
+	public static function title_covers_keyword( $title, $keyword ) {
+		$tokens = self::keyword_content_tokens( (string) $keyword );
+		if ( $tokens === array() ) {
+			return true;
+		}
+		$hay = strtolower( (string) $title );
+		foreach ( $tokens as $w ) {
+			if ( strpos( $hay, $w ) === false ) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * @return array<int,string>
+	 */
+	private static function keyword_content_tokens( $phrase ) {
+		$stop  = array( 'a' => true, 'an' => true, 'and' => true, 'for' => true, 'how' => true, 'in' => true, 'is' => true, 'of' => true, 'on' => true, 'or' => true, 'the' => true, 'to' => true, 'what' => true, 'why' => true );
+		$parts = preg_split( '/\s+/', strtolower( (string) $phrase ) );
+		if ( ! is_array( $parts ) ) {
+			return array();
+		}
+		$out = array();
+		foreach ( $parts as $w ) {
+			$w = preg_replace( '/[^a-z0-9]+/', '', $w );
+			if ( ! is_string( $w ) || strlen( $w ) < 2 || isset( $stop[ $w ] ) ) {
+				continue;
+			}
+			$out[] = $w;
+		}
+		return $out;
 	}
 }

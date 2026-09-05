@@ -26,7 +26,7 @@ class Neo_Pulse_App_Agent_Run_Worker {
 	 * @param array<string,mixed> $run
 	 */
 	public static function process_run_tick( array $run, bool $force = false ): void {
-		@set_time_limit( 300 );
+		@set_time_limit( 900 );
 		Neo_Pulse_App_Agent_Runs_Store::install_tables();
 		$run_id  = (int) ( $run['id'] ?? 0 );
 		$team_id = (int) ( $run['teamId'] ?? 0 );
@@ -62,6 +62,9 @@ class Neo_Pulse_App_Agent_Run_Worker {
 			$recipe = sanitize_key( (string) ( $run['recipeKey'] ?? '' ) );
 			if ( $recipe === 'post_creator' && class_exists( 'Neo_Pulse_App_Agent_Run_Harness_Post_Creator' ) ) {
 				Neo_Pulse_App_Agent_Run_Harness_Post_Creator::tick( $team_id, $run );
+			}
+			if ( $recipe === 'local_dominator_export' && class_exists( 'Neo_Pulse_App_Agent_Run_Harness_Local_Dominator_Export' ) ) {
+				Neo_Pulse_App_Agent_Run_Harness_Local_Dominator_Export::tick( $team_id, $run );
 			}
 		} catch ( Exception $e ) {
 			Neo_Pulse_App_Agent_Runs_Store::patch_run(

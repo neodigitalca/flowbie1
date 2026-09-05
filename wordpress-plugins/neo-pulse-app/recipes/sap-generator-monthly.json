@@ -1,0 +1,96 @@
+{
+  "keyword": "sap-generator-monthly",
+  "name": "SAP generator",
+  "description": "Hydrate entity CSV rows with GSC keywords and schedule SAP pages to WordPress.",
+  "notes": [
+    "Upload an entity CSV or chain from Entity generator in a workflow.",
+    "Fills keywords, titles, meta, and slugs, then publishes SAP pages.",
+    "Default: 15 pages scheduled evenly across the month."
+  ],
+  "category": "local-seo",
+  "verticals": [
+    "local-seo",
+    "general"
+  ],
+  "tags": [
+    "entity",
+    "sap",
+    "monthly"
+  ],
+  "prerequisites": [
+    "wordpress",
+    "gsc",
+    "entity-sitemap"
+  ],
+  "filters": {
+    "executionKinds": [
+      "sap_generator"
+    ],
+    "targetBuckets": [
+      "sap"
+    ],
+    "actionCount": 1
+  },
+  "defaultTasks": [
+    {
+      "keyword": "sap-generator-run",
+      "title": "Create SAP pages from entity CSV",
+      "status": "todo",
+      "assignPulse": true,
+      "scheduleMode": "calendar",
+      "dueDate": "2026-09-01",
+      "dueTime": "09:00",
+      "recurrenceRule": "monthly",
+      "executionKind": "sap_generator",
+      "executionPayload": {
+        "entityAdGroupCount": 3,
+        "entityAdsPerGroup": 5,
+        "entityPageCount": 15,
+        "postCount": 15,
+        "entityCsvInputSource": "upload",
+        "sitemapType": "entity",
+        "featuredImage": false,
+        "postDestination": "wordpress",
+        "scheduleTimesPerMonth": 15,
+        "scheduleCustomInterval": 15,
+        "scheduleStartDay": 1,
+        "scheduleStartTime": "09:00",
+        "scheduleStaggerOptimized": true,
+        "targetBucket": "sap",
+        "saveLocalArchive": true
+      }
+    }
+  ],
+  "triggerBlock": {
+    "keyword": "schedule-monthly",
+    "kind": "calendar",
+    "frequency": "monthly",
+    "startDate": "2026-09-01",
+    "time": "09:00",
+    "targetBucket": "sap"
+  },
+  "actionBlock": {
+    "keyword": "action-sap_generator",
+    "executionKind": "sap_generator",
+    "executionPayload": {
+      "entityAdGroupCount": 3,
+      "entityAdsPerGroup": 5,
+      "entityPageCount": 15,
+      "postCount": 15,
+      "entityCsvInputSource": "upload",
+      "sitemapType": "entity",
+      "featuredImage": false,
+      "postDestination": "wordpress",
+      "scheduleTimesPerMonth": 15,
+      "scheduleCustomInterval": 15,
+      "scheduleStartDay": 1,
+      "scheduleStartTime": "09:00",
+      "scheduleStaggerOptimized": true,
+      "targetBucket": "sap",
+      "saveLocalArchive": true
+    },
+    "title": "Create SAP pages from entity CSV"
+  },
+  "isAutomation": true,
+  "kind": "template"
+}

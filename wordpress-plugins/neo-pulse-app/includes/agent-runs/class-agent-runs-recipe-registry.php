@@ -31,6 +31,34 @@ class Neo_Pulse_App_Agent_Runs_Recipe_Registry {
 			'title'       => 'Local Dominator grid export',
 			'managerTabs' => array( 'generator' ),
 		),
+		'entity_page_creator'       => array(
+			'title'       => 'Entity page creator',
+			'managerTabs' => array( 'generator' ),
+		),
+		'entity_generator'          => array(
+			'title'       => 'Entity generator',
+			'managerTabs' => array( 'generator' ),
+		),
+		'sap_generator'             => array(
+			'title'       => 'SAP generator',
+			'managerTabs' => array( 'generator' ),
+		),
+		'chatgpt_website_audit'     => array(
+			'title'       => 'ChatGPT website audit',
+			'managerTabs' => array( 'generator' ),
+		),
+		'dfs_llm_article_audit'     => array(
+			'title'       => 'DFS LLM article audit',
+			'managerTabs' => array( 'generator' ),
+		),
+		'browser_automation'        => array(
+			'title'       => 'Residential browser automation',
+			'managerTabs' => array( 'generator' ),
+		),
+		'content_gap_check'         => array(
+			'title'       => 'Content gap check',
+			'managerTabs' => array( 'generator' ),
+		),
 	);
 
 	public static function is_valid( string $recipe_key ): bool {

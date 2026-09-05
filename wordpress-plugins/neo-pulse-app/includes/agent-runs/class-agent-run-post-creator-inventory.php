@@ -9,11 +9,13 @@ defined( 'ABSPATH' ) || exit;
 
 class Neo_Pulse_App_Agent_Run_Post_Creator_Inventory {
 
+	const BUCKET_LIMIT = 100;
+
 	/**
 	 * @param array<string,mixed> $site
 	 * @return array{urls:array<int,string>,posts:array<int,array<string,mixed>>,json:string}
 	 */
-	public static function load_posts_bucket( array $site, int $limit = 100 ): array {
+	public static function load_posts_bucket( array $site, int $limit = self::BUCKET_LIMIT ): array {
 		$site_url = rtrim( (string) ( $site['siteUrl'] ?? '' ), '/' );
 		$user     = (string) ( $site['username'] ?? '' );
 		$pass     = (string) ( $site['appPassword'] ?? '' );
@@ -134,7 +136,7 @@ class Neo_Pulse_App_Agent_Run_Post_Creator_Inventory {
 			}
 		}
 
-		$inventory = self::load_posts_bucket( $site, 100 );
+		$inventory = self::load_posts_bucket( $site, self::BUCKET_LIMIT );
 		$posts     = is_array( $inventory['posts'] ?? null ) ? $inventory['posts'] : array();
 		return array_values(
 			array_filter(
@@ -163,7 +165,7 @@ class Neo_Pulse_App_Agent_Run_Post_Creator_Inventory {
 		if ( $json !== '' ) {
 			return $json;
 		}
-		$inventory = self::load_posts_bucket( $site, 100 );
+		$inventory = self::load_posts_bucket( $site, self::BUCKET_LIMIT );
 		return (string) ( $inventory['json'] ?? '' );
 	}
 

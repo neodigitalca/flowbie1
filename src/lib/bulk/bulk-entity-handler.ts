@@ -2,6 +2,7 @@ import { parseSitemap, getPublishedPosts } from '../wordpress-api';
 import type { WordPressSite } from '@/components/integrations/types';
 import { extractEndpointFromEntitySitemapUrl } from '../entity-endpoint-extractor';
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 /**
  * Uses AI to analyze entity sitemap titles and extract service nickname
@@ -146,7 +147,7 @@ ${titles.slice(0, 20).map((t, i) => `${i + 1}. ${t}`).join('\n')}
 What is the service nickname that appears in the majority of these titles? Return ONLY the service name, no location, no "Near" or "In".`;
 
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await postOpenRouterAppChatFetch( {
       method: "POST",
       headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({

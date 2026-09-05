@@ -4,12 +4,32 @@
   var DEBOUNCE_MS = 300;
   var SESSION_KEY = 'neo-pulse_search_session_id';
 
-  document.addEventListener('DOMContentLoaded', function () {
+  function bindAllSearchWraps() {
     var wraps = document.querySelectorAll('.neo-pulse-search-wrap:not(.neo-pulse-search-wrap--panel-inner)');
     for (var i = 0; i < wraps.length; i++) {
       initSearch(wraps[i]);
     }
-  });
+  }
+
+  document.addEventListener('DOMContentLoaded', bindAllSearchWraps);
+  document.addEventListener('neo-pulse-ai-sidebar-merged', bindAllSearchWraps);
+
+  function resolveSearchScope(wrap, shellPanel) {
+    var unifiedPane = document.querySelector('[data-fai-unified="1"] .fai-sidebar-tab-pane[data-fai-tab="search"]');
+    if (unifiedPane) {
+      var unifiedInner = unifiedPane.querySelector('.neo-pulse-search-wrap--panel-inner') || unifiedPane;
+      if (unifiedInner.querySelector('.fbs__input')) {
+        return unifiedInner;
+      }
+    }
+    if (shellPanel) {
+      var panelInner = shellPanel.querySelector('.neo-pulse-search-wrap--panel-inner');
+      if (panelInner) {
+        return panelInner;
+      }
+    }
+    return wrap;
+  }
 
   function initSearch(wrap) {
     if (wrap.getAttribute('data-fbs-bound') === '1') {
@@ -21,8 +41,6 @@
     if (!wrap.getAttribute('data-rest-url')) {
       return;
     }
-    wrap.setAttribute('data-fbs-bound', '1');
-
     var isSidebar   = wrap.getAttribute('data-sidebar-mode') === '1';
     var isIconMode  = wrap.getAttribute('data-icon-mode') === '1';
     var iconOpenAs  = wrap.getAttribute('data-icon-open-as') || '';
@@ -130,20 +148,10 @@
     var showTerms    = wrap.getAttribute('data-show-popular-terms') === '1';
     var showOverseer = wrap.getAttribute('data-show-popular-pages-overseer') === '1';
     var showSearchPg = wrap.getAttribute('data-show-popular-pages-search') === '1';
-    var panelLayout  = wrap.getAttribute('data-panel-layout') || 'compact';
-    var isDiscovery  = panelLayout === 'discovery';
     var topicsLimit  = parseInt(wrap.getAttribute('data-topics-limit'), 10) || 4;
     var iconIds      = (wrap.getAttribute('data-fbs-icon-ids') || 'search').split(',');
 
-    var searchScope = wrap;
-    if (shellPanel) {
-      var panelInner = shellPanel.querySelector('.neo-pulse-search-wrap--panel-inner');
-      if (panelInner) {
-        searchScope = panelInner;
-      } else if (isIconMode && iconOpenAs !== 'expand_inline') {
-        searchScope = shellPanel;
-      }
-    }
+    var searchScope = resolveSearchScope(wrap, shellPanel);
     var container = searchScope.querySelector('.fbs');
     var form      = searchScope.querySelector('.fbs__form');
     var input     = searchScope.querySelector('.fbs__input');
@@ -154,6 +162,7 @@
     if (!container || !input || !dropdown || !statusEl) {
       return;
     }
+    wrap.setAttribute('data-fbs-bound', '1');
 
     if (hidePowered && poweredEl) {
       poweredEl.style.display = 'none';
@@ -390,20 +399,18 @@
         if (showTerms && data.popularTerms) {
           renderInsightBlock('popular_terms', data.popularTerms, 'term');
         }
+        var topicsBlock = searchScope.querySelector('.fbs__insights-block[data-insight="popular_topics"]');
         if (showOverseer && overseerPages.length) {
           var linkPages = overseerPages;
-          if (isDiscovery && searchScope.querySelector('.fbs__insights-block[data-insight="popular_topics"]')) {
+          if (topicsBlock) {
             linkPages = overseerPages.slice(topicsLimit);
           }
           if (linkPages.length) {
             renderInsightBlock('popular_pages_overseer', linkPages, 'page');
           }
         }
-        if (isDiscovery && showOverseer && overseerPages.length) {
-          var topicsBlock = searchScope.querySelector('.fbs__insights-block[data-insight="popular_topics"]');
-          if (topicsBlock) {
-            renderTopicsGrid(overseerPages.slice(0, topicsLimit), topicsBlock);
-          }
+        if (topicsBlock && overseerPages.length) {
+          renderTopicsGrid(overseerPages.slice(0, topicsLimit), topicsBlock);
         }
         if (showSearchPg && data.popularPagesFromSearch) {
           renderInsightBlock('popular_pages_search', data.popularPagesFromSearch, 'page');

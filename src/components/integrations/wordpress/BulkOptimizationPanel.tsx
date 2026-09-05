@@ -80,11 +80,8 @@ import { isOverviewRowBulkActive } from "@/components/overview/overview-tab/over
 import {
   CONTENT_PREP_BATCH_SECTION_TITLES,
   CONTENT_PREP_ENTITY_SAP_BATCH_SECTION_TITLES,
-  CONTENT_PREP_POST_HARNESS_TOTAL_SECTIONS,
-  CONTENT_PREP_POST_SECTION_TITLES,
-  buildWaitingPostHarnessSections,
 } from "@/lib/overview/overview-content-prep-harness-sections";
-import { buildSeoResearchArtifactDownloadable } from "@/hooks/content-optimization/optimization-helpers-b";
+import { CONTENT_OPTIMIZE_PIPELINE_TOTAL } from "@/lib/overview/overview-content-optimize-pipeline";
 
 function bulkRowLinkLabel(url: string, keyword?: string): string {
   const kw = keyword?.trim();
@@ -121,7 +118,7 @@ function resolveRowHarnessPlannedCount(
   if (isParallelHarnessRow) {
     return merged?.length ?? null;
   }
-  const prepCount = persistedLength || CONTENT_PREP_POST_HARNESS_TOTAL_SECTIONS;
+  const prepCount = persistedLength || CONTENT_OPTIMIZE_PIPELINE_TOTAL;
   const contentPlanned =
     isActive && typeof livePlanned === "number" && livePlanned > 0 ? livePlanned : 0;
   const total = prepCount + contentPlanned;
@@ -156,8 +153,10 @@ import {
   BulkDetailsDrawerStack,
   BulkDetailsTileSections,
   resolveDetailsPipelineSections,
-  isSerpPipelineSection,
+  resolveSerpBriefDownloadable,
 } from "@/components/shared/bulk-details-tile-sections";
+import { resolveBulkRowPipelineTitles } from "@/lib/overview/overview-bulk-pipeline-titles";
+import { resolveOverviewBulkPipelineTitles } from "@/lib/overview/overview-bulk-details-bindings";
 
 export type BulkPanelVariant = "modal" | "page";
 export type BulkPanelDisplayMode = "full" | "details-only";
@@ -359,7 +358,9 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
     bulkState?.runKind === "contentCleanup" ||
     bulkState?.runKind === "aiLinks" ||
     bulkState?.runKind === "aiWikipediaLink" ||
+    bulkState?.runKind === "aiAnswer" ||
     bulkState?.runKind === "aiOverview" ||
+    bulkState?.runKind === "aiScenario" ||
     bulkState?.runKind === "aiInContentImage";
   const isHarnessParallelRun =
     isBulkWpUploadRun ||
@@ -787,7 +788,6 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
               isActive && !isParallelHarnessRow
                 ? (currentStepProgress?.harnessSections as BulkHarnessSectionUi[] | undefined)
                 : undefined;
-            const rowHarnessSectionsList = resolveDetailsPipelineSections(persistedHarness, liveHarness);
             const rawFiles = mergeGeneratedFilesByName(
               urlGeneratedFiles[url] || [],
               isActive ? siteProgress?.generatedFiles ?? [] : [],
@@ -798,11 +798,28 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                 ? otherFiles.filter((f) => f.name === "in-content-image.md")
                 : otherFiles,
             );
+            const batchPipelineTitles = bulkState
+              ? resolveOverviewBulkPipelineTitles(bulkState.runKind, bulkState)
+              : undefined;
+            const rowPipelineTitles = resolveBulkRowPipelineTitles(
+              bulkState?.runKind,
+              persistedHarness,
+              displayFiles,
+              batchPipelineTitles,
+              bulkState ?? undefined,
+            );
+            const rowHarnessSectionsList = resolveDetailsPipelineSections(
+              persistedHarness,
+              liveHarness,
+              rowPipelineTitles,
+              displayFiles,
+            );
             const rowKeyword = row.focusKeyword?.trim() || bulkRowLinkLabel(url, urlKeywords[url]);
-            const serpBriefDownload =
-              row.seoResearch?.trim() && rowHarnessSectionsList.some(isSerpPipelineSection)
-                ? buildSeoResearchArtifactDownloadable(rowKeyword, row.seoResearch)
-                : null;
+            const serpBriefDownload = resolveSerpBriefDownloadable(
+              rowKeyword,
+              displayFiles,
+              row.seoResearch,
+            );
             const toggleRow = () => {
               setRowExpanded(url, !isExpanded);
             };
@@ -841,6 +858,7 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                     {showGeneratedFiles ? (
                       <BulkDetailsTileSections
                         harnessSections={rowHarnessSectionsList}
+                        pipelineSectionTitles={rowPipelineTitles}
                         files={displayFiles}
                         onDownloadFile={downloadFile}
                         onDownloadAll={downloadAllForUrl}

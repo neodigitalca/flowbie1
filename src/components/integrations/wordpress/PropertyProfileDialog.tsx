@@ -12,6 +12,7 @@ import {
   TASK_FORM_DIALOG_BUTTON_CLASS,
   TASK_PROJECT_DIALOG_CLASS,
 } from "@/components/manager/tasks/TaskFormLayout";
+import { SavePropertyButton } from "./SavePropertyButton";
 import type { WordPressSite } from "../types";
 import { wordpressSiteDisplayName } from "@/lib/wordpress-site-display-name";
 import { WordPressPropertySectionPills } from "./WordPressPropertySectionPills";
@@ -203,16 +204,7 @@ export function PropertyProfileDialog({
             Cancel
           </Button>
           {isSettings && onSaveProperty ? (
-            <Button
-              type="button"
-              className={cn(
-                "h-10 bg-[#77AA00] text-base text-black hover:bg-[#77AA00]/90",
-                TASK_FORM_DIALOG_BUTTON_CLASS,
-              )}
-              onClick={onSaveProperty}
-            >
-              Save Property
-            </Button>
+            <SavePropertyButton onClick={onSaveProperty} />
           ) : null}
         </DialogFooter>
       </DialogContent>

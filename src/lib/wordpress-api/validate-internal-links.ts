@@ -1,10 +1,10 @@
 /**
  * Validate internal links via backend (HTTP 200 only).
- * Only links that return 200 are considered valid; used to filter WordPress posts list
+ * Only links that return 200 are considered valid; used to filter the page-sitemap / blog catalog
  * so we never use fake or broken links.
  */
 
-import { BACKEND_API_BASE } from './connection';
+import { backendApiUrl } from './connection';
 
 export type PostWithLink = { id: number; slug: string; title: string; excerpt: string; link: string; date_gmt: string };
 
@@ -138,7 +138,7 @@ export async function filterPostsToValidatedLinksOnly(
 
   onProgress?.(`${fullUrls.length} link(s) for 200...`);
   try {
-    const response = await fetch(`${BACKEND_API_BASE}/api/bulk/validate-internal-links`, {
+    const response = await fetch(backendApiUrl("/bulk/validate-internal-links"), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ urls: fullUrls }),
@@ -210,7 +210,7 @@ export async function validateContentLinksBeforeUpload(
 
   onProgress?.(`${extracted.length} link(s) for 200...`);
   try {
-    const response = await fetch(`${BACKEND_API_BASE}/api/bulk/validate-internal-links`, {
+    const response = await fetch(backendApiUrl("/bulk/validate-internal-links"), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: combined, siteBaseUrl }),
@@ -323,7 +323,7 @@ export async function validateAndStripInvalidLinksFromContent(
 
   onProgress?.(`${extracted.length} link(s) for 200...`);
   try {
-    const response = await fetch(`${BACKEND_API_BASE}/api/bulk/validate-internal-links`, {
+    const response = await fetch(backendApiUrl("/bulk/validate-internal-links"), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: combined, siteBaseUrl }),

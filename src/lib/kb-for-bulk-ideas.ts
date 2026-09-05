@@ -18,6 +18,12 @@ export function loadKnowledgeBaseForBulkIdeas(): {
   knowledgeFiles: Array<{ name: string; content: string }>;
   activeKnowledgeBaseText: string;
 } {
+  if (typeof localStorage === "undefined") {
+    return {
+      knowledgeFiles: [],
+      activeKnowledgeBaseText: "",
+    };
+  }
   try {
     const storedFilesString = localStorage.getItem(KB_FILES_STORAGE_KEY) || "[]";
     const storedFiles = JSON.parse(storedFilesString) as StoredFile[];

@@ -30,6 +30,7 @@ interface ContentOptimizationControlsProps {
     content?: string;
     excerpt?: string;
     focusKeyword?: string;
+    seoResearch?: string;
   } | null) => void;
   multiSelect?: boolean;
   optimizationOptions?: OptimizationOptions;
@@ -51,6 +52,7 @@ interface ContentOptimizationControlsProps {
     content?: string;
     excerpt?: string;
     focusKeyword?: string;
+    seoResearch?: string;
   } | null;
   cardClassName?: string;
   /**

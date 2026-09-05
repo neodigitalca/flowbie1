@@ -40,13 +40,12 @@
       "title": "Meta sweep all buckets on position drop",
       "status": "todo",
       "assignPulse": true,
+      "scheduleMode": "trigger",
       "executionKind": "content_optimizer_meta",
       "executionPayload": {
         "targetBucket": "all",
         "updateMode": "update"
       },
-      "scheduleMode": "trigger",
-      "recurrenceRule": "none",
       "triggerConfig": {
         "sources": [
           "gsc"
@@ -68,8 +67,6 @@
       }
     }
   ],
-  "isAutomation": true,
-  "kind": "template",
   "triggerBlock": {
     "keyword": "gsc-position-drop",
     "kind": "gsc",
@@ -103,5 +100,7 @@
       "updateMode": "update"
     },
     "title": "Meta sweep all buckets on position drop"
-  }
+  },
+  "isAutomation": true,
+  "kind": "template"
 }

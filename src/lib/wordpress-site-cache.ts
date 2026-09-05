@@ -591,56 +591,15 @@ export function setSiteCacheForTest(
   return cache;
 }
 
-import { scorePostForLinkQuery } from "@/lib/content-generation/link-query-scoring";
-
-/**
- * Searches the cache for posts matching a query
- * Case-insensitive search in title, URL, slug, and excerpt.
- * Uses titleIndex to score only candidate posts (posts with at least one query word in title), falling back to full scan if no candidates.
- */
+/** Returns cached pages/posts for a site. Query is unused; callers that need intent use OpenRouter. */
 export function searchSiteCache(
   siteId: string,
-  query: string,
+  _query: string,
   limit: number = 50
 ): CachedPost[] {
   const cache = siteCache.get(siteId);
-  if (!cache || !query) {
-    return [];
-  }
-
-  const queryLower = query.toLowerCase().trim();
-  if (queryLower.length === 0) {
-    return cache.posts.slice(0, limit);
-  }
-
-  const queryWords = tokenizeTitle(query);
-  const candidates = new Set<CachedPost>();
-
-  if (cache.titleIndex && queryWords.length > 0) {
-    for (const word of queryWords) {
-      const postsForWord = cache.titleIndex.get(word) ?? [];
-      for (const post of postsForWord) {
-        candidates.add(post);
-      }
-    }
-  }
-
-  const toScore =
-    cache.titleIndex && candidates.size > 0
-      ? Array.from(candidates)
-      : cache.posts;
-
-  const matches: Array<{ post: CachedPost; score: number }> = [];
-
-  for (const post of toScore) {
-    const score = scorePostForLinkQuery(post, query);
-    if (score > 0) {
-      matches.push({ post, score });
-    }
-  }
-
-  matches.sort((a, b) => b.score - a.score);
-  return matches.slice(0, limit).map(m => m.post);
+  if (!cache) return [];
+  return cache.posts.slice(0, limit);
 }
 
 /**

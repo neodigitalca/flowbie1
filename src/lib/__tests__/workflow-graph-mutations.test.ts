@@ -66,13 +66,24 @@ describe("workflow-graph-mutations", () => {
     ]);
   });
 
-  it("insertNodeAfter(null) inserts after client when present", () => {
-    const workflow = baseWorkflow();
-    const trigger = createWorkflowNode("trigger_calendar", "Schedule");
-    const inserted = insertNodeAfter(workflow, null, trigger);
-    const ordered = linearOrderedNodes(inserted);
-    expect(ordered.map((node) => node.id)[0]).toBe(workflow.nodes[0]!.id);
-    expect(ordered.map((node) => node.id)[1]).toBe(trigger.id);
+  it("insertNodeAfter places Schedule after client when no event trigger exists", () => {
+    const client = createWorkflowNode("workflow_client", "Client");
+    client.config = { siteIds: ["site_a"] };
+    const workflow: Pick<WorkflowDefinition, "nodes" | "edges" | "ragVariables"> = {
+      nodes: [
+        client,
+        { id: "a1", kind: "action_agent", label: "Action", config: {}, position: { x: 120, y: 220 } },
+      ],
+      edges: [{ id: "e_c_a", source: client.id, target: "a1" }],
+      ragVariables: [],
+    };
+    const schedule = createWorkflowNode("trigger_calendar", "Schedule");
+    const inserted = insertNodeAfter(workflow, client.id, schedule);
+    expect(linearOrderedNodes(inserted).map((node) => node.kind)).toEqual([
+      "workflow_client",
+      "trigger_calendar",
+      "action_agent",
+    ]);
   });
 
   it("deleteNode repairs linear chain", () => {

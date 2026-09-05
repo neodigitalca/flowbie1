@@ -1,8 +1,13 @@
-import type { KeywordData } from "@/lib/keyword-types";
-import type { SeoContentBriefV1 } from "@/lib/overview-seo-content-brief";
-import { hasSubstantiveSeoResearch } from "@/hooks/content-optimization/bulk-optimization-missing-seo-research";
+import type { KeywordData, KeywordAIAnalysis } from "@/lib/keyword-types";
+import type { LlmAuditBrief, SeoContentBriefV1 } from "@/lib/overview-seo-content-brief";
+import { llmAuditGuidanceFromBrief } from "@/lib/llm-audit/llm-audit-dataforseo";
 import { sortGscQueriesByStats } from "@/lib/bulk/bulk-gsc-site-queries";
 import type { GscSiteQueryRow } from "@/lib/competitor-research/types";
+import {
+  mergeSeoResearchFromAcfIntoContext,
+  type AIDrivenACFContext,
+} from "@/lib/content-generation/ai-driven-acf-reader";
+import { sapSelectedH2OutlineTitles } from "@/lib/prompt-builders/sap-page-template";
 
 export type PageGscQueryRow = {
   query: string;
@@ -29,8 +34,26 @@ export function hasUsablePageGsc(gscResult: PageGscResultLike | null | undefined
 }
 
 export function hasSubstantiveSeoResearchBrief(raw: string | null | undefined): boolean {
-  if (!raw?.trim()) return false;
-  return hasSubstantiveSeoResearch({ seo_research: raw });
+  const brief = parseSeoResearchBrief(raw);
+  if (!brief) return false;
+  return Object.keys(brief as object).length > 0;
+}
+
+/** Prefer ACF brief; otherwise inject overview grid / caller-supplied stored brief. */
+export function mergeStoredSeoResearchBriefIntoContext(
+  acfFields: Record<string, unknown>,
+  acfContext: AIDrivenACFContext | undefined,
+  storedBrief?: string | null,
+): AIDrivenACFContext | undefined {
+  const fromAcf = mergeSeoResearchFromAcfIntoContext(acfFields, acfContext);
+  const overview = storedBrief?.trim();
+  if (!overview || hasSubstantiveSeoResearchBrief(fromAcf?.seoResearch)) {
+    return fromAcf;
+  }
+  if (hasSubstantiveSeoResearchBrief(overview)) {
+    return { ...(fromAcf ?? acfContext ?? {}), seoResearch: overview };
+  }
+  return fromAcf;
 }
 
 export function parseSeoResearchBrief(raw: string | null | undefined): SeoContentBriefV1 | null {
@@ -80,6 +103,18 @@ export function relatedKeywordsFromSeoBrief(brief: SeoContentBriefV1 | null): st
     out.push(k);
   }
   return out;
+}
+
+export { llmAuditGuidanceFromBrief };
+export { collectLiveLinksFromBrief } from "@/lib/llm-audit/llm-audit-authority-links";
+
+export function llmAuditSummaryFromSeoResearchBrief(raw: string | null | undefined): string {
+  return llmAuditGuidanceFromBrief(parseSeoResearchBrief(raw)).trim();
+}
+
+export function llmAuditSummaryFromLlmAuditBrief(audit: LlmAuditBrief | null | undefined): string {
+  if (!audit) return "";
+  return llmAuditGuidanceFromBrief({ llmAudit: audit } as SeoContentBriefV1).trim();
 }
 
 export function paaItemsFromSeoBrief(brief: SeoContentBriefV1 | null): Array<{ question: string; snippet: string }> {
@@ -147,5 +182,97 @@ export function mergeOptimizeResearchInputs(args: {
     relatedGSCKeywords,
     paaItems: paaItemsFromSeoBrief(brief),
     useCachedResearchOnly: Boolean(brief) || hasUsablePageGsc(args.gscResult),
+  };
+}
+
+export function researchLinksFromSeoBrief(brief: SeoContentBriefV1 | null, limit = 7): string[] {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  for (const row of brief?.dataforseo?.organic ?? []) {
+    const url = row.url?.trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    urls.push(url);
+    if (urls.length >= limit) break;
+  }
+  return urls;
+}
+
+/** Stored brief → blueprint inputs. No live keyword/PAA re-analysis. */
+export function buildOptimizeSelectionsFromStoredBrief(args: {
+  primaryKeyword: string;
+  selectedKeyword: PageGscQueryRow;
+  gscResult: PageGscResultLike | null | undefined;
+  seoResearchBrief: string;
+  clusterKeywords?: string[];
+  secondaryKeywords?: string[];
+  sapEntity?: string;
+}): {
+  keywordData: KeywordData;
+  aiAnalysis: KeywordAIAnalysis;
+  relatedKeywords: string[];
+  selectedKeywords: string[];
+  selectedH2Sections: string[];
+  selectedPeopleAlsoAsk: string[];
+  selectedResearchLinks: string[];
+  paaRawResponse: null;
+} {
+  const merged = mergeOptimizeResearchInputs({
+    primaryKeyword: args.primaryKeyword,
+    selectedKeyword: args.selectedKeyword,
+    gscResult: args.gscResult,
+    seoResearchBrief: args.seoResearchBrief,
+  });
+  const brief = parseSeoResearchBrief(args.seoResearchBrief);
+  const sapEntity = args.sapEntity?.trim();
+  const outlineH2s = sapEntity
+    ? sapSelectedH2OutlineTitles(sapEntity)
+    : [];
+  const paaQuestions = merged.paaItems.map((p) => p.question).slice(0, 7);
+  const researchLinks = researchLinksFromSeoBrief(brief);
+
+  const selectedKeywords = args.clusterKeywords?.length
+    ? [
+        ...new Set([
+          args.primaryKeyword,
+          ...args.clusterKeywords,
+          ...(args.secondaryKeywords ?? []),
+          ...merged.relatedGSCKeywords,
+        ]),
+      ]
+    : args.secondaryKeywords?.length
+      ? [...new Set([args.primaryKeyword, ...args.secondaryKeywords, ...merged.relatedGSCKeywords])]
+      : [...new Set([args.primaryKeyword, ...merged.relatedGSCKeywords])];
+
+  const aiAnalysis: KeywordAIAnalysis = {
+    keywordSuggestions: {
+      primary: args.primaryKeyword,
+      variations: merged.relatedGSCKeywords.slice(0, 10),
+      longTail: [],
+      semantic: [],
+    },
+    h2Suggestions: outlineH2s.map((heading) => ({
+      heading,
+      description: "",
+      priority: "high" as const,
+      reasoning: "",
+    })),
+    contentGaps: [],
+    peopleAlsoAsk: merged.paaItems.slice(0, 7).map((p) => ({
+      question: p.question,
+      answer: p.snippet,
+    })),
+    researchLinks: researchLinks.map((url) => ({ url, title: url })),
+  };
+
+  return {
+    keywordData: merged.keywordData,
+    aiAnalysis,
+    relatedKeywords: merged.relatedGSCKeywords,
+    selectedKeywords,
+    selectedH2Sections: outlineH2s,
+    selectedPeopleAlsoAsk: paaQuestions,
+    selectedResearchLinks: researchLinks,
+    paaRawResponse: null,
   };
 }

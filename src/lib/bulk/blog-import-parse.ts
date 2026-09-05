@@ -6,10 +6,10 @@ import type { KeywordAIAnalysis, KeywordData } from "@/lib/keyword-types";
 import {
   importedDraftToCsvRow,
   isBlogImportFileAccepted,
-  parseBlogImportFile,
   type BlogImportFeaturedImage,
   type ImportedBlogDraft,
 } from "@/lib/bulk/blog-import-parser";
+import { extractBlogImportViaOpenRouter } from "@/lib/bulk/blog-import-openrouter-run";
 
 export function rowHasImportedBlogSections(row: CSVRow): boolean {
   const sections = parseImportedSectionsJson(row.imported_sections_json);
@@ -62,28 +62,34 @@ export function buildBlogImportRowFromDraft(
 export async function processBlogImportFile(
   file: File,
   form: BlogImportFormState,
+  openRouterApiKey: string,
+  model?: string,
 ): Promise<{ row: CSVRow; draft: ImportedBlogDraft; fileName: string }> {
   if (!isBlogImportFileAccepted(file)) {
     throw new Error("Use .docx, .md, .html, or .txt with ## or Heading 2 sections");
   }
-  const draft = await parseBlogImportFile(file, {
-    titleOverride: form.titleOverride.trim() || undefined,
-  });
-  const row = buildBlogImportRowFromDraft(draft, form);
+  const row = await extractBlogImportViaOpenRouter(file, form, openRouterApiKey, model);
+  const sections = parseImportedSectionsJson(row.imported_sections_json) ?? [];
+  const draft: ImportedBlogDraft = {
+    title: row.title ?? "",
+    sections,
+  };
   return { row, draft, fileName: file.name };
 }
 
 export async function pickAndParseBlogImportFile(
   file: File | null,
   form: BlogImportFormState,
+  openRouterApiKey: string,
   onSuccess: (row: CSVRow, draft: ImportedBlogDraft, fileName: string) => void,
   onClear: () => void,
+  model?: string,
 ): Promise<boolean> {
   if (!file) {
     return false;
   }
   try {
-    const result = await processBlogImportFile(file, form);
+    const result = await processBlogImportFile(file, form, openRouterApiKey, model);
     onSuccess(result.row, result.draft, result.fileName);
     notify.success(notifyImportedXH2SectionsFromX(result.draft.sections.length, result.fileName));
     return true;

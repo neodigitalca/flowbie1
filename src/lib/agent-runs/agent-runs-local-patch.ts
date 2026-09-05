@@ -46,9 +46,11 @@ export function appendAgentRunStepLocally(
         return {};
       }
     }
+
+    let nextSteps = steps;
     const nextStep: AgentRunStep = {
       id: Date.now(),
-      stepIndex: steps.length,
+      stepIndex: nextSteps.length,
       stepKey,
       label: trimmed,
       status,
@@ -56,6 +58,6 @@ export function appendAgentRunStepLocally(
       createdAt: at,
       updatedAt: at,
     };
-    return { steps: [...steps, nextStep] };
+    return { steps: [...nextSteps, nextStep] };
   });
 }

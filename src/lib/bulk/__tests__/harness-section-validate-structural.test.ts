@@ -19,31 +19,19 @@ describe("countHarnessH2Tags", () => {
   });
 });
 
-describe("validateHarnessSectionOrThrow structural", () => {
-  it("throws on missing h2", () => {
+describe("validateHarnessSectionOrThrow", () => {
+  it("is a no-op so harness sections ship without per-section paragraph gates", () => {
     expect(() =>
       validateHarnessSectionOrThrow("<p>Only paragraph.</p>", {
         title: "Missing",
         isOverview: false,
       }),
-    ).toThrow(/missing <h2>/);
-  });
-
-  it("throws on incomplete body paragraph", () => {
+    ).not.toThrow();
     expect(() =>
       validateHarnessSectionOrThrow('<h2>T</h2><p>Cut off mid sentence without ending', {
         title: "T",
         isOverview: false,
       }),
-    ).toThrow(/no complete paragraphs/);
-  });
-
-  it("passes complete overview prose", () => {
-    expect(() =>
-      validateHarnessSectionOrThrow(
-        "<h2>Overview</h2><p>Lead sentence for the page.</p><ul><li><a href=\"#a\">A</a></li></ul>",
-        { title: "Overview", isOverview: true },
-      ),
     ).not.toThrow();
   });
 });

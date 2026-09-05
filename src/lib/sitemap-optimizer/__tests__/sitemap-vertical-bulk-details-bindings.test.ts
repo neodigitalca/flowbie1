@@ -233,6 +233,7 @@ describe("buildVerticalBenchmarkBulkGeneratorDetailsProps", () => {
       gridCsvContext: null,
       gridCsvFileName: null,
       contentTypeFilter: "post",
+      blogCount: 10,
     });
 
     expect(props.harnessSections).toEqual([]);

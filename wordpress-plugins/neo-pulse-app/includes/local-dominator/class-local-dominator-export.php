@@ -10,6 +10,18 @@ defined( 'ABSPATH' ) || exit;
 class Neo_Pulse_App_Local_Dominator_Export {
 
 	/**
+	 * Local Dominator grid search uses the GBP name before any " | Brand" suffix.
+	 */
+	public static function normalize_business_name( string $business_name ): string {
+		$business_name = trim( $business_name );
+		$pipe          = strpos( $business_name, ' | ' );
+		if ( $pipe !== false && $pipe > 0 ) {
+			return trim( substr( $business_name, 0, $pipe ) );
+		}
+		return $business_name;
+	}
+
+	/**
 	 * @return array<string,mixed>
 	 */
 	public static function probe_worker(): array {
@@ -133,7 +145,8 @@ class Neo_Pulse_App_Local_Dominator_Export {
 			return array(
 				'ok'     => false,
 				'status' => 'error',
-				'error'  => 'Job not found.',
+				// Worker job files gone after finalize — not "business missing in Local Dominator".
+				'error'  => 'Export worker job already cleaned up.',
 			);
 		}
 
@@ -149,7 +162,8 @@ class Neo_Pulse_App_Local_Dominator_Export {
 
 		$parsed = self::parse_progress_file( self::job_progress_path( $job_id ) );
 		if ( ( $parsed['status'] ?? '' ) === 'done' ) {
-			self::cleanup_job_files( $job_id );
+			// Keep job files until finalize cleans up so concurrent polls still see "done"
+			// instead of racing into "Job not found."
 			return array(
 				'ok'               => true,
 				'status'           => 'done',
@@ -278,17 +292,12 @@ class Neo_Pulse_App_Local_Dominator_Export {
 	private static function validate_export_body( array $body ): array {
 		$business_name = isset( $body['businessName'] ) ? trim( (string) $body['businessName'] ) : '';
 		$keyword       = isset( $body['keyword'] ) ? trim( (string) $body['keyword'] ) : '';
+		$business_name = self::normalize_business_name( $business_name );
 
 		if ( $business_name === '' ) {
 			return array(
 				'ok'    => false,
 				'error' => 'Missing required field: businessName',
-			);
-		}
-		if ( $keyword === '' ) {
-			return array(
-				'ok'    => false,
-				'error' => 'Missing required field: keyword',
 			);
 		}
 
@@ -401,6 +410,15 @@ class Neo_Pulse_App_Local_Dominator_Export {
 				wp_delete_file( $path );
 			}
 		}
+	}
+
+	/** Public cleanup after the agent run has finalized the CSV (avoids poll race). */
+	public static function cleanup_job_after_finalize( string $job_id ): void {
+		$job_id = trim( $job_id );
+		if ( $job_id === '' ) {
+			return;
+		}
+		self::cleanup_job_files( $job_id );
 	}
 
 	private static function is_process_running( int $pid ): bool {

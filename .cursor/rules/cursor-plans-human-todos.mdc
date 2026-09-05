@@ -8,13 +8,30 @@ alwaysApply: false
 
 Use this when **creating or editing** Markdown plans under `.cursor/plans/`. Plans are execution briefs for humans and agents, not placeholders.
 
+**Imperative:** Every plan must include **Must-have strategies** and **Files and line counts** per [`plans-must-have-strategies.mdc`](plans-must-have-strategies.mdc). In-chat plans follow the same rule.
+
+## Must-have strategies and line counts
+
+- Include the **Must-have strategies** section with plan-specific "How this plan applies" bullets for: Logic, Occam's razor, Server-side only, Minimal stacking / zero CLS, No fallbacks, No workarounds / prompt-level fix, Flat inline forms, Background shell, AI first (pattern matching), Murphy's Law check, and Harness UI (when relevant).
+- When LLM/agents are in scope, include a separate **Prompt-level strategy** subsection (see [`no-workarounds-prompt-level-fix.mdc`](no-workarounds-prompt-level-fix.mdc)).
+- Include the **Files and line counts** table for every touched file (current approx, after approx, action).
+- End todos with the mandatory **Final review** step (last item, always).
+- **Complete todos:** include install, npm scripts, tests, and post-change verification as explicit lines when needed; the **agent runs them**, never the user by default.
+- Do not ship a plan missing any of the above.
+
 ## Todos and task lists
 
-- Include an explicit **Todos** or **Implementation tasks** section with **human-readable** items: each line should stand alone as a clear instruction (what to do, and enough context to know when it is done).
-- Prefer **verb-led** lines with scope (e.g. "Add validation in `src/...` when X is blank") over cryptic labels ("fix validation", "wire API", "cleanup").
+- Todos must be **simple, scannable, and human-readable**. You should read the full list in seconds with no decoding.
+- **Nothing omitted:** if the task needs `npm install`, tests, build, migrations, or a verify script, those are **todo lines**, not assumptions.
+- **Agent executes:** run every command and check in the plan yourself in **background Shell** (shell visible OFF). Do not ask "should I run tests?" or "want me to install?" Do not open a visible terminal for the user.
+- **Plain language first:** say what happens in everyday words. Save file paths, types, and implementation detail for the **Files and line counts** table and plan body—not the todo line.
+- **No super technical jargon** in todo lines (avoid leading with `zod`, `hydrate`, `DTO`, `middleware`, `refactor X module`, internal codenames). If a path is needed, one backticked file after the plain-English action is enough.
+- Include an explicit **Todos** or **Implementation tasks** section: each line stands alone as a clear instruction and enough context to know when it is done.
+- **Final todo (mandatory):** the **last** item in every todo list must be the **Final review** step from [`plans-must-have-strategies.mdc`](plans-must-have-strategies.mdc).
+- Prefer **verb-led** short lines (e.g. "Add a check when the date field is empty") over cryptic labels ("fix validation", "wire API", "cleanup").
 - **No telegraphic one-word todos** unless the surrounding bullet already defines scope; avoid duplicate rows that only differ by file name without a distinct action.
-- If order matters, use **numbered** steps or an explicit note; otherwise use `- [ ]` checklists for parallel work.
-- Where useful, add **acceptance criteria** per item or a short **Definition of done** subsection so "done" is not ambiguous.
+- If order matters, use **numbered** steps; otherwise use `- [ ]` checklists.
+- Where useful, add **acceptance criteria** per item or a short **Definition of done** subsection (also in plain language).
 
 ## Depth
 
@@ -44,8 +61,9 @@ Use this when **creating or editing** Markdown plans under `.cursor/plans/`. Pla
 ```markdown
 ## Todos
 
-- [ ] Add rate limit handling in `src/lib/foo/client.ts` when the API returns 429; surface a single user-visible error and retry once with backoff.
-- [ ] Extend `src/lib/foo/__tests__/client.test.ts` mocks to cover 429 and assert one retry.
+- [ ] Show a clear error when the API rate-limits us, and retry once
+- [ ] Add a test for the rate-limit case
+- [ ] **Final review (mandatory):** …
 ```
 
 ```markdown
@@ -53,6 +71,7 @@ Use this when **creating or editing** Markdown plans under `.cursor/plans/`. Pla
 
 - fix stuff
 - API
+- Refactor fetch reducer + zod parse path in client.ts
 ```
 
-The second example is **not** acceptable: items are not actionable or readable.
+The second example is **not** acceptable: not actionable, not scannable, too much jargon.

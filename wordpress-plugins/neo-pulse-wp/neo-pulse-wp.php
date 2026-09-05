@@ -3,7 +3,7 @@
  * Plugin Name:       NEO Pulse WP
  * Plugin URI:        https://github.com/neo-pulse/neo-pulse
  * Description:       NEO Pulse AI tools for WordPress — chat, search, SEO, and editor wands.
-	 * Version:           0.9.124
+ * Version:           0.9.134
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            NEO Pulse
@@ -16,7 +16,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'NEO_PULSE_WP_VERSION', '0.9.124' );
+define( 'NEO_PULSE_WP_VERSION', '0.9.134' );
 define( 'NEO_PULSE_WP_PLUGIN_FILE', __FILE__ );
 define( 'NEO_PULSE_WP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 
@@ -49,6 +49,7 @@ require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-research-key
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-dataforseo.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-semrush.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-seo-brief-merge.php';
+require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-llm-audit.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-ai-fields.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-ai-seo-limits.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-ai-context.php';

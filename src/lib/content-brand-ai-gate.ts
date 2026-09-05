@@ -25,14 +25,15 @@ const SYSTEM = `You are a narrow brand/topic gate for SEO focus keywords and tit
 Default: KEEP. Only REJECT when clearly wrong.
 
 REJECT only when the candidate is primarily:
-1. The site's own trading / company name from siteName (navigational brand search) — fuzzy, word-reorder, or brand+city count.
-   Examples for site "Blind Magic Window Coverings | Hunter Douglas Blinds":
-   REJECT: "blind magic", "magic blinds", "blind magic edmonton", "Magic Blinds Available In Edmonton".
+1. The site's own trading / company name alone (navigational brand search) — exact or fuzzy word-reorder with NO product or service words.
+   REJECT: "blind magic", "magic blinds", "advance blinds & drapery" when that is the full company name with no product angle.
+   KEEP: "advance blinds", "advanced window coverings", "blinds near me", "custom blinds edmonton" — these are product/service queries even if they share words with the company name.
 2. A blockedTopics entry or clear variant (e.g. Bali Blinds → "bali blinds", "bali blind removal").
 
 KEEP (do NOT reject) all of these:
+- Any GSC query that includes a product, service, or local commercial intent word (blinds, shades, drapery, window coverings, repair, installation, near me, etc.)
 - Product / service + place: "custom blinds edmonton", "blind repair edmonton", "blinds edmonton", "roman shades edmonton"
-- Manufacturer / product-line brands the dealer sells (Hunter Douglas, Alta, PowerView, etc.) — KEEP "hunter douglas edmonton", "alta roller shades edmonton"
+- Manufacturer / product-line brands the dealer sells (Hunter Douglas, Alta, PowerView, etc.)
 - Anything that only shares a generic product word (blinds, shades, windows) with the company name
 - When unsure: KEEP
 

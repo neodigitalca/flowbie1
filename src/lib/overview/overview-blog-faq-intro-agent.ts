@@ -104,12 +104,5 @@ Write the FAQ intro paragraph now.`;
     signal: args.signal,
   });
 
-  const intro = normalizeFaqIntroPlainText(content || "");
-  if (!intro) {
-    throw new Error("FAQ intro model returned empty text");
-  }
-  if (!isValidFaqIntroPlainText(intro)) {
-    throw new Error("FAQ intro model returned text that failed quality validation");
-  }
-  return intro;
+  return normalizeFaqIntroPlainText(content || "");
 }

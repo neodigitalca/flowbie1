@@ -1,8 +1,9 @@
 import { loadApiKey } from "@/lib/api";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { extractGeographicEntityWithAI } from "@/lib/content-optimization-helpers";
-import { BACKEND_CONNECTION_ERROR } from "@/lib/wordpress-api/connection";
+import { BACKEND_CONNECTION_ERROR, backendApiUrl } from "@/lib/wordpress-api/connection";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 /**
  * Analyzes a WordPress post title to extract the origin entity (location) using AI
@@ -73,7 +74,7 @@ IMPORTANT:
 - **CRITICAL: Entities MUST be geolocations ONLY - nothing generic or personal!** Do NOT extract personal or generic entities like "home", "Your Home", "My Home", "house", "Your House", "place", "Your Big Day", "My Big Day", "Your Special Day", "My Event", "Your New Business", "My New Business", "The New Business", "Your Business", "My Business", "New Business", "Business", "Your Company", "My Company", "Office", "Offices", "Workplace", "Store", "Shop", "Location", "Area", "Region", "Neighborhood", "Venue", "Facility", "Building", "Establishment", "Premises", "Site", or ANY other personal/business/workplace possessive phrases (Your/My/The + generic/business term) as entities** - These are NOT geographic locations. Entities MUST be geolocations only (cities, states, streets, neighborhoods, etc.). AGGRESSIVELY REJECT all entities starting with "Your", "My", or "The" unless clearly followed by a specific geographic location. If the title contains any such personal/business/workplace entity without a specific geographic location, return "NONE" immediately. If you see "Offices", "Office", or any standalone business/workplace term, return "NONE" immediately.`;
 
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await postOpenRouterAppChatFetch({
       method: "POST",
       headers: openRouterWebAppHeaders(openRouterApiKey),
       body: JSON.stringify({
@@ -169,7 +170,7 @@ RULES:
   const userPrompt = `From this post context, extract the ONE geographic location (Origin) for the ACF Origin field.\n\n${parts.join('\n')}\n\nReturn only the location phrase or NONE.`;
 
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await postOpenRouterAppChatFetch({
       method: "POST",
       headers: openRouterWebAppHeaders(openRouterApiKey),
       body: JSON.stringify({
@@ -228,13 +229,7 @@ export async function updateACFOriginField(
   postTypeEndpoint?: string
 ): Promise<{ success: boolean; error?: string }> {
   // Trust research model–derived origin (fully agentic - no blocklist validation)
-  const BACKEND_API_BASE = typeof window !== 'undefined' 
-    ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? 'http://localhost:3001'
-        : '')
-    : 'http://localhost:3001';
-
-  const url = `${BACKEND_API_BASE}/api/wordpress/update-acf-field`;
+  const url = backendApiUrl("/wordpress/update-acf-field");
   
   try {
     const response = await fetch(url, {
@@ -311,13 +306,7 @@ export async function updateACFFields(
   diagnostics?: any;
   error?: string;
 }> {
-  const BACKEND_API_BASE = typeof window !== 'undefined' 
-    ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? 'http://localhost:3001'
-        : '')
-    : 'http://localhost:3001';
-
-  const url = `${BACKEND_API_BASE}/api/wordpress/update-acf-fields`;
+  const url = backendApiUrl("/wordpress/update-acf-fields");
   
   try {
     const response = await fetch(url, {

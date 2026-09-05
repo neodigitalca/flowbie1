@@ -1,4 +1,9 @@
 import { tasksApi } from "@/lib/tasks-api";
+import {
+  bundledAutomationRecipe,
+  mergeAutomationRecipeCatalog,
+  mergeAutomationRecipeFilterOptions,
+} from "@/lib/automation-recipes-catalog";
 import type {
   AutomationRecipeCatalogItem,
   AutomationRecipeFilterOptions,
@@ -29,9 +34,13 @@ export async function fetchAutomationRecipes(
     filters?: AutomationRecipeFilterOptions;
     error?: string;
   };
+  const recipes = mergeAutomationRecipeCatalog(data.recipes ?? []);
   return {
-    recipes: data.recipes ?? [],
-    filters: data.filters ?? { categories: [], verticals: [], buckets: [], signals: [] },
+    recipes,
+    filters: mergeAutomationRecipeFilterOptions(
+      data.filters ?? { categories: [], verticals: [], buckets: [], signals: [] },
+      recipes,
+    ),
   };
 }
 
@@ -41,6 +50,10 @@ export async function fetchAutomationRecipe(
 ): Promise<AutomationRecipeCatalogItem | null> {
   const kw = keyword.trim();
   if (!kw) return null;
+
+  const bundled = bundledAutomationRecipe(kw);
+  if (bundled) return bundled;
+
   const res = await tasksApi(`/teams/${teamId}/tasks/automation-recipes/${encodeURIComponent(kw)}`);
   const data = (await res.json()) as { ok?: boolean; recipe?: AutomationRecipeCatalogItem };
   return data.recipe ?? null;

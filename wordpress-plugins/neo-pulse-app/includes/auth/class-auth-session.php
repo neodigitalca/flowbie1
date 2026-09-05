@@ -195,4 +195,20 @@ class Neo_Pulse_App_Auth_Session {
 		}
 		return Neo_Pulse_App_Teams_Store::get_user_by_id( $user_id );
 	}
+
+	/**
+	 * Short-lived bearer token for server worker API calls.
+	 */
+	public static function mint_bearer_token( int $user_id, ?int $team_id, int $ttl_seconds = 3600 ): string {
+		$payload = wp_json_encode(
+			array(
+				'uid' => $user_id,
+				'tid' => ( $team_id === null || $team_id <= 0 ) ? null : $team_id,
+				'exp' => time() + max( 60, $ttl_seconds ),
+			)
+		);
+		$b64 = rtrim( strtr( base64_encode( (string) $payload ), '+/', '-_' ), '=' );
+		$sig = hash_hmac( 'sha256', $b64, self::secret() );
+		return $b64 . '|' . $sig;
+	}
 }

@@ -4,13 +4,14 @@ import { OptimizationFileManager } from "@/lib/optimization-file-manager";
 import { saveSelectedKeyword, updateOptimizationProgress } from "./optimization-helpers";
 import type { PendingOptimization } from "./use-optimization-state";
 import {
-  extractAndCleanEntity,
+  resolveSapEntityForOptimize,
   updateBulkStateWithEntity,
 } from "./continue-optimization-entity-helpers";
 import { runContinueOptimizationTryBody } from "./continue-optimization-try-body";
 import { clearSiteCache } from "@/lib/wordpress-site-cache";
 import { clearValidationCache } from "@/lib/cached-link-validation";
 import { clearRelevanceCache } from "@/lib/content-generation/ai-link-relevance-filter";
+import { resolveOptimizeFocusKeyword } from "@/lib/content-optimization/ensure-seo-research-brief-for-optimize";
 
 export type ContinueOptimizationFn = (
   siteId: string,
@@ -37,6 +38,7 @@ interface ContinueOptimizationParams {
   setOptimizationProgress: (prev: any) => any;
   setIsOptimizingContent: (prev: any) => any;
   setBulkOptimizationState: (prev: any) => any;
+  urlEntities?: Record<string, string | "N/A">;
 }
 
 export async function continueOptimizationWithKeyword(params: ContinueOptimizationParams): Promise<void> {
@@ -54,6 +56,7 @@ export async function continueOptimizationWithKeyword(params: ContinueOptimizati
     setOptimizationProgress,
     setIsOptimizingContent,
     setBulkOptimizationState,
+    urlEntities,
   } = params;
 
   if (!selectedKeyword?.query?.trim()) {
@@ -82,9 +85,14 @@ export async function continueOptimizationWithKeyword(params: ContinueOptimizati
     cleanedTitle: pendingCleanedTitle,
   } = pending;
 
-  const primaryKeyword = String(acfFields?.keyword_focus ?? acfContext?.keywordFocus ?? selectedKeyword.query).trim();
+  const primaryKeyword = resolveOptimizeFocusKeyword({
+    url,
+    acfFields: acfFields as Record<string, unknown>,
+    acfContext: acfContext as { keywordFocus?: string } | undefined,
+    selectedKeywordQuery: selectedKeyword.query,
+  });
   if (!primaryKeyword) {
-    throw new Error(`ACF keyword_focus is required for ${url}.`);
+    throw new Error(`Cannot derive a focus keyword for ${url}. Set keyword_focus in WordPress or use a URL with a slug.`);
   }
 
   const finalOptimizationOptions = {
@@ -97,19 +105,27 @@ export async function continueOptimizationWithKeyword(params: ContinueOptimizati
     useAcfKeyword: true,
   };
 
-  const { entity: extractedEntity, cleanedTitle: entityCleanedTitle } = await extractAndCleanEntity(
-    optimizationOptions?.hasEntity,
-    existingTitle,
-    url,
-    primaryKeyword,
-    pendingCleanedTitle,
-    site,
-    existingPost?.postTypeEndpoint ?? resolved?.endpoint ?? null,
-  );
+  const isSapRun =
+    optimizationOptions?.hasEntity === true ||
+    optimizationOptions?.inventorySitemapSource === "sap";
+  let extractedEntity: string | "N/A" = "N/A";
+  let finalTitle = pendingCleanedTitle || existingTitle || primaryKeyword;
 
-  const finalTitle = entityCleanedTitle || existingTitle || primaryKeyword;
-
-  await updateBulkStateWithEntity(site, url, primaryKeyword, extractedEntity, finalTitle, setBulkOptimizationState);
+  if (isSapRun) {
+    const sapEntity = resolveSapEntityForOptimize({
+      site,
+      url,
+      title: pendingCleanedTitle || existingTitle || finalTitle,
+      keyword: primaryKeyword,
+      acfFields: acfFields as Record<string, unknown> | undefined,
+      acfContext: acfContext as { origin?: string } | undefined,
+      urlEntities,
+    });
+    extractedEntity = sapEntity || "N/A";
+    if (sapEntity) {
+      await updateBulkStateWithEntity(site, url, primaryKeyword, extractedEntity, finalTitle, setBulkOptimizationState);
+    }
+  }
 
   setPendingOptimization((prev: Record<string, PendingOptimization>) => {
     const p = prev[siteId];

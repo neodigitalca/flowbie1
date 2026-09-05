@@ -43,16 +43,19 @@ class Neo_Pulse_App_Task_Execution_Coordinator {
 			$payload['sendAutomationEmail'] = true;
 			$payload['saveLocalArchive']    = true;
 		}
+		if ( ! empty( $payload['saveToGoogleDrive'] ) ) {
+			$payload['saveLocalArchive'] = true;
+		}
 
 		$site_id = trim( (string) ( $body['wordpressSiteId'] ?? $task['wordpressSiteId'] ?? '' ) );
-		if ( $site_id === '' ) {
+		if ( $site_id === '' && $kind !== 'browser_automation' ) {
 			return array( 'ok' => false, 'error' => 'Task wordpressSiteId is required.' );
 		}
 
 		$target_url = trim( (string) ( $payload['targetUrl'] ?? '' ) );
 		$target_bucket = Neo_Pulse_App_Tasks_Store::sanitize_execution_target_bucket( $payload['targetBucket'] ?? '' );
 		$target_urls = isset( $payload['targetUrls'] ) && is_array( $payload['targetUrls'] ) ? $payload['targetUrls'] : array();
-		if ( $kind !== 'gsc_reporting' && $kind !== 'post_creator' && $kind !== 'local_dominator_export' ) {
+		if ( $kind !== 'gsc_reporting' && $kind !== 'post_creator' && $kind !== 'local_dominator_export' && $kind !== 'chatgpt_website_audit' && $kind !== 'browser_automation' && $kind !== 'content_gap_check' ) {
 			if ( Neo_Pulse_App_Tasks_Store::is_execution_target_all( $target_url ) && $target_bucket === '' ) {
 				$target_bucket = 'all';
 			}
@@ -63,20 +66,22 @@ class Neo_Pulse_App_Task_Execution_Coordinator {
 				$target_bucket = 'pages';
 			}
 		} elseif ( $kind === 'gsc_reporting' ) {
-			$preset = sanitize_key( (string) ( $payload['comparePreset'] ?? 'mom' ) );
-			if ( $preset !== 'mom' && $preset !== 'yoy' ) {
-				return array( 'ok' => false, 'error' => 'executionPayload.comparePreset must be mom or yoy.' );
+			$trailing_count = Neo_Pulse_App_Tasks_Store::sanitize_gsc_trailing_month_count( $payload['gscTrailingMonthCount'] ?? null );
+			$preset_id      = sanitize_key( (string) ( $payload['gscComparePresetId'] ?? $payload['comparePreset'] ?? 'mom' ) );
+			if ( $trailing_count === null && $preset_id === 'custom_compare' ) {
+				$ranges  = is_array( $payload['gscCompareRanges'] ?? null ) ? $payload['gscCompareRanges'] : array();
+				$primary = is_array( $ranges['primary'] ?? null ) ? $ranges['primary'] : array();
+				$compare = is_array( $ranges['compare'] ?? null ) ? $ranges['compare'] : array();
+				if ( trim( (string) ( $primary['startDate'] ?? '' ) ) === '' || trim( (string) ( $primary['endDate'] ?? '' ) ) === '' || trim( (string) ( $compare['startDate'] ?? '' ) ) === '' || trim( (string) ( $compare['endDate'] ?? '' ) ) === '' ) {
+					return array( 'ok' => false, 'error' => 'executionPayload.gscCompareRanges is required for custom_compare.' );
+				}
+			} elseif ( $trailing_count === null && ! in_array( $preset_id, Neo_Pulse_App_Tasks_Store::gsc_compare_preset_ids(), true ) ) {
+				return array( 'ok' => false, 'error' => 'executionPayload.comparePreset must be a GSC compare preset.' );
 			}
 		} elseif ( $kind === 'post_creator' ) {
 			$post_count = (int) ( $payload['postCount'] ?? 0 );
 			if ( $post_count < 1 ) {
 				return array( 'ok' => false, 'error' => 'executionPayload.postCount must be at least 1.' );
-			}
-		} elseif ( $kind === 'local_dominator_export' ) {
-			$business_name = trim( (string) ( $payload['businessName'] ?? '' ) );
-			$ld_keyword    = trim( (string) ( $payload['keyword'] ?? '' ) );
-			if ( $business_name === '' || $ld_keyword === '' ) {
-				return array( 'ok' => false, 'error' => 'executionPayload.businessName and keyword are required.' );
 			}
 		}
 
@@ -165,7 +170,13 @@ class Neo_Pulse_App_Task_Execution_Coordinator {
 					? 'Ready for client post creator harness.'
 					: ( $kind === 'local_dominator_export'
 						? 'Ready for client Local Dominator export harness.'
-						: 'Ready for client content optimizer harness.' ) );
+						: ( $kind === 'chatgpt_website_audit'
+							? 'Ready for client ChatGPT website audit harness.'
+							: ( $kind === 'browser_automation'
+								? 'Ready for client browser automation harness.'
+								: ( $kind === 'content_gap_check'
+									? 'Ready for client content gap check harness.'
+									: 'Ready for client content optimizer harness.' ) ) ) ) );
 			Neo_Pulse_App_Task_Execution_Progress::update(
 				$team_id,
 				$execution_id,

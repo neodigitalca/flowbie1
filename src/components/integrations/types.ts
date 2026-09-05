@@ -164,6 +164,8 @@ export interface Location {
   address: string;
   city: string;
   state: string;
+  /** United States or Canada when set from Profile country select. */
+  country?: string;
   zip: string;
   phone: string;
   email?: string;

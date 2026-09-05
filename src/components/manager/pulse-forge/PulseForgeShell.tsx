@@ -14,7 +14,14 @@ import { createTaskProject } from "@/lib/tasks-api";
 import { fetchAutomationRecipe } from "@/lib/automation-recipes-api";
 import { fetchWorkflow, createWorkflow } from "@/lib/workflow/workflow-api";
 import { automationPlanToWorkflowGraph } from "@/lib/workflow/workflow-migrate-from-planner";
+import { persistWorkflowDefinition } from "@/lib/workflow/workflow-persist";
+import {
+  stripScheduleFieldsFromAgentPayload,
+} from "@/lib/workflow/workflow-agent-plan";
+import { stripInlineDeliveryFlags } from "@/lib/workflow/workflow-then-utils";
 import { recipeToPlan } from "@/lib/automation-planner-compile";
+import type { WorkflowActionConfig, WorkflowDefinition } from "@/lib/workflow/workflow-types";
+import type { AutomationPlan } from "@/lib/automation-planner-types";
 import { isAutomationProject } from "@/lib/task-automation-templates";
 import type { AutomationRecipeCatalogItem } from "@/lib/automation-recipes-types";
 import type { TaskProject } from "@/lib/tasks-types";
@@ -22,12 +29,14 @@ import type { WordPressSiteOption } from "@/components/manager/tasks/NewProjectD
 import type { PulseForgeNavMode } from "@/components/manager/pulse-forge/PulseForgeNavSidebar";
 import {
   pulseForgeNavModeFromRoute,
+  isPulseForgeWorkflowEditorOpen,
   setPulseForgeHash,
   usePulseForgeRoute,
   type PulseForgeRoute,
 } from "@/lib/pulse-forge/pulse-forge-hash";
-import { useAuth } from "@/contexts/AuthContext";
 import { filterVisibleAutomationProjects } from "@/lib/pulse-forge/forge-automation-visibility";
+import { useAuth } from "@/contexts/AuthContext";
+import { useManagerErrorLog } from "@/contexts/manager-error-log-context";
 
 export function PulseForgeShell(): React.ReactElement {
   const {
@@ -49,10 +58,13 @@ export function PulseForgeShell(): React.ReactElement {
   const navMode = pulseForgeNavModeFromRoute(route);
 
   const [recipeForRoute, setRecipeForRoute] = useState<AutomationRecipeCatalogItem | null>(null);
+  const [workflowAgentEdit, setWorkflowAgentEdit] = useState<{
+    workflow: WorkflowDefinition;
+    nodeId: string;
+  } | null>(null);
   const [workflowName, setWorkflowName] = useState<string | null>(null);
   const [draftWorkflowName, setDraftWorkflowName] = useState<string>("Untitled workflow");
-  const [workflowSaveError, setWorkflowSaveError] = useState<string | null>(null);
-  const [workflowListError, setWorkflowListError] = useState<string | null>(null);
+  const { reportError, clearErrors } = useManagerErrorLog();
 
   const siteOptions: WordPressSiteOption[] = useMemo(
     () => wpSites.map((s) => ({ id: s.id, name: s.name || s.siteUrl || s.id })),
@@ -66,24 +78,25 @@ export function PulseForgeShell(): React.ReactElement {
     return filterVisibleAutomationProjects(automations, user?.id ?? null);
   }, [members, projectBundles, taskProjects, user?.id]);
 
-  const workflowEditorOpen = useMemo(() => {
-    if (route.section === "recipes" && "view" in route && route.view === "builder") return true;
-    if (route.section === "workflows" && "view" in route) return true;
-    return false;
-  }, [route]);
+  const workflowEditorOpen = useMemo(() => isPulseForgeWorkflowEditorOpen(route), [route]);
+
+  const handleWorkflowError = useCallback(
+    (error: string | null) => {
+      if (error) reportError(error);
+    },
+    [reportError],
+  );
 
   useEffect(() => {
     if (route.section !== "workflows") {
-      setWorkflowSaveError(null);
-      setWorkflowListError(null);
+      clearErrors();
       return;
     }
     if ("view" in route) {
-      setWorkflowListError(null);
       return;
     }
-    setWorkflowSaveError(null);
-  }, [route]);
+    clearErrors();
+  }, [clearErrors, route]);
 
   useEffect(() => {
     if (route.section !== "recipes" || !("view" in route) || route.view !== "builder") {
@@ -104,13 +117,62 @@ export function PulseForgeShell(): React.ReactElement {
     };
   }, [route, teamId]);
 
+  const workflowAgentBuilderRoute = useMemo(() => {
+    if (
+      route.section !== "recipes" ||
+      !("view" in route) ||
+      route.view !== "builder" ||
+      !route.workflowId ||
+      !route.workflowNodeId
+    ) {
+      return null;
+    }
+    return route;
+  }, [route]);
+
+  const workflowReturn = useMemo(() => {
+    if (!workflowAgentBuilderRoute) return undefined;
+    return {
+      workflowId: workflowAgentBuilderRoute.workflowId,
+      workflowName,
+    };
+  }, [workflowAgentBuilderRoute, workflowName]);
+
   useEffect(() => {
-    if (route.section !== "workflows" || !("view" in route) || route.view !== "edit" || !teamId) {
+    if (!workflowAgentBuilderRoute || !teamId) {
+      setWorkflowAgentEdit(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchWorkflow(teamId, workflowAgentBuilderRoute.workflowId).then((workflow) => {
+      if (cancelled || !workflow) return;
+      setWorkflowAgentEdit({
+        workflow,
+        nodeId: workflowAgentBuilderRoute.workflowNodeId,
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId, workflowAgentBuilderRoute]);
+
+  useEffect(() => {
+    const workflowId =
+      route.section === "workflows" && "view" in route && route.view === "edit"
+        ? route.workflowId
+        : route.section === "recipes" &&
+            "view" in route &&
+            route.view === "builder" &&
+            route.workflowId
+          ? route.workflowId
+          : null;
+
+    if (!workflowId || !teamId) {
       setWorkflowName(null);
       return;
     }
     let cancelled = false;
-    void fetchWorkflow(teamId, route.workflowId).then((workflow) => {
+    void fetchWorkflow(teamId, workflowId).then((workflow) => {
       if (!cancelled) setWorkflowName(workflow?.name ?? null);
     });
     return () => {
@@ -155,6 +217,60 @@ export function PulseForgeShell(): React.ReactElement {
     navigate({ section: "workflows" });
   }, [navigate, route.section]);
 
+  const closeRecipeBuilder = useCallback(() => {
+    if (workflowAgentBuilderRoute) {
+      navigate({
+        section: "workflows",
+        view: "edit",
+        workflowId: workflowAgentBuilderRoute.workflowId,
+      });
+      return;
+    }
+    closeEditor();
+  }, [closeEditor, navigate, workflowAgentBuilderRoute]);
+
+  const handleSaveWorkflowAgent = useCallback(
+    async (
+      plan: AutomationPlan,
+      executionPayload: AutomationPlan["action"]["executionPayload"],
+    ): Promise<{ ok: boolean; workflow?: WorkflowDefinition; error?: string }> => {
+      if (!teamId || !workflowAgentEdit) {
+        return { ok: false, error: "Workflow not loaded." };
+      }
+      const agentPayload = stripInlineDeliveryFlags(
+        stripScheduleFieldsFromAgentPayload({
+          ...(executionPayload ?? {}),
+          saveLocalArchive: false,
+        }),
+      );
+      const nodes = workflowAgentEdit.workflow.nodes.map((node) => {
+        if (node.id !== workflowAgentEdit.nodeId || node.kind !== "action_agent") return node;
+        const config = node.config as WorkflowActionConfig;
+        return {
+          ...node,
+          label: plan.action.title?.trim() || plan.name || node.label,
+          config: {
+            ...config,
+            executionKind: plan.action.executionKind,
+            executionPayload: agentPayload,
+            title: plan.action.title ?? plan.name,
+            actionBlockKeyword: plan.action.keyword?.trim() || config.actionBlockKeyword,
+          },
+        };
+      });
+      const draft = { ...workflowAgentEdit.workflow, nodes };
+      const result = await persistWorkflowDefinition(teamId, draft);
+      if (result.workflow) {
+        setWorkflowAgentEdit({
+          workflow: result.workflow,
+          nodeId: workflowAgentEdit.nodeId,
+        });
+      }
+      return { ok: result.ok, workflow: result.workflow, error: result.error };
+    },
+    [teamId, workflowAgentEdit],
+  );
+
   const handleCreateFromRecipe = useCallback(
     async (payload: Parameters<typeof createTaskProject>[1]) => {
       if (!teamId) return false;
@@ -169,20 +285,38 @@ export function PulseForgeShell(): React.ReactElement {
     [refreshProjectBundle, setTaskProjects, teamId],
   );
 
-  const handleRecipeInstallAsWorkflow = useCallback(
-    async (recipe: AutomationRecipeCatalogItem) => {
-      if (!teamId) return;
-      const plan = recipeToPlan(recipe);
+  const handlePlanInstallAsWorkflow = useCallback(
+    async (plan: AutomationPlan) => {
+      if (!teamId) return false;
       const graph = automationPlanToWorkflowGraph(plan, {
         teamId,
-        siteId: activeWordPressSiteId,
+        siteId: null,
       });
       const created = await createWorkflow(teamId, graph);
       if (created.workflow) {
+        clearErrors();
         openWorkflow(created.workflow.id);
+        return true;
       }
+      reportError(created.error ?? "Could not create workflow.");
+      return false;
     },
-    [activeWordPressSiteId, openWorkflow, teamId],
+    [clearErrors, openWorkflow, reportError, teamId],
+  );
+
+  const handleRecipeInstallAsWorkflow = useCallback(
+    async (recipe: AutomationRecipeCatalogItem) => {
+      const plan = recipeToPlan(recipe);
+      await handlePlanInstallAsWorkflow(plan);
+    },
+    [handlePlanInstallAsWorkflow],
+  );
+
+  const handleRefreshProject = useCallback(
+    (projectId: number) => {
+      void refreshProjectBundle(projectId);
+    },
+    [refreshProjectBundle],
   );
 
   if (!teamId || !activeTeam) {
@@ -216,13 +350,6 @@ export function PulseForgeShell(): React.ReactElement {
                   ? draftWorkflowName
                   : workflowName
               }
-              statusMessage={
-                route.section === "workflows"
-                  ? "view" in route
-                    ? workflowSaveError
-                    : workflowListError
-                  : null
-              }
               className="px-4 py-3"
             />
           </div>
@@ -231,14 +358,18 @@ export function PulseForgeShell(): React.ReactElement {
           {route.section === "recipes" && "view" in route && route.view === "builder" ? (
             recipeForRoute ? (
               <TaskBuilderView
-                mode="recipe"
+                mode={workflowAgentEdit ? "workflow-agent" : "recipe"}
                 teamId={teamId}
                 sites={siteOptions}
                 members={members}
                 defaultSiteId={activeWordPressSiteId}
                 recipe={recipeForRoute}
-                onCancel={closeEditor}
+                workflowAgentEdit={workflowAgentEdit}
+                workflowReturn={workflowReturn}
+                onCancel={closeRecipeBuilder}
                 onCreate={handleCreateFromRecipe}
+                onInstallAsWorkflow={handlePlanInstallAsWorkflow}
+                onSaveWorkflowAgent={handleSaveWorkflowAgent}
                 onTemplatesChange={setTaskTemplates}
               />
             ) : (
@@ -253,11 +384,10 @@ export function PulseForgeShell(): React.ReactElement {
               sites={siteOptions}
               defaultSiteId={activeWordPressSiteId}
               route={route}
-              statusMessage={workflowSaveError}
               onCreated={(workflowId) => openWorkflow(workflowId)}
               onCancel={closeEditor}
               onNameChange={setWorkflowName}
-              onSaveErrorChange={setWorkflowSaveError}
+              onSaveErrorChange={handleWorkflowError}
             />
           ) : route.section === "workflows" && "view" in route && route.view === "new" ? (
             <WorkflowEditorView
@@ -266,11 +396,10 @@ export function PulseForgeShell(): React.ReactElement {
               sites={siteOptions}
               defaultSiteId={activeWordPressSiteId}
               route={route}
-              statusMessage={workflowSaveError}
               onCreated={(workflowId) => openWorkflow(workflowId)}
               onCancel={closeEditor}
               onNameChange={setDraftWorkflowName}
-              onSaveErrorChange={setWorkflowSaveError}
+              onSaveErrorChange={handleWorkflowError}
             />
           ) : navMode === "recipes" ? (
             <AutomationRecipeLibrary
@@ -286,17 +415,16 @@ export function PulseForgeShell(): React.ReactElement {
               teamId={teamId}
               sites={siteOptions}
               route={route}
-              statusMessage={workflowListError}
               onOpenWorkflow={openWorkflow}
               onNewWorkflow={openCreateWorkflow}
-              onLoadErrorChange={setWorkflowListError}
+              onLoadErrorChange={handleWorkflowError}
             />
           ) : (
             <PulseForgeDashboard
               automationProjects={automationProjects}
               projectBundles={projectBundles}
               onEditAutomation={(project: TaskProject) => openCreateWorkflow()}
-              onRefreshProject={(projectId) => void refreshProjectBundle(projectId)}
+              onRefreshProject={handleRefreshProject}
             />
           )}
         </main>

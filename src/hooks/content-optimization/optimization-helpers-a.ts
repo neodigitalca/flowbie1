@@ -9,7 +9,7 @@ import {
 } from "@/lib/content-optimization-helpers";
 import type { GeographicSiteContext } from "@/lib/content-optimization/entity";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
-import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChat } from "@/lib/openrouter-app-api";
 import {
   mergeRunProgress,
   reportRunProgress,
@@ -70,18 +70,22 @@ function attachGeneratedFiles(
   nextEntry: Record<string, unknown>,
   incoming: OptimizationProgressPatch,
 ): void {
-  if (incoming.generatedFiles == null && prevEntry.generatedFiles != null) {
-    nextEntry.generatedFiles = prevEntry.generatedFiles;
-  } else if (Array.isArray(incoming.generatedFiles)) {
-    const map = new Map<string, OptimizationFile>();
-    for (const f of (prevEntry.generatedFiles as OptimizationFile[] | undefined) ?? []) {
-      if (f?.name) map.set(f.name, f);
-    }
-    for (const f of incoming.generatedFiles) {
-      if (f?.name) map.set(f.name, f);
-    }
-    nextEntry.generatedFiles = [...map.values()];
+  if (incoming.generatedFiles == null) {
+    if (prevEntry.generatedFiles != null) nextEntry.generatedFiles = prevEntry.generatedFiles;
+    return;
   }
+  if (incoming.generatedFiles.length === 0) {
+    nextEntry.generatedFiles = [];
+    return;
+  }
+  const map = new Map<string, OptimizationFile>();
+  for (const f of (prevEntry.generatedFiles as OptimizationFile[] | undefined) ?? []) {
+    if (f?.name) map.set(f.name, f);
+  }
+  for (const f of incoming.generatedFiles) {
+    if (f?.name) map.set(f.name, f);
+  }
+  nextEntry.generatedFiles = [...map.values()];
 }
 
 /**
@@ -434,15 +438,13 @@ export async function extractKeywordFromTitleOnly(
     const openRouterApiKey = loadApiKey();
     if (openRouterApiKey && openRouterApiKey.trim().length > 0) {
       const researchModel = getResearchModel(siteId);
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: openRouterWebAppHeaders(openRouterApiKey),
-        body: JSON.stringify({
-          model: researchModel,
-          messages: [
-            {
-              role: "user",
-              content: `Analyze this page title and extract the primary search keyword that users would use to find this content:
+      const { content: aiKeywordRaw } = await postOpenRouterAppChat({
+        apiKey: openRouterApiKey,
+        model: researchModel,
+        messages: [
+          {
+            role: "user",
+            content: `Analyze this page title and extract the primary search keyword that users would use to find this content:
 
 Page Title: "${title.replace(/<[^>]+>/g, "").trim()}"
 Page URL: "${url}"
@@ -454,21 +456,16 @@ Extract the main keyword phrase (2-5 words) that best represents what this page 
 - Prefer product-, service-, or topic-based keywords when they fit; not restricted to only those.
 
 Return ONLY the keyword phrase, nothing else. No quotes, no explanation.`,
-            },
-          ],
-          temperature: 0.3,
-          max_tokens: 30,
-        }),
+          },
+        ],
+        temperature: 0.3,
+        maxTokens: 30,
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        const aiKeyword = data.choices?.[0]?.message?.content?.trim() || "";
-        if (aiKeyword && aiKeyword.length > 2) {
-          const cleaned = aiKeyword.replace(/^["']|["']$/g, "").trim().substring(0, 80);
-          if (cleaned.length >= 3) {
-            return cleaned;
-          }
+      const aiKeyword = aiKeywordRaw.trim();
+      if (aiKeyword && aiKeyword.length > 2) {
+        const cleaned = aiKeyword.replace(/^["']|["']$/g, "").trim().substring(0, 80);
+        if (cleaned.length >= 3) {
+          return cleaned;
         }
       }
     }
@@ -602,15 +599,13 @@ export async function inferPrimaryKeywordFromTitleAndMeta(
     if (meta) parts.push(`Meta description / excerpt: "${meta}"`);
     if (hint) parts.push(`Existing keyword focus hint (ignore if it is a company/brand name): "${hint}"`);
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: openRouterWebAppHeaders(openRouterApiKey),
-      body: JSON.stringify({
-        model: researchModel,
-        messages: [
-          {
-            role: "user",
-            content: `Derive the primary SEO keyword for this page. Use the page headings and title to determine what the page is about.
+    const { content: aiKeywordRaw } = await postOpenRouterAppChat({
+      apiKey: openRouterApiKey,
+      model: researchModel,
+      messages: [
+        {
+          role: "user",
+          content: `Derive the primary SEO keyword for this page. Use the page headings and title to determine what the page is about.
 
 ${parts.join("\n")}
 
@@ -627,17 +622,12 @@ RULES:
 - When in doubt, prefer the main heading or clear subject of the page.
 
 Return ONLY the keyword phrase, nothing else. No quotes, no explanation.`,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 30,
-      }),
+        },
+      ],
+      temperature: 0.3,
+      maxTokens: 30,
     });
-
-    if (!response.ok) return "";
-
-    const data = await response.json();
-    const aiKeyword = (data.choices?.[0]?.message?.content ?? "").trim();
+    const aiKeyword = aiKeywordRaw.trim();
     if (!aiKeyword || aiKeyword.length < 2) return "";
 
     const cleaned = aiKeyword.replace(/^["']|["']$/g, "").trim().substring(0, 80);

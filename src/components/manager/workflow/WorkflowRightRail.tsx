@@ -5,8 +5,11 @@ import { WorkflowRagSidebar } from "@/components/manager/workflow/WorkflowRagSid
 import {
   WORKFLOW_RIGHT_RAIL_CLASS,
   WORKFLOW_RAIL_TAB_CLASS,
+  WORKFLOW_SIDEBAR_BG_CLASS,
+  WORKFLOW_SIDEBAR_FIELD_CLASS,
 } from "@/components/manager/workflow/forge-workflow-styles";
 import type { WorkflowEdge, WorkflowNode, WorkflowRagVariable } from "@/lib/workflow/workflow-types";
+import type { WorkflowStepTestResult } from "@/lib/workflow/workflow-step-test";
 import { cn } from "@/lib/utils";
 
 export type WorkflowRightRailProps = {
@@ -18,8 +21,14 @@ export type WorkflowRightRailProps = {
   selectedNode: WorkflowNode | null;
   ragVariables: WorkflowRagVariable[];
   activeRunId: number | null;
+  focusRagOnRunId?: number | null;
   inspectorNote?: string | null;
+  stepTestResult?: WorkflowStepTestResult | null;
+  testingStepId?: string | null;
+  onTestStep?: (nodeId: string) => void;
   onNodeChange: (node: WorkflowNode) => void;
+  clientsMenuOpen?: boolean;
+  onClientsMenuOpenChange?: (open: boolean) => void;
 };
 
 export function WorkflowRightRail({
@@ -31,18 +40,28 @@ export function WorkflowRightRail({
   selectedNode,
   ragVariables,
   activeRunId,
+  focusRagOnRunId = null,
   inspectorNote,
+  stepTestResult,
+  testingStepId,
+  onTestStep,
   onNodeChange,
+  clientsMenuOpen,
+  onClientsMenuOpenChange,
 }: WorkflowRightRailProps): React.ReactElement {
   const [tab, setTab] = useState<"setup" | "rag">("setup");
 
   useEffect(() => {
-    if (activeRunId) setTab("rag");
-  }, [activeRunId]);
+    if (activeRunId && focusRagOnRunId && activeRunId === focusRagOnRunId) setTab("rag");
+  }, [activeRunId, focusRagOnRunId]);
+
+  useEffect(() => {
+    if (stepTestResult) setTab("setup");
+  }, [stepTestResult]);
 
   return (
     <aside className={WORKFLOW_RIGHT_RAIL_CLASS}>
-      <div className="flex shrink-0 border-b border-white/10">
+      <div className={cn("flex shrink-0", WORKFLOW_SIDEBAR_BG_CLASS)}>
         <button
           type="button"
           data-active={tab === "setup"}
@@ -64,8 +83,10 @@ export function WorkflowRightRail({
         {tab === "setup" ? (
           <div className="flex h-full flex-col overflow-hidden">
             {inspectorNote ? (
-              <div className="shrink-0 bg-zinc-900/50 px-6 py-3">
-                <p className="text-lg text-[hsl(var(--semantic-warning-foreground))]">{inspectorNote}</p>
+              <div className={cn("shrink-0 px-5 py-3", WORKFLOW_SIDEBAR_FIELD_CLASS)}>
+                <p className="select-text whitespace-pre-wrap break-words text-base text-muted-foreground">
+                  {inspectorNote}
+                </p>
               </div>
             ) : null}
             <WorkflowNodeInspector
@@ -74,11 +95,21 @@ export function WorkflowRightRail({
               edges={edges}
               ragVariables={ragVariables}
               sites={sites}
+              stepTestResult={stepTestResult}
+              testingStepId={testingStepId}
+              onTestStep={onTestStep}
               onChange={onNodeChange}
+              clientsMenuOpen={clientsMenuOpen}
+              onClientsMenuOpenChange={onClientsMenuOpenChange}
             />
           </div>
         ) : (
-          <WorkflowRagSidebar teamId={teamId} workflowId={workflowId} activeRunId={activeRunId} />
+          <WorkflowRagSidebar
+            teamId={teamId}
+            workflowId={workflowId}
+            nodes={nodes}
+            activeRunId={activeRunId}
+          />
         )}
       </div>
     </aside>
@@ -93,6 +124,8 @@ export type WorkflowRightRailDraftProps = {
   ragVariables: WorkflowRagVariable[];
   inspectorNote?: string | null;
   onNodeChange: (node: WorkflowNode) => void;
+  clientsMenuOpen?: boolean;
+  onClientsMenuOpenChange?: (open: boolean) => void;
 };
 
 export function WorkflowRightRailDraft({
@@ -103,15 +136,19 @@ export function WorkflowRightRailDraft({
   ragVariables,
   inspectorNote,
   onNodeChange,
+  clientsMenuOpen,
+  onClientsMenuOpenChange,
 }: WorkflowRightRailDraftProps): React.ReactElement {
   return (
     <aside className={WORKFLOW_RIGHT_RAIL_CLASS}>
-      <div className="shrink-0 border-b border-white/10 px-6 py-4">
+      <div className={cn("shrink-0 px-6 py-4", WORKFLOW_SIDEBAR_FIELD_CLASS)}>
         <p className="text-base font-normal text-white">Setup</p>
       </div>
       {inspectorNote ? (
-        <div className="shrink-0 bg-zinc-900/50 px-6 py-3">
-          <p className="text-base text-[hsl(var(--semantic-warning-foreground))]">{inspectorNote}</p>
+        <div className={cn("shrink-0 px-5 py-3", WORKFLOW_SIDEBAR_FIELD_CLASS)}>
+          <p className="select-text whitespace-pre-wrap break-words text-base text-muted-foreground">
+            {inspectorNote}
+          </p>
         </div>
       ) : null}
       <WorkflowNodeInspector
@@ -121,6 +158,8 @@ export function WorkflowRightRailDraft({
         ragVariables={ragVariables}
         sites={sites}
         onChange={onNodeChange}
+        clientsMenuOpen={clientsMenuOpen}
+        onClientsMenuOpenChange={onClientsMenuOpenChange}
       />
     </aside>
   );

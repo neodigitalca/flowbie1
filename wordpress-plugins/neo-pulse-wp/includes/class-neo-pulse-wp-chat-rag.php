@@ -416,7 +416,7 @@ class Neo_Pulse_Wp_Chat_Rag {
 
 		$card = array(
 			'type'       => 'recommendation',
-			'title'      => $site_name . ' blog posts on window coverings',
+			'title'      => $site_name . ' blog posts',
 			'body'       => implode( "\n", $lines ),
 			'links'      => array_slice( $links, 0, 4 ),
 			'confidence' => 'high',

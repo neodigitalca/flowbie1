@@ -1,4 +1,6 @@
 import type { AgentConfig } from "@/types/agent-config";
+import { extractChecklistItemTitle } from "@/lib/post-creator/post-creator-checklist-post-process";
+import { resolveIllustrativeH2Title } from "@/lib/content-optimization/first-party-authority-prompt";
 
 /**
  * Canonical outline for bulk “middle-out” harness generation.
@@ -18,6 +20,15 @@ export type BulkHarnessOutlineSection = {
   agent: AgentConfig;
 };
 
+export function agentHasIllustrativeFeature(agent: { features?: string[] }): boolean {
+  return (
+    agent.features?.some((f) => {
+      const s = typeof f === "string" ? f.toLowerCase().trim() : "";
+      return s.startsWith("[illustrative]");
+    }) ?? false
+  );
+}
+
 export function agentHasFaqFeature(agent: AgentConfig): boolean {
   return (
     agent.features?.some((f) => {
@@ -30,15 +41,18 @@ export function agentHasFaqFeature(agent: AgentConfig): boolean {
 export function buildBulkHarnessOutlineFromAgents(agents: AgentConfig[]): BulkHarnessOutlineSection[] {
   return agents.map((agent, index) => {
     const isFaq = agentHasFaqFeature(agent);
-    const displayTitle = isFaq ? "FAQ" : agent.title;
+    const rawTitle = isFaq ? "FAQ" : extractChecklistItemTitle(agent.title?.trim() || "");
+    const resolvedTitle = agentHasIllustrativeFeature(agent)
+      ? resolveIllustrativeH2Title(rawTitle)
+      : rawTitle;
     return {
       index,
-      title: agent.title,
-      displayTitle,
+      title: resolvedTitle,
+      displayTitle: resolvedTitle,
       description: agent.description ?? "",
       headingLevel: agent.headingLevel ?? 1,
       isFaq,
-      agent,
+      agent: isFaq ? agent : { ...agent, title: resolvedTitle },
     };
   });
 }

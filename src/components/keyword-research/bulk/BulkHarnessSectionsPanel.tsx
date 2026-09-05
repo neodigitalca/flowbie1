@@ -12,6 +12,7 @@ import { BULK_ACTIVE_SEMANTIC_BORDER_CLASS } from '@/lib/bulk/bulk-active-semant
 import {
   CONTENT_OPTIMIZER_MULTI_SITE_ROW_STACK_CLASS,
   contentOptimizerRowStripeClass,
+  CONTENT_OPTIMIZER_ACTIVE_ROW_TEXT_CLASS,
 } from "@/components/overview/overview-tab/overview-tab-content-constants";
 
 const DETAILS_FLAT_SECTION_LINE =
@@ -165,47 +166,17 @@ export function BulkHarnessSectionsPanel({
             ) : !isDetailsFlat && s.status === 'waiting' ? (
               <span className="h-2 w-2 shrink-0 rounded-full bg-muted-foreground/50" aria-hidden />
             ) : null}
-            <span className="min-w-0 flex-1 whitespace-normal text-base leading-snug text-white [overflow-wrap:anywhere]">
+            <span className="min-w-0 flex-1 whitespace-normal text-base leading-snug [overflow-wrap:anywhere]">
               {!isPlaceholder ? (
-                <span className={cn(!isDetailsFlat && !blogImportCompact && 'text-muted-foreground')}>
+                <span className={cn(!isDetailsFlat && !blogImportCompact && !isGenerating && 'text-muted-foreground')}>
                   {s.sectionIndex + 1}.{' '}
                 </span>
               ) : null}
-              {title}
+              <span className={cn(isGenerating && isDetailsFlat ? CONTENT_OPTIMIZER_ACTIVE_ROW_TEXT_CLASS : "text-white")}>
+                {title}
+              </span>
               {s.status === 'generating' && !isDetailsFlat && !blogImportCompact ? (
                 <span className="text-white/70"> …</span>
-              ) : null}
-              {isDetailsFlat && isGenerating && s.markdown?.trim() && !hideProgressMicroLines ? (
-                <span className="mt-0.5 block space-y-0.5 text-base [overflow-wrap:anywhere]">
-                  {s.markdown
-                    .trim()
-                    .split("\n")
-                    .filter((line) => line.trim().length > 0)
-                    .map((line, lineIndex, lines) => {
-                      const isActiveMicro = lineIndex === lines.length - 1;
-                      return (
-                        <span
-                          key={`${s.sectionIndex}-micro-${lineIndex}`}
-                          className={cn(
-                            "flex items-start gap-2",
-                            isActiveMicro
-                              ? "font-semibold text-primary"
-                              : "text-white/50",
-                          )}
-                        >
-                          {isActiveMicro ? (
-                            <Loader2
-                              className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin text-primary"
-                              aria-hidden
-                            />
-                          ) : (
-                            <span className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                          )}
-                          <span className="min-w-0 flex-1 whitespace-normal">{line}</span>
-                        </span>
-                      );
-                    })}
-                </span>
               ) : null}
             </span>
             {s.status === 'done' && s.markdown?.trim() && !hideSectionDownloads ? (

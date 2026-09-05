@@ -327,6 +327,11 @@ $resolved_insights = Neo_Pulse_Wp_Ai_Widget_Design::resolve_search_insights(
 neo-pulse_assert( empty( $resolved_insights['show_popular_terms'] ), 'instance overrides popular terms off' );
 neo-pulse_assert( (int) $resolved_insights['insights_days'] === 7, 'instance overrides insights days' );
 
+$overseer_on = Neo_Pulse_Wp_Ai_Widget_Design::resolve_search_insights(
+	array( 'show_popular_pages_overseer' => 'yes' )
+);
+neo-pulse_assert( ! empty( $overseer_on['show_popular_pages_overseer'] ), 'insights overseer pages honor instance on' );
+
 neo-pulse_assert(
 	Neo_Pulse_Wp_Search_Logs::normalize_query( '  Hello   World  ') === 'hello world',
 	'search log normalize query'

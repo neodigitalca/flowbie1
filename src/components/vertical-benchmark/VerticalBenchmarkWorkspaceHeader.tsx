@@ -1,6 +1,7 @@
 import { useMemo, useRef } from "react";
-import { BarChart3, Loader2, Upload } from "lucide-react";
+import { BarChart3, Download, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -12,6 +13,9 @@ import { UnifiedWorkspaceChrome } from "@/components/shared/UnifiedWorkspaceChro
 import { VerticalBenchmarkContentPills } from "@/components/vertical-benchmark/VerticalBenchmarkContentPills";
 import { ContentOptimizerDetailsDrawer } from "@/components/overview/overview-tab/ContentOptimizerDetailsDrawer";
 import {
+  BULK_HEADER_FIELD,
+  BULK_HEADER_ICON_RUN_BTN,
+  BULK_HEADER_ICON_TOOL_BTN,
   BULK_HEADER_RUN_BTN,
   BULK_HEADER_SELECT,
   BULK_HEADER_TOOL_BTN,
@@ -37,6 +41,8 @@ export type VerticalBenchmarkWorkspaceHeaderProps = {
   onTagFilterChange: (value: string) => void;
   tagFilterOptions: string[];
   onCreateBulkTemplate: () => void | Promise<void>;
+  onDownloadBulkTemplate: () => void;
+  canDownloadBulkTemplate: boolean;
   onGridCsvFile: (file: File | null) => void | Promise<void>;
   onClearGridCsv: () => void;
   exporting: boolean;
@@ -50,6 +56,8 @@ export type VerticalBenchmarkWorkspaceHeaderProps = {
   gridCsvParsing: boolean;
   rosterCount: number;
   selectedCount: number;
+  blogCount: number;
+  onBlogCountChange: (value: number) => void;
   onDetailsOpenChange?: (open: boolean) => void;
 };
 
@@ -60,6 +68,8 @@ export function VerticalBenchmarkWorkspaceHeader({
   onTagFilterChange,
   tagFilterOptions,
   onCreateBulkTemplate,
+  onDownloadBulkTemplate,
+  canDownloadBulkTemplate,
   onGridCsvFile,
   onClearGridCsv,
   exporting,
@@ -73,6 +83,8 @@ export function VerticalBenchmarkWorkspaceHeader({
   gridCsvParsing,
   rosterCount,
   selectedCount,
+  blogCount,
+  onBlogCountChange,
   onDetailsOpenChange,
 }: VerticalBenchmarkWorkspaceHeaderProps) {
   const gridFileInputRef = useRef<HTMLInputElement>(null);
@@ -113,6 +125,7 @@ export function VerticalBenchmarkWorkspaceHeader({
         gridCsvContext,
         gridCsvFileName,
         contentTypeFilter,
+        blogCount,
       }),
     [
       busy,
@@ -127,6 +140,7 @@ export function VerticalBenchmarkWorkspaceHeader({
       gridCsvContext,
       gridCsvFileName,
       contentTypeFilter,
+      blogCount,
     ],
   );
 
@@ -152,17 +166,17 @@ export function VerticalBenchmarkWorkspaceHeader({
       }
       toolbar={
         <>
-          <Select value={tagFilter} onValueChange={onTagFilterChange}>
+          <Select
+            value={tagFilterOptions.includes(tagFilter) ? tagFilter : (tagFilterOptions[0] ?? undefined)}
+            onValueChange={onTagFilterChange}
+          >
             <SelectTrigger
               className={`${BULK_HEADER_SELECT} w-[11rem]`}
               aria-label="Filter by category tag"
             >
-              <SelectValue placeholder="All categories" />
+              <SelectValue placeholder="Category" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__" className="text-base">
-                All categories
-              </SelectItem>
               {tagFilterOptions.map((label) => (
                 <SelectItem key={label} value={label} className="text-base">
                   {label}
@@ -213,6 +227,21 @@ export function VerticalBenchmarkWorkspaceHeader({
               </button>
             </span>
           ) : null}
+          <Input
+            type="number"
+            min={1}
+            max={50}
+            step={1}
+            value={blogCount}
+            disabled={busy}
+            placeholder="Blogs"
+            aria-label="Blogs"
+            className={`${BULK_HEADER_FIELD} w-[5.5rem] px-2`}
+            onChange={(e) => {
+              const n = parseInt(e.target.value, 10);
+              if (!Number.isNaN(n)) onBlogCountChange(n);
+            }}
+          />
           <Button
             type="button"
             size="sm"
@@ -225,6 +254,17 @@ export function VerticalBenchmarkWorkspaceHeader({
               <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
             ) : null}
             Curate
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className={canDownloadBulkTemplate ? BULK_HEADER_ICON_RUN_BTN : BULK_HEADER_ICON_TOOL_BTN}
+            disabled={!canDownloadBulkTemplate || busy}
+            title="Download curated bulk CSV"
+            aria-label="Download curated bulk CSV"
+            onClick={onDownloadBulkTemplate}
+          >
+            <Download className="h-4 w-4" aria-hidden />
           </Button>
         </>
       }

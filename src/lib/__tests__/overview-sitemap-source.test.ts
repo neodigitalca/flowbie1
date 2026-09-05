@@ -7,6 +7,7 @@ import {
   overviewInventoryCollectionsFromSource,
   overviewInventoryCollectionsForSite,
   overviewUrlsFromInventoryRows,
+  pageSitemapXmlUrlForPlay,
   resolveOverviewSitemapUrls,
 } from "@/lib/overview/overview-sitemap-source";
 import type { OverviewInventoryRow } from "@/lib/overview/overview-inventory-csv";
@@ -181,5 +182,19 @@ describe("canLoadOverviewSitemapSource", () => {
     expect(cols).toContain("pages");
     expect(cols).toContain("hunter-douglas");
     expect(cols).toContain("promotion");
+  });
+});
+
+describe("pageSitemapXmlUrlForPlay", () => {
+  it("uses the listed page-sitemap.xml child when present", () => {
+    expect(pageSitemapXmlUrlForPlay(shutterspotSite())).toBe(
+      "https://shutterspot.com/page-sitemap.xml",
+    );
+  });
+
+  it("defaults to /page-sitemap.xml when no page child is listed", () => {
+    const site = shutterspotSite();
+    site.sitemaps = undefined;
+    expect(pageSitemapXmlUrlForPlay(site)).toBe("https://shutterspot.com/page-sitemap.xml");
   });
 });

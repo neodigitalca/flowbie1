@@ -1,11 +1,7 @@
 import type { WordPressSite } from "@/components/integrations/types";
-import { loadApiKey, loadDataForSEOApiKey } from "@/lib/api";
-import { initPostCreatorProof } from "@/lib/agent-runs/agent-run-post-creator-proof";
-import {
-  AGENT_RUN_STEP_KEYS,
-  postCreatorHarnessStepKey,
-  postCreatorRowStepKey,
-} from "@/lib/agent-runs/agent-run-step-keys";
+import { loadDataForSEOApiKey } from "@/lib/api";
+import { resolveOpenRouterApiKeyForHarness } from "@/lib/openrouter-api-key-resolve";
+import { AGENT_RUN_STEP_KEYS, postCreatorHarnessStepKey, postCreatorRowStepKey } from "@/lib/agent-runs/agent-run-step-keys";
 import type { AgentRunResumePoint } from "@/lib/agent-runs-types";
 import type { PostCreatorBlockedRow } from "@/lib/post-creator/post-creator-cannibalization-agent";
 import { runPostCreatorBulkRows } from "@/lib/post-creator/post-creator-bulk-runner";
@@ -16,6 +12,8 @@ import {
 } from "@/lib/post-creator/post-creator-schedule";
 import type { PostCreatorExecutionPayload } from "@/lib/tasks-types";
 import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
+import { applyUpstreamContextToPostCreatorPayload } from "@/lib/workflow/upstream-research-facts";
+import type { PostCreatorServerPreflight } from "@/lib/post-creator/post-creator-server-preflight";
 
 export type PostCreatorUploadedPost = {
   url: string;
@@ -41,11 +39,21 @@ export type RunPostCreatorAgentHarnessArgs = {
   onContentBucketReady?: (
     files: import("@/lib/post-creator/post-creator-inventory-bucket").PostCreatorContentBucketFile[],
   ) => void;
+  onArtifact?: (input: {
+    stepKey: string;
+    stepLabel: string;
+    name: string;
+    mime: string;
+    content: string;
+    resumePayload?: Record<string, unknown>;
+  }) => Promise<void>;
+  serverPreflight?: PostCreatorServerPreflight;
 };
 
 export type PostCreatorAgentHarnessResult = {
   created: number;
   failed: number;
+  skipped: number;
   postCount: number;
   urls: string[];
   scheduledDates: string[];
@@ -70,10 +78,7 @@ function parseResumeUploadedPosts(
 export async function runPostCreatorAgentHarness(
   args: RunPostCreatorAgentHarnessArgs,
 ): Promise<PostCreatorAgentHarnessResult> {
-  const openRouterKey = loadApiKey()?.trim() || "";
-  if (!openRouterKey) {
-    throw new Error("Add an OpenRouter API key in Settings.");
-  }
+  const openRouterKey = await resolveOpenRouterApiKeyForHarness();
   const dataForSeoKey = loadDataForSEOApiKey()?.trim() || "";
   if (!dataForSeoKey) {
     throw new Error("Add a DataForSEO API key in Settings.");
@@ -90,14 +95,6 @@ export async function runPostCreatorAgentHarness(
   const savedChecklist = parseResumeChecklistRows(resumePayload);
   const priorUploaded = parseResumeUploadedPosts(resumePayload);
 
-  if (args.runId != null) {
-    initPostCreatorProof(
-      args.runId,
-      schedule.postCount,
-      args.payload.featuredImage !== false,
-    );
-  }
-
   let checklistRows: CSVRow[] | null = savedChecklist;
   let blockedRows: PostCreatorBlockedRow[] = Array.isArray(resumePayload.blockedRows)
     ? (resumePayload.blockedRows as PostCreatorBlockedRow[])
@@ -105,12 +102,15 @@ export async function runPostCreatorAgentHarness(
   let inventoryContext: Awaited<ReturnType<typeof buildPostCreatorSafeChecklistRows>>["inventory"];
 
   if (resumePhase === "bulk" && savedChecklist) {
+    if (typeof resumePayload.intraRowPhase !== "string" || !resumePayload.intraRowPhase.trim()) {
+      throw new Error("Bulk resume requires intraRowPhase.");
+    }
     args.onProgress?.(
       {
         label: `Post ${resumeRowIndex + 1}/${schedule.postCount}: resuming…`,
         step: 2 + resumeRowIndex,
         total: totalSteps,
-        stepKey: postCreatorRowStepKey(resumeRowIndex, "start"),
+        stepKey: postCreatorRowStepKey(resumeRowIndex, resumePayload.intraRowPhase),
       },
       {
         phase: "bulk",
@@ -140,6 +140,7 @@ export async function runPostCreatorAgentHarness(
     const checklist = await buildPostCreatorSafeChecklistRows({
       site: args.site,
       payload: { ...args.payload, postCount: schedule.postCount },
+      preflight: args.serverPreflight,
       onProgress: (message) => {
         args.onProgress?.(
           {
@@ -167,10 +168,24 @@ export async function runPostCreatorAgentHarness(
 
     args.onProgress?.(
       {
-        label: `Creating ${checklist.rows.length} posts…`,
+        label: `${checklist.rows.length} blog ideas ready`,
+        step: 1,
+        total: totalSteps,
+        stepKey: AGENT_RUN_STEP_KEYS.ideas,
+      },
+      {
+        phase: "ideation",
+        postCount: schedule.postCount,
+        checklistRows: checklist.rows,
+      },
+    );
+
+    args.onProgress?.(
+      {
+        label: `Post 1/${schedule.postCount}: keyword research`,
         step: 2,
         total: totalSteps,
-        stepKey: AGENT_RUN_STEP_KEYS.bulkStart,
+        stepKey: postCreatorRowStepKey(0, "keyword"),
       },
       {
         phase: "bulk",
@@ -179,6 +194,7 @@ export async function runPostCreatorAgentHarness(
         checklistRows: checklist.rows,
         uploadedPosts: [],
         blockedRows,
+        intraRowPhase: "keyword",
       },
     );
   } else {
@@ -224,22 +240,25 @@ export async function runPostCreatorAgentHarness(
     startRowIndex: resumePhase === "bulk" ? resumeRowIndex : 0,
     priorUploadedPosts: priorUploaded,
     resumeIntraRowPhase:
-      typeof resumePayload.intraRowPhase === "string" ? resumePayload.intraRowPhase : undefined,
+      resumePhase === "bulk" && typeof resumePayload.intraRowPhase === "string"
+        ? resumePayload.intraRowPhase
+        : undefined,
     isCancelled: args.isCancelled,
     onFilesChanged: args.onFilesChanged,
     onHarnessSection: args.onHarnessSection,
     onArtifact:
-      args.run && args.teamId
+      args.onArtifact ??
+      (args.run && args.teamId
         ? async (input) => {
             const { persistAgentRunArtifact } = await import("@/lib/agent-runs/agent-run-artifacts");
             await persistAgentRunArtifact(args.teamId!, args.run!, input);
           }
-        : undefined,
+        : undefined),
     onProgress: (p) => {
-      const harnessMatch = p.message.match(/^Harness (\d+)\/(\d+):/);
-      const stepKey = harnessMatch
-        ? postCreatorHarnessStepKey(p.rowIndex, Number(harnessMatch[1]) - 1)
-        : postCreatorRowStepKey(p.rowIndex, p.intraRowPhase ?? "progress");
+      const stepKey =
+        p.harnessSectionIndex != null
+          ? postCreatorHarnessStepKey(p.rowIndex, p.harnessSectionIndex)
+          : postCreatorRowStepKey(p.rowIndex, p.intraRowPhase);
       args.onProgress?.(
         { label: p.message, step: 2 + p.rowIndex, total: totalSteps, stepKey },
         {
@@ -247,7 +266,7 @@ export async function runPostCreatorAgentHarness(
           rowIndex: p.rowIndex,
           postCount: schedule.postCount,
           checklistRows,
-          uploadedPosts: p.uploadedPosts ?? priorUploaded,
+          uploadedPosts: p.uploadedPosts,
           blockedRows,
           intraRowPhase: p.intraRowPhase,
         },
@@ -258,6 +277,7 @@ export async function runPostCreatorAgentHarness(
   return {
     created: bulkResult.created,
     failed: bulkResult.failed,
+    skipped: 0,
     postCount: schedule.postCount,
     urls: bulkResult.urls,
     scheduledDates: bulkResult.scheduledDates,
@@ -266,15 +286,37 @@ export async function runPostCreatorAgentHarness(
   };
 }
 
+function prefilledImportRowsFromContract(raw: unknown): CSVRow[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const rows: CSVRow[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    const keyword = String(record.keyword ?? "").trim();
+    const title = String(record.title ?? "").trim() || keyword;
+    if (!keyword) continue;
+    rows.push({
+      keyword,
+      title,
+      destination_url: String(record.destination_url ?? "").trim() || undefined,
+      seo_research: String(record.seo_research ?? "").trim() || undefined,
+      prompt_modifier: String(record.prompt_modifier ?? "").trim() || undefined,
+      entity: String(record.entity ?? "").trim() || undefined,
+    });
+  }
+  return rows.length > 0 ? rows : undefined;
+}
+
 export function postCreatorPayloadFromContract(
   contract: Record<string, unknown>,
 ): PostCreatorExecutionPayload {
-  return {
+  const prefilledImportRows = prefilledImportRowsFromContract(contract.prefilledImportRows);
+  const payload: PostCreatorExecutionPayload = {
     postCount: typeof contract.postCount === "number" ? contract.postCount : Number(contract.postCount) || 1,
     keywordSource:
-      contract.keywordSource === "gsc" || contract.keywordSource === "manual"
+      contract.keywordSource === "prompt" || contract.keywordSource === "manual"
         ? contract.keywordSource
-        : "prompt",
+        : "gsc",
     optionalPrompt: String(contract.optionalPrompt ?? "").trim() || undefined,
     entityMode:
       contract.entityMode === "auto" || contract.entityMode === "manual"
@@ -297,5 +339,11 @@ export function postCreatorPayloadFromContract(
         : Number(contract.scheduleStartDay) || undefined,
     scheduleStartTime: String(contract.scheduleStartTime ?? "").trim() || undefined,
     scheduleStaggerOptimized: contract.scheduleStaggerOptimized !== false,
+    useUpstreamContext: contract.useUpstreamContext === true,
+    workflowContextBlock: String(contract.workflowContextBlock ?? "").trim() || undefined,
+    ...(prefilledImportRows
+      ? { prefilledImportRows, postCount: prefilledImportRows.length, keywordSource: "manual" as const }
+      : {}),
   };
+  return applyUpstreamContextToPostCreatorPayload(payload);
 }

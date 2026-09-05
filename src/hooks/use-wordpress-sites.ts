@@ -22,6 +22,7 @@ import {
   getWordPressPostContent,
   type IndexingProgress,
 } from "@/lib/wordpress-api";
+import { readSiteServiceCity, readSiteServiceState, readSiteServiceCountry, buildSiteLocationsPatch } from "@/lib/wordpress-api/site-service-area";
 import { persistGbpLocationIdInput } from "@/lib/gbp-post/normalize-gbp-location-id";
 import { getStoredSites, mergeServerGbpLocationIdsIntoLocalSites, mergeServerWpEngineCredentialsIntoLocalSites, restoreSitesFromServerMirrorIfEmpty, saveSites } from "@/components/integrations/storage";
 import { type WordPressSite } from "@/components/integrations/types";
@@ -121,6 +122,9 @@ function useWordPressSitesState() {
           ? site.optimizationPackage.trim()
           : "",
       benchmarkCustomTag: site.benchmarkCustomTag?.trim() ?? "",
+      serviceCity: readSiteServiceCity(site),
+      serviceState: readSiteServiceState(site),
+      serviceCountry: readSiteServiceCountry(site),
       slackEnabledForProperty: site.slackEnabledForProperty !== false,
       slackChannelId: site.slackChannelId ?? "",
       slackChannelName: site.slackChannelName ?? "",
@@ -472,6 +476,9 @@ function useWordPressSitesState() {
     formEditorialCountsPeriodStartYmd?: string,
     formOptimizationPackage?: string,
     formBenchmarkCustomTag?: string,
+    formServiceCity?: string,
+    formServiceState?: string,
+    formServiceCountry?: string,
   ): WordPressSite | false => {
     if (!formName.trim()) {
       notify.error(NOTIFY_ENTER_A_SITE_NAME);
@@ -510,6 +517,13 @@ function useWordPressSitesState() {
       benchmarkCustomTag: formBenchmarkCustomTag?.trim() || undefined,
       postBankEnabled: true,
     };
+    const servicePatch = buildSiteLocationsPatch(
+      siteData,
+      formServiceCity ?? readSiteServiceCity(editingSite),
+      formServiceState ?? readSiteServiceState(editingSite),
+      formServiceCountry ?? readSiteServiceCountry(editingSite),
+    );
+    Object.assign(siteData, servicePatch);
 
     invalidateEntitySiteWarmCacheIfCredentialsChanged(siteData);
 

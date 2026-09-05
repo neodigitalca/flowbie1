@@ -1,13 +1,10 @@
 import type { WordPressSite } from "@/components/integrations/types";
-import { getStoredSites } from "@/components/IntegrationsTab";
-import { loadApiKey } from "@/lib/api";
+import { getStoredSites } from "@/components/integrations/storage";
+import { resolveOpenRouterApiKeyForHarness } from "@/lib/openrouter-api-key-resolve";
 import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
 import type { LoadBulkSitemapInventoryResult } from "@/lib/bulk/bulk-sitemap-inventory-session";
-import {
-  buildPromptBulkKwConnectedSiteContext,
-  selectPromptBulkLowHangingKeywords,
-} from "@/lib/bulk/prompt-bulk-kw-research-agent";
 import { scrapePromptBulkSiteKwJson } from "@/lib/bulk/prompt-bulk-site-kw-scrape";
+import { runPostCreatorInventoryFirstIdeation } from "@/lib/post-creator/post-creator-inventory-ideation";
 import { parseTitleTemplate } from "@/lib/title-template-parser";
 import type {
   PostCreatorEntityMode,
@@ -21,10 +18,16 @@ import {
   loadPostCreatorInventoryBuckets,
   type PostCreatorContentBucketFile,
 } from "@/lib/post-creator/post-creator-inventory-bucket";
+import {
+  POST_CREATOR_MAX_POST_COUNT,
+  resolvePostCreatorPostCount,
+} from "@/lib/post-creator/post-creator-post-count";
+import type { PostCreatorServerPreflight } from "@/lib/post-creator/post-creator-server-preflight";
 
 export type PostCreatorSafeChecklistArgs = {
   site: WordPressSite;
   payload: PostCreatorExecutionPayload;
+  preflight?: PostCreatorServerPreflight;
   onProgress?: (message: string, progress?: number) => void;
   onContentBucketReady?: (files: PostCreatorContentBucketFile[]) => void;
   isCancelled?: () => Promise<boolean>;
@@ -106,23 +109,57 @@ function buildManualRows(
 export async function buildPostCreatorSafeChecklistRows(
   args: PostCreatorSafeChecklistArgs,
 ): Promise<PostCreatorSafeChecklistResult> {
-  const { site, payload, onProgress, onContentBucketReady, isCancelled } = args;
-  const postCount = Math.max(1, Math.min(31, Math.floor(Number(payload.postCount ?? 1) || 1)));
-  const keywordSource: PostCreatorKeywordSource = payload.keywordSource ?? "prompt";
-
-  const openRouterKey = loadApiKey()?.trim() || "";
-  if (!openRouterKey) throw new Error("Add an OpenRouter API key in Settings.");
-
-  if (await isCancelled?.()) throw new Error("Cancelled");
+  const { site, payload, preflight, onProgress, onContentBucketReady, isCancelled } = args;
+  const postCount = resolvePostCreatorPostCount(payload);
+  const prefilledRows = Array.isArray(payload.prefilledImportRows)
+    ? payload.prefilledImportRows.filter((row) => row && typeof row === "object")
+    : [];
 
   const stored = getStoredSites().find((s) => s.id === site.id) ?? site;
+
+  if (prefilledRows.length > 0) {
+    if (!stored.username?.trim() || !stored.appPassword?.trim()) {
+      throw new Error("WordPress credentials are required for post creation.");
+    }
+    onProgress?.(`${prefilledRows.length} imported blog draft(s) ready`, 0.9);
+    return {
+      rows: prefilledRows.slice(0, Math.min(POST_CREATOR_MAX_POST_COUNT, prefilledRows.length)),
+      inventory: null,
+      blockedRows: [],
+      bucketFiles: [],
+    };
+  }
+
+  const keywordSource: PostCreatorKeywordSource = payload.keywordSource ?? "gsc";
+
+  const openRouterKey = await resolveOpenRouterApiKeyForHarness();
+
+  if (await isCancelled?.()) throw new Error("Cancelled");
 
   if (!stored.username?.trim() || !stored.appPassword?.trim()) {
     throw new Error("WordPress credentials are required for post creation.");
   }
 
-  const { inventory } = await loadPostCreatorInventoryBuckets(stored, (msg) => onProgress?.(msg, 0.1));
-  const bucketFiles = buildContentBucketFiles(inventory, stored.siteUrl);
+  let inventory: LoadBulkSitemapInventoryResult;
+  let bucketFiles: PostCreatorContentBucketFile[];
+  let bucketJson: string;
+  let siteKwJsonText: string;
+
+  if (preflight) {
+    inventory = preflight.inventory;
+    bucketFiles = preflight.bucketFiles;
+    bucketJson = preflight.bucketJson;
+    siteKwJsonText = preflight.siteKwJsonText;
+    onProgress?.("Using server content bucket artifacts…", 0.1);
+  } else {
+    const loaded = await loadPostCreatorInventoryBuckets(stored, (msg) => onProgress?.(msg, 0.1));
+    inventory = loaded.inventory;
+    bucketFiles = buildContentBucketFiles(inventory, stored.siteUrl);
+    bucketJson = inventory.buckets.posts?.json ?? "";
+    const kwScrape = await scrapePromptBulkSiteKwJson(stored);
+    siteKwJsonText = kwScrape.keywordsJsonText;
+  }
+
   onContentBucketReady?.(bucketFiles);
 
   if (await isCancelled?.()) throw new Error("Cancelled");
@@ -132,28 +169,20 @@ export async function buildPostCreatorSafeChecklistRows(
   if (keywordSource === "manual") {
     rows = buildManualRows(payload, postCount);
   } else if (keywordSource === "gsc") {
-    onProgress?.("Loading GSC keywords…", 0.15);
-    const kwScrape = await scrapePromptBulkSiteKwJson(stored);
-    const gscExactKeywords = await selectPromptBulkLowHangingKeywords({
+    if (!preflight) {
+      onProgress?.("Loading GSC keywords…", 0.15);
+    }
+    const rawRows = await runPostCreatorInventoryFirstIdeation({
       apiKey: openRouterKey,
       siteId: stored.id,
-      keywordsJsonText: kwScrape.keywordsJsonText,
-      numberOfBlogs: postCount,
-      topic: payload.optionalPrompt,
-      modifier: payload.optionalPrompt,
-      inventoryUrlCount: inventory.totalRows,
-      connectedSite: buildPromptBulkKwConnectedSiteContext(stored),
-    });
-    rows = await runPostCreatorBulkIdeasOnce({
-      site: stored,
-      inventory,
-      payload,
+      siteName: stored.name,
       postCount,
-      apiKey: openRouterKey,
-      gscExactKeywords,
-      siteKwJsonText: kwScrape.keywordsJsonText,
+      optionalPrompt: payload.optionalPrompt,
+      bucketJson,
+      siteKwJsonText,
       onProgress: (msg) => onProgress?.(msg, 0.25),
     });
+    rows = rawRows.slice(0, postCount);
   } else {
     rows = await runPostCreatorBulkIdeasOnce({
       site: stored,
@@ -161,8 +190,10 @@ export async function buildPostCreatorSafeChecklistRows(
       payload,
       postCount,
       apiKey: openRouterKey,
+      siteKwJsonText,
       onProgress: (msg) => onProgress?.(msg, 0.25),
     });
+    rows = rows.slice(0, postCount);
   }
 
   rows = applyRowMetadata(rows, payload);

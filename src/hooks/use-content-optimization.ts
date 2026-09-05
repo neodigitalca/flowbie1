@@ -176,6 +176,7 @@ export function useContentOptimization() {
     inContentImageRequest?: { imageType: string; userPrompt?: string },
     prefilledUrlKeywords?: Record<string, string>,
     prefilledOverviewTargets?: Record<string, import("@/hooks/content-optimization/bulk-optimization-params").PrefilledOverviewTarget>,
+    useSiteWarmCacheOnly?: boolean,
   ) => {
     await handleOptimizeMultipleContentModule({
       site,
@@ -191,14 +192,19 @@ export function useContentOptimization() {
       setOptimizationProgress,
       setBulkOptimizationState,
       optimizationFileManagers,
+      setOptimizationFileManagers,
       continueOptimizationRef,
       prefilledUrlKeywords,
       prefilledOverviewTargets,
+      useSiteWarmCacheOnly,
     });
-  }, [setIsOptimizingContent, setOptimizationProgress, setBulkOptimizationState, optimizationFileManagers]);
+  }, [setIsOptimizingContent, setOptimizationProgress, setBulkOptimizationState, optimizationFileManagers, setOptimizationFileManagers]);
 
   const resetBulkBatch = useCallback(
     (batchKey: string) => {
+      const siteIdFromBatch = batchKey.endsWith("-batch")
+        ? batchKey.slice(0, -"-batch".length)
+        : "";
       setBulkOptimizationState((prev) => {
         const next = { ...prev };
         delete next[batchKey];
@@ -212,6 +218,7 @@ export function useContentOptimization() {
       setIsOptimizingContent((prev) => {
         const next = { ...prev };
         delete next[batchKey];
+        if (siteIdFromBatch) delete next[siteIdFromBatch];
         return next;
       });
     },

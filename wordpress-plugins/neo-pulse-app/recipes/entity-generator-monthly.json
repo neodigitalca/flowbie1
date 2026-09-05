@@ -1,0 +1,90 @@
+{
+  "keyword": "entity-generator-monthly",
+  "name": "Entity generator",
+  "description": "Generate entity location rows as bulk CSV from a Local Dominator grid with Wikipedia and entity sitemap validation.",
+  "notes": [
+    "Requires a Local Dominator grid CSV upload (or upstream workflow export).",
+    "Outputs entity-bulk.csv with skeleton rows (entity, title template, Wikipedia).",
+    "Does not hydrate GSC keywords or publish WordPress pages.",
+    "Default: 3 ad groups × 5 locations = 15 entity rows.",
+    "Chain with SAP generator to hydrate and schedule pages."
+  ],
+  "category": "local-seo",
+  "verticals": [
+    "local-seo",
+    "general"
+  ],
+  "tags": [
+    "entity",
+    "csv",
+    "grid",
+    "monthly"
+  ],
+  "prerequisites": [
+    "wordpress",
+    "entity-sitemap"
+  ],
+  "filters": {
+    "executionKinds": [
+      "entity_generator"
+    ],
+    "targetBuckets": [
+      "sap"
+    ],
+    "actionCount": 1
+  },
+  "defaultTasks": [
+    {
+      "keyword": "entity-generator-run",
+      "title": "Generate entity CSV",
+      "status": "todo",
+      "assignPulse": true,
+      "scheduleMode": "calendar",
+      "dueDate": "2026-09-01",
+      "dueTime": "09:00",
+      "recurrenceRule": "monthly",
+      "executionKind": "entity_generator",
+      "executionPayload": {
+        "locationSource": "grid",
+        "gridInputSource": "workflow",
+        "entityAdGroupCount": 3,
+        "entityAdsPerGroup": 5,
+        "entityPageCount": 15,
+        "postCount": 15,
+        "focusKeyword": "",
+        "titleTemplate": "{keyword} Near {entity}",
+        "sitemapType": "entity",
+        "targetBucket": "sap",
+        "saveLocalArchive": true
+      }
+    }
+  ],
+  "triggerBlock": {
+    "keyword": "schedule-monthly",
+    "kind": "calendar",
+    "frequency": "monthly",
+    "startDate": "2026-09-01",
+    "time": "09:00",
+    "targetBucket": "sap"
+  },
+  "actionBlock": {
+    "keyword": "action-entity_generator",
+    "executionKind": "entity_generator",
+    "executionPayload": {
+      "locationSource": "grid",
+      "gridInputSource": "workflow",
+      "entityAdGroupCount": 3,
+      "entityAdsPerGroup": 5,
+      "entityPageCount": 15,
+      "postCount": 15,
+      "focusKeyword": "",
+      "titleTemplate": "{keyword} Near {entity}",
+      "sitemapType": "entity",
+      "targetBucket": "sap",
+      "saveLocalArchive": true
+    },
+    "title": "Generate entity CSV"
+  },
+  "isAutomation": true,
+  "kind": "template"
+}

@@ -3,8 +3,15 @@ import {
   appendMasterInstructionsToSystemPrompt,
   ensureMasterInstructionsInMemory,
 } from "@/lib/master-instructions-storage";
-import { enforceExactFocusKeyword } from "@/hooks/overview/use-overview-ai-optimize";
-import { META_DESCRIPTION_ANTI_CLICKBAIT_RULE, TITLE_ANTI_CLICKBAIT_RULE, TITLE_CASE_RULE, TITLE_KEYWORD_WEAVING_RULE, TITLE_WELL_KNOWN_ACRONYMS_RULE } from "@/lib/prompt-builders";
+import { enforceExactFocusKeyword } from "@/lib/overview/enforce-exact-focus-keyword";
+import {
+  META_DESCRIPTION_ANTI_CLICKBAIT_RULE,
+  TITLE_ANTI_CLICKBAIT_RULE,
+  TITLE_CASE_RULE,
+  TITLE_KEYWORD_WEAVING_RULE,
+  TITLE_WELL_KNOWN_ACRONYMS_RULE,
+  UNIFIED_COPY_FORMATTING_RULE,
+} from "@/lib/prompt-builders/title-rules";
 import { normalizeOverviewKeywordUrlKey } from "@/lib/overview/overview-keyword-batch-parse";
 import {
   OVERVIEW_AI_ALL_META_BATCH_MAX_TOKENS,
@@ -34,8 +41,8 @@ For EVERY url in allowedUrls return exactly one result object with that exact ur
 Meta rules (always):
 - metaDescription: 130-150 characters, natural language, specific value for the searcher, neutral tone.
 - ${META_DESCRIPTION_ANTI_CLICKBAIT_RULE}
-- Include the full focusKeyword phrase exactly as in catalog (same spelling and spacing). Natural sentence casing for the phrase.
-- Do not add brand or site names. Do not paste JSON briefs into output.
+- ${UNIFIED_COPY_FORMATTING_RULE}
+- Include the full focusKeyword phrase exactly as WRITING KEYWORD in catalog (Title Case every word). Do not add brand or site names. Do not paste JSON briefs into output.
 - Use seoResearchBrief as primary intent signal per row.
 
 Title rules (only when includeTitle is true for that row):

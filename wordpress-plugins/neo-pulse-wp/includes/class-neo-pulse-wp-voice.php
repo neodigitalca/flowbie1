@@ -260,7 +260,7 @@ class Neo_Pulse_Wp_Voice {
 	/**
 	 * Enqueue shared voice assets (admin or frontend).
 	 *
-	 * @param array<string, mixed> $config Extra config merged into neo-pulseVoiceConfig.
+	 * @param array<string, mixed> $config Extra config merged into neoPulseVoiceConfig.
 	 * @param bool                $in_footer Load script in footer (false = head, for admin pages with inline JS).
 	 */
 	public static function enqueue_assets( array $config = array(), bool $in_footer = true ): void {
@@ -299,7 +299,7 @@ class Neo_Pulse_Wp_Voice {
 
 		wp_localize_script(
 			'neo-pulse-voice',
-			'neo-pulseVoiceConfig',
+			'neoPulseVoiceConfig',
 			array_merge( $defaults, $config )
 		);
 	}

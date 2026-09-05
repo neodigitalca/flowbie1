@@ -7,6 +7,7 @@ import { parseSitemap } from './wordpress-api';
 import type { WordPressSite } from '@/components/integrations/types';
 import { loadApiKey } from './api';
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 export interface WPPageAnalysis {
   titlePattern?: string; // Extracted title template pattern
@@ -377,7 +378,7 @@ What is the common pattern or template?`;
   try {
     const { getResearchModel } = await import("./optimization-settings-storage");
     const researchModel = getResearchModel();
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await postOpenRouterAppChatFetch( {
       method: "POST",
       headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
@@ -426,7 +427,7 @@ What is the common pattern or template?`;
   try {
     const { getResearchModel } = await import("./optimization-settings-storage");
     const researchModel = getResearchModel();
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await postOpenRouterAppChatFetch( {
       method: "POST",
       headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({

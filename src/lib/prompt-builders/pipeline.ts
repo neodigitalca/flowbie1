@@ -17,7 +17,7 @@ const STYLE_RULES =
   "Style: No em dashes (use comma+space). No 'if x then y'. No flowery language (e.g. 'delve'). Engaging and helpful.";
 
 const LIST_FORMAT =
-  "Lists: Steps/sequences/processes MUST use numbered format (1. 2. 3.) - never bullets for ordered content. Features/benefits use bullet format (- item). Never output list-like items as separate paragraphs - every such item needs a leading - or 1. One line per item; no <br> inside list items.";
+  "Lists: Steps/sequences/processes MUST use numbered format (1. 2. 3.) - never bullets for ordered content. Features/benefits use bullet format (- item). Never output list-like items as separate paragraphs - every such item needs a leading - or 1. One line per item (number and sentence on the same line). Forbidden: 1. on its own line then the sentence below; <br> inside list items.";
 
 const MANDATORY_STRUCTURE =
   "Required: at least 1 table, 1 bullet list, 1 numbered list; distribute across sections. Blog without all three is incomplete. " + LIST_FORMAT + " " + COMPARISON_FORMAT;
@@ -32,7 +32,7 @@ const TARGET_LINKS_ONLY =
   "Use only links from 'Target Links' section. No invented/placeholder/fake links. If plan says 'No links derived from Knowledge Base', state that and include no links.";
 
 const PLACEHOLDER_FORBIDDEN =
-  "No placeholder names (Dr. [Name], [Team Member], etc.). Use 'our team', 'our professionals' if needed. No fake staff lists.";
+  "No placeholder names (Dr. [Name], [Team Member], etc.). Use the connected business name or we plus a sourced fact. Never write 'our team' or 'our professionals'. No fake staff lists.";
 
 const PLAN_END_SENTENCE =
   "Plan complete. Passing to Drafting AI now. Fully write out tables (headers, separator line, rows/columns/data), lists, and other markdown. Tables: include separator line after header row. " +

@@ -1,35 +1,62 @@
-import { ChevronDown, ChevronRight } from "lucide-react";
+import type { ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
+import type { AgentRunBucketGroup, AgentRunBucketKey } from "@/lib/agent-runs/agent-run-grouping";
+import { AgentRunsBucketTabs } from "./AgentRunsBucketTabs";
 import { cn } from "@/lib/utils";
 
 type AgentRunsGroupFolderProps = {
-  label: string;
+  label?: string;
+  leading?: ReactNode;
   count: number;
-  open: boolean;
-  depth: 0 | 1;
-  onToggle: () => void;
+  buckets?: AgentRunBucketGroup[];
+  activeBucketKey?: AgentRunBucketKey;
+  onBucketChange?: (key: AgentRunBucketKey) => void;
+  collapsible?: boolean;
+  expanded?: boolean;
+  onToggleExpanded?: () => void;
 };
 
 export function AgentRunsGroupFolder({
   label,
+  leading,
   count,
-  open,
-  depth,
-  onToggle,
+  buckets,
+  activeBucketKey,
+  onBucketChange,
+  collapsible = false,
+  expanded = true,
+  onToggleExpanded,
 }: AgentRunsGroupFolderProps) {
+  const showTabs = Boolean(expanded && buckets?.length && activeBucketKey && onBucketChange);
+
   return (
-    <button
-      type="button"
-      className={cn(
-        "agent-runs-folder",
-        depth === 1 && "agent-runs-folder--bucket",
-        open && "agent-runs-folder--open",
-      )}
-      aria-expanded={open}
-      onClick={onToggle}
-    >
-      {open ? <ChevronDown className="agent-runs-folder__chevron" aria-hidden /> : <ChevronRight className="agent-runs-folder__chevron" aria-hidden />}
-      <span className="agent-runs-folder__label">{label}</span>
+    <div className="agent-runs-client-header">
+      {collapsible ? (
+        <button
+          type="button"
+          className="agent-runs-client-header__toggle"
+          aria-expanded={expanded}
+          onClick={onToggleExpanded}
+        >
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+              expanded && "rotate-180",
+            )}
+            aria-hidden
+          />
+        </button>
+      ) : null}
+      {leading ?? (label ? <span className="agent-runs-client-header__label">{label}</span> : null)}
+      {showTabs ? (
+        <AgentRunsBucketTabs
+          buckets={buckets}
+          value={activeBucketKey}
+          onChange={onBucketChange}
+          className="agent-runs-client-header__tabs"
+        />
+      ) : null}
       <span className="agent-runs-folder__count">{count}</span>
-    </button>
+    </div>
   );
 }

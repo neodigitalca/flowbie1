@@ -34,14 +34,32 @@ export function pickSitemapTypeFromRow(row: Record<string, unknown>): BulkRowSit
   return undefined;
 }
 
+/** Empty / N/A entity is a blog row. Never route those to the entity sitemap. */
+export function rowHasUploadEntity(entity: string | undefined | null): boolean {
+  const value = entity?.trim() ?? "";
+  return value.length > 0 && value.toUpperCase() !== "N/A";
+}
+
+export function resolveUploadSitemapType(
+  requested: BulkRowSitemapType,
+  entity: string | undefined | null,
+): BulkRowSitemapType {
+  if (!rowHasUploadEntity(entity)) return "post";
+  return requested;
+}
+
 export function resolveRowSitemapType(
   siteMode: BulkSitemapMode,
-  row: Pick<CSVRow, "sitemap_type">,
+  row: Pick<CSVRow, "sitemap_type" | "entity">,
   fallback: BulkRowSitemapType,
 ): BulkRowSitemapType {
-  if (siteMode === "post") return "post";
-  if (siteMode === "entity") return "entity";
-  return row.sitemap_type ?? fallback;
+  const requested: BulkRowSitemapType =
+    siteMode === "post"
+      ? "post"
+      : siteMode === "entity"
+        ? "entity"
+        : (row.sitemap_type ?? fallback);
+  return resolveUploadSitemapType(requested, row.entity);
 }
 
 export function applyRowSitemapToPosting(
@@ -97,11 +115,11 @@ export function postingSitemapPlaceholder(siteMode: BulkSitemapMode): BulkRowSit
 export function resolveSiteSitemapMode(
   siteConfigs: Record<string, { sitemapType: BulkSitemapMode }>,
   selectedWordPressSites: ReadonlySet<string>,
-  entityAvailable?: boolean,
+  _entityAvailable?: boolean,
 ): BulkSitemapMode {
   const siteId = Array.from(selectedWordPressSites)[0];
   const configured = siteId ? siteConfigs[siteId]?.sitemapType : undefined;
-  return configured ?? (entityAvailable ? "entity" : "post");
+  return configured ?? "post";
 }
 
 export function buildCustomModePrefetchSites(

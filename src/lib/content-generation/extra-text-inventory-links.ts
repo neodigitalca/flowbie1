@@ -66,6 +66,19 @@ export function buildWordPressPostsForLinkingFromInventory(
   return [...byNorm.values()];
 }
 
+/** Pages first, then posts — shared link pool order for bulk optimize. */
+export function buildMergedLinkPoolRows(
+  snapshot: BulkOptimizerInventorySnapshot,
+  siteUrl: string,
+): ExtraTextInventoryLinkRow[] {
+  const rows = buildWordPressPostsForLinkingFromInventory(snapshot, siteUrl, {
+    postsPagesOnly: true,
+  });
+  const pageRows = rows.filter((r) => r.postType === "page");
+  const postRows = rows.filter((r) => r.postType === "post");
+  return [...pageRows, ...postRows];
+}
+
 /** Pages bucket only (for entity What We Offer table links). */
 export function buildWordPressPagesForLinkingFromInventory(
   snapshot: BulkOptimizerInventorySnapshot,

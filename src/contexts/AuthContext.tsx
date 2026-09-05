@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import { clearAllMasterInstructionsMemory } from "@/lib/master-instructions-storage";
 import { clearDeviceAuth, loadDeviceAuth, saveDeviceAuth, setSessionToken, getSessionToken } from "@/lib/auth-device";
-import { AUTH_DISABLED } from "@/lib/auth-disabled";
+import { AUTH_DISABLED, LOCAL_DEMO_EMAIL, LOCAL_DEMO_PASSWORD } from "@/lib/auth-disabled";
 import { fetchAuthMe, loginWithEmail, logoutApi } from "@/lib/teams-api";
 import type { AuthUser, TeamPermissions, TeamSummary } from "@/lib/teams-types";
 
@@ -19,14 +19,8 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const DEV_ADMIN_USER: AuthUser = {
-  id: 0,
-  email: "admin@neo-pulse.local",
-  displayName: "Admin",
-};
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(AUTH_DISABLED ? DEV_ADMIN_USER : null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [activeTeam, setActiveTeam] = useState<TeamSummary | null>(null);
   const [permissions, setPermissions] = useState<TeamPermissions | null>(null);
   const [loading, setLoading] = useState(!AUTH_DISABLED);
@@ -45,23 +39,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkAuth = useCallback(async () => {
     if (AUTH_DISABLED) {
-      setUser(DEV_ADMIN_USER);
       setLoading(false);
       return;
     }
     try {
+      saveDeviceAuth(LOCAL_DEMO_EMAIL, LOCAL_DEMO_PASSWORD);
       const device = loadDeviceAuth();
       if (device?.sessionToken && !getSessionToken()) {
         setSessionToken(device.sessionToken);
       }
       let data = await fetchAuthMe();
       if (!data.user && !data.username) {
-        const device = loadDeviceAuth();
-        if (device) {
-          const loginResult = await loginWithEmail(device.email, device.password);
+        const saved = loadDeviceAuth();
+        if (saved) {
+          const loginResult = await loginWithEmail(saved.email, saved.password);
           if (loginResult.ok) {
             if (loginResult.sessionToken) {
               setSessionToken(loginResult.sessionToken);
+              saveDeviceAuth(saved.email, saved.password, loginResult.sessionToken);
             }
             data = await fetchAuthMe();
           } else {
@@ -85,10 +80,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string, rememberDevice = true) => {
-      if (AUTH_DISABLED) {
-        setUser(DEV_ADMIN_USER);
-        return { ok: true };
-      }
       const result = await loginWithEmail(email, password);
       if (result.ok) {
         if (result.sessionToken) {
@@ -110,10 +101,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
-    if (AUTH_DISABLED) {
-      setUser(DEV_ADMIN_USER);
-      return;
-    }
     clearDeviceAuth();
     await logoutApi();
     setUser(null);

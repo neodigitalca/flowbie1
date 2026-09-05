@@ -1,24 +1,43 @@
-import { callOpenRouterChatCompletion } from "@/lib/competitor-research/competitor-report-openrouter";
+import { callGscReportingOpenRouterChatCompletion } from "@/lib/gsc-reporting/gsc-reporting-openrouter";
 import {
   buildOpenRouterChatPostBodyJson,
   getCompetitorReportMaxOutputTokens,
 } from "@/lib/competitor-research/competitor-report-openrouter-limits";
 import {
-  bundleGscManualFilesForPrompt,
-  GSC_JSON_OPENROUTER_OPTS,
-  parseJsonObjectFromModelText,
+  bundleGscOutlineFilesForPrompt,
+} from "@/lib/gsc-reporting/gsc-reporting-outline-bundle";
+import {
   type GscManualAiPayload,
   type GscManualAiTopRow,
 } from "@/lib/gsc-manual-ai-aggregate";
 import type { GscReportingOutlineResult, GscReportingSectionKind, GscReportingSectionPlan } from "@/lib/gsc-reporting/gsc-reporting-types";
+import { GSC_OUTLINE_OPENROUTER_OPTS } from "@/lib/gsc-reporting/gsc-reporting-outline-schema";
 import {
   searchPerformanceH2ForCompareKind,
   type GscCompareKind,
 } from "@/lib/gsc-reporting/gsc-reporting-compare-signals";
+import { seedHasGenerativeAiFiles } from "@/lib/gsc-reporting/gsc-reporting-generative-ai";
+import {
+  applyReportPeriodToClientSeason,
+  emptyGscClientSeasonContext,
+  formatGscClientSeasonPromptBlock,
+  type GscClientSeasonContext,
+} from "@/lib/gsc-reporting/gsc-reporting-client-season";
+import { formatGscReportTitlePeriod } from "@/lib/gsc-reporting/gsc-reporting-document-title";
+
+/** Fail fast when OpenRouter outline hangs (PHP allows up to 300s). */
+export const GSC_OUTLINE_OPENROUTER_TIMEOUT_MS = 120_000;
+
+function outlineAbortSignal(userSignal?: AbortSignal): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(GSC_OUTLINE_OPENROUTER_TIMEOUT_MS);
+  if (!userSignal) return timeoutSignal;
+  return AbortSignal.any([userSignal, timeoutSignal]);
+}
 
 /** Blog-style Title Case H2s; no calendar ranges in headings (periods stay in tables / CSV). */
 const CANONICAL_H2_BY_KIND: Partial<Record<GscReportingSectionKind, string>> = {
   executive_summary: "Executive Summary",
+  generative_ai_impressions: "Generative AI Search Impressions",
   search_performance_period: "Search Performance Compared Month Over Month",
   key_performance_insights: "Key Performance Insights for the Team",
   sap_local_seo: "SAP & Local SEO Performance",
@@ -43,81 +62,44 @@ export function applyCanonicalGscSectionTitles(
 
 const OUTLINE_SYSTEM = `You are an SEO analyst. The user provides Google Search Console CSV exports.
 
-You MUST output exactly one JSON object and nothing else - no markdown fences, no commentary.
+Return JSON matching the response schema exactly.
 
-Schema (strict):
-{
-  "executiveSummary": string,
-  "topOpportunities": [ { "rank": number, "label": string, "why": string, "metrics": string, "evidence": string[] } ],
-  "clusters": [],
-  "sections": [
-    {
-      "id": string,
-      "h2Title": string,
-      "kind": string,
-      "ragQuery": string
-    }
-  ]
-}
+**executiveSummary** MUST name the **REPORT_PERIOD** date range when referring to the current window, and include **exactly one sentence** that uses the word **seasonality** and says **busy** or **not busy** for this city and vertical across the **full REPORT_PERIOD** from **CLIENT_SEASON** (not only the first month; not today's calendar month). Do **not** say **shoulder**, **peak**, or **slow**. Do **not** repeat that seasonality reading elsewhere. Do not invent metrics. Do not invent a city.
 
-**clusters** MUST always be the empty JSON array \`[]\`. Do not output thematic clusters here - query clustering is a separate optional raw file in the app, not part of this outline.
-
-Each section "kind" MUST be one of: executive_summary, search_performance_period, key_performance_insights, sap_local_seo, content_performance.
-
-**Do not** output the section kind **growth_metrics**. Site-wide period KPIs (clicks, impressions, search queries, CTR, position) belong **only** in **search_performance_period**; a separate growth section repeats the same numbers.
-
-Rules for sections (critical):
-- sections defines the **order** of ## headings in the final organic SEO report. Include **in order**. For each kind use **exactly** this **h2Title** string (blog-style **Title Case**). **Do not** put month names, years, or date ranges in **h2Title** - comparison periods belong in table bodies and CSV headers only.
-  1) executive_summary - h2Title "Executive Summary"
-  2) search_performance_period - h2Title "Search Performance Compared Month Over Month"
-  3) key_performance_insights - h2Title "Key Performance Insights for the Team"
-  4) sap_local_seo - h2Title "SAP & Local SEO Performance"
-  5) content_performance - h2Title "Content Performance: Your Growing Digital Footprint"
-- ragQuery: short keyword phrase for retrieving relevant CSV rows (used by the app; not shown to the user).
-- **sap_local_seo** \`ragQuery\`: aim at **entity sitemap** URLs (**entity**, **location**, **place**, **GBP**, **local business** page paths), **not** blog or editorial slugs; prefer filenames or rows that mention **entity** / **sitemap** when present.
-- **content_performance** \`ragQuery\`: aim at **pages**, **urls**, **landing**, plus **sitemap** list (**post-sitemap**, **page-sitemap**, **product**, **blog**, **location**, **local**, **service-area**) so segment buckets match submitted sitemaps.
-
-Data rules (same as manual GSC summary):
-- Numbers in executiveSummary, metrics, evidence must come from the CSV text.
+Data rules:
+- Numbers in executiveSummary, metrics, and evidence must come from the CSV text.
 - **Site-totals-MoM.csv** includes **Search queries** (total query count per period) as a standard site-wide KPI alongside clicks, impressions, CTR, and position.
 - When **Site-totals-compare-signals.txt** is present, **executiveSummary** must align with \`primaryPattern\` and \`interpretation\` from that block. **Never** describe **query_footprint_expansion** months as overall search visibility decline.
 - **Cross-metric rule (any period compare):** Do **not** infer visibility loss from average position alone when **Search queries** and **Total impressions** both rose vs the prior period.
-- **Formatting:** Do **not** wrap queries, keywords, page titles, or brands in \`"\` or \`'\` in **executiveSummary**, **topOpportunities** labels, **why**, or **metrics**. Use plain text only (downstream prose uses **bold** for emphasis, not quotes).
-- **executiveSummary** must be **factual synthesis** with numbers from the CSV only; keep it **thematic** (segments, demand patterns, branded vs non-brand) so downstream **### Key Insights** can stay **broad**, not a query-by-query inventory. Do **not** output prioritized action lists, "next steps", "priority" framing, or tactical blocks naming query themes as to-do items. Do **not** prescribe implementation checklists; keep interpretation concise. The report section **Executive Summary** will add a separate \`### Key Insights\` bullet list in the final markdown; this JSON field is a compact narrative hint only.
+- **Formatting:** Do **not** wrap queries, keywords, page titles, or brands in \`"\` or \`'\` in **executiveSummary**, **topOpportunities** labels, **why**, or **metrics**. Use plain text only.
+- **executiveSummary** must be **factual synthesis** with numbers from the CSV only; keep it **thematic**. Do **not** output prioritized action lists, "next steps", or tactical blocks.
 - topOpportunities: at most 8 rows; rank by business impact and merge near-duplicates.
-- evidence: at most 3 strings per row, each under 200 characters. Escape double quotes inside strings as \\".
-
-Respond with valid JSON only.`;
-
-const VALID_KINDS = new Set<GscReportingSectionKind>([
-  "executive_summary",
-  "search_performance_period",
-  "key_performance_insights",
-  "sap_local_seo",
-  "content_performance",
-  "cluster",
-]);
-
-function normalizeSectionKind(raw: string): GscReportingSectionKind | null {
-  const k = raw.trim();
-  if (k === "executive") return "executive_summary";
-  if (VALID_KINDS.has(k as GscReportingSectionKind)) return k as GscReportingSectionKind;
-  return null;
-}
+- evidence: at most 3 strings per row, each under 200 characters.`;
 
 export function defaultSectionsFromPayload(
   p: GscManualAiPayload,
   compareKind: GscCompareKind = "mom",
+  options?: { includeGenerativeAi?: boolean },
 ): GscReportingSectionPlan[] {
   void p;
-  return applyCanonicalGscSectionTitles(
-    [
+  const includeGenerativeAi = options?.includeGenerativeAi === true;
+  const sections: GscReportingSectionPlan[] = [
     {
       id: "executive_summary",
       h2Title: "",
       kind: "executive_summary",
       ragQuery: "executive summary clicks impressions ctr position trends branded",
     },
+  ];
+  if (includeGenerativeAi) {
+    sections.push({
+      id: "generative_ai_impressions",
+      h2Title: "",
+      kind: "generative_ai_impressions",
+      ragQuery: "generative AI impressions AI Overviews AI Mode Pages-GenerativeAI Site-totals-GenerativeAI",
+    });
+  }
+  sections.push(
     {
       id: "search_performance_period",
       h2Title: "",
@@ -142,14 +124,41 @@ export function defaultSectionsFromPayload(
       kind: "content_performance",
       ragQuery: "pages urls sitemap post blog product location local service-area landing impressions clicks position",
     },
-  ],
-    compareKind,
   );
+  return applyCanonicalGscSectionTitles(sections, compareKind);
 }
 
-/** Cluster sections are not generated in the main report; clusters live in a separate raw file. */
-function stripClusterSections(sections: GscReportingSectionPlan[]): GscReportingSectionPlan[] {
-  return sections.filter((s) => s.kind !== "cluster");
+/** Keep generative_ai_impressions only when includeGenerativeAi; insert after executive_summary when included and missing. */
+export function applyGenerativeAiSectionGate(
+  sections: GscReportingSectionPlan[],
+  includeGenerativeAi: boolean,
+  compareKind: GscCompareKind = "mom",
+): GscReportingSectionPlan[] {
+  const withoutAi = sections.filter((s) => s.kind !== "generative_ai_impressions");
+  if (!includeGenerativeAi) {
+    return applyCanonicalGscSectionTitles(withoutAi, compareKind);
+  }
+  const aiSection: GscReportingSectionPlan = {
+    id: "generative_ai_impressions",
+    h2Title: "Generative AI Search Impressions",
+    kind: "generative_ai_impressions",
+    ragQuery: "generative AI impressions AI Overviews AI Mode Pages-GenerativeAI Site-totals-GenerativeAI",
+  };
+  const execIdx = withoutAi.findIndex((s) => s.kind === "executive_summary");
+  const insertAt = execIdx >= 0 ? execIdx + 1 : 0;
+  const next = [...withoutAi.slice(0, insertAt), aiSection, ...withoutAi.slice(insertAt)];
+  return applyCanonicalGscSectionTitles(next, compareKind);
+}
+
+/** Drop seasonal_demand. Season is one sentence in Executive Summary only. */
+export function applySeasonalDemandSectionGate(
+  sections: GscReportingSectionPlan[],
+  compareKind: GscCompareKind = "mom",
+): GscReportingSectionPlan[] {
+  return applyCanonicalGscSectionTitles(
+    sections.filter((s) => s.kind !== "seasonal_demand"),
+    compareKind,
+  );
 }
 
 function isNonEmptyString(x: unknown): x is string {
@@ -191,54 +200,22 @@ function parseOutlineBasePayload(parsed: Record<string, unknown>): GscManualAiPa
   };
 }
 
-function parseSections(raw: unknown): GscReportingSectionPlan[] | null {
-  if (!Array.isArray(raw) || raw.length === 0) return null;
-  const out: GscReportingSectionPlan[] = [];
-  for (let i = 0; i < raw.length; i++) {
-    const row = raw[i];
-    if (!row || typeof row !== "object") return null;
-    const r = row as Record<string, unknown>;
-    if (!isNonEmptyString(r.id) || !isNonEmptyString(r.h2Title) || !isNonEmptyString(r.ragQuery)) return null;
-    const kindRaw = typeof r.kind === "string" ? r.kind : "";
-    const kind = normalizeSectionKind(kindRaw);
-    if (!kind) continue;
-    let clusterIndex: number | undefined;
-    if (r.clusterIndex != null) {
-      const n = typeof r.clusterIndex === "number" ? r.clusterIndex : Number(r.clusterIndex);
-      if (!Number.isFinite(n) || n < 0) return null;
-      clusterIndex = n;
-    }
-    out.push({
-      id: String(r.id).trim(),
-      h2Title: String(r.h2Title).trim(),
-      kind,
-      ragQuery: String(r.ragQuery).trim(),
-      clusterIndex,
-    });
-  }
-  return out.length > 0 ? out : null;
-}
-
 export function parseGscReportingOutlineJson(
   raw: string,
   compareKind: GscCompareKind = "mom",
+  options?: { includeGenerativeAi?: boolean },
 ): GscReportingOutlineResult {
   let parsed: Record<string, unknown>;
   try {
-    parsed = parseJsonObjectFromModelText(raw) as Record<string, unknown>;
+    parsed = JSON.parse(raw.trim()) as Record<string, unknown>;
   } catch {
     throw new Error("AI response was not valid JSON.");
   }
   const base = parseOutlineBasePayload(parsed);
-  const parsedSections = parseSections(parsed.sections);
-  let sections: GscReportingSectionPlan[];
-  if (parsedSections && parsedSections.length > 0) {
-    const noClusters = stripClusterSections(parsedSections);
-    sections = noClusters.length > 0 ? noClusters : defaultSectionsFromPayload(base, compareKind);
-  } else {
-    sections = defaultSectionsFromPayload(base, compareKind);
-  }
-  sections = applyCanonicalGscSectionTitles(sections, compareKind);
+  const includeGenerativeAi = options?.includeGenerativeAi === true;
+  let sections = defaultSectionsFromPayload(base, compareKind, { includeGenerativeAi });
+  sections = applyGenerativeAiSectionGate(sections, includeGenerativeAi, compareKind);
+  sections = applySeasonalDemandSectionGate(sections, compareKind);
   return {
     ...base,
     clusters: [],
@@ -253,6 +230,8 @@ export async function runGscReportingOutline(args: {
   siteUrl: string;
   files: { name: string; content: string }[];
   compareKind?: GscCompareKind;
+  compareLabel?: string;
+  clientSeason?: GscClientSeasonContext | null;
   signal?: AbortSignal;
 }): Promise<{
   outline: GscReportingOutlineResult;
@@ -261,8 +240,21 @@ export async function runGscReportingOutline(args: {
   outlineRequestBodyJson: string;
 }> {
   const compareKind = args.compareKind ?? "mom";
-  const { text, truncated, filenames } = bundleGscManualFilesForPrompt(args.files);
+  const includeGenerativeAi = seedHasGenerativeAiFiles(args.files);
+  const { text, truncated, filenames } = bundleGscOutlineFilesForPrompt(args.files);
+  const generativeAiHint = includeGenerativeAi
+    ? "\nGenerative AI CSV files ARE present in this upload. The app will add a Generative AI section in the report outline."
+    : "";
+  const compareLabel = args.compareLabel?.trim() ?? "";
+  const reportPeriod = formatGscReportTitlePeriod(compareLabel);
+  const season = applyReportPeriodToClientSeason(args.clientSeason ?? emptyGscClientSeasonContext(), compareLabel);
+  const reportPeriodBlock = reportPeriod
+    ? `\nREPORT_PERIOD (current GSC window from the date picker; name this exact range when you mention the period): ${reportPeriod}\n`
+    : "";
   const userMessage = `Site: ${args.siteName} (${args.siteUrl})
+${generativeAiHint}
+${reportPeriodBlock}
+${formatGscClientSeasonPromptBlock(season)}
 
 Below are the CSV file contents. Analyze and produce the JSON object as specified.
 
@@ -274,37 +266,23 @@ ${text}`;
     maxTokensRequested: maxTokens,
     system: OUTLINE_SYSTEM,
     userMessage,
-    ...GSC_JSON_OPENROUTER_OPTS,
+    ...GSC_OUTLINE_OPENROUTER_OPTS,
   });
 
-  const request = async (user: string) =>
-    callOpenRouterChatCompletion({
-      apiKey: args.apiKey,
-      model: args.model,
-      system: OUTLINE_SYSTEM,
-      user,
-      maxTokens,
-      signal: args.signal,
-      ...GSC_JSON_OPENROUTER_OPTS,
-    });
+  const { content, finishReason } = await callGscReportingOpenRouterChatCompletion({
+    apiKey: args.apiKey,
+    model: args.model,
+    system: OUTLINE_SYSTEM,
+    user: userMessage,
+    maxTokens,
+    signal: outlineAbortSignal(args.signal),
+    ...GSC_OUTLINE_OPENROUTER_OPTS,
+  });
 
-  let { content, finishReason } = await request(userMessage);
-  try {
-    const outline = parseGscReportingOutlineJson(content, compareKind);
-    return { outline, truncatedInput: truncated, filenames, outlineRequestBodyJson };
-  } catch (firstError) {
-    const retryUser = `${userMessage}
-
-Your previous reply was invalid or truncated JSON. Return one complete JSON object only. Escape double quotes inside strings as \\". Keep evidence arrays short.`;
-    ({ content, finishReason } = await request(retryUser));
-    try {
-      const outline = parseGscReportingOutlineJson(content, compareKind);
-      return { outline, truncatedInput: truncated, filenames, outlineRequestBodyJson };
-    } catch {
-      const truncatedHint =
-        finishReason === "length" ? " Model output was truncated; retry the run." : "";
-      const detail = firstError instanceof Error ? firstError.message : "AI response was not valid JSON.";
-      throw new Error(`${detail}${truncatedHint}`);
-    }
+  if (finishReason === "length") {
+    throw new Error("GSC outline model output was truncated.");
   }
+
+  const outline = parseGscReportingOutlineJson(content, compareKind, { includeGenerativeAi });
+  return { outline, truncatedInput: truncated, filenames, outlineRequestBodyJson };
 }

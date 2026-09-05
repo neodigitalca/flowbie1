@@ -104,13 +104,15 @@ export function buildSeoResearchArtifactDownloadable(
   };
 }
 
-export function saveSeoResearchArtifact(
+export function saveSerpResearchBrief(
   fileManager: OptimizationFileManager,
   primaryKeyword: string,
-  rawSeoResearch: string
+  briefJson: string,
 ): void {
-  const file = buildSeoResearchArtifactDownloadable(primaryKeyword, rawSeoResearch);
-  fileManager.addFile(file.name, file.content, file.mimeType);
+  const trimmed = String(briefJson ?? "").trim();
+  if (!trimmed) return;
+  const fileName = OptimizationFileManager.generateFilename("serp-research-brief", primaryKeyword, "json");
+  fileManager.addFile(fileName, trimmed, "application/json");
 }
 
 export function handleOptimizationError(

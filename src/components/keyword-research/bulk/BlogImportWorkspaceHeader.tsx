@@ -28,13 +28,11 @@ import {
 } from "@/components/keyword-research/bulk/bulk-workspace-header-styles";
 import type { MetaBulkMicroSnapshot } from "@/components/overview/OverviewBulkMicroProgress";
 import type { BlogImportFeaturedImage } from "@/lib/bulk/blog-import-parser";
+import { BLOG_IMPORT_FILE_ACCEPT } from "@/lib/bulk/blog-import-parser";
 import type { WordPressPostDestination } from "@/lib/bulk-auto-generate";
+import { WORDPRESS_POST_DESTINATION_SHORT } from "@/lib/bulk-auto-generate";
 import { cn } from "@/lib/utils";
 
-const POST_DESTINATION_SHORT: Record<WordPressPostDestination, string> = {
-  wordpress: "WordPress",
-  local: "Local files",
-};
 
 export type BlogImportWorkspaceHeaderProps = {
   activeSection: BlogGeneratorSectionId;
@@ -52,7 +50,7 @@ export type BlogImportWorkspaceHeaderProps = {
   onEntityChange: (v: string) => void;
   isParsing: boolean;
   importedFileName: string | null;
-  onPickFile: (file: File | null) => void;
+  onPickFiles: (files: File[]) => void;
   postDestination: WordPressPostDestination;
   onPostDestinationChange: (v: WordPressPostDestination) => void;
   postDestinationChoices: WordPressPostDestination[];
@@ -64,6 +62,7 @@ export type BlogImportWorkspaceHeaderProps = {
   canDownloadBlog?: boolean;
   onDownloadBlog?: () => void;
   scheduleMenu?: ReactNode;
+  sitemapMenu?: ReactNode;
   detailsProps: BulkGeneratorDetailsPanelProps;
   onDetailsOpenChange?: (open: boolean) => void;
 };
@@ -84,7 +83,7 @@ export function BlogImportWorkspaceHeader({
   onEntityChange,
   isParsing,
   importedFileName,
-  onPickFile,
+  onPickFiles,
   postDestination,
   onPostDestinationChange,
   postDestinationChoices,
@@ -96,6 +95,7 @@ export function BlogImportWorkspaceHeader({
   canDownloadBlog = false,
   onDownloadBlog,
   scheduleMenu,
+  sitemapMenu,
   detailsProps,
   onDetailsOpenChange,
 }: BlogImportWorkspaceHeaderProps) {
@@ -124,7 +124,14 @@ export function BlogImportWorkspaceHeader({
       activeSection={activeSection}
       onSectionChange={onSectionChange}
       sectionSwitchDisabled={isProcessing}
-      titleRowMenu={scheduleMenu}
+      titleRowMenu={
+        sitemapMenu || scheduleMenu ? (
+          <div className="flex shrink-0 items-center gap-0.5">
+            {sitemapMenu}
+            {scheduleMenu}
+          </div>
+        ) : null
+      }
       workspaceBusy={workspaceBusy}
       progressSnapshot={progressSnapshot}
       canOpenDetails={canOpenDetails}
@@ -139,9 +146,11 @@ export function BlogImportWorkspaceHeader({
                 ref={fileRef}
                 type="file"
                 className="hidden"
+                multiple
+                accept={BLOG_IMPORT_FILE_ACCEPT}
                 onChange={(e) => {
-                  const file = e.target.files?.[0] ?? null;
-                  onPickFile(file);
+                  const files = Array.from(e.target.files ?? []);
+                  onPickFiles(files);
                   e.target.value = "";
                 }}
               />
@@ -154,8 +163,8 @@ export function BlogImportWorkspaceHeader({
                 }
                 disabled={isParsing || isProcessing}
                 onClick={() => fileRef.current?.click()}
-                aria-label={importedFileName ? `Uploaded: ${importedFileName}` : "Upload blog file"}
-                title={importedFileName ?? "Choose blog file"}
+                aria-label={importedFileName ? `Uploaded: ${importedFileName}` : "Upload blog files"}
+                title={importedFileName ?? "Choose blog files"}
               >
                 {isParsing ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
@@ -213,13 +222,13 @@ export function BlogImportWorkspaceHeader({
                 onValueChange={(v) => onPostDestinationChange(v as WordPressPostDestination)}
                 disabled={workspaceBusy}
               >
-                <SelectTrigger className={GENERATOR_SELECT} aria-label="Export destination">
-                  <SelectValue />
+                <SelectTrigger className={GENERATOR_SELECT} aria-label="Destination">
+                  <SelectValue placeholder="Destination" />
                 </SelectTrigger>
                 <SelectContent position="popper">
                   {postDestinationChoices.map((choice) => (
                     <SelectItem key={choice} className="text-base" value={choice}>
-                      {POST_DESTINATION_SHORT[choice]}
+                      {WORDPRESS_POST_DESTINATION_SHORT[choice]}
                     </SelectItem>
                   ))}
                 </SelectContent>

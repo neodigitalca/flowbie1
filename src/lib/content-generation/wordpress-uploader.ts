@@ -23,6 +23,7 @@ import { generateSEOSlug } from "@/lib/seo-slug-generator";
 import { resolveRecommendedAuthor } from "@/lib/wordpress-api/author-resolver";
 import { parseFaqEntries, type FaqEntry } from "@/lib/faq-entries";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 /** ACF: overwrite only `seo_extra_text` / `extra_text`–style fields; leave all other keys unchanged. */
 function mergeAcfOnlyExtraText(
@@ -73,7 +74,7 @@ async function inferKeywordForKeywordFocus(
     parts.push(`Page Title: "${cleanTitle || "(none)"}"`, `Page URL: "${url}"`);
     if (metaText) parts.push(`Meta description (use as context for the page topic): "${metaText}"`);
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await postOpenRouterAppChatFetch( {
       method: "POST",
       headers: openRouterWebAppHeaders(openRouterApiKey),
       body: JSON.stringify({
@@ -147,7 +148,7 @@ export async function generateQuestionsFromContent(
       }
     }
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await postOpenRouterAppChatFetch( {
       method: "POST",
       headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
@@ -155,7 +156,7 @@ export async function generateQuestionsFromContent(
         messages: [
           {
             role: "system",
-            content: `You are an SEO expert specializing in North American content. Generate exactly ${targetCount} relevant FAQ questions that readers would ask about the topic. CRITICAL: All questions must focus ONLY on North America (United States, Canada, Mexico). NEVER reference locations outside North America (no Australia, UK, Europe, Asia, etc.). Return ONLY a JSON array of ${targetCount} question strings, nothing else.`
+            content: `You are an SEO expert specializing in North American content. Generate exactly ${targetCount} relevant FAQ questions that readers would ask about the topic. Prefer buyer questions (worth it, process, when not) over definitional What is X restatements. CRITICAL: All questions must focus ONLY on North America (United States, Canada, Mexico). NEVER reference locations outside North America (no Australia, UK, Europe, Asia, etc.). Return ONLY a JSON array of ${targetCount} question strings, nothing else.`
           },
           {
             role: "user",
@@ -557,6 +558,8 @@ export interface WordPressUploaderOptions {
   extraImageBase64?: string; // Extra image base64 for pages (ACF field: seo_extra_image)
   /** Only merge `seo_extra_text` / `extra_text` in ACF; no FAQ, date, keyword, or other fields. */
   seoExtraTextFieldOnly?: boolean;
+  /** Pre-built FAQ JSON-LD script from optimize FAQ bundle; skips PAA/template generation. */
+  faqSchemaOverride?: string;
 }
 
 export interface WordPressUploaderResult {
@@ -581,7 +584,7 @@ async function getACFFromOpenRouter(
 ): Promise<Record<string, unknown>> {
   const systemPrompt = `You are a local SEO. You are given the full WordPress post API response (including its acf object) and an updates object. Your job: merge the updates into the post's acf so that every ACF field a local SEO would fill is updated. Use the EXACT key names that already exist in the post's acf object (e.g. if the post has "seo_extra_text", use that key; if it has "extra_text", use that; if it has both, set both). Preserve every key from the post's acf; overwrite only with the corresponding update when applicable. Map updates like this: updates.date -> date_modifier / seo_date_modifier; updates.keyword -> keyword_focus (only if updates.keyword is present); updates.extraText -> extra_text / seo_extra_text; updates.faq -> faq / seo_faq (only if updates.faq is present); updates.metaDescription -> meta_description / seo_meta_description; updates.extraImageId -> extra_image / seo_extra_image. Return only the complete merged acf object as valid JSON, no markdown, no explanation.`;
   const userContent = `Full WordPress post (read the acf object and use its exact key names):\n${JSON.stringify(fullPost)}\n\nUpdates to apply:\n${JSON.stringify(updates)}\n\nReturn only the merged acf object as JSON.`;
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const res = await postOpenRouterAppChatFetch( {
     method: "POST",
     headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
@@ -627,7 +630,10 @@ export async function uploadToWordPress(
     seoExtraTextFieldOnly = false,
     writeMetaDescription = false,
     writeExcerpt: _writeExcerpt = false,
+    faqSchemaOverride = "",
   } = options;
+
+  const faqSchemaOverrideTrimmed = faqSchemaOverride?.trim() ?? "";
 
   const { site } = context;
   
@@ -925,9 +931,18 @@ export async function uploadToWordPress(
 
         let faqSchema = '';
         let skipFaqWrites = false;
-        const runFaqBlock = generateFaqSchema || bulkFaqMinimum4;
+        const runFaqBlock =
+          generateFaqSchema || bulkFaqMinimum4 || Boolean(faqSchemaOverrideTrimmed);
 
         if (runFaqBlock) {
+          if (faqSchemaOverrideTrimmed) {
+            faqSchema = faqSchemaOverrideTrimmed;
+            setProgress({
+              step: 'Applying FAQ Schema...',
+              progress: 93,
+              message: 'Writing optimized FAQ schema to ACF...',
+            });
+          } else {
           setProgress({
             step: 'Creating FAQ Schema...',
             progress: 93,
@@ -1013,6 +1028,7 @@ export async function uploadToWordPress(
               faqSchema = generateFAQSchema(fallbackQuestions, primaryKeyword, entity, site.siteUrl, napLocations);
               console.log('[WordPress Uploader] Using fallback FAQ schema');
             }
+          }
           }
         }
 
@@ -1303,9 +1319,18 @@ result = await createWordPressPost(
 
         let faqSchemaDraft = '';
         let skipFaqWritesDraft = false;
-        const runFaqBlockDraft = generateFaqSchema || bulkFaqMinimum4;
+        const runFaqBlockDraft =
+          generateFaqSchema || bulkFaqMinimum4 || Boolean(faqSchemaOverrideTrimmed);
 
         if (runFaqBlockDraft) {
+          if (faqSchemaOverrideTrimmed) {
+            faqSchemaDraft = faqSchemaOverrideTrimmed;
+            setProgress({
+              step: 'Applying FAQ Schema...',
+              progress: 93,
+              message: 'Writing optimized FAQ schema to ACF...',
+            });
+          } else {
           setProgress({
             step: 'Creating FAQ Schema...',
             progress: 93,
@@ -1374,6 +1399,7 @@ result = await createWordPressPost(
                 napLocationsDraft
               );
             }
+          }
           }
         }
 

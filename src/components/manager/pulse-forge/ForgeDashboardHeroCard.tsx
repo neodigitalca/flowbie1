@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { ArrowDown, ArrowUp, Maximize2 } from "lucide-react";
 import { Bar, BarChart, ResponsiveContainer, XAxis } from "recharts";
+import { useBoxReady } from "@/components/ui/chart-box-ready";
 import { cn } from "@/lib/utils";
 import type { ForgeDashboardHeroCard } from "@/lib/pulse-forge/forge-dashboard-demo-data";
 import {
@@ -23,6 +24,7 @@ export function ForgeDashboardHeroCard({ card }: ForgeDashboardHeroCardProps): R
 
   const showDelta = card.deltaPercent != null;
   const hasChart = card.miniKeys.length > 0 && card.miniSeries.length > 0;
+  const { boxRef, ready } = useBoxReady();
 
   return (
     <div className={cn(FORGE_DASHBOARD_HERO_CARD_SHELL_CLASS, "gap-2 p-3")}>
@@ -52,22 +54,24 @@ export function ForgeDashboardHeroCard({ card }: ForgeDashboardHeroCardProps): R
       </div>
 
       {hasChart ? (
-        <div className="h-14 w-full shrink-0">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={card.miniSeries} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-              <XAxis dataKey="date" hide />
-              {card.miniKeys.map((key) => (
-                <Bar
-                  key={key}
-                  dataKey={key}
-                  stackId="hero"
-                  fill={config[key]}
-                  radius={0}
-                  isAnimationActive={false}
-                />
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
+        <div ref={boxRef} className="h-14 w-full shrink-0">
+          {ready ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={card.miniSeries} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                <XAxis dataKey="date" hide />
+                {card.miniKeys.map((key) => (
+                  <Bar
+                    key={key}
+                    dataKey={key}
+                    stackId="hero"
+                    fill={config[key]}
+                    radius={0}
+                    isAnimationActive={false}
+                  />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          ) : null}
         </div>
       ) : null}
 

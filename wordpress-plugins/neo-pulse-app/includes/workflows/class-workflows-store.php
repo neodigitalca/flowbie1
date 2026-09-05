@@ -270,6 +270,43 @@ class Neo_Pulse_App_Workflows_Store {
 	 * @param array<string,mixed> $meta
 	 * @return array<string,mixed>|null
 	 */
+	public static function has_active_run( int $team_id, int $workflow_id ): bool {
+		if ( $team_id <= 0 || $workflow_id <= 0 ) {
+			return false;
+		}
+		global $wpdb;
+		$table = $wpdb->prefix . 'neo_pulse_workflow_runs';
+		$found = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT id FROM {$table} WHERE team_id = %d AND workflow_id = %d AND status IN ('queued','running') ORDER BY id DESC LIMIT 1",
+				$team_id,
+				$workflow_id
+			)
+		);
+		return ! empty( $found );
+	}
+
+	public static function cancel_leftover_runs( int $team_id, int $workflow_id ): int {
+		if ( $team_id <= 0 || $workflow_id <= 0 ) {
+			return 0;
+		}
+		global $wpdb;
+		$table = $wpdb->prefix . 'neo_pulse_workflow_runs';
+		$now   = current_time( 'mysql', true );
+		$updated = $wpdb->query(
+			$wpdb->prepare(
+				"UPDATE {$table} SET status = %s, error_message = %s, finished_at = %s, updated_at = %s WHERE team_id = %d AND workflow_id = %d AND status IN ('queued','running')",
+				'cancelled',
+				'Replaced by due schedule',
+				$now,
+				$now,
+				$team_id,
+				$workflow_id
+			)
+		);
+		return is_int( $updated ) ? $updated : 0;
+	}
+
 	public static function create_run( int $team_id, int $workflow_id, array $meta = array() ): ?array {
 		global $wpdb;
 		$table = $wpdb->prefix . 'neo_pulse_workflow_runs';
@@ -425,22 +462,58 @@ class Neo_Pulse_App_Workflows_Store {
 		if ( ! in_array( $scope, self::RAG_SCOPES, true ) ) {
 			$scope = 'run';
 		}
+		$node_id = sanitize_text_field( (string) ( $output['nodeId'] ?? '' ) );
+		$site_id = sanitize_text_field( (string) ( $output['siteId'] ?? '' ) );
 		$payload = array(
 			'variableKey'  => $key,
-			'nodeId'       => sanitize_text_field( (string) ( $output['nodeId'] ?? '' ) ),
+			'nodeId'       => $node_id,
 			'scope'        => $scope,
 			'label'        => sanitize_text_field( (string) ( $output['label'] ?? $key ) ),
 			'textPreview'  => (string) ( $output['textPreview'] ?? '' ),
 			'fileRefs'     => isset( $output['fileRefs'] ) && is_array( $output['fileRefs'] ) ? $output['fileRefs'] : array(),
 			'agentRunId'   => isset( $output['agentRunId'] ) ? (int) $output['agentRunId'] : null,
+			'siteId'       => $site_id,
+			'deliveryMeta' => isset( $output['deliveryMeta'] ) && is_array( $output['deliveryMeta'] ) ? $output['deliveryMeta'] : array(),
 		);
+		$encoded = self::encode_payload( $payload );
+		$existing = self::find_step_output_row( $team_id, $run_id, $node_id, $key, $site_id );
+		if ( is_array( $existing ) ) {
+			$existing_id = (int) ( $existing['id'] ?? 0 );
+			if ( $existing_id > 0 ) {
+				$ok = $wpdb->update(
+					$table,
+					array(
+						'node_id'      => $node_id,
+						'payload_json' => $encoded,
+					),
+					array(
+						'id'      => $existing_id,
+						'team_id' => $team_id,
+						'run_id'  => $run_id,
+					),
+					array( '%s', '%s' ),
+					array( '%d', '%d', '%d' )
+				);
+				if ( $ok === false ) {
+					return null;
+				}
+				return self::format_output_row(
+					array(
+						'id'           => $existing_id,
+						'run_id'       => $run_id,
+						'payload_json' => $encoded,
+						'created_at'   => (string) ( $existing['created_at'] ?? current_time( 'mysql', true ) ),
+					)
+				);
+			}
+		}
 		$ok = $wpdb->insert(
 			$table,
 			array(
 				'team_id'      => $team_id,
 				'run_id'       => $run_id,
-				'node_id'      => (string) $payload['nodeId'],
-				'payload_json' => self::encode_payload( $payload ),
+				'node_id'      => $node_id,
+				'payload_json' => $encoded,
 				'created_at'   => current_time( 'mysql', true ),
 			),
 			array( '%d', '%d', '%s', '%s', '%s' )
@@ -452,10 +525,57 @@ class Neo_Pulse_App_Workflows_Store {
 			array(
 				'id'           => (int) $wpdb->insert_id,
 				'run_id'       => $run_id,
-				'payload_json' => self::encode_payload( $payload ),
+				'payload_json' => $encoded,
 				'created_at'   => current_time( 'mysql', true ),
 			)
 		);
+	}
+
+	/**
+	 * Latest step output row for the same run node and variable key (optional site).
+	 *
+	 * @return array<string,mixed>|null
+	 */
+	private static function find_step_output_row(
+		int $team_id,
+		int $run_id,
+		string $node_id,
+		string $variable_key,
+		string $site_id
+	): ?array {
+		global $wpdb;
+		$table = $wpdb->prefix . 'neo_pulse_workflow_step_outputs';
+		if ( $node_id === '' || $variable_key === '' ) {
+			return null;
+		}
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE team_id = %d AND run_id = %d AND node_id = %s ORDER BY id DESC",
+				$team_id,
+				$run_id,
+				$node_id
+			),
+			ARRAY_A
+		);
+		if ( ! is_array( $rows ) ) {
+			return null;
+		}
+		foreach ( $rows as $row ) {
+			if ( ! is_array( $row ) ) {
+				continue;
+			}
+			$payload  = self::decode_payload( (string) ( $row['payload_json'] ?? '' ) );
+			$row_key  = sanitize_key( (string) ( $payload['variableKey'] ?? '' ) );
+			$row_site = sanitize_text_field( (string) ( $payload['siteId'] ?? '' ) );
+			if ( $row_key !== $variable_key ) {
+				continue;
+			}
+			if ( $site_id !== '' && $row_site !== $site_id ) {
+				continue;
+			}
+			return $row;
+		}
+		return null;
 	}
 
 	/**
@@ -664,6 +784,8 @@ class Neo_Pulse_App_Workflows_Store {
 			'textPreview'  => (string) ( $payload['textPreview'] ?? '' ),
 			'fileRefs'     => isset( $payload['fileRefs'] ) && is_array( $payload['fileRefs'] ) ? $payload['fileRefs'] : array(),
 			'agentRunId'   => isset( $payload['agentRunId'] ) ? (int) $payload['agentRunId'] : null,
+			'siteId'       => (string) ( $payload['siteId'] ?? '' ),
+			'deliveryMeta' => isset( $payload['deliveryMeta'] ) && is_array( $payload['deliveryMeta'] ) ? $payload['deliveryMeta'] : array(),
 			'createdAt'    => (string) ( $row['created_at'] ?? '' ),
 		);
 	}

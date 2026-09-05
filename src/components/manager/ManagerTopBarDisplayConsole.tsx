@@ -1,8 +1,8 @@
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { BookOpen, Download, Pencil, Plus, Power, RefreshCw, RotateCcw } from "lucide-react";
+import { BookOpen, Download, Pencil, Power, RefreshCw, RotateCcw } from "lucide-react";
+import { ManagerErrorLogBell } from "@/components/manager/ManagerErrorLogBell";
 import { useWordPressSites } from "@/hooks/use-wordpress-sites";
 import { useActiveWordPressSite } from "@/contexts/active-wordpress-site-context";
-import { useTeam } from "@/contexts/TeamContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,7 +10,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { TeamSwitcherPill } from "@/components/manager/TeamSwitcherPill";
 import { ManagerDisplayChipFace } from "@/components/manager/ManagerDisplayChipFace";
 import { SiteDisplayNameDialog } from "@/components/manager/SiteDisplayNameDialog";
 import {
@@ -34,7 +33,6 @@ import { useSitePrefetchState } from "@/hooks/use-site-prefetch-state";
 import {
   getEntitySiteWarmCacheIfReady,
   refreshSitePrefetch,
-  warmEntitySiteCache,
 } from "@/lib/local-analysis/entity-site-warm-cache";
 import { htmlToMarkdown } from "@/lib/wordpress-converter";
 
@@ -174,17 +172,13 @@ export function ManagerTopBarDisplayConsole({
 }) {
   const { sites, handleConnectSite, handlePatchSite } = useWordPressSites();
   const { activeWordPressSiteId, setActiveWordPressSiteId } = useActiveWordPressSite();
-  const { teams } = useTeam();
   const measureRef = useRef<HTMLDivElement>(null);
   const [siteMenuOpen, setSiteMenuOpen] = useState(false);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [renameSite, setRenameSite] = useState<WordPressSite | null>(null);
   const [siteMenuWidthPx, setSiteMenuWidthPx] = useState(0);
-  const [teamMenuWidthPx, setTeamMenuWidthPx] = useState(0);
-  const [teamDropdownWidthPx, setTeamDropdownWidthPx] = useState(0);
 
   const displayLabels = useMemo(() => sites.map((s) => wordpressSiteDisplayName(s)), [sites]);
-  const teamLabels = useMemo(() => teams.map((t) => t.name), [teams]);
   const activeSite = sites.find((s) => s.id === activeWordPressSiteId);
   const { loading: isSiteWarmLoading, fetchedAt, isStale, refreshing } = useSitePrefetchState(
     activeSite?.id,
@@ -193,30 +187,18 @@ export function ManagerTopBarDisplayConsole({
   const utilityRowCount = 1 + (activeSitePrefetch ? 1 : 0);
 
   useLayoutEffect(() => {
-    if (!activeSite) return;
-    warmEntitySiteCache(activeSite);
-  }, [activeSite?.id, activeSite?.siteUrl, activeSite?.username, activeSite?.appPassword]);
-
-  useLayoutEffect(() => {
     const root = measureRef.current;
     if (!root) return;
     setSiteMenuWidthPx(chipMenuWidthPx(root, "site-label", "site-row"));
-    setTeamMenuWidthPx(chipLabelWidthPx(root, "team-label"));
-    setTeamDropdownWidthPx(menuRowWidthPx(root, "team-menu-row"));
-  }, [displayLabels, teamLabels]);
+  }, [displayLabels]);
 
-  const utilitySquareCount = 2 + (showReset && onResetWorkspace ? 1 : 0);
+  const utilitySquareCount = 3 + (showReset && onResetWorkspace ? 1 : 0);
   const siteChipWidthPx =
     sites.length === 0 || !activeSite ? SQUARE_PX : siteMenuWidthPx > 0 ? siteMenuWidthPx : SQUARE_PX;
-  const teamChipWidthPx = teams.length > 0 && teamMenuWidthPx > 0 ? teamMenuWidthPx : 0;
-  const consoleWidthPx = teamChipWidthPx + siteChipWidthPx + SQUARE_PX * utilitySquareCount;
+  const consoleWidthPx = siteChipWidthPx + SQUARE_PX * utilitySquareCount;
 
   const siteMenuWidthStyle: CSSProperties | undefined =
     siteMenuWidthPx > 0 ? { width: siteMenuWidthPx, minWidth: siteMenuWidthPx } : undefined;
-  const teamMenuWidthStyle: CSSProperties | undefined =
-    teamMenuWidthPx > 0 ? { width: teamMenuWidthPx, minWidth: teamMenuWidthPx } : undefined;
-  const teamDropdownWidthStyle: CSSProperties | undefined =
-    teamDropdownWidthPx > 0 ? { width: teamDropdownWidthPx, minWidth: teamDropdownWidthPx } : undefined;
   const consoleWidthStyle: CSSProperties = { width: consoleWidthPx, minWidth: consoleWidthPx };
 
   const dropdownAnimateClass =
@@ -244,15 +226,6 @@ export function ManagerTopBarDisplayConsole({
             {wordpressSiteDisplayName(site)}
           </span>
         ))}
-        {teams.map((team) => (
-          <span key={`team-label-${team.id}`} data-measure="team-label" className={MANAGER_DISPLAY_NAME_LABEL}>
-            {team.name}
-          </span>
-        ))}
-        <div data-measure="team-menu-row" className="inline-flex items-center gap-2.5 px-3">
-          <Plus className="h-4 w-4 shrink-0" aria-hidden />
-          <span className="whitespace-nowrap text-base font-normal leading-tight">New agency</span>
-        </div>
         {sites.map((site) => (
           <div
             key={`site-row-${site.id}`}
@@ -268,13 +241,6 @@ export function ManagerTopBarDisplayConsole({
         ))}
       </div>
       <div className={MANAGER_DISPLAY_CONSOLE_ROW} style={consoleWidthStyle}>
-        <TeamSwitcherPill
-          menuWidthStyle={teamMenuWidthStyle}
-          dropdownMenuWidthStyle={teamDropdownWidthStyle}
-          dropdownItemClass={dropdownItemClass}
-          triggerHoverClass={triggerHoverClass}
-          dropdownAnimateClass={dropdownAnimateClass}
-        />
         {sites.length === 0 || !activeSite ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -418,6 +384,7 @@ export function ManagerTopBarDisplayConsole({
         >
           <BookOpen className="shrink-0" />
         </button>
+        <ManagerErrorLogBell />
         {showReset && onResetWorkspace ? (
           <button
             type="button"

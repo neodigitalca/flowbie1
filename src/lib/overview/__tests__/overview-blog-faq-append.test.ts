@@ -163,14 +163,14 @@ describe("appendFaqSectionToPostHtml", () => {
     ).toBeNull();
   });
 
-  it("throws when intro is empty", () => {
-    expect(() =>
+  it("returns null when intro is empty", () => {
+    expect(
       appendFaqSectionToPostHtml({
         sourceHtml: `<h2>Body</h2>`,
         entries: [{ question: "Q?", answer: "A." }],
         introParagraph: "  ",
       }),
-    ).toThrow("FAQ intro failed quality validation");
+    ).toBeNull();
   });
 });
 

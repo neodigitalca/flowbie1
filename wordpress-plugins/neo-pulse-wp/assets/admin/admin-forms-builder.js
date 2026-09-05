@@ -410,13 +410,13 @@
 				appendTo: 'body',
 				zIndex: 10000,
 				start: function () {
-					window._neo-pulseDragType = $(this).data('type');
+					window._neoPulseDragType = $(this).data('type');
 				}
 			});
 			$('#neo-pulse-form-fields-list').on('sortreceive', function (event, ui) {
-				if (!window._neo-pulseDragType) return;
-				var type = window._neo-pulseDragType;
-				window._neo-pulseDragType = null;
+				if (!window._neoPulseDragType) return;
+				var type = window._neoPulseDragType;
+				window._neoPulseDragType = null;
 				ui.item.remove();
 				addField(type);
 			});

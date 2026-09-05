@@ -21,7 +21,9 @@ export function getOverviewBulkPageTitle(
   if (runKind === "contentCleanup") return `Clean Up - ${site.name}`;
   if (runKind === "aiLinks") return `Links - ${site.name}`;
   if (runKind === "aiWikipediaLink") return `Wikipedia link - ${site.name}`;
+  if (runKind === "aiAnswer") return `Answer - ${site.name}`;
   if (runKind === "aiOverview") return `Overview - ${site.name}`;
+  if (runKind === "aiScenario") return `Scenario - ${site.name}`;
   if (runKind === "aiInContentImage") return `In Content Image - ${site.name}`;
   if (runKind === "wpUpload") return `WordPress upload - ${site.name}`;
   return `Content Optimizer - ${site.name}`;
@@ -40,17 +42,55 @@ function bulkUrlStatus(
   return "pending";
 }
 
+export function isOverviewResearchBatchInFlight(
+  batchBulkState: BulkOptimizationState | undefined,
+): boolean {
+  return (
+    batchBulkState?.runKind === "research" &&
+    batchBulkState.currentStep !== "Batch complete" &&
+    !isOverviewBatchAllComplete(batchBulkState)
+  );
+}
+
+export function isOverviewBulkRunEngaged(
+  batchBulkState: BulkOptimizationState | undefined,
+  batchKey: string,
+  siteId: string,
+  isOptimizingContent: Record<string, boolean>,
+): boolean {
+  if (Boolean(isOptimizingContent[batchKey] || (siteId && isOptimizingContent[siteId]))) {
+    return true;
+  }
+  return isOverviewResearchBatchInFlight(batchBulkState);
+}
+
 export function getOverviewBulkActiveRowUrl(
   batchBulkState: BulkOptimizationState | undefined,
   batchRunning: boolean,
 ): string | null {
-  if (!batchRunning || !batchBulkState?.urls?.length) return null;
+  if (!batchBulkState?.urls?.length) return null;
+  const engaged = batchRunning || isOverviewResearchBatchInFlight(batchBulkState);
+  if (!engaged) return null;
   if (isOverviewBatchAllComplete(batchBulkState)) return null;
 
   const urls = batchBulkState.urls;
+  const isResearch = batchBulkState.runKind === "research";
 
   for (const url of urls) {
     if (batchBulkState.urlStatuses?.[url] === "optimizing") return url;
+  }
+
+  if (isResearch) {
+    const fromCurrent = batchBulkState.currentUrl?.trim();
+    if (fromCurrent) {
+      const status = batchBulkState.urlStatuses?.[fromCurrent];
+      if (status === "optimizing" || status === "pending") return fromCurrent;
+    }
+    const currentIndex = batchBulkState.currentIndex ?? 0;
+    if (currentIndex >= 0 && currentIndex < urls.length) {
+      return urls[currentIndex]!;
+    }
+    return null;
   }
 
   if (typeof batchBulkState.warmingUpIndex === "number") {
@@ -175,6 +215,7 @@ export function isOverviewBulkWorkerActive(
   isOptimizingContent: Record<string, boolean>,
   batchKey: string,
   siteId: string,
+  batchBulkState?: BulkOptimizationState,
 ): boolean {
-  return Boolean(isOptimizingContent[batchKey] || isOptimizingContent[siteId]);
+  return isOverviewBulkRunEngaged(batchBulkState, batchKey, siteId, isOptimizingContent);
 }

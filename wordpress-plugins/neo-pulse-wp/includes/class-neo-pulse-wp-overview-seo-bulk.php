@@ -191,6 +191,8 @@ class Neo_Pulse_Wp_Overview_Seo_Bulk {
 			return new \WP_Error( 'neo-pulse_empty', __( 'Nothing to update (empty meta and acf).', 'neo-pulse-wp' ) );
 		}
 
+		Neo_Pulse_Wp_Ai_Apply::maybe_sync_post_title_from_seo_research( $post_id );
+
 		return true;
 	}
 }

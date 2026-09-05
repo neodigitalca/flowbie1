@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   GLOBAL_FORBIDDEN_WORDS,
+  GLOBAL_FORBIDDEN_PHRASES,
   GLOBAL_FORBIDDEN_WORDS_PROMPT_BLOCK,
   appendUniversalContentRulesToSystemPrompt,
   buildBlacklistRagBlock,
@@ -41,6 +42,19 @@ describe("GLOBAL_FORBIDDEN_WORDS_PROMPT_BLOCK", () => {
     expect(GLOBAL_FORBIDDEN_WORDS).toContain("crucial");
     expect(GLOBAL_FORBIDDEN_WORDS).toContain("vital");
   });
+
+  it("blacklists common AI template phrases", () => {
+    expect(GLOBAL_FORBIDDEN_PHRASES).toContain("our team");
+    expect(GLOBAL_FORBIDDEN_PHRASES).toContain("this article provides");
+    expect(GLOBAL_FORBIDDEN_PHRASES).toContain("when it comes to");
+    expect(GLOBAL_FORBIDDEN_PHRASES).toContain("we often find");
+    expect(GLOBAL_FORBIDDEN_PHRASES).toContain("we frequently recommend that");
+    expect(GLOBAL_FORBIDDEN_PHRASES).not.toContain("we frequently recommend");
+    expect(GLOBAL_FORBIDDEN_PHRASES).toContain("this guide walks through");
+    expect(GLOBAL_FORBIDDEN_PHRASES).toContain("families can review");
+    expect(GLOBAL_FORBIDDEN_PHRASES).toContain("tailored to your needs");
+    expect(GLOBAL_FORBIDDEN_WORDS_PROMPT_BLOCK).toMatch(/dictionary definition/i);
+  });
 });
 
 describe("enforceForbiddenWordsOnChecklist", () => {
@@ -80,7 +94,7 @@ describe("enforceForbiddenWordsOnBlueprintAgents", () => {
         title: "PST Expansion",
         description: "Advises on navigating the 2026 rules which is crucial for compliance.",
         features: [
-          "[BLOCKQUOTE]: proactive tax planning is key to navigating complex changes.",
+          "[STRUCTURE]: proactive tax planning is key to navigating complex changes.",
         ],
       },
     ]);
@@ -234,6 +248,15 @@ describe("prepareChecklistForPipeline", () => {
     expect(out).toHaveLength(1);
     expect(out[0]).toContain("Motorized Options");
   });
+
+  it("pins SAP headings and slices to exactly 7 items", () => {
+    const entity = "Virginia Park, AB";
+    const extraRows = Array.from({ length: 10 }, (_, i) => `Extra topic ${i + 1} [STRUCTURE]: paragraph.`);
+    const out = prepareChecklistForPipeline(extraRows, { sapEntity: entity });
+    expect(out).toHaveLength(7);
+    expect(out[0]).toMatch(/Sunlight And Privacy Challenges/i);
+    expect(out[6]).toMatch(/Next Steps/i);
+  });
 });
 
 describe("sanitizeForbiddenWordsInChecklistItem", () => {
@@ -282,6 +305,16 @@ describe("scrubForbiddenWordsFromHtml", () => {
   it("fixes forbidden heading titles", () => {
     const html = "<h2>Understanding the 5 New PST Categories</h2><p>Body text.</p>";
     expect(scrubForbiddenWordsFromHtml(html)).toContain("<h2>5 New PST Categories</h2>");
+  });
+
+  it("keeps we-recommend-when lines and still flags we-often-find", () => {
+    const keep =
+      "<p>We recommend cellular shades when west glass overheats.</p>";
+    expect(scrubForbiddenWordsFromHtml(keep)).toContain("We recommend cellular shades when");
+    expect(listForbiddenWordViolations(keep)).toEqual([]);
+    const hollow = "<p>We often find that homeowners prefer cellular shades.</p>";
+    expect(listForbiddenWordViolations(hollow)).toContain("banned phrase: we often find");
+    expect(scrubForbiddenWordsFromHtml(hollow)).not.toMatch(/we often find/i);
   });
 });
 

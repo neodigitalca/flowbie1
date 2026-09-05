@@ -9,7 +9,7 @@ defined( 'ABSPATH' ) || exit;
 
 class Neo_Pulse_App_Agent_Run_Article_Length_Policy {
 
-	const ARTICLE_MAX_WORDS          = 2000;
+	const ARTICLE_MAX_WORDS          = 2500;
 	const MAX_CHECKLIST_ITEMS_BLOG   = 6;
 	const MAX_CHECKLIST_ITEMS_SAP    = 7;
 	const OVERVIEW_AGENT_ID          = 'ai-overview-summary';
@@ -29,8 +29,9 @@ class Neo_Pulse_App_Agent_Run_Article_Length_Policy {
 		return "--- ARTICLE LENGTH (NON-NEGOTIABLE) ---\n"
 			. "**[ARTICLE LENGTH]**: Entire published article MUST NOT exceed {$cap} words.\n"
 			. "- Create **{$item_range}** checklist items maximum for this {$mode_label} (hard cap **{$max_items}** items including intro and conclusion).\n"
-			. "- **DEPTH IN FEWER H2s**: Cover topics in fewer, tighter sections. One H2 per major topic. **MAX 2 H3s** per H2. **1-2 paragraphs** per H2.\n"
-			. "- **TABLE BUDGET**: Entire article gets **at most 2** [TABLE] sections.\n"
+            . "- **HEADROOM**: {$cap} is a hard cap, not a target. Stop when chooser / tradeoff / process is met. Forbidden padding: extra H2s, repeated generic benefits, a second catalog table.\n"
+			. "- **DEPTH IN FEWER H2s**: Cover topics in fewer, tighter sections. One H2 per major topic. **MAX 2 H3s** per H2. **1-2 paragraphs** per H2 except [DECISION]/[TRADEOFF] items (2-3 paragraphs).\n"
+			. "- **TABLE BUDGET**: Entire article gets **at most 2** [TABLE] sections. Prefer a decision-criteria table.\n"
 			. "- **NO DUPLICATE TOPICS**: Never create two H2s for the same topic.\n"
 			. "- Meet exact-primary-per-H2 and link requirements with **concise copy**, not extra sections.\n"
 			. '--- END ARTICLE LENGTH ---';

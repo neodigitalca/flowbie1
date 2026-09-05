@@ -1,5 +1,5 @@
 import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
-import { TITLE_KEYWORD_WEAVING_RULE, TITLE_CASE_RULE, TITLE_WELL_KNOWN_ACRONYMS_RULE } from "@/lib/prompt-builders/system-user";
+import { TITLE_KEYWORD_WEAVING_RULE, TITLE_CASE_RULE, TITLE_WELL_KNOWN_ACRONYMS_RULE } from "@/lib/prompt-builders/title-rules";
 import type { EntityGeographicLevel } from "@/lib/entity-geographic-level";
 import {
   buildSapEntityFieldRulesGridBroad,
@@ -15,6 +15,8 @@ import {
 import { formatStrategyMarkdownAsBullets } from "@/lib/strategy-markdown-bullets";
 import { extractJsonObjectFromModelText } from "@/lib/gsc-manual-ai-aggregate";
 import { fetchWikipediaClustersForSapEntityHints } from "@/lib/wikipedia-api";
+import { harvestWikiPoolTitlesFromGridRows } from "@/lib/wikipedia/wiki-entity-pool";
+import type { LocalDominatorRow } from "@/lib/local-dominator-csv";
 import { dedupeRepeatedCommaPlaceSegments } from "@/lib/comma-place-label";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 import {
@@ -718,6 +720,9 @@ export interface LocalSeoStrategyFromGridParams {
   clientAudienceContextMarkdown?: string;
   /** Granular Wikipedia pool titles for the session — pool-first entity→article resolution. */
   wikipediaPreferredTitles?: string[];
+  /** When set without `wikipediaPreferredTitles`, tiered Wikipedia harvest fills the entity pool. */
+  gridParsedRows?: LocalDominatorRow[];
+  gridPlaceHints?: string[];
   /** Grid place weakness weights (same shape as suggest) — order preferred titles before lookup. */
   gridPlaceWeightsForWiki?: ReadonlyArray<{ place: string; weight: number }>;
   /** Progress while resolving Wikipedia intros before the SAP JSON call. */
@@ -778,6 +783,8 @@ export async function fetchLocalSeoStrategyFromGrid(
     wordpressPostInventory,
     clientAudienceContextMarkdown,
     wikipediaPreferredTitles,
+    gridParsedRows,
+    gridPlaceHints,
     gridPlaceWeightsForWiki,
     onWikiProgress,
     onSapGenerateStart,
@@ -807,6 +814,35 @@ ${JSON.stringify(wpInventoryPayload, null, 2)}
 
   const manual = manualTargetsOnly === true;
   const laSingleSeedSap = localAnalysisSingleSeed === true && proposalKeywordMode !== true;
+
+  let effectiveWikiPreferredTitles = (wikipediaPreferredTitles ?? [])
+    .map((t) => t.trim())
+    .filter(Boolean);
+  if (
+    effectiveWikiPreferredTitles.length === 0 &&
+    gridParsedRows?.length &&
+    !manual
+  ) {
+    effectiveWikiPreferredTitles = await harvestWikiPoolTitlesFromGridRows({
+      rows: gridParsedRows,
+      gridPlaceHints: gridPlaceHints ?? [],
+      minCount: targetSapCount,
+      wikipediaSearchAugment: wikipediaSearchAugment,
+    });
+  }
+
+  const wikiPoolEntityBlock =
+    effectiveWikiPreferredTitles.length > 0 && !manual
+      ? `\n--- Wikipedia entity pool (read full list — pick allowed physical places only) ---
+Each SAP row \`entity\` must come from **one title on this harvested list**. Read every line. **Allowed:** neighbourhoods, districts, communities, suburbs, streets, parks, buildings, malls, civic venues, landmarks. **Never use:** murders, crimes, deaths, trials, disasters, biographies, sports teams, companies, newspapers, films, or "List of …" pages — skip those even if listed. Format as **Place, City, Province/State** when needed. **Never** invent a name not on this list.
+
+${effectiveWikiPreferredTitles
+  .slice(0, 80)
+  .map((t, i) => `${i + 1}. ${t}`)
+  .join("\n")}
+
+`
+      : "";
   const rowSeeds = expandKeywordTargetsToRowSeeds(keywordTargets);
   const egLevel = resolveEntityGeographicLevel(entityGeographicLevelParam);
   const entityTypeFocus = (entityTypeFocusParam ?? []).filter(
@@ -879,29 +915,29 @@ ${JSON.stringify(wpInventoryPayload, null, 2)}
 
   const gridEntitySection = useCityEntityRules
     ? `**SAP "entity" field (mandatory):** \`entity\` is **only** a structured place label (for UI and exports). **No filler words, no prose, no prefixes.**
-- **Shape:** **Two or three** comma-separated segments: (1) **hyperlocal proper name** - street/avenue/corridor as **place** (no civic numbers), park, landmark, named building or complex, district, campus, waterfront, neighborhood; (2) **city** only; (3) **province/state** optional when multi-region or export clarity needs it - **not** optional as an excuse to output \`City, Province\` without segment (1). **Never** two-part \`City, Province\` (or \`City, ST\`) **without** a distinct first segment when the grid supports finer places.
-- **First segment = proper name only:** It must **begin** with the geographic **name** (e.g. \`Whyte Avenue\`, \`Memorial Park\`, \`Arts District\`, \`17 Ave SW Retail Corridor\`, \`named civic tower or mall\` without suite numbers). **Forbidden at the start of \`entity\`:** \`Near \`, \`Around \`, \`Close to \`, \`By \`, \`At \`, \`In \`, \`In the \`, or any similar conversational prefix. **Wrong:** \`Near Confederation Park, Calgary, AB\`. **Right:** \`Confederation Park, Calgary, AB\`.
+- **Shape:** **Two or three** comma-separated segments: (1) **hyperlocal proper name** - neighbourhood, district, named community, park, landmark, mall, civic building or complex, campus, waterfront; (2) **city** only; (3) **province/state** optional when multi-region or export clarity needs it - **not** optional as an excuse to output \`City, Province\` without segment (1). **Never** two-part \`City, Province\` (or \`City, ST\`) **without** a distinct first segment when the grid supports finer places. Street/avenue/corridor as place (no civic numbers) is a **last resort** only when no neighbourhood, district, or landmark fits.
+- **First segment = proper name only:** It must **begin** with the geographic **name** (e.g. \`Millwood\`, \`Memorial Park\`, \`Arts District\`, \`Altona Community Centre\`). **Forbidden at the start of \`entity\`:** \`Near \`, \`Around \`, \`Close to \`, \`By \`, \`At \`, \`In \`, \`In the \`, or any similar conversational prefix. **Wrong:** \`Near Confederation Park, Calgary, AB\`. **Right:** \`Confederation Park, Calgary, AB\`.
 - **Where to use "near":** Words like "near" or "in" belong in \`title\` (headline) if useful for SEO, **not** in \`entity\`.
-- **Good examples (diverse types):** \`The Annex, Toronto, ON\`; \`Whyte Avenue, Edmonton\` (main street as place, **no civic number**); \`River Valley Park, Edmonton, AB\`; \`17 Ave Retail Corridor, CityName, AB\`. **Priority order for the first segment:** (1) **Neighbourhood, district, or named community** from the grid's "Nearby place names" / district labels when available; (2) parks, landmarks, malls, campuses; (3) **main-street / corridor** as place **without** a street number. **Do not** pick a street-by-default when the grid names a neighbourhood or district for that area.
+- **Good examples (diverse types):** \`Millwood, Altona, MB\`; \`The Annex, Toronto, ON\`; \`Altona Community Centre, Altona, MB\`; \`River Valley Park, Edmonton, AB\`. **Priority order for the first segment:** (1) **Neighbourhood, district, or named community** from the grid's "Nearby place names" / district labels when available; (2) parks, landmarks, malls, campuses; (3) **main-street / corridor** as place **without** a street number **only** when (1) and (2) are unavailable. **Do not** pick a street-by-default when the grid names a neighbourhood or district for that area.
 - **Grid cluster - use named areas from the scan (mandatory):** The grid markdown includes **Nearby place names**, POIs, corridors, and neighbourhood/district labels. **Each** SAP row must use a **distinct** first-segment **hyperlocal** name taken from that evidence (or from sample weak points / pins **inside** the footprint). **Do not** output lazy \`City, Province\` or \`City, ST\` as the **whole** \`entity\` (e.g. \`Edmonton, Alberta\`, \`Edmonton, AB\`) **when** the cluster lists **any** specific sub-city areas for that market. **Do not** reuse the **same** \`entity\` string on two rows. **Do not** use the **city name alone** as the first segment - the first segment must be a **different** proper place than the city token in segment (2).
-- **Forbidden in \`entity\` (any segment):** street numbers, unit/suite lines (\`Unit 3\`, \`#200\`), full street addresses (\`16329 130 Ave NW\`), or postal codes (\`T5V 1K5\`). Part (2) must be the **city name only** (e.g. \`Edmonton\`) - never paste a full mailing address from GBP or grid pins into \`entity\`. Named corridors and **street-as-place** names are OK without civic numbers.`
+- **Forbidden in \`entity\` (any segment):** street numbers, unit/suite lines (\`Unit 3\`, \`#200\`), full street addresses (\`16329 130 Ave NW\`), or postal codes (\`T5V 1K5\`). Part (2) must be the **city name only** (e.g. \`Edmonton\`) - never paste a full mailing address from GBP or grid pins into \`entity\`. Named corridors and **street-as-place** names are OK without civic numbers only as a last resort.`
     : buildSapEntityFieldRulesGridBroad(egLevel, entityTypeFocus);
 
   const manualEntitySection = useCityEntityRules
     ? `**SAP "entity" field (mandatory):** \`entity\` is **only** a structured place label (for UI and exports). **No filler words, no prose, no prefixes.**
-- **Shape:** **Two or three** comma-separated segments: (1) **hyperlocal proper name** - street/avenue/corridor as **place** (no civic numbers), park, landmark, named building or complex, district, campus, waterfront, neighborhood; (2) **city** only; (3) **province/state** optional when multi-region or export clarity needs it - **not** optional as an excuse to output \`City, Province\` without segment (1). **Never** two-part \`City, Province\` without a distinct first segment when hints and market allow finer places.
-- **First segment = proper name only:** It must **begin** with the geographic **name** (e.g. \`Whyte Avenue\`, \`Memorial Park\`, \`Arts District\`, \`17 Ave SW Retail Corridor\`). **Forbidden at the start of \`entity\`:** \`Near \`, \`Around \`, \`Close to \`, \`By \`, \`At \`, \`In \`, \`In the \`, or any similar conversational prefix. **Wrong:** \`Near Confederation Park, Calgary, AB\`. **Right:** \`Confederation Park, Calgary, AB\`.
+- **Shape:** **Two or three** comma-separated segments: (1) **hyperlocal proper name** - neighbourhood, district, named community, park, landmark, mall, civic building or complex, campus, waterfront; (2) **city** only; (3) **province/state** optional when multi-region or export clarity needs it - **not** optional as an excuse to output \`City, Province\` without segment (1). **Never** two-part \`City, Province\` without a distinct first segment when hints and market allow finer places. Street/avenue/corridor as place is a **last resort**.
+- **First segment = proper name only:** It must **begin** with the geographic **name** (e.g. \`Millwood\`, \`Memorial Park\`, \`Arts District\`, \`Altona Community Centre\`). **Forbidden at the start of \`entity\`:** \`Near \`, \`Around \`, \`Close to \`, \`By \`, \`At \`, \`In \`, \`In the \`, or any similar conversational prefix. **Wrong:** \`Near Confederation Park, Calgary, AB\`. **Right:** \`Confederation Park, Calgary, AB\`.
 - **Where to use "near":** Words like "near" or "in" belong in \`title\` (headline) if useful for SEO, **not** in \`entity\`.
-- **Good examples (diverse types):** \`The Annex, Toronto, ON\`; \`Whyte Avenue, Edmonton\` (main street as place, **no civic number**); \`River Valley Park, Edmonton, AB\`. **Priority order:** neighbourhood or district **first** when hints/market name them; then parks, landmarks, corridors. **Do not** default to a street when a neighbourhood label fits the row.
+- **Good examples (diverse types):** \`Millwood, Altona, MB\`; \`The Annex, Toronto, ON\`; \`River Valley Park, Edmonton, AB\`. **Priority order:** neighbourhood or district **first** when hints/market name them; then parks and landmarks. **Do not** default to a street when a neighbourhood label fits the row.
 - **No grid - avoid lazy city:** Without a rank scan, use **entity hints** and **market** to pick **distinct** sub-city area names; do **not** use \`City, Province\` alone for every row when hints name different areas. **Do not** duplicate the same \`entity\` on two rows.
-- **Forbidden in \`entity\` (any segment):** street numbers, unit/suite lines, full street addresses, or postal codes. Part (2) must be the **city name only** - never paste a full mailing address from GBP into \`entity\`. Named corridors and **street-as-place** names are OK without civic numbers.`
+- **Forbidden in \`entity\` (any segment):** street numbers, unit/suite lines, full street addresses, or postal codes. Part (2) must be the **city name only** - never paste a full mailing address from GBP into \`entity\`. Named corridors and **street-as-place** names are OK without civic numbers only as a last resort.`
     : buildSapEntityFieldRulesManualBroad(egLevel, entityTypeFocus);
 
   const gridFooterTail = useCityEntityRules
-    ? `- **Per-target optional entity hint:** If the user message lists an "Optional user entity focus" for a target keyword, prioritize that service area for those SAP rows, subject to the grid geographic scope. Output "entity" as **hyperlocal place, city**[, **province/state** when needed]. If \`sapPages\` for that target is greater than 1, use **distinct** first segments; **prioritize neighbourhood, district, and named-community** labels from the grid, then parks, landmarks, and main-street as place (no civic numbers) for diversity when needed; if no hint is given for a target, choose entities from grid evidence alone.
-- **"entity" label order (mandatory):** **Hyperlocal anchor first** (proper name: street/avenue/corridor as place, park, landmark, building, district, campus, waterfront, neighborhood - **not** the city name first), **then** city, **then** province/state **when useful**. Do **not** output two-part "City, Province" with no finer first segment. Do **not** lead with province or country alone. Do **not** prefix the string with \`Near\`, \`Around\`, or similar (see **SAP entity field rules**).
+    ? `- **Per-target optional entity hint:** If the user message lists an "Optional user entity focus" for a target keyword, prioritize that service area for those SAP rows, subject to the grid geographic scope. Output "entity" as **hyperlocal place, city**[, **province/state** when needed]. If \`sapPages\` for that target is greater than 1, use **distinct** first segments; **prioritize neighbourhood, district, and named-community** labels from the grid, then parks and landmarks; if no hint is given for a target, choose entities from grid evidence alone.
+- **"entity" label order (mandatory):** **Hyperlocal anchor first** (proper name: neighbourhood, district, landmark, park, building, campus, waterfront - **not** the city name first), **then** city, **then** province/state **when useful**. Street/avenue/corridor as place is a last resort. Do **not** output two-part "City, Province" with no finer first segment. Do **not** lead with province or country alone. Do **not** prefix the string with \`Near\`, \`Around\`, or similar (see **SAP entity field rules**).
 - "entity" must be a concrete, unambiguous place string suitable for a service-area / location page; the opening segment must name a sub-city location when the grid gives any basis for one. The \`entity\` field is **data**, not a sentence.
-- **Geographic scope (mandatory):** The grid data includes a "## Geographic scope (from this file)" section with centroid, bounding box, and a buffered radius in miles. Every "entity" MUST sit within that footprint. Prefer first-segment names from **neighborhood/district labels** and "Nearby place names" **before** defaulting to a main-street or corridor; use POI labels, parks, named streets as **place** (no numbers), malls, campuses, and landmarks. Do **not** paste full street addresses or postal codes from grid pins into "entity" - use **neighbourhood or district, or hyperlocal anchor + city**[, **province** when needed]. Do NOT name distant towns or regions hundreds of miles away unless that exact name appears in the grid evidence. **Do not** substitute a **regional hub** city (e.g. a core-metro name) when the grid file only evidences **suburban or corridor** names - every named place must be **traceable** to a line in the uploaded grid summary, not invented for convenience.
+- **Geographic scope (mandatory):** The grid data includes a "## Geographic scope (from this file)" section with centroid, bounding box, and a buffered radius in miles. Every "entity" MUST sit within that footprint. Prefer first-segment names from **neighborhood/district labels**, **Nearby place names**, and **landmarks** before any street-as-place or corridor name; use POI labels, parks, malls, campuses, and civic complexes. Do **not** paste full street addresses or postal codes from grid pins into "entity" - use **neighbourhood or district, or hyperlocal anchor + city**[, **province** when needed]. Do NOT name distant towns or regions hundreds of miles away unless that exact name appears in the grid evidence. **Do not** substitute a **regional hub** city (e.g. a core-metro name) when the grid file only evidences **suburban or corridor** names - every named place must be **traceable** to a line in the uploaded grid summary, not invented for convenience.
 - **Forbidden** for "entity": city-only or province-only strings as the whole label (e.g. "Calgary, AB"); **also** \`City, Province\` where the **first segment is not** a distinct sub-city place **when** the grid lists such places; inventing far-away geography unrelated to the scan pins. Local parks and landmarks **inside** the footprint are encouraged as the first segment when relevant.
 - If the user message includes **Wikipedia intros (one per entity hint)**, use them only to ground **names** and light facts about each hinted place. They do **not** replace the grid: **rank evidence, pins, and service-area geography must still come from the grid scan**. Do **not** paste long Wikipedia text into "strategyMarkdown" or row fields.
 ${
@@ -919,8 +955,8 @@ ${
       }`;
 
   const manualFooterTail = useCityEntityRules
-    ? `- **Per-target optional entity hint:** If the user message lists an "Optional user entity focus" for a target keyword, prioritize that service area for those SAP rows, consistent with the stated geography. Output "entity" as **hyperlocal place, city**[, **province/state** when needed]. If \`sapPages\` for that target is greater than 1, use **distinct** first segments; **prioritize neighbourhood, district, and named-community** names, then parks, landmarks, and main-street as place when hints and market allow; if no hint is given for a target, choose plausible sub-city places from the market and context.
-- **"entity" label order (mandatory):** **Hyperlocal anchor first** (proper name: street/avenue/corridor as place, park, landmark, building, district, campus, waterfront, neighborhood - **not** the city name first), **then** city, **then** province/state **when useful**. Do **not** output two-part "City, Province" with no finer first segment. Do **not** lead with province or country alone. Do **not** prefix the string with \`Near\`, \`Around\`, or similar (see **SAP entity field rules**).
+    ? `- **Per-target optional entity hint:** If the user message lists an "Optional user entity focus" for a target keyword, prioritize that service area for those SAP rows, consistent with the stated geography. Output "entity" as **hyperlocal place, city**[, **province/state** when needed]. If \`sapPages\` for that target is greater than 1, use **distinct** first segments; **prioritize neighbourhood, district, and named-community** names, then parks and landmarks; if no hint is given for a target, choose plausible sub-city places from the market and context.
+- **"entity" label order (mandatory):** **Hyperlocal anchor first** (proper name: neighbourhood, district, landmark, park, building, campus, waterfront - **not** the city name first), **then** city, **then** province/state **when useful**. Street/avenue/corridor as place is a last resort. Do **not** output two-part "City, Province" with no finer first segment. Do **not** lead with province or country alone. Do **not** prefix the string with \`Near\`, \`Around\`, or similar (see **SAP entity field rules**).
 - "entity" must be a concrete, unambiguous place string suitable for a service-area / location page; the opening segment must name a sub-city location when the stated geography allows. The \`entity\` field is **data**, not a sentence.
 - **Geographic scope (manual mode):** There is no grid footprint. Use the optional market label, per-target entity hints, and Wikipedia intros to ground geography. Pick plausible sub-city places within the implied metro or region; do **not** name distant cities or regions far from the user's stated geography unless the hint explicitly names them.
 - **Forbidden** for "entity": city-only or province-only strings as the whole label (e.g. "Calgary, AB"); **also** \`City, Province\` where the first segment is not a distinct sub-city place **when** hints or market allow finer areas; inventing far-away geography unrelated to the user's hints. Local parks and landmarks in the implied market are encouraged as the first segment when relevant.
@@ -1066,7 +1102,7 @@ Prefer sub-city locations (neighborhoods, corridors, parks, landmarks, districts
       siteId,
       wikipediaSearchAugment,
       onWikiProgress,
-      ...(wikipediaPreferredTitles?.length ? { preferredTitles: wikipediaPreferredTitles } : {}),
+      ...(effectiveWikiPreferredTitles.length ? { preferredTitles: effectiveWikiPreferredTitles } : {}),
       ...(gridPlaceWeightsForWiki?.length ? { gridPlaceWeights: gridPlaceWeightsForWiki } : {}),
     };
     const clusters = await fetchWikipediaClustersForSapEntityHints(uniqueEntityHints, wikiOpts);
@@ -1124,7 +1160,7 @@ For every SAP row: (1) \`keyword\` must be **geography-free** **product/service-
       : ` **With grid data (below):** each row's first segment must be a **distinct** named sub-city area from the scan (**Nearby place names**, POIs, corridors, weak-rank samples) - **not** a shortcut \`City, Province\` / \`City, ST\` when the cluster lists specific areas. **Do not** reuse the same \`entity\` on two rows.`
   } (3) Set \`title\` to \`""\` on every row (Gemini title agent runs after entity generation).
 
-${wikipediaClustersBlock}${
+${wikiPoolEntityBlock}${wikipediaClustersBlock}${
     manual
       ? `--- Manual mode (no grid CSV) ---
 

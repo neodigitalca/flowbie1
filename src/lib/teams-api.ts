@@ -26,6 +26,17 @@ function stripJsonBom(raw: string): string {
   return raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
 }
 
+function formatApiTransportError(raw: string, res: Response): string {
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("<!") || trimmed.startsWith("<html") || trimmed.includes("<!DOCTYPE")) {
+    return `Backend returned HTML instead of JSON (${res.status}). Check local WordPress plugin sync.`;
+  }
+  if (trimmed.length > 240) {
+    return `${trimmed.slice(0, 240).trim()}…`;
+  }
+  return trimmed || res.statusText || `Request failed (${res.status})`;
+}
+
 async function parseJsonResponse<T>(res: Response): Promise<T> {
   const raw = stripJsonBom(await res.text());
   return JSON.parse(raw) as T;
@@ -37,7 +48,7 @@ async function parseApiResult(res: Response): Promise<{ ok: boolean; error?: str
   try {
     data = JSON.parse(raw) as { ok?: boolean; error?: string; transport?: string };
   } catch {
-    return { ok: false, error: raw.trim() || res.statusText || `Request failed (${res.status})` };
+    return { ok: false, error: formatApiTransportError(raw, res) };
   }
   if (data.ok) return { ok: true, transport: data.transport };
   return { ok: false, error: data.error || res.statusText || `Request failed (${res.status})` };
@@ -54,7 +65,12 @@ export type AuthMeResponse = {
 
 export async function fetchAuthMe(): Promise<AuthMeResponse> {
   const res = await api(`/auth/me?_=${Date.now()}`);
-  return parseJsonResponse<AuthMeResponse>(res);
+  const raw = stripJsonBom(await res.text());
+  try {
+    return JSON.parse(raw) as AuthMeResponse;
+  } catch {
+    return { ok: false };
+  }
 }
 
 export async function loginWithEmail(
@@ -66,8 +82,20 @@ export async function loginWithEmail(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username: email, email, password }),
   });
-  const data = await parseJsonResponse<{ ok?: boolean; error?: string; sessionToken?: string }>(res);
-  return { ok: Boolean(data.ok), error: data.error, sessionToken: data.sessionToken };
+  const raw = stripJsonBom(await res.text());
+  let data: { ok?: boolean; error?: string; sessionToken?: string } = {};
+  try {
+    data = JSON.parse(raw) as { ok?: boolean; error?: string; sessionToken?: string };
+  } catch {
+    return {
+      ok: false,
+      error: formatApiTransportError(raw, res),
+    };
+  }
+  if (!res.ok || !data.ok) {
+    return { ok: false, error: data.error || res.statusText || "Invalid credentials" };
+  }
+  return { ok: true, sessionToken: data.sessionToken };
 }
 
 export async function logoutApi(): Promise<void> {
@@ -243,7 +271,7 @@ export async function sendTeamInvite(
     try {
       data = JSON.parse(raw) as { ok?: boolean; added?: boolean; error?: string };
     } catch {
-      return { ok: false, error: raw.trim() || res.statusText || `Request failed (${res.status})` };
+      return { ok: false, error: formatApiTransportError(raw, res) };
     }
     if (data.ok) return { ok: true, added: Boolean(data.added) };
     return { ok: false, error: data.error || res.statusText || `Request failed (${res.status})` };

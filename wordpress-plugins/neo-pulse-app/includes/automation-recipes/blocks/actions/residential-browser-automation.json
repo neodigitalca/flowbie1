@@ -1,0 +1,15 @@
+{
+  "keyword": "residential-browser-automation",
+  "name": "Residential browser automation",
+  "executionKind": "browser_automation",
+  "description": "Browse a URL via Oxylabs residential proxy. Describe the goal; the agent drives the browser from screenshots.",
+  "filters": {
+    "categories": ["browser"],
+    "verticals": ["general", "local-seo", "agency"]
+  },
+  "defaults": {
+    "executionPayload": {
+      "saveLocalArchive": true
+    }
+  }
+}

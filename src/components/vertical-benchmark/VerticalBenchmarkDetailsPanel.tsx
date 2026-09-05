@@ -17,6 +17,7 @@ export type VerticalBenchmarkDetailsPanelProps = {
   tagFilter: string;
   gridCsvContext: BenchmarkGridCsvContext | null;
   gridCsvFileName: string | null;
+  blogCount: number;
 };
 
 export function verticalBenchmarkDetailsCanOpen(

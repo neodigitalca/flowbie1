@@ -46,7 +46,7 @@ class Neo_Pulse_App_Gsc_Performance {
 		$resolved = Neo_Pulse_App_Gsc_Service_Account::resolve_or_fallback( $site_url, $cur['startDateStr'], $cur['endDateStr'] );
 		if ( ! $resolved['property'] ) {
 			$email = Neo_Pulse_App_Gsc_Service_Account::service_account_email();
-			return self::err( 403, "This site is not in the list of properties the service account can access.\n\nAdd {$email} as a user in GSC.", array( 'errorType' => 'site_not_in_list', 'originalSiteUrl' => $site_url, 'serviceAccountEmail' => $email ) );
+			return self::err( 200, "This site is not in the list of properties the service account can access.\n\nAdd {$email} as a user in GSC.", array( 'errorType' => 'site_not_in_list', 'originalSiteUrl' => $site_url, 'serviceAccountEmail' => $email ) );
 		}
 		$prop   = $resolved['property'];
 		$now    = self::stats_for_range( $prop, $cur['startDateStr'], $cur['endDateStr'] );

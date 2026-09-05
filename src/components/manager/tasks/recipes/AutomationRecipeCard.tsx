@@ -33,6 +33,63 @@ export function AutomationRecipeCard({
   const buckets = recipe.filters.targetBuckets ?? [];
   const categoryLabel = automationRecipeCategoryLabel(recipe.category);
   const normalizedCategory = recipe.category === "reactive" ? "maintenance" : recipe.category;
+  const install = onInstall ?? onSelect;
+
+  const body = (
+    <>
+      <div className="flex min-w-0 flex-col gap-1">
+        <span className={cn("text-lg font-semibold", recipeCategoryLabelClass(recipe.category))}>
+          {categoryLabel}
+        </span>
+        <div className="flex min-w-0 items-center gap-1">
+          <h3 className="min-w-0 text-lg font-semibold text-white">{recipe.name}</h3>
+          {onInstall ? (
+            <span
+              aria-hidden
+              className={cn(
+                getPropertyListRowBlackIconButtonClass(true),
+                getPropertyListRowIconButtonHoverGlowClass("powerOn"),
+                "pointer-events-none",
+              )}
+            >
+              <Plus className="h-4 w-4" />
+            </span>
+          ) : null}
+        </div>
+      </div>
+      <p className="text-lg text-muted-foreground">{recipe.description}</p>
+      <div className="flex flex-wrap gap-2">
+        <span className="bg-black px-2 py-1 text-lg text-white">
+          {AUTOMATION_RECIPE_CATEGORY_LABELS[normalizedCategory] ?? recipe.category}
+        </span>
+        {buckets.map((bucket) => (
+          <span key={bucket} className="bg-black px-2 py-1 text-lg text-muted-foreground">
+            {AUTOMATION_RECIPE_BUCKET_LABELS[bucket] ?? bucket}
+          </span>
+        ))}
+        {recipe.prerequisites.map((req) => (
+          <span key={req} className="bg-black px-2 py-1 text-lg text-muted-foreground">
+            {AUTOMATION_RECIPE_PREREQUISITE_LABELS[req] ?? req}
+          </span>
+        ))}
+      </div>
+    </>
+  );
+
+  if (install) {
+    return (
+      <button
+        type="button"
+        className={cn(
+          recipeCardClassName(recipe.category, selected),
+          "flex w-full flex-col gap-3 p-4 text-left",
+        )}
+        onClick={install}
+      >
+        {body}
+      </button>
+    );
+  }
 
   return (
     <article className={cn(recipeCardClassName(recipe.category, selected), "flex flex-col gap-3 p-4")}>
@@ -40,24 +97,9 @@ export function AutomationRecipeCard({
         <span className={cn("text-lg font-semibold", recipeCategoryLabelClass(recipe.category))}>
           {categoryLabel}
         </span>
-        <div className="flex min-w-0 items-center gap-1">
-          <button type="button" className="min-w-0 text-left" onClick={onSelect}>
-            <h3 className="text-lg font-semibold text-white">{recipe.name}</h3>
-          </button>
-          {onInstall ? (
-            <button
-              type="button"
-              aria-label={`Install ${recipe.name}`}
-              className={cn(
-                getPropertyListRowBlackIconButtonClass(true),
-                getPropertyListRowIconButtonHoverGlowClass("powerOn"),
-              )}
-              onClick={onInstall}
-            >
-              <Plus className="h-4 w-4" aria-hidden />
-            </button>
-          ) : null}
-        </div>
+        <button type="button" className="min-w-0 text-left" onClick={onSelect}>
+          <h3 className="text-lg font-semibold text-white">{recipe.name}</h3>
+        </button>
       </div>
       <button type="button" className="text-left" onClick={onSelect}>
         <p className="text-lg text-muted-foreground">{recipe.description}</p>

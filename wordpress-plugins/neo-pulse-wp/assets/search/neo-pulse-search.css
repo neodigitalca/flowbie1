@@ -768,7 +768,7 @@
 }
 
 .fbs__sidebar-query-scroll {
-	flex: 1 1 auto;
+	flex: 0 0 auto;
 	min-height: 0;
 	max-height: var(--fbs-sidebar-query-max-height, min(42vh, 360px));
 	overflow-x: hidden;
@@ -778,7 +778,6 @@
 	scrollbar-width: thin;
 	scrollbar-color: color-mix(in srgb, var(--fbs-panel-text-muted, var(--fbs-text-muted, #64748b)) 45%, transparent) transparent;
 	width: 100%;
-	flex-shrink: 0;
 }
 
 .fbs__sidebar-query-scroll::-webkit-scrollbar {
@@ -1579,13 +1578,21 @@
 	border-radius: var(--fbs-radius, 8px);
 }
 
-/* Panel content offset (sidebar / icon panel modes) */
+/* Panel content offset (sidebar / icon panel modes).
+   Offset is used in Elementor preview; live drawers keep a short top pad so the heading sits next to the close control. */
 .fai-sidebar-panel:not(.fbs-modal-panel) .fai-sidebar-panel__body,
 .neo-pulse-search-wrap--sidebar-mode .fai-sidebar-panel__body,
 .fai-sidebar-panel--portaled .fai-sidebar-panel__body {
-	padding-top: var(--fbs-panel-offset-top, 64px);
+	padding-top: 12px;
 	overflow: hidden;
 	touch-action: auto;
+}
+
+.fai-sidebar-panel:not(.fbs-modal-panel) .fai-sidebar-heading {
+	padding-right: 56px;
+	min-height: 40px;
+	display: flex;
+	align-items: center;
 }
 
 .neo-pulse-search-wrap--panel-align-center .fai-sidebar-panel__body,

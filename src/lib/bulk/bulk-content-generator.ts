@@ -13,10 +13,16 @@ import {
 import { ensurePressReleaseSectionHeading } from '@/lib/press-release/press-release-heading-guard';
 import { pressReleaseHarnessSectionLabel } from '@/lib/press-release/press-release-harness-prompts';
 import { buildFocusedArticlePurpose } from '@/lib/content-generation/article-length-policy';
+import { formatSapPageWriterBlock } from '@/lib/prompt-builders/sap-page-template';
 import { getProductionModel } from '@/lib/optimization-settings-storage';
 import { resolveHarnessHttpReferer, runHarnessOpenRouterSection } from '@/lib/bulk/harness-openrouter-worker-client';
 import {
+  HARNESS_SECTION_MAX_ATTEMPTS,
+  harnessSectionPreparedValid,
+  illustrativeHarnessSectionValid,
   prepareHarnessSectionHtml,
+  stitchedArticleHasAnswerH2,
+  stitchedHarnessArticleValid,
 } from '@/lib/bulk/harness-section-validate';
 import { injectBlacklistRagIntoMessages } from '@/lib/content-word-blocklist';
 import { findImportedSectionBody } from '@/lib/bulk/blog-import-parser';
@@ -29,6 +35,7 @@ import {
   ensureBlogHarnessSummaryLast,
   splitBlogHarnessBodyAndOverview,
 } from '@/lib/bulk/blog-harness-summary-agent';
+import { buildBlogHarnessAnswerAgent } from '@/lib/bulk/blog-harness-answer-agent';
 import {
   buildHarnessSectionAnchorMap,
   formatHarnessInPageAnchorBlock,
@@ -39,6 +46,29 @@ import {
   isHarnessSeoOpenerBodyAgent,
 } from '@/lib/bulk/harness-section-max-tokens';
 import { formatMandatoryEntityWikipediaForPrompt } from '@/lib/bulk/entity-wikipedia-prompt';
+import { formatAnswerGroundingForIllustrativePromptBlock } from '@/lib/content-optimization/defensible-specificity-prompt';
+import {
+  extractIllustrativeExample,
+  formatResearchAsOfLabel,
+  buildIllustrativeExampleResearchQuery,
+} from '@/lib/content-optimization/topic-research-fanout';
+import { formatIllustrativePersonaPromptBlock, formatOverviewPersonaTeaserBlock, resolveIllustrativeH2Title } from '@/lib/content-optimization/first-party-authority-prompt';
+import type { IllustrativeExample } from '@/lib/overview-seo-content-brief';
+import {
+  formatPageLocalContextPromptBlock,
+  resolvePageLocalContext,
+} from '@/lib/content-optimization/page-local-context';
+import { parseSeoResearchBrief } from '@/lib/content-optimization/seo-research-brief-for-optimize';
+import { resolveSiteLocationLabel } from '@/lib/llm-audit/resolve-site-location-label';
+import type { WordPressSite } from '@/components/integrations/types';
+
+function agentHasIllustrativeFeature(agent: AgentConfig): boolean {
+  return (
+    agent.features?.some(
+      (f) => typeof f === "string" && f.toLowerCase().trim().startsWith("[illustrative]"),
+    ) ?? false
+  );
+}
 
 /** Extra prompt wiring for WordPress content optimizer (RAG page URL, GSC, shared ACF context). */
 export type HarnessPromptEnv = {
@@ -51,8 +81,17 @@ export type HarnessPromptEnv = {
   /** Optimizer: passed to buildSystemPrompt for cache-scoped internal link list. */
   siteId?: string;
   primaryKeyword?: string;
+  /** Predetermined page/blog link plan from Link targets harness step. */
+  linkTargetsPlan?: import("@/lib/bulk/bulk-generation-wp-inventory").LinkTargetsPlan;
   /** Relaxes blog SEO rules (per-H2 exact keyword, etc.) for press releases */
   contentKind?: "press_release";
+  /** Merged multi-platform LLM audit — mandatory local facts in harness sections. */
+  llmAuditSummary?: string;
+  dfsArticleAuditBlock?: string;
+  firstPartyAuthorityBlock?: string;
+  llmAuditAuthorityExternalPairs?: import("@/lib/content-generation/external-link-placeholders").ExternalLinkPair[];
+  /** Full site record for primary city resolution (not { name, siteUrl } alone). */
+  wordpressSite?: WordPressSite;
 };
 
 /** Last-line / last-paragraph © or "All rights reserved" blocks (model hallucination). */
@@ -139,7 +178,6 @@ export async function generateMarkdownContent(
 
   // Entity/service-area prompts (near [entity], local phrasing) only when posting to entity sitemap - not blog/post URLs
   const entity =
-    options.useEntitySitemapTemplate &&
     row.entity &&
     row.entity.trim() &&
     row.entity.trim() !== "N/A"
@@ -287,7 +325,6 @@ export async function generateMarkdownContentHarnessed(
     promptEnv?.primaryKeyword?.trim() || row.keyword?.trim() || row.keyword_focus?.trim() || "";
 
   const entityFromRow =
-    options.useEntitySitemapTemplate &&
     row.entity &&
     row.entity.trim() &&
     row.entity.trim() !== 'N/A'
@@ -300,6 +337,21 @@ export async function generateMarkdownContentHarnessed(
       : entityFromRow;
   const entityWikipediaUrl = row.wikipedia_url?.trim() || undefined;
 
+  const harnessKeyword =
+    promptEnv?.primaryKeyword?.trim()
+    || row.keyword_focus?.trim()
+    || row.keyword?.trim()
+    || "";
+  const harnessPageCtx = promptEnv?.wordpressSite
+    ? resolvePageLocalContext({
+        keyword: harnessKeyword,
+        site: promptEnv.wordpressSite,
+        entity,
+      })
+    : null;
+  const harnessPageLocalBlock =
+    harnessPageCtx?.primaryCity ? formatPageLocalContextPromptBlock(harnessPageCtx) : "";
+
   const acfContext: AIDrivenACFContext =
     promptEnv?.acfContextOverride ??
     ({
@@ -310,7 +362,7 @@ export async function generateMarkdownContentHarnessed(
 
   const portfolioBlocked = options.portfolioBlockedHosts;
 
-  const systemPrompt = await buildSystemPrompt(
+  let systemPrompt = await buildSystemPrompt(
     knowledgeBaseContext,
     options.openRouterApiKey,
     connectedSite,
@@ -323,12 +375,20 @@ export async function generateMarkdownContentHarnessed(
     semrushExternalUrls,
     portfolioBlocked,
     promptEnv?.contentKind,
-    isPressReleaseHarness ? 'full_article' : 'harness_section',
+    'harness_section',
+    '',
+    promptEnv?.llmAuditAuthorityExternalPairs,
+    promptEnv?.linkTargetsPlan,
   );
+
+
+  if (entity && !isPressReleaseHarness) {
+    systemPrompt += `\n${formatSapPageWriterBlock(entity)}`;
+  }
 
   const totalBudget = options.maxTokens || 16000;
   const httpReferer = resolveHarnessHttpReferer();
-  const harnessFormat = "markdown" as const;
+  const harnessFormat = isPressReleaseHarness ? ("markdown" as const) : ("html" as const);
 
   if (isPressReleaseHarness) {
     const outline = buildBulkHarnessOutlineFromAgents(agentsForBulk);
@@ -376,6 +436,15 @@ export async function generateMarkdownContentHarnessed(
           portfolioBlocked,
           promptEnv?.contentKind,
           releaseTopic,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          promptEnv?.llmAuditSummary,
+          promptEnv?.dfsArticleAuditBlock,
+          promptEnv?.firstPartyAuthorityBlock,
+          promptEnv?.llmAuditAuthorityExternalPairs,
         );
         const importedTone = getImportedToneFromRow(row);
         if (importedTone) {
@@ -450,14 +519,21 @@ export async function generateMarkdownContentHarnessed(
     throw new Error('Harness: no body sections to generate');
   }
 
+  const answerAgent = buildBlogHarnessAnswerAgent();
   const bodyOutline = buildBulkHarnessOutlineFromAgents(bodyAgents);
   const bodyAnchors = buildHarnessSectionAnchorMap(bodyOutline);
-  const publishedSectionTitles = ['Overview', ...bodyOutline.map((x) => x.displayTitle)];
-  const totalSections = bodyAgents.length + 1;
+  const publishedSectionTitles = ['Answer', 'Overview', ...bodyOutline.map((x) => x.displayTitle)];
+  const totalSections = bodyAgents.length + 2;
   const outlineBlock = formatOutlineTitlesForHarnessPrompt(bodyOutline);
 
   const harnessTokenSlots = computeHarnessSectionTokenBudgets(
     [
+      {
+        sectionKey: 'Answer',
+        agent: answerAgent,
+        isOverview: false,
+        isAnswer: true,
+      },
       {
         sectionKey: 'Overview',
         agent: overviewAgent,
@@ -479,6 +555,77 @@ export async function generateMarkdownContentHarnessed(
     harnessTokenSlots.map((slot) => [slot.sectionKey, slot.maxTokens]),
   );
 
+  const harnessPrimaryKeyword =
+    promptEnv?.primaryKeyword?.trim()
+    || row.keyword_focus?.trim()
+    || row.keyword?.trim()
+    || keywordData.keyword?.trim()
+    || "";
+
+  let cachedIllustrativePersonaBlock: string | null = null;
+  let cachedOverviewPersonaTeaser: string | null = null;
+
+  const ensureIllustrativePersonaCached = async (answerSectionHtml?: string): Promise<void> => {
+    if (cachedIllustrativePersonaBlock) return;
+    if (!bodyAgents.some(agentHasIllustrativeFeature)) return;
+    const companyName = connectedSite?.name?.trim();
+    if (!companyName) {
+      throw new Error("Harness: [ILLUSTRATIVE] requires a connected site name");
+    }
+    const illustrativeAgentIndex = bodyAgents.findIndex(agentHasIllustrativeFeature);
+    const illustrativeTitle =
+      illustrativeAgentIndex >= 0
+        ? bodyOutline[illustrativeAgentIndex]!.displayTitle
+        : resolveIllustrativeH2Title("");
+    const brief = acfContext?.seoResearch?.trim()
+      ? parseSeoResearchBrief(acfContext.seoResearch)
+      : null;
+    const researchAsOf =
+      brief?.queryFanout?.researchAsOf?.trim() || formatResearchAsOfLabel(new Date());
+    const pageCtx = resolvePageLocalContext({
+      keyword: harnessPrimaryKeyword,
+      site: promptEnv?.wordpressSite,
+      entity,
+    });
+    const location =
+      pageCtx.prosePlaceLabel
+      || pageCtx.primaryCity
+      || entity?.trim()
+      || acfContext?.serviceArea?.trim()
+      || resolveSiteLocationLabel(promptEnv?.wordpressSite, harnessPrimaryKeyword)
+      || "";
+    const researchTopic = pageCtx.serviceTopic || harnessPrimaryKeyword;
+    const illustrativeExampleQuery =
+      brief?.queryFanout?.illustrativeExampleQuery?.trim()
+      || buildIllustrativeExampleResearchQuery({
+        topic: researchTopic,
+        location: location || researchTopic,
+        asOfLabel: researchAsOf,
+      });
+    const persona: IllustrativeExample = await extractIllustrativeExample({
+      keyword: harnessPrimaryKeyword,
+      location,
+      researchAsOf,
+      companyName,
+      illustrativeExampleQuery,
+      pageUrl: promptEnv?.currentPageUrl,
+      entity,
+      serpByQuery: brief?.queryFanout?.serpByQuery,
+      chatGptByQuery: brief?.queryFanout?.chatGptByQuery,
+      illustrativeH2Title: resolveIllustrativeH2Title(illustrativeTitle),
+      pageTitle: blueprint.title || row.title,
+      siteId: promptEnv?.siteId,
+      site: promptEnv?.wordpressSite,
+      pageLocalContext: pageCtx,
+      answerSectionHtml,
+    });
+    cachedIllustrativePersonaBlock = [
+      formatPageLocalContextPromptBlock(pageCtx),
+      formatIllustrativePersonaPromptBlock(persona, researchAsOf),
+    ].join("\n\n");
+    cachedOverviewPersonaTeaser = formatOverviewPersonaTeaserBlock(persona.personaName ?? "");
+  };
+
   const runBlogHarnessSection = async (
     agent: AgentConfig,
     sectionIndex: number,
@@ -486,9 +633,12 @@ export async function generateMarkdownContentHarnessed(
     opts: {
       maxTokens: number;
       isOverviewSection: boolean;
+      isAnswerSection?: boolean;
       inPageAnchorBlock?: string;
       publishedPlanIndex: number;
       otherSectionTitles: string[];
+      /** Published Answer HTML — grounds later sections so they do not recap; illustrative also uses economic ceiling. */
+      answerSectionHtml?: string;
     },
   ): Promise<string> => {
     options.onHarnessSection?.({
@@ -504,7 +654,15 @@ export async function generateMarkdownContentHarnessed(
       harnessFormat,
       promptEnv?.contentKind,
       releaseTopic,
+      harnessPrimaryKeyword || undefined,
     );
+    let illustrativePersonaBlock = "";
+    if (agentHasIllustrativeFeature(agent)) {
+      if (!cachedIllustrativePersonaBlock) {
+        throw new Error("Harness: illustrative persona must be pre-extracted before [ILLUSTRATIVE] section");
+      }
+      illustrativePersonaBlock = cachedIllustrativePersonaBlock;
+    }
     let userPrompt = buildBulkHarnessSectionUserPrompt(
       blueprint.title || row.title,
       blueprint.purpose || buildFocusedArticlePurpose(keywordData.keyword),
@@ -527,10 +685,26 @@ export async function generateMarkdownContentHarnessed(
       releaseTopic,
       opts.inPageAnchorBlock,
       opts.isOverviewSection && entity && entityWikipediaUrl ? entityWikipediaUrl : undefined,
-      opts.isOverviewSection ? undefined : titleForCb,
+      opts.isOverviewSection || opts.isAnswerSection ? undefined : titleForCb,
       promptEnv?.primaryKeyword?.trim() || row.keyword_focus?.trim() || row.keyword?.trim() || undefined,
       publishedSectionTitles,
+      promptEnv?.llmAuditSummary,
+      promptEnv?.dfsArticleAuditBlock,
+      promptEnv?.firstPartyAuthorityBlock,
+      formatAnswerGroundingForIllustrativePromptBlock(
+        opts.isAnswerSection ? undefined : opts.answerSectionHtml,
+      ),
+      promptEnv?.llmAuditAuthorityExternalPairs,
     );
+    if (harnessPageLocalBlock) {
+      userPrompt += `\n\n${harnessPageLocalBlock}`;
+    }
+    if (illustrativePersonaBlock) {
+      userPrompt += `\n\n${illustrativePersonaBlock}`;
+    }
+    if (opts.isOverviewSection && cachedOverviewPersonaTeaser) {
+      userPrompt += `\n\n${cachedOverviewPersonaTeaser}`;
+    }
     if (opts.isOverviewSection && entity && entityWikipediaUrl) {
       const wikiBlock = formatMandatoryEntityWikipediaForPrompt({
         entity,
@@ -545,37 +719,47 @@ export async function generateMarkdownContentHarnessed(
     if (importedTone) {
       userPrompt += `\n\n${formatImportedToneForHarnessPrompt(importedTone)}`;
     }
-    if (!opts.isOverviewSection) {
+    if (!opts.isOverviewSection && !opts.isAnswerSection) {
       const importedExcerpt = findImportedSectionBody(row, titleForCb);
       if (importedExcerpt) {
         userPrompt += `\n\n--- Imported draft excerpt (use facts from this excerpt only for this assigned section; do NOT copy headings, lists, or paragraphs belonging to other sections; output only the assigned ## block) ---\n${importedExcerpt}`;
       }
     }
 
-    const result = await runHarnessOpenRouterSection({
-      sectionIndex,
-      apiKey: options.openRouterApiKey,
-      model: options.selectedModel || getProductionModel(),
-      messages: injectBlacklistRagIntoMessages([
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ]),
-      temperature: options.temperature || 1.0,
-      maxTokens: opts.maxTokens,
-      topP: options.topP || 0.9,
-      httpReferer,
-    });
+    const isIllustrative = agentHasIllustrativeFeature(agent);
+    let truncated = false;
 
-    const sectionContent = (result.content || '').trim();
-    if (!sectionContent) {
-      throw new Error(`Section "${titleForCb}" returned empty content`);
+    for (let attempt = 1; attempt <= HARNESS_SECTION_MAX_ATTEMPTS; attempt++) {
+      const attemptMaxTokens = Math.round(opts.maxTokens * (1 + (attempt - 1) * 0.15));
+      const result = await runHarnessOpenRouterSection({
+        sectionIndex,
+        apiKey: options.openRouterApiKey,
+        model: options.selectedModel || getProductionModel(),
+        messages: injectBlacklistRagIntoMessages([
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ]),
+        temperature: options.temperature || 1.0,
+        maxTokens: attemptMaxTokens,
+        topP: options.topP || 0.9,
+        httpReferer,
+      });
+
+      const sectionContent = (result.content || '').trim();
+      if (!sectionContent) {
+        continue;
+      }
+      truncated = isCompletionTruncatedByTokenLimit(result.finishReason);
+
+      const prepared = prepareHarnessSectionHtml(sectionContent, {
+        title: titleForCb,
+        isOverview: opts.isOverviewSection,
+        isAnswer: opts.isAnswerSection,
+        isIllustrative,
+      });
+      if (!harnessSectionPreparedValid(prepared, { isIllustrative })) {
+      continue;
     }
-    const truncated = isCompletionTruncatedByTokenLimit(result.finishReason);
-
-    const prepared = prepareHarnessSectionHtml(sectionContent, {
-      title: titleForCb,
-      isOverview: opts.isOverviewSection,
-    });
 
     options.onHarnessSection?.({
       rowIndex: harnessRowIndex,
@@ -588,10 +772,156 @@ export async function generateMarkdownContentHarnessed(
     });
 
     return prepared;
+  }
+
+  const sectionLabel = opts.isAnswerSection
+      ? "Answer"
+      : opts.isOverviewSection
+        ? "Overview"
+        : isIllustrative
+          ? "[ILLUSTRATIVE]"
+          : titleForCb;
+    throw new Error(`Harness: section "${sectionLabel}" could not be generated after ${HARNESS_SECTION_MAX_ATTEMPTS} attempts`);
   };
 
-  const bodyPieces = await Promise.all(
-    bodyAgents.map(async (agent, bi) => {
+  if (options.sequentialHarnessSections) {
+    const overviewInPageAnchorBlock = formatHarnessInPageAnchorBlock(bodyAnchors, { contextOnly: true });
+    const answerMaxTokens = harnessTokenBySectionKey.get("Answer");
+    if (answerMaxTokens == null) {
+      throw new Error("Harness: missing token budget for Answer");
+    }
+    const overviewMaxTokens = harnessTokenBySectionKey.get("Overview");
+    if (overviewMaxTokens == null) {
+      throw new Error("Harness: missing token budget for Overview");
+    }
+    const sequentialPieces: string[] = [
+      await runBlogHarnessSection(answerAgent, 0, "Answer", {
+        maxTokens: answerMaxTokens,
+        isOverviewSection: false,
+        isAnswerSection: true,
+        publishedPlanIndex: 0,
+        otherSectionTitles: ["Overview", ...bodyOutline.map((x) => x.displayTitle)],
+      }),
+    ];
+    const answerMd = sequentialPieces[0] ?? "";
+    await ensureIllustrativePersonaCached(answerMd);
+    sequentialPieces.push(
+      await runBlogHarnessSection(overviewAgent, 1, "Overview", {
+        maxTokens: overviewMaxTokens,
+        isOverviewSection: true,
+        inPageAnchorBlock: overviewInPageAnchorBlock,
+        publishedPlanIndex: 1,
+        otherSectionTitles: bodyOutline.map((x) => x.displayTitle),
+        answerSectionHtml: answerMd,
+      }),
+    );
+    for (let bi = 0; bi < bodyAgents.length; bi++) {
+      const agent = bodyAgents[bi]!;
+      const o = bodyOutline[bi]!;
+      const titleForCb = o.displayTitle;
+      const otherSectionTitles = bodyOutline.filter((_, j) => j !== bi).map((x) => x.displayTitle);
+      const maxTokens = harnessTokenBySectionKey.get(titleForCb);
+      if (maxTokens == null) {
+        throw new Error(`Harness: missing token budget for section "${titleForCb}"`);
+      }
+      sequentialPieces.push(
+        await runBlogHarnessSection(agent, bi + 2, titleForCb, {
+          maxTokens,
+          isOverviewSection: false,
+          publishedPlanIndex: bi + 2,
+          otherSectionTitles,
+          answerSectionHtml: answerMd,
+        }),
+      );
+    }
+    const requireIllustrative = bodyAgents.some(agentHasIllustrativeFeature);
+    let sequentialHtml = stripTrailingCopyrightBoilerplate(stitchHarnessSections(sequentialPieces));
+
+    for (let repair = 0; repair < HARNESS_SECTION_MAX_ATTEMPTS; repair++) {
+      if (stitchedHarnessArticleValid(sequentialHtml, { requireIllustrative })) {
+        break;
+      }
+      const currentAnswer = sequentialPieces[0] ?? "";
+      if (!stitchedArticleHasAnswerH2(sequentialHtml)) {
+        sequentialPieces[0] = await runBlogHarnessSection(answerAgent, 0, "Answer", {
+          maxTokens: answerMaxTokens,
+          isOverviewSection: false,
+          isAnswerSection: true,
+          publishedPlanIndex: 0,
+          otherSectionTitles: ["Overview", ...bodyOutline.map((x) => x.displayTitle)],
+        });
+      }
+      const repairedAnswer = sequentialPieces[0] ?? currentAnswer;
+      const hasOverview =
+        /<h2\b[^>]*>\s*overview\s*</i.test(sequentialHtml)
+        || /\bid\s*=\s*["']overview["']/i.test(sequentialHtml);
+      if (!hasOverview) {
+        sequentialPieces[1] = await runBlogHarnessSection(overviewAgent, 1, "Overview", {
+          maxTokens: overviewMaxTokens,
+          isOverviewSection: true,
+          inPageAnchorBlock: overviewInPageAnchorBlock,
+          publishedPlanIndex: 1,
+          otherSectionTitles: bodyOutline.map((x) => x.displayTitle),
+          answerSectionHtml: repairedAnswer,
+        });
+      }
+      if (requireIllustrative) {
+        const illustrativeIndex = bodyAgents.findIndex(agentHasIllustrativeFeature);
+        if (illustrativeIndex >= 0) {
+          const pieceIndex = illustrativeIndex + 2;
+          const illustrativePiece = sequentialPieces[pieceIndex] ?? "";
+          if (!illustrativeHarnessSectionValid(illustrativePiece)) {
+            const agent = bodyAgents[illustrativeIndex]!;
+            const o = bodyOutline[illustrativeIndex]!;
+            const titleForCb = o.displayTitle;
+            const maxTokens = harnessTokenBySectionKey.get(titleForCb);
+            if (maxTokens == null) {
+              throw new Error(`Harness: missing token budget for section "${titleForCb}"`);
+            }
+            sequentialPieces[pieceIndex] = await runBlogHarnessSection(agent, pieceIndex, titleForCb, {
+              maxTokens,
+              isOverviewSection: false,
+              publishedPlanIndex: pieceIndex,
+              otherSectionTitles: bodyOutline.filter((_, j) => j !== illustrativeIndex).map((x) => x.displayTitle),
+              answerSectionHtml: repairedAnswer,
+            });
+          }
+        }
+      }
+      sequentialHtml = stripTrailingCopyrightBoilerplate(stitchHarnessSections(sequentialPieces));
+    }
+    return sequentialHtml;
+  }
+
+  const overviewInPageAnchorBlock = formatHarnessInPageAnchorBlock(bodyAnchors, { contextOnly: true });
+  const answerMaxTokens = harnessTokenBySectionKey.get('Answer');
+  if (answerMaxTokens == null) {
+    throw new Error('Harness: missing token budget for Answer');
+  }
+  const overviewMaxTokens = harnessTokenBySectionKey.get('Overview');
+  if (overviewMaxTokens == null) {
+    throw new Error('Harness: missing token budget for Overview');
+  }
+  const answerMd = await runBlogHarnessSection(answerAgent, 0, 'Answer', {
+    maxTokens: answerMaxTokens,
+    isOverviewSection: false,
+    isAnswerSection: true,
+    publishedPlanIndex: 0,
+    otherSectionTitles: ['Overview', ...bodyOutline.map((x) => x.displayTitle)],
+  });
+
+  await ensureIllustrativePersonaCached(answerMd);
+
+  const [overviewMd, ...bodyPieces] = await Promise.all([
+    runBlogHarnessSection(overviewAgent, 1, 'Overview', {
+      maxTokens: overviewMaxTokens,
+      isOverviewSection: true,
+      inPageAnchorBlock: overviewInPageAnchorBlock,
+      publishedPlanIndex: 1,
+      otherSectionTitles: bodyOutline.map((x) => x.displayTitle),
+      answerSectionHtml: answerMd,
+    }),
+    ...bodyAgents.map(async (agent, bi) => {
       const o = bodyOutline[bi];
       const titleForCb = o.displayTitle;
       const otherSectionTitles = bodyOutline.filter((_, j) => j !== bi).map((x) => x.displayTitle);
@@ -599,40 +929,28 @@ export async function generateMarkdownContentHarnessed(
       if (maxTokens == null) {
         throw new Error(`Harness: missing token budget for section "${titleForCb}"`);
       }
-      return runBlogHarnessSection(agent, bi + 1, titleForCb, {
+      return runBlogHarnessSection(agent, bi + 2, titleForCb, {
         maxTokens,
         isOverviewSection: false,
-        publishedPlanIndex: bi + 1,
+        publishedPlanIndex: bi + 2,
         otherSectionTitles,
+        answerSectionHtml: answerMd,
       });
     }),
-  );
+  ]);
 
-  const overviewInPageAnchorBlock = formatHarnessInPageAnchorBlock(bodyAnchors, { contextOnly: true });
-  const overviewMaxTokens = harnessTokenBySectionKey.get('Overview');
-  if (overviewMaxTokens == null) {
-    throw new Error('Harness: missing token budget for Overview');
-  }
-  const overviewMd = await runBlogHarnessSection(
-    overviewAgent,
-    0,
-    'Overview',
-    {
-      maxTokens: overviewMaxTokens,
-      isOverviewSection: true,
-      inPageAnchorBlock: overviewInPageAnchorBlock,
-      publishedPlanIndex: 0,
-      otherSectionTitles: bodyOutline.map((x) => x.displayTitle),
-    },
-  );
-
-  const stitched = stitchHarnessSections([overviewMd, ...bodyPieces]);
+  const stitched = stitchHarnessSections([answerMd, overviewMd, ...bodyPieces]);
   if (!stitched?.trim()) {
-    return stripTrailingCopyrightBoilerplate(
-      [overviewMd, ...bodyPieces].filter(Boolean).join("\n"),
+    throw new Error("Harness: stitched article is empty");
+  }
+  const html = stripTrailingCopyrightBoilerplate(stitched);
+  const requireIllustrativeParallel = bodyAgents.some(agentHasIllustrativeFeature);
+  if (!stitchedHarnessArticleValid(html, { requireIllustrative: requireIllustrativeParallel })) {
+    throw new Error(
+      "[Bulk Harness] Stitched article missing Answer, Overview, or illustrative scenario after section retries",
     );
   }
-  return stripTrailingCopyrightBoilerplate(stitched);
+  return html;
 }
 
 export { stitchHarnessSections } from './bulk-harness-outline';
@@ -681,7 +999,7 @@ function wikiTitleFromEnUrl(url: string): string {
 }
 
 /**
- * Add entity Wikipedia links and "We Care About" sections to markdown content
+ * Add entity Wikipedia links to markdown content
  */
 export async function addEntityLinksToContent(
   markdownContent: string,
@@ -840,7 +1158,7 @@ export async function addEntityLinksToContent(
           markdownContent = markdownContent.replace(entityRegex, entityLink);
         }
         
-        // Note: "We Care About [Entity]" section is already generated by the blueprint
+        // Local Recommendation / What We Offer H2s come from the SAP blueprint
         // (via blog-template-builder.ts), so we don't need to add it here
         onProgress?.(rowIndex, 0, `Added Wikipedia links for ${row.entity}${localLinks.length > 0 ? ` with ${localLinks.length} knowledge graph entity links` : ''}`);
       }

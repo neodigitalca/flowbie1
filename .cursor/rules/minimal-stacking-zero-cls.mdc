@@ -1,0 +1,72 @@
+---
+description: Mandatory UI layout - minimal element stacking, zero CLS, no layout-jank patterns
+globs: src/**/*.{tsx,ts,css}
+alwaysApply: true
+---
+
+# Minimal stacking and zero CLS
+
+Flowbie UI must stay **stable and flat**. **Cumulative Layout Shift (CLS) is forbidden.** Do not ship patterns that move content after paint. Do not stack redundant wrappers or z-index layers when a simpler layout works.
+
+## Mandatory self-check (UI changes)
+
+**Will anything move, resize, or pop in after first paint?**
+
+If yes, reserve space first or restructure so layout is fixed before data arrives.
+
+## Minimal element stacking
+
+**Forbidden:** deep wrapper trees, decorative nesting, overlapping absolute stacks, and z-index layering used to patch layout instead of fixing structure.
+
+### Do
+
+- Prefer **one semantic container** per section; siblings over nested shells.
+- Use **flex/grid** with gap and surface color for grouping (see flat design in `response-harness-mandatory-opener.mdc`).
+- Keep header/toolbar bands at **fixed height** (`UNIFIED_*_CLASS`, `h-8`, `min-h-8` patterns).
+- Collapse related controls into **one row or one column**, not wrapper inside wrapper inside card.
+
+### Do not
+
+- Do **not** add extra `<div>` / `<span>` wrappers "for spacing" when the parent can hold `gap` or padding.
+- Do **not** stack `absolute` + `relative` layers for normal document flow.
+- Do **not** use z-index towers (`z-10`, `z-20`, …) except for true overlays (modals, popovers, drawers).
+- Do **not** nest the same visual frame twice (card inside card, bordered box inside bordered box).
+
+## Zero CLS (explicitly forbidden practices)
+
+CLS happens when visible elements change size or position after load. **Treat any layout shift as a bug.**
+
+### Forbidden
+
+- Mounting/unmounting toolbar or header controls that **change band height** when state toggles.
+- Showing/hiding blocks without **reserved space** (no sudden height collapse or expansion).
+- Injecting banners, errors, or counts **above** content that pushes the page down without a reserved slot.
+- Images, avatars, or media without **width/height or aspect-ratio** (or a fixed-size container).
+- Async text (counts, labels, filenames) in tight slots without **min-width** / **tabular-nums**.
+- Swapping loading UI for content when the two have **different dimensions**.
+- Font or icon loads that reflow lines without stable line-height and reserved width.
+
+### Do instead
+
+- **Reserve slots:** use fixed width/height, `min-h-*`, `min-w-*`, or `invisible` placeholders. See `GENERATOR_TOOLBAR_SLOT_RESERVE` in `generator-toolbar-theme.ts`.
+- **Keep chrome always visible:** pagination and progress controls stay mounted; disable or empty-state instead of removing. See `OverviewGridPagination.tsx`.
+- **Skeleton = final size:** loading placeholders match the loaded component's box model.
+- **Stable numbers:** `tabular-nums` and width reserved for counters, page labels, and timestamps that update.
+- **Overlays, not push:** transient messages use fixed-position overlays or inline regions that already exist; they must not shove sibling content.
+- **One layout pass:** decide column widths and row heights in the shell; inner content fills, it does not redefine the shell.
+
+## Workspace chrome
+
+- Title, toolbar, and progress bands must not shift when filters load, counts update, or details open.
+- Conditional controls in the black toolbar: **reserve the slot** or use a fixed-width zone (`GENERATOR_TOOLBAR_OPTIONS_CLASS` pattern).
+- Details drawer toggles content in a **side panel**, not by resizing bands above the main workspace.
+
+## When shift seems unavoidable
+
+Stop and pick a simpler structure: fixed-height band, reserved slot, or skeleton. Do not ship "we'll fix CLS later." Only exception: user explicitly requests a shifting pattern.
+
+## Reference implementations
+
+- `src/components/blog-generator/generator-toolbar-theme.ts` — fixed toolbar zones, slot reserve
+- `src/components/overview/OverviewGridPagination.tsx` — always-visible pagination, layout total width
+- `src/components/shared/UnifiedWorkspaceChrome.tsx` — three-band fixed chrome

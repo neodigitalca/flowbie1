@@ -1,18 +1,16 @@
 import React from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  TaskFormFieldGrid,
   TaskFormFlatGrid,
-  TaskFormFlatSelectPlaceholder,
-  TaskFormInfield,
   TaskFormPlaceholderCell,
 } from "@/components/manager/tasks/TaskFormLayout";
+import { GscReportingPeriodFields } from "@/components/manager/tasks/GscReportingPeriodFields";
 import type { TaskExecutionPayload } from "@/lib/tasks-types";
 
 export type GscReportingExecutionFieldsProps = {
   executionPayload?: TaskExecutionPayload | null;
   disabled?: boolean;
-  layout?: "stack" | "inline";
+  layout?: "stack" | "inline" | "workflow";
   onChange: (payload: TaskExecutionPayload) => void;
 };
 
@@ -23,26 +21,35 @@ export function GscReportingExecutionFields({
   onChange,
 }: GscReportingExecutionFieldsProps): React.ReactElement {
   const payload = executionPayload ?? {};
-  const comparePreset = payload.comparePreset ?? "mom";
   const saveToDisk = payload.saveToDisk !== false;
   const inline = layout === "inline";
+  const workflow = layout === "workflow";
 
   const patch = (partial: Partial<TaskExecutionPayload>) => {
     onChange({ ...payload, ...partial });
   };
 
+  if (workflow) {
+    return (
+      <>
+        <GscReportingPeriodFields
+          executionPayload={payload}
+          disabled={disabled}
+          layout="workflow"
+          onChange={onChange}
+        />
+      </>
+    );
+  }
+
   if (inline) {
     return (
       <TaskFormFlatGrid className="grid-cols-2">
-        <TaskFormFlatSelectPlaceholder
-          placeholder="Compare"
-          value={comparePreset}
-          onChange={(v) => patch({ comparePreset: v as TaskExecutionPayload["comparePreset"] })}
+        <GscReportingPeriodFields
+          executionPayload={payload}
           disabled={disabled}
-          options={[
-            { value: "mom", label: "Month over month" },
-            { value: "yoy", label: "Year over year" },
-          ]}
+          layout="task"
+          onChange={onChange}
         />
         <TaskFormPlaceholderCell className="flex min-w-0 items-center gap-2">
           <Checkbox
@@ -61,20 +68,12 @@ export function GscReportingExecutionFields({
 
   return (
     <div className="flex flex-col gap-3">
-      <TaskFormFieldGrid>
-        <TaskFormInfield label="Compare preset">
-          <TaskFormFlatSelectPlaceholder
-            placeholder="Compare"
-            value={comparePreset}
-            onChange={(v) => patch({ comparePreset: v as TaskExecutionPayload["comparePreset"] })}
-            disabled={disabled}
-            options={[
-              { value: "mom", label: "Month over month" },
-              { value: "yoy", label: "Year over year" },
-            ]}
-          />
-        </TaskFormInfield>
-      </TaskFormFieldGrid>
+      <GscReportingPeriodFields
+        executionPayload={payload}
+        disabled={disabled}
+        layout="task"
+        onChange={onChange}
+      />
       <div className="flex items-center gap-2">
         <Checkbox
           id="gsc-reporting-save-stack"

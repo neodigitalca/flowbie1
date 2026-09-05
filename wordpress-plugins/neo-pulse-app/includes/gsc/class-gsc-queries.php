@@ -50,9 +50,24 @@ class Neo_Pulse_App_Gsc_Queries {
 		$fm    = Neo_Pulse_App_Gsc_Service_Account::find_matching_property( $site_url );
 		$exact = $fm['match'];
 
+		if ( ! empty( $fm['listError'] ) ) {
+			return array(
+				'statusCode' => 200,
+				'body'       => array(
+					'success'             => false,
+					'error'               => $fm['listError'],
+					'errorType'           => 'api_error',
+					'originalSiteUrl'     => $site_url,
+					'serviceAccountEmail' => $email,
+					'requestedDomain'     => $fm['requestedDomain'],
+					'dateRange'           => array( 'start' => $start_str, 'end' => $end_str ),
+				),
+			);
+		}
+
 		if ( ! $exact ) {
 			return array(
-				'statusCode' => 403,
+				'statusCode' => 200,
 				'body'       => array(
 					'success'                     => false,
 					'error'                       => "This site is not in the list of properties the service account can access.\n\nTo fix this:\n1. Go to Google Search Console → Settings → Users and permissions\n2. Add {$email} as a user\n3. Grant at least \"Full\" permissions\n4. Wait a few minutes for permissions to propagate\n5. Use \"Test connection\" in NEO Pulse to refresh the list",

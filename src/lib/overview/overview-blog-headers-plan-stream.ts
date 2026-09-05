@@ -1,10 +1,16 @@
 import { z } from "zod";
 import { streamChatCompletion } from "@/lib/api";
+import { callOpenRouterChatCompletion } from "@/lib/competitor-research/competitor-report-openrouter";
 import { parseAssistantJsonObject } from "@/lib/competitor-research/competitor-report-json-parse";
 import { getCompetitorReportMaxOutputTokens } from "@/lib/competitor-research/competitor-report-openrouter-limits";
 import {
   appendMasterInstructionsToSystemPrompt,
 } from "@/lib/master-instructions-storage";
+import {
+  buildBlogHeadersPlanSystemPrompt,
+  buildBlogHeadersPlanUserExtras,
+  isGenericHarnessHeadingTitle,
+} from "@/lib/content-optimization/harness-heading-titles";
 import type { BlogHeadersCatalogRow } from "@/lib/overview/overview-blog-headers-catalog";
 import type { BlogHeadersAgentOptions, BlogHeadersPlanResult } from "@/lib/overview/overview-blog-headers-agent";
 
@@ -24,21 +30,6 @@ export function clampBlogHeadersPlanToExistingH2s(
     ),
   };
 }
-
-const PLAN_SYSTEM = `You are an expert content SEO strategist. Rewrite blog H2 headings for search intent and clicks.
-
-Rules:
-- For every index in existingH2s, output exactly one { action: "optimize", index, proposedText, rationale }.
-- proposedText MUST be an SEO rewrite: clearer intent, entities, and keywords. It MUST NOT equal existingH2s[index] (no copy-paste).
-- When missingLeadingH2 is true, also set leadingH2: exactly ONE new intro H2 before the first paragraph (must differ from every existingH2s entry). Do not duplicate the post title if it already appears as an H2 in the body.
-- When missingLeadingH2 is false, omit leadingH2 entirely.
-- Replace existing H2 inner text only. Never insert additional H2 tags beyond the single leadingH2 when flagged.
-- Use gscHeadingKeywords, focusKeyword, and seoResearchBrief when planning each rewrite.
-- Do not use "add". Do not plan indices outside existingH2s.
-- Do not change body copy. Headings only.
-- proposedText: Title Case, scannable, 3-14 words.
-- rationale: one short sentence.
-- Return ONLY valid JSON matching outputSchema (no markdown fences).`;
 
 const planResponseSchema = z.object({
   h2Actions: z.array(
@@ -65,6 +56,79 @@ function parsePlanContent(content: string): BlogHeadersPlanResult {
   };
 }
 
+/** Second OpenRouter call when the plan skipped indices (placeholder H2s would stay in HTML). */
+async function fillMissingBlogHeadersPlanActions(
+  row: BlogHeadersCatalogRow,
+  plan: BlogHeadersPlanResult,
+  options: BlogHeadersAgentOptions,
+): Promise<BlogHeadersPlanResult> {
+  const covered = new Set(
+    plan.h2Actions.filter((a) => a.action === "optimize").map((a) => a.index),
+  );
+  const missingIndices: number[] = [];
+  for (let i = 0; i < row.existingH2s.length; i++) {
+    if (!covered.has(i)) missingIndices.push(i);
+  }
+  if (!missingIndices.length) return plan;
+
+  const gsc = row.gscPicks;
+  const user = JSON.stringify({
+    task: "overview_blog_headers_plan_missing_indices",
+    url: row.url,
+    title: row.title,
+    focusKeyword: row.focusKeyword || undefined,
+    seoResearchBrief: row.seoResearchBrief || undefined,
+    ...buildBlogHeadersPlanUserExtras(row.existingH2s),
+    missingIndices,
+    existingH2s: row.existingH2s,
+    gscHeadingKeywords: gsc?.headingKeywords ?? [],
+    mandate: `Output exactly one optimize action per missing index (${missingIndices.join(", ")}). proposedText must differ from existingH2s[index] and must not be a placeholder (Section, Intro, Section N).`,
+    outputSchema: {
+      h2Actions: [
+        {
+          action: "optimize",
+          index: "0-based index from missingIndices",
+          proposedText: "specific SEO topic title",
+          rationale: "string",
+        },
+      ],
+    },
+  });
+
+  const system = appendMasterInstructionsToSystemPrompt(
+    buildBlogHeadersPlanSystemPrompt(),
+    options.siteId ?? null,
+  );
+  const { content } = await callOpenRouterChatCompletion({
+    apiKey: options.apiKey,
+    model: options.model,
+    system,
+    user,
+    maxTokens: getCompetitorReportMaxOutputTokens(options.model),
+    temperature: 0.35,
+    responseFormat: { type: "json_object" },
+    signal: options.signal,
+  });
+
+  const parsed = planResponseSchema.parse(parseAssistantJsonObject(content));
+  const merged = [...plan.h2Actions];
+  const mergedIndexes = new Set(merged.map((a) => a.index));
+  for (const a of parsed.h2Actions) {
+    if (!missingIndices.includes(a.index)) continue;
+    const proposedText = a.proposedText.trim();
+    if (!proposedText || isGenericHarnessHeadingTitle(proposedText)) continue;
+    if (mergedIndexes.has(a.index)) continue;
+    merged.push({
+      action: "optimize",
+      index: a.index,
+      proposedText,
+      rationale: (a.rationale ?? "").trim(),
+    });
+    mergedIndexes.add(a.index);
+  }
+  return { ...plan, h2Actions: merged };
+}
+
 function buildPlanUserMessage(row: BlogHeadersCatalogRow): string {
   const gsc = row.gscPicks;
   const gscSparse = !gsc?.totalQueries || !gsc.headingKeywords.length;
@@ -74,6 +138,7 @@ function buildPlanUserMessage(row: BlogHeadersCatalogRow): string {
     title: row.title,
     focusKeyword: row.focusKeyword || undefined,
     seoResearchBrief: row.seoResearchBrief || undefined,
+    ...buildBlogHeadersPlanUserExtras(row.existingH2s),
     gscSparse,
     missingLeadingH2: row.missingLeadingH2,
     requiredOptimizeCount: row.existingH2s.length,
@@ -111,7 +176,10 @@ export async function runBlogHeadersPlanStream(
     throw new Error("OpenRouter API key is missing. Set it in Settings first.");
   }
 
-  const system = appendMasterInstructionsToSystemPrompt(PLAN_SYSTEM, options.siteId ?? null);
+  const system = appendMasterInstructionsToSystemPrompt(
+    buildBlogHeadersPlanSystemPrompt(),
+    options.siteId ?? null,
+  );
   const maxTokens = getCompetitorReportMaxOutputTokens(options.model);
   let buf = "";
   let finishReason: string | undefined;
@@ -144,8 +212,11 @@ export async function runBlogHeadersPlanStream(
     throw new Error("Empty plan response from OpenRouter");
   }
 
+  const parsedPlan = parsePlanContent(content);
+  const filledPlan = await fillMissingBlogHeadersPlanActions(row, parsedPlan, options);
+
   return clampBlogHeadersPlanToExistingH2s(
-    parsePlanContent(content),
+    filledPlan,
     row.existingH2s.length,
     row.missingLeadingH2,
   );

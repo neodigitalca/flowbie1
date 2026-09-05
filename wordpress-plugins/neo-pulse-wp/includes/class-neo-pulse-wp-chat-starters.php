@@ -9,14 +9,33 @@ defined( 'ABSPATH' ) || exit;
 
 class Neo_Pulse_Wp_Chat_Starters {
 
-	const CACHE_KEY  = 'neo_pulse_chat_starters_v1';
-	const CACHE_TTL  = 3600;
-	const MAX_COUNT  = 3;
-	const FAST_MODEL = 'google/gemini-2.5-flash-lite';
-	const MAX_TOKENS = 512;
+	const CACHE_KEY       = 'neo_pulse_chat_starters_v2';
+	const CACHE_TTL       = DAY_IN_SECONDS;
+	const MAX_COUNT       = 3;
+	const FAST_MODEL      = 'google/gemini-2.5-flash-lite';
+	const MAX_TOKENS      = 512;
+	const CRON_HOOK       = 'neo_pulse_wp_refresh_chat_starters';
+	const RECENCY_DAYS    = 45;
+	const RECENCY_LIMIT   = 200;
+	const RECENCY_LINE_MAX = 240;
+
+	public static function maybe_schedule(): void {
+		add_action( self::CRON_HOOK, array( __CLASS__, 'refresh' ) );
+		if ( ! wp_next_scheduled( self::CRON_HOOK ) ) {
+			wp_schedule_event( time(), 'daily', self::CRON_HOOK );
+		}
+	}
 
 	public static function invalidate_cache(): void {
 		delete_transient( self::CACHE_KEY );
+	}
+
+	/**
+	 * Rebuild starters into the daily cache (WP-Cron).
+	 */
+	public static function refresh(): void {
+		self::invalidate_cache();
+		self::get();
 	}
 
 	/**
@@ -56,6 +75,7 @@ class Neo_Pulse_Wp_Chat_Starters {
 
 		$inventory = self::build_inventory_block( $site_index );
 		$kb_block  = self::build_knowledge_block( $settings );
+		$recency   = self::build_recency_block();
 
 		$system = <<<'PROMPT'
 You suggest conversation starter questions for a website chat widget empty state.
@@ -68,6 +88,9 @@ Rules:
 - Ground every question in the SITE INVENTORY or KNOWLEDGE BASE. Do not invent pages, products, or services.
 - Mix helpful discovery (products, services, locations) with action intent (booking, contact, quote) when the inventory supports it.
 - Use natural visitor phrasing, not SEO keyword stuffing.
+- If RECENT VISITOR QUESTIONS is present, prefer themes that appear there and that the inventory or knowledge base can answer.
+- Ignore summarize-the-page prompts, near-duplicate lines, and questions the site cannot answer.
+- Do not copy a recent visitor line unless it is grounded in inventory or knowledge base.
 - Output ONLY JSON, no markdown fences.
 PROMPT;
 
@@ -75,6 +98,10 @@ PROMPT;
 		if ( $kb_block !== '' ) {
 			$user .= "\n\nKNOWLEDGE BASE:\n{$kb_block}";
 		}
+		if ( $recency !== '' ) {
+			$user .= "\n\nRECENT VISITOR QUESTIONS (last 45 days):\n{$recency}";
+		}
+		$user .= "\n\nPrefer recent visitor themes that inventory or knowledge base can answer. Return exactly 3 starters as JSON.";
 
 		$result = self::call_openrouter( $system, $user );
 		if ( is_wp_error( $result ) ) {
@@ -129,6 +156,49 @@ PROMPT;
 		}
 
 		return implode( "\n\n", $lines );
+	}
+
+	/**
+	 * Recent frontend visitor questions for the starter prompt.
+	 */
+	private static function build_recency_block(): string {
+		if ( ! class_exists( 'Neo_Pulse_Wp_Chat_Logs', false ) ) {
+			return '';
+		}
+
+		$from   = gmdate( 'Y-m-d', time() - ( self::RECENCY_DAYS * DAY_IN_SECONDS ) );
+		$result = Neo_Pulse_Wp_Chat_Logs::query(
+			array(
+				'source'    => 'frontend',
+				'role'      => 'user',
+				'date_from' => $from,
+				'per_page'  => self::RECENCY_LIMIT,
+				'orderby'  => 'created_at',
+				'order'    => 'desc',
+			)
+		);
+		$items = isset( $result['items'] ) && is_array( $result['items'] ) ? $result['items'] : array();
+		$lines = array();
+		$n     = 1;
+		foreach ( $items as $item ) {
+			$content = '';
+			if ( is_object( $item ) && isset( $item->content ) ) {
+				$content = (string) $item->content;
+			} elseif ( is_array( $item ) && isset( $item['content'] ) ) {
+				$content = (string) $item['content'];
+			}
+			$content = trim( wp_strip_all_tags( $content ) );
+			if ( $content === '' ) {
+				continue;
+			}
+			if ( strlen( $content ) > self::RECENCY_LINE_MAX ) {
+				$content = substr( $content, 0, self::RECENCY_LINE_MAX );
+			}
+			$lines[] = $n . '. ' . $content;
+			++$n;
+		}
+
+		return empty( $lines ) ? '' : implode( "\n", $lines );
 	}
 
 	/**

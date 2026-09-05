@@ -36,6 +36,16 @@ services:
         sync: false
       - key: LOCAL_DOMINATOR_LOGIN_URL
         value: https://app.localdominator.co/login/
+      - key: OXYLABS_PROXY_HOST
+        value: pr.oxylabs.io
+      - key: OXYLABS_PROXY_PORT
+        value: "7777"
+      - key: OXYLABS_PROXY_USERNAME
+        sync: false
+      - key: OXYLABS_PROXY_PASSWORD
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
 
   - type: web
     name: flowbie-prod-static
@@ -72,5 +82,15 @@ services:
         sync: false
       - key: LOCAL_DOMINATOR_LOGIN_URL
         value: https://app.localdominator.co/login/
+      - key: OXYLABS_PROXY_HOST
+        value: pr.oxylabs.io
+      - key: OXYLABS_PROXY_PORT
+        value: "7777"
+      - key: OXYLABS_PROXY_USERNAME
+        sync: false
+      - key: OXYLABS_PROXY_PASSWORD
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
     domains:
       - ld.neodigital.ca

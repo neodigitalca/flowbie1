@@ -60,31 +60,43 @@ describe("verifyOverviewHarnessScrollLinks", () => {
     expect(() => verifyOverviewHarnessScrollLinks(compliantHtml, anchorMap)).not.toThrow();
   });
 
-  it("throws when bullet count mismatches anchor map", () => {
+  it("warns when bullet count mismatches anchor map", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const html = `<h2>Overview</h2><ul>
 <li><strong>Only</strong>: one <a href="#policy-context">link</a>.</li>
 </ul>`;
-    expect(() => verifyOverviewHarnessScrollLinks(html, anchorMap)).toThrow(/expected 2 bullets/);
+    verifyOverviewHarnessScrollLinks(html, anchorMap);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
-  it("throws when an anchor is missing", () => {
+  it("warns when an anchor is missing", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const html = `<h2>Overview</h2><ul>
 <li><strong>A</strong>: <a href="#policy-context">one</a>.</li>
 <li><strong>B</strong>: <a href="#policy-context">dup</a>.</li>
 </ul>`;
-    expect(() => verifyOverviewHarnessScrollLinks(html, anchorMap)).toThrow(/must appear exactly once/);
+    verifyOverviewHarnessScrollLinks(html, anchorMap);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
-  it("throws on non-# hrefs when anchors are satisfied", () => {
+  it("warns on non-# hrefs when anchors are satisfied", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const html = `<h2>Overview</h2><ul>
 <li><strong>A</strong>: <a href="#policy-context">one</a> and <a href="https://example.com">bad</a>.</li>
 <li><strong>B</strong>: <a href="#financial-impact">two</a>.</li>
 </ul>`;
-    expect(() => verifyOverviewHarnessScrollLinks(html, anchorMap)).toThrow(/forbidden non-# href/);
+    verifyOverviewHarnessScrollLinks(html, anchorMap);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
-  it("throws on empty anchor map", () => {
-    expect(() => verifyOverviewHarnessScrollLinks(compliantHtml, [])).toThrow(/anchor map is empty/);
+  it("warns on empty anchor map", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    verifyOverviewHarnessScrollLinks(compliantHtml, []);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });
 
@@ -122,40 +134,78 @@ describe("applyOverviewHarnessScrollLinks", () => {
     expect(callOpenRouterChatCompletion).toHaveBeenCalledTimes(1);
   });
 
-  it("throws when anchor map is empty", async () => {
-    await expect(
-      applyOverviewHarnessScrollLinks({
-        html: compliantHtml,
-        anchorMap: [],
-        articleTitle: "Title",
-        keyword: "kw",
-        apiKey: "test-key",
-      }),
-    ).rejects.toThrow(/without body H2 anchors/);
+  it("returns html unchanged when anchor map is empty", async () => {
+    const out = await applyOverviewHarnessScrollLinks({
+      html: compliantHtml,
+      anchorMap: [],
+      articleTitle: "Title",
+      keyword: "kw",
+      apiKey: "test-key",
+    });
+    expect(out).toBe(compliantHtml);
+    expect(callOpenRouterChatCompletion).not.toHaveBeenCalled();
   });
 
-  it("throws when model returns wrong bullet count", async () => {
+  it("ships partial bullets when scroll-link agent returns wrong bullet count", async () => {
     vi.mocked(callOpenRouterChatCompletion).mockResolvedValueOnce({
       content: JSON.stringify({
         bullets: [
           {
             anchorId: "policy-context",
             bulletLabel: "Policy",
-            sentenceHtml: '<a href="#policy-context">one</a>',
+            sentenceHtml: 'Review <a href="#policy-context">policy shifts</a> for clinics.',
           },
         ],
       }),
     });
 
-    await expect(
-      applyOverviewHarnessScrollLinks({
-        html: compliantHtml,
-        anchorMap,
-        articleTitle: "Title",
-        keyword: "kw",
-        apiKey: "test-key",
+    const out = await applyOverviewHarnessScrollLinks({
+      html: compliantHtml,
+      anchorMap,
+      articleTitle: "Title",
+      keyword: "kw",
+      apiKey: "test-key",
+    });
+    expect(out).toContain('href="#policy-context"');
+    expect(callOpenRouterChatCompletion).toHaveBeenCalledTimes(1);
+  });
+
+  it("repairs anchorId mismatch from model JSON", async () => {
+    vi.mocked(callOpenRouterChatCompletion).mockResolvedValueOnce({
+      content: JSON.stringify({
+        bullets: [
+          {
+            anchorId: "wrong-id",
+            bulletLabel: "Treatments",
+            sentenceHtml:
+              'Review <a href="#wrong-id">window treatments</a> for local homes.',
+          },
+          {
+            anchorId: "financial-impact",
+            bulletLabel: "Finance",
+            sentenceHtml: 'Review <a href="#financial-impact">cost pressures</a> for clinics.',
+          },
+        ],
       }),
-    ).rejects.toThrow(/model returned 1 bullets, expected 2/);
+    });
+
+    const out = await applyOverviewHarnessScrollLinks({
+      html: `<h2>Overview</h2><p>Lead.</p>`,
+      anchorMap: [
+        {
+          sectionIndex: 1,
+          displayTitle: "Window Treatments for Municipality of Rhineland, Altona Homes",
+          anchorId: "window-treatments-for-municipality-of-rhineland-altona-homes",
+        },
+        { sectionIndex: 2, displayTitle: "Financial Impact", anchorId: "financial-impact" },
+      ],
+      articleTitle: "Title",
+      keyword: "window treatments",
+      apiKey: "test-key",
+    });
+
+    expect(out).toContain('href="#window-treatments-for-municipality-of-rhineland-altona-homes"');
+    expect(out).toContain('href="#financial-impact"');
   });
 });
 

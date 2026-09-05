@@ -3,6 +3,7 @@
  * Classifies site-wide KPI patterns so agents do not treat avg position in isolation.
  */
 import type { GscQueryPerfRow, GscSiteTotalsPreviousMonth } from "@/lib/gsc-reporting/gsc-reporting-fetch";
+import { parseCanadianNumber, splitCsvLine } from "@/lib/gsc-reporting/gsc-number-format";
 export type GscCompareKind = "mom" | "yoy" | "custom";
 
 export type GscCompareSignalPattern =
@@ -256,7 +257,7 @@ export function parseSiteTotalsCompareCsv(csvText: string): {
   const lines = csvText.split(/\r?\n/).filter((l) => l.trim() && !l.trim().startsWith("#"));
   if (lines.length < 2) return null;
 
-  const header = lines[0]!.split(",");
+  const header = splitCsvLine(lines[0]!);
   if (header.length < 3 || header[0]?.trim() !== "Metric") return null;
 
   const colA = header[1]?.trim() ?? "";
@@ -264,15 +265,17 @@ export function parseSiteTotalsCompareCsv(csvText: string): {
 
   const metrics: Record<string, { a?: number; b?: number }> = {};
   for (let i = 1; i < lines.length; i++) {
-    const parts = lines[i]!.split(",");
+    const parts = splitCsvLine(lines[i]!);
     const name = parts[0]?.trim();
     if (!name) continue;
     const a = parts[1]?.trim();
     const b = parts[2]?.trim();
     metrics[name] = {
-      a: a && a !== " - " ? Number(a) : undefined,
-      b: b && b !== " - " ? Number(b) : undefined,
+      a: a && a !== " - " ? parseCanadianNumber(a) : undefined,
+      b: b && b !== " - " ? parseCanadianNumber(b) : undefined,
     };
+    if (metrics[name]!.a != null && !Number.isFinite(metrics[name]!.a)) metrics[name]!.a = undefined;
+    if (metrics[name]!.b != null && !Number.isFinite(metrics[name]!.b)) metrics[name]!.b = undefined;
   }
 
   const clicks = metrics["Total clicks"];
@@ -320,7 +323,7 @@ export function parseQueriesMomCsv(csvText: string): {
   const lines = csvText.split(/\r?\n/).filter((l) => l.trim() && !l.trim().startsWith("#"));
   if (lines.length < 2) return { primaryQueries: [], compareQueries: [] };
 
-  const header = lines[0]!.split(",");
+  const header = splitCsvLine(lines[0]!);
   const queryIdx = header.findIndex((h) => h.trim() === "Query");
   if (queryIdx < 0) return { primaryQueries: [], compareQueries: [] };
 
@@ -339,14 +342,14 @@ export function parseQueriesMomCsv(csvText: string): {
   const compareQueries: GscQueryPerfRow[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const parts = lines[i]!.split(",");
+    const parts = splitCsvLine(lines[i]!);
     const query = parts[queryIdx]?.trim();
     if (!query) continue;
 
     const parseNum = (idx: number): number | undefined => {
       const v = parts[idx]?.trim();
       if (!v || v === " - ") return undefined;
-      const n = Number(v);
+      const n = parseCanadianNumber(v);
       return Number.isFinite(n) ? n : undefined;
     };
 
@@ -446,4 +449,4 @@ export const COMPARE_SIGNALS_SECTION_KINDS = new Set([
   "key_performance_insights",
 ]);
 
-export const COMPARE_SIGNALS_LEXICON = `**COMPARE_SIGNALS (when present in RETRIEVED DATA or RAW_DATA):** Treat \`primaryPattern\`, \`interpretation\`, and \`forbiddenFraming\` as **authoritative**. When \`primaryPattern\` is **query_footprint_expansion**, **forbidden** phrasing includes "visibility decline", "search visibility fell", and "overall visibility worsened". When Search queries rose AND impressions rose AND average position worsened, prose must mention **query discovery / footprint expansion** before noting click or position softness. Use \`compareLabel\` for period wording; do **not** say "month over month" when \`compareKind\` is **yoy**.`;
+export const COMPARE_SIGNALS_LEXICON = `**COMPARE_SIGNALS (when present in RETRIEVED DATA or RAW_DATA):** Treat \`primaryPattern\`, \`interpretation\`, and \`forbiddenFraming\` as **authoritative**. When \`primaryPattern\` is **query_footprint_expansion**, **forbidden** phrasing includes "visibility decline", "search visibility fell", and "overall visibility worsened". When Search queries rose AND impressions rose AND average position worsened, prose must mention **query discovery / footprint expansion** before noting click or position softness. Use \`compareLabel\` for period wording; do **not** say "month over month" when \`compareKind\` is **yoy** or **custom**.`;

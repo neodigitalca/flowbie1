@@ -1,0 +1,105 @@
+{
+  "keyword": "entity-page-creator-monthly",
+  "name": "Entity page creator",
+  "description": "Generate entity locations from a Local Dominator grid, then schedule entity pages across the month.",
+  "notes": [
+    "Requires a Local Dominator grid CSV upload (or use the Grid to entity pages workflow).",
+    "Grid pins drive location picks; Wikipedia and entity sitemap validate and dedupe.",
+    "Creates ad-group structured bulk CSV rows, fills GSC keywords, titles, and meta, then publishes entity pages.",
+    "Default: 3 ad groups × 5 locations = 15 entity pages scheduled evenly across the month.",
+    "Requires WordPress entity sitemap, OpenRouter, DataForSEO, and GSC."
+  ],
+  "category": "local-seo",
+  "verticals": [
+    "local-seo",
+    "general"
+  ],
+  "tags": [
+    "entity",
+    "sap",
+    "grid",
+    "monthly"
+  ],
+  "prerequisites": [
+    "wordpress",
+    "gsc",
+    "entity-sitemap"
+  ],
+  "filters": {
+    "executionKinds": [
+      "entity_page_creator"
+    ],
+    "targetBuckets": [
+      "sap"
+    ],
+    "actionCount": 1
+  },
+  "defaultTasks": [
+    {
+      "keyword": "entity-page-creator-run",
+      "title": "Create scheduled entity pages",
+      "status": "todo",
+      "assignPulse": true,
+      "scheduleMode": "calendar",
+      "dueDate": "2026-09-01",
+      "dueTime": "09:00",
+      "recurrenceRule": "monthly",
+      "executionKind": "entity_page_creator",
+      "executionPayload": {
+        "locationSource": "grid",
+        "gridInputSource": "workflow",
+        "entityAdGroupCount": 3,
+        "entityAdsPerGroup": 5,
+        "entityPageCount": 15,
+        "postCount": 15,
+        "focusKeyword": "",
+        "titleTemplate": "{keyword} Near {entity}",
+        "sitemapType": "entity",
+        "featuredImage": false,
+        "postDestination": "wordpress",
+        "scheduleTimesPerMonth": 15,
+        "scheduleCustomInterval": 15,
+        "scheduleStartDay": 1,
+        "scheduleStartTime": "09:00",
+        "scheduleStaggerOptimized": true,
+        "targetBucket": "sap",
+        "saveLocalArchive": true
+      }
+    }
+  ],
+  "triggerBlock": {
+    "keyword": "schedule-monthly",
+    "kind": "calendar",
+    "frequency": "monthly",
+    "startDate": "2026-09-01",
+    "time": "09:00",
+    "targetBucket": "sap"
+  },
+  "actionBlock": {
+    "keyword": "action-entity_page_creator",
+    "executionKind": "entity_page_creator",
+    "executionPayload": {
+      "locationSource": "grid",
+      "gridInputSource": "workflow",
+      "entityAdGroupCount": 3,
+      "entityAdsPerGroup": 5,
+      "entityPageCount": 15,
+      "postCount": 15,
+      "focusKeyword": "",
+      "titleTemplate": "{keyword} Near {entity}",
+      "sitemapType": "entity",
+      "featuredImage": false,
+      "postDestination": "wordpress",
+      "scheduleTimesPerMonth": 15,
+      "scheduleCustomInterval": 15,
+      "scheduleStartDay": 1,
+      "scheduleStartTime": "09:00",
+      "scheduleStaggerOptimized": true,
+      "targetBucket": "sap",
+      "saveLocalArchive": true
+    },
+    "title": "Create scheduled entity pages"
+  },
+  "isAutomation": true,
+  "kind": "template"
+}

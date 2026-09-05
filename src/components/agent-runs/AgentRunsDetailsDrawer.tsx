@@ -1,4 +1,5 @@
 import { Download } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { OptimizationArtifactDownloads } from "@/components/integrations/wordpress/OptimizationArtifactDownloads";
 import {
@@ -8,28 +9,29 @@ import {
   contentOptimizerRowStripeClass,
 } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import { WorkspaceDetailsLiveMessage } from "@/components/shared/WorkspaceDetailsStack";
-import { agentRunInlineStatus } from "@/lib/agent-runs/agent-run-display";
 import { formatAgentRunLogTimeline } from "@/lib/agent-runs/agent-run-log-format";
 import {
-  agentRunOpenViewLabel,
-  agentRunProgressHeading,
-  agentRunShowsOpenView,
+  agentRunShowsBrowserPreview,
   agentRunShowsUrlProgress,
   resolveAgentRunRecipeKey,
 } from "@/lib/agent-runs/agent-run-navigation";
-import { agentRunSiteId } from "@/lib/agent-runs/agent-run-batch-key";
-import { downloadAgentRunLog } from "@/lib/agent-runs/agent-run-log-download";
-import { useAgentRunOptimizerScope } from "@/contexts/agent-run-optimizer-scope-context";
+import { findAgentRunBrowserPreviewArtifact, agentRunBrowserPreviewBase64FromArtifact } from "@/lib/agent-runs/agent-run-browser-preview";
+import {
+  downloadAgentRunLog,
+  downloadWorkflowRunAgentLogs,
+  workflowRunIdFromAgentRun,
+} from "@/lib/agent-runs/agent-run-log-download";
 import { useTeam } from "@/contexts/TeamContext";
-import type { AgentRun } from "@/lib/agent-runs-types";
+import { useAgentRunsContext } from "@/contexts/agent-runs-context";
+import type { AgentRun, AgentRunUploadedPost } from "@/lib/agent-runs-types";
 import { isAgentRunTerminal } from "@/lib/agent-runs-types";
 import { cn } from "@/lib/utils";
+import { driveFolderDisplayName, driveFolderMonthLeafName } from "@/lib/google-drive/google-drive-folder-hierarchy";
 import { useAgentRunLiveSnapshot } from "./use-agent-run-live-snapshot";
 import { useAgentRunEnrichedProgressSteps } from "./use-agent-run-enriched-progress-steps";
 import { AgentRunProgressLog } from "./AgentRunProgressLog";
-import { useAgentRunPostCreatorProof } from "./use-agent-run-post-creator-proof";
-import { AgentRunPostCreatorProofPanel } from "./AgentRunPostCreatorProofPanel";
-
+import { AgentRunBrowserPreviewModal } from "./AgentRunBrowserPreviewModal";
+import { ChatGptAuditQueryPanel } from "./ChatGptAuditQueryPanel";
 type AgentRunsDetailsDrawerProps = {
   run: AgentRun;
   resumable?: boolean;
@@ -39,6 +41,26 @@ type AgentRunsDetailsDrawerProps = {
   onResume?: () => void;
 };
 
+function agentRunUploadedPostsForDisplay(run: AgentRun): AgentRunUploadedPost[] {
+  const posts = run.result?.uploadedPosts ?? [];
+  if (posts.length > 0) return posts;
+  return (run.result?.urls ?? []).map((url) => ({ url }));
+}
+
+function googleDriveResultLinkLabel(run: AgentRun, url: string): string {
+  if (!url.includes("/drive/folders/")) return "Open in Google Docs";
+  const candidates = [
+    run.result?.googleDriveFolderLabel ?? "",
+    (run.result?.googleDriveFoldersCreated ?? []).join(" / "),
+    ...(run.steps ?? []).map((step) => step.label),
+  ];
+  for (const candidate of candidates) {
+    const month = driveFolderMonthLeafName(candidate);
+    if (month) return month;
+  }
+  return driveFolderDisplayName(run.result?.googleDriveFolderLabel ?? "") || "View folder";
+}
+
 export function AgentRunsDetailsDrawer({
   run,
   resumable = false,
@@ -47,30 +69,35 @@ export function AgentRunsDetailsDrawer({
   onCancel,
   onResume,
 }: AgentRunsDetailsDrawerProps) {
+  const [browserPreviewOpen, setBrowserPreviewOpen] = useState(false);
   const live = useAgentRunLiveSnapshot(run);
   const { activeTeam } = useTeam();
-  const { openAgentRunOptimizer } = useAgentRunOptimizerScope();
-  const runSiteId = agentRunSiteId(run);
+  const { refreshRuns, runs } = useAgentRunsContext();
   const isRunning = !isAgentRunTerminal(run.status);
+  const workflowRunId = useMemo(() => workflowRunIdFromAgentRun(run), [run]);
+  const workflowRunLogCount = useMemo(() => {
+    if (!workflowRunId) return 0;
+    return runs.filter((item) => workflowRunIdFromAgentRun(item) === workflowRunId).length;
+  }, [runs, workflowRunId]);
   const showResumableError = resumable && Boolean(run.errorMessage?.trim());
   const progressSteps = useAgentRunEnrichedProgressSteps(run, live?.progressLabel ?? null);
   const timelineRows = formatAgentRunLogTimeline(run, progressSteps, live?.progressLabel ?? null);
-  const proof = useAgentRunPostCreatorProof(run);
   const recipeKey = resolveAgentRunRecipeKey(run);
   const showsUrlProgress = agentRunShowsUrlProgress(recipeKey);
-  const progressHeading = agentRunProgressHeading(recipeKey);
-  const openViewLabel = agentRunOpenViewLabel(recipeKey);
+  const showsBrowserPreview = agentRunShowsBrowserPreview(recipeKey);
+  const browserPreviewArtifact = findAgentRunBrowserPreviewArtifact(run);
+  const browserPreviewStep = run.steps?.find((step) => step.stepKey === "browser_preview");
+  const liveScreenshotBase64 = agentRunBrowserPreviewBase64FromArtifact(browserPreviewArtifact);
+  const previewCacheKey = browserPreviewStep?.updatedAt ?? browserPreviewStep?.createdAt ?? null;
 
   const currentUrl = showsUrlProgress ? (live?.currentUrl ?? null) : null;
   const postTitle = live?.postTitle ?? null;
-  const positionLabel = live?.positionLabel ?? null;
-  const inlineStatus = live?.progressLabel
-    ? agentRunInlineStatus(live.progressLabel)
-    : isRunning
-      ? "Starting…"
-      : "\u00a0";
   const generatedFiles = live?.generatedFiles ?? [];
-  const statusTitle = inlineStatus.trim() && inlineStatus !== "\u00a0" ? inlineStatus : undefined;
+
+  const uploadedPosts = agentRunUploadedPostsForDisplay(run);
+  const showsUploadedPosts =
+    (recipeKey === "post_creator" || recipeKey === "entity_page_creator") &&
+    (uploadedPosts.length > 0 || (recipeKey === "post_creator" && Boolean(run.result?.blockedRows?.length)));
 
   let stripeIndex = 0;
 
@@ -80,7 +107,7 @@ export function AgentRunsDetailsDrawer({
         <WorkspaceDetailsLiveMessage message={run.errorMessage!.trim()} stripeIndex={stripeIndex++} />
       ) : null}
 
-      {showsUrlProgress ? (
+      {showsUrlProgress && currentUrl ? (
         <div
           className={cn(
             contentOptimizerRowStripeClass(stripeIndex++, { isActiveOptimize: isRunning && Boolean(currentUrl) }),
@@ -88,61 +115,34 @@ export function AgentRunsDetailsDrawer({
           )}
         >
           <div className="agent-runs-card__current border-0 px-2.5 py-2 sm:px-3">
-            <div className="flex min-h-[1.5rem] min-w-0 items-center gap-2">
-              <span className="shrink-0 text-base text-muted-foreground">{progressHeading}</span>
-              <span
-                className="agent-runs-card__status-line min-w-0 flex-1 text-base text-white"
-                title={statusTitle}
-              >
-                {inlineStatus}
-              </span>
-              <span className="shrink-0 tabular-nums text-base text-muted-foreground">
-                {positionLabel ?? "\u00a0"}
-              </span>
-            </div>
-
             <div className="agent-runs-card__current-link min-h-[1.5rem]">
-              {currentUrl ? (
-                <a
-                  href={currentUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={cn(
-                    "text-base font-semibold [overflow-wrap:anywhere] hover:text-cyan-300 hover:underline",
-                    isRunning ? CONTENT_OPTIMIZER_ACTIVE_ROW_TEXT_CLASS : "text-zinc-100",
-                  )}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {postTitle || currentUrl}
-                </a>
-              ) : (
-                <span className="text-base text-muted-foreground">{isRunning ? "Starting…" : "\u00a0"}</span>
-              )}
+              <a
+                href={currentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cn(
+                  "text-base font-semibold [overflow-wrap:anywhere] hover:text-cyan-300 hover:underline",
+                  isRunning ? CONTENT_OPTIMIZER_ACTIVE_ROW_TEXT_CLASS : "text-zinc-100",
+                )}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {postTitle || currentUrl}
+              </a>
             </div>
           </div>
         </div>
       ) : null}
 
-      {recipeKey === "post_creator" && proof ? (
-        <div className={contentOptimizerRowStripeClass(stripeIndex++)}>
-          <div className="border-0 px-2.5 py-2 sm:px-3">
-            <AgentRunPostCreatorProofPanel
-              rows={proof.rows}
-              activeRowIndex={proof.activeRowIndex}
-              contentBucketFiles={proof.contentBucketFiles}
-            />
-          </div>
-        </div>
-      ) : null}
-
-      {recipeKey === "post_creator" && (run.result?.uploadedPosts?.length || run.result?.blockedRows?.length) ? (
+      {showsUploadedPosts ? (
         <div className={contentOptimizerRowStripeClass(stripeIndex++)}>
           <div className="space-y-2 border-0 px-2.5 py-2 sm:px-3">
-            {run.result?.uploadedPosts?.length ? (
+            {uploadedPosts.length ? (
               <div>
-                <p className="text-base text-muted-foreground">Uploaded posts</p>
+                <p className="text-base text-muted-foreground">
+                  {recipeKey === "entity_page_creator" ? "Created pages" : "Uploaded posts"}
+                </p>
                 <ul className="mt-1 space-y-1">
-                  {run.result.uploadedPosts.map((post) => (
+                  {uploadedPosts.map((post) => (
                     <li key={post.url}>
                       <a
                         href={post.url}
@@ -165,7 +165,7 @@ export function AgentRunsDetailsDrawer({
                 </ul>
               </div>
             ) : null}
-            {run.result?.blockedRows?.length ? (
+            {recipeKey === "post_creator" && run.result?.blockedRows?.length ? (
               <div>
                 <p className="text-base text-muted-foreground">Blocked (cannibalization)</p>
                 <ul className="mt-1 space-y-1">
@@ -191,6 +191,38 @@ export function AgentRunsDetailsDrawer({
                 </ul>
               </div>
             ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {recipeKey === "chatgpt_website_audit" ? (
+        <div className={contentOptimizerRowStripeClass(stripeIndex++)}>
+          <div className="border-0 px-2.5 py-2 sm:px-3">
+            <ChatGptAuditQueryPanel
+              run={run}
+              isRunning={isRunning}
+              onRefresh={() => {
+                void refreshRuns();
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {typeof run.result?.googleDriveWebViewLink === "string" &&
+      run.result.googleDriveWebViewLink.trim() ? (
+        <div className={contentOptimizerRowStripeClass(stripeIndex++)}>
+          <div className="border-0 px-2.5 py-2 sm:px-3">
+            <p className="text-base text-muted-foreground">Google Drive</p>
+            <a
+              href={run.result.googleDriveWebViewLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 inline-block text-base font-semibold text-cyan-300 hover:underline [overflow-wrap:anywhere]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {googleDriveResultLinkLabel(run, run.result.googleDriveWebViewLink)}
+            </a>
           </div>
         </div>
       ) : null}
@@ -228,17 +260,17 @@ export function AgentRunsDetailsDrawer({
               Resume
             </Button>
           ) : null}
-          {runSiteId && agentRunShowsOpenView(recipeKey) ? (
+          {showsBrowserPreview && (isRunning || browserPreviewArtifact) ? (
             <Button
               type="button"
               variant="ghost"
               className="h-8 shrink-0 px-2 text-base text-cyan-300 hover:bg-white/10 hover:text-cyan-200"
               onClick={(e) => {
                 e.stopPropagation();
-                openAgentRunOptimizer(run);
+                setBrowserPreviewOpen(true);
               }}
             >
-              {openViewLabel}
+              View browser
             </Button>
           ) : null}
           <Button
@@ -254,6 +286,19 @@ export function AgentRunsDetailsDrawer({
           >
             <Download className="h-3.5 w-3.5" aria-hidden />
           </Button>
+          {workflowRunId && workflowRunLogCount > 1 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-8 shrink-0 px-2 text-base text-white hover:bg-white/10 hover:text-white"
+              onClick={(e) => {
+                e.stopPropagation();
+                void downloadWorkflowRunAgentLogs(activeTeam?.id ?? null, workflowRunId, runs);
+              }}
+            >
+              All logs ({workflowRunLogCount})
+            </Button>
+          ) : null}
           {generatedFiles.length > 0 ? (
             <div className="ml-auto min-w-0">
               <OptimizationArtifactDownloads files={generatedFiles} variant="details" />
@@ -261,6 +306,18 @@ export function AgentRunsDetailsDrawer({
           ) : null}
         </div>
       </div>
+
+      {showsBrowserPreview ? (
+        <AgentRunBrowserPreviewModal
+          run={run}
+          open={browserPreviewOpen}
+          onOpenChange={setBrowserPreviewOpen}
+          timelineRows={timelineRows}
+          liveScreenshotBase64={liveScreenshotBase64}
+          liveLabel={live?.progressLabel ?? browserPreviewStep?.label ?? null}
+          previewCacheKey={previewCacheKey}
+        />
+      ) : null}
     </div>
   );
 }

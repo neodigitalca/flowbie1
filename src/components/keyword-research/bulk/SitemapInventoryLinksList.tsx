@@ -1,7 +1,42 @@
-import { ExternalLink } from "lucide-react";
+import { Download } from "lucide-react";
 import type { PromptBulkSitemapInventoryLink } from "@/lib/bulk/prompt-bulk-sitemap-inventory";
 import type { BulkGscKeywordsHostedLink } from "@/lib/bulk/bulk-gsc-keywords-hosted-link";
 import type { PromptBulkSiteKwHostedLink } from "@/lib/bulk/prompt-bulk-site-kw-scrape";
+
+export const HOSTED_INVENTORY_DOWNLOAD_STAGGER_MS = 300;
+
+export type HostedInventoryDownload = { href: string; filename: string };
+
+export function hostedInventoryDownloads(
+  links: PromptBulkSitemapInventoryLink[],
+  gscLink?: BulkGscKeywordsHostedLink | PromptBulkSiteKwHostedLink | null,
+): HostedInventoryDownload[] {
+  const out: HostedInventoryDownload[] = links.map((link) => ({
+    href: link.href,
+    filename: link.filename,
+  }));
+  if (gscLink) out.push({ href: gscLink.href, filename: gscLink.filename });
+  return out;
+}
+
+export function downloadHostedInventoryFile(file: HostedInventoryDownload): void {
+  const a = document.createElement("a");
+  a.href = file.href;
+  a.download = file.filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+export function downloadAllHostedInventoryFiles(
+  links: PromptBulkSitemapInventoryLink[],
+  gscLink?: BulkGscKeywordsHostedLink | PromptBulkSiteKwHostedLink | null,
+): void {
+  hostedInventoryDownloads(links, gscLink).forEach((file, index) => {
+    setTimeout(() => downloadHostedInventoryFile(file), index * HOSTED_INVENTORY_DOWNLOAD_STAGGER_MS);
+  });
+}
 
 function InventoryHostedLinkRow({
   label,
@@ -17,20 +52,26 @@ function InventoryHostedLinkRow({
   unit: string;
 }) {
   return (
-    <li className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-base">
-      <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+    <li className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-base">
+      <Download className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       <span className="font-medium text-white">{label}</span>
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-primary underline-offset-2 hover:underline"
+      <span
+        className="min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere] text-white"
+        title={filename}
       >
         {filename}
-      </a>
+      </span>
       <span className="text-muted-foreground">
         ({count} {unit})
       </span>
+      <a
+        href={href}
+        download={filename}
+        className="inline-flex h-7 shrink-0 items-center px-2 text-base text-white hover:bg-white/10 hover:text-white"
+      >
+        <Download className="mr-1 h-3 w-3" aria-hidden />
+        File
+      </a>
     </li>
   );
 }

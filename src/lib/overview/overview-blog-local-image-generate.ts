@@ -34,7 +34,7 @@ import {
 } from "@/lib/in-content-image-generator";
 import { parseMarkdownSections } from "@/lib/section-parser";
 import { uploadWordPressMedia } from "@/lib/wordpress-api";
-import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
+import { backendApiUrl } from "@/lib/wordpress-api/connection";
 import {
   isCurrentConnectedSite,
   searchSapCrossSiteInContentImage,
@@ -207,7 +207,7 @@ export async function prepareLocalImageDataUrl(dataUrl: string): Promise<{
   height: number;
   upscaled: boolean;
 }> {
-  const res = await fetch(`${BACKEND_API_BASE}/api/images/prepare-local-image`, {
+  const res = await fetch(backendApiUrl("/images/prepare-local-image"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ dataUrl }),
@@ -235,7 +235,7 @@ export async function prepareLocalImageDataUrl(dataUrl: string): Promise<{
 async function fetchGoogleImagesForEntity(
   keyword: string,
 ): Promise<GoogleImagesSerpItem[]> {
-  const res = await fetch(`${BACKEND_API_BASE}/api/dataforseo/google-images`, {
+  const res = await fetch(backendApiUrl("/dataforseo/google-images"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -263,7 +263,7 @@ async function fetchGoogleImagesForEntity(
 
 async function prefetchImageDataUrl(imageUrl: string): Promise<string | null> {
   try {
-    const res = await fetch(`${BACKEND_API_BASE}/api/images/fetch-data-url`, {
+    const res = await fetch(backendApiUrl("/images/fetch-data-url"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url: imageUrl }),

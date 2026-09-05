@@ -26,7 +26,13 @@ import { TaskTriggerFields } from "@/components/manager/tasks/TaskTriggerFields"
 import { GscReportingExecutionFields } from "@/components/manager/tasks/GscReportingExecutionFields";
 import { LocalDominatorExportExecutionFields } from "@/components/manager/tasks/LocalDominatorExportExecutionFields";
 import { PostCreatorExecutionFields } from "@/components/manager/tasks/PostCreatorExecutionFields";
+import { EntityPageCreatorExecutionFields } from "@/components/manager/tasks/EntityPageCreatorExecutionFields";
+import { EntityGeneratorExecutionFields } from "@/components/manager/tasks/EntityGeneratorExecutionFields";
+import { SapGeneratorExecutionFields } from "@/components/manager/tasks/SapGeneratorExecutionFields";
+import { ContentGapCheckExecutionFields, ensureContentGapCheckPayload } from "@/components/manager/tasks/ContentGapCheckExecutionFields";
+import { BrowserAutomationExecutionFields } from "@/components/manager/tasks/BrowserAutomationExecutionFields";
 import { ensurePostCreatorPayload } from "@/lib/post-creator/post-creator-defaults";
+import { ensureEntityPageCreatorPayload } from "@/lib/entity-page-creator/entity-page-creator-defaults";
 import {
   automationUsesTriggerUi,
   resolveEditorialPostCreatorTask,
@@ -45,6 +51,7 @@ import type {
   TaskRecurrenceRule,
   TaskExecutionKind,
   TaskExecutionPayload,
+  EntityPageCreatorExecutionPayload,
   TaskScheduleMode,
 } from "@/lib/tasks-types";
 import { TASK_RECURRENCE_LABELS, TASK_RECURRENCE_RULES, TASK_STATUS_LABELS, TASK_STATUSES } from "@/lib/tasks-types";
@@ -337,6 +344,14 @@ export function TaskDetailPane({
             });
             return;
           }
+          if (kind === "content_gap_check") {
+            onUpdate({
+              executionKind: kind,
+              scheduleMode: "calendar",
+              executionPayload: ensureContentGapCheckPayload(task.executionPayload),
+            });
+            return;
+          }
           onUpdate({ executionKind: kind, scheduleMode: "trigger" });
         }}
         disabled={saving}
@@ -378,6 +393,46 @@ export function TaskDetailPane({
           />
         </TaskFormInfield>
       </TaskFormFieldGrid>
+      {executionKind === "entity_page_creator" ? (
+        <EntityPageCreatorExecutionFields
+          layout="stack"
+          executionPayload={ensureEntityPageCreatorPayload(executionPayload as EntityPageCreatorExecutionPayload)}
+          disabled={saving}
+          onChange={(nextPayload) =>
+            onUpdate({
+              executionPayload: ensureEntityPageCreatorPayload(nextPayload as EntityPageCreatorExecutionPayload),
+              executionKind: "entity_page_creator",
+              scheduleMode: "calendar",
+            })
+          }
+        />
+      ) : null}
+      {executionKind === "entity_generator" ? (
+        <EntityGeneratorExecutionFields
+          executionPayload={ensureEntityPageCreatorPayload(executionPayload as EntityPageCreatorExecutionPayload)}
+          disabled={saving}
+          onChange={(nextPayload) =>
+            onUpdate({
+              executionPayload: ensureEntityPageCreatorPayload(nextPayload as EntityPageCreatorExecutionPayload),
+              executionKind: "entity_generator",
+              scheduleMode: "calendar",
+            })
+          }
+        />
+      ) : null}
+      {executionKind === "sap_generator" ? (
+        <SapGeneratorExecutionFields
+          executionPayload={ensureEntityPageCreatorPayload(executionPayload as EntityPageCreatorExecutionPayload)}
+          disabled={saving}
+          onChange={(nextPayload) =>
+            onUpdate({
+              executionPayload: ensureEntityPageCreatorPayload(nextPayload as EntityPageCreatorExecutionPayload),
+              executionKind: "sap_generator",
+              scheduleMode: "calendar",
+            })
+          }
+        />
+      ) : null}
       {executionKind === "post_creator" ? (
         <PostCreatorExecutionFields
           layout="stack"
@@ -402,6 +457,36 @@ export function TaskDetailPane({
           executionPayload={executionPayload}
           disabled={saving}
           onChange={(nextPayload) => onUpdate({ executionPayload: nextPayload })}
+        />
+      ) : null}
+      {executionKind === "content_gap_check" ? (
+        <ContentGapCheckExecutionFields
+          layout="stack"
+          clientSiteId={task.wordpressSiteId ?? ""}
+          executionPayload={executionPayload}
+          disabled={saving}
+          onChange={(nextPayload) =>
+            onUpdate({
+              executionPayload: ensureContentGapCheckPayload(nextPayload),
+              executionKind: "content_gap_check",
+              scheduleMode: "calendar",
+            })
+          }
+        />
+      ) : null}
+      {executionKind === "browser_automation" ? (
+        <BrowserAutomationExecutionFields
+          layout="stack"
+          clientSiteId={task.wordpressSiteId ?? ""}
+          executionPayload={executionPayload}
+          disabled={saving}
+          onChange={(nextPayload) =>
+            onUpdate({
+              executionPayload: nextPayload,
+              executionKind: "browser_automation",
+              scheduleMode: "calendar",
+            })
+          }
         />
       ) : null}
     </TaskFormPanel>

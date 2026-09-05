@@ -7,6 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const pluginRoot = join(__dirname, "..");
 const mapFixture = join(__dirname, "fixtures/entity-maps-serp-map-rectangle.json");
 const kgFixture = join(__dirname, "fixtures/entity-maps-serp-knowledge-graph-neighborhood.json");
+const kgVillageFixture = join(__dirname, "fixtures/entity-maps-serp-knowledge-graph-village.json");
 const noMapFixture = join(__dirname, "fixtures/entity-maps-serp-no-map.json");
 const multiMapFixture = join(__dirname, "fixtures/entity-maps-serp-multiple-map-rectangles.json");
 const meadowlarkFixture = join(__dirname, "fixtures/entity-maps-serp-meadowlark-maps-block.json");
@@ -19,6 +20,23 @@ function runRectangleParser(fixture) {
 
 function runKeywordBuilder(entity) {
   const out = execFileSync("php", [phpScript, "--keyword", entity], { encoding: "utf8" });
+  return JSON.parse(out.trim());
+}
+
+function runKeywordsBuilder(entity) {
+  const out = execFileSync("php", [phpScript, "--keywords", entity], { encoding: "utf8" });
+  return JSON.parse(out.trim());
+}
+
+function runCityLabelsBuilder(entity) {
+  const out = execFileSync("php", [phpScript, "--city-labels", entity], { encoding: "utf8" });
+  return JSON.parse(out.trim());
+}
+
+function runFallbackRect(width, height) {
+  const out = execFileSync("php", [phpScript, "--fallback-rect", String(width), String(height)], {
+    encoding: "utf8",
+  });
   return JSON.parse(out.trim());
 }
 
@@ -63,6 +81,16 @@ describe("entity map rectangle parser", () => {
     });
   });
 
+  it("derives map crop from knowledge_graph for village/city entities", () => {
+    const rect = runRectangleParser(kgVillageFixture);
+    expect(rect).toEqual({
+      x: 900,
+      y: 222,
+      width: 300,
+      height: 300,
+    });
+  });
+
   it("returns null when no map item exists", () => {
     expect(runRectangleParser(noMapFixture)).toBeNull();
   });
@@ -79,5 +107,61 @@ describe("entity map SERP keyword builder", () => {
     expect(runKeywordBuilder("Meadowlark Park, Edmonton, AB maps")).toBe(
       "Meadowlark Park, Edmonton, AB maps",
     );
+  });
+
+  it("builds fallback SERP keywords for city entities", () => {
+    expect(runKeywordsBuilder("Plum Coulee, MB")).toEqual([
+      "Plum Coulee, MB maps",
+      "Plum Coulee maps",
+    ]);
+  });
+
+  it("adds city-level keywords for POI entities without a map rectangle", () => {
+    expect(runKeywordsBuilder("Altona Community Centre, MB")).toEqual([
+      "Altona Community Centre, MB maps",
+      "Altona Community Centre maps",
+      "Altona, MB maps",
+      "Altona maps",
+    ]);
+  });
+
+  it("adds bare city keywords for region + city entities", () => {
+    expect(runKeywordsBuilder("Pembina Valley Region, Altona")).toEqual([
+      "Pembina Valley Region, Altona maps",
+      "Pembina Valley Region maps",
+      "Altona maps",
+    ]);
+  });
+});
+
+describe("entity map city label builder", () => {
+  it("extracts city from POI + region labels", () => {
+    expect(runCityLabelsBuilder("Altona Community Centre, MB")).toEqual(["Altona, MB", "Altona"]);
+  });
+
+  it("extracts city from POI + city + region labels", () => {
+    expect(runCityLabelsBuilder("Altona Community Centre, Altona, MB")).toEqual(["Altona, MB"]);
+  });
+
+  it("extracts city from neighborhood + city + region labels", () => {
+    expect(runCityLabelsBuilder("Millwood, Altona, MB")).toEqual(["Altona, MB"]);
+  });
+
+  it("extracts bare city from region + city labels", () => {
+    expect(runCityLabelsBuilder("Pembina Valley Region, Altona")).toEqual([
+      "Pembina Valley Region, Altona",
+      "Altona",
+    ]);
+  });
+});
+
+describe("entity map city screenshot fallback rectangle", () => {
+  it("crops full width below the search bar", () => {
+    expect(runFallbackRect(1920, 1080)).toEqual({
+      x: 0,
+      y: 100,
+      width: 1920,
+      height: 980,
+    });
   });
 });

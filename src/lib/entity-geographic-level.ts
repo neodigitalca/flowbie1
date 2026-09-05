@@ -34,13 +34,13 @@ export const ENTITY_TYPE_TAXONOMY: Record<EntityGeographicLevel, readonly string
   city: [
     "Neighbourhoods and residential quarters",
     "Business districts and downtown cores",
-    "Street-as-place corridors and main streets",
+    "Historic districts and quarters",
+    "Suburbs and inner-ring communities",
     "Parks, trails, and river valleys (named)",
     "Landmarks, civic buildings, and named complexes",
     "Industrial pockets and business parks",
-    "Historic districts and quarters",
-    "Suburbs and inner-ring communities",
     "Waterfront or campus-adjacent micro-areas",
+    "Street-as-place corridors and main streets",
   ],
 } as const;
 
@@ -163,7 +163,7 @@ export function targetsBlockEntityDifferentiationNote(level: EntityGeographicLev
     case "provincial":
       return "distinct **provincial- or state-scale** place types (regional cities, county seats, provincial parks, subregions, in-province corridors) grounded in the user's market and hints";
     default:
-      return "distinct **neighbourhood- and district-scale** first segments; **prioritize** neighbourhood, district, and named-community labels from evidence, then parks, landmarks, and main-street as place when diversity or the grid requires it";
+      return "distinct **neighbourhood- and district-scale** first segments; **prioritize** neighbourhood, district, and named-community labels from evidence, then parks and landmarks";
   }
 }
 
@@ -173,8 +173,8 @@ export function targetsBlockMultiRowNote(level: EntityGeographicLevel, manual: b
     return ` Use ${targetsBlockEntityDifferentiationNote(level)}.`;
   }
   return manual
-    ? " **Prioritize** neighbourhood, district, and named-community **first** segments per row; add street-as-place, park, or landmark when hints lack neighbourhood names or you need a distinct non-duplicate place."
-    : " **Prioritize** neighbourhood, district, and named-community names from the grid; add street-as-place, park, or landmark when the grid has no such label for that area or you need a distinct place without repeating a neighbourhood.";
+    ? " **Prioritize** neighbourhood, district, and named-community **first** segments per row; use parks or landmarks when hints lack neighbourhood names or you need a distinct non-duplicate place."
+    : " **Prioritize** neighbourhood, district, and named-community names from the grid; use parks or landmarks when the grid has no such label for that area or you need a distinct place without repeating a neighbourhood.";
 }
 
 function focusSentence(entityTypeFocus?: readonly string[] | null): string {

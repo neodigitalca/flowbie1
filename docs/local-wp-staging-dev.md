@@ -57,6 +57,12 @@ curl.exe -k -X POST https://neopulse.local/api/auth/setup-admin `
 ## Daily dev loop
 
 ```powershell
+npm run start:local
+```
+
+Or only Vite when Docker is already up:
+
+```powershell
 npm run dev
 ```
 
@@ -97,6 +103,8 @@ npm run deploy:wp-clients
 
 | Script | Purpose |
 |--------|---------|
+| `start:local` | Docker + neopulse.local + Vite (:8080) |
+| `launch:local` | Same as `start:local`, opens browser |
 | `setup:local-wp` | One-time hosts + secrets + plugin sync |
 | `sync:local-wp` | Re-sync plugins and regenerate secrets |
 | `dev:local` | Vite dev with `/api` → `neopulse.local` |

@@ -1,7 +1,9 @@
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import {
   CONTENT_OPTIMIZER_MULTI_SITE_ROW_STACK_CLASS,
   contentOptimizerRowStripeClass,
+  CONTENT_OPTIMIZER_ACTIVE_ROW_TEXT_CLASS,
+  CONTENT_OPTIMIZER_ACTIVE_ROW_HIGHLIGHT_CLASS,
 } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import { ChevronDown, Download, FileDown, Map as MapIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,16 +26,26 @@ import {
 import {
   CONTENT_PREP_BATCH_SECTION_TITLES,
   CONTENT_PREP_ENTITY_SAP_BATCH_SECTION_TITLES,
-  CONTENT_PREP_POST_SECTION_TITLES,
-  buildWaitingPostHarnessSections,
 } from "@/lib/overview/overview-content-prep-harness-sections";
+import {
+  CONTENT_OPTIMIZE_PIPELINE_TITLES,
+  buildWaitingContentOptimizeHarnessSections,
+  isContentOptimizePipelineTitles,
+} from "@/lib/overview/overview-content-optimize-pipeline";
+import {
+  RESEARCH_HARNESS_SECTION_TITLES,
+  RESEARCH_STEP_ARTIFACT_SLUGS,
+  isResearchHarnessPipelineTitles,
+  researchBriefGeneratedFile,
+} from "@/lib/overview/overview-research-harness-sections";
 
 export type BulkDetailsDownloadable = { name: string; content: string; mimeType: string };
 
 const PIPELINE_HARNESS_TITLES = new Set<string>([
   ...CONTENT_PREP_BATCH_SECTION_TITLES,
   ...CONTENT_PREP_ENTITY_SAP_BATCH_SECTION_TITLES,
-  ...CONTENT_PREP_POST_SECTION_TITLES,
+  ...CONTENT_OPTIMIZE_PIPELINE_TITLES,
+  ...RESEARCH_HARNESS_SECTION_TITLES,
 ]);
 
 function filterPipelineHarnessSections(
@@ -52,13 +64,43 @@ function isSerpPipelineSection(section: BulkHarnessSectionUi): boolean {
   return title.includes("serp") || title.includes("research brief");
 }
 
-/** Details drawer: SERP pipeline row only; artifact files list checklist/blueprint/content separately. */
-export const DETAILS_DRAWER_PIPELINE_TITLE = CONTENT_PREP_POST_SECTION_TITLES[0];
+export function isSerpBriefGeneratedFileName(name: string): boolean {
+  const n = name.toLowerCase();
+  return (
+    n.includes("serp-research-brief") ||
+    n.includes("seo-research-brief") ||
+    n.includes("seo_research_brief") ||
+    n.includes("acf-seo-research") ||
+    n.startsWith("seo-research-")
+  );
+}
+
+export function resolveSerpBriefDownloadable(
+  keyword: string,
+  displayFiles: BulkDetailsDownloadable[],
+  overviewBriefJson?: string | null,
+): BulkDetailsDownloadable | null {
+  const fromFiles = displayFiles.find((file) => isSerpBriefGeneratedFileName(file.name)) ?? null;
+  if (fromFiles) return fromFiles;
+  const fromOverview = researchBriefGeneratedFile(keyword, overviewBriefJson ?? undefined)[0];
+  return fromOverview ?? null;
+}
+
+/** Details drawer: first content-optimize pipeline row (SERP research brief). */
+export const DETAILS_DRAWER_PIPELINE_TITLE = CONTENT_OPTIMIZE_PIPELINE_TITLES[0];
+
+function sanitizeHarnessSectionForDrawer(section: BulkHarnessSectionUi): BulkHarnessSectionUi {
+  if (section.status === "done") {
+    return section;
+  }
+  return { ...section, markdown: undefined };
+}
 
 function resolveDetailsPipelineSections(
   persisted: BulkHarnessSectionUi[] | undefined,
   live: BulkHarnessSectionUi[] | undefined,
   pipelineSectionTitles?: readonly string[],
+  files?: Array<{ name: string }>,
 ): BulkHarnessSectionUi[] {
   if (pipelineSectionTitles?.length) {
     const statusByTitle = new Map<string, BulkHarnessSectionUi>();
@@ -68,19 +110,19 @@ function resolveDetailsPipelineSections(
     }
     return pipelineSectionTitles.map((title, sectionIndex) => {
       const patch = statusByTitle.get(title);
-      return (
-        patch ?? {
-          sectionIndex,
-          title,
-          status: "waiting" as const,
-        }
-      );
+      if (patch && patch.status !== "waiting") {
+        return sanitizeHarnessSectionForDrawer({ ...patch, sectionIndex, title });
+      }
+      const placeholder: BulkHarnessSectionUi = patch ?? {
+        sectionIndex,
+        title,
+        status: "waiting" as const,
+      };
+      return placeholder;
     });
   }
 
-  const waiting = buildWaitingPostHarnessSections().filter(
-    (section) => section.title === DETAILS_DRAWER_PIPELINE_TITLE,
-  );
+  const waiting = buildWaitingContentOptimizeHarnessSections();
   const statusByTitle = new Map<string, BulkHarnessSectionUi>();
   for (const section of [...(persisted ?? []), ...(live ?? [])]) {
     const title = section.title?.trim();
@@ -106,6 +148,7 @@ function harnessSectionToDownloadable(
   section: BulkHarnessSectionUi,
   orderIndex: number,
 ): BulkDetailsDownloadable | null {
+  if (section.status !== "done") return null;
   const markdown = section.markdown?.trim();
   if (!markdown) return null;
 
@@ -118,23 +161,147 @@ function harnessSectionToDownloadable(
   if (csvMatch) {
     return { name: `${base}.csv`, content: csvMatch[1], mimeType: "text/csv;charset=utf-8" };
   }
+  const looksHtml = markdown.startsWith("<") && /<\/(p|h2|h3|div|ul|ol|table|blockquote)\b/i.test(markdown);
+  if (looksHtml) {
+    return { name: `${base}.html`, content: markdown, mimeType: "text/html;charset=utf-8" };
+  }
   return { name: `${base}.md`, content: markdown, mimeType: "text/markdown;charset=utf-8" };
+}
+
+function linkResearchStepFile(
+  section: BulkHarnessSectionUi,
+  files: BulkDetailsDownloadable[],
+): BulkDetailsDownloadable | null {
+  const title = section.title.trim();
+  const slug = RESEARCH_STEP_ARTIFACT_SLUGS[title as keyof typeof RESEARCH_STEP_ARTIFACT_SLUGS];
+  if (slug) {
+    return files.find((file) => file.name.toLowerCase().includes(slug)) ?? null;
+  }
+
+  const titleLower = title.toLowerCase();
+  if (titleLower.includes("brief merge")) {
+    return files.find((file) => isSerpBriefGeneratedFileName(file.name)) ?? null;
+  }
+  if (titleLower.includes("brief upload")) {
+    return (
+      files.find(
+        (file) => file.name.startsWith("seo_brief__") && file.content.trim().startsWith("{"),
+      ) ?? null
+    );
+  }
+
+  const titlePart = sanitizeHarnessFilenamePart(section.title);
+  if (!titlePart) return null;
+  const titleNorm = titlePart.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return (
+    files.find((file) => {
+      if (!file.name.startsWith("research-")) return false;
+      const fileNorm = file.name.toLowerCase().replace(/[^a-z0-9]+/g, "");
+      return fileNorm.includes(titleNorm);
+    }) ?? null
+  );
 }
 
 function linkPipelineSectionToGeneratedFile(
   section: BulkHarnessSectionUi,
   files: BulkDetailsDownloadable[],
 ): BulkDetailsDownloadable | null {
+  const researchLinked = linkResearchStepFile(section, files);
+  if (researchLinked) return researchLinked;
+
   const title = section.title.trim().toLowerCase();
   if (!title) return null;
-  if (title.includes("serp") || title.includes("research brief")) {
+  if (title === "keyword research") {
+    return files.find((file) => file.name.toLowerCase().startsWith("keyword-research")) ?? null;
+  }
+  if (title === "selected keyword") {
+    return files.find((file) => file.name.toLowerCase().startsWith("selected-keyword")) ?? null;
+  }
+  if (title === "link targets") {
+    return files.find((file) => file.name.toLowerCase().startsWith("link-targets")) ?? null;
+  }
+  if (title === "brief merge" || title.includes("research brief")) {
+    return files.find((file) => isSerpBriefGeneratedFileName(file.name)) ?? null;
+  }
+  if (title.includes("brief upload")) {
     return (
-      files.find((file) => file.name.includes("acf-seo-research")) ??
-      files.find((file) => file.name.includes("keyword-research")) ??
+      files.find(
+        (file) => file.name.startsWith("seo_brief__") && file.content.trim().startsWith("{"),
+      ) ??
+      files.find((file) => isSerpBriefGeneratedFileName(file.name)) ??
       null
     );
   }
-  if (title.includes("blueprint") || title.includes("content")) {
+  if (title.includes("semrush")) {
+    return (
+      files.find((file) => file.name.toLowerCase().includes("semrush-enrichment")) ??
+      files.find((file) => file.name.toLowerCase().includes("semrush")) ??
+      files.find((file) => file.name.includes("Semrush_enrichment")) ??
+      null
+    );
+  }
+  if (title.includes("dataforseo")) {
+    return (
+      files.find((file) => file.name.toLowerCase().includes("dataforseo-serp")) ??
+      files.find((file) => file.name.toLowerCase().includes("dataforseo_serp")) ??
+      null
+    );
+  }
+  if (title === "serp dump load") {
+    return (
+      files.find((file) => file.name.toLowerCase().includes("serp-dump-load")) ??
+      files.find((file) => file.name.toLowerCase().includes("serp_dump_load")) ??
+      null
+    );
+  }
+  if (title.includes("gsc quick-wins")) {
+    return (
+      files.find((file) => file.name.toLowerCase().includes("gsc-quick-wins-context")) ??
+      files.find((file) => file.name.toLowerCase().includes("gsc_quick_wins")) ??
+      null
+    );
+  }
+  if (title.includes("gsc")) {
+    const slug = sanitizeHarnessFilenamePart(section.title);
+    return (
+      files.find((file) => file.name.includes(slug)) ??
+      files.find((file) => file.name.toLowerCase().includes("gsc")) ??
+      null
+    );
+  }
+  if (title.includes("llm")) {
+    return (
+      files.find((file) => file.name.toLowerCase().includes("llm-audit")) ??
+      files.find((file) => file.name.includes("LLM_audit")) ??
+      null
+    );
+  }
+  if (title.includes("serp") || title.includes("research brief")) {
+    return files.find((file) => isSerpBriefGeneratedFileName(file.name)) ?? null;
+  }
+  if (title.includes("blueprint")) {
+    return files.find((file) => file.name.toLowerCase().startsWith("blueprint")) ?? null;
+  }
+  if (title.includes("checklist")) {
+    return files.find((file) => file.name.toLowerCase().includes("checklist")) ?? null;
+  }
+  if (title.includes("content html")) {
+    return (
+      files.find(
+        (file) =>
+          file.name.toLowerCase().startsWith("content-") && file.name.toLowerCase().endsWith(".html"),
+      ) ?? null
+    );
+  }
+  if (title.includes("content markdown")) {
+    return (
+      files.find(
+        (file) =>
+          file.name.toLowerCase().startsWith("content-") && file.name.toLowerCase().endsWith(".md"),
+      ) ?? null
+    );
+  }
+  if (title.includes("content")) {
     return (
       files.find((file) => file.name.startsWith("blueprint")) ??
       files.find((file) => file.name.startsWith("content-")) ??
@@ -145,6 +312,12 @@ function linkPipelineSectionToGeneratedFile(
     return files.find((file) => file.name.includes("sitemap")) ?? null;
   }
   return null;
+}
+
+function isHarnessSectionDownloadReady(section: BulkHarnessSectionUi): boolean {
+  if (section.status === "waiting") return false;
+  if (section.status === "done") return true;
+  return false;
 }
 
 function sectionFallbackDownloadable(
@@ -166,41 +339,50 @@ export function resolvePipelineSectionDownloadable(
   files: BulkDetailsDownloadable[],
   claimedNames: Set<string>,
   serpBriefDownload?: BulkDetailsDownloadable | null,
-  options?: { noFallback?: boolean },
+  options?: { noFallback?: boolean; researchArtifactsOnly?: boolean; requireDoneStatus?: boolean },
 ): BulkDetailsDownloadable | null {
   const available = files.filter((file) => !claimedNames.has(file.name));
 
-  if (!options?.noFallback && isSerpPipelineSection(section) && serpBriefDownload) {
+  if (options?.requireDoneStatus && section.status !== "done") {
+    const linkedEarly = linkPipelineSectionToGeneratedFile(section, available);
+    if (linkedEarly) {
+      claimedNames.add(linkedEarly.name);
+      return linkedEarly;
+    }
+    return null;
+  }
+
+  if (isSerpPipelineSection(section) && serpBriefDownload && !claimedNames.has(serpBriefDownload.name)) {
     claimedNames.add(serpBriefDownload.name);
     return serpBriefDownload;
   }
 
-  const fromMarkdown = harnessSectionToDownloadable(section, orderIndex);
-  if (fromMarkdown) {
-    claimedNames.add(fromMarkdown.name);
-    return fromMarkdown;
+  const linked = linkPipelineSectionToGeneratedFile(section, available);
+  if (linked) {
+    claimedNames.add(linked.name);
+    return linked;
   }
 
-  if (!options?.noFallback) {
-    const linked = linkPipelineSectionToGeneratedFile(section, available);
-    if (linked) {
-      claimedNames.add(linked.name);
-      return linked;
+  if (!options?.researchArtifactsOnly) {
+    const fromMarkdown = harnessSectionToDownloadable(section, orderIndex);
+    if (fromMarkdown) {
+      claimedNames.add(fromMarkdown.name);
+      return fromMarkdown;
     }
-
-    const fallback = sectionFallbackDownloadable(section, orderIndex);
-    claimedNames.add(fallback.name);
-    return fallback;
   }
 
-  return null;
+  if (options?.noFallback) return null;
+
+  const fallback = sectionFallbackDownloadable(section, orderIndex);
+  claimedNames.add(fallback.name);
+  return fallback;
 }
 
 function buildPipelineSectionDownloadables(
   pipelineSections: BulkHarnessSectionUi[],
   files: BulkDetailsDownloadable[],
   serpBriefDownload?: BulkDetailsDownloadable | null,
-  options?: { noFallback?: boolean },
+  options?: { noFallback?: boolean; researchArtifactsOnly?: boolean; requireDoneStatus?: boolean },
 ): Array<BulkDetailsDownloadable | null> {
   const claimedNames = new Set<string>();
   return pipelineSections.map((section, index) =>
@@ -219,7 +401,7 @@ export function buildAllDownloadables(
   pipelineSections: BulkHarnessSectionUi[],
   files: BulkDetailsDownloadable[],
   serpBriefDownload?: BulkDetailsDownloadable | null,
-  options?: { noFallback?: boolean },
+  options?: { noFallback?: boolean; researchArtifactsOnly?: boolean; requireDoneStatus?: boolean },
 ): BulkDetailsDownloadable[] {
   const seen = new Set<string>();
   const all: BulkDetailsDownloadable[] = [];
@@ -228,7 +410,9 @@ export function buildAllDownloadables(
     seen.add(file.name);
     all.push(file);
   };
-  buildPipelineSectionDownloadables(pipelineSections, files, serpBriefDownload, options).forEach(push);
+  buildPipelineSectionDownloadables(pipelineSections, files, serpBriefDownload, options).forEach((file) =>
+    push(file),
+  );
   files.forEach((file) => push(file));
   return all;
 }
@@ -243,6 +427,8 @@ export function BulkDetailsTileSections({
   statusMessage,
   progressLabel,
   pipelineSectionTitles,
+  defaultFilesOpen,
+  downloadsLocked = false,
 }: {
   harnessSections: BulkHarnessSectionUi[];
   files: BulkDetailsDownloadable[];
@@ -254,41 +440,62 @@ export function BulkDetailsTileSections({
   /** Active-row batch counter (e.g. 20/115), inline before file count. */
   progressLabel?: string | null;
   pipelineSectionTitles?: readonly string[];
+  defaultFilesOpen?: boolean;
+  /** @deprecated Row-level lock; per-step gating uses harness status === done. */
+  downloadsLocked?: boolean;
 }) {
-  const [filesOpen, setFilesOpen] = useState(false);
+  const [filesOpen, setFilesOpen] = useState(defaultFilesOpen ?? false);
+  useEffect(() => {
+    if (defaultFilesOpen) setFilesOpen(true);
+  }, [defaultFilesOpen]);
   const useExplicitPipeline = Boolean(pipelineSectionTitles?.length);
+  const isResearchPipeline =
+    useExplicitPipeline && isResearchHarnessPipelineTitles(pipelineSectionTitles);
+  const isContentOptimizePipeline =
+    useExplicitPipeline && isContentOptimizePipelineTitles(pipelineSectionTitles);
+  const pipelineDownloadOptions = isResearchPipeline
+    ? { researchArtifactsOnly: true as const }
+    : isContentOptimizePipeline
+      ? { noFallback: true as const, requireDoneStatus: true as const }
+      : undefined;
   const pipelineSections = useExplicitPipeline
-    ? harnessSections.length
-      ? harnessSections
-      : pipelineSectionTitles!.map((title, sectionIndex) => ({
-          sectionIndex,
-          title,
-          status: "waiting" as const,
-        }))
-    : (
-        harnessSections.length
-          ? filterPipelineHarnessSections(harnessSections)
-          : buildWaitingPostHarnessSections()
-      ).filter((section) => section.title === DETAILS_DRAWER_PIPELINE_TITLE);
-  const strictPipelineDownloads = useExplicitPipeline;
+    ? resolveDetailsPipelineSections(harnessSections, undefined, pipelineSectionTitles, files)
+    : resolveDetailsPipelineSections(
+        harnessSections,
+        undefined,
+        [...CONTENT_OPTIMIZE_PIPELINE_TITLES],
+        files,
+      );
   const pipelineDownloadables = buildPipelineSectionDownloadables(
     pipelineSections,
     files,
     serpBriefDownload,
-    strictPipelineDownloads ? { noFallback: true } : undefined,
+    pipelineDownloadOptions,
   );
-  const allDownloadables = buildAllDownloadables(
-    pipelineSections,
-    files,
-    serpBriefDownload,
-    strictPipelineDownloads ? { noFallback: true } : undefined,
+  const claimedPipelineNames = new Set(
+    pipelineDownloadables.filter((file): file is BulkDetailsDownloadable => file != null).map((file) => file.name),
   );
-  const itemCount =
-    pipelineDownloadables.filter(Boolean).length + files.length;
+  const extraFiles = isContentOptimizePipeline
+    ? []
+    : files.filter((file) => !claimedPipelineNames.has(file.name));
+  const readyPipelineDownloadables = pipelineDownloadables.filter(
+    (file): file is BulkDetailsDownloadable => file != null,
+  );
+  const allDownloadables = isContentOptimizePipeline
+    ? readyPipelineDownloadables
+    : buildAllDownloadables(pipelineSections, extraFiles, serpBriefDownload, pipelineDownloadOptions);
+  const downloadableCount =
+    pipelineDownloadables.filter((file) => file != null).length + extraFiles.length;
+  const headerItemCount = useExplicitPipeline ? pipelineSections.length : downloadableCount;
   const trimmedStatus = statusMessage?.trim();
   const trimmedProgress = progressLabel?.trim();
+  const activePipelineIndex = pipelineSections.reduce(
+    (acc, section, index) =>
+      section.status === "generating" || section.status === "start" ? index : acc,
+    -1,
+  );
 
-  if (itemCount === 0 && !trimmedStatus && !trimmedProgress) {
+  if (pipelineSections.length === 0 && downloadableCount === 0 && !trimmedStatus && !trimmedProgress) {
     return null;
   }
 
@@ -296,89 +503,119 @@ export function BulkDetailsTileSections({
     <div className={zoneMetaAccordionStack} role="region" aria-label="Generated files">
       <MetaAccordionStripeRow stripeIndex={stripeBaseIndex}>
         <Collapsible open={filesOpen} onOpenChange={setFilesOpen}>
-          <CollapsibleTrigger asChild>
-            <button type="button" className={cn(META_TRIGGER_FLAT, "w-full font-semibold")}>
-              <FileDown className="h-4 w-4 shrink-0" aria-hidden />
-              <span className="shrink-0 text-left">Generated files</span>
-              {trimmedStatus ? (
-                <span
-                  className="min-w-0 flex-1 truncate text-left font-normal text-white"
-                  role="status"
-                  aria-live="polite"
-                >
-                  {trimmedStatus}
-                </span>
-              ) : (
-                <span className="min-w-0 flex-1" aria-hidden />
-              )}
-              {trimmedProgress ? (
-                <span
-                  className="shrink-0 tabular-nums text-muted-foreground"
-                  aria-label={`Progress ${trimmedProgress}`}
-                >
-                  {trimmedProgress}
-                </span>
-              ) : null}
-              <div className={cn(META_FIELD_END_RAIL, "pointer-events-auto shrink-0")}>
-                <span
-                  className={cn(
-                    META_FIELD_COUNT,
-                    META_FIELD_END_RAIL_CELL,
-                    "min-w-[1.75rem] tabular-nums font-semibold",
-                  )}
-                >
-                  {itemCount.toLocaleString()}
-                </span>
-                {allDownloadables.length > 0 ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className={META_FIELD_END_RAIL_BTN}
-                    title="Download all"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onDownloadAll(allDownloadables);
-                    }}
+          <div className={cn(META_TRIGGER_FLAT, "w-full font-semibold")}>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 items-center gap-2 border-0 bg-transparent p-0 text-left text-base font-semibold text-white"
+              >
+                <FileDown className="h-4 w-4 shrink-0" aria-hidden />
+                <span className="shrink-0 text-left">Generated files</span>
+                {trimmedStatus ? (
+                  <span
+                    className="min-w-0 flex-1 truncate text-left font-normal text-white"
+                    role="status"
+                    aria-live="polite"
                   >
-                    <Download className="h-4 w-4 shrink-0" />
-                  </Button>
-                ) : null}
-              </div>
-              <ChevronDown
-                className={cn(
-                  "h-4 w-4 shrink-0 transition-transform",
-                  filesOpen && "rotate-180",
+                    {trimmedStatus}
+                  </span>
+                ) : (
+                  <span className="min-w-0 flex-1" aria-hidden />
                 )}
-              />
-            </button>
-          </CollapsibleTrigger>
+                {trimmedProgress ? (
+                  <span
+                    className="shrink-0 tabular-nums text-muted-foreground"
+                    aria-label={`Progress ${trimmedProgress}`}
+                  >
+                    {trimmedProgress}
+                  </span>
+                ) : null}
+              </button>
+            </CollapsibleTrigger>
+            <div className={cn(META_FIELD_END_RAIL, "shrink-0")}>
+              <span
+                className={cn(
+                  META_FIELD_COUNT,
+                  META_FIELD_END_RAIL_CELL,
+                  "min-w-[1.75rem] tabular-nums font-semibold",
+                )}
+              >
+                {headerItemCount.toLocaleString()}
+              </span>
+              {allDownloadables.length > 0 ? (
+                <button
+                  type="button"
+                  className={META_FIELD_END_RAIL_BTN}
+                  title="Download all"
+                  aria-label="Download all generated files"
+                  onClick={() => onDownloadAll(allDownloadables)}
+                >
+                  <Download className="h-4 w-4 shrink-0" />
+                </button>
+              ) : null}
+            </div>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex shrink-0 items-center border-0 bg-transparent p-0 text-white"
+                aria-label={filesOpen ? "Collapse generated files" : "Expand generated files"}
+              >
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 shrink-0 transition-transform",
+                    filesOpen && "rotate-180",
+                  )}
+                />
+              </button>
+            </CollapsibleTrigger>
+          </div>
           <CollapsibleContent className="space-y-3 pt-3">
             <div className="space-y-2 text-base">
               {pipelineSections.map((s, i) => {
                 const downloadable = pipelineDownloadables[i];
+                const isActiveStep = i === activePipelineIndex;
+                const stepReady = Boolean(downloadable);
                 return (
-                  <div key={s.sectionIndex} className="flex min-w-0 items-center gap-2">
-                    <span className="w-6 shrink-0 tabular-nums text-muted-foreground">{i + 1}</span>
-                    <span className="min-w-0 flex-1 text-white">
+                  <div
+                    key={`${s.sectionIndex}-${s.title || "section"}`}
+                    className={cn(
+                      "flex min-w-0 items-center gap-2 rounded-none px-1 py-0.5",
+                      isActiveStep && CONTENT_OPTIMIZER_ACTIVE_ROW_HIGHLIGHT_CLASS,
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "w-6 shrink-0 tabular-nums",
+                        isActiveStep ? CONTENT_OPTIMIZER_ACTIVE_ROW_TEXT_CLASS : "text-muted-foreground",
+                      )}
+                    >
+                      {i + 1}
+                    </span>
+                    <span
+                      className={cn(
+                        "min-w-0 flex-1",
+                        isActiveStep ? CONTENT_OPTIMIZER_ACTIVE_ROW_TEXT_CLASS : "text-white",
+                      )}
+                    >
                       {s.title || `Section ${s.sectionIndex + 1}`}
                     </span>
-                    {downloadable ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 shrink-0 px-2 text-base text-white hover:bg-white/10 hover:text-white"
-                        onClick={() => onDownloadFile(downloadable)}
-                      >
-                        <Download className="mr-1 h-3 w-3" />
-                        File
-                      </Button>
-                    ) : null}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={cn(
+                        "h-7 shrink-0 px-2 text-base hover:bg-white/10 hover:text-white",
+                        stepReady ? "text-white" : "text-muted-foreground",
+                      )}
+                      disabled={!stepReady}
+                      onClick={() => downloadable && onDownloadFile(downloadable)}
+                    >
+                      <Download className="mr-1 h-3 w-3" />
+                      File
+                    </Button>
                   </div>
                 );
               })}
-              {files.map((file, idx) => (
+              {extraFiles.map((file, idx) => (
                 <div key={`${file.name}-${idx}`} className="flex min-w-0 items-center gap-2">
                   <span className="w-6 shrink-0 tabular-nums text-muted-foreground">
                     {pipelineSections.length + idx + 1}
@@ -392,7 +629,11 @@ export function BulkDetailsTileSections({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 shrink-0 px-2 text-base text-white hover:bg-white/10 hover:text-white"
+                    className={cn(
+                      "h-7 shrink-0 px-2 text-base hover:bg-white/10 hover:text-white",
+                      downloadsLocked ? "text-muted-foreground" : "text-white",
+                    )}
+                    disabled={downloadsLocked}
                     onClick={() => onDownloadFile(file)}
                   >
                     <Download className="mr-1 h-3 w-3" />
@@ -530,4 +771,4 @@ export function BulkDetailsPrepAccordion({
   );
 }
 
-export { filterPipelineHarnessSections, resolveDetailsPipelineSections, isSerpPipelineSection };
+export { filterPipelineHarnessSections, resolveDetailsPipelineSections, isSerpPipelineSection, isHarnessSectionDownloadReady };

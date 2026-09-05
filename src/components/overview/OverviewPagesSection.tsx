@@ -30,7 +30,9 @@ function metaOptimizerPipelineBusy(row: OverviewRow): boolean {
     row.status === "ai-headers" ||
     row.status === "ai-links" ||
     row.status === "ai-wikipedia-link" ||
+    row.status === "ai-answer" ||
     row.status === "ai-overview" ||
+    row.status === "ai-scenario" ||
     row.status === "ai-in-content-image" ||
     row.status === "ai-focus-kw" ||
     row.status === "uploading" ||
@@ -95,7 +97,9 @@ export interface OverviewPagesSectionProps {
   handleAiHeadersRow: (index: number) => Promise<void>;
   handleAiLinksRow: (index: number) => Promise<void>;
   handleAiWikipediaLinkRow: (index: number) => Promise<void>;
+  handleAiAnswerRow: (index: number) => Promise<void>;
   handleAiOverviewRow: (index: number) => Promise<void>;
+  handleAiScenarioRow: (index: number) => Promise<void>;
   handleAiInContentImageRow: (index: number) => Promise<void>;
 }
 
@@ -133,12 +137,14 @@ export function OverviewPagesSection({
   handleAiHeadersRow,
   handleAiLinksRow,
   handleAiWikipediaLinkRow,
+  handleAiAnswerRow,
   handleAiOverviewRow,
+  handleAiScenarioRow,
   handleAiInContentImageRow,
 }: OverviewPagesSectionProps) {
   const batchKey = `${site.id}-batch`;
   const batchBulkState = opt.bulkOptimizationState[batchKey];
-  const batchRunning = isOverviewBulkWorkerActive(opt.isOptimizingContent, batchKey, site.id);
+  const batchRunning = isOverviewBulkWorkerActive(opt.isOptimizingContent, batchKey, site.id, batchBulkState);
 
   const pageRows = useMemo(
     () => overviewGridPageSlice(displayRows, gridPageIndex, OVERVIEW_GRID_VISIBLE_ROW_COUNT),
@@ -177,7 +183,9 @@ export function OverviewPagesSection({
     handleAiHeadersRow,
     handleAiLinksRow,
     handleAiWikipediaLinkRow,
+    handleAiAnswerRow,
     handleAiOverviewRow,
+    handleAiScenarioRow,
     handleAiInContentImageRow,
   } satisfies Omit<
     MetaOptimizerPageRowDetailsProps,

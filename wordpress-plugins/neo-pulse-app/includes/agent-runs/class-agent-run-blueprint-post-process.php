@@ -122,12 +122,17 @@ class Neo_Pulse_App_Agent_Run_Blueprint_Post_Process {
 	}
 
 	private static function checklist_item_title( string $item ): string {
-		$title = preg_replace( '/\[[^\]]+\]/', '', $item );
-		$title = preg_replace( '/^\d+\.\s*/', '', (string) $title );
-		$title = trim( (string) $title );
+		$title = trim( (string) $item );
+		$title = preg_replace( '/^\d+\.\s*/', '', $title );
+		$title = preg_replace( '/^#{1,6}\s+/', '', (string) $title );
+		$bracket = strpos( $title, '[' );
+		if ( false !== $bracket ) {
+			$title = substr( $title, 0, $bracket );
+		}
+		$title = trim( (string) preg_replace( '/:\s*$/', '', trim( (string) $title ) ) );
 		if ( $title === '' ) {
 			return 'Section';
 		}
-		return strlen( $title ) > 60 ? substr( $title, 0, 57 ) . '...' : $title;
+		return $title;
 	}
 }

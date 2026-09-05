@@ -245,6 +245,9 @@ class Neo_Pulse_App_Task_Schedule_Cron {
 		if ( $kind === 'local_dominator_export' ) {
 			return 'local_dominator_export';
 		}
+		if ( $kind === 'chatgpt_website_audit' ) {
+			return 'chatgpt_website_audit';
+		}
 		return '';
 	}
 }

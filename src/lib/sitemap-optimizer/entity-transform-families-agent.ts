@@ -32,6 +32,7 @@ import {
 import { parseAssistantJsonObject } from "@/lib/competitor-research/competitor-report-json-parse";
 import { z } from "zod";
 import type { SitemapOptimizerPostRow } from "@/lib/sitemap-optimizer/types";
+import { SAP_DEFAULT_COMBINED_OUTLINE } from "@/lib/prompt-builders/sap-page-template";
 
 export {
   isPlaceholderKeyword,
@@ -277,7 +278,7 @@ export function fillFamilyStrategyFromPillar(
   let combinedOutline =
     working.combinedOutline?.length
       ? [...working.combinedOutline]
-      : ["Local service overview", "Products and options", "Service area coverage", "Next steps"];
+      : [...SAP_DEFAULT_COMBINED_OUTLINE];
   const outlineMentionsPlaces = placeLabels.every((p) =>
     combinedOutline.some((line) => line.toLowerCase().includes(p.toLowerCase())),
   );

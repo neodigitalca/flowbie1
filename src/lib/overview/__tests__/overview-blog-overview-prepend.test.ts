@@ -5,12 +5,57 @@ import {
 import {
   findH2OpenPositions,
   injectBodyH2AnchorIds,
+  injectHarnessH2AnchorIdsForStitchedBlog,
   outlineFromBodyH2Titles,
   stitchOverviewOntoBody,
+  stripLeadingAnswerSection,
   stripLeadingOverviewSection,
+  enforceHarnessAnswerBeforeOverview,
 } from "@/lib/overview/overview-blog-overview-prepend";
 import { buildHarnessSectionAnchorMap } from "@/lib/bulk/harness-section-anchor-ids";
+import { HARNESS_ANSWER_ANCHOR_ID } from "@/lib/bulk/blog-harness-answer-agent";
 import { FLO_OVERVIEW_CLASS } from "@/lib/overview/wrap-overview-section-html";
+
+describe("stripLeadingAnswerSection", () => {
+  it("removes Answer H2 through the next H2", () => {
+    const html = [
+      `<h2 id="answer">Answer</h2>`,
+      `<p>Direct one. Direct two.</p>`,
+      `<h2 id="overview">Overview</h2>`,
+      `<p>Lead</p>`,
+      `<h2>Cost Factors</h2>`,
+      `<p>Body</p>`,
+    ].join("");
+    const out = stripLeadingAnswerSection(html);
+    expect(out.toLowerCase()).not.toContain(">answer<");
+    expect(out).toContain("Overview");
+    expect(out).toContain("Cost Factors");
+  });
+});
+
+describe("injectHarnessH2AnchorIdsForStitchedBlog", () => {
+  it("assigns answer, overview, then body anchor ids", () => {
+    const html = [
+      `<h2>Answer</h2><p>a. b.</p>`,
+      `<h2>Overview</h2><p>Lead</p>`,
+      `<h2>Cost Factors</h2><p>Body</p>`,
+    ].join("");
+    const map = buildHarnessSectionAnchorMap(outlineFromBodyH2Titles(["Cost Factors"]));
+    const out = injectHarnessH2AnchorIdsForStitchedBlog(html, map);
+    expect(out).toContain(`id="${HARNESS_ANSWER_ANCHOR_ID}"`);
+    expect(out).toContain(`id="${HARNESS_OVERVIEW_ANCHOR_ID}"`);
+    expect(out).toContain(`id="cost-factors"`);
+  });
+
+  it("supports legacy Overview-first posts without Answer", () => {
+    const html = `<h2>Overview</h2><p>Lead</p><h2>Cost Factors</h2><p>Body</p>`;
+    const map = buildHarnessSectionAnchorMap(outlineFromBodyH2Titles(["Cost Factors"]));
+    const out = injectHarnessH2AnchorIdsForStitchedBlog(html, map);
+    expect(out).toContain(`id="${HARNESS_OVERVIEW_ANCHOR_ID}"`);
+    expect(out).toContain(`id="cost-factors"`);
+    expect(out.toLowerCase()).not.toContain(`id="${HARNESS_ANSWER_ANCHOR_ID}"`);
+  });
+});
 
 describe("stripLeadingOverviewSection", () => {
   it("removes Overview H2 through the next H2", () => {
@@ -119,7 +164,37 @@ describe("extractOverviewSectionHtml", () => {
   });
 });
 
+describe("enforceHarnessAnswerBeforeOverview", () => {
+  it("re-stitches when Overview precedes Answer", () => {
+    const reversed = `<div class="flo-overview"><h2 id="overview">Overview</h2><p>Lead</p><ul><li><strong>A</strong>: one</li></ul></div><h2 id="answer">Answer</h2><p>Direct answer here.</p><h2>Cost Factors</h2><p>Body</p>`;
+    const fixed = enforceHarnessAnswerBeforeOverview(reversed);
+    const answerPos = fixed.indexOf('id="answer"');
+    const overviewPos = fixed.indexOf('id="overview"');
+    expect(answerPos).toBeGreaterThanOrEqual(0);
+    expect(overviewPos).toBeGreaterThan(answerPos);
+    expect(fixed).toContain("Cost Factors");
+  });
+
+  it("is a no-op when Answer already precedes Overview", () => {
+    const correct = `<h2 id="answer">Answer</h2><p>Direct answer here.</p><div class="flo-overview"><h2 id="overview">Overview</h2><p>Lead</p></div><h2>Cost Factors</h2><p>Body</p>`;
+    expect(enforceHarnessAnswerBeforeOverview(correct)).toBe(correct);
+  });
+});
+
 describe("stitchOverviewOntoBody", () => {
+  it("prepends Answer before wrapped Overview when answerHtml is provided", () => {
+    const result = stitchOverviewOntoBody({
+      sourceHtml: `<h2>Cost Factors</h2><p>Body</p>`,
+      answerHtml: `<h2>Answer</h2><p>One. Two.</p>`,
+      overviewHtml: `<h2>Overview</h2><p>Lead</p><ul><li><strong>A</strong>: one</li></ul>`,
+    });
+    const answerPos = result.html.indexOf(`id="${HARNESS_ANSWER_ANCHOR_ID}"`);
+    const overviewPos = result.html.indexOf(`id="${HARNESS_OVERVIEW_ANCHOR_ID}"`);
+    expect(answerPos).toBeGreaterThanOrEqual(0);
+    expect(overviewPos).toBeGreaterThan(answerPos);
+    expect(result.html).toContain("Cost Factors");
+  });
+
   it("wraps Overview in flo-overview", () => {
     const result = stitchOverviewOntoBody({
       sourceHtml: `<h2>Cost Factors</h2><p>Body</p>`,

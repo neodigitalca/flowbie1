@@ -1,0 +1,23 @@
+{
+  "tasks": [
+    {
+      "result": [
+        {
+          "items": [
+            {
+              "type": "knowledge_graph",
+              "title": "Plum Coulee",
+              "subtitle": "Village in Manitoba, Canada",
+              "rectangle": {
+                "x": 0,
+                "y": 178,
+                "width": 1905,
+                "height": 2765
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -84,6 +84,10 @@ function taskForScheduledRun(task: TeamTask, activeWordPressSiteId: string | nul
   };
 }
 
+function isWorkflowRuntimeTask(task: TeamTask): boolean {
+  return (task.keyword ?? "").trim().startsWith("workflow_");
+}
+
 type UsePulseTaskScheduleRunnerArgs = {
   teamId: number | null;
   myTasks: TeamTask[];
@@ -173,6 +177,7 @@ export function usePulseTaskScheduleRunner({
 
       for (const task of scheduledTasksRef.current) {
         if (task.status === "done") continue;
+        if (isWorkflowRuntimeTask(task)) continue;
 
         const dueDate = (task.dueDate ?? "").slice(0, 10);
         const dueTime = normalizeTimeKey(task.dueTime ?? "");

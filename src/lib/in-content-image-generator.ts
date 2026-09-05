@@ -13,6 +13,7 @@ import {
   type ImageChecklistItem,
 } from "@/lib/image-checklist-builder";
 import { uploadWordPressMedia } from "@/lib/wordpress-api";
+import { dataUrlToBase64, fetchImageDataUrlViaApi } from "@/lib/proxy-fetch-text";
 import {
   analyzeBestSectionForImage,
   type ImageType,
@@ -154,20 +155,8 @@ async function imageBase64FromGenerateResult(imageResult: {
 }): Promise<string> {
   if (imageResult.imageBase64) return imageResult.imageBase64;
   if (imageResult.imageUrl) {
-    const imageResponse = await fetch(imageResult.imageUrl);
-    const imageBlob = await imageResponse.blob();
-    const reader = new FileReader();
-    return new Promise<string>((resolve, reject) => {
-      reader.onloadend = () => {
-        const base64String = reader.result as string;
-        const base64 = base64String.includes(",")
-          ? base64String.split(",")[1]!
-          : base64String;
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(imageBlob);
-    });
+    const dataUrl = await fetchImageDataUrlViaApi(imageResult.imageUrl);
+    return dataUrlToBase64(dataUrl);
   }
   throw new Error("No image data available");
 }

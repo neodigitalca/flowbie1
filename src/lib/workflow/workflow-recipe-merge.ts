@@ -5,6 +5,7 @@ import {
   ensureRagArchiveNode,
   insertNodesAfter,
   linearOrderedNodes,
+  resolveDefaultInsertAnchorId,
 } from "@/lib/workflow/workflow-graph-mutations";
 import type {
   WorkflowDefinition,
@@ -62,6 +63,7 @@ export function recipeToActionSubgraph(
         ragVariableKey: variableKey,
         ragScope: "run",
         title: action.title,
+        actionBlockKeyword: action.keyword,
         recipeKeyword: recipe.keyword,
         recipeCategory: recipe.category,
       },
@@ -89,11 +91,7 @@ export function mergeRecipeIntoWorkflow(
 
   let anchorId = afterNodeId;
   if (!anchorId) {
-    const ordered = linearOrderedNodes(workflow);
-    const archive = ordered.find((node) => node.kind === "rag_archive");
-    anchorId = archive
-      ? ordered[ordered.indexOf(archive) - 1]?.id ?? ordered[0]?.id ?? null
-      : ordered[ordered.length - 1]?.id ?? null;
+    anchorId = resolveDefaultInsertAnchorId(workflow);
   }
 
   let graph = insertNodesAfter(workflow, anchorId, subgraph.nodes);

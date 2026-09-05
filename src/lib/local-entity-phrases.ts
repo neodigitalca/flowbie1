@@ -57,16 +57,16 @@ const SERVICE_PHRASES = [
  * Expertise phrases for demonstrating local knowledge
  */
 const EXPERTISE_PHRASES = [
-  (entity: string) => `After installing hundreds of systems near ${entity}`,
-  (entity: string) => `Our experience serving residents in the ${entity} area`,
-  (entity: string) => `Having worked with homeowners living by ${entity}`,
-  (entity: string) => `In our years of supporting the ${entity} community`,
-  (entity: string) => `After working with countless customers near ${entity}`,
-  (entity: string) => `Our experience helping residents in the ${entity} area`,
-  (entity: string) => `Having served the ${entity} community for years`,
-  (entity: string) => `In our time working with people in the ${entity} vicinity`,
-  (entity: string) => `After completing hundreds of projects near ${entity}`,
-  (entity: string) => `Our years of experience serving the ${entity} area`,
+  (entity: string) => `work near ${entity}`,
+  (entity: string) => `jobs in the ${entity} area`,
+  (entity: string) => `homes near ${entity}`,
+  (entity: string) => `projects by ${entity}`,
+  (entity: string) => `installs around ${entity}`,
+  (entity: string) => `service in the ${entity} area`,
+  (entity: string) => `work in the ${entity} vicinity`,
+  (entity: string) => `jobs close to ${entity}`,
+  (entity: string) => `homes in proximity to ${entity}`,
+  (entity: string) => `service near ${entity}`,
 ];
 
 /**

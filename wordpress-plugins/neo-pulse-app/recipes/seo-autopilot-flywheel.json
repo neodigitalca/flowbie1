@@ -9,7 +9,7 @@
     "Posts: full rewrite when click-through rate falls 15%+ vs the prior 28 days (snippet or body no longer matches what searchers want).",
     "Same URL waits 72 hours before it can run again."
   ],
-  "category": "maintenance",
+  "category": "reactive",
   "verticals": [
     "general"
   ],
@@ -46,13 +46,12 @@
       "title": "Meta optimize pages on trigger",
       "status": "todo",
       "assignPulse": true,
+      "scheduleMode": "trigger",
       "executionKind": "content_optimizer_meta",
       "executionPayload": {
         "targetBucket": "pages",
         "updateMode": "update"
       },
-      "scheduleMode": "trigger",
-      "recurrenceRule": "none",
       "triggerConfig": {
         "sources": [
           "gsc"
@@ -84,13 +83,12 @@
       "title": "Full AISEO on posts on trigger",
       "status": "todo",
       "assignPulse": true,
+      "scheduleMode": "trigger",
       "executionKind": "content_optimizer",
       "executionPayload": {
         "targetBucket": "posts",
         "updateMode": "update"
       },
-      "scheduleMode": "trigger",
-      "recurrenceRule": "none",
       "triggerConfig": {
         "sources": [
           "gsc"
@@ -98,16 +96,10 @@
         "match": "any",
         "conditions": [
           {
-            "signal": "position_drop",
+            "signal": "ctr_drop",
             "operator": "gte",
-            "value": 3,
+            "value": 15,
             "minImpressions": 100
-          },
-          {
-            "signal": "quick_win_slipped",
-            "operator": "gte",
-            "value": 0,
-            "minImpressions": 50
           }
         ],
         "lookbackDays": 28,
@@ -118,8 +110,6 @@
       }
     }
   ],
-  "isAutomation": true,
-  "kind": "template",
   "triggerBlock": {
     "keyword": "gsc-position-drop",
     "kind": "gsc",
@@ -179,5 +169,7 @@
       },
       "title": "Full AISEO on posts on trigger"
     }
-  ]
+  ],
+  "isAutomation": true,
+  "kind": "template"
 }

@@ -7,7 +7,7 @@
  */
 
 import type { WordPressSite } from "@/components/integrations/types";
-import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
+import { backendApiUrl } from "@/lib/wordpress-api/connection";
 import { prepareLocalImageDataUrl } from "@/lib/overview/overview-blog-local-image-generate";
 import {
   searchPeerFeaturedImage,
@@ -47,7 +47,7 @@ function peerImageFileSlug(value: string): string {
 }
 
 async function fetchImageAsDataUrl(url: string): Promise<string> {
-  const res = await fetch(`${BACKEND_API_BASE}/api/images/fetch-data-url`, {
+  const res = await fetch(backendApiUrl("/images/fetch-data-url"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url }),

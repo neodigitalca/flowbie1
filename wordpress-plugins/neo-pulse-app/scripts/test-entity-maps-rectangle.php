@@ -31,6 +31,25 @@ if ( $fixture === '--keyword' ) {
 	exit( 0 );
 }
 
+if ( $fixture === '--keywords' ) {
+	$entity = isset( $argv[2] ) ? (string) $argv[2] : '';
+	echo wp_json_encode( Neo_Pulse_App_Entity_Maps_Image::serp_keywords_for_entity( $entity ) );
+	exit( 0 );
+}
+
+if ( $fixture === '--city-labels' ) {
+	$entity = isset( $argv[2] ) ? (string) $argv[2] : '';
+	echo wp_json_encode( Neo_Pulse_App_Entity_Maps_Image::city_labels_for_entity( $entity ) );
+	exit( 0 );
+}
+
+if ( $fixture === '--fallback-rect' ) {
+	$img_w = isset( $argv[2] ) ? (int) $argv[2] : 0;
+	$img_h = isset( $argv[3] ) ? (int) $argv[3] : 0;
+	echo wp_json_encode( Neo_Pulse_App_Entity_Maps_Image::fallback_city_screenshot_rectangle( $img_w, $img_h ) );
+	exit( 0 );
+}
+
 if ( $fixture === '' || ! is_readable( $fixture ) ) {
 	fwrite( STDERR, "Fixture path required\n" );
 	exit( 2 );

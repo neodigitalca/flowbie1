@@ -66,7 +66,7 @@ interface BulkAutoGeneratePanelProps {
    * Locks the panel to CSV or prompt mode and hides the in-panel method toggle.
    * Blog Generator shell uses CSV upload vs Prompt generator side tabs.
    */
-  forcedInputMode?: "csv" | "prompt";
+  forcedInputMode?: "csv" | "prompt" | "blog-import";
   /** Hides CSV vs prompt toggle; keeps CSV pipeline with optional slot instead of file upload. */
   sapMode?: boolean;
   replaceCsvFileUploadWith?: ReactNode;
@@ -114,7 +114,7 @@ export const BulkAutoGeneratePanel: React.FC<BulkAutoGeneratePanelProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [inputMode, setInputMode] = useState<"csv" | "prompt">(() =>
-    sapMode ? "csv" : (forcedInputMode ?? "csv")
+    sapMode ? "csv" : forcedInputMode === "prompt" ? "prompt" : "csv",
   );
   
   // Blog generation settings
@@ -295,16 +295,10 @@ export const BulkAutoGeneratePanel: React.FC<BulkAutoGeneratePanelProps> = ({
     });
     setSiteConfigs((prev) => {
       if (prev[wordPressSite.id]) return prev;
-      const defaultType =
-        forcedInputMode === "prompt"
-          ? "post"
-          : wordPressSite.entitySitemapUrl?.trim()
-            ? "entity"
-            : "post";
       return {
         ...prev,
         [wordPressSite.id]: {
-          sitemapType: defaultType,
+          sitemapType: "post",
         },
       };
     });
@@ -569,7 +563,8 @@ export const BulkAutoGeneratePanel: React.FC<BulkAutoGeneratePanelProps> = ({
       resolveSiteSitemapMode(siteConfigs, selectedWordPressSites, entitySitemapAvailable),
     [siteConfigs, selectedWordPressSites, entitySitemapAvailable],
   );
-  const siteFallbackSitemapType: BulkRowSitemapType = entitySitemapAvailable ? 'entity' : 'post';
+  const siteFallbackSitemapType: BulkRowSitemapType =
+    sapMode && entitySitemapAvailable ? "entity" : "post";
 
   const applyCsvSitemapInference = useCallback(
     (parsed: CSVRow[]): CSVRow[] => {

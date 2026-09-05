@@ -90,6 +90,22 @@ describe("getGscReportingSectionSystemPrompt", () => {
     expect(s).toMatch(/GSC-sitemaps|sitemap-style buckets/i);
     expect(s).toMatch(/SEGMENT AGGREGATES/i);
   });
+
+  it("forbids naming internal data blocks in client-facing report output", () => {
+    const sap = getGscReportingSectionSystemPrompt("sap_local_seo");
+    const exec = getGscReportingSectionSystemPrompt("executive_summary");
+    expect(sap).toMatch(/CLIENT-FACING LANGUAGE/);
+    expect(sap).toMatch(/the site's data/);
+    expect(sap).toMatch(/Never write those block names in the report/i);
+    expect(exec).toMatch(/CLIENT-FACING LANGUAGE/);
+  });
+
+  it("content_performance table is Segment Clk Imp Pos with no Inc column", () => {
+    const s = getGscReportingSectionSystemPrompt("content_performance");
+    expect(s).toMatch(/\*\*Segment\*\* \| \*\*Clk\*\* \| \*\*Imp\*\* \| \*\*Pos\*\*/);
+    expect(s).toMatch(/four columns total/);
+    expect(s).toMatch(/Forbidden:\*\* an \*\*Inc\*\*/);
+  });
 });
 
 describe("buildUserMessageForSection", () => {
@@ -114,6 +130,31 @@ describe("buildUserMessageForSection", () => {
     });
     expect(msg.endsWith(GSC_REPORTING_EXEC_SUMMARY_STYLE_LINE)).toBe(true);
     expect(msg).toContain("RETRIEVED DATA");
+  });
+
+  it("injects the picker date range into the executive summary user message", () => {
+    const outline: GscReportingOutlineResult = {
+      executiveSummary: "Summary text",
+      topOpportunities: [],
+      clusters: [],
+      sections: [],
+    };
+    const msg = buildUserMessageForSection({
+      siteName: "Ridgeline Solar",
+      siteUrl: "https://ridgelinesolar.ca",
+      outline,
+      plan: {
+        id: "executive_summary",
+        h2Title: "Executive Summary",
+        kind: "executive_summary",
+        ragQuery: "x",
+      },
+      retrievedContext: "csv data",
+      compareLabel: "April 1, 2026 to April 30, 2026 vs March 1–31, 2026",
+    });
+    expect(msg).toContain("REPORT_PERIOD");
+    expect(msg).toContain("April 1, 2026 to April 30, 2026");
+    expect(GSC_REPORTING_EXEC_SUMMARY_STYLE_LINE).toMatch(/first sentence must name the exact REPORT_PERIOD/);
   });
 
   it("appends default tables-first style for non-executive sections", () => {
@@ -158,7 +199,8 @@ describe("buildUserMessageForSection", () => {
       retrievedContext: "csv",
     });
     expect(msg).toContain("**Content override:**");
-    expect(msg).toContain("sitemap / content-type");
+    expect(msg).toContain("Segment | Clk | Imp | Pos");
+    expect(msg).toContain("**no** **Inc** column");
   });
 
   it("reminds cluster sections to use tables only", () => {
@@ -187,6 +229,19 @@ describe("buildUserMessageForSection", () => {
 });
 
 describe("defaultSectionsFromPayload", () => {
+  it("places generative_ai_impressions after executive_summary when includeGenerativeAi", () => {
+    const p: GscManualAiPayload = {
+      executiveSummary: "x",
+      topOpportunities: [],
+      clusters: [],
+    };
+    const s = defaultSectionsFromPayload(p, "mom", { includeGenerativeAi: true });
+    expect(s).toHaveLength(6);
+    expect(s[0]!.kind).toBe("executive_summary");
+    expect(s[1]!.kind).toBe("generative_ai_impressions");
+    expect(s[1]!.h2Title).toBe("Generative AI Search Impressions");
+  });
+
   it("ends with content_performance (no FAQ, top opportunities, cluster, or all-search-terms sections)", () => {
     const p: GscManualAiPayload = {
       executiveSummary: "x",
@@ -199,6 +254,7 @@ describe("defaultSectionsFromPayload", () => {
     expect(s[0]!.h2Title).toBe("Executive Summary");
     expect(s[1]!.kind).toBe("search_performance_period");
     expect(s[1]!.h2Title).toBe("Search Performance Compared Month Over Month");
+    expect(s[2]!.kind).toBe("key_performance_insights");
     expect(s[3]!.kind).toBe("sap_local_seo");
     expect(s[4]!.kind).toBe("content_performance");
     expect(s[4]!.h2Title).toBe("Content Performance: Your Growing Digital Footprint");
@@ -206,7 +262,7 @@ describe("defaultSectionsFromPayload", () => {
   });
 });
 
-describe("applyCanonicalGscSectionTitles", () => {
+describe("undefined", () => {
   it("strips date-stuffed search_performance titles from the model", () => {
     const out = applyCanonicalGscSectionTitles([
       {

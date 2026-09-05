@@ -1,0 +1,66 @@
+{
+  "keyword": "chatgpt-website-audit",
+  "name": "ChatGPT website audit",
+  "description": "ChatGPT session for client website audits. Log in via AgentMail OTP, send setup questions automatically, and archive replies in one cumulative CSV for RAG.",
+  "notes": [
+    "Run from a Forge workflow with Client as step 1.",
+    "Uses neo-pulse@agentmail.to for ChatGPT login codes.",
+    "Setup Questions are sent when ChatGPT is ready; the session finishes after those replies.",
+    "Each completed URL appends rows to one cumulative CSV for Archive to RAG.",
+    "Type a question during the run only when the Questions list is empty."
+  ],
+  "category": "research",
+  "verticals": [
+    "general",
+    "local-seo",
+    "agency"
+  ],
+  "tags": [
+    "research",
+    "chatgpt",
+    "audit",
+    "website"
+  ],
+  "prerequisites": [
+    "wordpress"
+  ],
+  "filters": {
+    "executionKinds": [
+      "chatgpt_website_audit"
+    ],
+    "actionCount": 1
+  },
+  "defaultTasks": [
+    {
+      "keyword": "chatgpt-website-audit-run",
+      "title": "ChatGPT website audit",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "chatgpt_website_audit",
+      "executionPayload": {
+        "saveLocalArchive": true,
+        "saveToDisk": true
+      },
+      "scheduleMode": "calendar",
+      "recurrenceRule": "none"
+    }
+  ],
+  "isAutomation": true,
+  "kind": "template",
+  "triggerBlock": {
+    "keyword": "schedule-once",
+    "kind": "calendar",
+    "frequency": "once",
+    "startDate": "2026-09-01",
+    "time": "09:00"
+  },
+  "actionBlock": {
+    "keyword": "chatgpt-website-audit",
+    "executionKind": "chatgpt_website_audit",
+    "executionPayload": {
+      "saveLocalArchive": true,
+      "saveToDisk": true
+    },
+    "title": "ChatGPT website audit"
+  }
+}

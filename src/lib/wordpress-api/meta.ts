@@ -3,7 +3,7 @@
  * Functions for getting and updating WordPress post meta fields
  */
 
-import { BACKEND_API_BASE, BACKEND_CONNECTION_ERROR } from './connection';
+import { BACKEND_CONNECTION_ERROR, backendApiUrl } from './connection';
 import type { OverviewBulkSeoApiItem } from '@/lib/overview/overview-bulk-seo-payload';
 import type {
   WordPressPostMetaResult,
@@ -57,7 +57,7 @@ export async function getWordPressPostMeta(
   postType: string = 'post',
   postTypeEndpoint?: string // Actual WordPress REST API endpoint name from scraped post
 ): Promise<WordPressPostMetaResult> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/get-post-meta`;
+  const url = backendApiUrl('/wordpress/get-post-meta');
   
   try {
     const response = await fetch(url, {
@@ -122,7 +122,7 @@ export async function updateWordPressPostMeta(
   postTypeEndpoint?: string, // Actual WordPress REST API endpoint name from scraped post
   meta: Record<string, any>
 ): Promise<WordPressPostMetaUpdateResult> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/update-post-meta`;
+  const url = backendApiUrl('/wordpress/update-post-meta');
   
   try {
     const response = await fetch(url, {
@@ -170,7 +170,7 @@ export async function updateOverviewSeoItem(
   appPassword: string,
   item: OverviewBulkSeoApiItem,
 ): Promise<BulkOverviewSeoResultRow> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/update-overview-seo-item`;
+  const url = backendApiUrl('/wordpress/update-overview-seo-item');
 
   try {
     const response = await fetch(url, {
@@ -331,7 +331,7 @@ export async function bulkUpdateOverviewSeo(
     );
   }
 
-  const url = `${BACKEND_API_BASE}/api/wordpress/bulk-update-overview-seo`;
+  const url = backendApiUrl('/wordpress/bulk-update-overview-seo');
 
   try {
     const response = await fetch(url, {

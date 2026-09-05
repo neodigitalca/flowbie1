@@ -205,8 +205,7 @@ export async function discoverACFFieldMapping(
 
   const fieldNames = Object.keys(acfFields);
   if (fieldNames.length === 0) {
-    console.warn("[ACF Field Mapper] No ACF fields provided");
-    return {};
+    return fallbackFieldMapping(acfFields);
   }
 
   const systemPrompt = `You are an expert WordPress developer analyzing ACF (Advanced Custom Fields) field names. Your task is to map field purposes to actual field names found in a WordPress site.

@@ -128,6 +128,7 @@ function main() {
   const local = loadLocalConfig();
   const siteUrl = String(local.siteUrl || "https://neopulse.local").replace(/\/+$/, "");
   const frontendUrl = String(local.viteDevUrl || "http://localhost:8080/").replace(/(?<!\/)$/, "/");
+  const googleMcpRedirectUri = `${frontendUrl.replace(/\/+$/, "")}/api/google-mcp/callback`;
 
   const gscJson = resolveGscServiceAccountJson(dotenv);
   const openRouterKey = resolveOpenRouterApiKey(dotenv, local);
@@ -136,6 +137,23 @@ function main() {
     .join(ROOT, "scripts", "research", "local-dominator", "export-grid.mjs")
     .replace(/\\/g, "/");
   const ldEnvFile = path.join(ROOT, ".env.localdominator").replace(/\\/g, "/");
+  const chatgptSessionScript = path
+    .join(ROOT, "scripts", "research", "chatgpt-audit", "run-session.mjs")
+    .replace(/\\/g, "/");
+  const chatgptEnvFile = path.join(ROOT, ".env").replace(/\\/g, "/");
+  const chatgptWorkerUrl = "http://host.docker.internal:8080/api";
+  const localWorkerPort = pick(dotenv, "NEO_PULSE_APP_LOCAL_WORKER_PORT", "LOCAL_WORKER_PORT") || "10000";
+  const postCreatorWorkerUrl = `http://host.docker.internal:${localWorkerPort}`;
+  const postCreatorApiBase = siteUrl;
+  const postCreatorWorkerAuth = pick(dotenv, "NEO_PULSE_APP_POST_CREATOR_WORKER_AUTH", "LD_WORKER_AUTH_TOKEN");
+  const ldWorkerUrl =
+    pick(dotenv, "NEO_PULSE_APP_LOCAL_DOMINATOR_WORKER_URL")
+    || `http://host.docker.internal:${localWorkerPort}`;
+  const ldWorkerAuth = pick(dotenv, "NEO_PULSE_APP_LOCAL_DOMINATOR_WORKER_AUTH", "LD_WORKER_AUTH_TOKEN");
+  const browserAutomationScript = path
+    .join(ROOT, "scripts", "research", "browser-automation", "run-session.mjs")
+    .replace(/\\/g, "/");
+  const residentialProxyEnvFile = path.join(ROOT, ".env.residential-proxy").replace(/\\/g, "/");
   const lines = [
     "<?php",
     "/**",
@@ -173,6 +191,9 @@ function main() {
     `if ( ! defined( 'NEO_PULSE_APP_GMB_REDIRECT_URI' ) ) {`,
     `\tdefine( 'NEO_PULSE_APP_GMB_REDIRECT_URI', ${phpString(`${siteUrl}/api/gmb/callback`)} );`,
     "}",
+    `if ( ! defined( 'NEO_PULSE_APP_GOOGLE_MCP_REDIRECT_URI' ) ) {`,
+    `\tdefine( 'NEO_PULSE_APP_GOOGLE_MCP_REDIRECT_URI', ${phpString(googleMcpRedirectUri)} );`,
+    "}",
     `if ( ! defined( 'NEO_PULSE_APP_FRONTEND_URL' ) ) {`,
     `\tdefine( 'NEO_PULSE_APP_FRONTEND_URL', ${phpString(frontendUrl)} );`,
     "}",
@@ -190,6 +211,45 @@ function main() {
     "}",
     `if ( ! defined( 'NEO_PULSE_APP_LOCAL_DOMINATOR_ENV_FILE' ) ) {`,
     `\tdefine( 'NEO_PULSE_APP_LOCAL_DOMINATOR_ENV_FILE', ${phpString(ldEnvFile)} );`,
+    "}",
+    `if ( ! defined( 'NEO_PULSE_APP_AGENTMAIL_API_KEY' ) ) {`,
+    `\tdefine( 'NEO_PULSE_APP_AGENTMAIL_API_KEY', ${phpString(pick(dotenv, "NEO_PULSE_APP_AGENTMAIL_API_KEY", "AGENTMAIL_API_KEY", "NEO_PULSE_WP_AGENTMAIL_API_KEY"))} );`,
+    "}",
+    `if ( ! defined( 'NEO_PULSE_APP_AGENTMAIL_INBOX' ) ) {`,
+    `\tdefine( 'NEO_PULSE_APP_AGENTMAIL_INBOX', ${phpString(pick(dotenv, "NEO_PULSE_APP_AGENTMAIL_INBOX", "AGENTMAIL_INBOX", "NEO_PULSE_WP_AGENTMAIL_INBOX"))} );`,
+    "}",
+    `if ( ! defined( 'NEO_PULSE_APP_CHATGPT_AUDIT_SCRIPT' ) ) {`,
+    `\tdefine( 'NEO_PULSE_APP_CHATGPT_AUDIT_SCRIPT', ${phpString(chatgptSessionScript)} );`,
+    "}",
+    `if ( ! defined( 'NEO_PULSE_APP_CHATGPT_AUDIT_ENV_FILE' ) ) {`,
+    `\tdefine( 'NEO_PULSE_APP_CHATGPT_AUDIT_ENV_FILE', ${phpString(chatgptEnvFile)} );`,
+    "}",
+    `if ( ! defined( 'NEO_PULSE_APP_CHATGPT_AUDIT_WORKER_URL' ) ) {`,
+    `\tdefine( 'NEO_PULSE_APP_CHATGPT_AUDIT_WORKER_URL', ${phpString(chatgptWorkerUrl)} );`,
+    "}",
+    `if ( ! defined( 'NEO_PULSE_APP_BROWSER_AUTOMATION_SCRIPT' ) ) {`,
+    `\tdefine( 'NEO_PULSE_APP_BROWSER_AUTOMATION_SCRIPT', ${phpString(browserAutomationScript)} );`,
+    "}",
+    `if ( ! defined( 'NEO_PULSE_APP_RESIDENTIAL_PROXY_ENV_FILE' ) ) {`,
+    `\tdefine( 'NEO_PULSE_APP_RESIDENTIAL_PROXY_ENV_FILE', ${phpString(residentialProxyEnvFile)} );`,
+    "}",
+    `if ( ! defined( 'NEO_PULSE_APP_LOCAL_DOMINATOR_WORKER_URL' ) ) {`,
+    `\tdefine( 'NEO_PULSE_APP_LOCAL_DOMINATOR_WORKER_URL', ${phpString(ldWorkerUrl)} );`,
+    "}",
+    `if ( ! defined( 'NEO_PULSE_APP_LOCAL_DOMINATOR_WORKER_AUTH' ) ) {`,
+    `\tdefine( 'NEO_PULSE_APP_LOCAL_DOMINATOR_WORKER_AUTH', ${phpString(ldWorkerAuth)} );`,
+    "}",
+    `if ( ! defined( 'NEO_PULSE_APP_POST_CREATOR_WORKER_URL' ) ) {`,
+    `\tdefine( 'NEO_PULSE_APP_POST_CREATOR_WORKER_URL', ${phpString(postCreatorWorkerUrl)} );`,
+    "}",
+    `if ( ! defined( 'NEO_PULSE_APP_POST_CREATOR_WORKER_AUTH' ) ) {`,
+    `\tdefine( 'NEO_PULSE_APP_POST_CREATOR_WORKER_AUTH', ${phpString(postCreatorWorkerAuth)} );`,
+    "}",
+    `if ( ! defined( 'NEO_PULSE_APP_POST_CREATOR_API_BASE' ) ) {`,
+    `\tdefine( 'NEO_PULSE_APP_POST_CREATOR_API_BASE', ${phpString(postCreatorApiBase)} );`,
+    "}",
+    `if ( ! defined( 'NEO_PULSE_APP_PUBLIC_API_BASE' ) ) {`,
+    `\tdefine( 'NEO_PULSE_APP_PUBLIC_API_BASE', ${phpString(siteUrl)} );`,
     "}",
     "",
   ];

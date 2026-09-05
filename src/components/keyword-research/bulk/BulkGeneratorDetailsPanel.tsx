@@ -16,6 +16,7 @@ import {
 } from "@/lib/bulk/blog-import-header-progress";
 import type { ImportedBlogDraft } from "@/lib/bulk/blog-import-parser";
 import type { WordPressPostDestination } from "@/lib/bulk-auto-generate";
+import { WORDPRESS_POST_DESTINATION_SHORT } from "@/lib/bulk-auto-generate";
 import { cn } from "@/lib/utils";
 import { contentOptimizerRowStripeClass } from "@/components/overview/overview-tab/overview-tab-content-constants";
 
@@ -30,16 +31,14 @@ import {
 } from "@/components/shared/WorkspaceDetailsStack";
 import type { BulkGeneratedFile } from "@/lib/bulk-file-manager";
 import type { PromptBulkSitemapInventoryLink } from "@/lib/bulk/prompt-bulk-sitemap-inventory";
+import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
+import type { ResearchBatchSignals } from "@/lib/overview/overview-bulk-pipeline-titles";
 import { BulkSitemapInventoryRunDetail } from "@/components/keyword-research/bulk/BulkSitemapInventoryRunDetail";
 import { SitemapInventoryLinksList } from "@/components/keyword-research/bulk/SitemapInventoryLinksList";
 import { workspaceDetailsCanOpen } from "@/lib/workspace/workspace-details-can-open";
 
 export type BulkGeneratorDetailsVariant = "csv" | "prompt" | "blog-import";
 
-const POST_DESTINATION_LABEL: Record<WordPressPostDestination, string> = {
-  wordpress: "WordPress",
-  local: "Local files",
-};
 
 const VARIANT_LABEL: Record<BulkGeneratorDetailsVariant, string> = {
   csv: "CSV",
@@ -83,8 +82,12 @@ export type BulkGeneratorDetailsPanelProps = {
   directionsSiteName?: string;
   prepAccordionTitle?: string;
   pipelineSectionTitles?: string[];
+  runKind?: BulkOptimizationState["runKind"];
+  researchBatchSignals?: ResearchBatchSignals;
+  researchRowIndices?: ReadonlySet<number>;
   liveMessage?: string | null;
   entitySapRowDisplay?: boolean;
+  urlStatuses?: BulkOptimizationState["urlStatuses"];
 };
 
 export function bulkGeneratorDetailsCanOpen(
@@ -103,7 +106,7 @@ function BlogImportWorkspaceInline({
   postDestination: WordPressPostDestination;
   importedFileName?: string | null;
 }) {
-  const parts = [VARIANT_LABEL["blog-import"], POST_DESTINATION_LABEL[postDestination]];
+  const parts = [VARIANT_LABEL["blog-import"], WORDPRESS_POST_DESTINATION_SHORT[postDestination]];
   if (importedFileName?.trim()) parts.push(importedFileName.trim());
   return <WorkspaceDetailsLiveMessage message={parts.join(" · ")} stripeIndex={0} />;
 }
@@ -135,7 +138,7 @@ function BulkGeneratorWorkspaceContext({
       <WorkspaceDetailsKvRow label="Section" value={VARIANT_LABEL[variant]} stripeIndex={kvIndex++} whiteLabels={whiteLabels} />
       <WorkspaceDetailsKvRow
         label="Destination"
-        value={POST_DESTINATION_LABEL[postDestination]}
+        value={WORDPRESS_POST_DESTINATION_SHORT[postDestination]}
         stripeIndex={kvIndex++}
         whiteLabels={whiteLabels}
       />

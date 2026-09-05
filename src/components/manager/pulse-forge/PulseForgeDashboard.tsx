@@ -5,6 +5,7 @@ import {
   activeForgeAgentRuns,
   primaryAutomationTask,
 } from "@/lib/pulse-forge/forge-dashboard-runs";
+import { isAgentRunTerminal } from "@/lib/agent-runs-types";
 import type { TaskBuilderTab } from "@/components/manager/pulse-forge/TaskBuilderView";
 import { ForgeDashboardRow } from "@/components/manager/pulse-forge/ForgeDashboardRow";
 import { ForgeDashboardHeroCard } from "@/components/manager/pulse-forge/ForgeDashboardHeroCard";
@@ -64,12 +65,22 @@ export function PulseForgeDashboard({
   }, [refreshRuns]);
 
   useEffect(() => {
-    for (const project of automationProjects) {
-      if (!projectBundles[project.id]) {
-        onRefreshProject(project.id);
+    if (viewMode !== "live") return;
+    const automationProjectIds = new Set(automationProjects.map((project) => project.id));
+    const prefetchProjectIds = new Set<number>();
+    for (const run of runs) {
+      if (isAgentRunTerminal(run.status)) continue;
+      const projectId = run.context?.projectId;
+      if (projectId != null && automationProjectIds.has(projectId)) {
+        prefetchProjectIds.add(projectId);
       }
     }
-  }, [automationProjects, onRefreshProject, projectBundles]);
+    for (const projectId of prefetchProjectIds) {
+      if (!projectBundles[projectId]) {
+        onRefreshProject(projectId);
+      }
+    }
+  }, [automationProjects, onRefreshProject, projectBundles, runs, viewMode]);
 
   const activeRuns = useMemo(
     () => activeForgeAgentRuns(runs, automationProjects, projectBundles),

@@ -10,8 +10,8 @@ export const BULK_GSC_QUERY_ROW_LIMIT = 10000;
 /** Extra GSC rows beyond SAP budget so short-tail filtering still has candidates. */
 export const ENTITY_GSC_ROW_BUFFER = 20;
 
-/** Max GSC rows fetched into the entity site warm cache (top queries by clicks/impressions). */
-export const ENTITY_SITE_WARM_GSC_ROW_LIMIT = 100;
+/** Max GSC rows fetched into the entity site warm cache (full property export). */
+export const ENTITY_SITE_WARM_GSC_ROW_LIMIT = BULK_GSC_QUERY_ROW_LIMIT;
 
 /** GSC fetch rowLimit for Entity Clusters: SAP budget + buffer (not full history / 10k). */
 export function entityGscRowLimitForSapBudget(sapRowCount: number): number {
@@ -207,6 +207,34 @@ export function gscShortTailKeywordsForOpenRouter(
     limit,
     excludeBrandPhrases,
   );
+}
+
+/** Every GSC query string for entity keyword fill (minimal filtering; place stripped at compose). */
+export function gscAllQueryStringsForEntityKeywordFill(
+  queries: GscSiteQueryRow[],
+  excludeBrandPhrases: readonly string[] = [],
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const row of sortGscQueriesByStats(queries)) {
+    const kw = row.query?.trim();
+    if (!kw || isOffensiveGscQuery(kw) || isBlockedContentTopicPhrase(kw)) continue;
+    if (gscQueryContainsBrandPhrase(kw, excludeBrandPhrases)) continue;
+    const key = keywordUniquenessKey(kw);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(kw);
+  }
+  return out;
+}
+
+/** SAP keyword bases from every GSC query in the bundle (no row-budget cap). */
+export function gscSapKeywordBasesFromAllQueries(
+  queries: GscSiteQueryRow[],
+  excludeBrandPhrases: readonly string[] = [],
+): string[] {
+  const limit = Math.max(queries.length, 1);
+  return gscSapKeywordBasesForOpenRouter(queries, limit, excludeBrandPhrases);
 }
 
 /** SAP keyword bases only: 2–3 word transactional GSC phrases (entity appended separately). */

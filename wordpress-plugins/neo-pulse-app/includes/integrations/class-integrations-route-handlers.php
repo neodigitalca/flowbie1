@@ -58,12 +58,14 @@ class Neo_Pulse_App_Integrations_Route_Handlers {
 		if ( $subpath === 'sync-email-worker-keys' && $method === 'POST' ) {
 			$openrouter = isset( $body['openRouterApiKey'] ) ? trim( (string) $body['openRouterApiKey'] ) : '';
 			$inbox      = isset( $body['agentmailGeneralEmail'] ) ? sanitize_email( strtolower( trim( (string) $body['agentmailGeneralEmail'] ) ) ) : '';
+			$webhook_secret = isset( $body['agentmailWebhookSecret'] ) ? trim( (string) $body['agentmailWebhookSecret'] ) : '';
 			$keys_path  = Neo_Pulse_App_Data_Paths::root() . '/email-worker-keys.json';
 			Neo_Pulse_App_Json_File_Store::write(
 				$keys_path,
 				array(
 					'agentmailApiKey'        => isset( $body['agentmailApiKey'] ) ? (string) $body['agentmailApiKey'] : '',
 					'agentmailGeneralEmail'  => $inbox,
+					'agentmailWebhookSecret' => $webhook_secret,
 					'openRouterApiKey'       => $openrouter,
 					'updatedAt'              => gmdate( 'c' ),
 				)

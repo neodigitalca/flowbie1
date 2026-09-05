@@ -52,7 +52,7 @@ describe("performKeywordResearchFlow", () => {
     );
 
     expect(performKeywordResearch).not.toHaveBeenCalled();
-    expect(performAIAnalysis).toHaveBeenCalled();
+    expect(performAIAnalysis).not.toHaveBeenCalled();
     expect(result.relatedKeywords).toContain("gsc kw");
     expect(result.relatedKeywords).toContain("related");
     expect(result.aiAnalysis.peopleAlsoAsk?.[0]?.question).toBe("Q1?");

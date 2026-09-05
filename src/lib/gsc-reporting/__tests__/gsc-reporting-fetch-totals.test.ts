@@ -18,7 +18,7 @@ describe("gscSiteTotalsPreviousMonthToCsv", () => {
       position: 14.7,
     });
     expect(csv).toContain("Total clicks,112");
-    expect(csv).toContain("Total impressions,3410");
+    expect(csv).toContain("Total impressions,\"3,410\"");
     expect(csv).toContain("March 2026");
     expect(csv).toContain("2026-03-01");
   });

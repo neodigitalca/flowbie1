@@ -9,9 +9,15 @@ import {
   buildFocusedArticlePurpose,
 } from "@/lib/content-generation/article-length-policy";
 import { INTERNAL_LINK_PLACEHOLDER_FEATURE_SUFFIX } from "@/lib/content-generation/internal-link-placeholders";
+import { formatBlogPlayLinkTargetsPrompt } from "@/lib/bulk/bulk-generation-wp-inventory";
 
 const LINK_FEATURE_PLACEHOLDER = `[LINK]: ${INTERNAL_LINK_PLACEHOLDER_FEATURE_SUFFIX}`;
 import { GLOBAL_FORBIDDEN_WORDS_PROMPT_BLOCK } from "@/lib/content-word-blocklist";
+import { AUTHENTICITY_CHECKLIST_RULE } from "@/lib/prompt-builders/core";
+import {
+  formatSapChecklistExample,
+  formatSapPageChecklistBlock,
+} from "@/lib/prompt-builders/sap-page-template";
 
 export type GeneratorWordPressPost = {
   id?: number;
@@ -20,6 +26,8 @@ export type GeneratorWordPressPost = {
   excerpt?: string;
   link: string;
   date_gmt?: string;
+  collection?: string;
+  postType?: string;
 };
 
 export type ChecklistPromptContext = {
@@ -35,6 +43,7 @@ export type ChecklistPromptContext = {
   semrushScatterContext?: string;
   bucketReadFirstBlock?: string;
   entity?: string;
+  firstPartyAuthorityBlock?: string;
 };
 
 export type BlueprintPromptContext = {
@@ -47,6 +56,7 @@ export type BlueprintPromptContext = {
   wordPressPosts?: GeneratorWordPressPost[];
   semrushKeywordsContext?: string;
   semrushScatterContext?: string;
+  firstPartyAuthorityBlock?: string;
 };
 
 function keywordSection(keywordData: KeywordData, selectedKeywords: string[]): string {
@@ -59,38 +69,26 @@ Difficulty: ${keywordData.difficulty ?? "N/A"}/100
 Intent: ${keywordData.intent ?? "N/A"}
 Selected Keywords: ${selected}
 
-FOCUS KEYWORD DENSITY: Target minimum ~1.0% focus keyword density (exact phrase + combinations), not ~0.5%.
-EXACT PRIMARY PER H2: Include the exact primary keyword phrase at least once in every H2 section body.
+FOCUS KEYWORD DENSITY: Target minimum ~1.0% focus keyword density (exact phrase + combinations), not ~0.5%. For connected-site homeowner articles with first-party authority: prefer semantic variants; exact phrase in Answer plus at most ~4 additional natural body mentions; article-wide cap ~5 exact-phrase uses in prose.
+EXACT PRIMARY PER H2: Include the exact primary keyword phrase once in every H2 section body when natural (not in every sentence). Skip exact phrase in a section if the prior body section already used it. Intro: at most one exact primary, not required in sentence one.
 PARAGRAPH LENGTH: Moderately short paragraphs (~2-4 sentences); split long blocks.`;
 }
 
-function wordPressPostsBlock(posts: GeneratorWordPressPost[], siteName: string): string {
-  if (!posts.length) return "";
-  const lines = posts.slice(0, 30).map((post, idx) => {
-    const excerpt = (post.excerpt ?? "").replace(/<[^>]+>/g, "").slice(0, 80);
-    return `${idx + 1}. "${post.title}"${excerpt ? ` - ${excerpt}` : ""}\n   URL: ${post.link}`;
-  });
-  return `
-=== WORDPRESS POSTS SOURCE (INTERNAL LINKS) ===
-Available WordPress Posts from ${siteName} (${posts.length} total):
-
-${lines.join("\n\n")}
-
-Use ONLY URLs from this list for [LINK] placeholders. Never invent internal URLs.
-=== END WORDPRESS POSTS SOURCE ===
-`;
+function wordPressPostsBlock(posts: GeneratorWordPressPost[], _siteName: string): string {
+  return formatBlogPlayLinkTargetsPrompt(posts);
 }
 
 function checklistFormatExample(h2Sample: string): string {
   return `CRITICAL FORMAT REQUIREMENT:
 Format your response as a numbered list, one item per line. Do NOT use ## markdown headings in checklist items.
 
-Example (NOTE: numbered lines only — no ##):
-1. Why Smart Blinds Matter for Modern Homes [STRUCTURE]: 2 short paragraphs. [EXACT PRIMARY PER H2]: exact primary once in body. [FOCUS KEYWORD DENSITY]: ~1%+ across article. [LINK]: 3-5 [[LINK:query|anchor]] placeholders.
-2. ${h2Sample || "Core Benefits"} [STRUCTURE]: 1-2 paragraphs. [TABLE]: compact comparison table. [EXACT PRIMARY PER H2]. [LINK]: 3-5 internal links.
-3. ${h2Sample || "Installation Steps"} [LIST]: number step-by-step process. [EXACT PRIMARY PER H2]. [LINK]: 3-5 internal links.
-4. ${h2Sample || "Maintenance Tips"} [LIST]: bullet key benefits. [EXACT PRIMARY PER H2]. [LINK]: 3-5 internal links.
-5. Conclusion and Next Steps [EXACT PRIMARY PER H2]. [LINK]: CTA internal links.
+Example (NOTE: numbered lines only — no ##). Match ARTICLE CONTENT TYPE jobs (never "What is X" or "Your Guide to X"):
+1. How ${h2Sample || "this topic"} works [STRUCTURE]: 2-3 paragraphs. [LIST]: components. Opener leads with a sourced fact, then the topic (not keyword-first, not a dictionary definition). [FIRST-PARTY AUTHORITY]. [EXACT PRIMARY PER H2]: exact primary once later in the intro body. [FOCUS KEYWORD DENSITY]: ~1%+ across article. [LINK]: 3-5 [[LINK:query|anchor]] placeholders.
+2. Compared with the adjacent approach [STRUCTURE]: 2-3 paragraphs. [TABLE] or [DECISION]: criteria. [EXACT PRIMARY PER H2]. [LINK]: 3-5 internal links.
+3. A Local Homeowner Example [STRUCTURE]: 1 intro paragraph, then scenario in body (not in the H2). [ILLUSTRATIVE]: labeled hypothetical. [BLOCKQUOTE]. Short H2. No links in H2 or H3. [EXACT PRIMARY PER H2]. [LINK]: 3-5 in body only.
+4. How to apply this [LIST]: numbered steps. [EXACT PRIMARY PER H2]. [LINK]: 3-5 internal links.
+5. How to measure success [NUMBERS] or [TRADEOFF]: when it fails. [EXACT PRIMARY PER H2]. [LINK]: 3-5 internal links.
+6. What we recommend [STRUCTURE]: 1-2 paragraphs. [RECOMMENDATION]: site-first recommendation. [EXACT PRIMARY PER H2]. [LINK]: CTA internal links.
 
 Output ONLY the numbered checklist items, no additional text.`;
 }
@@ -143,10 +141,18 @@ ${buildArticleLengthChecklistBlock(isServiceArea)}
 Harness contract: Each checklist item = exactly one H2 harness pass (~${Math.floor(ARTICLE_MAX_WORDS / 6)} words). Max 2 [TABLE] in entire article.
 Each item must include [STRUCTURE], [EXACT PRIMARY PER H2], [FOCUS KEYWORD DENSITY], [PARAGRAPH LENGTH], and [LINK]: 3-5 [[LINK:query|anchor]].
 Include at least one [TABLE], one [LIST]: bullet, and one [LIST]: number across the article.
+Put [DECISION] on exactly one item and [TRADEOFF] on exactly one item.
 First H2: NEVER title it Introduction or Intro — use SEO-friendly active title.
 Conclusion H2 with exact primary keyword once in body.
+FORBIDDEN: Never start a checklist line with "Create an agent", "Create a first section agent", or similar. Each line begins with the exact H2 heading text.
 
-${checklistFormatExample(ctx.selectedH2Sections[0] ?? "Section Topic")}
+${AUTHENTICITY_CHECKLIST_RULE}
+
+${ctx.firstPartyAuthorityBlock?.trim() ? `${ctx.firstPartyAuthorityBlock.trim()}\n\n` : ""}${
+  isServiceArea
+    ? formatSapChecklistExample(ctx.entity!.trim(), ctx.title)
+    : checklistFormatExample(ctx.selectedH2Sections[0] ?? "Section Topic")
+}
 
 ${GLOBAL_FORBIDDEN_WORDS_PROMPT_BLOCK}`;
 
@@ -155,6 +161,8 @@ ${GLOBAL_FORBIDDEN_WORDS_PROMPT_BLOCK}`;
     user += ctx.bucketReadFirstBlock.trim() + "\n\n";
   }
   user += `Generate a focused checklist for creating a blog template blueprint.
+
+${isServiceArea ? formatSapPageChecklistBlock(ctx.entity!.trim()) : ""}
 
 ${buildArticleLengthChecklistBlock(isServiceArea)}
 
@@ -165,14 +173,17 @@ Blog Details:
 - Related Keywords: ${ctx.selectedKeywords.slice(0, 5).join(", ") || ctx.keywordData.keyword}
 
 Requirements:
-1. Create ${isServiceArea ? "6-7" : "5-6"} checklist items maximum: introduction-style first H2, 3-4 body topics, conclusion.
+1. Create ${isServiceArea ? "6-7" : "5-6"} checklist items. ${isServiceArea ? "Follow SAP PAGE TEMPLATE (local problem, sourced local conditions, What We Offer, Local Recommendation table, Next Steps). Do not emit encyclopedia how-it-works jobs." : "Match type-skeleton jobs (how it works, vs adjacent, apply, measure, recommendation). First H2 is never Introduction/Intro/What is X/Your Guide to X."}
 2. Each item must include mandatory markers: [STRUCTURE], [EXACT PRIMARY PER H2], [FOCUS KEYWORD DENSITY], [PARAGRAPH LENGTH], [LINK].
-3. Include at least one [TABLE], one [LIST]: bullet, and one [LIST]: number (max 2 [TABLE] total).
-4. First H2: active SEO title (never Introduction/Intro). Conclusion H2 with exact primary keyword.
+3. Include at least one [TABLE], one [LIST]: bullet, and one [LIST]: number (max 2 [TABLE] total). ${isServiceArea ? "The two tables are What We Offer and Local Recommendation (Product | Best for | Budget | Reason)." : "Put [DECISION] on one item, [TRADEOFF] on one item, [ILLUSTRATIVE] on one item, and [RECOMMENDATION] on the last item."}
+4. ${isServiceArea ? "Local Recommendation H2: four-column table plus connected business name." : "Last H2: site-first [RECOMMENDATION] with exact primary keyword once in body."}
 5. Output ONLY numbered checklist lines. Do NOT use ## markdown headings in items.`;
 
   if (ctx.userPrompt?.trim()) {
     user += `\n\n--- CRITICAL: USER-SPECIFIED REQUIREMENTS ---\n${ctx.userPrompt.trim()}`;
+  }
+  if (ctx.firstPartyAuthorityBlock?.trim()) {
+    user += `\n\n${ctx.firstPartyAuthorityBlock.trim()}`;
   }
 
   user += `\n\n--- MANDATORY: INTERNAL LINK REQUIREMENTS ---
@@ -204,6 +215,9 @@ export function buildBlueprintPromptMessages(ctx: BlueprintPromptContext): { sys
   const modifierBlock = ctx.userPrompt?.trim()
     ? `\n--- PROMPT MODIFIER ---\n${ctx.userPrompt.trim()}\n--- END ---\n`
     : "";
+  const firstPartyBlock = ctx.firstPartyAuthorityBlock?.trim()
+    ? `\n${ctx.firstPartyAuthorityBlock.trim()}\n`
+    : "";
 
   const system = `You are the Blueprint Architect AI. Return valid JSON only.
 
@@ -211,7 +225,7 @@ export function buildBlueprintPromptMessages(ctx: BlueprintPromptContext): { sys
 Title: ${ctx.title}
 Purpose: ${ctx.purpose}
 Primary Keyword: ${ctx.keyword}
-${siteBlock}${postsBlock}${modifierBlock}${semrushBlock}
+${siteBlock}${postsBlock}${modifierBlock}${firstPartyBlock}${semrushBlock}
 
 --- Template Checklist ---
 ${ctx.checklist.map((item, i) => `${i + 1}. ${item}`).join("\n")}
@@ -226,6 +240,10 @@ NEVER use FAQ-style agent titles.
 Agent JSON schema:
 {"title":"","purpose":"","agents":[{"id":"section-1","step":1,"title":"","description":"","features":["[LINK]: [[LINK:query|anchor]] placeholders"],"headingLevel":2}]}
 
+CRITICAL — agent.title: ONLY the H2 heading phrase (checklist text before the first [STRUCTURE]/[LINK]/[TABLE]/[LIST]/[EXACT]/[DECISION]/[TRADEOFF] marker). Never copy [STRUCTURE], paragraph counts, or other harness tags into title.
+
+Copy [DECISION] and [TRADEOFF] from checklist items into that agent's features array when present.
+
 ${GLOBAL_FORBIDDEN_WORDS_PROMPT_BLOCK}`;
 
   const user = `Build a JSON blueprint for "${ctx.title}" (keyword: ${ctx.keyword}).
@@ -234,7 +252,7 @@ ${ctx.userPrompt?.trim() ? `Prompt modifier focus: ${ctx.userPrompt.trim()}\n` :
 Checklist:
 ${ctx.checklist.map((item, i) => `${i + 1}. ${item}`).join("\n")}
 
-Return JSON with one agent per checklist item. Rename Intro/Introduction titles. Each agent needs [LINK] in features.`;
+Return JSON with one agent per checklist item. Rename Intro/Introduction titles. Each agent needs [LINK] in features. Each agent.title = H2 heading only (text before first [ marker in that checklist line).`;
 
   return { system, user };
 }
@@ -251,9 +269,12 @@ Return JSON only:
   "keywordSuggestions": { "primary": "...", "variations": ["..."], "longTail": ["..."] },
   "peopleAlsoAsk": [{ "question": "...", "answer": "..." }],
   "contentGaps": ["..."]
-}`;
+}
+
+h2Suggestions: follow a type skeleton (how it works / vs adjacent / how to apply / how to measure / recommendation). Prefer how to choose / vs / cost factors / process / when not worth it. Forbidden as the whole outline: definitional "What is X", "Your Guide to X", or "Benefits of X".
+contentGaps: include buyer-decision gaps (which option, when not worth it, cost drivers), not only missing topics.`;
 }
 
 export function buildKeywordAnalysisSystemPrompt(): string {
-  return "You are an SEO keyword analyst. Return valid JSON only. Suggest 5-7 H2 section topics (no FAQ titles). Include keyword variations and PAA questions from SERP context.";
+  return "You are an SEO keyword analyst. Return valid JSON only. Suggest 5-7 H2 section topics (no FAQ titles). Follow a type skeleton: how it works, vs adjacent approach, how to apply, how to measure, recommendation. Prefer jobs-to-be-done headings (choose / vs / cost / process / when not) over definitional titles. Forbidden: What is X, Your Guide to X. Include keyword variations and PAA questions from SERP context. contentGaps must include buyer-decision gaps.";
 }

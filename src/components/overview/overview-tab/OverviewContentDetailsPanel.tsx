@@ -8,7 +8,10 @@ import type { useWordPressOptimization } from "@/contexts/wordpress-optimization
 import {
   WorkspaceDetailsStack,
 } from "@/components/shared/WorkspaceDetailsStack";
-import { isOverviewBatchAllComplete } from "@/components/overview/overview-tab/overview-bulk-run-helpers";
+import {
+  isOverviewBatchAllComplete,
+  isOverviewResearchBatchInFlight,
+} from "@/components/overview/overview-tab/overview-bulk-run-helpers";
 import { SinglePageOptimizationDetailsPanel } from "@/components/overview/overview-tab/SinglePageOptimizationDetailsPanel";
 import { ContentOptimizerDetailsDrawer } from "@/components/overview/overview-tab/ContentOptimizerDetailsDrawer";
 import {
@@ -77,9 +80,18 @@ function isOverviewBatchRunActive(
   batchBulkState: BulkOptimizationState | undefined,
   bulkBatchKey: string,
   isOptimizing: Record<string, boolean>,
+  siteId?: string,
 ): boolean {
   if (!batchBulkState?.urls?.length) return false;
   if (bulkBatchKey && isOptimizing[bulkBatchKey]) return true;
+  if (siteId && isOptimizing[siteId]) return true;
+  if (
+    batchBulkState.runKind === "research" &&
+    batchBulkState.currentStep !== "Batch complete" &&
+    !isOverviewBatchAllComplete(batchBulkState)
+  ) {
+    return true;
+  }
   return !isOverviewBatchAllComplete(batchBulkState);
 }
 
@@ -110,6 +122,20 @@ export function hasOverviewContentDetailsActivity(
   );
 }
 
+export function isOverviewResearchWorkerActive(
+  batchBulkState: BulkOptimizationState | undefined,
+  bulkBatchKey: string,
+  siteId: string,
+  isOptimizing: Record<string, boolean>,
+): boolean {
+  if (isOptimizing[bulkBatchKey] || (siteId && isOptimizing[siteId])) return true;
+  return (
+    batchBulkState?.runKind === "research" &&
+    batchBulkState.currentStep !== "Batch complete" &&
+    !isOverviewBatchAllComplete(batchBulkState)
+  );
+}
+
 export function OverviewContentDetailsPanel({
   ctrl: c,
   batchBulkState,
@@ -130,34 +156,57 @@ export function OverviewContentDetailsPanel({
         optimizationFileManagers: opt.optimizationFileManagers,
       }
     : undefined;
+  const siteBatchKey = siteId ? `${siteId}-batch` : "";
+  const siteBatchState = siteBatchKey ? opt.bulkOptimizationState[siteBatchKey] : undefined;
+  const effectiveBatchState =
+    batchBulkState?.urls?.length
+      ? batchBulkState
+      : siteBatchState?.runKind === "research" && siteBatchState.urls?.length
+        ? siteBatchState
+        : batchBulkState;
+  const effectiveBatchKey =
+    effectiveBatchState === siteBatchState && siteBatchKey ? siteBatchKey : bulkBatchKey;
+  const hasSiteResearchBatch = Boolean(
+    siteBatchState?.runKind === "research" && siteBatchState.urls?.length,
+  );
+
   const singlePageUrl = opt.pendingOptimization[siteId]?.url;
   const batchActive = isOverviewBatchRunActive(
-    batchBulkState,
-    bulkBatchKey,
+    effectiveBatchState,
+    effectiveBatchKey,
     opt.isOptimizingContent,
+    siteId,
   );
   const showSinglePage = hasSinglePageOptimizationDetailsActivity(singlePageCtx);
   const keepCompletedBatch =
-    batchBulkState?.runKind === "aiInContentImage" ||
-    batchBulkState?.runKind === "aiWikipediaLink";
+    effectiveBatchState?.runKind === "research" ||
+    effectiveBatchState?.runKind === "aiInContentImage" ||
+    effectiveBatchState?.runKind === "aiWikipediaLink";
   const showBatch = Boolean(
-    site && batchBulkState?.urls?.length && (batchActive || keepCompletedBatch),
+    site && effectiveBatchState?.urls?.length && (batchActive || keepCompletedBatch),
   );
   const isSinglePageOptimizing = Boolean(site && opt.isOptimizingContent[siteId]);
   const hasMicroActivity = hasActiveMicroSlices(c.bulkActionProgress);
+  const researchWorkerActive = isOverviewResearchWorkerActive(
+    effectiveBatchState,
+    effectiveBatchKey,
+    siteId,
+    opt.isOptimizingContent,
+  );
   const workspaceBusy = Boolean(
-    opt.isOptimizingContent[bulkBatchKey] ||
+    opt.isOptimizingContent[effectiveBatchKey] ||
       opt.isOptimizingContent[siteId] ||
-      hasMicroActivity,
+      hasMicroActivity ||
+      researchWorkerActive,
   );
 
   const bulkDetailsProps =
-    site && (showBatch || hasMicroActivity || isOverviewBulkDetailsRun(batchBulkState))
+    site && (showBatch || hasMicroActivity || isOverviewBulkDetailsRun(effectiveBatchState))
       ? buildOverviewBulkGeneratorDetailsProps(
           {
             siteId,
-            batchKey: bulkBatchKey,
-            bulkState: batchBulkState ?? { urls: [], currentIndex: 0, urlStatuses: {}, currentStep: "" },
+            batchKey: effectiveBatchKey,
+            bulkState: effectiveBatchState ?? { urls: [], currentIndex: 0, urlStatuses: {}, currentStep: "" },
             batchProgress,
             siteProgress: opt.optimizationProgress[siteId],
             overviewRows: c.rows,
@@ -173,10 +222,34 @@ export function OverviewContentDetailsPanel({
           },
           workspaceBusy,
         )
-      : null;
+      : researchWorkerActive && site && effectiveBatchState
+        ? buildOverviewBulkGeneratorDetailsProps(
+            {
+              siteId,
+              batchKey: effectiveBatchKey,
+              bulkState: effectiveBatchState,
+              batchProgress,
+              siteProgress: opt.optimizationProgress[siteId],
+              overviewRows: c.rows,
+              isOptimizingContent: opt.isOptimizingContent,
+              optimizationFileManagers: opt.optimizationFileManagers,
+              siteName: site.name,
+              sitemapInventoryLinks,
+              siteKwHostedLink: gscHostedLink,
+              sitemapInventoryLoading,
+              sitemapSource: c.sitemapSource,
+              bulkActionProgress: c.bulkActionProgress,
+              bulkScopeUrlKeys: c.bulkScopeUrlKeys,
+            },
+            true,
+          )
+        : null;
 
   const showWarmInventoryOnly =
     !bulkDetailsProps &&
+    !researchWorkerActive &&
+    !isOverviewResearchBatchInFlight(effectiveBatchState) &&
+    !hasSiteResearchBatch &&
     overviewBulkDetailsCanOpenFromWarm(sitemapInventoryLinks, gscHostedLink, sitemapInventoryLoading);
 
   const warmOnlyProps = showWarmInventoryOnly
@@ -191,15 +264,21 @@ export function OverviewContentDetailsPanel({
 
   const drawerProps = bulkDetailsProps ?? warmOnlyProps;
 
+  const hideSinglePageForResearch =
+    hasSiteResearchBatch ||
+    researchWorkerActive ||
+    effectiveBatchState?.runKind === "research" ||
+    showBatch;
+
   return (
     <WorkspaceDetailsStack>
-      {showSinglePage && !(batchActive && batchBulkState?.urls?.length) ? (
+      {showSinglePage && !hideSinglePageForResearch ? (
         <SinglePageOptimizationDetailsPanel
           siteId={siteId}
           opt={opt}
           pageUrl={singlePageUrl}
           stripeIndex={0}
-          hideRowBody={Boolean(batchActive && batchBulkState?.urls?.length)}
+          hideRowBody={Boolean(batchActive && effectiveBatchState?.urls?.length)}
         />
       ) : null}
 

@@ -63,7 +63,7 @@ describe("fillMissingBulkSeoResearchFromSerp", () => {
     expect(maxInFlight).toBeLessThanOrEqual(8);
   });
 
-  it("skips URLs that already have substantive seo_research", async () => {
+  it("refetches SERP even when seo_research already exists", async () => {
     const fetchBrief = vi.fn().mockResolvedValue('{"ok":true}');
 
     const urls = ["https://example.com/a/", "https://example.com/b/"];
@@ -83,12 +83,6 @@ describe("fillMissingBulkSeoResearchFromSerp", () => {
       fetchBrief,
     });
 
-    expect(fetchBrief).toHaveBeenCalledTimes(1);
-    expect(fetchBrief).toHaveBeenCalledWith(
-      expect.objectContaining({
-        keyword: "k1",
-        pageUrl: "https://example.com/b/",
-      }),
-    );
+    expect(fetchBrief).toHaveBeenCalledTimes(2);
   });
 });

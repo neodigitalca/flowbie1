@@ -167,8 +167,12 @@ function batchRunLabel(batchState: BulkOptimizationState, siteName?: string): st
       return `Links${siteSuffix}`;
     case "aiWikipediaLink":
       return `Wikipedia link${siteSuffix}`;
+    case "aiAnswer":
+      return `Answer${siteSuffix}`;
     case "aiOverview":
       return `Overview${siteSuffix}`;
+    case "aiScenario":
+      return `Scenario${siteSuffix}`;
     case "aiInContentImage":
       return `In Content Image${siteSuffix}`;
     default:
@@ -196,8 +200,12 @@ function defaultBatchStatusMessage(batchState: BulkOptimizationState): string {
       return "Processing internal links";
     case "aiWikipediaLink":
       return "Inserting Wikipedia links";
+    case "aiAnswer":
+      return "Prepending Answer";
     case "aiOverview":
       return "Prepending Overview";
+    case "aiScenario":
+      return "Regenerating Scenario";
     case "aiInContentImage":
       return "Generating in-content image";
     default:

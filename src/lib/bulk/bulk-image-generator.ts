@@ -8,6 +8,7 @@ import {
   collectReferenceDataUrls,
   researchGoogleImageReferences,
 } from '../image-reference-research';
+import { fetchImageDataUrlViaApi } from '../proxy-fetch-text';
 
 /**
  * Parse image checklist from AI response
@@ -268,21 +269,8 @@ export async function generateFeaturedImage(
 
   // If we got a URL, fetch it and convert to base64
   if (result.imageUrl && !result.imageBase64) {
-    try {
-      const response = await fetch(result.imageUrl);
-      const blob = await response.blob();
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const base64 = reader.result as string;
-          resolve({ imageBase64: base64 });
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-    } catch (error) {
-      throw new Error(`Failed to fetch image from URL: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    const dataUrl = await fetchImageDataUrlViaApi(result.imageUrl);
+    return { imageBase64: dataUrl };
   }
 
   // Ensure base64 has data URL prefix

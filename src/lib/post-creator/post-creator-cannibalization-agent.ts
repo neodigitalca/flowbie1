@@ -9,18 +9,17 @@ import {
   type PostCreatorCannibalToolName,
   type PostCreatorInventoryCatalog,
 } from "@/lib/post-creator/post-creator-cannibalization-tools";
-import type { PostCreatorRowGateResult } from "@/lib/post-creator/post-creator-inventory-gate";
+import type { PostCreatorRowReviewEntry } from "@/lib/post-creator/post-creator-inventory-gate";
+import { buildInventoryCannibalPromptBlock } from "@/lib/vertical-benchmark/vertical-benchmark-inventory-cannibal";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 const CANNIBAL_SYSTEM = `You are a senior SEO strategist reviewing proposed NEW blog posts before upload.
 
-Your job: block any row that would cannibalize existing site inventory (same search intent, same slug path, or near-duplicate topic).
+Read the full SITE_INVENTORY (every slug, title, URL). Block any proposed row that would cannibalize existing coverage: same search intent, same topic cluster, near-duplicate angle, or light rephrase of an existing title/keyword.
 
-Rules:
-- Use the provided tools to look up inventory before deciding.
-- Existing inventory wins. Automations must create net-new posts only, never overwrite or compete with live URLs.
-- Block when keyword, title, or implied slug overlaps an existing post even with light rephrasing.
-- Allow only clearly distinct search intents with no inventory overlap.
-- Return final JSON only after tool lookups are complete.`;
+Allow only net-new search intents or clearly complementary topics that do not compete with inventory.
+
+Use lookup tools when you need to verify overlap. Return final JSON: {"decisions":[{"rowIndex":0,"allow":true,"reason":"string","conflictingUrl":"optional url"}]}`;
 
 type ChatMessage =
   | { role: "system" | "user"; content: string }
@@ -31,11 +30,11 @@ type ChatMessage =
     }
   | { role: "tool"; tool_call_id: string; content: string };
 
-function buildProposedCatalog(rows: PostCreatorRowGateResult[]): unknown[] {
-  return rows.map((entry) => ({
-    rowIndex: entry.rowIndex,
-    keyword: entry.row.keyword?.trim() || "",
-    title: entry.row.title?.trim() || "",
+function buildProposedCatalog(rows: CSVRow[]): unknown[] {
+  return rows.map((row, rowIndex) => ({
+    rowIndex,
+    keyword: row.keyword?.trim() || "",
+    title: row.title?.trim() || "",
   }));
 }
 
@@ -48,7 +47,7 @@ async function callWithTools(args: {
   content: string;
   toolCalls?: Array<{ id: string; name: string; arguments: string }>;
 }> {
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const res = await postOpenRouterAppChatFetch( {
     method: "POST",
     signal: args.signal,
     headers: openRouterWebAppHeaders(args.apiKey),
@@ -88,17 +87,18 @@ export async function runPostCreatorCannibalizationAgent(args: {
   apiKey: string;
   model?: string;
   catalog: PostCreatorInventoryCatalog;
-  rows: PostCreatorRowGateResult[];
+  inventoryJson: string;
+  rows: CSVRow[];
   signal?: AbortSignal;
 }): Promise<Map<number, { allow: boolean; reason: string; conflictingUrl?: string }>> {
-  const okRows = args.rows.filter((row) => row.status === "ok");
   const decisions = new Map<number, { allow: boolean; reason: string; conflictingUrl?: string }>();
-  if (okRows.length === 0) return decisions;
+  if (args.rows.length === 0) return decisions;
 
-  for (const row of okRows) {
-    decisions.set(row.rowIndex, { allow: true, reason: "Passed deterministic gate" });
+  for (let i = 0; i < args.rows.length; i++) {
+    decisions.set(i, { allow: true, reason: "Pending AI review" });
   }
 
+  const inventoryBlock = buildInventoryCannibalPromptBlock(args.inventoryJson);
   const model = args.model ?? getResearchModel();
   const messages: ChatMessage[] = [
     { role: "system", content: CANNIBAL_SYSTEM },
@@ -106,13 +106,11 @@ export async function runPostCreatorCannibalizationAgent(args: {
       role: "user",
       content: JSON.stringify({
         task: "post_creator_cannibalization_review",
-        proposedRows: buildProposedCatalog(okRows),
+        siteInventory: inventoryBlock,
+        proposedRows: buildProposedCatalog(args.rows),
         inventoryRowCount: args.catalog.rows.length,
-        outputSchema: {
-          decisions: [{ rowIndex: 0, allow: true, conflictingUrl: "optional url", reason: "string" }],
-        },
         instructions:
-          "For each proposed row, call inventory lookup tools as needed, then return JSON { decisions: [...] } for every rowIndex listed.",
+          "Read every inventory slug and title. Return one decision per rowIndex. Block semantic overlap, not just exact slug matches.",
       }),
     },
   ];
@@ -171,7 +169,8 @@ export async function runPostCreatorCannibalizationAgent(args: {
     system: CANNIBAL_SYSTEM,
     user: JSON.stringify({
       task: "post_creator_cannibalization_final_json",
-      proposedRows: buildProposedCatalog(okRows),
+      siteInventory: inventoryBlock,
+      proposedRows: buildProposedCatalog(args.rows),
       note: "Return JSON only: { decisions: [{ rowIndex, allow, reason, conflictingUrl? }] }",
     }),
     maxTokens: 3000,
@@ -192,11 +191,10 @@ export async function runPostCreatorCannibalizationAgent(args: {
 }
 
 export function applyCannibalDecisions(
-  rows: PostCreatorRowGateResult[],
+  rows: PostCreatorRowReviewEntry[],
   decisions: Map<number, { allow: boolean; reason: string; conflictingUrl?: string }>,
-): PostCreatorRowGateResult[] {
+): PostCreatorRowReviewEntry[] {
   return rows.map((entry) => {
-    if (entry.status === "blocked") return entry;
     const decision = decisions.get(entry.rowIndex);
     if (!decision || decision.allow) return entry;
     return {
@@ -214,7 +212,7 @@ export type PostCreatorBlockedRow = {
   conflictingUrl?: string;
 };
 
-export function blockedRowsFromGate(results: PostCreatorRowGateResult[]): PostCreatorBlockedRow[] {
+export function blockedRowsFromReview(results: PostCreatorRowReviewEntry[]): PostCreatorBlockedRow[] {
   return results
     .filter((entry) => entry.status === "blocked")
     .map((entry) => ({
@@ -224,6 +222,12 @@ export function blockedRowsFromGate(results: PostCreatorRowGateResult[]): PostCr
     }));
 }
 
-export function approvedRowsFromGate(results: PostCreatorRowGateResult[]): CSVRow[] {
+export function approvedRowsFromReview(results: PostCreatorRowReviewEntry[]): CSVRow[] {
   return results.filter((entry) => entry.status === "ok").map((entry) => entry.row);
 }
+
+/** @deprecated Use blockedRowsFromReview */
+export const blockedRowsFromGate = blockedRowsFromReview;
+
+/** @deprecated Use approvedRowsFromReview */
+export const approvedRowsFromGate = approvedRowsFromReview;

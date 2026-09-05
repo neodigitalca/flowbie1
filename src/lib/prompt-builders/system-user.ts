@@ -3,12 +3,33 @@ import {
   buildHarnessArticleBudgetBlock,
   buildHarnessArticleCapLine,
 } from "@/lib/content-generation/article-length-policy";
+import {
+  MIN_INTERNAL_LINKS_PER_BODY_H2,
+  TARGET_INTERNAL_LINKS_PER_BODY_H2,
+} from "@/lib/content-generation/link-anchor-text-case";
 import { INTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK } from "../content-generation/internal-link-placeholders";
+import {
+  formatBlogPlayLinkTargetsPrompt,
+  formatLinkTargetsPlanPrompt,
+  INTERNAL_LINK_INTENT_ROUTING_RULE,
+  keepBlogPlayLinkTargets,
+  type LinkTargetsPlan,
+} from "@/lib/bulk/bulk-generation-wp-inventory";
+import { EXTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK } from "../content-generation/external-link-placeholders";
 import { appendMasterInstructionsToSystemPrompt, ensureMasterInstructionsInMemory } from "../master-instructions-storage";
-import { searchSiteCache, getSiteCache } from "../wordpress-site-cache";
+import { getSiteCache } from "../wordpress-site-cache";
 import { getLocalEntityPhraseExamples, getLocalGeneralPhrase } from "../local-entity-phrases";
+import { formatEntityKeywordVariantPromptBlock } from "@/lib/entity-keyword-variant-phrases";
+import {
+  entityLabelForProse,
+  formatEntityReferencePromptBlock,
+  resolveServiceTopicKeyword,
+} from "@/lib/entity-place-reference";
+import { normalizeEntityHintCommaLabel } from "@/lib/comma-place-label";
 import type { AIDrivenACFContext } from "../content-generation/ai-driven-acf-reader";
-import { TABLE_FORMAT, CRITICAL_LINK_RULE, NO_FAKE_TESTIMONIALS_RULE } from "./core";
+import { TABLE_FORMAT, TABLE_FORMAT_MARKDOWN, CRITICAL_LINK_RULE, NO_FAKE_TESTIMONIALS_RULE, TABLE_NO_LINK_ONLY_COLUMN_RULE, AUTHENTICITY_WRITER_RULE, SYSTEM_PROMPT_CORE } from "./core";
+import { formatSapPageWriterBlock } from "@/lib/prompt-builders/sap-page-template";
+import { MARKDOWN_QUOTE_OUTPUT_RULE } from "../feature-mapping";
 import {
   buildOverviewLinkRulesBlock,
 } from "./overview-link-rules";
@@ -21,6 +42,48 @@ import {
   buildKeywordPunctuationPromptBlock,
   resolveWritingKeyword,
 } from "./keyword-canonical-punctuation";
+import { formatDfsArticleAuditHarnessPromptBlockFromText } from "@/lib/dfs-article-audit/format-dfs-article-audit-harness";
+import type { ExternalLinkPair } from "@/lib/content-generation/external-link-placeholders";
+import { formatLlmAuditHarnessPromptBlock } from "@/lib/llm-audit/llm-audit-dataforseo";
+import {
+  FIRST_PARAGRAPH_AUTHORITY_RULE,
+  FIRST_PARTY_AUTHORITY_WRITING_RULE,
+  A_PLUS_HOMEOWNER_ARTICLE_RULE,
+  A_PLUS_KEYWORD_AUTHORITY_RULE,
+  AISO_AUTHORITY_PHRASING_RULE,
+  AISO_DEPTH_RULE,
+  AISO_SEMANTIC_BREADTH_RULE,
+  INSTALLER_EXPERTISE_GATE_RULE,
+  FORBIDDEN_HOLLOW_AUTHORITY_RULE,
+  PHRASE_VARIATION_RULE,
+  SERVICE_AREA_DENSITY_RULE,
+  A_LEVEL_CONNECTED_SITE_ARTICLE_RULE,
+  A_LEVEL_DECISION_PRECISION_RULE,
+  FACTUAL_VERIFICATION_SOURCE_RULE,
+  ILLUSTRATIVE_BLOCKQUOTE_RULE,
+  ILLUSTRATIVE_SCENARIO_PERSONA_RULE,
+  NON_ILLUSTRATIVE_HYPOTHETICAL_BAN_RULE,
+  PRIMARY_CITY_CONSISTENCY_RULE,
+  formatSiteUsedOpenersPromptBlock,
+  COMPARISON_ANSWER_RULE,
+  AUTOMATION_TIER_TAXONOMY_RULE,
+  OVERVIEW_ASSIGNED_PERSONA_RULE,
+  INTERNAL_LINK_ANCHOR_MATCH_RULE,
+  isComparisonPrimaryKeyword,
+  isAutomationTierTopic,
+} from "@/lib/content-optimization/first-party-authority-prompt";
+import {
+  DEFENSIBLE_SPECIFICITY_RULE,
+  NUMERIC_DENSITY_TARGET_RULE,
+  ILLUSTRATIVE_ANSWER_GROUNDING_RULE,
+} from "@/lib/content-optimization/defensible-specificity-prompt";
+
+function connectedSiteTopicAisoRules(primaryKeyword: string): string {
+  const chunks: string[] = [INTERNAL_LINK_ANCHOR_MATCH_RULE];
+  if (isComparisonPrimaryKeyword(primaryKeyword)) chunks.push(COMPARISON_ANSWER_RULE);
+  if (isAutomationTierTopic(primaryKeyword)) chunks.push(AUTOMATION_TIER_TAXONOMY_RULE);
+  return `\n${chunks.join("\n")}`;
+}
 
 // --- Shared rule blocks (DRY) ---
 
@@ -55,7 +118,7 @@ const LINK_RULES = (
       ? ` **Other managed clients (NEVER link)** - do not link to these domains or any URL on them (other sites in this workspace): ${uniquePortfolio.slice(0, 45).join(", ")}${uniquePortfolio.length > 45 ? " …" : ""}.`
       : "";
   return `
-Links: HTML ONLY. Same-site internal links may use <a href="exact-url">anchor</a> from the linkable URLs list (${siteUrl}). Third-party/Semrush citations: NEVER write <a href="https://..."> — use [[EXTERNAL:exact-url|exact-anchor]] copied from the assigned blueprint Semrush pair. Internal placeholders: [[LINK:query|anchor]]. Overview scroll: [[SCROLL:#id|phrase]]. ${externalRule} NEVER link to competitors or local businesses in the same industry.${portfolioRule} **Blacklist (never link)**: forums, chat/messaging apps, Reddit, Discord, Quora, Stack Overflow, Pinterest, or other thread/UGC platforms - unless that exact URL appears in the Semrush approved list (lists are pre-filtered). (3) Never "External Resources" sections. (4) NEVER use markdown [text](url) for external URLs. (5) NEVER use "here" in or after a link. (7) FORBIDDEN: parenthetical footnotes (anchor phrase) or bare (https://...). (8) FORBIDDEN: any third-party URL in prose except inside [[EXTERNAL:url|anchor]].${currentPageUrl ? ` (6) INVALID - REJECT: Any link that matches the page being optimized (${currentPageUrl}). Same path = self-link = forbidden. Do not use it.` : ""}`;
+Links: HTML ONLY. Same-site internal links: [[LINK:query|anchor]] only (${siteUrl}). Never <a href> or [text](url) for same-site URLs. ${INTERNAL_LINK_INTENT_ROUTING_RULE} Third-party/Semrush citations: NEVER write <a href="https://..."> — use [[EXTERNAL:exact-url|exact-anchor]] copied from the assigned blueprint Semrush pair. Overview scroll: [[SCROLL:#id|phrase]]. ${externalRule} NEVER link to competitors or local businesses in the same industry.${portfolioRule} **Blacklist (never link)**: forums, chat/messaging apps, Reddit, Discord, Quora, Stack Overflow, Pinterest, or other thread/UGC platforms - unless that exact URL appears in the Semrush approved list (lists are pre-filtered). (3) Never "External Resources" sections. (4) NEVER use markdown [text](url) for external URLs. (5) NEVER use "here" in or after a link. (7) FORBIDDEN: parenthetical footnotes (anchor phrase) or bare (https://...). (8) FORBIDDEN: any third-party URL in prose except inside [[EXTERNAL:url|anchor]].${currentPageUrl ? ` (6) INVALID - REJECT: Any link that matches the page being optimized (${currentPageUrl}). Same path = self-link = forbidden. Do not use it.` : ""}`;
 };
 
 function buildSemrushApprovedExternalBlock(
@@ -89,6 +152,23 @@ Do NOT type any third-party URL in your output unless it is copied exactly from 
 `;
 }
 
+function buildLlmAuditAuthorityApprovedBlock(
+  pairs: ExternalLinkPair[] | undefined,
+): string {
+  const list = (pairs ?? []).filter((p) => p.url.trim() && p.anchor.trim());
+  if (!list.length) return "";
+  const lines = list
+    .map((p, i) => `${i + 1}. URL: ${p.url.trim()} | Anchor: ${p.anchor.trim()}`)
+    .join("\n");
+  return `
+=== APPROVED EXTERNAL URLs (LLM AUDIT AUTHORITY) ===
+MANDATORY: Include EVERY URL below as an outbound citation using [[EXTERNAL:exact-url|exact-anchor]] with the **exact** URL and **exact** Anchor from this list.
+Weave each link mid-sentence inside a body paragraph — same rules as [[LINK:query|anchor]] internal placeholders. Never append links after the final period. Never use bare domain names or "for more" / "here" as anchor text.
+${lines}
+=== END LLM AUDIT AUTHORITY ===
+`;
+}
+
 // Manager Panel / Blueprint flow: Markdown output (plan, draft, final report)
 const MARKDOWN_FORMAT_RULES = `
 *** OUTPUT: MARKDOWN ONLY. NEVER HTML. ***
@@ -96,7 +176,7 @@ All content MUST be valid Markdown. Headings: ## H2, ### H3. Links: [anchor text
 **PARAGRAPH LENGTH**: Use **moderately short** paragraphs (blank line between them). Target roughly **2–4 sentences** per paragraph on average - **not** one-sentence micro-paragraphs for every thought, and **not** long wall-of-text blocks. Split any paragraph that would exceed **~5 sentences** or read as an oversized block (avoids SEO/readability warnings like “paragraph is long”).
 Pros/Cons, advantages vs disadvantages, or strengths vs weaknesses MUST be rendered as a two-column Markdown table with "Pros" and "Cons" headers - NEVER as bullet lists or numbered lists.
 NEVER use: <p>, <h2>, <a href>, <table>, <ul>, <ol>, or any HTML tags. Use markdown syntax only.
-${TABLE_FORMAT} No duplicate headings. No placeholder names; use "our team" if needed.
+${TABLE_FORMAT_MARKDOWN} No duplicate headings. No placeholder names; never use hollow "our team" filler. ${TABLE_NO_LINK_ONLY_COLUMN_RULE}
 ${NO_COPYRIGHT_FAKE_BRAND_RULE}
 ${NO_FAKE_TESTIMONIALS_RULE}
 `;
@@ -104,20 +184,20 @@ ${NO_FAKE_TESTIMONIALS_RULE}
 // Content Optimizer / Optimization flow: HTML output for WordPress upload
 const HTML_FORMAT_RULES = `
 *** OUTPUT: HTML ONLY. NEVER MARKDOWN. ***
-All content MUST be valid HTML. Paragraphs: <p>...</p>. Links: <a href="url">text</a>. Images: <figure class="wp-block-image size-full"><img src="url" alt="description" loading="lazy" /></figure> — NEVER use <a href="image-url"> for wp-content/uploads images; display them inline with <img>. Lists: <ul><li>...</li></ul> or <ol><li>...</li></ol>. Tables: <table><thead><tr><th>H1</th><th>H2</th></tr></thead><tbody><tr><td>...</td><td>...</td></tr></tbody></table>.
+All content MUST be valid HTML. Paragraphs: <p>...</p>. Same-site internals: [[LINK:query|anchor]] only (never raw <a href> or [text](url)). Images: <figure class="wp-block-image size-full"><img src="url" alt="description" loading="lazy" /></figure> — NEVER use <a href="image-url"> for wp-content/uploads images; display them inline with <img>. Lists: <ul><li>...</li></ul> or <ol><li>...</li></ol>. Tables: <table><thead><tr><th>H1</th><th>H2</th></tr></thead><tbody><tr><td>...</td><td>...</td></tr></tbody></table>.
 **PARAGRAPH LENGTH**: Keep each <p> **moderately short** - typically **2–4 sentences**. Do **not** create **long** single paragraphs (wall of text); split into additional <p> tags when needed. Do **not** over-split into **only** one-sentence paragraphs unless emphasis truly needs it. Avoid any one paragraph carrying a whole section’s worth of text (addresses tools that flag “paragraph is long”).
 Pros/Cons, advantages vs disadvantages, or strengths vs weaknesses MUST be rendered as a two-column HTML <table> with <th>Pros</th> and <th>Cons</th> headers - NEVER as <ul>/<ol> lists.
 CRITICAL: FAQ table = SAME HTML format as every other table. <table><thead><tr><th>Question</th><th>Answer</th></tr></thead><tbody>...</tbody></table>. NEVER | Question | Answer | or |-|-|.
-NEVER use: ## headings, [text](url), | markdown tables |, - bullets, 1. numbered (use HTML elements instead).
-${TABLE_FORMAT} No empty tables; no link-only columns; at least one data row. No duplicate headings. No "Article Title:" label. No placeholder names; use "our team" if needed.
-Lists: Numbered steps (1, 2, 3...) = <ol><li>...</li></ol> ONLY. Bullet items (features, benefits) = <ul><li>...</li></ul>. NEVER use bullet format for sequential steps - use <ol> for any process, ranking, or step-by-step list. CRITICAL: Every <li> MUST be inside a <ul> or <ol> wrapper. NEVER output bare <li> elements without a list container. Wrong: <li>Item</li>. Correct: <ul><li>Item</li></ul>.
+NEVER use: ## headings, [text](url), | markdown tables |, - bullets, 1. numbered, **asterisk bold**, or *italic* (use HTML elements instead). Never put a keyword or <a> as the last words of a sentence.
+${TABLE_FORMAT} No empty tables; at least one data row. No duplicate headings. No "Article Title:" label. No placeholder names; never use hollow "our team" filler. ${TABLE_NO_LINK_ONLY_COLUMN_RULE}
+Lists: Numbered steps = <ol><li>one sentence on the same line as the number</li></ol>. Bullet items = <ul><li>one sentence</li></ul>. NEVER use bullets for sequential steps. Every <li> MUST be inside <ul> or <ol>. NEVER output bare <li>. Wrong: <li>Item</li>. Correct: <ol><li>Prepare your data. Organize titles and SEO metadata into a CSV.</li></ol>. Forbidden inside <li>: <p>, <br>, a number on its own line, typing "1." in the item (the <ol> already numbers), a bold mini-heading then a paragraph, or **Label**: markdown.
 
 *** SEO HEADING HIERARCHY (THIS IS THE ONLY RULE - FOLLOW IT) ***
-DEPTH OF CONTENT: Each main substantive topic = H2. Main topics include: "What is [X]?", "The Core Principles of [X]", "How Much Does [X] Cost?", "Choosing the Right [X]", "Key Services Offered", "Benefits of [X]", style/trend sections, etc. These are NOT H3s - they are H2s. One H2 per major concept.
-H2 = agents you dictate + every main substantive topic (What is X?, Core Principles, Costs, Styles, Benefits, etc.).
-H3 = only truly subordinate subtopics under an H2 (e.g. under "Core Principles" you might have 2-3 H3s like "Scale & Proportion", "Balance"). MAX 3-5 H3s per H2.
+DEPTH OF CONTENT: Each main substantive topic = H2. Main topics follow ARTICLE CONTENT TYPE jobs: how it works, vs adjacent approach, how to apply, how to measure, who it is for / not for, site recommendation. These are NOT H3s - they are H2s. One H2 per major concept. Forbidden as a main H2: "What is [X]?", "Your Guide to [X]", "Introduction".
+H2 = agents you dictate + every main substantive topic (how it works, comparison, process, costs, recommendation).
+H3 = only truly subordinate subtopics under an H2 (e.g. under "How it works" you might have 2-3 H3s). MAX 3-5 H3s per H2.
 H4 = rare; sub-subsections when 3+ levels.
-FORBIDDEN: Nesting main topics (What is, Core Principles, Costs, Benefits) as H3s. Flattening everything to H3. More than 5 H3s under any H2.
+FORBIDDEN: Nesting main topics (how it works, comparison, costs, recommendation) as H3s. Flattening everything to H3. More than 5 H3s under any H2.
 Each heading = one short phrase (3–10 words). Never wrap paragraphs in heading tags.
 ${NO_COPYRIGHT_FAKE_BRAND_RULE}
 ${NO_FAKE_TESTIMONIALS_RULE}`;
@@ -140,22 +220,31 @@ Wrap-ups, conclusions, and CTAs belong in normal <p> (or lists/tables) under thi
 const HARNESS_ANCHOR_TAG_FORMAT_RULE = `
 *** ANCHOR TAG FORMAT (HARNESS – NON-NEGOTIABLE) ***
 Every link MUST include visible anchor text inside <a>...</a> — never empty, never "here", never the raw URL.
-External links: [[EXTERNAL:exact-url|exact-anchor]] only (code emits <a href="url">anchor</a>).
+External links: [[EXTERNAL:exact-url|exact-anchor]] only (code emits <a href="url">anchor</a>). Weave mid-sentence like [[LINK:...]] — never bare domain, never "for more"/"here", never after the final period.
 Scroll links: [[SCROLL:#id|phrase]] or <a href="#id">phrase</a> with a natural phrase.
 Format: <a href="url-or-#id">anchor text</a>
+FORBIDDEN: a link or the writing keyword as the last words of a sentence.
+FORBIDDEN: wrapping **markdown**, <strong>, or <b> as the link. Never output asterisk bold.
 FORBIDDEN on <a>: target=, rel=, class=, id=, style=, or any attribute besides href.
 Never output partial tags, orphaned attributes (e.g. target="_blank" rel="noopener">), or markdown [text](url).`;
 
 const HTML_FORMAT_RULES_HARNESS_SECTION = `${HTML_FORMAT_RULES}${HARNESS_HTML_NO_FOOTER_ELEMENT_RULES}${HARNESS_ANCHOR_TAG_FORMAT_RULE}`;
 
 const HARNESS_MODE_SYSTEM_BLOCK = `**HARNESS MODE (NON-NEGOTIABLE)**: You write exactly ONE section per request.
-- Output contains exactly ONE ## heading for this section (Overview: ## Overview plus mandatory key-points bullet list only).
-- Forbidden: any other top-level ## from the plan, whole-article intros, conclusions, Overview scroll-link bullets in body sections, or repeating sibling sections.
-- Full article cap: ${ARTICLE_MAX_WORDS} words total across all sections; write only this section's allocated budget.`;
+- Output contains exactly ONE top-level heading for this section (<h2> for HTML harness; Overview uses <h2>Overview</h2> plus mandatory key-points bullet list only).
+- Forbidden: any other top-level heading from the plan, whole-article intros, conclusions, Overview scroll-link bullets in body sections, or repeating sibling sections.
+- Forbidden H2 placeholders: Section, Intro, Introduction, Content, Overview (body), Section N, or harness meta-instructions ("Create an agent", etc.). The assigned heading text must be copied exactly.
+- Full article cap: ${ARTICLE_MAX_WORDS} words total across all sections; write only this section's allocated budget. Exceeding your section budget breaks the ${ARTICLE_MAX_WORDS}-word article cap. ${ARTICLE_MAX_WORDS} is a hard cap, not a target; do not pad.
+${INSTALLER_EXPERTISE_GATE_RULE}
+${A_PLUS_HOMEOWNER_ARTICLE_RULE}
+${A_PLUS_KEYWORD_AUTHORITY_RULE}
+${AISO_AUTHORITY_PHRASING_RULE}
+${AISO_DEPTH_RULE}
+${AUTHENTICITY_WRITER_RULE}`;
 
 export type BuildSystemPromptGenerationMode = "full_article" | "harness_section";
 
-const ENTITY_FORBIDDEN = `Never use [city], [location], [area] or bracket placeholders. Never fake team lists; use "our team" / "our professionals" if needed.`;
+const ENTITY_FORBIDDEN = `Never use [city], [location], [area] or bracket placeholders. Never fake team lists or write "our team" / "our professionals". Use the connected business name or we plus a sourced concrete detail.`;
 
 function buildTargetSiteBlock(
   connectedSite: { name: string; siteUrl: string },
@@ -177,40 +266,19 @@ ${linkRules}
 === END TARGET SITE ===`;
 }
 
-function buildWordPressPostsBlock(
-  posts: Array<{ id: number; slug: string; title: string; excerpt: string; link: string; date_gmt: string }>,
-  availableForLinking: typeof posts,
-  connectedSiteName: string,
-  normalizedCurrentPageUrl: string,
-  currentPageUrl?: string,
-  primaryKeyword?: string
-): string {
-  const MAX_POSTS_FOR_LINKS = 30;
-  const list = availableForLinking.slice(0, MAX_POSTS_FOR_LINKS).map((post, i) => {
-    const title = (post.title || "").replace(/"/g, "'");
-    const url = post.link || post.slug || "";
-    return `${i + 1}. "${title}" | ${url}`;
-  }).join("\n");
-
-  const requiredLinkCount = availableForLinking.length;
+function buildEntityBlock(entityName: string, keyword?: string): string {
+  const canonical = normalizeEntityHintCommaLabel(entityName);
+  const proseLabel = entityLabelForProse(canonical);
+  const general = getLocalEntityPhraseExamples(proseLabel, "general", 5);
+  const expertise = getLocalEntityPhraseExamples(proseLabel, "expertise", 3);
+  const referenceBlock = formatEntityReferencePromptBlock({
+    entity: canonical,
+    keyword,
+  });
   return `
-=== LINKABLE URLs (ONLY SOURCE FOR INTERNAL LINKS) ===
-From ${connectedSiteName}: ${posts.length} total (posts + pages + entity URLs), ${availableForLinking.length} available${currentPageUrl ? " (current page excluded)" : ""}${primaryKeyword ? ` | filtered: ${primaryKeyword}` : ""}
-
-REQUIRED: You MUST include exactly ${requiredLinkCount} internal links in your article - one for each URL below. Use every URL in this list exactly once. No fewer, no more. Spread them across sections with natural, in-context anchor text.
-
-${list}
-
-Use ONLY these URLs for internal links. Copy exact URL from list - character-for-character. Do not invent or guess URLs. NEVER use example.com, example.org, or any placeholder domain. Knowledge base = content only, not for links. Content should align with themes/topics of these pages.${currentPageUrl ? ` CRITICAL: If a URL matches the page being optimized (${currentPageUrl}), it is INVALID - reject it. Same path or equivalent = self-link = do not use.` : ""}
-=== END LINKABLE URLs ===`;
-}
-
-function buildEntityBlock(entityName: string): string {
-  const general = getLocalEntityPhraseExamples(entityName, "general", 5);
-  const expertise = getLocalEntityPhraseExamples(entityName, "expertise", 3);
-  return `
-=== ENTITY/LOCAL CONTENT: ${entityName} ===
-Use location naturally: exact name 2–3×, broader terms (e.g. "area", "region") often. Vary phrases: ${general.map((ex) => `"${ex}"`).join(", ")}. Expertise examples: ${expertise.map((ex) => `"${ex}"`).join(", ")}. Replace 15–20% of keyword repeats with "local experts", "our team", "specialists". One specific local detail (landmark, neighborhood, geography). Authentic to readers ${getLocalGeneralPhrase(entityName, 0)}. ${ENTITY_FORBIDDEN}
+=== ENTITY/LOCAL CONTENT: ${canonical} ===
+${referenceBlock}
+Use location naturally: exact canonical comma label 2–3×, broader terms (e.g. "area", "region") often. Vary phrases: ${general.map((ex) => `"${ex}"`).join(", ")}. Place phrases: ${expertise.map((ex) => `"${ex}"`).join(", ")}. Reduce keyword repetition with semantic product/topic variants — not hollow "our team" or "local experts" filler. Landmark, climate, or process detail only if present in master instructions, GBP, inventory, existing HTML, or audit blocks; otherwise omit. Authentic to readers ${getLocalGeneralPhrase(proseLabel, 0)}. ${ENTITY_FORBIDDEN}
 === END ENTITY ===`;
 }
 
@@ -236,18 +304,18 @@ export async function buildSystemPrompt(
   contentKind?: "press_release",
   generationMode: BuildSystemPromptGenerationMode = "full_article",
   workflowContextBlock = "",
+  llmAuditAuthorityExternalPairs?: ExternalLinkPair[],
+  linkTargetsPlan?: LinkTargetsPlan,
 ): Promise<string> {
   const normalizedSiteUrl = connectedSite?.siteUrl ? connectedSite.siteUrl.replace(/\/+$/, "") : "";
   const normalizedCurrentPageUrl = currentPageUrl ? currentPageUrl.replace(/\/+$/, "").toLowerCase() : "";
 
-  let postsToUse = wordPressPosts ?? [];
-  if (siteId && primaryKeyword) {
+  let postsToUse = keepBlogPlayLinkTargets(wordPressPosts ?? []);
+  if (!postsToUse.length && siteId) {
     try {
       const cache = getSiteCache(siteId);
       if (cache) {
-        postsToUse = searchSiteCache(siteId, primaryKeyword, 50).map((p) => ({
-          id: p.id, slug: p.slug, title: p.title, excerpt: p.excerpt, link: p.link, date_gmt: p.date_gmt,
-        }));
+        postsToUse = keepBlogPlayLinkTargets(cache.posts);
       }
     } catch {
       // keep wordPressPosts
@@ -274,6 +342,7 @@ export async function buildSystemPrompt(
     semrushExternalUrls,
     harnessUsesMarkdown ? "markdown" : "html",
   );
+  const llmAuditAuthorityBlock = buildLlmAuditAuthorityApprovedBlock(llmAuditAuthorityExternalPairs);
 
   const targetSiteContext = connectedSite
     ? buildTargetSiteBlock(
@@ -288,24 +357,30 @@ export async function buildSystemPrompt(
       )
     : "";
 
+  const usedOpenersContext = connectedSite
+    ? formatSiteUsedOpenersPromptBlock(postsToUse, currentPageUrl)
+    : "";
+  const linkTargetsBlock = linkTargetsPlan ? formatLinkTargetsPlanPrompt(linkTargetsPlan) : "";
+  const fullCatalogBlock = formatBlogPlayLinkTargetsPrompt(availablePostsForLinking);
   const wordPressPostsContext =
     postsToUse.length > 0 && connectedSite
       ? generationMode === "harness_section"
-        ? INTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK
-        : buildWordPressPostsBlock(
-            postsToUse,
-            availablePostsForLinking,
-            connectedSite.name,
-            normalizedCurrentPageUrl,
-            currentPageUrl,
-            primaryKeyword,
-          )
+        ? [
+            INTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK,
+            linkTargetsBlock || fullCatalogBlock,
+          ]
+            .filter(Boolean)
+            .join("\n")
+        : linkTargetsBlock || fullCatalogBlock
       : generationMode === "harness_section" && connectedSite
         ? INTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK
         : "";
 
   const hasEntity = entity?.trim() && entity.trim() !== "N/A";
-  const entityContext = hasEntity ? buildEntityBlock(entity!.trim()) : buildRegularBlogBlock();
+  const normalizedEntity = hasEntity ? normalizeEntityHintCommaLabel(entity!.trim()) : "";
+  const entityContext = hasEntity
+    ? buildEntityBlock(normalizedEntity, primaryKeyword)
+    : buildRegularBlogBlock();
 
   const knowledgeBlock = knowledgeBaseContext
     ? `\n=== KNOWLEDGE BASE ===\n${knowledgeBaseContext}\n=== END KNOWLEDGE BASE ===`
@@ -314,29 +389,42 @@ export async function buildSystemPrompt(
   const workflowBlock = workflowContextBlock.trim() ? `\n${workflowContextBlock.trim()}` : "";
 
   const pk = primaryKeyword?.trim() ?? "";
-  const writingKw = pk ? resolveWritingKeyword(pk) : "";
+  const serviceTopicForEntity =
+    hasEntity && pk ? resolveServiceTopicKeyword(pk, normalizedEntity) : "";
+  const writingKw = pk
+    ? resolveWritingKeyword(serviceTopicForEntity || pk)
+    : "";
   const keywordPunctuationBlock = pk ? buildKeywordPunctuationPromptBlock(pk, writingKw) : "";
   const exactPrimaryEcho = writingKw
-    ? ` Writing keyword for copy: "${writingKw}".`
+    ? serviceTopicForEntity && serviceTopicForEntity.toLowerCase() !== pk.toLowerCase()
+      ? ` Service topic for prose: "${writingKw}". Full SEO keyword "${pk}" is for metadata — do not paste the geo-stuffed slug in body copy.`
+      : ` Writing keyword for copy: "${writingKw}".`
     : pk
       ? ` Primary keyword string for exact-match checks: "${pk}".`
       : "";
   const exactPrimaryPerH2BlockFull =
     !isPressRelease && writingKw
       ? connectedSite
-        ? `\n**EXACT PRIMARY PER H2 (MANDATORY)**: Under **every** <h2>, the section body must contain the **writing keyword** phrase **at least once** (same words and order as "${writingKw}"; normal sentence capitalization allowed; standard canonical hyphens required when KEYWORD PUNCTUATION block applies). Count paragraphs, list items, and table cells under that <h2> - include the phrase in that section's content. Every H2 including introduction and conclusion - no skipped sections.`
-        : `\n**EXACT PRIMARY PER H2 (MANDATORY)**: In **every** ## section body, include the **writing keyword** phrase **at least once** (same words and order as "${writingKw}"; sentence casing OK; canonical hyphens when specified).`
+        ? `\n**EXACT PRIMARY PER H2 (MANDATORY)**: Under each <h2>, include the **WRITING KEYWORD** phrase **at most once** when it reads naturally (paste "${writingKw}" exactly — full Title Case, same words and order). Never put WRITING KEYWORD in the H2/H3 title text. If Answer or the prior body section already used the exact phrase, use semantic synonyms only in this section. Never repeat the exact phrase in table Pros cells or list items after the one required mention. Article-wide cap: ~5 exact-phrase uses in prose (see AISO SEMANTIC BREADTH). The intro may omit it from sentence one.`
+        : `\n**EXACT PRIMARY PER H2 (MANDATORY)**: In **every** ## section body, include the **WRITING KEYWORD** phrase **once** (paste "${writingKw}" exactly — full Title Case, same words and order). Never in the H2/H3 title. Do not repeat it in every sentence.`
       : "";
   const exactPrimaryPerH2BlockHarness =
     isHarnessSection && writingKw
-      ? `\n**EXACT PRIMARY IN THIS SECTION (MANDATORY)**: In this section's body under its ## heading, include the **writing keyword** phrase **at least once** (same words and order as "${writingKw}"; sentence casing OK; canonical hyphens when KEYWORD PUNCTUATION block applies). Do not preview or repeat keyword coverage for sibling sections.`
+      ? `\n**EXACT PRIMARY IN THIS SECTION (MANDATORY)**: In this section's body under its ## heading, include the **WRITING KEYWORD** phrase **at most once** when natural (paste "${writingKw}" exactly — full Title Case, same words and order). Never in the H2/H3 title. If Answer or the prior body section already used the exact phrase, use semantic synonyms only here. Do not stack it in every sentence, table row, or Pros cell. Do not preview or repeat keyword coverage for sibling sections.`
       : "";
   const exactPrimaryPerH2Block = isHarnessSection ? exactPrimaryPerH2BlockHarness : exactPrimaryPerH2BlockFull;
+  const entityKeywordVariantBlock =
+    connectedSite && hasEntity && pk && contentKind !== "press_release"
+      ? formatEntityKeywordVariantPromptBlock({
+          entity: normalizedEntity,
+          keyword: pk,
+        })
+      : "";
   const firstParagraphRuleFull = connectedSite
-    ? `\n**FIRST PARAGRAPH RULE (MANDATORY)**: The very first <p> of the article MUST directly address the primary keyword in its opening sentence. If the primary keyword is a question, state the question and give a clear, direct answer immediately - do NOT open with generic background, context, or tangential information. Never just allude to the keyword; name it and address it head-on. Example: if the keyword is "can a night guard straighten teeth", do NOT open with "Night guards serve a crucial role in safeguarding your oral health" - instead open with "Many people wonder whether a night guard can straighten teeth. The short answer is no - night guards are not designed to realign teeth."`
+    ? `\n${INSTALLER_EXPERTISE_GATE_RULE}\n${FORBIDDEN_HOLLOW_AUTHORITY_RULE}\n${A_PLUS_HOMEOWNER_ARTICLE_RULE}\n${A_PLUS_KEYWORD_AUTHORITY_RULE}\n${AISO_AUTHORITY_PHRASING_RULE}\n${AISO_DEPTH_RULE}\n${AISO_SEMANTIC_BREADTH_RULE}\n${entityKeywordVariantBlock}\n${A_LEVEL_CONNECTED_SITE_ARTICLE_RULE}\n${A_LEVEL_DECISION_PRECISION_RULE}\n${PRIMARY_CITY_CONSISTENCY_RULE}\n${ILLUSTRATIVE_SCENARIO_PERSONA_RULE}\n${ILLUSTRATIVE_BLOCKQUOTE_RULE}\n${ILLUSTRATIVE_ANSWER_GROUNDING_RULE}\n${FACTUAL_VERIFICATION_SOURCE_RULE}\n${DEFENSIBLE_SPECIFICITY_RULE}\n${NUMERIC_DENSITY_TARGET_RULE}\n${FIRST_PARAGRAPH_AUTHORITY_RULE}\n${FIRST_PARTY_AUTHORITY_WRITING_RULE}\n${PHRASE_VARIATION_RULE}${pk ? connectedSiteTopicAisoRules(pk) : ""}`
     : "";
   const generalFocusRule = isPressRelease
-    ? `\n**PRESS RELEASE MODE**: Neutral AP/wire style. Output **Markdown only** (## headings, paragraphs, [anchor](url), blockquotes).${
+    ? `\n**PRESS RELEASE MODE**: Neutral AP/wire style. Output **Markdown only** (## headings, paragraphs, [anchor](url), quotes as > lines). ${MARKDOWN_QUOTE_OUTPUT_RULE}${
         pk
           ? ` Topic and keyword: "${pk}". Write about the connected business in the context of this topic; optional title override is a headline hint only.${exactPrimaryEcho}`
           : " Use the article title and purpose as the topic anchor."
@@ -349,7 +437,7 @@ Syndication-ready copy; follow each harness section scope exactly.
 Each ## subhead is topical wire copy (service, expertise, or reader need)—not a label for section type and not a fake news headline.`
     : isHarnessSection
       ? `\nContent focus: Optimize for the page topic and primary keyword. Primary keyword is the main subject of the page, not the company name or a place.${exactPrimaryEcho}
-${HARNESS_MODE_SYSTEM_BLOCK}${exactPrimaryPerH2Block}`
+${HARNESS_MODE_SYSTEM_BLOCK}${exactPrimaryPerH2Block}${generationMode === "harness_section" ? `\n${SERVICE_AREA_DENSITY_RULE}` : ""}`
       : connectedSite
       ? `\nContent focus: Optimize for the page topic and primary keyword. Primary keyword is the main subject of the page, not the company name or a place.${exactPrimaryEcho}
 ${firstParagraphRuleFull}${exactPrimaryPerH2Block}`
@@ -365,14 +453,29 @@ ${firstParagraphRuleFull}${exactPrimaryPerH2Block}`
     generationMode === "full_article"
       ? `\n**SEMRUSH URLs - OVERRIDE**: When the "APPROVED EXTERNAL URLs (SEMRUSH)" block appears above, those exact third-party URLs are allowed and required per that block. The line in CRITICAL_LINK_RULE that limits externals to Wikipedia-only does **not** apply to URLs listed in that Semrush block (entity Wikipedia remains optional in addition).`
       : "";
-  // Bulk harness = Markdown (press release and connected WordPress). Content Optimizer full article = HTML.
+  const llmAuditAuthorityOverridesWikipediaOnly =
+    (llmAuditAuthorityExternalPairs?.length ?? 0) > 0 && generationMode === "full_article"
+      ? `\n**LLM AUDIT AUTHORITY URLs - OVERRIDE**: When the "APPROVED EXTERNAL URLs (LLM AUDIT AUTHORITY)" block appears above, those exact third-party URLs are allowed and required per that block in addition to entity Wikipedia when applicable.`
+      : "";
+  const hasApprovedExternals =
+    (llmAuditAuthorityExternalPairs?.length ?? 0) > 0 ||
+    (semrushExternalUrls ?? []).some((u) => String(u ?? "").trim());
+  const externalLinkPromptBlock = hasApprovedExternals
+    ? `\n${EXTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK}`
+    : "";
+  // WordPress harness = HTML sections. Press release harness = Markdown. Full article = HTML.
   const formatRules =
-    contentKind === "press_release" || !connectedSite || generationMode === "harness_section"
+    contentKind === "press_release"
       ? MARKDOWN_FORMAT_RULES
-      : HTML_FORMAT_RULES_FULL_ARTICLE;
-  const core = `You are an expert SEO content AI. Use the API key for content tasks. Output must be optimized, on-topic, and structurally correct.
+      : generationMode === "harness_section" && connectedSite
+        ? HTML_FORMAT_RULES_HARNESS_SECTION
+        : generationMode === "harness_section"
+          ? MARKDOWN_FORMAT_RULES
+          : HTML_FORMAT_RULES_FULL_ARTICLE;
+  const core = `${SYSTEM_PROMPT_CORE}
+You are an expert SEO content AI. Use the API key for content tasks. Output must be optimized, on-topic, and structurally correct.
 ${formatRules}${generalFocusRule}${keywordPunctuationBlock}
-${knowledgeBlock}${workflowBlock}${entityContext}${targetSiteContext}${semrushExternalBlock}${wordPressPostsContext}${linkRuleBlock}${semrushOverridesWikipediaOnly}`;
+${knowledgeBlock}${workflowBlock}${entityContext}${targetSiteContext}${semrushExternalBlock}${llmAuditAuthorityBlock}${externalLinkPromptBlock}${wordPressPostsContext}${usedOpenersContext}${linkRuleBlock}${semrushOverridesWikipediaOnly}${llmAuditAuthorityOverridesWikipediaOnly}`;
   await ensureMasterInstructionsInMemory(siteId);
   return appendUniversalContentRulesToSystemPrompt(
     appendMasterInstructionsToSystemPrompt(core, siteId),
@@ -429,7 +532,7 @@ export const buildUserPrompt = (
   const normalizedSiteUrl = connectedSite?.siteUrl ? connectedSite.siteUrl.replace(/\/+$/, "") : "";
   const hasSemrushExternals = Array.isArray(semrushExternalUrls) && semrushExternalUrls.some((u) => u?.trim());
   const linkBlock = connectedSite
-    ? `\nLinks: HTML format <a href="url">text</a> only. Internal = ${normalizedSiteUrl} only. ${
+    ? `\nLinks: HTML ONLY. Same-site internals: [[LINK:query|anchor]] only. Internal = ${normalizedSiteUrl} only. ${
         hasSemrushExternals
           ? `External = entity Wikipedia when applicable, OR only URLs under APPROVED EXTERNAL URLs (SEMRUSH) in the system prompt - exact hrefs only. No other external sites.`
           : `External = ONLY entity Wikipedia page (when entity exists). No other external sites.`
@@ -443,7 +546,7 @@ export const buildUserPrompt = (
         const general = getLocalEntityPhraseExamples(entityName, "general", 6);
         const expertise = getLocalEntityPhraseExamples(entityName, "expertise", 4);
         return `
-Entity: ${entityName}. Use varied phrases: ${general.map((ex) => `"${ex}"`).join(", ")}. Expertise: ${expertise.map((ex) => `"${ex}"`).join(", ")}. One local "fun fact". Reduce keyword repetition; use "our team", "specialists". Short anchors (2–5 words). No nested anchors. ${ENTITY_FORBIDDEN}`;
+Entity: ${entityName}. Use varied phrases: ${general.map((ex) => `"${ex}"`).join(", ")}. Place phrases: ${expertise.map((ex) => `"${ex}"`).join(", ")}. Local landmark/climate/process only if present in master instructions, GBP, inventory, existing HTML, or audit blocks; otherwise omit. Reduce keyword repetition with semantic product/topic variants — not hollow team filler. Short anchors (2–5 words). No nested anchors. ${ENTITY_FORBIDDEN}`;
       })()
     : `
 No entity. General post; no locations or placeholders. ${ENTITY_FORBIDDEN}`;
@@ -487,7 +590,7 @@ No entity. General post; no locations or placeholders. ${ENTITY_FORBIDDEN}`;
   return [
     legacyArticleCapLine,
     `Entire article MUST NOT exceed ${ARTICLE_MAX_WORDS} words.`,
-    "Write a complete professional blog article in HTML ONLY. Every element must be HTML: <h2>, <h3>, <p>, <a href=\"...\">...</a>, <ul><li>, <ol><li>, <table>, <footer> (closing contentinfo block per system prompt). NEVER use markdown (##, [text](url), |, -).",
+    "Write a complete professional blog article in HTML ONLY. Every element must be HTML: <h2>, <h3>, <p>, [[LINK:query|anchor]] internals, <ul><li>, <ol><li>, <table>, <footer> (closing contentinfo block per system prompt). NEVER use markdown (##, [text](url), |, -).",
     `Title: ${flowTitle || "Untitled Article"}`,
     `Purpose: ${flowPurpose}`,
     acfBlock,
@@ -499,9 +602,9 @@ No entity. General post; no locations or placeholders. ${ENTITY_FORBIDDEN}`;
     sectionsPrompt,
     "--- Output ---",
     connectedSite && !hasWordPressPosts
-      ? "One focused paragraph per heading unless section block says otherwise. CRITICAL: Do NOT add any internal links - no linkable URLs from API. Only add internal links when the system prompt includes a linkable URLs list (posts, pages, entities)."
-      : "One focused paragraph per heading unless section block says otherwise. 3–5 internal links per section (from linkable URLs list); natural anchor text; follow link rules from system prompt.",
-    "Required: at least 1 <table>, 1 <ul><li>, 1 <ol><li>; distribute across sections. ALL tables (including FAQ) = HTML <table> only. NEVER | pipes | or |-|-|. FAQ table: <table><thead><tr><th>Question</th><th>Answer</th></tr></thead><tbody><tr><td>Q</td><td>A</td></tr></tbody></table>. Steps/sequences/processes = <ol><li> ONLY (never bullets). Features/benefits = <ul><li>. No nested sublists unless [LIST] requested.",
+      ? "One focused paragraph per heading unless section block says otherwise. CRITICAL: Do NOT add any internal links - no PAGES or BLOG POSTS titles from API."
+      : "One focused paragraph per heading unless section block says otherwise. At least 2-3 [[LINK:query|anchor]] per body H2 from PAGES and BLOG POSTS titles (prose + table cells); natural sentence-case anchor text; follow INTERNAL LINK PLACEHOLDERS.",
+    "Required: at least 1 <table>, 1 <ul><li>, 1 <ol><li>; distribute across sections. ALL tables (including FAQ) = HTML <table> only. NEVER | pipes | or |-|-|. FAQ table: <table><thead><tr><th>Question</th><th>Answer</th></tr></thead><tbody><tr><td>Q</td><td>A</td></tr></tbody></table>. Steps/sequences/processes = <ol><li> ONLY (never bullets). Features/benefits = <ul><li>. No nested sublists unless [LIST] requested. " + TABLE_NO_LINK_ONLY_COLUMN_RULE,
     hasSemrushExternals
       ? "Semrush externals - HARD REQUIREMENT: follow APPROVED EXTERNAL URLs (SEMRUSH) in the system prompt (count + exact hrefs). Integrate links in **body copy** as neutral reference / knowledge-base citations (vary wording; no boilerplate after every heading). Never frame as where to buy or not buy. Copy each href EXACTLY from the numbered list; do not invent URLs. Before you finish, verify the HTML contains the required distinct outbound <a href> to those list URLs."
       : "Do not mention external sites (Houzz, Reddit, etc.) or competitors. Wikipedia only for entity name (location) when entity exists - never for topics or products.",
@@ -523,69 +626,25 @@ const HARNESS_SECTION_SCOPE_RULE_HTML = `**HARNESS – SINGLE SECTION ONLY**:
 - STOP: after your last </p>, </table>, </ol>, or </ul> (Overview), output nothing else.
 - **Never** use <footer> or </footer> in this section. No exceptions.`;
 
-export const TITLE_WELL_KNOWN_ACRONYMS_RULE = `**Well-known acronyms (mandatory)**:
-- Spell recognized initialisms in **ALL CAPS**, even when every other title word uses Title Case.
-- Examples: CRA, RRSP, TFSA, RESP, CPP, OAS, RRIF, HST, GST, IRS, SEO, KWB.
-- Forbidden: Cra, Rrsp, rrsp, or other mixed/lowercase forms when the term is a standard acronym in the article's domain.`;
-
-export const TITLE_CASE_RULE = `**Title Case (mandatory - blog headline style)**:
-- Capitalize the **first letter of every word** in the headline, including articles, conjunctions, and short prepositions (A, An, The, And, Or, But, For, In, On, At, To, Of, With, Near, Vs).
-- Apply the same rule **after** a question mark or exclamation point (every word in that segment too).
-- The focus keyword input is often all-lowercase. That is input only. In the title, rewrite every keyword word in Title Case. Never leave the keyword span lowercase inside an otherwise Title Case headline.
-- Good: "Best Hunter Douglas Blinds Near Edmonton City Centre" (keyword was "hunter douglas blinds").
-- Forbidden: "Best hunter douglas blinds Near Edmonton City Centre" (keyword left lowercase).
-- Examples: "Need A Holding Company? Benefits And Considerations", "Canada Arctic Investment And Security Infrastructure", "When CRA Tax Instalments Are Required And How To Pay".
-- Forbidden: "Need a Holding Company? …", "Canada arctic investment: …", "when CRA tax instalments are required", or any headline that leaves **any** word starting with a lowercase letter (except mixed-case brand names like QuickBooks when already correct).`;
-
-/** Natural front-load and single-mention keyword discipline for all title agents. */
-export const TITLE_KEYWORD_WEAVING_RULE = `**Keyword weaving (mandatory)**:
-- WRITING KEYWORD (canonical punctuation when KEYWORD PUNCTUATION block applies) appears **exactly once** with the same words and word order. Casing in the title MUST be full Title Case (do not paste lowercase keyword casing).
-- **Grammar first**: the full title must read as one coherent, polished phrase written by a human editor. The keyword must perform a natural grammatical role inside that phrase.
-- **Front-load naturally**: open with the keyword woven into the first readable phrase (first ~5 words). Choose the title angle and sentence structure first, then integrate the keyword with natural connecting words.
-- Never paste the keyword as a standalone block and bolt a generic phrase, audience label, benefit fragment, or subtitle onto it. Rewrite the whole title until every word flows as one thought.
-- **No colons**: colons are **forbidden** in every title. Never \`[keyword/topic]: [subtitle]\`. Join with natural glue — "and", "for", "vs", "without", "how to", "what", "why", "when", or end with "?". One flowing headline only.
-- **Synthesis, not concatenation**: when multiple candidate titles exist, write one fresh headline from their intent; do not stitch candidate strings together.
-- **Good**: "Solar Panel Costs And What To Expect", "Solar Installation Cost Overview For Homeowners", "Blackout Blinds Benefits For Sleep", "How To Choose Between Roman Shades And Curtains"
-- **Bad**: "Solar Panel Costs: What To Expect For Your Home", "Solar Installation Cost: A Comprehensive Overview", "Smart Blinds Guide: Smart Blinds: A Complete Guide", "Cellular Shades Types: Cellular Shades: Types Explained"`;
-
-/** Editorial judgment for accurate, neutral, non-clickbait SEO titles. */
-export const TITLE_ANTI_CLICKBAIT_RULE = `**SEO editorial standard (mandatory)**:
-- Act as a senior SEO content title specialist. Use editorial judgment to write an accurate, specific, **neutral** title aligned with the page content and real search intent.
-- Prefer plain, factual wording. Reject clickbait, sensationalism, manufactured urgency, exaggerated importance, empty promotional claims, and sales-driven calls to action.
-- Avoid promotional hype verbs and marketing stock language such as boost, maximize, unlock, and similar. Prefer calm, descriptive phrasing over salesy intensity.
-- Treat the title as a neutral page label, not an advertisement. Do not use imperative, second-person, ownership, immediate-action, or acquisition framing.
-- Make the title useful on its own and proportionate to what the page actually delivers.`;
-
-/** Editorial judgment for accurate, neutral, non-clickbait meta descriptions. */
-export const META_DESCRIPTION_ANTI_CLICKBAIT_RULE = `**SEO editorial standard (mandatory)**:
-- Act as a senior SEO content specialist. Use editorial judgment to summarize the page accurately in **neutral**, factual language and communicate its concrete value to the searcher.
-- Prefer plain, restrained wording. Reject clickbait, sensationalism, manufactured urgency, exaggerated importance, empty promotional claims, and sales-driven calls to action.
-- Avoid promotional hype verbs and marketing stock language such as boost, maximize, unlock, and similar. Prefer calm, descriptive phrasing over salesy intensity.
-- Keep every claim proportionate to what the page actually supports.`;
-
-/** WordPress post title + SEO title (bulk publish, blueprint, merge, meta). */
-export const BULK_WORDPRESS_POST_TITLE_RULE = `**WORDPRESS POST TITLE (mandatory)**:
-- Output **one** title string for the live post H1 and the SEO title field when used as the post title.
-- **NO COLONS** in the title. Never topic-then-subtitle. Rewrite any colon in candidate titles into one flowing phrase.
-${TITLE_CASE_RULE}
-${TITLE_KEYWORD_WEAVING_RULE}
-${TITLE_ANTI_CLICKBAIT_RULE}
-- **Focus keyword**: same words and order as WRITING KEYWORD, always in Title Case in the title even if the keyword input is lowercase. Use standard canonical hyphens when the KEYWORD PUNCTUATION block specifies them (X-ray, e-commerce). Do not add decorative punctuation (if keyword is "veneers vs crowns", do not write "veneers vs. crowns" in the title).
-- **Length**: Prefer a complete natural headline. **Never truncate, never cut mid-word, never strip trailing words.** Upload/return the full title.
-- **No** site name, brand prefix, or pipe suffix (no "Brand | …"). Topic-focused title only.
-${TITLE_WELL_KNOWN_ACRONYMS_RULE}`;
-
 const HARNESS_SECTION_LENGTH_RULE_HTML = `**HARNESS LENGTH (mandatory)**:
-- Body prose in this section: at most **2** <p> tags (use **3** only when this section block explicitly requires a list/table-heavy block).
-- Each <p>: at most **3** sentences. Moderately short paragraphs only.
+- **Section word cap**: obey **ARTICLE WORD BUDGET** in this prompt. Typical body section: **~450-530 words max** when the full article has 6 sections under the ${ARTICLE_MAX_WORDS}-word cap.
+- Unmarked body sections: at most **2** <p> tags.
+- Marked [LIST], [TABLE], [DECISION], [TRADEOFF], [NUMBERS]: **3** <p> tags plus the required table or list (do not skip the table/list).
+- [ILLUSTRATIVE]: **3** <p> tags (do not invent a table).
+- [RECOMMENDATION]: **3** <p> tags (do not invent a table) unless SAP PAGE TEMPLATE is in this prompt: then **1-2** <p> tags plus the four-column Product | Best for | Budget | Reason table.
+- Each <p>: at most **3** sentences (use **4** per <p> when this section has [NUMBERS]). Moderately short paragraphs only.
+- **MAX 2** <h3> subheadings in this section. No H4.
 - Every paragraph MUST end with a complete sentence (. ! ?). If you cannot fit another sentence, finish the current sentence and STOP — never stop mid-sentence or mid-word.
 - NEVER output Semrush API, MCP, subscription, or tool error messages in article HTML.
-- Forbidden: full-article intros ("this guide will explore…"), repeating other outline H2 topics, or restating content that belongs in other sections.`;
+- Forbidden: full-article intros ("this guide will explore…"), repeating other outline H2 topics, restating the Answer definition, or restating content that belongs in other sections. Use section budget for sourced depth, not filler.`;
 
 const HARNESS_SECTION_LENGTH_RULE_MARKDOWN = `**HARNESS LENGTH (mandatory)**:
-- Body prose in this section: at most **2** paragraphs after the ## line (use **3** only when this block explicitly requires list/table-heavy content).
-- Each paragraph: at most **3** sentences.
-- Forbidden: wire-style repetition of other blocks, full-release previews, or restating the whole thesis.`;
+- Unmarked body sections: at most **2** paragraphs after the ## line.
+- Marked [LIST], [TABLE], [DECISION], [TRADEOFF], [NUMBERS]: **3** paragraphs plus the required table or list.
+- [ILLUSTRATIVE]: **3** paragraphs (do not invent a table).
+- [RECOMMENDATION]: **3** paragraphs (do not invent a table) unless SAP PAGE TEMPLATE is in this prompt: then **1-2** paragraphs plus the four-column Product | Best for | Budget | Reason table.
+- Each paragraph: at most **3** sentences (use **4** when this block has [NUMBERS]).
+- Forbidden: wire-style repetition of other blocks, full-release previews, restating the Answer definition, restating the whole thesis, or filler padding toward the article cap.`;
 
 const HARNESS_SECTION_SCOPE_RULE_MARKDOWN = `**HARNESS – SINGLE SECTION ONLY**:
 - Output exactly ONE section: the block under "Section to write". Start with that section's required ## heading as specified. Do NOT add any other top-level ## sections from the plan in this response.
@@ -664,16 +723,50 @@ export const buildBulkHarnessSectionUserPrompt = (
   primaryKeyword?: string,
   /** Blog harness: ordered H2 titles for plan-only context (replaces full outline block). */
   allSectionTitles?: string[],
+  /** Merged multi-platform LLM audit guidance — mandatory local facts for this section. */
+  llmAuditSummary?: string,
+  /** DFS article audit optimization directives from upstream workflow step. */
+  dfsArticleAuditBlock?: string,
+  /** First-party claims + ChatGPT business facts (optimize / post creator). */
+  firstPartyAuthorityBlock?: string,
+  /** Published Answer section for later H2s (do not recap; illustrative also uses economic ceiling). */
+  answerGroundingBlock?: string,
+  /** LLM audit liveLinks classified as authority (gov, municipal, news). */
+  llmAuditAuthorityExternalPairs?: ExternalLinkPair[],
 ): string => {
   const normalizedSiteUrl = connectedSite?.siteUrl ? connectedSite.siteUrl.replace(/\/+$/, "") : "";
   const storedKeyword = (primaryKeyword ?? acfContext?.keywordFocus ?? "").trim();
+  const entityRaw = entity?.trim() ?? "";
+  const hasEntityRow = entityRaw && entityRaw !== "N/A";
+  const normalizedEntity = hasEntityRow ? normalizeEntityHintCommaLabel(entityRaw) : "";
+  const serviceTopicForEntity =
+    hasEntityRow && storedKeyword
+      ? resolveServiceTopicKeyword(storedKeyword, normalizedEntity)
+      : "";
+  const writingKw = storedKeyword
+    ? resolveWritingKeyword(serviceTopicForEntity || storedKeyword)
+    : "";
   const keywordPunctuationBlock = storedKeyword
-    ? buildKeywordPunctuationPromptBlock(storedKeyword)
+    ? buildKeywordPunctuationPromptBlock(storedKeyword, writingKw)
     : "";
   const hasSemrushExternals = Array.isArray(semrushExternalUrls) && semrushExternalUrls.some((u) => u?.trim());
+  const hasLlmAuditAuthority =
+    (llmAuditAuthorityExternalPairs?.length ?? 0) > 0;
+  const hasApprovedExternals = hasSemrushExternals || hasLlmAuditAuthority;
   const isPressReleaseHarness = contentKind === "press_release";
+  const entityKeywordVariantBlock =
+    connectedSite && hasEntityRow && storedKeyword && !isPressReleaseHarness
+      ? formatEntityKeywordVariantPromptBlock({
+          entity: normalizedEntity,
+          keyword: storedKeyword,
+        })
+      : "";
   const isOverviewSection = Boolean(inPageAnchorBlock?.trim());
-  const entityNameForWiki = entity?.trim() ?? "";
+  const isIllustrativeBodySection =
+    !isOverviewSection &&
+    !isPressReleaseHarness &&
+    /\[ILLUSTRATIVE\]|ILLUSTRATIVE SCENARIO|ILLUSTRATIVE PERSONA/i.test(singleSectionPrompt);
+  const entityNameForWiki = normalizedEntity || entityRaw;
   const wikiUrlForOverview = entityWikipediaUrl?.trim() ?? "";
   const overviewHasEntityWiki =
     isOverviewSection &&
@@ -683,30 +776,43 @@ export const buildBulkHarnessSectionUserPrompt = (
   const overviewLinkBlock = buildOverviewLinkRulesBlock({
     entity: entityNameForWiki,
     wikipediaUrl: wikiUrlForOverview,
+    hasIllustrativeAnchor: inPageAnchorBlock?.includes("ILLUSTRATIVE (Real-World Example"),
   });
   const linkBlock = isOverviewSection
     ? overviewLinkBlock
     : connectedSite
       ? `\nLinks: Internal = ${normalizedSiteUrl} only when natural via [[LINK:query|anchor]]. ${
-          hasSemrushExternals
-            ? isPressReleaseHarness
-              ? "External = only the APPROVED EXTERNAL URL in the system prompt; at most one [anchor](exact-url) in this section if it fits, and only one such link in the full release."
-              : "User-specified externals only: [[EXTERNAL:exact-url|exact-anchor]] copied from the APPROVED EXTERNAL URLs block — never [anchor](url). No other third-party sites."
+          hasApprovedExternals
+            ? "User-specified externals only: [[EXTERNAL:exact-url|exact-anchor]] copied from the APPROVED EXTERNAL URLs block — never [anchor](url). No other third-party sites."
             : "No third-party external links. Forbidden: [[EXTERNAL:...]], raw https:// in prose, and third-party <a href=\"https://...\">. Internal links and entity Wikipedia only when listed."
         } NEVER link to competitors. No "External Resources" sections.\n`
       : "";
 
-  const entityName = entity?.trim() ?? "";
-  const hasEntity = entityName && entityName !== "N/A";
+  const hasEntity = Boolean(normalizedEntity);
+  const proseEntity = hasEntity ? entityLabelForProse(normalizedEntity) : "";
+  const entityReferenceBlock = hasEntity
+    ? formatEntityReferencePromptBlock({
+        entity: normalizedEntity,
+        keyword: storedKeyword || undefined,
+      })
+    : "";
+  const geoKeywordNote =
+    serviceTopicForEntity &&
+    storedKeyword &&
+    serviceTopicForEntity.toLowerCase() !== storedKeyword.toLowerCase()
+      ? `\nService topic for prose: "${writingKw}". Full SEO keyword "${storedKeyword}" is metadata-only — do not paste the geo-stuffed slug in body copy.`
+      : "";
   const entityBlock = hasEntity
     ? isOverviewSection
       ? `
-Entity: ${entityName}. Use varied phrases: ${getLocalEntityPhraseExamples(entityName, "general", 6).map((ex) => `"${ex}"`).join(", ")}. Expertise: ${getLocalEntityPhraseExamples(entityName, "expertise", 4).map((ex) => `"${ex}"`).join(", ")}. One local "fun fact". Reduce keyword repetition; use "our team", "specialists". Overview lead paragraphs only: optional entity Wikipedia link per Overview LINKS block — no site links or # scroll links in lead prose. ${ENTITY_FORBIDDEN}`
+${entityReferenceBlock}
+Entity: ${normalizedEntity}. Use varied phrases: ${getLocalEntityPhraseExamples(proseEntity, "general", 6).map((ex) => `"${ex}"`).join(", ")}. Place phrases: ${getLocalEntityPhraseExamples(proseEntity, "expertise", 4).map((ex) => `"${ex}"`).join(", ")}. Local landmark/climate/process only if present in master instructions, GBP, inventory, existing HTML, or audit blocks; otherwise omit. Reduce keyword repetition with semantic product/topic variants — not hollow team filler. Overview lead paragraphs only: optional entity Wikipedia link per Overview LINKS block — no site links or # scroll links in lead prose.${geoKeywordNote} ${ENTITY_FORBIDDEN}`
       : (() => {
-        const general = getLocalEntityPhraseExamples(entityName, "general", 6);
-        const expertise = getLocalEntityPhraseExamples(entityName, "expertise", 4);
+        const general = getLocalEntityPhraseExamples(proseEntity, "general", 6);
+        const expertise = getLocalEntityPhraseExamples(proseEntity, "expertise", 4);
         return `
-Entity: ${entityName}. Use varied phrases: ${general.map((ex) => `"${ex}"`).join(", ")}. Expertise: ${expertise.map((ex) => `"${ex}"`).join(", ")}. One local "fun fact". Reduce keyword repetition; use "our team", "specialists". Short anchors (2–5 words). No nested anchors. ${ENTITY_FORBIDDEN}`;
+${entityReferenceBlock}
+Entity: ${normalizedEntity}. Use varied phrases: ${general.map((ex) => `"${ex}"`).join(", ")}. Place phrases: ${expertise.map((ex) => `"${ex}"`).join(", ")}. Local landmark/climate/process only if present in master instructions, GBP, inventory, existing HTML, or audit blocks; otherwise omit. Reduce keyword repetition with semantic product/topic variants — not hollow team filler. Short anchors (2–5 words). No nested anchors.${geoKeywordNote} ${ENTITY_FORBIDDEN}`;
       })()
     : `
 No entity. General post; no locations or placeholders. ${ENTITY_FORBIDDEN}`;
@@ -747,6 +853,11 @@ No entity. General post; no locations or placeholders. ${ENTITY_FORBIDDEN}`;
       ? `\n${SEMRUSH_CLUSTER_SCATTER_BLOCK}\n${semrushScatterContext.trim()}\n`
       : "";
 
+  const llmAuditBlock = formatLlmAuditHarnessPromptBlock(llmAuditSummary ?? "");
+  const dfsArticleAuditHarnessBlock = dfsArticleAuditBlock?.trim()
+    ? formatDfsArticleAuditHarnessPromptBlockFromText(dfsArticleAuditBlock)
+    : "";
+
   const siblingBlock = isPressReleaseHarness
     ? "Other blocks of this release are written separately. Output only this block with your own invented ## subhead; do not preview or duplicate other blocks."
     : otherSectionTitles.length > 0
@@ -769,7 +880,7 @@ No entity. General post; no locations or placeholders. ${ENTITY_FORBIDDEN}`;
 
   const scopeRule = HARNESS_SECTION_SCOPE_RULE_MARKDOWN;
   const formatLine =
-    "Write in MARKDOWN ONLY for this section: ##, ###, paragraphs, [text](url), - lists, blockquotes (>). NEVER HTML.";
+    `Write in MARKDOWN ONLY for this section: ##, ###, paragraphs, [[LINK:query|anchor]] internals, - lists. ${MARKDOWN_QUOTE_OUTPUT_RULE} NEVER HTML. NEVER [text](https://...) or raw hrefs for same-site links. ${INTERNAL_LINK_INTENT_ROUTING_RULE}`;
 
   const lengthRule = HARNESS_SECTION_LENGTH_RULE_MARKDOWN;
 
@@ -791,6 +902,34 @@ No entity. General post; no locations or placeholders. ${ENTITY_FORBIDDEN}`;
     scopeRule,
     FORBIDDEN_WORDS_USER_PROMPT_REMINDER,
     lengthRule,
+    isPressReleaseHarness ? "" : INSTALLER_EXPERTISE_GATE_RULE,
+    isPressReleaseHarness ? "" : FORBIDDEN_HOLLOW_AUTHORITY_RULE,
+    isPressReleaseHarness ? "" : A_PLUS_HOMEOWNER_ARTICLE_RULE,
+    isPressReleaseHarness ? "" : A_PLUS_KEYWORD_AUTHORITY_RULE,
+    isPressReleaseHarness ? "" : AISO_AUTHORITY_PHRASING_RULE,
+    isPressReleaseHarness ? "" : AISO_DEPTH_RULE,
+    isPressReleaseHarness ? "" : AISO_SEMANTIC_BREADTH_RULE,
+    isPressReleaseHarness || !entityKeywordVariantBlock ? "" : entityKeywordVariantBlock,
+    isPressReleaseHarness || !connectedSite || !isIllustrativeBodySection
+      ? ""
+      : `${ILLUSTRATIVE_SCENARIO_PERSONA_RULE}\n${ILLUSTRATIVE_BLOCKQUOTE_RULE}`,
+    isPressReleaseHarness || !connectedSite || !isIllustrativeBodySection
+      ? ""
+      : ILLUSTRATIVE_ANSWER_GROUNDING_RULE,
+    isPressReleaseHarness || !isOverviewSection || !connectedSite
+      ? ""
+      : OVERVIEW_ASSIGNED_PERSONA_RULE,
+    isPressReleaseHarness || isOverviewSection || !connectedSite || isIllustrativeBodySection
+      ? ""
+      : NON_ILLUSTRATIVE_HYPOTHETICAL_BAN_RULE,
+    AUTHENTICITY_WRITER_RULE,
+    hasEntity && !isPressReleaseHarness ? formatSapPageWriterBlock(normalizedEntity) : "",
+    isPressReleaseHarness || isOverviewSection ? "" : FIRST_PARAGRAPH_AUTHORITY_RULE,
+    FIRST_PARTY_AUTHORITY_WRITING_RULE,
+    PHRASE_VARIATION_RULE,
+    connectedSite && storedKeyword && !isPressReleaseHarness
+      ? connectedSiteTopicAisoRules(storedKeyword)
+      : "",
     articleBudgetBlock,
     keywordPunctuationBlock,
     formatLine,
@@ -806,28 +945,28 @@ No entity. General post; no locations or placeholders. ${ENTITY_FORBIDDEN}`;
     singleSectionPrompt,
     "=== END SECTION ===",
     harnessSectionDisplayTitle?.trim() && !isPressReleaseHarness && !isOverviewSection
-      ? `NON-NEGOTIABLE ## TITLE: The first ## line MUST be exactly: "${harnessSectionDisplayTitle.trim()}" — no paraphrase, reorder, or substitute wording.`
+      ? `NON-NEGOTIABLE ## TITLE: The first ## line MUST be exactly: "${harnessSectionDisplayTitle.trim()}" — no paraphrase, reorder, or substitute wording. Forbidden: ## Section, ## Intro, ## Introduction, ## Content, ## Overview, or any placeholder. Output no other top-level ## heading.`
       : "",
     inPageAnchorBlock?.trim() ? inPageAnchorBlock.trim() : "",
     "--- Output ---",
     isOverviewSection
       ? overviewHasEntityWiki
-        ? `Output ## Overview, 1-2 lead paragraphs (NO em dashes; obey WORD BLACKLIST above), then a - bullet list with one item per IN-PAGE anchor. Each bullet: **Label**: one sentence with exactly ONE [2-4 words](#exact-id). FORBIDDEN: second link in the same bullet, duplicate #id links, or "including [link]" phrasing. Optional entity Wikipedia in first paragraph: [${entityNameForWiki}](${wikiUrlForOverview}). Never "see below". Stop after the bullet list.`
-        : 'Output ## Overview, 1-2 lead paragraphs (NO em dashes; obey WORD BLACKLIST above), then a - bullet list with one item per IN-PAGE anchor. Each bullet: one sentence with exactly ONE [2-4 words](#exact-id). FORBIDDEN: second link in the same bullet, duplicate #id links, or "including [link]" phrasing. Never "see below". Stop after the bullet list.'
+        ? `Output ## Overview, 1-2 lead paragraphs that map remaining sections (NO em dashes; obey WORD BLACKLIST above). Do not recap the published Answer (dates, rates, percentages, dollar figures, statute stack, or closing company sentence). When connected-site rules apply: second lead sentence must state the article includes a labeled real-world hypothetical (one genderless named persona under stated assumptions with a site-level business recommendation) and point forward to the Real-World Example section (do not paste the full scenario in Overview; no payback or savings numbers in Overview). Then a - bullet list with one item per IN-PAGE anchor. The anchor tagged ILLUSTRATIVE MUST use bullet label **Real-World Example** exactly. Each bullet: **Label**: one sentence with exactly ONE [2-4 words](#exact-id). FORBIDDEN: second link in the same bullet, duplicate #id links, or "including [link]" phrasing. Optional entity Wikipedia in first paragraph: [${entityNameForWiki}](${wikiUrlForOverview}). Never "see below". Stop after the bullet list.`
+        : 'Output ## Overview, 1-2 lead paragraphs that map remaining sections (NO em dashes; obey WORD BLACKLIST above). Do not recap the published Answer (dates, rates, percentages, dollar figures, statute stack, or closing company sentence). When connected-site rules apply: second lead sentence must state the article includes a labeled real-world hypothetical (one genderless named persona under stated assumptions with a site-level business recommendation) and point forward to the Real-World Example section (do not paste the full scenario in Overview; no payback or savings numbers in Overview). Then a - bullet list with one item per IN-PAGE anchor. The anchor tagged ILLUSTRATIVE MUST use bullet label **Real-World Example** exactly. Each bullet: one sentence with exactly ONE [2-4 words](#exact-id). FORBIDDEN: second link in the same bullet, duplicate #id links, or "including [link]" phrasing. Never "see below". Stop after the bullet list.'
       : connectedSite && !hasWordPressPosts
       ? "CRITICAL: Do NOT add internal links—no linkable URLs from API—for this section unless the system prompt lists URLs."
-      : "Use 1–2 [[LINK:sitemap search phrase|anchor text]] placeholders per section woven into complete sentences (follow INTERNAL LINK PLACEHOLDERS in system prompt). Never use raw https:// internal URLs in body sections.",
-    "Follow the section block for lists or blockquotes. Use Markdown pipe tables only. NEVER HTML.",
-    hasSemrushExternals
-      ? isPressReleaseHarness
-        ? "Approved external URL: include in this section only if it fits naturally and the full release does not already require the link elsewhere; use [anchor](exact-url)."
-        : "User-specified externals only: when this section needs one, insert [[EXTERNAL:exact-url|exact-anchor]] copied from the APPROVED EXTERNAL URLs block — never [anchor](url)."
-      : isPressReleaseHarness
-        ? "No external links unless listed in the system prompt."
-        : "No third-party external links. Forbidden: [[EXTERNAL:...]], raw https://, and third-party <a href>. Wikipedia only when entity URL is listed.",
+      : `MANDATORY: Include at least ${MIN_INTERNAL_LINKS_PER_BODY_H2} [[LINK:query|anchor]] placeholders in this body H2 section (target ${TARGET_INTERNAL_LINKS_PER_BODY_H2} when this section has a table or 3+ paragraphs). Weave into prose and table cells. Use distinct plan queries when LINK TARGETS PLAN is present. Format is exactly [[LINK:query|anchor]] — never {{LINK:...}}, {LINK:...}, or raw https:// internal URLs in body sections.`,
+    `Follow the section block for lists or quotes. ${MARKDOWN_QUOTE_OUTPUT_RULE} Use Markdown pipe tables only. NEVER HTML. ` + TABLE_NO_LINK_ONLY_COLUMN_RULE,
+    hasApprovedExternals
+      ? "User-specified externals only: weave [[EXTERNAL:exact-url|exact-anchor]] mid-sentence in a paragraph (same rules as [[LINK:...]]). Copy exact URL and anchor from APPROVED EXTERNAL URLs — never bare domain, never 'for more'/'here', never after the final period."
+      : "No third-party external links. Forbidden: [[EXTERNAL:...]], raw https://, and third-party <a href>. Wikipedia only when entity URL is listed.",
     isPressReleaseHarness ? "" : entityBlock,
     linkBlock,
     acfBlock,
+    llmAuditBlock,
+    dfsArticleAuditHarnessBlock,
+    answerGroundingBlock?.trim() ? answerGroundingBlock.trim() : "",
+    firstPartyAuthorityBlock?.trim() ? firstPartyAuthorityBlock.trim() : "",
     gscBlock,
     semrushKeywordsBlock,
     semrushScatterBlock,

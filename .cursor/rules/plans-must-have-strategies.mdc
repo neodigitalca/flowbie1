@@ -1,0 +1,183 @@
+---
+description: Imperative plan format - Must-have strategies section + per-file line counts in every plan
+alwaysApply: true
+---
+
+# Plans: must-have strategies (imperative)
+
+**Every plan you produce is incomplete without this.** Applies to in-chat plans, SwitchMode/Plan mode output, and `.cursor/plans/*.md` files. No exceptions unless the user explicitly asks for a one-line answer with no plan.
+
+## Required sections (in this order)
+
+1. **Goal / problem** (brief)
+2. **Must-have strategies** (mandatory section below)
+3. **Files and line counts** (mandatory table)
+4. **Implementation tasks / todos** (complete list: code + installs + commands + verification; plain language; last item = mandatory review)
+5. **Verification** (what the agent runs and checks; not delegated to the user)
+
+Skip empty sections. Do not omit **Must-have strategies**, **Files and line counts**, operational steps, or the **final review todo**.
+
+## Must-have strategies (copy into every plan)
+
+Include this section verbatim in structure; fill in **How this plan applies** for each row with plan-specific bullets (not generic placeholders).
+
+```markdown
+## Must-have strategies
+
+| Strategy | How this plan applies |
+|----------|----------------------|
+| **Logic** ([`logic-non-contradictory-identification.mdc`](.cursor/rules/logic-non-contradictory-identification.mdc)) | Ground claims in code/evidence; no contradictory assumptions about system state |
+| **Occam's razor** ([`occams-razor-parsimony.mdc`](.cursor/rules/occams-razor-parsimony.mdc)) | Smallest change set that satisfies the goal; no extra layers or scope |
+| **Server-side only** ([`server-side-only-no-browser-fetch.mdc`](.cursor/rules/server-side-only-no-browser-fetch.mdc)) | External/API logic on server; browser calls `backendApiUrl` / `/api/*` only |
+| **Minimal stacking / zero CLS** ([`minimal-stacking-zero-cls.mdc`](.cursor/rules/minimal-stacking-zero-cls.mdc)) | Flat DOM, reserved slots, no layout shift after paint |
+| **No fallbacks** ([`response-harness-mandatory-opener.mdc`](.cursor/rules/response-harness-mandatory-opener.mdc)) | One explicit contract; fail fast; no silent try-X-then-Y |
+| **No workarounds / prompt-level fix** ([`no-workarounds-prompt-level-fix.mdc`](.cursor/rules/no-workarounds-prompt-level-fix.mdc)) | No downstream patches or extra conditions; when LLM/agents involved, separate **Prompt-level strategy** subsection (failure mode, root cause, prompt/harness fix, code validates only) |
+| **Flat inline forms** ([`flat-inline-forms.mdc`](.cursor/rules/flat-inline-forms.mdc)) | Labels as inline placeholders (not stacked); flat colored wells (`bg-zinc-900`); stylized selects with placeholder labels; semantic Figma grouping |
+| **Harness UI** (when touching UI) | Unified workspace chrome, 1rem min type, minimal stacking, zero CLS |
+| **Background shell** ([`background-shell-no-visible-terminal.mdc`](.cursor/rules/background-shell-no-visible-terminal.mdc)) | Shell visible OFF; agent runs all commands in background; no user terminal, no asking to run npm/install/test |
+| **AI first (pattern matching)** ([`ai-first-pattern-matching.mdc`](.cursor/rules/ai-first-pattern-matching.mdc)) | OpenRouter + schema for classify/extract/compare; no complicated regex or keyword ladders unless exception applies |
+| **Murphy's Law check** ([`murphys-law-check.mdc`](.cursor/rules/murphys-law-check.mdc)) | Name what can go wrong (empty data, API/auth fail, races, bad LLM shape); prevent or fail fast visibly; verify in tests/todos |
+```
+
+Replace the generic third column with **2–4 concrete bullets per strategy** that name files, flows, or decisions in *this* plan. If a strategy does not apply (e.g. no UI), state **N/A** and one line why.
+
+When the plan touches **LLM calls, agents, or prompts**, add a dedicated subsection immediately after the table:
+
+```markdown
+### Prompt-level strategy
+
+- **Failure mode:** …
+- **Root cause:** …
+- **Fix (prompt/harness):** …
+- **Code role:** parse/validate/execute only; no workaround branch
+```
+
+## Files and line counts (mandatory)
+
+For **each file** you add, modify, split, or delete, include a row:
+
+```markdown
+## Files and line counts
+
+| File | Current (approx) | After (approx) | Action |
+|------|------------------|----------------|--------|
+| `src/lib/example.ts` | 240 | ~280 | modify |
+| `src/lib/example-helper.ts` | — | ~60 | add |
+```
+
+- **Current**: measure when possible (`wc -l`, IDE count, or read); approximate is fine.
+- **After**: estimated total lines after the plan executes.
+- **Action**: `add` | `modify` | `delete` | `split`.
+- Scripts/modules: keep each **under ~500 lines**; if after-count exceeds that, plan a split in the same table.
+
+Chat-only plans use the same table; do not skip it for "small" tasks.
+
+## Implementation todos (scannable, plain language)
+
+Todos are for **you** to scan quickly. Every step must be **simple, human-readable, and jargon-light**.
+
+### Do
+
+- **One clear action per line.** Start with a plain verb: Add, Update, Remove, Wire, Test, Review.
+- **Say what changes in plain English**, then put file paths in backticks only when needed to disambiguate.
+- Keep lines **short** (one or two sentences max). You should grasp the whole list in seconds.
+- Name the **user-visible outcome** when it helps ("Reporting tab shows one MoM file" not "refactor fetch reducer").
+- Use `- [ ]` checklists. Number steps only when order matters.
+
+### Do not
+
+- Do **not** pack todos with technical jargon: no `zod`, `hydration`, `middleware`, `refactor the adapter layer`, `normalize the DTO`, unless you use plain English beside it.
+- Do **not** use cryptic labels: "wire API", "fix validation", "cleanup", "parity pass".
+- Do **not** write essay bullets or stack multiple unrelated actions on one line.
+- Do **not** assume the reader knows internal codenames without a three-word plain label.
+
+### Examples
+
+**Good (scannable):**
+
+```markdown
+## Todos
+
+- [ ] Add one combined "Site totals" download instead of two separate files
+- [ ] Update the reporting screen label so it matches the new file name
+- [ ] Add a test that the new CSV includes both months
+- [ ] Run the reporting unit tests
+- [ ] **Final review (mandatory):** …
+```
+
+**Bad (too technical / not scannable):**
+
+```markdown
+## Todos
+
+- [ ] Refactor `gsc-reporting-fetch.ts` reducer to emit aggregated MoM artifact
+- [ ] Wire `friendlyGscFileLabel` parity in ReportingTab consume path
+- [ ] zod schema + OR harness
+```
+
+Technical detail belongs in **Files and line counts**, **Must-have strategies**, or body sections—not in todo lines.
+
+## Complete plans, agent executes (imperative)
+
+**Never leave steps out.** If the work needs it, it goes in the todo list. **You run every step yourself** during implementation in **background Shell** (shell visible OFF). Do not hand work to the user and do not ask whether to run it. See `background-shell-no-visible-terminal.mdc`.
+
+### Always include in todos when applicable
+
+- **Install dependencies** (`npm install`, `npm ci`, package adds)
+- **Build / typecheck / lint** (`npm run build`, `tsc`, project test scripts)
+- **Run tests** for touched areas
+- **Migrations, codegen, sync scripts**, env file updates the task requires
+- **Restart or verify services** when local dev behavior changes (background Shell, `block_until_ms: 0` for long runners; see `local-dev-startup.mdc`, `background-shell-no-visible-terminal.mdc`)
+- **Post-change verification** (open page, run verify script, check output)
+
+List each as its **own scannable todo line** in plain English (e.g. "Install new packages after updating package.json", "Run the unit tests for reporting").
+
+### Forbidden in plans and execution
+
+- **Omitting** operational steps because they seem obvious (install, test, build).
+- **"User should run…"**, **"Ask user to…"**, **"Optional: run tests"**, or **"If you want, I can…"**
+- Ending with **delegated** verification only the user can do when you can run it in the shell
+- **Asking permission** to install, test, commit, or execute a command you are able to run
+
+### When truly blocked
+
+Only stop for user action when the environment **cannot** proceed without them (missing secret, login, physical device, production deploy approval they explicitly gate). State the blocker once; do not offer a menu of optional next steps.
+
+### Todo order template
+
+```markdown
+## Todos
+
+- [ ] … (code / UI changes, plain language)
+- [ ] Install packages if package.json changed
+- [ ] Run tests (or the specific test script for this area)
+- [ ] … (any other command or verify step this task needs)
+- [ ] **Final review (mandatory):** …
+```
+
+Adjust lines to the task; **never** skip install/test/build rows when those apply.
+
+## Final todo (mandatory, always last)
+
+Every plan **must** end the implementation todos with this item as the **last step**. Copy the checklist; tailor the scope line to this plan's files/flows.
+
+```markdown
+- [ ] **Final review (mandatory):** Re-read the full diff and plan details once more. Confirm: no multiplied entities (extra abstractions, duplicate helpers, redundant wrappers, parallel code paths); no fallbacks, silent retries, or workarounds; no extra conditions, flags, or guards the user did not ask for; claims match evidence (**Rand logic**, non-contradictory identification); scope stayed minimal (**Occam's razor**); **Murphy's Law** pass (empty/missing data, API/auth failures, races, LLM parse errors, ops steps run). Fix anything that violates must-have strategies before marking done.
+```
+
+- This todo is **never optional** and **never omitted**, including small or single-file plans.
+- Do not mark the plan complete until this step is executed during implementation.
+- All **install, command, and verify** todos above it must be **run by the agent**, not left for the user.
+
+## Quality bar (also mandatory)
+
+- Todos follow **Scannable, plain language** rules above and [`cursor-plans-human-todos.mdc`](.cursor/rules/cursor-plans-human-todos.mdc).
+- Todos are **verb-led**, scoped, and checkable.
+- No em dashes in plan copy.
+- Prefer structured parsers/schemas over regex unless numeric-only or user-requested.
+- OpenRouter for smart extraction/classification per [`agent-contract-openrouter.mdc`](.cursor/rules/agent-contract-openrouter.mdc).
+
+## Do not skip
+
+- A plan without **Must-have strategies**, **Files and line counts**, **complete operational todos**, or the **final review todo** is invalid; add them before presenting the plan.
+- Updating an existing plan file: insert or refresh all three if missing.

@@ -10,6 +10,17 @@ import {
   type GscCompareKind,
 } from "@/lib/gsc-reporting/gsc-reporting-compare-signals";
 import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
+import {
+  csvDashNumberCell,
+  csvNumberCell,
+  formatCanadianNumber,
+} from "@/lib/gsc-reporting/gsc-number-format";
+import {
+  GSC_GENERATIVE_AI_PAGES_FILENAME,
+  GSC_GENERATIVE_AI_SITE_TOTALS_FILENAME,
+  parseGenerativeAiBundleFromApi,
+  shouldIncludeGenerativeAiSection,
+} from "@/lib/gsc-reporting/gsc-reporting-generative-ai";
 /** Site-wide Search Analytics aggregate for one date range (no dimensions). */
 export type GscSiteTotalsPreviousMonth = {
   label: string;
@@ -29,6 +40,8 @@ export type GscReportingFetchResult = {
   compareEndDate: string;
   /** Legacy: only when fetch was single-period (no longer used from Reporting). */
   siteTotalsPreviousMonth: GscSiteTotalsPreviousMonth | null;
+  /** True when Generative AI CSVs were emitted (available + impressions > 0). */
+  generativeAiIncluded: boolean;
 };
 
 export type GscPagePerfRow = {
@@ -64,11 +77,11 @@ function escapeCsvCell(s: string): string {
 
 function formatCtr(ctr: number): string {
   const c = ctr <= 1 ? ctr * 100 : ctr;
-  return `${c.toFixed(2)}%`;
+  return `${formatCanadianNumber(c)}%`;
 }
 
 function formatPosition(position: number): string {
-  return typeof position === "number" ? position.toFixed(2) : String(position);
+  return formatCanadianNumber(position);
 }
 
 /** True when start/end are the first and last day of the same UTC calendar month. */
@@ -150,8 +163,8 @@ export function gscQueriesToCsv(
   const rows = queries.map((q) => {
     return [
       escapeCsvCell(q.query),
-      String(q.clicks),
-      String(q.impressions),
+      csvNumberCell(q.clicks),
+      csvNumberCell(q.impressions),
       formatCtr(q.ctr),
       formatPosition(q.position as number),
     ].join(",");
@@ -200,7 +213,6 @@ export function gscQueriesMomComparisonCsv(
     momQueriesPagesCsvHeaderRow(primaryRange, compareRange, "Query"),
   ];
 
-  const dashNum = (n: number | undefined): string => (n === undefined ? " - " : String(n));
   const pct = (a: number | undefined, b: number | undefined): string => {
     if (a === undefined || b === undefined) return " - ";
     return gscSiteTotalsPctChangeVsPrior(a, b);
@@ -211,11 +223,11 @@ export function gscQueriesMomComparisonCsv(
     lines.push(
       [
         escapeCsvCell(k),
-        dashNum(p?.clicks),
-        dashNum(c?.clicks),
+        csvDashNumberCell(p?.clicks),
+        csvDashNumberCell(c?.clicks),
         pct(p?.clicks, c?.clicks),
-        dashNum(p?.impressions),
-        dashNum(c?.impressions),
+        csvDashNumberCell(p?.impressions),
+        csvDashNumberCell(c?.impressions),
         pct(p?.impressions, c?.impressions),
         p ? formatCtr(p.ctr) : " - ",
         c ? formatCtr(c.ctr) : " - ",
@@ -235,8 +247,8 @@ export function gscPagesToCsv(pages: GscPagePerfRow[]): string {
   const rows = pages.map((p) => {
     return [
       escapeCsvCell(p.page),
-      String(p.clicks),
-      String(p.impressions),
+      csvNumberCell(p.clicks),
+      csvNumberCell(p.impressions),
       formatCtr(p.ctr),
       formatPosition(p.position as number),
     ].join(",");
@@ -277,7 +289,6 @@ export function gscPagesMomComparisonCsv(
     momQueriesPagesCsvHeaderRow(primaryRange, compareRange, "Page"),
   ];
 
-  const dashNum = (n: number | undefined): string => (n === undefined ? " - " : String(n));
   const pct = (a: number | undefined, b: number | undefined): string => {
     if (a === undefined || b === undefined) return " - ";
     return gscSiteTotalsPctChangeVsPrior(a, b);
@@ -288,11 +299,11 @@ export function gscPagesMomComparisonCsv(
     lines.push(
       [
         escapeCsvCell(k),
-        dashNum(p?.clicks),
-        dashNum(c?.clicks),
+        csvDashNumberCell(p?.clicks),
+        csvDashNumberCell(c?.clicks),
         pct(p?.clicks, c?.clicks),
-        dashNum(p?.impressions),
-        dashNum(c?.impressions),
+        csvDashNumberCell(p?.impressions),
+        csvDashNumberCell(c?.impressions),
         pct(p?.impressions, c?.impressions),
         p ? formatCtr(p.ctr) : " - ",
         c ? formatCtr(c.ctr) : " - ",
@@ -314,8 +325,8 @@ export function gscSiteTotalsPreviousMonthToCsv(t: GscSiteTotalsPreviousMonth): 
     `# Range: ${t.startDate} → ${t.endDate}. In GSC: Performance → set date to this range → Monthly.`,
     "#",
     "Metric,Value",
-    `Total clicks,${t.clicks}`,
-    `Total impressions,${t.impressions}`,
+    `Total clicks,${csvNumberCell(t.clicks)}`,
+    `Total impressions,${csvNumberCell(t.impressions)}`,
     `Average CTR,${formatCtr(t.ctr)}`,
     `Average position,${formatPosition(t.position)}`,
   ];
@@ -330,8 +341,8 @@ export function gscSitePeriodTotalsToCsv(t: GscSiteTotalsPreviousMonth, periodTi
     `# Range: ${t.startDate} → ${t.endDate}. In GSC: Performance → set date to this range → Monthly.`,
     "#",
     "Metric,Value",
-    `Total clicks,${t.clicks}`,
-    `Total impressions,${t.impressions}`,
+    `Total clicks,${csvNumberCell(t.clicks)}`,
+    `Total impressions,${csvNumberCell(t.impressions)}`,
     `Average CTR,${formatCtr(t.ctr)}`,
     `Average position,${formatPosition(t.position)}`,
   ];
@@ -369,8 +380,7 @@ export function gscSiteTotalsMomComparisonCsv(
     `Metric,${escapeCsvCell(colA)},${escapeCsvCell(colB)},% change vs prior`,
   ];
 
-  const dash = (n: number | null | undefined): string =>
-    n === null || n === undefined ? " - " : String(n);
+  const dash = (n: number | null | undefined): string => csvDashNumberCell(n);
   const pctCell = (p: number | null | undefined, c: number | null | undefined): string => {
     if (p === null || p === undefined || c === null || c === undefined) return " - ";
     return gscSiteTotalsPctChangeVsPrior(p, c);
@@ -386,7 +396,7 @@ export function gscSiteTotalsMomComparisonCsv(
     `Total impressions,${dash(p?.impressions)},${dash(c?.impressions)},${pctCell(p?.impressions, c?.impressions)}`,
   );
   lines.push(
-    `Search queries,${queryCountPrimary},${queryCountCompare},${gscSiteTotalsPctChangeVsPrior(queryCountPrimary, queryCountCompare)}`,
+    `Search queries,${csvNumberCell(queryCountPrimary)},${csvNumberCell(queryCountCompare)},${gscSiteTotalsPctChangeVsPrior(queryCountPrimary, queryCountCompare)}`,
   );
   lines.push(
     `Average CTR,${p ? formatCtr(p.ctr) : " - "},${c ? formatCtr(c.ctr) : " - "},${pctCell(p?.ctr, c?.ctr)}`,
@@ -401,9 +411,19 @@ export function gscSiteTotalsMomComparisonCsv(
   return lines.join("\n");
 }
 
-/**
- * Unique URLs that had Search traffic in the range (page dimension). Same semantics as POST /api/gsc/url-inventory.
- */
+/** HTTP(S) page URLs from an Indexed-pages CSV (comment lines skipped). */
+export function gscIndexedPageUrlsFromCsv(content: string): string[] {
+  const urls: string[] = [];
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("https://") || trimmed.startsWith("http://")) {
+      urls.push(trimmed);
+    }
+  }
+  return urls;
+}
+
+/** Unique URLs that had Search traffic in the range (page dimension). Same semantics as POST /api/gsc/url-inventory. */
 export function gscIndexedUrlsCsvFromPages(
   pages: GscPagePerfRow[],
   startDate: string,
@@ -504,11 +524,15 @@ export async function fetchGscQueriesRawForReporting(
     aggregateCompare?: GscSiteTotalsPreviousMonth | null;
     sitemaps?: GscSitemapApiRow[];
     sitemapsError?: string;
+    generativeAi?: unknown;
   };
 
   if (!response.ok || !data.success) {
     throw new Error(data.error || `HTTP ${response.status}`);
   }
+
+  const generativeAi = parseGenerativeAiBundleFromApi(data.generativeAi);
+  const generativeAiIncluded = shouldIncludeGenerativeAiSection(generativeAi);
 
   const queries = data.queries ?? [];
   const pages = data.pages ?? [];
@@ -633,6 +657,27 @@ export async function fetchGscQueriesRawForReporting(
     });
   }
 
+  if (generativeAiIncluded && generativeAi) {
+    files.push({
+      name: GSC_GENERATIVE_AI_PAGES_FILENAME,
+      content: gscPagesMomComparisonCsv(
+        generativeAi.pagesPrimary ?? [],
+        generativeAi.pagesCompare ?? [],
+        { start: startDateStr, end: endDateStr },
+        { start: compareStartDateStr, end: compareEndDateStr },
+      ),
+    });
+    files.push({
+      name: GSC_GENERATIVE_AI_SITE_TOTALS_FILENAME,
+      content: gscSiteTotalsMomComparisonCsv(
+        generativeAi.aggregatePrimary ?? null,
+        generativeAi.aggregateCompare ?? null,
+        0,
+        0,
+      ),
+    });
+  }
+
   return {
     files,
     startDate: startDateStr,
@@ -640,5 +685,6 @@ export async function fetchGscQueriesRawForReporting(
     compareStartDate: compareStartDateStr,
     compareEndDate: compareEndDateStr,
     siteTotalsPreviousMonth: data.siteTotalsPreviousMonth ?? null,
+    generativeAiIncluded,
   };
 }

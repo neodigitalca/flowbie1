@@ -112,3 +112,11 @@ export function gscReportingArchiveFiles(input: {
   }
   return out;
 }
+
+export { chatgptAuditCumulativeCsvFile } from "@/lib/chatgpt-audit-csv";
+
+export function chatgptAuditArchiveFiles(
+  files: TaskArchiveFileInput[],
+): TaskArchiveFileInput[] {
+  return files.filter((file) => file.fileName.trim() && file.content);
+}

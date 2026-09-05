@@ -1,0 +1,34 @@
+{
+  "keyword": "entity-page-creator-monthly",
+  "name": "Entity page creator",
+  "executionKind": "entity_page_creator",
+  "description": "Generate entity locations and schedule entity pages via the bulk CSV pipeline.",
+  "filters": {
+    "categories": ["local-seo"],
+    "buckets": ["sap"],
+    "verticals": ["local-seo", "general"]
+  },
+  "defaults": {
+    "executionPayload": {
+      "locationSource": "grid",
+      "gridInputSource": "workflow",
+      "entityAdGroupCount": 3,
+      "entityAdsPerGroup": 5,
+      "entityPageCount": 15,
+      "postCount": 15,
+      "focusKeyword": "",
+      "titleTemplate": "{keyword} Near {entity}",
+      "sitemapType": "entity",
+      "featuredImage": false,
+      "postDestination": "wordpress",
+      "targetBucket": "sap",
+      "scheduleFrequency": "custom",
+      "scheduleCustomInterval": 15,
+      "scheduleTimesPerMonth": 15,
+      "scheduleStartDay": 1,
+      "scheduleStartTime": "09:00",
+      "scheduleStaggerOptimized": true,
+      "saveLocalArchive": true
+    }
+  }
+}

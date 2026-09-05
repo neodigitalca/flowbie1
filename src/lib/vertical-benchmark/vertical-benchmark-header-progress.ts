@@ -15,10 +15,10 @@ function activeProgress(args: {
   exportProgress: BenchmarkPipelineProgress | null;
   bulkTemplateProgress: BenchmarkPipelineProgress | null;
 }): { progress: BenchmarkPipelineProgress; label: string } | null {
-  if (args.generatingBulkTemplate && args.bulkTemplateProgress) {
+  if (args.bulkTemplateProgress) {
     return { progress: args.bulkTemplateProgress, label: BULK_CSV_LABEL };
   }
-  if (args.exporting && args.exportProgress) {
+  if (args.exportProgress) {
     return { progress: args.exportProgress, label: GSC_EXPORT_LABEL };
   }
   return null;

@@ -35,7 +35,7 @@ trait Neo_Pulse_Wp_Admin_Trait_Render_Backend_Assist {
 
 		wp_localize_script(
 			'neo-pulse-wp-backend-assist',
-			'neo-pulseBackendAssist',
+			'neoPulseBackendAssist',
 			array(
 				'baseUrl'            => esc_url_raw( rest_url( 'neo-pulse/v1/backend-assist' ) ),
 				'stepUrl'            => esc_url_raw( rest_url( 'neo-pulse/v1/backend-assist/step' ) ),

@@ -199,6 +199,26 @@ class Neo_Pulse_App_Teams_Route_Handlers {
 			return;
 		}
 
+		if ( preg_match( '#^agentmail-inbound/(.+)$#', $sub, $am ) && $method === 'GET' ) {
+			if ( ! Neo_Pulse_App_Teams_Store::is_active_member( $member ) ) {
+				Neo_Pulse_App_Api_Dispatcher::send_json( array( 'ok' => false, 'error' => 'Forbidden' ), 403 );
+				return;
+			}
+			$message_id = rawurldecode( (string) ( $am[1] ?? '' ) );
+			$inbound    = Neo_Pulse_App_Agentmail_Inbound_Store::get_inbound( $team_id, $message_id );
+			if ( ! is_array( $inbound ) ) {
+				Neo_Pulse_App_Api_Dispatcher::send_json( array( 'ok' => false, 'error' => 'Not found' ), 404 );
+				return;
+			}
+			Neo_Pulse_App_Api_Dispatcher::send_json(
+				array(
+					'ok'      => true,
+					'inbound' => $inbound,
+				)
+			);
+			return;
+		}
+
 		if ( $sub === 'mail-test' && $method === 'POST' ) {
 			if ( (string) $member['access_role'] !== 'owner' ) {
 				Neo_Pulse_App_Api_Dispatcher::send_json( array( 'ok' => false, 'error' => 'Forbidden' ), 403 );

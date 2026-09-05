@@ -1,5 +1,5 @@
 import { notify } from "@/lib/app-notifications";
-import { NOTIFY_NO_BULK_ROWS_FROM_POSTS_OR_GRID_ENTITY_S, NOTIFY_NO_BULK_ROWS_LEFT_AFTER_FINAL_REVIEW, NOTIFY_NO_BULK_ROWS_TO_EXPORT, NOTIFY_NO_CLIENTS_SELECTED_SELECT_AT_LEAST_ONE_, NOTIFY_NO_CLIENTS_WITH_SITE_CONTEXT_FOR_GRID_EN, NOTIFY_NO_ROWS_TO_DOWNLOAD, NOTIFY_OPENROUTER_API_KEY_REQUIRED_FOR_BULK_CSV, notifyGridEntityPackageStepFailedX, notifyNoBulkRowsToCurateX, notifyQuarterPostCapKeptTopXPostsByGsc, notifyRemovedXRowSOutsideTheUploadedGri, notifyXClientSSkippedX } from "@/lib/notify-messages";
+import { NOTIFY_NO_BULK_ROWS_FROM_POSTS_OR_GRID_ENTITY_S, NOTIFY_NO_BULK_ROWS_TO_EXPORT, NOTIFY_NO_CLIENTS_SELECTED_SELECT_AT_LEAST_ONE_, NOTIFY_NO_CLIENTS_WITH_SITE_CONTEXT_FOR_GRID_EN, NOTIFY_NO_ROWS_TO_DOWNLOAD, NOTIFY_OPENROUTER_API_KEY_REQUIRED_FOR_BULK_CSV, notifyGridEntityPackageStepFailedX, notifyNoBulkRowsToCurateX, notifyXClientSSkippedX } from "@/lib/notify-messages";
 import { callOpenRouterChatCompletion } from "@/lib/competitor-research/competitor-report-openrouter";
 import { QUARTER_EDITORIAL_POSTS_GOAL } from "@/lib/quarter-editorial-gap";
 import { getSiteInventoryBulk } from "@/lib/wordpress-api";
@@ -44,7 +44,6 @@ import {
   BULK_BENCHMARK_TOPIC_EXCLUSIONS_BLOCK,
   BULK_CANNIBALIZATION_INSTRUCTIONS,
   createGlobalBulkDedupeState,
-  filterBannedBulkBenchmarkRows,
   globalExclusionBlockForPrompt,
   isBannedBulkBenchmarkTopic,
   type GlobalBulkDedupeState,
@@ -63,8 +62,6 @@ import {
 import {
   buildBenchmarkEntityRowsOnceForPackage,
   buildBenchmarkGridRagBlock,
-  filterBulkSheetToGridFootprint,
-  gridPlaceHintsForMatching,
   gscPlanContentKindsForBulkCurate,
   hasBenchmarkGridContext,
   type BenchmarkGridCsvContext,
@@ -90,10 +87,14 @@ import {
   benchmarkSiteInventoryStepLabel,
   buildBenchmarkInventorySiteQueue,
 } from "@/lib/vertical-benchmark/vertical-benchmark-roster-order";
+import {
+  clampBenchmarkBlogCount,
+  keywordFromPeerGscUrl,
+  pickBestPeerGscPages,
+} from "@/lib/vertical-benchmark/vertical-benchmark-peer-gsc";
 
 const DEFAULT_TEMPERATURE = 0.7;
 const MAX_TOKENS_PER_CLIENT = 8192;
-const MAX_TOKENS_FINAL_REVIEW = 16384;
 /** One editorial quarter across the whole export package (not per client). */
 export const BENCHMARK_BULK_QUARTER_POST_ROW_CAP = QUARTER_EDITORIAL_POSTS_GOAL;
 /** Parallel OpenRouter calls per client during bulk row generation. */
@@ -247,6 +248,7 @@ NO DUPLICATES (mandatory):
 - Vary title format across rows: not every "X vs Y", not every "Guide to…".
 ${BENCHMARK_SITE_INVENTORY_CANNIBALIZATION}
 ${BULK_CANNIBALIZATION_INSTRUCTIONS}
+ROW COUNT LOCK (overrides omit/merge): rows[] MUST contain exactly ${rowCount} object(s). Never omit a numbered GSC line. If two lines share intent or a line overlaps SITE_INVENTORY, pivot keyword and title — do not drop the row. Ignore any instruction that says to omit a row or keep only the stronger one by deleting the other.
 Within rows[] for this client: apply cannibalization rules across all ${rowCount} row(s) and against every SITE_INVENTORY entry before returning JSON.`;
 }
 
@@ -313,11 +315,14 @@ export function buildClientGscBulkAdaptPrompt(
   const urlList = pages
     .map(
       (p, i) =>
-        `${i + 1}. rank=${p.rank} url=${p.url} clicks=${p.clicks} impressions=${p.impressions} position=${normalizeGscPositionForTokens(p.position)}`,
+        `${i + 1}. exemplar_url=${p.url} clicks=${p.clicks} impressions=${p.impressions} position=${normalizeGscPositionForTokens(p.position)}`,
     )
     .join("\n");
 
-  const clusterBlock = buildGscClusterPromptBlock(plan.gscPayload.topPages, plan.gscClusters, plan.outputPages);
+  const hasClusters = plan.gscClusters.length > 0;
+  const clusterBlock = hasClusters
+    ? buildGscClusterPromptBlock(plan.gscPayload.topPages, plan.gscClusters, plan.outputPages)
+    : "";
 
   const isEntity = plan.contentKind === "entity";
   const inventorySlim = buildInventoryCannibalPromptBlock(plan.siteInventoryJson);
@@ -338,11 +343,13 @@ Pre-output checklist (mandatory): for each row, confirm title and keyword do not
 
 Rules:
 - Return exactly ${n} object(s) in rows[] — one per numbered GSC OUTPUT line below, same order (1..${n}).
-- When GSC MERGED CLUSTERS is present, row count is less than raw GSC URL count: merged URLs must not get their own row.
-- Do NOT add or remove rows beyond the required count ${n}. Do NOT invent topics beyond the GSC lines and clusters below.
-- source_exemplar_url MUST equal the exact url from the matching numbered OUTPUT line.
+${hasClusters ? "- When GSC MERGED CLUSTERS is present, merged URLs must not get their own extra row beyond the required count.\n" : ""}- Do NOT add or remove rows beyond the required count ${n}. Do NOT invent topics beyond the GSC lines below.
+- source_exemplar_url MUST equal the exact exemplar_url from the matching numbered OUTPUT line.
+- CURATE FOR THIS CLIENT only (${plan.site.name}). Exemplar URLs are from other sites. Write a new keyword and title for this client. Do not copy the peer slug, peer title, or peer keyword wording.
+- Never use Bali or Bali blinds in keyword or title (any wording, including removal/DIY).
+- Every keyword unique. Every title unique.
 ${isEntity ? entityEntityColumnRules() : postEntityColumnRules()}
-- keyword: 2–3 word short-tail intent${isEntity ? "" : " (no city/region/state/country names)"}.
+- keyword: 2–4 word short-tail for this client${isEntity ? "" : " (no city/region/state/country names)"}.
 - title: under 60 chars${isEntity ? "" : "; national/educational only"}.
 ${MODIFIER_RULES_BLOCK}
 ${isEntity ? (plan.gridRagBlock ? ENTITY_TITLE_WITH_GRID_BLOCK : ENTITY_TITLE_BLOCK) : NO_GEO_IN_TITLE_BLOCK}
@@ -366,13 +373,15 @@ ${plan.gridRagBlock ? `\n${plan.gridRagBlock}\n` : ""}
 
 ${clusterBlock}
 
-GSC OUTPUT LINES (${n} bulk row(s) — produce exactly ${n}; inventory wins when GSC intent overlaps published coverage):
-${urlList}`;
+GSC EXEMPLARS (${n} unique topic(s) from other sites — write ${n} rows for ${plan.site.name}):
+${urlList}
+
+FIXED COUNT: Reply with exactly ${n} row object(s) for ${plan.site.name}. Never omit a line. Never repeat a keyword or title. Never mention Bali.`;
 
   return { system, user };
 }
 
-type JsonBulkRow = {
+export type JsonBulkRow = {
   keyword?: string;
   entity?: string;
   title?: string;
@@ -429,36 +438,37 @@ function parseJsonBulkRows(content: string): JsonBulkRow[] {
   }
 }
 
-function jsonRowsToPitchRows(
+function titleFromPulledKeyword(keyword: string): string {
+  return keyword
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/** One CSV row per picked GSC page. Never drop a picked keyword. */
+export function jsonRowsToPitchRows(
   jsonRows: JsonBulkRow[],
   outputPages: GscTop10RagPage[],
   contentKind: VerticalBenchmarkContentKind,
 ): BacklinkBlogPitchOption[] {
-  const byUrl = new Map<string, JsonBulkRow>();
-  for (const r of jsonRows) {
-    const u = r.source_exemplar_url?.trim();
-    if (u) byUrl.set(u, r);
-  }
-
-  const out: BacklinkBlogPitchOption[] = [];
-  for (const page of outputPages) {
+  return outputPages.map((page, i) => {
     const url = page.url?.trim() ?? "";
-    const r = byUrl.get(url);
-    if (!r) continue;
-    const keyword = r.keyword?.trim() ?? "";
-    const title = r.title?.trim() ?? "";
-    if (!keyword || !title) continue;
-    if (isBannedBulkBenchmarkTopic(keyword, title, url)) continue;
-    out.push({
+    const r = jsonRows[i];
+    const pulled = keywordFromPeerGscUrl(url);
+    const modelKeyword = r?.keyword?.trim() ?? "";
+    const keyword =
+      modelKeyword && !isBannedBulkBenchmarkTopic(modelKeyword) ? modelKeyword : pulled;
+    const title = r?.title?.trim() || titleFromPulledKeyword(keyword);
+    return {
       keyword,
-      entity: contentKind === "entity" ? (r.entity?.trim() ?? "") : "",
+      entity: contentKind === "entity" ? (r?.entity?.trim() ?? "") : "",
       title,
-      modifier: normalizeBulkBenchmarkModifier(r.modifier, title),
-      featuredImage: (r.featuredImage?.trim() || "y") === "n" ? "n" : "y",
+      modifier: normalizeBulkBenchmarkModifier(r?.modifier, title),
+      featuredImage: (r?.featuredImage?.trim() || "y") === "n" ? "n" : "y",
       publish_date_gmt: "",
-    });
-  }
-  return out;
+    };
+  });
 }
 
 export async function callGeminiBulkRowsForPlan(
@@ -480,27 +490,9 @@ export async function callGeminiBulkRowsForPlan(
     responseFormat: { type: "json_object" },
   });
 
-  try {
-    const jsonRows = parseJsonBulkRows(content);
-    const rows = jsonRowsToPitchRows(jsonRows, pages, plan.contentKind);
-    return rows;
-  } catch {
-    console.warn(`[Benchmark bulk template] Invalid JSON from model for ${plan.site.name}`);
-    return [];
-  }
+  const jsonRows = parseJsonBulkRows(content);
+  return jsonRowsToPitchRows(jsonRows, pages, plan.contentKind);
 }
-
-type IndexedBulkRowForReview = {
-  index: number;
-  client: string;
-  content_kind: VerticalBenchmarkContentKind;
-  keyword: string;
-  entity: string;
-  title: string;
-  modifier: string;
-  featuredImage: string;
-  verified_brands: string[];
-};
 
 type BulkRowWithClient = BacklinkBlogPitchOption & {
   clientName: string;
@@ -540,137 +532,27 @@ function attachGscMetricsAtIndices(
   plan: BenchmarkClientPlan,
   rowsByIndex: Array<BacklinkBlogPitchOption | undefined>,
 ): BulkRowWithClient[] {
-  const out: BulkRowWithClient[] = [];
-  for (let i = 0; i < rowsByIndex.length; i++) {
+  return plan.outputPages.map((page, i) => {
     const row = rowsByIndex[i];
-    if (!row?.keyword?.trim() || !row?.title?.trim()) continue;
-    const page = plan.outputPages[i];
-    out.push({
-      ...row,
-      clientName: plan.site.name,
-      verifiedBrands: plan.verifiedBrands,
-      gscClicks: page?.clicks ?? 0,
-      gscImpressions: page?.impressions ?? 0,
-      contentKind: plan.contentKind,
-    });
-  }
-  return out;
-}
-
-function attachGscMetricsToRows(
-  plan: BenchmarkClientPlan,
-  rows: BacklinkBlogPitchOption[],
-  outputPages: GscTop10RagPage[],
-): BulkRowWithClient[] {
-  return rows.map((row, i) => {
-    const page = outputPages[i];
+    const pulled = keywordFromPeerGscUrl(page.url);
+    const modelKeyword = row?.keyword?.trim() ?? "";
+    const keyword =
+      modelKeyword && !isBannedBulkBenchmarkTopic(modelKeyword) ? modelKeyword : pulled;
+    const title = row?.title?.trim() || titleFromPulledKeyword(keyword);
     return {
-      ...row,
+      keyword,
+      entity: row?.entity ?? "",
+      title,
+      modifier: normalizeBulkBenchmarkModifier(row?.modifier, title),
+      featuredImage: (row?.featuredImage?.trim() || "y") === "n" ? "n" : "y",
+      publish_date_gmt: row?.publish_date_gmt ?? "",
       clientName: plan.site.name,
       verifiedBrands: plan.verifiedBrands,
-      gscClicks: page?.clicks ?? 0,
-      gscImpressions: page?.impressions ?? 0,
+      gscClicks: page.clicks ?? 0,
+      gscImpressions: page.impressions ?? 0,
       contentKind: plan.contentKind,
     };
   });
-}
-
-function parseFinalReviewKeepIndices(content: string): number[] {
-  try {
-    const parsed = parseAssistantJsonObject(content) as { keep_indices?: unknown };
-    if (!Array.isArray(parsed.keep_indices)) return [];
-    return parsed.keep_indices
-      .map((v) => (typeof v === "number" ? v : parseInt(String(v), 10)))
-      .filter((n) => Number.isFinite(n) && n >= 1);
-  } catch {
-    return [];
-  }
-}
-
-/** One Gemini pass over the full combined sheet — duplicates, cannibalization, geo titles. */
-async function geminiFinalSheetDedupe(
-  rows: BulkRowWithClient[],
-  apiKey: string,
-  model: string,
-  inventoryByClient: Map<string, string>,
-  gridContext?: BenchmarkGridCsvContext | null,
-): Promise<BulkRowWithClient[]> {
-  if (!rows.length) return [];
-
-  const payload: IndexedBulkRowForReview[] = rows.map((r, i) => ({
-    index: i + 1,
-    client: r.clientName,
-    content_kind: r.contentKind,
-    keyword: r.keyword,
-    entity: r.entity ?? "",
-    title: r.title,
-    modifier: r.modifier ?? "",
-    featuredImage: r.featuredImage ?? "y",
-    verified_brands: r.verifiedBrands,
-  }));
-
-  const clientInventories: Record<string, unknown> = {};
-  for (const [clientName, siteInventoryJson] of inventoryByClient) {
-    if (!siteInventoryJson.trim()) continue;
-    try {
-      clientInventories[clientName] = JSON.parse(buildInventoryCannibalPromptBlock(siteInventoryJson));
-    } catch {
-      clientInventories[clientName] = buildInventoryCannibalPromptBlock(siteInventoryJson);
-    }
-  }
-
-  const system = `${BENCHMARK_SEO_CONTENT_SPECIALIST_PERSONA}
-
-You review a combined bulk CSV export (blog posts and/or entity service-area rows) before download. Reply with JSON only:
-{ "keep_indices": [ 1, 2, 5, ... ] }
-
-Review this content sheet against each client's SITE_INVENTORY in the user message. Drop any row that would cannibalize existing published titles or keywords.
-
-Rules:
-- keep_indices lists ONLY the input "index" values to KEEP (1-based). Omit duplicate, cannibalizing, or invalid rows.
-- No duplicate titles (exact or light rephrase). No duplicate keywords.
-- Drop rows whose title or keyword competes with that client's published inventory (comparison pairs, topic clusters, subtitle rephrases).
-- For content_kind "post": drop any title containing city, state, province, region, or country names; entity must stay "".
-- For content_kind "entity": keep rows with a non-empty entity place label; geo in title is allowed when it matches the service-area intent.
-- Drop any row about Bali Blinds or DIY remove/detach/uninstall Bali blinds (keyword or title).
-- Drop rows where title/keyword reference a brand not in that row's verified_brands list.
-- Each row was already curated under that client's Master Rules during per-client generation; drop rows that violate verified_brands or banned topics.
-- When two rows conflict, keep the single strongest intent; drop the weaker — including across different clients in this sheet.
-- For content_kind "post": this export is ONE editorial quarter for the whole roster — keep at most ${BENCHMARK_BULK_QUARTER_POST_ROW_CAP} post row(s) total across all clients (prefer highest GSC clicks). Drop weaker post rows beyond that cap.
-- Do not invent rows; only filter the provided list.
-${
-  gridContext && hasBenchmarkGridContext(gridContext) ?
-    `- LOCAL DOMINATOR GRID FOOTPRINT: Only keep content_kind "entity" rows whose title, entity, or keyword references a place from this list: ${gridPlaceHintsForMatching(gridContext).slice(0, 50).join("; ")}. Drop entity rows for any other city or market.\n`
-  : ""
-}${BULK_CANNIBALIZATION_INSTRUCTIONS}
-Final pass: aggressively drop near-duplicate comparison pairs and topic clusters. Drop weaker rows when two titles share the same repair intent for the same product type. Keep one roundup/guide per brand product line; drop extra single-product review rows. When unsure, drop the weaker row.`;
-
-  const user = `Review ${payload.length} bulk row(s) from multiple clients. Cannibalization against each client's published inventory AND within this sheet matters.
-
-CLIENT INVENTORIES (published coverage — drop rows that compete with these):
-${JSON.stringify(clientInventories, null, 2)}
-
-ROWS TO REVIEW (return keep_indices):
-${JSON.stringify(payload, null, 2)}`;
-
-  const { content } = await callOpenRouterChatCompletion({
-    apiKey,
-    model,
-    system,
-    user,
-    maxTokens: MAX_TOKENS_FINAL_REVIEW,
-    temperature: 0.3,
-    responseFormat: { type: "json_object" },
-  });
-
-  const keepSet = new Set(parseFinalReviewKeepIndices(content));
-  const kept = keepSet.size ? rows.filter((_, i) => keepSet.has(i + 1)) : rows;
-  if (keepSet.size) {
-    return kept;
-  }
-
-  console.warn("[Benchmark bulk template] Final review JSON invalid or empty keep_indices; keeping all rows");
-  return rows;
 }
 
 function bulkRowToCsvExport(row: BulkRowWithClient): BacklinkBlogPitchOption {
@@ -874,6 +756,8 @@ export async function runBenchmarkBulkTemplateDownload(options: {
   clientTagLabelBySiteId: Record<string, string>;
   /** Manager header connected site — inventory crawl always starts here. */
   connectedSite?: WordPressSite | null;
+  /** Total blog rows on the sheet (not per site). */
+  blogCount?: number;
   onProgress?: BenchmarkPipelineProgressCallback;
 }): Promise<BenchmarkBulkTemplateDownloadResult | null> {
   const {
@@ -885,7 +769,9 @@ export async function runBenchmarkBulkTemplateDownload(options: {
     onProgress,
     contentKinds = ["post"],
     gridContext = null,
+    blogCount: blogCountRaw,
   } = options;
+  const blogCount = clampBenchmarkBlogCount(blogCountRaw ?? BENCHMARK_BULK_QUARTER_POST_ROW_CAP);
   const connectedSiteId = connectedSite?.id ?? null;
 
   const apiKey = openRouterApiKey?.trim();
@@ -907,18 +793,41 @@ export async function runBenchmarkBulkTemplateDownload(options: {
   const inventoryQueue = buildBenchmarkInventorySiteQueue(sites, connectedSite);
   const curateSiteIds = new Set(sites.map((s) => s.id));
   let invSteps = initInventorySteps(inventoryQueue, connectedSiteId);
-  let pipelineSteps: BenchmarkPipelineStep[] = [...invSteps, ...gscStepsWaiting];
+  let pipelineSteps: BenchmarkPipelineStep[] = [...gscStepsWaiting, ...invSteps];
   const inventoryHostedLinks: BenchmarkInventoryHostedLink[] = [];
+
+  const gscOut = await fetchGscTop10InMemory({
+    sites,
+    contentKinds,
+    openRouterApiKey: apiKey,
+    clientTagBySiteId,
+    clientTagLabelBySiteId,
+    onProgress,
+    progressBase: 0,
+    progressSpan: PHASE_WEIGHT.gsc,
+    pipelineSteps,
+    inventoryLinks: [],
+  });
+  if (!gscOut) {
+    return null;
+  }
+
+  const gscRows = gscOut.rows;
+  const gscExtendedRows = gscOut.extendedRows;
+  const gscSteps = gscOut.steps;
+  const dateRange = gscOut.dateRange;
+
+  pipelineSteps = [...gscSteps, ...invSteps];
 
   const inventoryIntroMessage =
     inventoryQueue.length === 1 ?
-      `Research site inventory: ${inventoryQueue[0]!.name}…`
-    : `Research site inventory for ${inventoryQueue.length} clients in parallel…`;
+      `Site inventory: ${inventoryQueue[0]!.name}…`
+    : `Site inventory for ${inventoryQueue.length} clients in parallel…`;
 
   emitProgress(onProgress, {
     phase: "inventory",
     message: inventoryIntroMessage,
-    percent: 0,
+    percent: PHASE_WEIGHT.gsc,
     steps: pipelineSteps,
     inventoryLinks: [],
   });
@@ -936,16 +845,16 @@ export async function runBenchmarkBulkTemplateDownload(options: {
         label: stepLabel,
         detail: "WordPress crawl…",
       });
-      pipelineSteps = [...invSteps, ...gscStepsWaiting];
+      pipelineSteps = [...gscSteps, ...invSteps];
       emitProgress(onProgress, {
         phase: "inventory",
         message: `Site inventory: ${site.name}`,
-        percent: Math.round((invDoneCount / Math.max(invTotal, 1)) * PHASE_WEIGHT.inventory),
+        percent:
+          PHASE_WEIGHT.gsc +
+          Math.round((invDoneCount / Math.max(invTotal, 1)) * PHASE_WEIGHT.inventory),
         steps: pipelineSteps,
         inventoryLinks: [...inventoryHostedLinks],
       });
-
-      const invStartMs = Date.now();
 
       const [inv, gmbRaw] = await Promise.all([
         fetchMergedInventory(site, contentKinds),
@@ -982,11 +891,13 @@ export async function runBenchmarkBulkTemplateDownload(options: {
       }
 
       invDoneCount += 1;
-      pipelineSteps = [...invSteps, ...gscStepsWaiting];
+      pipelineSteps = [...gscSteps, ...invSteps];
       emitProgress(onProgress, {
         phase: "inventory",
         message: `Site inventory ${invDoneCount} / ${invTotal} complete`,
-        percent: Math.round((invDoneCount / Math.max(invTotal, 1)) * PHASE_WEIGHT.inventory),
+        percent:
+          PHASE_WEIGHT.gsc +
+          Math.round((invDoneCount / Math.max(invTotal, 1)) * PHASE_WEIGHT.inventory),
         steps: pipelineSteps,
         inventoryLinks: [...inventoryHostedLinks],
       });
@@ -995,96 +906,111 @@ export async function runBenchmarkBulkTemplateDownload(options: {
     },
   );
 
-  const gscOut = await fetchGscTop10InMemory({
-    sites,
-    contentKinds,
-    openRouterApiKey: apiKey,
-    clientTagBySiteId,
-    clientTagLabelBySiteId,
-    onProgress,
-    progressBase: PHASE_WEIGHT.inventory,
-    progressSpan: PHASE_WEIGHT.gsc,
-    pipelineSteps,
-    inventoryLinks: inventoryHostedLinks,
-  });
-  if (!gscOut) {
-    return null;
-  }
-
-  const gscRows = gscOut.rows;
-  const gscExtendedRows = gscOut.extendedRows;
-  const gscSteps = gscOut.steps;
-  const dateRange = gscOut.dateRange;
-
-  pipelineSteps = [...invSteps, ...gscSteps];
+  pipelineSteps = [...gscSteps, ...invSteps];
 
   const plans: BenchmarkClientPlan[] = [];
   const planSkipReasons: string[] = [];
-  const inventoryByClient = new Map<string, string>();
   const inventoryTitlesByClient: Record<string, number> = {};
-  for (const { site, inv, context } of invResults) {
-    if (!curateSiteIds.has(site.id)) continue;
+  for (const { site, inv } of invResults) {
+    if (!curateSiteIds.has(site.id) && site.id !== connectedSiteId) continue;
     if (inv.error) {
       invSteps = patchStep(invSteps, `inv-${site.id}`, { status: "error", detail: inv.error });
       planSkipReasons.push(`${site.name}: ${inv.error}`);
       continue;
     }
-
-    inventoryByClient.set(site.name, inv.siteInventoryJson);
     inventoryTitlesByClient[site.name] = inv.inventoryRowCount;
-
-    const tagLabel = clientTagLabelBySiteId[site.id] ?? "";
     invSteps = patchStep(invSteps, `inv-${site.id}`, {
       status: "done",
       label: benchmarkSiteInventoryStepLabel(site, connectedSiteId),
       detail: benchmarkInventoryStepDetail(inv.inventoryRowCount, inv.inventoryTruncated),
     });
+  }
 
-    for (const kind of gscPlanKinds) {
-      const kindLabel = benchmarkContentKindLabel([kind]);
+  const wantPosts = gscPlanKinds.includes("post");
+  const wantEntityOnly = gscPlanKinds.includes("entity") && !wantPosts;
+  const targetSite = connectedSite ?? sites[0] ?? null;
+  const targetResult =
+    targetSite ?
+      invResults.find(({ site }) => site.id === targetSite.id) ?? null
+    : null;
+
+  if (wantPosts && targetSite && targetResult && !targetResult.inv.error) {
+    const tagLabel = clientTagLabelBySiteId[targetSite.id] ?? "";
+    const outputPages = pickBestPeerGscPages({
+      targetSiteId: targetSite.id,
+      rows: [...gscRows, ...gscExtendedRows],
+      count: blogCount,
+      contentKind: "post",
+    });
+    if (!outputPages.length) {
+      planSkipReasons.push(`${targetSite.name}: no peer GSC blog URLs from other sites`);
+    } else {
+      const gscPayload = {
+        siteId: targetSite.id,
+        siteName: targetSite.name,
+        siteUrl: targetResult.inv.siteUrl,
+        clientTag: tagLabel,
+        dateRange,
+        topPages: outputPages,
+      };
+      const verifiedBrands = targetResult.context?.offerings.verifiedBrands ?? [];
+      plans.push({
+        site: targetSite,
+        siteUrl: targetResult.inv.siteUrl,
+        categoryLabel: tagLabel,
+        contentKind: "post",
+        siteInventoryJson: targetResult.inv.siteInventoryJson,
+        clientOfferingsBlock: targetResult.context?.clientOfferingsBlock ?? "",
+        verifiedBrands,
+        gscPayload,
+        gscClusters: [],
+        outputPages,
+        expectedRows: outputPages.length,
+        gridRagBlock,
+      });
+    }
+  }
+
+  if (wantEntityOnly) {
+    for (const { site, inv, context } of invResults) {
+      if (!curateSiteIds.has(site.id)) continue;
+      if (inv.error) continue;
+      const tagLabel = clientTagLabelBySiteId[site.id] ?? "";
       const gscPayloadRaw = buildGscTop10RagPayloadForSite(
         site.id,
         site.name,
         inv.siteUrl,
         tagLabel,
         gscRows,
-        kind,
+        "entity",
         dateRange,
       );
       const topPages = gscPayloadRaw.topPages.filter((p) => !isBannedBulkBenchmarkTopic(p.url));
       const gscPayload = { ...gscPayloadRaw, topPages };
-      if (gscPayload.topPages.length === 0) {
-        planSkipReasons.push(`${site.name}: no GSC ${kindLabel} in Search Console`);
+      if (!gscPayload.topPages.length) {
+        planSkipReasons.push(`${site.name}: no GSC entity URLs in Search Console`);
         continue;
       }
-
       const verifiedBrands = context?.offerings.verifiedBrands ?? [];
       const gscClusters = detectBrandProductLineClusters(gscPayload.topPages, verifiedBrands);
       const rawOutputPages = buildGscOutputPages(gscPayload.topPages, gscClusters);
-      const extendedPages = buildGscExtendedRagPagesForSite(site.id, gscExtendedRows, kind).filter(
+      const extendedPages = buildGscExtendedRagPagesForSite(site.id, gscExtendedRows, "entity").filter(
         (p) => !isBannedBulkBenchmarkTopic(p.url),
       );
       const gscPool = [...gscPayload.topPages, ...extendedPages].filter(
         (p, i, arr) => arr.findIndex((x) => normalizeInventoryUrl(x.url) === normalizeInventoryUrl(p.url)) === i,
       );
-      const { pages: outputPages, droppedPublishedUrls, swapped } = gscOutputPagesExcludingPublishedInventory(
+      const { pages: outputPages } = gscOutputPagesExcludingPublishedInventory(
         rawOutputPages,
         gscPool,
         inv.siteInventoryJson,
       );
-      if (outputPages.length === 0) {
-        if (rawOutputPages.length > 0) {
-          planSkipReasons.push(
-            `${site.name}: all ${rawOutputPages.length} GSC ${kindLabel} URL(s) already published (${droppedPublishedUrls.length} in inventory, ${gscPool.length} in swap pool)`,
-          );
-        }
-        continue;
-      }
+      if (!outputPages.length) continue;
       plans.push({
         site,
         siteUrl: inv.siteUrl,
         categoryLabel: tagLabel,
-        contentKind: kind,
+        contentKind: "entity",
         siteInventoryJson: inv.siteInventoryJson,
         clientOfferingsBlock: context?.clientOfferingsBlock ?? "",
         verifiedBrands,
@@ -1096,7 +1022,7 @@ export async function runBenchmarkBulkTemplateDownload(options: {
       });
     }
   }
-  pipelineSteps = [...invSteps, ...gscSteps];
+  pipelineSteps = [...gscSteps, ...invSteps];
 
   const gridEligibleSites = invResults.filter(({ inv }) => !inv.error);
 
@@ -1179,11 +1105,7 @@ export async function runBenchmarkBulkTemplateDownload(options: {
       combinedWithClient.push(...attachGscMetricsAtIndices(plan, rowsByIndex));
     }
 
-    filtered = sortBulkBenchmarkRowsByGsc(
-      filterBannedBulkBenchmarkRows(
-        combinedWithClient.filter((r) => r.keyword?.trim() && r.title?.trim()),
-      ),
-    );
+    filtered = combinedWithClient;
 
     if (!filtered.length && !useGridEntityEndStep) {
       const failHint =
@@ -1256,19 +1178,7 @@ export async function runBenchmarkBulkTemplateDownload(options: {
       return null;
     }
 
-    filtered = sortBulkBenchmarkRowsByGsc(
-      filterBannedBulkBenchmarkRows([...filtered, ...gridEntityRows]),
-    );
-  }
-
-  if (hasGrid && gridContext) {
-    const { kept, dropped } = filterBulkSheetToGridFootprint(filtered, gridContext);
-    filtered = kept;
-    if (dropped.length > 0) {
-      notify.info(
-        `Removed ${dropped.length} row(s) outside the uploaded grid footprint before final review.`,
-      );
-    }
+    filtered = [...filtered, ...gridEntityRows];
   }
 
   if (!filtered.length) {
@@ -1276,52 +1186,15 @@ export async function runBenchmarkBulkTemplateDownload(options: {
     return null;
   }
 
+  const hasPostRows = filtered.some((r) => r.contentKind === "post");
   pipelineSteps = [...baseStepsWithoutGemini(), finalReviewStep()];
   pipelineSteps = patchStep(pipelineSteps, "gemini-final", {
-    status: "active",
-    detail: "dedupe review",
-  });
-  const finalPct =
-    PHASE_WEIGHT.gsc +
-    PHASE_WEIGHT.inventory +
-    (plans.length > 0 ? PHASE_WEIGHT.geminiClients : 0) +
-    (useGridEntityEndStep ? PHASE_WEIGHT.gridEntity : 0);
-  emitProgress(onProgress, {
-    phase: "gemini",
-    message: "Final Gemini pass on combined sheet…",
-    percent: finalPct,
-    indeterminate: true,
-    steps: pipelineSteps,
-  });
-
-  const beforeFinal = filtered.length;
-  filtered = await geminiFinalSheetDedupe(filtered, apiKey, researchModel, inventoryByClient, gridContext);
-
-  const hasPostRows = filtered.some((r) => r.contentKind === "post");
-  if (hasPostRows) {
-    const { rows: capped, trimmed } = capBulkBenchmarkPostRowsToQuarterGoal(filtered);
-    filtered = capped;
-    if (trimmed > 0) {
-      notify.info(
-        `Quarter post cap: kept top ${BENCHMARK_BULK_QUARTER_POST_ROW_CAP} posts by GSC (${trimmed} extra row(s) dropped).`,
-      );
-    }
-  }
-
-  pipelineSteps = patchStep(pipelineSteps, "gemini-final", {
     status: "done",
-    detail: `${filtered.length} / ${beforeFinal} kept`,
+    detail: `${filtered.length} row(s)`,
   });
-
-  if (!filtered.length) {
-    notify.error(NOTIFY_NO_BULK_ROWS_LEFT_AFTER_FINAL_REVIEW);
-    return null;
-  }
 
   const hasEntityRows = filtered.some((r) => r.contentKind === "entity");
-  const rowsForCsv = sortBulkBenchmarkRowsByGsc(filterBannedBulkBenchmarkRows(filtered)).map(
-    bulkRowToCsvExport,
-  );
+  const rowsForCsv = filtered.map(bulkRowToCsvExport);
 
   const artifact = createBulkTemplateDownloadArtifact(rowsForCsv, "benchmark-bulk-template", {
     blankEntityColumn: !hasEntityRows,
@@ -1335,7 +1208,7 @@ export async function runBenchmarkBulkTemplateDownload(options: {
     phase: "done",
     message:
       hasPostRows && !hasEntityRows ?
-        `Bulk CSV ready, ${artifact.rowCount} quarter post(s)`
+        `Bulk CSV ready, ${artifact.rowCount} blog(s)`
       : `Bulk CSV ready, ${artifact.rowCount} row(s)`,
     percent: 100,
     busy: false,

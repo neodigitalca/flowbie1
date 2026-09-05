@@ -23,6 +23,13 @@ const LANGUAGE_CODES: Record<string, number> = {
   // Add more as needed
 };
 
+/** Labs keyword_overview looks up search queries, not title-case display strings. */
+export function keywordsForLabsOverview(keywords: string[]): string[] {
+  return keywords
+    .filter((keyword) => typeof keyword === "string" && keyword.trim().length > 0)
+    .map((keyword) => keyword.trim().toLowerCase());
+}
+
 /**
  * Calls MCP tool for keyword overview
  * Uses DataForSEO MCP tools directly via the MCP function interface
@@ -34,62 +41,26 @@ export async function callMCPKeywordOverview(
 ): Promise<KeywordData[]> {
   const locationName = location;
   const languageCode = language;
+  const labsKeywords = keywordsForLabsOverview(keywords);
+  if (labsKeywords.length === 0) {
+    return [];
+  }
 
   try {
-    console.log('[MCP Service] Calling keyword overview for:', { keywords, locationName, languageCode });
+    console.log('[MCP Service] Calling keyword overview for:', { keywords: labsKeywords, locationName, languageCode });
     
-    const { 
-      mcp_DataForSEO_dataforseo_labs_google_keyword_overview,
-      mcp_DataForSEO_dataforseo_labs_google_keyword_ideas 
-    } = await import('@/lib/mcp-tools');
-    
-    // Try keyword overview first
+    const { mcp_DataForSEO_dataforseo_labs_google_keyword_overview } = await import('@/lib/mcp-tools');
+
     const result = await mcp_DataForSEO_dataforseo_labs_google_keyword_overview({
-      keywords,
+      keywords: labsKeywords,
       location_name: locationName,
       language_code: languageCode,
     });
     
     console.log('[MCP Service] Raw result from API:', result);
-    
-    // Check if we got actual data (not just empty items)
-    const hasData = result?.tasks?.some((task: any) => {
-      if (task.result && Array.isArray(task.result)) {
-        return task.result.some((item: any) => {
-          // Check if we have keyword_info or items with data
-          return item.keyword_info || (item.items && Array.isArray(item.items) && item.items.length > 0);
-        });
-      }
-      return false;
-    });
-    
-    // If no data from overview, try keyword_ideas as fallback
-    if (!hasData && keywords.length > 0) {
-      console.log('[MCP Service] No data from overview, trying keyword_ideas as fallback...');
-      try {
-        const ideasResult = await mcp_DataForSEO_dataforseo_labs_google_keyword_ideas({
-          keywords,
-          location_name: locationName,
-          language_code: languageCode,
-          limit: 10,
-        });
-        
-        const ideasTransformed = transformMCPSemanticData(ideasResult);
-        if (ideasTransformed.length > 0) {
-          console.log('[MCP Service] Got data from keyword_ideas fallback:', ideasTransformed.length, 'results');
-          return ideasTransformed;
-        }
-      } catch (ideasError) {
-        console.warn('[MCP Service] Keyword ideas fallback failed:', ideasError);
-      }
-    }
-    
-    // Transform for compatibility with existing code
+
     const transformed = transformMCPKeywordData(result);
-    
     console.log('[MCP Service] Transformed results:', transformed);
-    
-    // If still no data, return empty array (will be handled by caller)
     return transformed;
   } catch (error) {
     console.error("[MCP Service] Keyword overview error:", error);
@@ -117,30 +88,15 @@ export async function callMCPSemanticKeywords(
   const languageCode = language;
 
   try {
-    const { 
-      mcp_DataForSEO_dataforseo_labs_google_keyword_ideas,
-      mcp_DataForSEO_dataforseo_labs_google_related_keywords 
-    } = await import('@/lib/mcp-tools');
-    
-    // Try keyword ideas first
-    try {
-      const result = await mcp_DataForSEO_dataforseo_labs_google_keyword_ideas({
-        keywords: [keyword],
-        location_name: locationName,
-        language_code: languageCode,
-        limit,
-      });
-      return transformMCPSemanticData(result);
-    } catch (ideasError) {
-      // Fallback to related keywords
-      const result = await mcp_DataForSEO_dataforseo_labs_google_related_keywords({
-        keyword,
-        location_name: locationName,
-        language_code: languageCode,
-        limit,
-      });
-      return transformMCPSemanticData(result);
-    }
+    const { mcp_DataForSEO_dataforseo_labs_google_keyword_ideas } = await import('@/lib/mcp-tools');
+
+    const result = await mcp_DataForSEO_dataforseo_labs_google_keyword_ideas({
+      keywords: [keyword],
+      location_name: locationName,
+      language_code: languageCode,
+      limit,
+    });
+    return transformMCPSemanticData(result);
   } catch (error) {
     console.error("MCP semantic keywords error:", error);
     throw new Error(
@@ -234,10 +190,8 @@ function transformMCPKeywordData(apiResponse: any): KeywordData[] {
           console.log('[Transform] Created keyword data:', keywordData);
           results.push(keywordData);
         } 
-        // Handle case where items_count is 0 or items is null - no data available
         else if (resultItem.items_count === 0 || resultItem.items === null) {
-          console.warn('[Transform] No keyword data available (items_count: 0 or items: null)');
-          // Don't create empty entry - let fallback handle it
+          // Labs found no volume rows for these queries. That is a valid empty result.
         }
         else if (resultItem.keyword) {
           // Fallback: if we have keyword but no keyword_info, create minimal entry
@@ -275,27 +229,6 @@ function transformMCPKeywordData(apiResponse: any): KeywordData[] {
     }
   }
 
-  console.log('[Transform] Final results count:', results.length);
-  
-  if (results.length === 0) {
-    console.warn('[Transform] No results extracted. Full response structure:', {
-      has_tasks: !!apiResponse.tasks,
-      tasks_count: apiResponse.tasks?.length,
-      first_task: apiResponse.tasks?.[0] ? {
-        status_code: apiResponse.tasks[0].status_code,
-        status_message: apiResponse.tasks[0].status_message,
-        result_count: apiResponse.tasks[0].result_count,
-        has_result: !!apiResponse.tasks[0].result,
-        result_type: typeof apiResponse.tasks[0].result,
-        result_is_array: Array.isArray(apiResponse.tasks[0].result),
-        result_keys: apiResponse.tasks[0].result ? Object.keys(apiResponse.tasks[0].result) : null,
-        result_sample: apiResponse.tasks[0].result && Array.isArray(apiResponse.tasks[0].result) 
-          ? apiResponse.tasks[0].result[0] 
-          : apiResponse.tasks[0].result
-      } : null
-    });
-  }
-  
   return results;
 }
 

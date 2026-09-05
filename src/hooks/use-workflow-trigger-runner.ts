@@ -1,42 +1,27 @@
 import { useEffect, useRef } from "react";
 import { fetchAgentRun } from "@/lib/agent-runs-api";
-import { isAgentRunTerminal } from "@/lib/agent-runs-types";
-import type { StartAgentRunPayload } from "@/lib/agent-runs-types";
 import { ackPendingWorkflowTrigger, fetchPendingWorkflowTriggers } from "@/lib/workflow/workflow-api";
+import type { WorkflowRunCallbacks } from "@/lib/workflow/workflow-runner";
 import { handlePendingWorkflowDispatch } from "@/lib/workflow/workflow-runner";
+import { tryContinueWorkflowAfterAgentComplete } from "@/lib/workflow/workflow-ld-continue-watchdog";
 
-const POLL_MS = 15_000;
+const POLL_MS = 5_000;
 
 type UseWorkflowTriggerRunnerArgs = {
   teamId: number | null;
-  startRun: (
-    payload: StartAgentRunPayload,
-    options?: { openSidebar?: boolean },
-  ) => Promise<{ ok: boolean; run?: { id: number; status: string; result?: Record<string, unknown> }; error?: string }>;
+  callbacks: WorkflowRunCallbacks;
   onWorkflowRun?: () => void;
 };
 
-async function waitForAgentRun(teamId: number, runId: number): Promise<{ status: string; result?: Record<string, unknown> }> {
-  for (let attempt = 0; attempt < 120; attempt += 1) {
-    const run = await fetchAgentRun(teamId, runId);
-    if (!run) return { status: "failed" };
-    if (isAgentRunTerminal(run.status)) {
-      return { status: run.status, result: run.result as Record<string, unknown> | undefined };
-    }
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-  }
-  return { status: "failed" };
-}
-
 export function useWorkflowTriggerRunner({
   teamId,
-  startRun,
+  callbacks,
   onWorkflowRun,
 }: UseWorkflowTriggerRunnerArgs): void {
   const runningRef = useRef(false);
-  const startRunRef = useRef(startRun);
+  const callbacksRef = useRef(callbacks);
   const onWorkflowRunRef = useRef(onWorkflowRun);
-  startRunRef.current = startRun;
+  callbacksRef.current = callbacks;
   onWorkflowRunRef.current = onWorkflowRun;
 
   useEffect(() => {
@@ -50,10 +35,34 @@ export function useWorkflowTriggerRunner({
           const pending = await fetchPendingWorkflowTriggers(teamId);
           if (!pending.length) return;
           for (const item of pending) {
-            await handlePendingWorkflowDispatch(teamId, item.workflowId, item.runId, {
-              startRun: startRunRef.current,
-              waitForAgentRun: (runId) => waitForAgentRun(teamId, runId),
-            });
+            if (String(item.triggerKind ?? "") === "workflow_continue") {
+              const agentRunId = Number(
+                (item.payload as { agentRunId?: number } | undefined)?.agentRunId ?? 0,
+              );
+              if (agentRunId <= 0) {
+                await ackPendingWorkflowTrigger(teamId, item.workflowId);
+                onWorkflowRunRef.current?.();
+                continue;
+              }
+              const agentRun = await fetchAgentRun(teamId, agentRunId);
+              if (!agentRun) {
+                await ackPendingWorkflowTrigger(teamId, item.workflowId);
+                onWorkflowRunRef.current?.();
+                continue;
+              }
+              const continued = await tryContinueWorkflowAfterAgentComplete(
+                teamId,
+                agentRun,
+                callbacksRef.current,
+              );
+              // Leave pending when CSV is not ready yet; watchdog/poll will retry.
+              if (continued) {
+                await ackPendingWorkflowTrigger(teamId, item.workflowId);
+              }
+              onWorkflowRunRef.current?.();
+              continue;
+            }
+            await handlePendingWorkflowDispatch(teamId, item.workflowId, item.runId, callbacksRef.current);
             onWorkflowRunRef.current?.();
           }
         } finally {

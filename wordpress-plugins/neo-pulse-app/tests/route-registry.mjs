@@ -4,6 +4,9 @@
 export const NEO_PULSE_APP_VISIBLE_TAB_ROUTES = [
   { method: "POST", path: "wordpress/test-connection" },
   { method: "POST", path: "gsc/fetch-reporting-bundle" },
+  { method: "POST", path: "gsc/reporting-chat-completion" },
+  { method: "POST", path: "openrouter/chat-completion" },
+  { method: "POST", path: "proxy/fetch-text" },
   { method: "POST", path: "dataforseo/competitor-research" },
   { method: "POST", path: "proposal/site-audit" },
   { method: "POST", path: "seo/discover-locations" },
@@ -32,5 +35,7 @@ export const NEO_PULSE_APP_DISPATCHER_MARKERS = [
   "Neo_Pulse_App_Manager_Route_Handlers::dispatch_cloud",
   "Neo_Pulse_App_Bulk_Validate_Links::stream",
   "Neo_Pulse_App_Wikipedia_Proxy::proxy_query",
+  "Neo_Pulse_App_Openrouter_Chat_Completion_Route::dispatch_http",
+  "Neo_Pulse_App_Url_Text_Proxy::dispatch_http",
   "Neo_Pulse_App_Entity_Maps_Image::generate",
 ];

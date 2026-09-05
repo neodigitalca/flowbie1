@@ -154,7 +154,24 @@ describe("formatHarnessInPageAnchorBlock", () => {
       { contextOnly: true },
     );
     expect(block).toContain("contextual <ul>");
-    expect(block).toContain("NOT \"see below\"");
+    expect(block).toContain("see … below");
     expect(block).toContain("#hiring-tips");
+  });
+
+  it("tags illustrative section for Real-World Example Overview bullet", () => {
+    const block = formatHarnessInPageAnchorBlock(
+      [
+        {
+          sectionIndex: 0,
+          displayTitle: "Choosing Panels",
+          anchorId: "choosing-panels",
+          isIllustrative: true,
+        },
+      ],
+      { contextOnly: true },
+    );
+    expect(block).toContain("ILLUSTRATIVE");
+    expect(block).toContain("Real-World Example");
+    expect(block).toContain("#choosing-panels");
   });
 });

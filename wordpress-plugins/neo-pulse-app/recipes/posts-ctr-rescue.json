@@ -9,7 +9,7 @@
     "NEO Pulse rewrites title, meta, headings, and body when the snippet underperforms.",
     "Same URL waits 72 hours before it can run again."
   ],
-  "category": "maintenance",
+  "category": "reactive",
   "verticals": [
     "editorial",
     "general"
@@ -41,13 +41,12 @@
       "title": "Full AISEO on posts when CTR drops",
       "status": "todo",
       "assignPulse": true,
+      "scheduleMode": "trigger",
       "executionKind": "content_optimizer",
       "executionPayload": {
         "targetBucket": "posts",
         "updateMode": "update"
       },
-      "scheduleMode": "trigger",
-      "recurrenceRule": "none",
       "triggerConfig": {
         "sources": [
           "gsc"
@@ -69,8 +68,6 @@
       }
     }
   ],
-  "isAutomation": true,
-  "kind": "template",
   "triggerBlock": {
     "keyword": "gsc-ctr-drop",
     "kind": "gsc",
@@ -104,5 +101,7 @@
       "updateMode": "update"
     },
     "title": "Full AISEO on posts when CTR drops"
-  }
+  },
+  "isAutomation": true,
+  "kind": "template"
 }

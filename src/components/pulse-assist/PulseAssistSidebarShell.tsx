@@ -89,9 +89,9 @@ export function PulseAssistSidebarShell({
   const panelRef = useRef<HTMLDivElement>(null);
   const { width, isResizing, isMobile, handleProps } = usePulseAssistSidebarResize(open);
   const panelLabel = panel === "agents" ? RUNNING_AGENTS_LABEL : NEO_PULSE_ASSIST_LABEL;
-  const { clearHistory, runs } = useAgentRunsContext();
+  const { clearHistory, cancelActiveRuns } = useAgentRunsContext();
   const [clearingHistory, setClearingHistory] = useState(false);
-  const canClearAgents = runs.length > 0;
+  const [cancellingRuns, setCancellingRuns] = useState(false);
   const docked = layout === "docked";
 
   useEffect(() => {
@@ -164,7 +164,7 @@ export function PulseAssistSidebarShell({
         {open && !isMobile ? <PulseAssistSidebarResizeHandle {...handleProps} /> : null}
         {open ? (
           <div
-            className="flex min-h-[2.75rem] shrink-0 items-center gap-1 bg-black px-3 py-2"
+            className="pulse-assist-panel-tablist flex min-h-[2.75rem] min-w-0 shrink-0 items-center gap-1 bg-black px-3 py-2"
             role="tablist"
             aria-label="Sidebar panel"
           >
@@ -173,33 +173,46 @@ export function PulseAssistSidebarShell({
               active={panel === "assist"}
               square
               onClick={() => onPanelChange("assist")}
-              className="h-8 min-w-[4.5rem]"
+              className="h-8 min-w-[4.5rem] shrink-0"
             />
             <WorkspacePill
               label="Agents"
               active={panel === "agents"}
               square
               onClick={() => onPanelChange("agents")}
-              className="h-8 min-w-[4.5rem]"
+              className="h-8 min-w-[4.5rem] shrink-0"
             />
-            <PulseAssistClock className="ml-auto" />
-            {panel === "agents" ? (
-              <Button
-                type="button"
-                variant="ghost"
-                className={cn(
-                  "h-10 shrink-0 px-3 text-lg font-semibold text-muted-foreground hover:text-foreground",
-                  !canClearAgents && "pointer-events-none invisible",
-                )}
-                disabled={clearingHistory || !canClearAgents}
-                onClick={() => {
-                  setClearingHistory(true);
-                  void clearHistory().finally(() => setClearingHistory(false));
-                }}
-              >
-                {clearingHistory ? "Clearing…" : "Clear all"}
-              </Button>
-            ) : null}
+            <div className="ml-auto flex min-w-0 items-center justify-end gap-1">
+              <PulseAssistClock className="min-w-0" />
+              {panel === "agents" ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-8 shrink-0 px-2 text-base font-semibold text-foreground hover:text-foreground"
+                    disabled={cancellingRuns || clearingHistory}
+                    onClick={() => {
+                      setCancellingRuns(true);
+                      void cancelActiveRuns().finally(() => setCancellingRuns(false));
+                    }}
+                  >
+                    {cancellingRuns ? "Cancelling…" : "Cancel"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-8 shrink-0 px-2 text-base font-semibold text-foreground hover:text-foreground"
+                    disabled={clearingHistory || cancellingRuns}
+                    onClick={() => {
+                      setClearingHistory(true);
+                      void clearHistory().finally(() => setClearingHistory(false));
+                    }}
+                  >
+                    {clearingHistory ? "Clearing…" : "Clear all"}
+                  </Button>
+                </>
+              ) : null}
+            </div>
           </div>
         ) : null}
         {children}

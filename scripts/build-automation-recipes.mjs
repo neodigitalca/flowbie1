@@ -52,6 +52,74 @@ const SIG_QUICK_WIN =
 const PAGES_META_ACTION =
   "Updates title, meta description, and SEO extra text. Page body content is not rewritten.";
 
+function calendarAction(keyword, title, executionKind, executionPayload, recurrenceRule = "monthly") {
+  return {
+    keyword,
+    title,
+    status: "todo",
+    assignPulse: true,
+    scheduleMode: "calendar",
+    dueDate: "2026-09-01",
+    dueTime: "09:00",
+    recurrenceRule,
+    executionKind,
+    executionPayload,
+  };
+}
+
+const ENTITY_PAGE_CREATOR_PAYLOAD = {
+  locationSource: "grid",
+  gridInputSource: "workflow",
+  entityAdGroupCount: 3,
+  entityAdsPerGroup: 5,
+  entityPageCount: 15,
+  postCount: 15,
+  focusKeyword: "",
+  titleTemplate: "{keyword} Near {entity}",
+  sitemapType: "entity",
+  featuredImage: false,
+  postDestination: "wordpress",
+  scheduleTimesPerMonth: 15,
+  scheduleCustomInterval: 15,
+  scheduleStartDay: 1,
+  scheduleStartTime: "09:00",
+  scheduleStaggerOptimized: true,
+  targetBucket: "sap",
+  saveLocalArchive: true,
+};
+
+const ENTITY_GENERATOR_PAYLOAD = {
+  locationSource: "grid",
+  gridInputSource: "workflow",
+  entityAdGroupCount: 3,
+  entityAdsPerGroup: 5,
+  entityPageCount: 15,
+  postCount: 15,
+  focusKeyword: "",
+  titleTemplate: "{keyword} Near {entity}",
+  sitemapType: "entity",
+  targetBucket: "sap",
+  saveLocalArchive: true,
+};
+
+const SAP_GENERATOR_PAYLOAD = {
+  entityAdGroupCount: 3,
+  entityAdsPerGroup: 5,
+  entityPageCount: 15,
+  postCount: 15,
+  entityCsvInputSource: "upload",
+  sitemapType: "entity",
+  featuredImage: false,
+  postDestination: "wordpress",
+  scheduleTimesPerMonth: 15,
+  scheduleCustomInterval: 15,
+  scheduleStartDay: 1,
+  scheduleStartTime: "09:00",
+  scheduleStaggerOptimized: true,
+  targetBucket: "sap",
+  saveLocalArchive: true,
+};
+
 const recipes = [
   {
     keyword: "seo-autopilot-flywheel",
@@ -716,6 +784,228 @@ const recipes = [
       ),
     ],
   },
+  {
+    keyword: "entity-page-creator-monthly",
+    name: "Entity page creator",
+    description:
+      "Generate entity locations from a Local Dominator grid, then schedule entity pages across the month.",
+    notes: [
+      "Requires a Local Dominator grid CSV upload (or use the Grid to entity pages workflow).",
+      "Grid pins drive location picks; Wikipedia and entity sitemap validate and dedupe.",
+      "Creates ad-group structured bulk CSV rows, fills GSC keywords, titles, and meta, then publishes entity pages.",
+      "Default: 3 ad groups × 5 locations = 15 entity pages scheduled evenly across the month.",
+      "Requires WordPress entity sitemap, OpenRouter, DataForSEO, and GSC.",
+    ],
+    category: "local-seo",
+    verticals: ["local-seo", "general"],
+    tags: ["entity", "sap", "grid", "monthly"],
+    prerequisites: ["wordpress", "gsc", "entity-sitemap"],
+    filters: {
+      executionKinds: ["entity_page_creator"],
+      targetBuckets: ["sap"],
+      actionCount: 1,
+    },
+    defaultTasks: [
+      calendarAction(
+        "entity-page-creator-run",
+        "Create scheduled entity pages",
+        "entity_page_creator",
+        { ...ENTITY_PAGE_CREATOR_PAYLOAD },
+      ),
+    ],
+  },
+  {
+    keyword: "grid-to-entity-pages-monthly",
+    name: "Grid to entity pages",
+    description: "Export a Local Dominator grid, then generate and schedule entity pages from grid locations.",
+    notes: [
+      "Sequential workflow: Local Dominator grid export, then entity page creator (grid mode only).",
+      "Install creates a workflow with two action steps; step 2 fails if step 1 produces no CSV.",
+      "Default: 3 ad groups × 5 locations = 15 entity pages scheduled evenly across the month.",
+    ],
+    category: "local-seo",
+    verticals: ["local-seo", "general"],
+    tags: ["entity", "grid", "local-dominator", "workflow", "monthly"],
+    prerequisites: ["wordpress", "gsc", "entity-sitemap"],
+    filters: {
+      executionKinds: ["local_dominator_export", "entity_page_creator"],
+      targetBuckets: ["sap"],
+      actionCount: 2,
+    },
+    defaultTasks: [
+      calendarAction(
+        "local-dominator-grid-export",
+        "Export Local Dominator grid CSV",
+        "local_dominator_export",
+        {
+          businessName: "",
+          keyword: "",
+          saveLocalArchive: true,
+          saveToDisk: true,
+        },
+      ),
+      calendarAction(
+        "entity-page-creator-grid-run",
+        "Create entity pages from grid",
+        "entity_page_creator",
+        {
+          ...ENTITY_PAGE_CREATOR_PAYLOAD,
+          locationSource: "grid",
+          gridInputSource: "workflow",
+          ragInputKeys: ["local_dominator_export_1"],
+        },
+      ),
+    ],
+    kind: "workflow_template",
+  },
+  {
+    keyword: "entity-generator-monthly",
+    name: "Entity generator",
+    description: "Generate entity location rows as bulk CSV from a Local Dominator grid with Wikipedia and entity sitemap validation.",
+    notes: [
+      "Requires a Local Dominator grid CSV upload (or upstream workflow export).",
+      "Outputs entity-bulk.csv with skeleton rows (entity, title template, Wikipedia).",
+      "Does not hydrate GSC keywords or publish WordPress pages.",
+      "Default: 3 ad groups × 5 locations = 15 entity rows.",
+      "Chain with SAP generator to hydrate and schedule pages.",
+    ],
+    category: "local-seo",
+    verticals: ["local-seo", "general"],
+    tags: ["entity", "csv", "grid", "monthly"],
+    prerequisites: ["wordpress", "entity-sitemap"],
+    filters: {
+      executionKinds: ["entity_generator"],
+      targetBuckets: ["sap"],
+      actionCount: 1,
+    },
+    defaultTasks: [
+      calendarAction(
+        "entity-generator-run",
+        "Generate entity CSV",
+        "entity_generator",
+        { ...ENTITY_GENERATOR_PAYLOAD },
+      ),
+    ],
+  },
+  {
+    keyword: "sap-generator-monthly",
+    name: "SAP generator",
+    description: "Hydrate entity CSV rows with GSC keywords and schedule SAP pages to WordPress.",
+    notes: [
+      "Upload an entity CSV or chain from Entity generator in a workflow.",
+      "Fills keywords, titles, meta, and slugs, then publishes SAP pages.",
+      "Default: 15 pages scheduled evenly across the month.",
+    ],
+    category: "local-seo",
+    verticals: ["local-seo", "general"],
+    tags: ["entity", "sap", "monthly"],
+    prerequisites: ["wordpress", "gsc", "entity-sitemap"],
+    filters: {
+      executionKinds: ["sap_generator"],
+      targetBuckets: ["sap"],
+      actionCount: 1,
+    },
+    defaultTasks: [
+      calendarAction(
+        "sap-generator-run",
+        "Create SAP pages from entity CSV",
+        "sap_generator",
+        { ...SAP_GENERATOR_PAYLOAD },
+      ),
+    ],
+  },
+  {
+    keyword: "entity-to-sap-monthly",
+    name: "Entity to SAP pages",
+    description: "Generate entity CSV rows, then hydrate and schedule SAP pages.",
+    notes: [
+      "Sequential workflow: Entity generator, then SAP generator.",
+      "Step 2 reads entity-bulk.csv from step 1 via workflow RAG.",
+      "Default: 3 ad groups × 5 locations = 15 SAP pages scheduled across the month.",
+    ],
+    category: "local-seo",
+    verticals: ["local-seo", "general"],
+    tags: ["entity", "sap", "workflow", "monthly"],
+    prerequisites: ["wordpress", "gsc", "entity-sitemap"],
+    filters: {
+      executionKinds: ["entity_generator", "sap_generator"],
+      targetBuckets: ["sap"],
+      actionCount: 2,
+    },
+    defaultTasks: [
+      calendarAction(
+        "entity-generator-run",
+        "Generate entity CSV",
+        "entity_generator",
+        { ...ENTITY_GENERATOR_PAYLOAD },
+      ),
+      calendarAction(
+        "sap-generator-run",
+        "Create SAP pages from entity CSV",
+        "sap_generator",
+        {
+          ...SAP_GENERATOR_PAYLOAD,
+          entityCsvInputSource: "workflow",
+          ragInputKeys: ["entity_generator_1"],
+        },
+      ),
+    ],
+    kind: "workflow_template",
+  },
+  {
+    keyword: "grid-to-entity-to-sap-monthly",
+    name: "Grid to entity to SAP",
+    description: "Export a Local Dominator grid, generate entity CSV, then schedule SAP pages.",
+    notes: [
+      "Three-step workflow: Local Dominator export, Entity generator, SAP generator.",
+      "Each step passes CSV output to the next via workflow RAG.",
+      "Default: 15 SAP pages scheduled evenly across the month.",
+    ],
+    category: "local-seo",
+    verticals: ["local-seo", "general"],
+    tags: ["entity", "grid", "local-dominator", "workflow", "monthly"],
+    prerequisites: ["wordpress", "gsc", "entity-sitemap"],
+    filters: {
+      executionKinds: ["local_dominator_export", "entity_generator", "sap_generator"],
+      targetBuckets: ["sap"],
+      actionCount: 3,
+    },
+    defaultTasks: [
+      calendarAction(
+        "local-dominator-grid-export",
+        "Export Local Dominator grid CSV",
+        "local_dominator_export",
+        {
+          businessName: "",
+          keyword: "",
+          saveLocalArchive: true,
+          saveToDisk: true,
+        },
+      ),
+      calendarAction(
+        "entity-generator-grid-run",
+        "Generate entity CSV from grid",
+        "entity_generator",
+        {
+          ...ENTITY_GENERATOR_PAYLOAD,
+          locationSource: "grid",
+          gridInputSource: "workflow",
+          ragInputKeys: ["local_dominator_export_1"],
+        },
+      ),
+      calendarAction(
+        "sap-generator-run",
+        "Create SAP pages from entity CSV",
+        "sap_generator",
+        {
+          ...SAP_GENERATOR_PAYLOAD,
+          entityCsvInputSource: "workflow",
+          ragInputKeys: ["entity_generator_2"],
+        },
+      ),
+    ],
+    kind: "workflow_template",
+  },
 ];
 
 function inferGscKeyword(config) {
@@ -809,7 +1099,7 @@ for (const recipe of recipes) {
   const payload = {
     ...attachBlocks(recipe),
     isAutomation: true,
-    kind: "template",
+    kind: recipe.kind ?? "template",
   };
   const path = join(outDir, `${recipe.keyword}.json`);
   writeFileSync(path, JSON.stringify(payload, null, 2) + "\n", "utf8");

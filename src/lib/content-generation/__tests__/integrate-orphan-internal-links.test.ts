@@ -45,10 +45,9 @@ describe("integrateOrphanInternalLinksInHtml", () => {
     expect(out).not.toMatch(/<p>\s*<a[^>]+>dental crown benefits<\/a>\s*<\/p>/i);
   });
 
-  it("strips surviving [[LINK:...]] placeholders", () => {
+  it("passes through unresolved [[LINK:...]] placeholders", () => {
     const html = "<p>Topic [[LINK:nonexistent page|related topic]] here.</p>";
     const out = integrateOrphanInternalLinksInHtml(html, { siteUrl: SITE_URL });
-    expect(out).toContain("related topic");
-    expect(out).not.toContain("[[LINK:");
+    expect(out).toContain("[[LINK:nonexistent page|related topic]]");
   });
 });

@@ -25,7 +25,7 @@ class Neo_Pulse_App_Gsc_Performance_Batch {
 		$resolved = Neo_Pulse_App_Gsc_Service_Account::resolve_or_fallback( $site_url, $dv['startDateStr'], $dv['endDateStr'], 'page' );
 		if ( ! $resolved['property'] ) {
 			$email = Neo_Pulse_App_Gsc_Service_Account::service_account_email();
-			return self::err( 403, "Add {$email} in GSC. Use \"Test connection\" in NEO Pulse.", array( 'errorType' => 'site_not_in_list', 'originalSiteUrl' => $site_url, 'serviceAccountEmail' => $email ) );
+			return self::err( 200, "Add {$email} in GSC. Use \"Test connection\" in NEO Pulse.", array( 'errorType' => 'site_not_in_list', 'originalSiteUrl' => $site_url, 'serviceAccountEmail' => $email ) );
 		}
 		$limit = min( max( (int) ( $body['limit'] ?? 20 ), 1 ), 1000 );
 		$res   = Neo_Pulse_App_Gsc_Service_Account::search_analytics_query(
@@ -66,7 +66,7 @@ class Neo_Pulse_App_Gsc_Performance_Batch {
 		$resolved  = Neo_Pulse_App_Gsc_Service_Account::resolve_or_fallback( $site_url, $dv['startDateStr'], $dv['endDateStr'], 'page' );
 		if ( ! $resolved['property'] ) {
 			$email = Neo_Pulse_App_Gsc_Service_Account::service_account_email();
-			return self::err( 403, "Could not find GSC property. Add {$email} in GSC.", array( 'errorType' => 'site_not_in_list', 'originalSiteUrl' => $site_url, 'serviceAccountEmail' => $email ) );
+			return self::err( 200, "Could not find GSC property. Add {$email} in GSC.", array( 'errorType' => 'site_not_in_list', 'originalSiteUrl' => $site_url, 'serviceAccountEmail' => $email ) );
 		}
 		$res = Neo_Pulse_App_Gsc_Service_Account::search_analytics_query(
 			$resolved['property'],

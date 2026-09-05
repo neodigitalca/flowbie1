@@ -19,6 +19,7 @@ export type HydrateEntitySapIdeaRowsOptions = {
   gscQueries: GscSiteQueryRow[];
   gridLocations: string[];
   entityTypeFocus?: string[];
+  clientAudienceContextMarkdown?: string;
   onKeywordPhase?: (phase: string) => void;
   onTitleProgress?: (done: number, total: number) => void;
   onMetaProgress?: (done: number, total: number) => void;
@@ -60,6 +61,9 @@ export async function hydrateEntitySapIdeaRows(
     gscQueries,
     gridLocations: options.gridLocations,
     entityTypeFocus: options.entityTypeFocus,
+    ...(options.clientAudienceContextMarkdown?.trim()
+      ? { clientAudienceContextMarkdown: options.clientAudienceContextMarkdown.trim() }
+      : {}),
   });
   onRowsUpdate?.(withKeywords);
 

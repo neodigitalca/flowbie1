@@ -1,6 +1,5 @@
 import { deduplicateInternalLinksInHtml, removeInvalidInternalLinks } from "@/lib/content-generation/content-sanitizer";
 import { resolveInternalLinkPlaceholdersInHtml } from "@/lib/content-generation/internal-link-placeholders";
-import { integrateOrphanInternalLinksInHtml } from "@/lib/content-generation/integrate-orphan-internal-links";
 
 export type WordPressPostLinkRow = {
   id: number;
@@ -36,22 +35,14 @@ export async function finalizeBulkSeoExtraTextHtml(options: {
 
   if (wordPressPosts.length > 0) {
     onProgress("Resolving internal links...", 88, "Matching link placeholders to sitemap...");
-    try {
-      extra = resolveInternalLinkPlaceholdersInHtml(extra, {
-        siteId,
-        siteUrl,
-        currentPageUrl,
-        wordPressPosts,
-      });
-      extra = deduplicateInternalLinksInHtml(extra);
-      extra = integrateOrphanInternalLinksInHtml(extra, {
-        siteUrl,
-        currentPageUrl,
-        wordPressPosts,
-      });
-    } catch (err) {
-      console.warn("[Bulk SEO extra text] Resolve link placeholders failed:", err);
-    }
+    extra = await resolveInternalLinkPlaceholdersInHtml(extra, {
+      siteId,
+      siteUrl,
+      currentPageUrl,
+      wordPressPosts,
+      apiKey,
+    });
+    extra = deduplicateInternalLinksInHtml(extra);
   }
 
   extra = deduplicateInternalLinksInHtml(extra);

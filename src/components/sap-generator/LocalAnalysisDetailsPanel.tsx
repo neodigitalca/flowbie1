@@ -8,9 +8,9 @@ import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
 import type { OverviewSitemapSource } from "@/lib/overview/overview-sitemap-source";
 import {
   CONTENT_PREP_ENTITY_SAP_BATCH_SECTION_TITLES,
-  CONTENT_PREP_POST_SECTION_TITLES,
   ENTITY_SAP_GSC_PREP_SECTION_TITLE,
 } from "@/lib/overview/overview-content-prep-harness-sections";
+import { CONTENT_OPTIMIZE_PIPELINE_TITLES } from "@/lib/overview/overview-content-optimize-pipeline";
 
 export type LocalAnalysisDetailsPanelProps = {
   workspaceBusy: boolean;
@@ -108,4 +108,4 @@ export function buildEntityBatchPrepHarnessSections(
   ];
 }
 
-export const ENTITY_DETAILS_PIPELINE_SECTION_TITLES = CONTENT_PREP_POST_SECTION_TITLES;
+export const ENTITY_DETAILS_PIPELINE_SECTION_TITLES = CONTENT_OPTIMIZE_PIPELINE_TITLES;

@@ -19,12 +19,16 @@ import {
 } from "./bulk-optimization-constants";
 import { findEndpointFromSitemap } from "./optimization-helpers";
 import {
-  applyContentPrepHarnessPayload,
-  buildContentPrepHarnessPayload,
+  buildContentOptimizeHarnessPayload,
+  buildWaitingContentOptimizeHarnessSections,
+  contentOptimizeHarnessSectionIndex,
+  CONTENT_OPTIMIZE_PIPELINE_TOTAL,
+} from "@/lib/overview/overview-content-optimize-pipeline";
+import { reduceHarnessSectionList } from "@/lib/bulk/harness-sections-reducer";
+import {
   CONTENT_PREP_HARNESS_TOTAL_SECTIONS,
 } from "@/lib/overview/overview-content-prep-harness-sections";
 import {
-  effectiveHasEntityForContentOptimizer,
   restCollectionMatchesEntitySitemap,
 } from "@/lib/entity-endpoint-extractor";
 
@@ -107,8 +111,11 @@ function touchPrefetchHarness(
   setBulkOptimizationState((prev: any) => {
     const current = prev[batchKey];
     if (!current) return prev;
-    const payload = buildContentPrepHarnessPayload(urlIndex, 4, phase);
-    const nextSections = applyContentPrepHarnessPayload(current.urlHarnessSections?.[url], payload);
+    const serpIndex = contentOptimizeHarnessSectionIndex("SERP research brief");
+    const payload = buildContentOptimizeHarnessPayload(urlIndex, serpIndex, phase);
+    const baseSections =
+      current.urlHarnessSections?.[url] ?? buildWaitingContentOptimizeHarnessSections();
+    const nextSections = reduceHarnessSectionList(baseSections, payload);
     return {
       ...prev,
       [batchKey]: {
@@ -245,11 +252,8 @@ export async function bulkOptimizationDoPrefetch(
       String(existingPost.postTypeSubtype || "") ||
       (postTypeEndpoint === "pages" ? "page" : postTypeEndpoint === "posts" ? "post" : postTypeEndpoint);
 
-    const effectiveHasEntity = effectiveHasEntityForContentOptimizer(
-      site,
-      postTypeEndpoint,
-      optimizationOptions?.hasEntity,
-    );
+    const isSapBulkRun = optimizationOptions?.inventorySitemapSource === "sap";
+    const pendingHasEntity = isSapBulkRun;
 
     const cachedAcfFields = prefetchedAcfFieldsCache.get(urlIndex);
     let acfFields: Record<string, any> = cachedAcfFields ? { ...cachedAcfFields } : {};
@@ -303,7 +307,7 @@ export async function bulkOptimizationDoPrefetch(
           ...basePendingFields,
           optimizationOptions: {
             ...optimizationOptions,
-            hasEntity: effectiveHasEntity,
+            hasEntity: pendingHasEntity,
             useAcfKeyword: true,
             manualKeyword: "",
           },
@@ -341,7 +345,7 @@ export async function bulkOptimizationDoPrefetch(
           optimizeFeaturedImage: optimizationOptions?.optimizeFeaturedImage === true,
           optimizeExtraText: optimizationOptions?.optimizeExtraText === true,
           optimizeExtraImage: optimizationOptions?.optimizeExtraImage === true,
-          hasEntity: effectiveHasEntity,
+          hasEntity: pendingHasEntity,
           bulkFaqMinimum4: optimizationOptions?.bulkFaqMinimum4 === true,
           contentOnlyUpload: true,
           useAcfKeyword: true,
@@ -356,51 +360,6 @@ export async function bulkOptimizationDoPrefetch(
     touchPrefetchHarness(setBulkOptimizationState, batchKey, targetUrl.trim(), urlIndex, "done");
   } catch (wpErr) {
     console.warn(`[Bulk Optimization] Prefetch for index ${urlIndex} failed:`, wpErr);
-    if (prefetchedPendingCache.has(urlIndex)) return;
-
-    const slugTitle = humanizeSlugFromUrl(targetUrl);
-    const endpointHint =
-      site.manualEndpoint || findEndpointFromSitemap(targetUrl, site) || "posts";
-    const postTypeSubtype = endpointHint === "pages" ? "page" : endpointHint === "posts" ? "post" : endpointHint;
-
-    prefetchedPendingCache.set(urlIndex, {
-      pending: {
-        site,
-        url: targetUrl,
-        updateMode,
-        gscResult: DEATH_STAR_NO_GSC,
-        existingPost: {
-          id: 0,
-          slug: "",
-          title: slugTitle,
-          content: "",
-          excerpt: "",
-          link: targetUrl,
-          postTypeEndpoint: endpointHint,
-          postTypeSubtype,
-        },
-        resolved: {
-          id: 0,
-          subtype: postTypeSubtype,
-          endpoint: endpointHint,
-          url: targetUrl,
-          link: targetUrl,
-          slug: "",
-        },
-        existingTitle: slugTitle,
-        existingContent: "",
-        existingExcerpt: "",
-        wordPressPosts: wordPressPostsForRun,
-        optimizationOptions: {
-          ...optimizationOptions,
-          useAcfKeyword: true,
-          manualKeyword: "",
-        },
-        inContentImageRequest,
-        acfFields: prefetchedAcfFieldsCache.get(urlIndex) ?? {},
-        acfContext: { keywordFocus: "" },
-      },
-      primaryKeyword: "",
-    });
+    throw wpErr instanceof Error ? wpErr : new Error(String(wpErr));
   }
 }

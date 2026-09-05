@@ -7,6 +7,7 @@
 
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 export type PostWithLink = {
   id: number;
@@ -70,7 +71,7 @@ export async function filterPostsByTopicalRelevance(
   const userPrompt = `Target keyword: "${keyword.trim()}"\n\nSite pages:\n${listText}\n\nReturn a JSON array of the exact URLs (as strings) that are topically relevant internal link targets for this keyword.`;
 
   try {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const res = await postOpenRouterAppChatFetch( {
       method: "POST",
       headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({

@@ -211,7 +211,7 @@ trait Neo_Pulse_Wp_Admin_Trait_Render_Image_Seo {
 	}
 
 	public static function enqueue_image_seo_assets( string $hook_suffix ): void {
-		if ( 'neo-pulse-wp_page_neo_pulse-wp-image-seo' !== $hook_suffix ) {
+		if ( ! Neo_Pulse_Wp_Admin::admin_hook_matches( $hook_suffix, array( 'neo-pulse-wp_page_neo_pulse-wp-image-seo' ) ) ) {
 			return;
 		}
 		$base = 'assets/admin/';

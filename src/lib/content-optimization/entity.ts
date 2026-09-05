@@ -1,6 +1,6 @@
 import { loadApiKey } from "@/lib/api";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
-import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChat } from "@/lib/openrouter-app-api";
 
 export interface GeographicSiteContext {
   siteUrl?: string;
@@ -75,22 +75,17 @@ export async function extractGeographicEntityWithAI(
   const userPrompt = `From this post, return the one geographic origin or NONE:\n\n${parts.join("\n")}`;
 
   try {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: openRouterWebAppHeaders(key),
-      body: JSON.stringify({
-        model: getResearchModel(),
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.2,
-        max_tokens: 120,
-      }),
+    const { content } = await postOpenRouterAppChat({
+      apiKey: key,
+      model: getResearchModel(),
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.2,
+      maxTokens: 120,
     });
-    if (!res.ok) return null;
-    const data = await res.json();
-    let out = (data.choices?.[0]?.message?.content ?? "")
+    let out = content
       .trim()
       .replace(/^["']|["']$/g, "")
       .replace(/\*\*/g, "")

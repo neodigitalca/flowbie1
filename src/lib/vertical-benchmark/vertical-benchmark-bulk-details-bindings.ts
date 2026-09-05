@@ -16,7 +16,7 @@ function stepStatusToHarness(status: BenchmarkPipelineStepStatus): BulkHarnessSe
 }
 
 function categoryFilterLabel(tagFilter: string): string {
-  return tagFilter === "__all__" ? "All categories" : tagFilter;
+  return tagFilter;
 }
 
 function contentTypeLabel(contentTypeFilter: ContentTypeFilter): string {
@@ -65,11 +65,7 @@ function buildHarnessForSteps(steps: BenchmarkPipelineStep[]): BulkHarnessSectio
 export function buildVerticalBenchmarkBulkGeneratorDetailsProps(
   input: VerticalBenchmarkDetailsPanelProps & { contentTypeFilter: ContentTypeFilter },
 ): BulkGeneratorDetailsPanelProps {
-  const activeProgress = input.generatingBulkTemplate
-    ? input.bulkTemplateProgress
-    : input.exporting
-      ? input.exportProgress
-      : null;
+  const activeProgress = input.bulkTemplateProgress ?? input.exportProgress;
 
   const siteIds = activeProgress?.steps?.length
     ? siteIdsFromSteps(activeProgress.steps)
@@ -118,7 +114,7 @@ export function buildVerticalBenchmarkBulkGeneratorDetailsProps(
     {
       sectionIndex: 2,
       title: "Category filter",
-      status: input.tagFilter !== "__all__" ? "done" : "waiting",
+      status: input.tagFilter ? "done" : "waiting",
     },
   ];
 
@@ -156,6 +152,7 @@ export function buildVerticalBenchmarkBulkGeneratorDetailsProps(
       contentTypeLabel(input.contentTypeFilter),
       input.gridCsvFileName ? `${input.gridCsvFileName}` : null,
       input.selectedCount > 0 ? `${input.selectedCount} / ${input.rosterCount} selected` : null,
+      input.blogCount > 0 ? `${input.blogCount} blogs` : null,
     ]
       .filter(Boolean)
       .join(" · ") || undefined,

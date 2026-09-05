@@ -85,7 +85,7 @@ class Neo_Pulse_Wp_Forms_Renderer {
 
 		wp_localize_script(
 			'neo-pulse-forms',
-			'neo-pulseFormsConfig_' . $form_id,
+			'neoPulseFormsConfig_' . $form_id,
 			array(
 				'formId'  => $form_id,
 				'restUrl' => rest_url( 'neo-pulse/v1/forms/' . $form_id . '/submit' ),

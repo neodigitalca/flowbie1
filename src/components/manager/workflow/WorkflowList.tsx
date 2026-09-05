@@ -20,7 +20,6 @@ export type WorkflowListProps = {
   teamId: number;
   sites: WordPressSiteOption[];
   route: PulseForgeRoute;
-  statusMessage?: string | null;
   onOpenWorkflow: (workflowId: number) => void;
   onNewWorkflow: () => void;
   onLoadErrorChange?: (error: string | null) => void;
@@ -30,7 +29,6 @@ export function WorkflowList({
   teamId,
   sites,
   route,
-  statusMessage,
   onOpenWorkflow,
   onNewWorkflow,
   onLoadErrorChange,
@@ -79,7 +77,6 @@ export function WorkflowList({
       <div className={WORKFLOW_HEADER_BAND_CLASS}>
         <PulseForgeBreadcrumbs
           route={route}
-          statusMessage={null}
           hideLeaf
           className="shrink-0"
         />
@@ -105,11 +102,6 @@ export function WorkflowList({
         >
           New workflow
         </Button>
-        {statusMessage ? (
-          <p className="max-w-[12rem] shrink-0 truncate text-base text-red-400" role="status">
-            {statusMessage}
-          </p>
-        ) : null}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-4">
         {filteredWorkflows.length === 0 ? (
@@ -123,7 +115,7 @@ export function WorkflowList({
                 {sections.length > 1 ? (
                   <p className="text-base font-normal text-muted-foreground">{section.label}</p>
                 ) : null}
-                <div className="grid grid-cols-1 gap-3 xl:grid-cols-2 2xl:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {section.workflows.map((workflow) => (
                     <WorkflowCard
                       key={workflow.id}

@@ -32,6 +32,26 @@ describe("filterWikipediaTitlesForCommunityEntity", () => {
       })
     ).rejects.toThrow(/OpenRouter API key is required/);
   });
+
+  it("includes client context in user message when provided", async () => {
+    let userPrompt = "";
+    const { streamChatCompletion } = await import("@/lib/api");
+    vi.mocked(streamChatCompletion).mockImplementation(
+      async ({ messages, onContentChunk }: { messages?: { role: string; content: string }[]; onContentChunk: (c: string) => void }) => {
+        userPrompt = messages?.find((m) => m.role === "user")?.content ?? "";
+        onContentChunk('{"kept":["Neighbourhood A"]}');
+        return { content: '{"kept":["Neighbourhood A"]}', isGenerating: false };
+      },
+    );
+    await filterWikipediaTitlesForCommunityEntity({
+      apiKey: "k",
+      titles: ["Neighbourhood A", "Bev Facey Community High School"],
+      clientAudienceContextMarkdown:
+        "- **Business / site name:** Example Accounting LLP\n- **Focus service / product theme:** tax preparation",
+    });
+    expect(userPrompt).toContain("Client & site context");
+    expect(userPrompt).toContain("Example Accounting LLP");
+  });
 });
 
 describe("filterWikipediaTitlesForCommunityEntity strict (no unfiltered fallback)", () => {

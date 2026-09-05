@@ -5,6 +5,7 @@ import {
   ensureMasterInstructionsInMemory,
 } from "@/lib/master-instructions-storage";
 import type { BlogHeadersCatalogRow } from "@/lib/overview/overview-blog-headers-catalog";
+import { FORBIDDEN_H2_PLACEHOLDER_PROMPT_LINE } from "@/lib/content-optimization/harness-heading-titles";
 import type { BlogHeadersAgentOptions } from "@/lib/overview/overview-blog-headers-agent";
 import { parseBlogHeadersBatchJson } from "@/lib/overview/overview-blog-headers-batch-parse";
 
@@ -12,11 +13,14 @@ export const OVERVIEW_BLOG_HEADERS_BATCH_SIZE = 40;
 
 const BATCH_SYSTEM = `You are an expert content SEO strategist. Plan H2 heading changes for every url in allowedUrls.
 
+${FORBIDDEN_H2_PLACEHOLDER_PROMPT_LINE}
+
 Rules:
 - Return exactly one result object per allowed url (same url string).
 - h2Actions: optimize weak H2s or add missing H2s. Never plan body/paragraph edits.
 - optimize: index is 0-based in existingH2s.
 - add: index is insertion position in final H2 list.
+- When existingH2s[index] is a forbidden placeholder, proposedText MUST be a specific topic title — never Section, Intro, or Section N.
 - proposedText: Title Case, 3-12 words, natural keyword use when relevant.
 - rationale: one short sentence max.
 - Return ONLY valid JSON matching outputSchema.`;

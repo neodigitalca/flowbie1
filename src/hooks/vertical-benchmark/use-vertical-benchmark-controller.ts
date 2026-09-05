@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { notify } from "@/lib/app-notifications";
-import { NOTIFY_NO_TAGGED_CLIENTS_SELECTED_SET_BENCHMARK, NOTIFY_OPENROUTER_API_KEY_REQUIRED_FOR_BULK_CSV, NOTIFY_OPENROUTER_API_KEY_REQUIRED_FOR_GSC_EXPO, NOTIFY_UPLOAD_A_CSV_FILE_LOCAL_DOMINATOR_GRID_E, notifyBulkCsvTemplateReadyXXRowsX, notifyBulkTemplateCouldNotFinishX, notifyGridLoadedXRowsDominantKeywordX, notifyGscTop10CsvXRowsXClients, notifyGscTop10CsvXRowsXClientsXHadNo, notifyNoClientsSelectedInCategoryXAddTa } from "@/lib/notify-messages";
+import { NOTIFY_NO_TAGGED_CLIENTS_SELECTED_SET_BENCHMARK, NOTIFY_OPENROUTER_API_KEY_REQUIRED_FOR_GSC_EXPO, NOTIFY_UPLOAD_A_CSV_FILE_LOCAL_DOMINATOR_GRID_E, notifyBulkCsvTemplateReadyXXRowsX, notifyBulkTemplateCouldNotFinishX, notifyGridLoadedXRowsDominantKeywordX, notifyGscTop10CsvXRowsXClients, notifyGscTop10CsvXRowsXClientsXHadNo, notifyNoClientsSelectedInCategoryXAddTa } from "@/lib/notify-messages";
 import { useWordPressSites } from "@/hooks/use-wordpress-sites";
 import {
   revokeCsvDownloadArtifact,
+  triggerCsvDownloadArtifact,
   type CsvDownloadArtifact,
 } from "@/lib/backlink-research/backlink-bulk-csv-export";
 import { exportVerticalBenchmarkGscCsv } from "@/lib/vertical-benchmark/vertical-benchmark-api";
@@ -30,7 +31,12 @@ import {
   type BenchmarkGridCsvContext,
 } from "@/lib/vertical-benchmark/vertical-benchmark-grid-entity";
 import { useWordPressOptimization } from "@/contexts/wordpress-optimization-context";
+import { resolveOpenRouterApiKeyForHarness } from "@/lib/openrouter-api-key-resolve";
 import { orderBenchmarkSitesConnectedFirst, resolveBenchmarkCurateSites } from "@/lib/vertical-benchmark/vertical-benchmark-roster-order";
+import {
+  BENCHMARK_BLOG_COUNT_DEFAULT,
+  clampBenchmarkBlogCount,
+} from "@/lib/vertical-benchmark/vertical-benchmark-peer-gsc";
 
 export type ContentTypeFilter = "" | VerticalBenchmarkContentKind;
 
@@ -52,7 +58,8 @@ export function useVerticalBenchmarkController(openRouterApiKey: string) {
   const [gridCsvParsing, setGridCsvParsing] = useState(false);
   const [clientTagBySiteId, setClientTagBySiteId] = useState<Record<string, string>>({});
   const [clientTagLabelBySiteId, setClientTagLabelBySiteId] = useState<Record<string, string>>({});
-  const [tagFilter, setTagFilter] = useState<string>("__all__");
+  const [tagFilter, setTagFilter] = useState<string>("");
+  const [blogCount, setBlogCount] = useState(BENCHMARK_BLOG_COUNT_DEFAULT);
   const [tagSortDir, setTagSortDir] = useState<ClientTagSortDir>("asc");
   const [exportProgress, setExportProgress] = useState<BenchmarkPipelineProgress | null>(null);
   const [gscDownloadArtifact, setGscDownloadArtifact] = useState<CsvDownloadArtifact | null>(null);
@@ -95,11 +102,32 @@ export function useVerticalBenchmarkController(openRouterApiKey: string) {
     return [...labels].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
   }, [labeledSites, clientTagLabelBySiteId]);
 
-  const rosterSites = useMemo(() => {
-    let list = [...labeledSites];
-    if (tagFilter !== "__all__") {
-      list = list.filter((s) => clientTagLabelBySiteId[s.id] === tagFilter);
+  const connectedTagLabel = useMemo(() => {
+    if (!activeWordPressSiteId) return "";
+    return clientTagLabelBySiteId[activeWordPressSiteId] ?? "";
+  }, [activeWordPressSiteId, clientTagLabelBySiteId]);
+
+  useEffect(() => {
+    if (connectedTagLabel) {
+      setTagFilter(connectedTagLabel);
     }
+  }, [activeWordPressSiteId, connectedTagLabel]);
+
+  useEffect(() => {
+    if (!tagFilterOptions.length) return;
+    setTagFilter((current) => {
+      if (current && tagFilterOptions.includes(current)) return current;
+      if (connectedTagLabel && tagFilterOptions.includes(connectedTagLabel)) {
+        return connectedTagLabel;
+      }
+      return tagFilterOptions[0]!;
+    });
+  }, [tagFilterOptions, connectedTagLabel]);
+
+  const rosterSites = useMemo(() => {
+    let list = tagFilter
+      ? labeledSites.filter((s) => clientTagLabelBySiteId[s.id] === tagFilter)
+      : [];
     list.sort((a, b) => {
       const ta = clientTagLabelBySiteId[a.id] ?? "";
       const tb = clientTagLabelBySiteId[b.id] ?? "";
@@ -153,7 +181,7 @@ export function useVerticalBenchmarkController(openRouterApiKey: string) {
       activeWordPressSiteId,
     );
     if (!toExport.length) {
-      if (tagFilter !== "__all__") {
+      if (tagFilter) {
         notify.error(notifyNoClientsSelectedInCategoryXAddTa(tagFilter));
       } else {
         notify.error(NOTIFY_NO_TAGGED_CLIENTS_SELECTED_SET_BENCHMARK);
@@ -277,10 +305,6 @@ export function useVerticalBenchmarkController(openRouterApiKey: string) {
 
   const handleCreateBulkTemplate = useCallback(async () => {
     if (generatingBulkTemplate) return;
-    if (!openRouterApiKey.trim()) {
-      notify.error(NOTIFY_OPENROUTER_API_KEY_REQUIRED_FOR_BULK_CSV);
-      return;
-    }
     const { curateSites, connectedSite } = resolveBenchmarkCurateSites({
       allSites: sites,
       rosterSites,
@@ -288,7 +312,7 @@ export function useVerticalBenchmarkController(openRouterApiKey: string) {
       connectedSiteId: activeWordPressSiteId,
     });
     if (!curateSites.length) {
-      if (tagFilter !== "__all__") {
+      if (tagFilter) {
         notify.error(notifyNoClientsSelectedInCategoryXAddTa(tagFilter));
       } else {
         notify.error(NOTIFY_NO_TAGGED_CLIENTS_SELECTED_SET_BENCHMARK);
@@ -309,13 +333,15 @@ export function useVerticalBenchmarkController(openRouterApiKey: string) {
     });
     const contentKinds = resolveBenchmarkContentKinds(contentTypeFilter);
     try {
+      const apiKey = (openRouterApiKey.trim() || (await resolveOpenRouterApiKeyForHarness())).trim();
       revokeCsvDownloadArtifact(bulkTemplateDownloadArtifact);
       const result = await runBenchmarkBulkTemplateDownload({
         sites: curateSites,
         connectedSite,
         contentKinds,
         gridContext: gridCsvContext,
-        openRouterApiKey,
+        blogCount,
+        openRouterApiKey: apiKey,
         clientTagBySiteId,
         clientTagLabelBySiteId,
         onProgress: (p) => {
@@ -358,6 +384,7 @@ export function useVerticalBenchmarkController(openRouterApiKey: string) {
     bulkTemplateDownloadArtifact,
     generatingBulkTemplate,
     gridCsvContext,
+    blogCount,
     activeWordPressSiteId,
     bulkInventoryLinks,
   ]);
@@ -397,6 +424,11 @@ export function useVerticalBenchmarkController(openRouterApiKey: string) {
     setGridCsvFileName(null);
   }, []);
 
+  const handleDownloadBulkTemplate = useCallback(() => {
+    if (!bulkTemplateDownloadArtifact) return;
+    triggerCsvDownloadArtifact(bulkTemplateDownloadArtifact);
+  }, [bulkTemplateDownloadArtifact]);
+
   const busy = exporting || generatingBulkTemplate;
 
   return {
@@ -425,6 +457,10 @@ export function useVerticalBenchmarkController(openRouterApiKey: string) {
     bulkTemplateDownloadArtifact,
     handleExportGscCsv,
     handleCreateBulkTemplate,
+    handleDownloadBulkTemplate,
+    canDownloadBulkTemplate: Boolean(bulkTemplateDownloadArtifact),
+    blogCount,
+    setBlogCount: (n: number) => setBlogCount(clampBenchmarkBlogCount(n)),
     gridCsvContext,
     gridCsvFileName,
     gridCsvParsing,

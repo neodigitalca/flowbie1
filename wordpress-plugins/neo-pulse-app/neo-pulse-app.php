@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       NEO Pulse App
  * Description:       Headless NEO Pulse API for https://neodigital.ca/neo-pulse/ (replaces Node /api/* on WP Engine).
- * Version:           1.0.1
+ * Version:           1.0.8
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            NEO Pulse
@@ -14,7 +14,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'NEO_PULSE_APP_VERSION', '1.0.7' );
+define( 'NEO_PULSE_APP_VERSION', '1.0.8' );
 define( 'NEO_PULSE_APP_PLUGIN_FILE', __FILE__ );
 define( 'NEO_PULSE_APP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 

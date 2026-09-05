@@ -77,3 +77,24 @@
 .fai-sidebar-root--unified:not(.fai-sidebar-root--open) .fcw-panel.fcw-panel--sidebar {
 	display: none;
 }
+
+.fai-sidebar-root--unified .fai-sidebar-tab-pane[data-fai-tab="search"] {
+	overflow: auto;
+}
+
+.fai-sidebar-root--unified .fai-sidebar-tab-pane[data-fai-tab="search"] > .fai-sidebar-panel__body {
+	padding-top: 0;
+	flex: 1;
+	min-height: 0;
+}
+
+.fai-sidebar-root--unified .fai-sidebar-tab-pane[data-fai-tab="search"] .fbs__sidebar-insights {
+	display: flex;
+	flex-shrink: 0;
+}
+
+.fai-sidebar-root--unified .fbs__icon-launcher,
+.fai-sidebar-root--unified ~ .neo-pulse-search-wrap .fbs__icon-launcher,
+.neo-pulse-search-wrap .fbs__icon-launcher {
+	pointer-events: auto;
+}

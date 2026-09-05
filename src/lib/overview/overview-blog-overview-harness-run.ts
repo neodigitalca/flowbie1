@@ -17,6 +17,7 @@ import {
   markOverviewRowDone,
   markOverviewRowError,
   markOverviewRowOptimizing,
+  markOverviewRowSkipped,
   emitOverviewHarnessPayload,
   setOverviewHarnessMessage,
   type OverviewHarnessSetters,
@@ -34,6 +35,7 @@ import {
   extractOverviewSectionHtml,
   generateAndPrependOverviewHtml,
   resolveOverviewSourceHtml,
+  type OverviewHarnessPageKind,
 } from "@/lib/overview/overview-blog-overview-prepend";
 import { extractH2TextsFromHtml } from "@/lib/overview/overview-blog-headers-extract";
 
@@ -41,12 +43,19 @@ type SetBulkState = Dispatch<SetStateAction<Record<string, BulkOptimizationState
 type SetOptProgress = Dispatch<SetStateAction<Record<string, unknown>>>;
 type SetIsOptimizing = Dispatch<SetStateAction<Record<string, boolean>>>;
 
+function isMissingBodyHtmlMessage(message: string): boolean {
+  return /no html body/i.test(message);
+}
+
 export type BlogOverviewCatalogRow = {
   index: number;
   url: string;
   title: string;
   focusKeyword: string;
   html: string;
+  entity?: string;
+  pageKind?: OverviewHarnessPageKind;
+  seoResearchBrief?: string;
 };
 
 export function initOverviewBlogOverviewHarnessBatchState(params: {
@@ -190,14 +199,7 @@ export async function runOverviewBlogOverviewHarnessBatch(
 
         const sourceHtml = resolveOverviewSourceHtml({ postContentOptimized: row.html }, row.html);
         if (!sourceHtml.trim()) {
-          failed += 1;
-          markOverviewRowError(
-            url,
-            row.index,
-            harnessSetters,
-            updateRow,
-            "No HTML body for Overview prepend",
-          );
+          markOverviewRowSkipped(url, row.index, harnessSetters, updateRow);
           continue;
         }
 
@@ -225,15 +227,36 @@ export async function runOverviewBlogOverviewHarnessBatch(
           makeOverviewHarnessStartPayload(row.index, OVERVIEW_STEP_OVERVIEW),
         );
 
+        if (row.pageKind === "entity" && !row.entity?.trim()) {
+          failed += 1;
+          markOverviewRowError(
+            url,
+            row.index,
+            harnessSetters,
+            updateRow,
+            "Could not resolve place entity for this SAP page",
+          );
+          continue;
+        }
+
         const result = await generateAndPrependOverviewHtml({
           sourceHtml,
           articleTitle: row.title,
           focusKeyword: row.focusKeyword,
           pageUrl: url,
           connectedSite: { name: site.name, siteUrl: site.siteUrl },
+          site,
+          entity: row.entity,
+          pageKind: row.pageKind,
+          seoResearchBrief: row.seoResearchBrief,
           apiKey,
           model,
         });
+
+        if (!result) {
+          markOverviewRowSkipped(url, row.index, harnessSetters, updateRow);
+          continue;
+        }
 
         const overviewHtml =
           extractOverviewSectionHtml(result.html) ||
@@ -251,8 +274,12 @@ export async function runOverviewBlogOverviewHarnessBatch(
         onRowOk?.(url, result.html);
         ok += 1;
       } catch (err) {
-        failed += 1;
         const message = err instanceof Error ? err.message : String(err);
+        if (isMissingBodyHtmlMessage(message)) {
+          markOverviewRowSkipped(url, row.index, harnessSetters, updateRow);
+          continue;
+        }
+        failed += 1;
         markOverviewRowError(url, row.index, harnessSetters, updateRow, message);
       }
     }

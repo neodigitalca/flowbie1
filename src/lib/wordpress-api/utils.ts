@@ -3,7 +3,7 @@
  * Utility functions for WordPress operations
  */
 
-import { BACKEND_API_BASE, BACKEND_CONNECTION_ERROR } from './connection';
+import { BACKEND_CONNECTION_ERROR, backendApiUrl } from './connection';
 import type {
   GenerateEntitiesResult,
   CheckFuturePostsResult
@@ -141,7 +141,7 @@ export async function checkFuturePosts(
   appPassword: string,
   sitemapUrl: string
 ): Promise<CheckFuturePostsResult> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/check-future-posts`;
+  const url = backendApiUrl('/wordpress/check-future-posts');
   
   try {
     const response = await fetch(url, {

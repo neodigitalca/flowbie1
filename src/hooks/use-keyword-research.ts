@@ -19,7 +19,6 @@ import {
 } from "@/lib/keyword-api";
 import { saveKeywordResearchToDB } from "@/lib/keyword-db";
 import { analyzeKeywordWithAI } from "@/lib/keyword-ai-analyzer";
-import { stopServer } from "@/lib/server-manager";
 import { formatKeyword } from "@/lib/keyword-formatter";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import type { ConnectedSiteSummary } from "@/components/integrations/types";
@@ -752,18 +751,8 @@ setCurrentResult(minimalResult);
         // Still try to show error as JSON
         setRawApiData({ error: errorMessage, details: err });
       } finally {
-setIsAnalyzing(false);
+        setIsAnalyzing(false);
         setIsLoadingSuggestions(false);
-        
-        // Stop server after analysis completes (success or failure)
-        try {
-          const stopResult = await stopServer();
-          if (stopResult.success) {
-            console.log('[Keyword Research Hook] Server stopped after analysis:', stopResult.message);
-          }
-        } catch (stopError) {
-          console.error('[Keyword Research Hook] Error stopping server after analysis:', stopError);
-        }
       }
 
       return analysisComplete

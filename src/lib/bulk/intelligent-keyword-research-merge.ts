@@ -7,8 +7,7 @@ import type { SemrushBulkEnrichmentResult, SemrushKeywordOverviewPayload } from 
 import { loadApiKey } from '@/lib/api';
 import { getResearchModel } from '@/lib/optimization-settings-storage';
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
-
-const OR = 'https://openrouter.ai/api/v1/chat/completions';
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 export type IntelligentKeywordResearchMergeResult = {
   primaryIntent: string;
@@ -151,7 +150,7 @@ Rules:
 - semrushIntentAlignment: brief note on how Semrush/overview data relates (or "n/a" if thin).
 Keep rationale under 400 characters.`;
 
-  const res = await fetch(OR, {
+  const res = await postOpenRouterAppChatFetch( {
     method: 'POST',
     headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({

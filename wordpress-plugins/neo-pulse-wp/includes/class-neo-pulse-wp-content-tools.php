@@ -12,10 +12,12 @@ class Neo_Pulse_Wp_Content_Tools {
 	/** @var array<string, true> */
 	private static $excluded_post_types = array(
 		'neo-pulse-field-group'  => true,
+		'np-field-group'         => true,
 		'neo-pulse-field'        => true,
 		'neo-pulse-post-type'    => true,
 		'neo-pulse-taxonomy'     => true,
 		'neo-pulse-options-page' => true,
+		'np-options-page'        => true,
 		'neo-pulse-form'         => true,
 		'neo-pulse-form-field'   => true,
 	);

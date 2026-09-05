@@ -184,6 +184,26 @@ export function markOverviewRowDone(
   });
 }
 
+export function markOverviewRowSkipped(
+  url: string,
+  index: number,
+  setters: OverviewHarnessSetters,
+  updateRow: (index: number, patch: Partial<OverviewRow>) => void,
+): void {
+  updateRow(index, { status: "idle" });
+  setters.setBulkOptimizationState((prev) => {
+    const current = prev[setters.batchKey];
+    if (!current) return prev;
+    return {
+      ...prev,
+      [setters.batchKey]: {
+        ...current,
+        urlStatuses: { ...(current.urlStatuses || {}), [url]: "skipped" },
+      },
+    };
+  });
+}
+
 export function markOverviewRowError(
   url: string,
   index: number,

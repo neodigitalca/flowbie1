@@ -477,7 +477,7 @@ class Neo_Pulse_App_Chat_Openrouter {
 
 		$content = trim( (string) ( $json['choices'][0]['message']['content'] ?? '' ) );
 		if ( $content === '' ) {
-			throw new Exception( 'OpenRouter returned empty content' );
+			throw new Exception( 'OpenRouter response was not valid JSON' );
 		}
 
 		$parsed = json_decode( $content, true );
@@ -485,6 +485,19 @@ class Neo_Pulse_App_Chat_Openrouter {
 			throw new Exception( 'OpenRouter response was not valid JSON' );
 		}
 		return $parsed;
+	}
+
+	private static function extract_json_object_text( string $content ): string {
+		$content = trim( $content );
+		if ( preg_match( '/```(?:json)?\\s*(\\{[\\s\\S]*\\})\\s*```/i', $content, $matches ) ) {
+			return trim( $matches[1] );
+		}
+		$start = strpos( $content, '{' );
+		$end   = strrpos( $content, '}' );
+		if ( $start !== false && $end !== false && $end > $start ) {
+			return substr( $content, $start, $end - $start + 1 );
+		}
+		return $content;
 	}
 
 	/**

@@ -106,6 +106,47 @@ describe("calculateScheduledDate custom (times per month)", () => {
       expect(d.getUTCDate()).toBeLessThanOrEqual(26);
     }
   });
+
+  it("uses explicit publishDays instead of even spread", () => {
+    const opts = {
+      ...baseOpts,
+      customInterval: 3,
+      customStaggerOptimized: false,
+      publishDays: [3, 10, 20],
+    };
+    expect(calculateScheduledDate(0, opts).getUTCDate()).toBe(3);
+    expect(calculateScheduledDate(1, opts).getUTCDate()).toBe(10);
+    expect(calculateScheduledDate(2, opts).getUTCDate()).toBe(20);
+  });
+
+  it("reuses publishDays in the next month and clamps past that month last allowed day", () => {
+    const feb1 = new Date(Date.UTC(2026, 1, 1, 9, 0, 0, 0));
+    const opts = {
+      frequency: "custom" as const,
+      startDate: feb1,
+      startTime: "09:00",
+      totalRows: 6,
+      customInterval: 3,
+      customStaggerOptimized: false,
+      publishDays: [1, 15, 26],
+    };
+    expect(calculateScheduledDate(0, opts).getUTCDate()).toBe(1);
+    expect(calculateScheduledDate(1, opts).getUTCDate()).toBe(15);
+    expect(calculateScheduledDate(2, opts).getUTCDate()).toBe(23);
+    const march = calculateScheduledDate(3, opts);
+    expect(march.getUTCMonth()).toBe(2);
+    expect(march.getUTCDate()).toBe(1);
+  });
+
+  it("throws when publishDays do not match times per month", () => {
+    expect(() =>
+      calculateScheduledDate(0, {
+        ...baseOpts,
+        customInterval: 3,
+        publishDays: [1, 2],
+      }),
+    ).toThrow("Publish days do not match times per month.");
+  });
 });
 
 describe("calculateScheduledDate monthly", () => {

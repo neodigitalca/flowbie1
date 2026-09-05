@@ -1,0 +1,72 @@
+---
+description: Mandatory Murphy's Law check - anticipate what can go wrong before shipping
+alwaysApply: true
+---
+
+# Murphy's Law check
+
+**Priority: mandatory.** Anything that can go wrong, might. Before and during implementation, **anticipate failure** and design so surprises are caught early, not hidden.
+
+Pairs with **Rand logic** (claims match evidence), **Occam's razor** (simplest fix), and **no fallbacks** (fail fast visibly, do not mask).
+
+## Principle
+
+If a step can fail, assume it **will** fail sometimes. Name the failure, decide the **explicit** behavior (error, empty state, retry policy the user asked for), and verify it in todos.
+
+## Mandatory self-check
+
+**What is most likely to break here, and what happens when it does?**
+
+Answer for this plan or change before marking work done.
+
+## Check (every plan and significant change)
+
+### Inputs and state
+
+- Empty, null, missing, or malformed data (no rows, blank fields, wrong types)
+- Stale or partial state (half-loaded page, aborted run, cached old data)
+- Wrong site, client, or env selected
+
+### External dependencies
+
+- API down, timeout, rate limit, auth expired, CORS, 4xx/5xx
+- WordPress/plugin missing field or unexpected shape
+- LLM parse failure or schema mismatch (fail fast; fix prompt, no regex workaround)
+
+### Concurrency and ordering
+
+- Double submit, race on save, out-of-order async results
+- User changes filter while fetch in flight
+
+### UI and layout
+
+- Long labels, zero rows, loading forever, layout shift on slow data
+- Conditional controls appearing without reserved space (CLS)
+
+### Operations
+
+- Forgot `npm install`, test not run, migration skipped
+- Background job never started or log not checked
+
+## In plans (must-have strategies row)
+
+Fill **How this plan applies** with **2–4 concrete risks** for this work and what you will do:
+
+- **Prevent** (validation, guard at boundary, reserve UI slot)
+- **Detect** (test, assert, log, user-visible error)
+- **Never** silent swallow or undeclared fallback
+
+## Forbidden
+
+- "It probably won't happen" with no check
+- Assuming happy path only in todos or tests
+- Shipping without naming at least one realistic failure mode for non-trivial work
+
+## Final review
+
+The mandatory **Final review** todo must include a Murphy's Law pass: re-walk the risks above for this diff; fix gaps before done.
+
+## Do not skip
+
+- Trivial one-line typo fixes: brief mental check is enough.
+- Anything touching APIs, auth, data writes, LLM output, or multi-step flows: **explicit** Murphy's row in the plan table.

@@ -9,20 +9,25 @@ import { finalizeEntitySapRowsForAdGroups } from "@/lib/local-analysis/sap-entit
 
 vi.mock("@/lib/local-analysis/entity-site-warm-cache", () => ({
   ensureEntitySiteWarmCache: vi.fn(),
-  gscQueriesFromWarmBundleForSapBudget: vi.fn(() => [
+  gscAllQueriesFromWarmBundle: vi.fn(() => [
     { query: "blinds near me", clicks: 1, impressions: 10 },
   ]),
+  gscQueriesFromWarmBundleForSapBudget: vi.fn(() => []),
 }));
 
-vi.mock("@/lib/local-analysis/entity-sap-row-keyword-fill", () => ({
-  fillEntitySapRowKeywordsFromInventoryAndGsc: vi.fn(async ({ rows }: { rows: CSVRow[] }) =>
-    rows.map((row, i) => ({ ...row, keyword: row.keyword || `kw-${i}` })),
-  ),
-}));
+vi.mock("@/lib/local-analysis/entity-sap-row-keyword-fill", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/local-analysis/entity-sap-row-keyword-fill")>();
+  return {
+    ...actual,
+    fillEntitySapRowKeywordsFromInventoryAndGsc: vi.fn(async ({ rows }: { rows: CSVRow[] }) =>
+      rows.map((row, i) => ({ ...row, keyword: row.keyword || `kw-${i}` })),
+    ),
+  };
+});
 
 import {
   ensureEntitySiteWarmCache,
-  gscQueriesFromWarmBundleForSapBudget,
+  gscAllQueriesFromWarmBundle,
 } from "@/lib/local-analysis/entity-site-warm-cache";
 import { fillEntitySapRowKeywordsFromInventoryAndGsc } from "@/lib/local-analysis/entity-sap-row-keyword-fill";
 
@@ -81,7 +86,7 @@ describe("fillEntitySlotKeywordsFromGsc", () => {
   });
 
   it("throws when GSC queries are empty", async () => {
-    vi.mocked(gscQueriesFromWarmBundleForSapBudget).mockReturnValueOnce([]);
+    vi.mocked(gscAllQueriesFromWarmBundle).mockReturnValueOnce([]);
     vi.mocked(ensureEntitySiteWarmCache).mockResolvedValue({
       inventory: {
         totalRows: 10,
@@ -133,31 +138,60 @@ describe("fillEntitySlotKeywordsFromGsc", () => {
     expect(fillEntitySapRowKeywordsFromInventoryAndGsc).toHaveBeenCalled();
   });
 
-  it("throws when fill leaves blank entity keywords", async () => {
+  it("passes clientAudienceContextMarkdown to keyword fill", async () => {
     vi.mocked(ensureEntitySiteWarmCache).mockResolvedValue({
       inventory: {
         totalRows: 10,
         links: [],
         buckets: {},
       },
-      gsc: { queries: [{ query: "blinds", clicks: 1, impressions: 10 }], dateRange: undefined },
+      gsc: { queries: [{ query: "tax preparation", clicks: 1, impressions: 10 }], dateRange: undefined },
+      error: undefined,
+    } as Awaited<ReturnType<typeof ensureEntitySiteWarmCache>>);
+
+    await fillEntitySlotKeywordsFromGsc({
+      site: mockSite,
+      apiKey: "key",
+      model: "m",
+      siteName: "KWB LLP",
+      siteUrl: "https://example.com",
+      rows: [row("Sherwood Park, AB")],
+      gridLocations: ["Sherwood Park, AB"],
+      clientAudienceContextMarkdown: "**Services:** tax preparation, bookkeeping",
+    });
+
+    expect(fillEntitySapRowKeywordsFromInventoryAndGsc).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientAudienceContextMarkdown: "**Services:** tax preparation, bookkeeping",
+      }),
+    );
+  });
+
+  it("returns rows from keyword fill without a second collision pass", async () => {
+    vi.mocked(ensureEntitySiteWarmCache).mockResolvedValue({
+      inventory: {
+        totalRows: 10,
+        links: [],
+        buckets: {},
+      },
+      gsc: { queries: [{ query: "blinds near me", clicks: 1, impressions: 10 }], dateRange: undefined },
       error: undefined,
     } as Awaited<ReturnType<typeof ensureEntitySiteWarmCache>>);
 
     vi.mocked(fillEntitySapRowKeywordsFromInventoryAndGsc).mockResolvedValueOnce([
-      row("Southland Mall, Winkler, MB", ""),
+      row("Southland Mall, Winkler, MB", "blinds southland mall winkler mb"),
     ]);
 
-    await expect(
-      fillEntitySlotKeywordsFromGsc({
-        site: mockSite,
-        apiKey: "key",
-        model: "m",
-        siteName: "Test",
-        siteUrl: "https://example.com",
-        rows: [row("Southland Mall, Winkler, MB")],
-        gridLocations: ["Winkler"],
-      }),
-    ).rejects.toThrow(/blank row/i);
+    const result = await fillEntitySlotKeywordsFromGsc({
+      site: mockSite,
+      apiKey: "key",
+      model: "m",
+      siteName: "Test",
+      siteUrl: "https://example.com",
+      rows: [row("Southland Mall, Winkler, MB")],
+      gridLocations: ["Winkler"],
+    });
+
+    expect(result.rows[0]?.keyword?.trim()).toBe("blinds southland mall winkler mb");
   });
 });

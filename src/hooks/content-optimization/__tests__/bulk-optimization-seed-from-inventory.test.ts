@@ -89,6 +89,7 @@ describe("seedAllBulkPrefetchCachesFromInventory", () => {
     expect(acfCache.get(0)?.keyword_focus).toBe("energy rebate st albert");
     expect(postCache.get(0)?.id).toBe(42);
     expect(pendingCache.get(0)?.primaryKeyword).toBe("energy rebate st albert");
+    expect((pendingCache.get(0)?.pending as { optimizationOptions?: { hasEntity?: boolean } }).optimizationOptions?.hasEntity).toBe(false);
     expect(fullPostCache.get(0)).toEqual({
       id: 42,
       link: fullRow.url,

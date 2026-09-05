@@ -13,9 +13,16 @@ class Neo_Pulse_App_Task_Execution_Registry {
 	private static $runners = array(
 		'content_optimizer'      => 'Neo_Pulse_App_Task_Execution_Runner_Content_Optimizer',
 		'content_optimizer_meta' => 'Neo_Pulse_App_Task_Execution_Runner_Content_Optimizer',
+		'content_gap_check'      => 'Neo_Pulse_App_Task_Execution_Runner_Content_Gap_Check',
 		'gsc_reporting'          => 'Neo_Pulse_App_Task_Execution_Runner_Gsc_Reporting',
 		'post_creator'           => 'Neo_Pulse_App_Task_Execution_Runner_Post_Creator',
+		'entity_page_creator'    => 'Neo_Pulse_App_Task_Execution_Runner_Entity_Page_Creator',
+		'entity_generator'       => 'Neo_Pulse_App_Task_Execution_Runner_Entity_Generator',
+		'sap_generator'          => 'Neo_Pulse_App_Task_Execution_Runner_Sap_Generator',
 		'local_dominator_export' => 'Neo_Pulse_App_Task_Execution_Runner_Local_Dominator_Export',
+		'chatgpt_website_audit'  => 'Neo_Pulse_App_Task_Execution_Runner_ChatGpt_Audit',
+		'dfs_llm_article_audit'  => 'Neo_Pulse_App_Task_Execution_Runner_Dfs_Article_Audit',
+		'browser_automation'     => 'Neo_Pulse_App_Task_Execution_Runner_Browser_Automation',
 	);
 
 	/**

@@ -100,10 +100,17 @@ class Neo_Pulse_App_Agent_Runs_Artifacts {
 				continue;
 			}
 			$basename = basename( $path );
-			$parts    = explode( '-', $basename, 3 );
-			$step_key = isset( $parts[0] ) ? sanitize_key( (string) $parts[0] ) : '';
-			$file_id  = isset( $parts[1] ) ? sanitize_key( (string) $parts[1] ) : '';
-			$name     = isset( $parts[2] ) ? (string) $parts[2] : $basename;
+			// Filenames are "{stepKey}-{12 hex id}-{originalName}". stepKey may contain hyphens.
+			if ( preg_match( '/^(.+)-([a-f0-9]{12})-(.+)$/i', $basename, $m ) ) {
+				$step_key = sanitize_key( (string) $m[1] );
+				$file_id  = sanitize_key( (string) $m[2] );
+				$name     = (string) $m[3];
+			} else {
+				$parts    = explode( '-', $basename, 3 );
+				$step_key = isset( $parts[0] ) ? sanitize_key( (string) $parts[0] ) : '';
+				$file_id  = isset( $parts[1] ) ? sanitize_key( (string) $parts[1] ) : '';
+				$name     = isset( $parts[2] ) ? (string) $parts[2] : $basename;
+			}
 			$out[]    = array(
 				'id'       => $file_id !== '' ? $file_id : substr( md5( $basename ), 0, 12 ),
 				'name'     => $name,
@@ -112,6 +119,82 @@ class Neo_Pulse_App_Agent_Runs_Artifacts {
 				'createdAt'=> gmdate( 'c', (int) filemtime( $path ) ),
 			);
 		}
+		return $out;
+	}
+
+	/**
+	 * @return bool
+	 */
+	public static function is_deliverable_artifact( string $name, string $step_key ): bool {
+		$name = trim( $name );
+		if ( $name === '' || preg_match( '/^browser-preview\\.(png|jpe?g|webp)$/i', $name ) ) {
+			return false;
+		}
+
+		$deliverable_steps = array(
+			'grid_export',
+			'grid_csv_input',
+			'grid_summary_md',
+			'entity_wiki_picks',
+			'entity_hydrated_rows',
+			'gsc_reporting',
+			'gsc-deliverables',
+			'gscdeliverables',
+			'entity_bulk_csv',
+			'chatgpt_response',
+			'chatgpt_session',
+		);
+		if ( in_array( sanitize_key( $step_key ), $deliverable_steps, true ) ) {
+			return true;
+		}
+
+		$lower = strtolower( $name );
+		return str_ends_with( $lower, '.md' )
+			|| str_ends_with( $lower, '.csv' )
+			|| str_ends_with( $lower, '.json' );
+	}
+
+	/**
+	 * @return string
+	 */
+	public static function mime_for_name( string $name ): string {
+		$lower = strtolower( trim( $name ) );
+		if ( str_ends_with( $lower, '.md' ) ) {
+			return 'text/markdown';
+		}
+		if ( str_ends_with( $lower, '.csv' ) ) {
+			return 'text/csv';
+		}
+		if ( str_ends_with( $lower, '.json' ) ) {
+			return 'application/json';
+		}
+		return 'text/plain';
+	}
+
+	/**
+	 * @return array<int,array{fileName:string,mime:string,content:string}>
+	 */
+	public static function list_deliverable_contents( int $run_id ): array {
+		$out = array();
+		foreach ( self::list_artifacts( $run_id ) as $artifact ) {
+			$name     = (string) ( $artifact['name'] ?? '' );
+			$step_key = (string) ( $artifact['stepKey'] ?? '' );
+			if ( ! self::is_deliverable_artifact( $name, $step_key ) ) {
+				continue;
+			}
+
+			$content = self::read_artifact_content( $run_id, $step_key, $name );
+			if ( $content === '' ) {
+				continue;
+			}
+
+			$out[] = array(
+				'fileName' => $name,
+				'mime'     => self::mime_for_name( $name ),
+				'content'  => $content,
+			);
+		}
+
 		return $out;
 	}
 

@@ -1,0 +1,16 @@
+{
+  "keyword": "dfs-llm-article-audit",
+  "name": "DFS LLM article audit",
+  "executionKind": "dfs_llm_article_audit",
+  "description": "Grade an existing article on a 10-point scorecard via DataForSEO LLM (ChatGPT, Gemini, Perplexity) and archive optimization guidance for downstream steps.",
+  "filters": {
+    "categories": ["research"],
+    "verticals": ["general", "local-seo", "agency", "editorial"]
+  },
+  "defaults": {
+    "executionPayload": {
+      "saveLocalArchive": true,
+      "saveToDisk": true
+    }
+  }
+}

@@ -32,7 +32,6 @@ export function OverviewTabContent(props: OverviewTabContentProps) {
   }, [ctrl.displayRows, ctrl.expandedPageUrl, ctrl.wpTitlesByUrl]);
 
   usePulseAssistOverviewBridge({
-    site,
     sitemapSource: ctrl.sitemapSource,
     expandedPageUrl: ctrl.expandedPageUrl,
     expandedPageTitle,
@@ -105,7 +104,9 @@ export function OverviewTabContent(props: OverviewTabContentProps) {
         handleAiHeadersRow={ctrl.handleAiHeadersRow}
         handleAiLinksRow={ctrl.handleAiLinksRow}
         handleAiWikipediaLinkRow={ctrl.handleAiWikipediaLinkRow}
+        handleAiAnswerRow={ctrl.handleAiAnswerRow}
         handleAiOverviewRow={ctrl.handleAiOverviewRow}
+        handleAiScenarioRow={ctrl.handleAiScenarioRow}
         handleAiInContentImageRow={ctrl.handleAiInContentImageRow}
       />
       </div>

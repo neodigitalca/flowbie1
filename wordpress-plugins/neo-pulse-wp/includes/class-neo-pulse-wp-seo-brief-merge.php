@@ -20,7 +20,7 @@ class Neo_Pulse_Wp_Seo_Brief_Merge {
 		$dataforseo = self::extract_dataforseo_serp_brief( $input['serpDumpJson'] ?? null );
 		$semrush    = self::extract_semrush_brief( $input['semrushOverviewJson'] ?? null );
 
-		return array(
+		$brief = array(
 			'version'       => 1,
 			'generatedAt'   => gmdate( 'c' ),
 			'focusKeyword'  => trim( (string) ( $input['focusKeyword'] ?? '' ) ),
@@ -32,6 +32,12 @@ class Neo_Pulse_Wp_Seo_Brief_Merge {
 			),
 			'semrush'       => $semrush,
 		);
+
+		if ( ! empty( $input['llmAudit'] ) && is_array( $input['llmAudit'] ) ) {
+			$brief['llmAudit'] = $input['llmAudit'];
+		}
+
+		return $brief;
 	}
 
 	/**

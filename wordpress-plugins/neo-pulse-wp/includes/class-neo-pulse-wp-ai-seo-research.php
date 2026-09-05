@@ -90,6 +90,13 @@ class Neo_Pulse_Wp_Ai_Seo_Research {
 				'gscPageUrl'          => $urls['pageUrl'],
 				'gscQueries'          => $gsc_context['queries'],
 				'semrushOverviewJson' => $semrush_overview,
+				'llmAudit'            => Neo_Pulse_Wp_Llm_Audit::fetch_parallel(
+					array(
+						'keyword'  => $focus,
+						'siteUrl'  => $urls['pageUrl'],
+						'location' => Neo_Pulse_Wp_Llm_Audit::resolve_location_from_keyword( $focus ),
+					)
+				),
 			)
 		);
 

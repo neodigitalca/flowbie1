@@ -109,12 +109,14 @@ class Neo_Pulse_App_Wp_Meta {
 		$update_data = array( 'meta' => $meta );
 		$has_title   = is_string( $post_title );
 		$has_excerpt = is_string( $post_excerpt );
+		$current_acf = $current_post ? Neo_Pulse_App_Wp_Url_Normalize::rest_acf_from_post( $current_post ) : array();
+		$current_acf = is_array( $current_acf ) ? $current_acf : array();
 
 		if ( $current_post ) {
 			if ( $has_title ) {
-				$update_data['title'] = $post_title;
+				$update_data['title'] = Neo_Pulse_App_Wp_Overview_Seo_Item::aligned_title( $post_title, $current_acf );
 			} elseif ( ! empty( $meta['rank_math_title'] ) && is_string( $meta['rank_math_title'] ) && trim( $meta['rank_math_title'] ) !== '' ) {
-				$update_data['title'] = trim( $meta['rank_math_title'] );
+				$update_data['title'] = Neo_Pulse_App_Wp_Overview_Seo_Item::aligned_title( trim( $meta['rank_math_title'] ), $current_acf );
 			} else {
 				$update_data['title'] = Neo_Pulse_App_Wp_Url_Normalize::rendered_text( $current_post['title'] ?? '' );
 			}

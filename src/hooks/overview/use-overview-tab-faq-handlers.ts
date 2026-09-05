@@ -7,6 +7,13 @@ import type { OverviewRow } from "@/components/overview/overview-meta-row-types"
 import { parseFaqEntries, serializeFaqEntriesPlain } from "@/lib/faq-entries";
 import type { OverviewTabBase } from "@/hooks/overview/use-overview-tab-base";
 import {
+  applyHarnessHtmlPatchesToRows,
+  loadOverviewHarnessRowHtmlPatches,
+} from "@/lib/overview/overview-harness-page-catalog";
+import type { OverviewInventoryUrlMatch } from "@/lib/overview/overview-row-scrape";
+import type { OverviewBinding } from "@/hooks/overview/use-overview-wordpress-binding";
+import type { OverviewSitemapSource } from "@/lib/overview/overview-sitemap-source";
+import {
   finalizeOverviewFaqHarnessBatch,
   initOverviewFaqHarnessBatchState,
   runFaqPairsForRow,
@@ -19,6 +26,9 @@ import { overviewBulkRowIndices, overviewRowsInBulkScope } from "@/lib/overview/
 type Args = Pick<
   OverviewTabBase,
   | "rows"
+  | "bindings"
+  | "resolveBindings"
+  | "prefetchOverviewInventory"
   | "optimizeFaq"
   | "optimizeFaqQuestion"
   | "optimizeFaqAnswer"
@@ -28,12 +38,21 @@ type Args = Pick<
   | "opt"
 > & {
   site: WordPressSite | undefined;
+  sitemapSource: OverviewSitemapSource;
   bulkScopeUrlKeys: Set<string>;
+  getInventoryMatchForUrl: (
+    site: WordPressSite | null,
+    url: string,
+  ) => OverviewInventoryUrlMatch | undefined;
 };
 
 export function useOverviewTabFaqHandlers({
   site,
+  sitemapSource,
   rows,
+  bindings,
+  resolveBindings,
+  prefetchOverviewInventory,
   optimizeFaq,
   optimizeFaqQuestion,
   optimizeFaqAnswer,
@@ -42,6 +61,7 @@ export function useOverviewTabFaqHandlers({
   bulkAiFaqSeedCount,
   opt,
   bulkScopeUrlKeys,
+  getInventoryMatchForUrl,
 }: Args) {
   const faqDeps: FaqHarnessOptimizeDeps = {
     optimizeFaq,
@@ -61,6 +81,66 @@ export function useOverviewTabFaqHandlers({
       };
     },
     [site, opt.setBulkOptimizationState, opt.setOptimizationProgress],
+  );
+
+  const hydrateFaqRowHtml = useCallback(
+    async (indices: number[], batchKey: string): Promise<Record<number, string>> => {
+      if (!site || sitemapSource !== "sap" || !indices.length) return {};
+
+      const mergedBindings: Record<string, OverviewBinding | undefined> = {
+        ...bindings,
+        ...(await resolveBindings(
+          indices.map((i) => rows[i]?.url?.trim() ?? "").filter(Boolean),
+          site,
+          undefined,
+          { inventoryOnly: true },
+        )),
+      };
+
+      const rowHtmlByIndex = await loadOverviewHarnessRowHtmlPatches({
+        site,
+        rows,
+        indices,
+        sitemapSource,
+        bindings: mergedBindings,
+        getInventoryMatchForUrl,
+        bulkScopeUrlKeys,
+        prefetchOverviewInventory,
+        onProgress: (message) => {
+          opt.setBulkOptimizationState((prev) => {
+            const current = prev[batchKey];
+            if (!current) return prev;
+            return {
+              ...prev,
+              [batchKey]: {
+                ...current,
+                currentStepProgress: {
+                  ...(current.currentStepProgress || {}),
+                  step: "AI FAQs",
+                  progress: 4,
+                  message,
+                },
+              },
+            };
+          });
+        },
+      });
+
+      applyHarnessHtmlPatchesToRows({ rowHtmlByIndex, updateRow });
+      return rowHtmlByIndex;
+    },
+    [
+      site,
+      sitemapSource,
+      rows,
+      bindings,
+      resolveBindings,
+      getInventoryMatchForUrl,
+      bulkScopeUrlKeys,
+      prefetchOverviewInventory,
+      updateRow,
+      opt.setBulkOptimizationState,
+    ],
   );
 
   const handleAiFaqQuestion = useCallback(
@@ -166,8 +246,15 @@ export function useOverviewTabFaqHandlers({
       }
 
       try {
+        const htmlPatches = await hydrateFaqRowHtml([rowIndex], batchKey);
+        const patchedHtml = htmlPatches[rowIndex]?.trim();
+        const workingRow =
+          patchedHtml != null && patchedHtml
+            ? { ...row, postContentOptimized: patchedHtml }
+            : row;
+
         const success = await runFaqPairsForRow({
-          row,
+          row: workingRow,
           rowIndex,
           bulkAiFaqSeedCount: options?.seedQuestionCount ?? bulkAiFaqSeedCount,
           deps: faqDeps,
@@ -200,6 +287,7 @@ export function useOverviewTabFaqHandlers({
       rows,
       bulkAiFaqSeedCount,
       makeHarnessSetters,
+      hydrateFaqRowHtml,
       opt.setBulkOptimizationState,
       opt.setOptimizationProgress,
       opt.setIsOptimizingContent,
@@ -234,9 +322,15 @@ export function useOverviewTabFaqHandlers({
     });
 
     try {
+      const htmlPatches = await hydrateFaqRowHtml(rowIndices, batchKey);
+      const patchedRows = rows.map((row, index) => {
+        const html = htmlPatches[index]?.trim();
+        return html ? { ...row, postContentOptimized: html } : row;
+      });
+
       await runOverviewFaqHarnessBatch({
         site,
-        rows,
+        rows: patchedRows,
         rowIndices,
         bulkAiFaqSeedCount,
         deps: faqDeps,
@@ -253,10 +347,13 @@ export function useOverviewTabFaqHandlers({
     }
   }, [
     site,
+    sitemapSource,
     rows,
+    bindings,
     bulkScopeUrlKeys,
     bulkAiFaqSeedCount,
     makeHarnessSetters,
+    hydrateFaqRowHtml,
     opt.setBulkOptimizationState,
     opt.setOptimizationProgress,
     opt.setIsOptimizingContent,

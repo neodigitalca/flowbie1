@@ -9,33 +9,47 @@ defined( 'ABSPATH' ) || exit;
 
 class Neo_Pulse_App_Agent_Run_Worker_Cron {
 
-	const HOOK = 'neo_pulse_app_agent_run_worker';
+	const HOOK             = 'neo_pulse_app_agent_run_worker';
+	const SCHEDULE         = 'neo_pulse_five_minutes';
+	const INTERVAL_SECONDS = 300;
 
 	public static function init(): void {
 		add_action( self::HOOK, array( __CLASS__, 'run' ) );
 	}
 
 	public static function activate(): void {
-		if ( ! wp_next_scheduled( self::HOOK ) ) {
-			wp_schedule_event( time() + 60, 'neo_pulse_two_minutes', self::HOOK );
-		}
+		self::ensure_five_minute_schedule();
 	}
 
 	public static function deactivate(): void {
-		$timestamp = wp_next_scheduled( self::HOOK );
-		if ( $timestamp ) {
-			wp_unschedule_event( $timestamp, self::HOOK );
-		}
+		wp_clear_scheduled_hook( self::HOOK );
 	}
 
 	public static function register_schedule( array $schedules ): array {
-		if ( ! isset( $schedules['neo_pulse_two_minutes'] ) ) {
-			$schedules['neo_pulse_two_minutes'] = array(
-				'interval' => 120,
-				'display'  => 'Every 2 minutes (NEO Pulse agent worker)',
-			);
-		}
+		$schedules[ self::SCHEDULE ] = array(
+			'interval' => self::INTERVAL_SECONDS,
+			'display'  => 'Every 5 minutes (NEO Pulse agent worker)',
+		);
 		return $schedules;
+	}
+
+	public static function ensure_five_minute_schedule(): void {
+		$event = wp_get_scheduled_event( self::HOOK );
+		if ( is_object( $event ) && (string) ( $event->schedule ?? '' ) === self::SCHEDULE ) {
+			return;
+		}
+		wp_clear_scheduled_hook( self::HOOK );
+		wp_schedule_event( self::next_five_minute_ts(), self::SCHEDULE, self::HOOK );
+	}
+
+	public static function next_five_minute_ts( int $now = 0 ): int {
+		$now  = $now > 0 ? $now : time();
+		$step = self::INTERVAL_SECONDS;
+		$next = (int) ( ceil( $now / $step ) * $step );
+		if ( $next < $now ) {
+			$next += $step;
+		}
+		return $next;
 	}
 
 	public static function run(): void {
@@ -43,6 +57,39 @@ class Neo_Pulse_App_Agent_Run_Worker_Cron {
 			return;
 		}
 		Neo_Pulse_App_Agent_Run_Worker::process_pending_runs();
+		if ( class_exists( 'Neo_Pulse_App_Workflow_Trigger_Cron' ) ) {
+			Neo_Pulse_App_Workflow_Trigger_Cron::run();
+		}
+		self::drain_workflow_pending();
+	}
+
+	private static function drain_workflow_pending(): void {
+		if ( ! class_exists( 'Neo_Pulse_App_Workflow_Server_Dispatch' ) ) {
+			return;
+		}
+		$teams_base = Neo_Pulse_App_Data_Paths::subdir( 'teams' );
+		if ( ! is_dir( $teams_base ) ) {
+			return;
+		}
+		$paths = glob( trailingslashit( $teams_base ) . '*/workflow-trigger-pending.json' );
+		if ( ! is_array( $paths ) ) {
+			return;
+		}
+		foreach ( $paths as $path ) {
+			if ( ! is_string( $path ) || ! preg_match( '#/teams/(\d+)/workflow-trigger-pending\.json$#', str_replace( '\\', '/', $path ), $matches ) ) {
+				continue;
+			}
+			$team_id = (int) ( $matches[1] ?? 0 );
+			if ( $team_id <= 0 ) {
+				continue;
+			}
+			$data = Neo_Pulse_App_Json_File_Store::read( $path );
+			$pending = isset( $data['pending'] ) && is_array( $data['pending'] ) ? $data['pending'] : array();
+			if ( empty( $pending ) ) {
+				continue;
+			}
+			Neo_Pulse_App_Workflow_Server_Dispatch::drain_pending( $team_id );
+		}
 	}
 
 	public static function kick(): void {
@@ -50,6 +97,17 @@ class Neo_Pulse_App_Agent_Run_Worker_Cron {
 			self::activate();
 		}
 		wp_schedule_single_event( time() + 5, self::HOOK );
+		if ( ! class_exists( 'Neo_Pulse_App_Agent_Run_Worker' ) ) {
+			return;
+		}
+		// Advance server runs immediately; wp-cron alone is unreliable in local Docker.
+		for ( $i = 0; $i < 24; $i++ ) {
+			$runs = Neo_Pulse_App_Agent_Runs_Store::list_server_worker_runs( 5 );
+			if ( empty( $runs ) ) {
+				break;
+			}
+			Neo_Pulse_App_Agent_Run_Worker::process_pending_runs();
+		}
 	}
 }
 

@@ -36,15 +36,20 @@ export function reduceHarnessSectionList(
       sectionIndex: i,
       title: payload.title || next[i]?.title || "",
       status: "generating",
-      markdown: payload.markdownSlice ?? next[i]?.markdown,
+      markdown: undefined,
       truncated: next[i]?.truncated,
     };
   } else {
+    const markdown =
+      payload.markdownSlice?.includes("=== WORD BLACKLIST") ||
+      payload.markdownSlice?.includes("WORD BLACKLIST (READ ONLY")
+        ? undefined
+        : payload.markdownSlice;
     next[i] = {
       sectionIndex: i,
       title: payload.title,
       status: "done",
-      markdown: payload.markdownSlice,
+      markdown,
       truncated: payload.truncated,
     };
   }

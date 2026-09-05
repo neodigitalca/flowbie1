@@ -4,8 +4,7 @@ import {
 } from "@/lib/master-instructions-storage";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
-
-const OR = "https://openrouter.ai/api/v1/chat/completions";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 const SYS_VALIDATE = `You classify one English Wikipedia page for local SEO entity mapping.
 
@@ -124,7 +123,7 @@ export async function validateWikipediaPlacePage(
   });
 
   try {
-    const res = await fetch(OR, {
+    const res = await postOpenRouterAppChatFetch( {
       method: "POST",
       headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({

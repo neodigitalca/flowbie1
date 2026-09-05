@@ -4,7 +4,8 @@ import { validateAutomationPlan } from "@/lib/automation-planner-compile";
 import type { AutomationPlan } from "@/lib/automation-planner-types";
 
 export type AutomationJsonPanelHandle = {
-  flushPendingPlan: () => AutomationPlan | null;
+  /** Applies pending JSON edits when the editor is dirty. Returns undefined when not dirty. */
+  flushPendingPlan: () => AutomationPlan | null | undefined;
 };
 
 export type AutomationJsonPanelProps = {
@@ -39,7 +40,7 @@ export const AutomationJsonPanel = forwardRef<AutomationJsonPanelHandle, Automat
       ref,
       () => ({
         flushPendingPlan: () => {
-          if (!dirty) return null;
+          if (!dirty) return undefined;
           try {
             const parsed = JSON.parse(text) as AutomationPlan;
             setParseError(null);

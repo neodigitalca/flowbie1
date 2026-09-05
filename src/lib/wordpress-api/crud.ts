@@ -3,7 +3,7 @@
  * Functions for creating, updating, and deleting WordPress posts
  */
 
-import { BACKEND_API_BASE, BACKEND_CONNECTION_ERROR } from './connection';
+import { BACKEND_CONNECTION_ERROR, backendApiUrl } from './connection';
 import type {
   WordPressPostCreateResult,
   WordPressPostUpdateResult,
@@ -50,7 +50,7 @@ export async function createWordPressPost(
   slug?: string,
   author?: number | { id: number }
 ): Promise<WordPressPostCreateResult> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/create-post`;
+  const url = backendApiUrl('/wordpress/create-post');
 try {
     const response = await fetch(url, {
       method: 'POST',
@@ -136,7 +136,7 @@ export async function updateWordPressPost(
   slug?: string, // Preserve original slug to prevent URL changes
   postTypeEndpoint?: string // Actual WordPress REST API endpoint name from scraped post
 ): Promise<WordPressPostUpdateResult> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/update-post`;
+  const url = backendApiUrl('/wordpress/update-post');
   
   try {
     const response = await fetch(url, {
@@ -213,7 +213,7 @@ export async function deleteWordPressPost(
   postTypeEndpoint?: string,
   options?: DeleteWordPressPostOptions,
 ): Promise<WordPressPostDeleteResult> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/delete-post`;
+  const url = backendApiUrl('/wordpress/delete-post');
   
   try {
     const response = await fetch(url, {

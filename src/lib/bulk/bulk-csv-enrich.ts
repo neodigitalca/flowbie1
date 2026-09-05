@@ -1,5 +1,8 @@
 import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
-import { fillSapRowMetaFromOpenRouter } from "@/lib/local-analysis/entity-sap-meta-agent";
+import {
+  fillBlogRowMetaFromOpenRouter,
+  fillSapRowMetaFromOpenRouter,
+} from "@/lib/local-analysis/entity-sap-meta-agent";
 import { fillSapRowTitlesFromOpenRouter } from "@/lib/local-analysis/entity-sap-title-agent";
 import { applySapTargetSlugsFromKeywordEntity } from "@/lib/sap-slug-from-keyword-entity";
 
@@ -22,22 +25,35 @@ export async function enrichCsvRowsFromSheet(
   const withSlugs = applySapTargetSlugsFromKeywordEntity(rows);
   options.onRowsUpdate?.(withSlugs.map((row) => ({ ...row })));
 
-  const titled = await fillSapRowTitlesFromOpenRouter(withSlugs, {
-    apiKey: options.apiKey,
-    model: options.model,
-    siteId: options.siteId,
-    siteName: options.siteName,
-    gridLocations: options.gridLocations,
-    onRowsUpdate: options.onRowsUpdate,
-  });
+  const needsSapTitles = withSlugs.some((row) => row.entity?.trim() && !row.title?.trim());
+  const titled =
+    needsSapTitles ?
+      await fillSapRowTitlesFromOpenRouter(withSlugs, {
+        apiKey: options.apiKey,
+        model: options.model,
+        siteId: options.siteId,
+        siteName: options.siteName,
+        gridLocations: options.gridLocations,
+        onRowsUpdate: options.onRowsUpdate,
+      })
+    : withSlugs;
 
-  const withMeta = await fillSapRowMetaFromOpenRouter(titled, {
-    apiKey: options.apiKey,
-    model: options.model,
-    siteId: options.siteId,
-    siteName: options.siteName,
-    onRowsUpdate: options.onRowsUpdate,
-  });
+  const hasEntity = titled.some((row) => row.entity?.trim());
+  const withMeta = hasEntity
+    ? await fillSapRowMetaFromOpenRouter(titled, {
+        apiKey: options.apiKey,
+        model: options.model,
+        siteId: options.siteId,
+        siteName: options.siteName,
+        onRowsUpdate: options.onRowsUpdate,
+      })
+    : await fillBlogRowMetaFromOpenRouter(titled, {
+        apiKey: options.apiKey,
+        model: options.model,
+        siteId: options.siteId,
+        siteName: options.siteName,
+        onRowsUpdate: options.onRowsUpdate,
+      });
 
   options.onRowsUpdate?.(withMeta.map((row) => ({ ...row })));
 

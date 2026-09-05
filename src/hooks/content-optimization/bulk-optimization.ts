@@ -2,21 +2,17 @@ import { notify } from "@/lib/app-notifications";
 import { NOTIFY_PLEASE_SELECT_AT_LEAST_ONE_POST_TO_OPTIM, notifyProcessingXTargetsInXPagesOfX } from "@/lib/notify-messages";
 import { setOptimizingState, updateOptimizationProgress } from "./optimization-helpers";
 import { stepLabel, computePrepProgress } from "@/lib/content-optimization/content-optimizer-run-progress";
-import { buildWordPressPostsForLinkingFromInventory, buildWordPressPagesForLinkingFromInventory } from "@/lib/content-generation/extra-text-inventory-links";
+import { buildMergedLinkPoolRows, buildWordPressPagesForLinkingFromInventory } from "@/lib/content-generation/extra-text-inventory-links";
 import { clearSiteCache, seedSiteCacheFromLinkablePosts } from "@/lib/wordpress-site-cache";
 import { clearValidationCache } from "@/lib/cached-link-validation";
 import { clearRelevanceCache } from "@/lib/content-generation/ai-link-relevance-filter";
 import type { HandleOptimizeMultipleContentParams } from "./bulk-optimization-params";
+import { OptimizationFileManager } from "@/lib/optimization-file-manager";
 import { seedBulkUrlKeywordsFromCaches } from "./bulk-optimization-seed-keywords";
 import {
   assertBulkInventorySnapshotReady,
   seedAllBulkPrefetchCachesFromInventory,
 } from "./bulk-optimization-seed-from-inventory";
-import {
-  seedBulkUrlSerpResearchReadyFromAcfCache,
-  hasSubstantiveSeoResearch,
-} from "./bulk-optimization-missing-seo-research";
-import { mergeSeoResearchFromAcfIntoContext } from "@/lib/content-generation/ai-driven-acf-reader";
 import { createBulkSerpWarmupController } from "./bulk-optimization-serp-warmup";
 import { prefetchBulkAcfFieldsByPostIdForUrls } from "./bulk-optimization-prefetch-acf-by-post-id";
 import {
@@ -30,13 +26,14 @@ import {
 import { clearGoogleMapsImageSessionCache } from "@/lib/content-generation/google-maps-image-api";
 import { bulkOptimizationRunPostLoop } from "./bulk-optimization-post-loop";
 import { patchBulkPrefetchedPendingLinkPools } from "./bulk-optimization-pending-link-pools";
+import { seedOverviewSeoResearchFromPrefilledTargets } from "./bulk-optimization-missing-seo-research";
 import type { WpPostSnapshotFromAcfByUrl } from "@/lib/wordpress-api/fields-client";
 import {
   getSiteMirrorIndex,
   siteHasNeoPulseWp,
 } from "@/lib/wordpress-api/fields-client";
 import { type BulkOptimizerInventorySnapshot } from "@/lib/wordpress-api/inventory-match";
-import { ensureBulkOptimizerInventoryForRun, ensurePostsInventoryForHarness, ensurePagesInventoryForHarness, ensureSapInventoryForHarness } from "./bulk-optimization-load-inventory-snapshot";
+import { ensureBulkOptimizerInventoryForRun, ensureMergedPostsPagesLinkPool, ensurePostsInventoryForHarness, ensurePagesInventoryForHarness, ensureSapInventoryForHarness } from "./bulk-optimization-load-inventory-snapshot";
 import {
   CONTENT_OPTIMIZER_BULK_PAGE_SIZE,
   contentOptimizerBulkPageRanges,
@@ -48,18 +45,44 @@ import {
 } from "@/lib/overview/overview-content-prep-harness-run";
 import {
   applyBatchPrepHarnessPayload,
-  applyPostPrepHarnessPayload,
   buildBatchPrepHarnessPayload,
-  buildPostPrepHarnessPayload,
   buildWaitingBatchPrepHarnessSections,
   resolveContentPrepBatchSectionTitles,
-  CONTENT_PREP_POST_HARNESS_TOTAL_SECTIONS,
 } from "@/lib/overview/overview-content-prep-harness-sections";
+import {
+  buildContentOptimizeHarnessPayload,
+  buildWaitingContentOptimizeHarnessSections,
+  contentOptimizeHarnessSectionIndex,
+  CONTENT_OPTIMIZE_PIPELINE_TOTAL,
+} from "@/lib/overview/overview-content-optimize-pipeline";
+import { reduceHarnessSectionList } from "@/lib/bulk/harness-sections-reducer";
+import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
+import { sanitizeHarnessArticleTitle } from "@/lib/overview/overview-content-optimize-pipeline";
 import {
   buildEntityBucketHarnessMarkdown,
   buildInventoryBucketHarnessMarkdown,
   buildMergedInventoryHarnessMarkdown,
 } from "@/lib/overview/overview-inventory-csv";
+import { setMuteOptimizationToasts, getMuteOptimizationToasts } from "./optimization-toast-mute";
+
+function articleTitleByUrlFromPosts(
+  urls: string[],
+  wordPressPosts?: HandleOptimizeMultipleContentParams["wordPressPosts"],
+  keywordByUrl?: Record<string, string | undefined>,
+): Record<string, string | undefined> {
+  const map: Record<string, string | undefined> = {};
+  for (const url of urls) {
+    const key = normalizePageUrlKey(url);
+    const post = wordPressPosts?.find((entry) => normalizePageUrlKey(entry.link) === key);
+    const raw = post?.title?.trim() ?? "";
+    const sanitized = sanitizeHarnessArticleTitle(raw, {
+      pageUrl: url,
+      keyword: keywordByUrl?.[url],
+    });
+    if (sanitized) map[url] = sanitized;
+  }
+  return map;
+}
 
 
 function bulkRunCancelRequested(
@@ -93,10 +116,11 @@ export async function handleOptimizeMultipleContent(
     setOptimizationProgress,
     setBulkOptimizationState,
     optimizationFileManagers,
+    setOptimizationFileManagers,
     continueOptimizationRef,
     muteToasts = false,
     prefilledUrlKeywords = {},
-    prefilledOverviewTargets,
+    prefilledOverviewTargets = {},
     resumeCompletedUrls = [],
     prefetchedBulkInventorySnapshot,
     useSiteWarmCacheOnly = false,
@@ -110,6 +134,26 @@ export async function handleOptimizeMultipleContent(
   }
 
   const batchKey = batchKeyOverride?.trim() || `${site.id}-batch`;
+  const priorOptimizationToastMute = getMuteOptimizationToasts();
+  const shouldMuteIntermediateToasts = !muteToasts;
+  if (shouldMuteIntermediateToasts) {
+    setMuteOptimizationToasts(true);
+  }
+
+  let researchBatchBlocked = false;
+  setBulkOptimizationState((prev: Record<string, { runKind?: string }>) => {
+    if (prev[batchKey]?.runKind === "research") {
+      researchBatchBlocked = true;
+    }
+    return prev;
+  });
+  if (researchBatchBlocked) {
+    notify.error("A research batch is still running on this site. Wait for it to finish.", {
+      duration: 10000,
+    });
+    return { prepCompleted: false };
+  }
+
   setOptimizingState(setIsOptimizingContent, batchKey, true);
   const isAcfKeywordMode = true;
   const useInventoryOnlyPrep = Boolean(site.username?.trim() && site.appPassword?.trim());
@@ -189,8 +233,8 @@ export async function handleOptimizeMultipleContent(
   setBulkOptimizationState((prev: any) => {
     const existing = prev[batchKey];
     const batchPrepHarnessSections = waitingBatchPrepHarnessSections();
-    const urlHarnessSections =
-      existing?.urlHarnessSections ?? buildContentPrepUrlHarnessMap(urls);
+    const articleTitleByUrl = articleTitleByUrlFromPosts(urls, wordPressPosts, prefilledUrlKeywords);
+    const urlHarnessSections = buildContentPrepUrlHarnessMap(urls, articleTitleByUrl, prefilledUrlKeywords);
     const firstUrl = urls[0]?.trim() ?? "";
     return {
       ...prev,
@@ -203,6 +247,7 @@ export async function handleOptimizeMultipleContent(
         currentUrl: firstUrl,
         urlKeywords: { ...prefilledUrlKeywords, ...(existing?.urlKeywords || {}) },
         urlSerpResearchReady: {},
+        urlGeneratedFiles: {},
         warmingUpIndex: null,
         warmingUpIndex2: null,
         researchedUrls: [],
@@ -234,8 +279,21 @@ export async function handleOptimizeMultipleContent(
     );
   }
 
+  const emptyFileManager = new OptimizationFileManager();
+  optimizationFileManagers[site.id] = emptyFileManager;
+  setOptimizationFileManagers?.((prev: Record<string, OptimizationFileManager>) => ({
+    ...prev,
+    [site.id]: emptyFileManager,
+  }));
+
   updateOptimizationProgress(setOptimizationProgress, batchKey, "prepInventory", 0, "Initializing batch…", {
     bulkMeta: { totalUrls: urls.length, completedUrls: 0, prepComplete: false },
+    generatedFiles: [],
+    harnessSections: [],
+  });
+  updateOptimizationProgress(setOptimizationProgress, site.id, "prepInventory", 0, "Initializing batch…", {
+    generatedFiles: [],
+    harnessSections: [],
   });
 
   const recordGeneratedFilesForUrl = (siteId: string, url: string) => {
@@ -325,7 +383,8 @@ export async function handleOptimizeMultipleContent(
       const activeUrl = (current.currentUrl || urls[current.currentIndex ?? 0] || urls[0] || "").trim();
       let batchPrepHarnessSections =
         current.batchPrepHarnessSections ?? waitingBatchPrepHarnessSections();
-      let urlHarnessSections = current.urlHarnessSections ?? buildContentPrepUrlHarnessMap(urls);
+      let urlHarnessSections =
+        current.urlHarnessSections ?? buildContentPrepUrlHarnessMap(urls, articleTitleByUrlFromPosts(urls, wordPressPosts, current.urlKeywords), current.urlKeywords);
       if (stepId === "prepInventory" && opts?.batchSectionIndex !== undefined) {
         const sectionIndex = opts.batchSectionIndex;
         const existingSection = batchPrepHarnessSections.find((s) => s.sectionIndex === sectionIndex);
@@ -337,10 +396,13 @@ export async function handleOptimizeMultipleContent(
           );
         }
       } else if (stepId === "prepResearch" && activeUrl) {
-        const payload = buildPostPrepHarnessPayload(current.currentIndex ?? 0, 0, "start");
+        const serpIndex = contentOptimizeHarnessSectionIndex("SERP research brief");
+        const payload = buildContentOptimizeHarnessPayload(current.currentIndex ?? 0, serpIndex, "start");
+        const baseSections =
+          urlHarnessSections[activeUrl] ?? buildWaitingContentOptimizeHarnessSections();
         urlHarnessSections = {
           ...urlHarnessSections,
-          [activeUrl]: applyPostPrepHarnessPayload(urlHarnessSections[activeUrl], payload),
+          [activeUrl]: reduceHarnessSectionList(baseSections, payload),
         };
       }
       const harnessForProgress =
@@ -360,7 +422,7 @@ export async function handleOptimizeMultipleContent(
             harnessSections: harnessForProgress,
             harnessPlannedSectionCount:
               stepId === "prepResearch"
-                ? CONTENT_PREP_POST_HARNESS_TOTAL_SECTIONS
+                ? CONTENT_OPTIMIZE_PIPELINE_TOTAL
                 : batchPrepHarnessTotalSections,
           },
           batchPrepHarnessSections,
@@ -373,33 +435,11 @@ export async function handleOptimizeMultipleContent(
   let linkingInventorySnapshot: BulkOptimizerInventorySnapshot | null = null;
 
   const buildLinkPoolFromInventory = async (
-    bulkSnapshot: BulkOptimizerInventorySnapshot,
     onMsg?: (message: string) => void,
-  ): Promise<ReturnType<typeof buildWordPressPostsForLinkingFromInventory>> => {
-    if (optimizationOptions?.inventorySitemapSource === "sap") {
-      let linkSnapshot = linkingInventorySnapshot;
-      const hasLinkRows =
-        Boolean(linkSnapshot?.postsMaps.byLink.size) ||
-        Boolean(linkSnapshot?.pagesMaps.byLink.size);
-      if (!hasLinkRows) {
-        const [postsSnap, pagesSnap] = await Promise.all([
-          ensurePostsInventoryForHarness(site, onMsg),
-          ensurePagesInventoryForHarness(site, onMsg),
-        ]);
-        linkSnapshot = {
-          postsMaps: postsSnap.postsMaps,
-          pagesMaps: pagesSnap.pagesMaps,
-          customMapsByCollection: {},
-        };
-      }
-      const rows = buildWordPressPostsForLinkingFromInventory(linkSnapshot!, site.siteUrl, {
-        postsPagesOnly: true,
-      });
-      const pageRows = rows.filter((r) => r.postType === "page");
-      const postRows = rows.filter((r) => r.postType === "post");
-      return [...pageRows, ...postRows];
-    }
-    return buildWordPressPostsForLinkingFromInventory(bulkSnapshot, site.siteUrl);
+  ): Promise<ReturnType<typeof buildMergedLinkPoolRows>> => {
+    const linkSnapshot = await ensureMergedPostsPagesLinkPool(site, onMsg);
+    linkingInventorySnapshot = linkSnapshot;
+    return buildMergedLinkPoolRows(linkSnapshot, site.siteUrl);
   };
 
   let bulkInventorySnapshot: BulkOptimizerInventorySnapshot | null = null;
@@ -409,12 +449,6 @@ export async function handleOptimizeMultipleContent(
   try {
 
   if (useInventoryOnlyPrep) {
-    if (useSiteWarmCacheOnly && !prefetchedBulkInventorySnapshot) {
-      throw new Error(
-        "Bulk content optimization requires WordPress inventory. Load the site inventory first (Content tab / Integrations), then retry.",
-      );
-    }
-
     setBulkStep(
       "prepInventory",
       useSiteWarmCacheOnly ? "Starting optimization…" : "Loading site inventory…",
@@ -428,6 +462,7 @@ export async function handleOptimizeMultipleContent(
         inventorySitemapSource ?? (isEntitySapRun ? "sap" : undefined),
         (msg) => setBulkStep("prepInventory", msg, 0.25),
         { requireBody: false, requireKeyword: false },
+        { warmCacheOnly: useSiteWarmCacheOnly },
       ));
     assertBulkInventorySnapshotReady(bulkInventorySnapshot);
 
@@ -456,9 +491,7 @@ export async function handleOptimizeMultipleContent(
           site.siteUrl,
         );
       }
-      wordPressPostsForRun = await buildLinkPoolFromInventory(bulkInventorySnapshot, (msg) =>
-        setBulkStep("prepInventory", msg, 0.75),
-      );
+      wordPressPostsForRun = buildMergedLinkPoolRows(linkingInventorySnapshot, site.siteUrl);
       if (wordPressPostsForRun.length > 0) {
         seedSiteCacheFromLinkablePosts(site, wordPressPostsForRun);
       }
@@ -497,7 +530,7 @@ export async function handleOptimizeMultipleContent(
 
     setBulkStep("prepInventory", "Building link pool…", 0.75);
 
-    wordPressPostsForRun = await buildLinkPoolFromInventory(bulkInventorySnapshot, (msg) =>
+    wordPressPostsForRun = await buildLinkPoolFromInventory((msg) =>
       setBulkStep("prepInventory", msg, 0.85),
     );
     if (wordPressPostsForRun.length > 0) {
@@ -531,33 +564,8 @@ export async function handleOptimizeMultipleContent(
       skipUrlSet.add(skippedUrl);
     }
 
-    // Merge Overview-grid cached seo_research into ACF prefetch (no live SERP).
-    if (prefilledOverviewTargets) {
-      for (let i = 0; i < urls.length; i++) {
-        const url = urls[i]?.trim();
-        if (!url) continue;
-        const research = prefilledOverviewTargets[url]?.seoResearch?.trim();
-        if (!research) continue;
-        const prev = prefetchedAcfFieldsCache.get(i) ?? {};
-        if (hasSubstantiveSeoResearch(prev)) continue;
-        const next = { ...prev, seo_research: research };
-        prefetchedAcfFieldsCache.set(i, next);
-        const pending = prefetchedPendingCache.get(i);
-        if (pending) {
-          prefetchedPendingCache.set(i, {
-            ...pending,
-            pending: mergeSeoResearchFromAcfIntoContext(next, {
-              ...pending.pending,
-              keywordFocus: pending.primaryKeyword,
-            }),
-          });
-        }
-      }
-    }
-
-    // Inventory list often omits large seo_research; backfill from WP so SERP is skipped when research already exists.
     if (!useSiteWarmCacheOnly) {
-      setBulkStep("prepInventory", "Loading existing seo_research…", 0.9);
+      setBulkStep("prepInventory", "Loading ACF fields…", 0.9);
       await prefetchBulkAcfFieldsByPostIdForUrls({
         site,
         urls,
@@ -573,6 +581,15 @@ export async function handleOptimizeMultipleContent(
       const pageGscCache = await prefetchBulkPageGscForUrls(site.siteUrl, urls);
       applyPageGscToPendingCache(urls, prefetchedPendingCache, pageGscCache);
     }
+
+    seedOverviewSeoResearchFromPrefilledTargets({
+      urls,
+      prefilledOverviewTargets,
+      prefetchedAcfFieldsCache,
+      prefetchedPendingCache,
+      batchKey,
+      setBulkOptimizationState,
+    });
 
     setBulkStep(
       "prepInventory",
@@ -708,18 +725,9 @@ export async function handleOptimizeMultipleContent(
         break;
       }
 
-      if (isAcfKeywordMode) {
-        seedBulkUrlSerpResearchReadyFromAcfCache({
-          urls,
-          batchKey,
-          prefetchedAcfFieldsCache,
-          setBulkOptimizationState,
-        });
-      }
-
       setBulkStep(
         "prepResearch",
-        `${pageProgressLabel(start, end, page, pageCount)}: SERP warmup (2-post buffer)…`,
+        `${pageProgressLabel(start, end, page, pageCount)}: SERP warmup…`,
         0,
       );
 
@@ -764,6 +772,9 @@ export async function handleOptimizeMultipleContent(
     }
     return { prepCompleted };
   } finally {
+    if (shouldMuteIntermediateToasts) {
+      setMuteOptimizationToasts(priorOptimizationToastMute);
+    }
     setOptimizingState(setIsOptimizingContent, batchKey, false);
 
     // Link-validation cache is intentionally retained across URLs for the batch; clears run here (and on cancel above), not inside bulkOptimizationRunPostLoop.

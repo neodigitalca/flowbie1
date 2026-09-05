@@ -1,9 +1,3 @@
-import {
-  OVERVIEW_AUDIT_FULL_POST_LABEL,
-  OVERVIEW_AUDIT_PREAMBLE_LABEL,
-  splitHtmlForOverviewAudit,
-} from "@/lib/overview/overview-post-html-audit-sections";
-
 function isTagBoundaryChar(ch: string | undefined): boolean {
   if (!ch || ch.length === 0) return true;
   const c = ch.charCodeAt(0);
@@ -39,17 +33,23 @@ export function htmlMissingLeadingH2(html: string): boolean {
   return /<p[\s>]/i.test(trimmed.slice(0, firstH2));
 }
 
-/** Ordered H2 inner texts from post HTML (inventory / grid body). */
+/** Ordered H2 inner texts from post HTML (one entry per opening h2 tag, document order). */
 export function extractH2TextsFromHtml(html: string): string[] {
   const trimmed = (html ?? "").trim();
   if (!trimmed) return [];
-  const sections = splitHtmlForOverviewAudit(trimmed);
+  const positions = findH2OpenPositions(trimmed);
+  const low = trimmed.toLowerCase();
   const out: string[] = [];
-  for (const sec of sections) {
-    if (sec.sectionLabel === OVERVIEW_AUDIT_PREAMBLE_LABEL) continue;
-    if (sec.sectionLabel === OVERVIEW_AUDIT_FULL_POST_LABEL) continue;
-    const label = sec.sectionLabel.trim();
-    if (label) out.push(label);
+  for (const openPos of positions) {
+    const gt = trimmed.indexOf(">", openPos);
+    if (gt === -1) {
+      out.push("");
+      continue;
+    }
+    const innerStart = gt + 1;
+    const close = low.indexOf("</h2>", innerStart);
+    const inner = close === -1 ? trimmed.slice(innerStart) : trimmed.slice(innerStart, close);
+    out.push(plainTextFromH2InnerHtml(inner));
   }
   return out;
 }

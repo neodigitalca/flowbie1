@@ -13,6 +13,10 @@ export const jobsDir = process.env.LOCAL_DOMINATOR_JOBS_DIR || path.join(os.tmpd
 /** @type {Map<string, { child: import("node:child_process").ChildProcess | null, progressPath: string }>} */
 const activeJobs = new Map();
 
+/** Keep last terminal payload so a second poll after cleanup does not return "Job not found." */
+/** @type {Map<string, Record<string, unknown>>} */
+const terminalJobs = new Map();
+
 export function parseProgressFile(progressPath) {
   if (!fs.existsSync(progressPath)) {
     return { status: "running", label: "Starting" };
@@ -40,7 +44,6 @@ export function parseProgressFile(progressPath) {
     }
     if (data.type === "done") {
       status = "done";
-      label = "Complete";
       result = data;
     }
     if (data.type === "error") {
@@ -57,6 +60,21 @@ function ensureJobsDir() {
   fs.mkdirSync(jobsDir, { recursive: true });
 }
 
+const LEGACY_TEMPLATE_KEYWORD = "blinds near me";
+const LEGACY_TEMPLATE_BUSINESS = "advance blinds & drapery";
+
+function resolveExportKeyword(businessName, keyword) {
+  const trimmed = String(keyword ?? "").trim();
+  if (trimmed.toLowerCase() === "auto") return "";
+  if (
+    trimmed.toLowerCase() === LEGACY_TEMPLATE_KEYWORD
+    && String(businessName ?? "").trim().toLowerCase() !== LEGACY_TEMPLATE_BUSINESS
+  ) {
+    return "";
+  }
+  return trimmed;
+}
+
 export function startJob(businessName, keyword) {
   if (!fs.existsSync(exportScript)) {
     return {
@@ -71,6 +89,8 @@ export function startJob(businessName, keyword) {
   const progressPath = path.join(jobsDir, `${jobId}.jsonl`);
   fs.writeFileSync(progressPath, "", "utf8");
 
+  const resolvedKeyword = resolveExportKeyword(businessName, keyword);
+
   const child = spawn(
     process.execPath,
     [
@@ -81,10 +101,13 @@ export function startJob(businessName, keyword) {
       "--business",
       businessName,
       "--keyword",
-      keyword,
+      resolvedKeyword,
     ],
-    { cwd: repoRoot, env: process.env },
+    { cwd: repoRoot, env: process.env, stdio: ["ignore", "pipe", "pipe"] },
   );
+
+  child.stdout?.on("data", () => {});
+  child.stderr?.on("data", () => {});
 
   activeJobs.set(jobId, { child, progressPath });
 
@@ -98,56 +121,100 @@ export function startJob(businessName, keyword) {
   return { ok: true, jobId };
 }
 
+export function cancelJob(jobId) {
+  const normalized = String(jobId ?? "").trim().toLowerCase();
+  if (!normalized) {
+    return { ok: false, error: "Missing job id." };
+  }
+
+  const entry = activeJobs.get(normalized);
+  const progressPath = entry?.progressPath ?? path.join(jobsDir, `${normalized}.jsonl`);
+
+  if (entry?.child && entry.child.exitCode === null) {
+    try {
+      entry.child.kill("SIGTERM");
+    } catch {
+      // ignore
+    }
+  }
+
+  activeJobs.delete(normalized);
+
+  try {
+    fs.appendFileSync(
+      progressPath,
+      `${JSON.stringify({ type: "error", message: "Cancelled" })}\n`,
+      "utf8",
+    );
+  } catch {
+    // ignore
+  }
+
+  return { ok: true, status: "error", error: "Cancelled" };
+}
+
+export function cancelAllJobs() {
+  const jobIds = [...activeJobs.keys()];
+  for (const jobId of jobIds) {
+    cancelJob(jobId);
+  }
+  return { ok: true, cancelled: jobIds.length };
+}
+
 export function readJobProgress(jobId) {
+  const cached = terminalJobs.get(jobId);
+  if (cached) {
+    return { ...cached };
+  }
+
   const entry = activeJobs.get(jobId);
   const progressPath = entry?.progressPath ?? path.join(jobsDir, `${jobId}.jsonl`);
   if (!entry && !fs.existsSync(progressPath)) {
-    return { ok: false, status: "error", error: "Job not found." };
+    // Prefer cached terminal payload; if both are gone, soft-miss (not a business miss).
+    return { ok: false, status: "error", error: "Export worker job already cleaned up." };
   }
 
   const parsed = parseProgressFile(progressPath);
   if (parsed.status === "done") {
     activeJobs.delete(jobId);
-    try {
-      fs.unlinkSync(progressPath);
-    } catch {
-      // ignore
-    }
-    return {
+    const payload = {
       ok: true,
       status: "done",
       label: parsed.label,
       screenshotBase64: parsed.screenshotBase64,
       result: parsed.result,
     };
+    terminalJobs.set(jobId, payload);
+    // Keep the progress file until PHP finalize cleans up so a concurrent poll
+    // does not surface "Job not found" (that is the worker job id, not the business).
+    return { ...payload };
   }
 
   if (parsed.status === "error") {
     activeJobs.delete(jobId);
-    try {
-      fs.unlinkSync(progressPath);
-    } catch {
-      // ignore
-    }
-    return {
+    const payload = {
       ok: true,
       status: "error",
       label: parsed.label,
       screenshotBase64: parsed.screenshotBase64,
       error: parsed.error,
     };
+    terminalJobs.set(jobId, payload);
+    return { ...payload };
   }
 
   const running = Boolean(entry?.child && entry.child.exitCode === null);
   if (!running && entry && entry.child?.exitCode !== 0 && entry.child?.exitCode != null) {
     activeJobs.delete(jobId);
-    return {
+    const payload = {
       ok: true,
       status: "error",
       label: parsed.label,
       screenshotBase64: parsed.screenshotBase64,
       error: parsed.error || "Local Dominator export process exited unexpectedly.",
     };
+    terminalJobs.set(jobId, payload);
+    return { ...payload };
   }
 
   return {
@@ -196,6 +263,25 @@ export async function handleLocalDominatorExportRequest(req, res, pathname) {
     return true;
   }
 
+  const cancelJobMatch = url.match(/^\/local-dominator\/export-grid\/jobs\/([a-f0-9-]{8,64})\/cancel$/i);
+  if (method === "POST" && cancelJobMatch) {
+    if (!checkWorkerAuth(req)) {
+      sendJson(res, 401, { ok: false, error: "Unauthorized." });
+      return true;
+    }
+    sendJson(res, 200, cancelJob(cancelJobMatch[1].toLowerCase()));
+    return true;
+  }
+
+  if (method === "POST" && url === "/local-dominator/export-grid/jobs/cancel-all") {
+    if (!checkWorkerAuth(req)) {
+      sendJson(res, 401, { ok: false, error: "Unauthorized." });
+      return true;
+    }
+    sendJson(res, 200, cancelAllJobs());
+    return true;
+  }
+
   if (method === "POST" && url === "/local-dominator/export-grid/jobs") {
     if (!checkWorkerAuth(req)) {
       sendJson(res, 401, { ok: false, error: "Unauthorized." });
@@ -212,17 +298,12 @@ export async function handleLocalDominatorExportRequest(req, res, pathname) {
     }
 
     const businessName = String(body.businessName ?? "").trim();
-    const keyword = String(body.keyword ?? "").trim();
     if (!businessName) {
       sendJson(res, 400, { ok: false, error: "Missing required field: businessName" });
       return true;
     }
-    if (!keyword) {
-      sendJson(res, 400, { ok: false, error: "Missing required field: keyword" });
-      return true;
-    }
 
-    const started = startJob(businessName, keyword);
+    const started = startJob(businessName, body.keyword);
     sendJson(res, started.ok ? 200 : 500, started);
     return true;
   }
@@ -243,17 +324,12 @@ export async function handleLocalDominatorExportRequest(req, res, pathname) {
     }
 
     const businessName = String(body.businessName ?? "").trim();
-    const keyword = String(body.keyword ?? "").trim();
     if (!businessName) {
       sendJson(res, 400, { ok: false, error: "Missing required field: businessName" });
       return true;
     }
-    if (!keyword) {
-      sendJson(res, 400, { ok: false, error: "Missing required field: keyword" });
-      return true;
-    }
 
-    const started = startJob(businessName, keyword);
+    const started = startJob(businessName, body.keyword);
     if (!started.ok || !started.jobId) {
       sendJson(res, 500, started);
       return true;

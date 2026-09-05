@@ -26,6 +26,9 @@ interface SiteDialogProps {
   formEditorialCountsPeriodStartYmd: string;
   formOptimizationPackage: string;
   formBenchmarkCustomTag: string;
+  formServiceCity: string;
+  formServiceState: string;
+  formServiceCountry: string;
   onFormNameChange: (value: string) => void;
   onFormSiteUrlChange: (value: string) => void;
   onFormProductionSiteUrlChange: (value: string) => void;
@@ -37,6 +40,9 @@ interface SiteDialogProps {
   onFormEditorialCountsPeriodStartYmdChange: (value: string) => void;
   onFormOptimizationPackageChange: (value: string) => void;
   onFormBenchmarkCustomTagChange: (value: string) => void;
+  onFormServiceCityChange: (value: string) => void;
+  onFormServiceStateChange: (value: string) => void;
+  onFormServiceCountryChange: (value: string) => void;
   onSave: () => void;
   onPatchSite?: (siteId: string, patch: Partial<WordPressSite>) => void;
 }
@@ -56,6 +62,9 @@ export const SiteDialog: React.FC<SiteDialogProps> = ({
   formEditorialCountsPeriodStartYmd,
   formOptimizationPackage,
   formBenchmarkCustomTag,
+  formServiceCity,
+  formServiceState,
+  formServiceCountry,
   onFormNameChange,
   onFormSiteUrlChange,
   onFormProductionSiteUrlChange,
@@ -67,6 +76,9 @@ export const SiteDialog: React.FC<SiteDialogProps> = ({
   onFormEditorialCountsPeriodStartYmdChange,
   onFormOptimizationPackageChange,
   onFormBenchmarkCustomTagChange,
+  onFormServiceCityChange,
+  onFormServiceStateChange,
+  onFormServiceCountryChange,
   onSave,
   onPatchSite,
 }) => {
@@ -94,6 +106,9 @@ export const SiteDialog: React.FC<SiteDialogProps> = ({
           formEditorialCountsPeriodStartYmd={formEditorialCountsPeriodStartYmd}
           formOptimizationPackage={formOptimizationPackage}
           formBenchmarkCustomTag={formBenchmarkCustomTag}
+          formServiceCity={formServiceCity}
+          formServiceState={formServiceState}
+          formServiceCountry={formServiceCountry}
           onFormNameChange={onFormNameChange}
           onFormSiteUrlChange={onFormSiteUrlChange}
           onFormProductionSiteUrlChange={onFormProductionSiteUrlChange}
@@ -105,8 +120,12 @@ export const SiteDialog: React.FC<SiteDialogProps> = ({
           onFormEditorialCountsPeriodStartYmdChange={onFormEditorialCountsPeriodStartYmdChange}
           onFormOptimizationPackageChange={onFormOptimizationPackageChange}
           onFormBenchmarkCustomTagChange={onFormBenchmarkCustomTagChange}
+          onFormServiceCityChange={onFormServiceCityChange}
+          onFormServiceStateChange={onFormServiceStateChange}
+          onFormServiceCountryChange={onFormServiceCountryChange}
           onPatchSite={onPatchSite}
           patchSiteId={editingSite?.id ?? null}
+          serviceAreaSite={editingSite}
           semrushActionsDisabled={editingSite?.enabled === false}
           className="py-2"
         />

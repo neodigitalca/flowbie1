@@ -57,6 +57,7 @@ export function buildPressReleaseBlueprint(opts: {
         "Dateline appears once here only; never bracket placeholders.",
 
         "Weave the keyword naturally; no keyword stuffing.",
+        "[LINK]",
 
       ],
 
@@ -85,6 +86,7 @@ export function buildPressReleaseBlueprint(opts: {
         "Do not repeat the wire dateline or open with a date.",
 
         "No invented launches, expansions, or \"today announced\" framing.",
+        "[LINK]",
 
       ],
 
@@ -102,7 +104,7 @@ export function buildPressReleaseBlueprint(opts: {
 
       description:
 
-        "Practical context about the keyword topic and how the business helps. Factual; short paragraphs. Best section for the single required external citation link when listed in the system prompt.",
+        "Practical context about the keyword topic and how the business helps. Factual; short paragraphs. Weave one internal [[LINK:query|anchor]] to a relevant same-site page.",
 
       features: [
 
@@ -111,6 +113,7 @@ export function buildPressReleaseBlueprint(opts: {
         "No calendar date prefix. No fake news events.",
 
         "Optional - bullet list for 2–4 factual bullets if it fits.",
+        "[LINK]",
 
       ],
 
@@ -128,15 +131,16 @@ export function buildPressReleaseBlueprint(opts: {
 
       description:
 
-        "If user-supplied quote or speaker attribution exists in ACF/prompt context, use it verbatim in a blockquote with attribution. If none supplied, write one short neutral sentence about the topic or service without inventing a person's name.",
+        "If user-supplied quote or speaker attribution exists in ACF/prompt context, use it verbatim as a > quote line with attribution. If none supplied, write one short neutral sentence about the topic or service without inventing a person's name.",
 
       features: [
 
         "## reflects the topic (expertise, quality, or customer focus), not a product launch.",
 
-        "Use blockquote (> lines) with attribution on the next line, or one factual paragraph if no quote provided.",
+        "Use a markdown quote that starts with > then the sentence, with attribution on the next line, or one factual paragraph if no quote provided. Never wrap the quote with the word blockquote.",
 
         "No calendar date prefix.",
+        "[LINK]",
 
       ],
 
@@ -163,6 +167,7 @@ export function buildPressReleaseBlueprint(opts: {
         "One tight paragraph aligned with the connected site.",
 
         "No calendar date prefix.",
+        "[LINK]",
 
       ],
 
@@ -189,6 +194,7 @@ export function buildPressReleaseBlueprint(opts: {
         "Paragraph lines for contact; do not invent email/phone unless provided in context.",
 
         "No calendar date prefix.",
+        "[LINK]",
 
       ],
 
@@ -204,7 +210,7 @@ export function buildPressReleaseBlueprint(opts: {
 
     title: headline,
 
-    purpose: `Editorial press release centered on: ${kw}. Describe the connected business naturally; use the keyword sparingly and prefer everyday wording. Do not invent grand openings, expansions, or "today announced" events unless the user supplied them. Wire dateline only in section 1. One approved external reference link is required body-wide per system prompt when listed.`,
+    purpose: `Editorial press release centered on: ${kw}. Describe the connected business naturally; use the keyword sparingly and prefer everyday wording. Do not invent grand openings, expansions, or "today announced" events unless the user supplied them. Wire dateline only in section 1. Internal links use [[LINK:query|anchor]] to same-site pages only. Never link to competitors or third-party sites.`,
 
     agents,
 

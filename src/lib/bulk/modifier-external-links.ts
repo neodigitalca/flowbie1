@@ -161,3 +161,71 @@ export function injectModifierExternalLinksIntoBlueprintAgents<T extends Bluepri
     return { ...agent, features };
   });
 }
+
+export type LlmAuditAuthorityLinkLike = {
+  url: string;
+  anchorText: string;
+  category?: string;
+};
+
+export function formatLlmAuditAuthorityLinksForPrompt(links: LlmAuditAuthorityLinkLike[]): string {
+  if (links.length === 0) return "";
+  const lines = links.map((link, i) => {
+    const cat = link.category?.trim() ? ` (${link.category})` : "";
+    return `${i + 1}. [${link.anchorText}](${link.url})${cat}`;
+  });
+  return `
+=== LLM AUDIT AUTHORITY LINKS (MANDATORY — COPY EXACTLY) ===
+These URLs come from the stored SERP/LLM research brief (government, municipal, news, weather, BBB, education). Every link MUST appear in the final article using the **exact** URL below. Use [[EXTERNAL:exact-url|exact-anchor]] in harness output with the exact anchor phrase from this list. Weave each link mid-sentence inside a paragraph — same placement as [[LINK:query|anchor]] internal links. Include **all** of them at least once. Do not substitute, shorten, or omit any href. FORBIDDEN: bare domain anchors, "for more", "here", or links appended after the final period.
+
+${lines.join("\n")}
+
+Checklist: include \`[LLM_AUDIT_AUTHORITY_LINK]\` with the exact markdown for each URL above.
+Blueprint: include \`[LLM_AUDIT_AUTHORITY_LINK]\` in features with the exact markdown.
+=== END LLM AUDIT AUTHORITY LINKS ===
+`;
+}
+
+export function injectLlmAuditAuthorityLinksIntoChecklist(
+  checklist: string[],
+  links: LlmAuditAuthorityLinkLike[],
+): string[] {
+  if (links.length === 0) return checklist;
+  const next = [...checklist];
+  for (const link of links) {
+    const line = `[LLM_AUDIT_AUTHORITY_LINK]: Weave [[EXTERNAL:${link.url}|${link.anchorText}]] mid-sentence in body copy (same rules as internal [[LINK:...]]). Exact href: ${link.url}. Forbidden: bare domain anchor, "for more", or trailing link after final period.`;
+    if (next.some((item) => item.includes(link.url))) continue;
+    next.push(line);
+  }
+  return next;
+}
+
+export function injectLlmAuditAuthorityLinksIntoBlueprintAgents<T extends BlueprintAgent>(
+  agents: T[],
+  links: LlmAuditAuthorityLinkLike[],
+): T[] {
+  if (links.length === 0 || agents.length === 0) return agents;
+
+  const introIdx = agents.findIndex((a) => a.step === 1);
+  const targetIndices = new Set<number>();
+  if (introIdx >= 0) {
+    targetIndices.add(introIdx);
+  } else {
+    targetIndices.add(0);
+  }
+  const bodyIdx = introIdx >= 0 ? introIdx + 1 : 1;
+  if (bodyIdx < agents.length) {
+    targetIndices.add(bodyIdx);
+  }
+
+  return agents.map((agent, index) => {
+    if (!targetIndices.has(index)) return agent;
+    const features = Array.isArray(agent.features) ? [...agent.features] : [];
+    for (const link of links) {
+      const feature = `[LLM_AUDIT_AUTHORITY_LINK]: [${link.anchorText}](${link.url})`;
+      if (features.some((f) => f.includes(link.url))) continue;
+      features.push(feature);
+    }
+    return { ...agent, features };
+  });
+}

@@ -8,14 +8,6 @@ import { migrateAllLegacyNeoPulseStorageKeys } from "@/lib/neo-pulse-storage-mig
 
 migrateAllLegacyNeoPulseStorageKeys();
 
-void import("@/components/integrations/storage").then(({ hydrateLocalAppStateFromServerIfEmpty, getStoredSites }) =>
-  hydrateLocalAppStateFromServerIfEmpty().then(() =>
-    import("@/lib/local-analysis/entity-site-warm-cache").then(({ bootstrapEntitySiteWarmOnAppLoad }) => {
-      bootstrapEntitySiteWarmOnAppLoad(getStoredSites());
-    }),
-  ),
-);
-
 const rootElement = document.getElementById("root");
 
 if (!rootElement) {

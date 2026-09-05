@@ -8,6 +8,7 @@ import type { ConnectedSiteSummary } from '@/components/integrations/types';
 import { cn } from '@/lib/utils';
 import {
   BULK_POST_DESTINATION_CHOICES,
+  WORDPRESS_POST_DESTINATION_LONG,
   type CSVRow,
   type WordPressPostDestination,
 } from '@/lib/bulk-auto-generate';
@@ -71,10 +72,6 @@ interface WordPressPostingConfigProps {
   hideSitemapField?: boolean;
 }
 
-const POST_DESTINATION_LABELS: Record<WordPressPostDestination, string> = {
-  wordpress: 'Post to WordPress',
-  local: 'Local only (files)',
-};
 
 export function WordPressPostingConfig({
   selectedWordPressSites,
@@ -185,7 +182,7 @@ export function WordPressPostingConfig({
                           htmlFor={`bulk-pd-${choice}`}
                           className="cursor-pointer text-base font-normal"
                         >
-                          {POST_DESTINATION_LABELS[choice]}
+                          {WORDPRESS_POST_DESTINATION_LONG[choice]}
                         </Label>
                       </div>
                     ))}

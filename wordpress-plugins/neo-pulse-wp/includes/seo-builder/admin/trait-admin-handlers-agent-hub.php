@@ -149,8 +149,8 @@ trait Neo_Pulse_Wp_Admin_Trait_Handlers_Agent_Hub {
 			'admin_page_neo_pulse-wp-agent-hub-edit',
 			'neo-pulse-wp_page_neo_pulse-wp-agent-hub-edit',
 		);
-		$is_list = in_array( $hook_suffix, $list_hooks, true );
-		$is_edit = in_array( $hook_suffix, $edit_hooks, true );
+		$is_list = Neo_Pulse_Wp_Admin::admin_hook_matches( $hook_suffix, $list_hooks );
+		$is_edit = Neo_Pulse_Wp_Admin::admin_hook_matches( $hook_suffix, $edit_hooks );
 		if ( ! $is_list && ! $is_edit ) {
 			return;
 		}

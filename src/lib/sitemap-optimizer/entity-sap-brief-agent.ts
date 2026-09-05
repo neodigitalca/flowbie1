@@ -1,6 +1,6 @@
 import { callOpenRouterChatCompletion } from "@/lib/competitor-research/competitor-report-openrouter";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
-import { BULK_WORDPRESS_POST_TITLE_RULE } from "@/lib/prompt-builders/system-user";
+import { BULK_WORDPRESS_POST_TITLE_RULE } from "@/lib/prompt-builders/title-rules";
 import {
   stripHtmlToPlainText,
   truncatePlainText,
@@ -19,6 +19,7 @@ import {
 } from "@/lib/sitemap-optimizer/entity-merge-prompts";
 import { gridMemberSourceUrl } from "@/lib/sitemap-optimizer/grid-member-url";
 import { displayPostTitle } from "@/lib/sitemap-optimizer/merge-results-display";
+import { SAP_DEFAULT_COMBINED_OUTLINE } from "@/lib/prompt-builders/sap-page-template";
 import { resolvedMemberRows } from "@/lib/sitemap-optimizer/resolved-cluster-members";
 import type { BlogDestinationPolicy } from "@/lib/sitemap-optimizer/blog-destination-policy";
 import type {
@@ -91,12 +92,7 @@ function fillEntitySapBriefGaps(
 ): ParsedEntitySapBrief {
   const out = { ...brief };
   if (!out.combinedOutline.length) {
-    out.combinedOutline = [
-      "Local service overview",
-      "Products and options",
-      "Service area coverage",
-      "Next steps",
-    ];
+    out.combinedOutline = [...SAP_DEFAULT_COMBINED_OUTLINE];
   }
   if (!out.whatToKeepFromEach.length) {
     out.whatToKeepFromEach = members.map((row) => ({

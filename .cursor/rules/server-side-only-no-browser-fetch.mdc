@@ -1,0 +1,44 @@
+---
+description: Mandatory apex server-side only - no direct browser fetch for external data, secrets, or API logic
+alwaysApply: true
+---
+
+# Server-side only (no browser fetch)
+
+**Priority: highest (mandatory).** Apex rule. Pairs with `logic-non-contradictory-identification.mdc` and `occams-razor-parsimony.mdc`. Do **not** paste this rule into user-facing replies.
+
+External data, credentials, and API logic live on the **server**. The browser calls **this app's API** only. Do not push third-party fetch logic into client code.
+
+## Principle
+
+Keep identification and retrieval on the server. The browser is a UI layer, not an integration layer.
+
+## Mandatory self-check (every turn)
+
+**Should this fetch or logic run server-side instead of in the browser?**
+
+If yes, use a server route, worker, or script. Do not add direct browser `fetch` to WordPress, DataForSEO, Semrush, Google APIs, or other third-party origins.
+
+## Code (implementation)
+
+- Browser/client code calls `backendApiUrl('/…')` or existing `/api/*` handlers. Follow patterns in `src/lib/wordpress-api/*`.
+- **No direct browser fetch** to WordPress REST, wp-admin, or external APIs that need secrets, CORS workarounds, or bulk aggregation.
+- API keys, passwords, and session secrets stay **server-side only** (env, server handlers, workers).
+- Prefer one server POST that returns aggregate data over many client-side per-item requests.
+- New integrations: add or extend a **server handler first**, then wire a thin client caller.
+
+## Agent work (investigation and verification)
+
+- Prefer **shell** (agent Shell, **background**, shell visible OFF), **server scripts**, and **MCP server tools** (e.g. DataForSEO, Semrush) over **WebFetch** or **browser** tools for API/data tasks. See `background-shell-no-visible-terminal.mdc`.
+- Use browser tools only for UI verification the user asked for, or when no server-side path exists.
+- Do not curl or fetch third-party APIs from client-side code you are writing.
+
+## Exceptions
+
+- User explicitly requests client-side or direct browser fetch.
+- Static public assets with no secrets and no CORS constraint (rare; still prefer server when the app will consume the data).
+
+## Do not skip
+
+- Applies every turn: new features, bug fixes, refactors, and reviews.
+- When reviewing diffs, flag new browser `fetch` to external origins as a violation unless excepted above.

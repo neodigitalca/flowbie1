@@ -9,6 +9,9 @@ defined( 'ABSPATH' ) || exit;
 
 class Neo_Pulse_App_Gsc_Reporting_Bundle {
 
+	/** Locked Search Analytics `type` for Generative AI features (AI Overviews / AI Mode). */
+	private const GENERATIVE_AI_SEARCH_TYPE = 'generativeAi';
+
 	/** @param array<string,mixed> $body */
 	public static function fetch_reporting_bundle( array $body ): array {
 		$site_url = trim( (string) ( $body['siteUrl'] ?? '' ) );
@@ -59,6 +62,19 @@ class Neo_Pulse_App_Gsc_Reporting_Bundle {
 		$exact         = $fm['match'];
 		$email         = Neo_Pulse_App_Gsc_Service_Account::service_account_email();
 		$candidates    = array();
+		if ( ! empty( $fm['listError'] ) ) {
+			return self::err(
+				200,
+				$fm['listError'],
+				array(
+					'errorType'           => 'api_error',
+					'originalSiteUrl'     => $site_url,
+					'serviceAccountEmail' => $email,
+					'requestedDomain'     => $fm['requestedDomain'],
+					'dateRange'           => array( 'start' => $start_str, 'end' => $end_str ),
+				)
+			);
+		}
 		if ( $exact ) {
 			if ( 0 === strpos( $exact, 'sc-domain:' ) ) {
 				$domain       = substr( $exact, strlen( 'sc-domain:' ) );
@@ -68,7 +84,7 @@ class Neo_Pulse_App_Gsc_Reporting_Bundle {
 			}
 		} else {
 			return self::err(
-				403,
+				200,
 				"This site is not in the list of properties the service account can access.\n\nTo fix this:\n1. Go to Google Search Console → Settings → Users and permissions\n2. Add {$email} as a user\n3. Grant at least \"Full\" permissions\n4. Wait a few minutes for permissions to propagate\n5. Use \"Test connection\" in NEO Pulse to refresh the list",
 				array(
 					'errorType'                  => 'site_not_in_list',
@@ -257,7 +273,128 @@ class Neo_Pulse_App_Gsc_Reporting_Bundle {
 			$response['sitemapsError'] = $sitemaps_error;
 		}
 
+		// Locked Search Analytics contract: type=generativeAi (totals + page dimension).
+		// If Google rejects the type or returns no usable rows, available=false; never copy web rows.
+		$generative_ai = self::fetch_generative_ai_bundle(
+			$successful_property,
+			$start_str,
+			$end_str,
+			$date_range_label,
+			$row_limit,
+			$has_compare ? $compare_start : null,
+			$has_compare ? $compare_end : null,
+			$has_compare ? $compare_range_label : null
+		);
+		$response['generativeAi'] = $generative_ai;
+
 		return array( 'statusCode' => 200, 'body' => $response );
+	}
+
+	/**
+	 * Single generative-AI Search Analytics contract (type=generativeAi).
+	 *
+	 * @return array<string,mixed>
+	 */
+	private static function fetch_generative_ai_bundle(
+		string $property,
+		string $start,
+		string $end,
+		string $date_label,
+		int $row_limit,
+		?string $compare_start,
+		?string $compare_end,
+		?string $compare_label
+	): array {
+		$primary = self::fetch_generative_ai_period( $property, $start, $end, $date_label, $row_limit );
+		if ( empty( $primary['available'] ) ) {
+			return array(
+				'available' => false,
+				'reason'    => (string) ( $primary['reason'] ?? 'Generative AI Search Analytics unavailable for this property.' ),
+			);
+		}
+
+		$out = array(
+			'available'         => true,
+			'searchType'        => self::GENERATIVE_AI_SEARCH_TYPE,
+			'aggregatePrimary'  => $primary['aggregate'],
+			'pagesPrimary'      => $primary['pages'],
+		);
+
+		if ( $compare_start && $compare_end && $compare_label ) {
+			$compare = self::fetch_generative_ai_period( $property, $compare_start, $compare_end, $compare_label, $row_limit );
+			if ( empty( $compare['available'] ) ) {
+				return array(
+					'available' => false,
+					'reason'    => (string) ( $compare['reason'] ?? 'Generative AI Search Analytics unavailable for the comparison period.' ),
+				);
+			}
+			$out['aggregateCompare'] = $compare['aggregate'];
+			$out['pagesCompare']     = $compare['pages'];
+		}
+
+		return $out;
+	}
+
+	/**
+	 * @return array{available:bool,reason?:string,aggregate?:array<string,mixed>,pages?:array<int,array<string,mixed>>}
+	 */
+	private static function fetch_generative_ai_period(
+		string $property,
+		string $start,
+		string $end,
+		string $date_label,
+		int $row_limit
+	): array {
+		$agg_res = Neo_Pulse_App_Gsc_Service_Account::search_analytics_query(
+			$property,
+			array(
+				'startDate' => $start,
+				'endDate'   => $end,
+				'type'      => self::GENERATIVE_AI_SEARCH_TYPE,
+				'rowLimit'  => 1,
+			)
+		);
+		if ( is_wp_error( $agg_res ) ) {
+			return array(
+				'available' => false,
+				'reason'    => $agg_res->get_error_message() ?: 'Generative AI Search Analytics request failed.',
+			);
+		}
+
+		$pages_res = Neo_Pulse_App_Gsc_Service_Account::search_analytics_query(
+			$property,
+			array(
+				'startDate'  => $start,
+				'endDate'    => $end,
+				'type'       => self::GENERATIVE_AI_SEARCH_TYPE,
+				'dimensions' => array( 'page' ),
+				'rowLimit'   => $row_limit,
+				'startRow'   => 0,
+			)
+		);
+		if ( is_wp_error( $pages_res ) ) {
+			return array(
+				'available' => false,
+				'reason'    => $pages_res->get_error_message() ?: 'Generative AI page Search Analytics request failed.',
+			);
+		}
+
+		$row = $agg_res['rows'][0] ?? null;
+		$aggregate = array(
+			'label'       => self::month_label_from_range_start_utc( $start ),
+			'startDate'   => $start,
+			'endDate'     => $end,
+			'clicks'      => (int) ( is_array( $row ) ? ( $row['clicks'] ?? 0 ) : 0 ),
+			'impressions' => (int) ( is_array( $row ) ? ( $row['impressions'] ?? 0 ) : 0 ),
+			'ctr'         => (float) ( is_array( $row ) ? ( $row['ctr'] ?? 0 ) : 0 ),
+			'position'    => (float) ( is_array( $row ) ? ( $row['position'] ?? 0 ) : 0 ),
+		);
+
+		return array(
+			'available' => true,
+			'aggregate' => $aggregate,
+			'pages'     => self::map_reporting_rows( $pages_res['rows'] ?? array(), 'page', $date_label ),
+		);
 	}
 
 	/** @param array<int,array<string,mixed>> $rows @return array<int,array<string,mixed>> */

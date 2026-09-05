@@ -6,7 +6,7 @@ import type {
 
 export type AutomationRecipeCategory = "reactive" | "maintenance" | "local-seo" | "onboarding" | "research";
 
-export type AutomationRecipeExecutionFilter = "meta-only" | "full-aiseo";
+export type AutomationRecipeExecutionFilter = "meta-only" | "full-aiseo" | "entity-page-creator";
 
 export type AutomationRecipeBucket = "pages" | "posts" | "sap" | "all";
 

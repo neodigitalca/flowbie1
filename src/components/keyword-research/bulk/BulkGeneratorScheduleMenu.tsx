@@ -14,15 +14,18 @@ import { cn } from "@/lib/utils";
 export type BulkGeneratorScheduleMenuProps = WordPressScheduleFieldsProps & {
   postDestination: WordPressPostDestination;
   inventoryDownloadFileName?: string | null;
+  /** Keep schedule picker visible when export destination is local (blog import). */
+  showWhenLocal?: boolean;
 };
 
 export function BulkGeneratorScheduleMenu({
   postDestination,
   inventoryDownloadFileName = null,
   isDisabled = false,
+  showWhenLocal = false,
   ...scheduleProps
 }: BulkGeneratorScheduleMenuProps) {
-  if (postDestination === "local") {
+  if (postDestination === "local" && !showWhenLocal) {
     return null;
   }
 

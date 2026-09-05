@@ -132,14 +132,43 @@ vi.mock("@/lib/local-seo-strategy-from-grid", () => ({
   }),
 }));
 
+vi.mock("@/lib/wikipedia/wiki-entity-pool", () => ({
+  harvestWikiPlacesForCity: vi.fn(async () => ({
+    pool: [
+      {
+        wikipediaTitle: "Plum Coulee",
+        wikipediaUrl: "https://en.wikipedia.org/wiki/Plum_Coulee",
+        entityLabel: "Plum Coulee, MB",
+        tier: "place",
+      },
+    ],
+    tier1Count: 1,
+    tier2Count: 0,
+  })),
+  pickWikiEntriesFromPool: vi.fn(async () => [
+    {
+      wikipediaTitle: "Plum Coulee",
+      wikipediaUrl: "https://en.wikipedia.org/wiki/Plum_Coulee",
+      entityLabel: "Plum Coulee, MB",
+      tier: "place",
+    },
+  ]),
+}));
+
 describe("runLocalStrategySapSchedule grid direct path", () => {
   it("returns builtFromGridDirect and does not call fetchLocalSeoStrategyFromGrid", async () => {
     const { fetchLocalSeoStrategyFromGrid } = await import("@/lib/local-seo-strategy-from-grid");
     const gridParsedRows = [
-      row({ keyword: "kw", rank: 8, address: "a, b, c, d, e, f" }),
+      row({
+        keyword: "kw",
+        rank: 8,
+        address: "303A Main Ave, Plum Coulee, MB R0G 1R0",
+        latitude: 49.18,
+        longitude: -97.93,
+      }),
     ];
     const res = await runLocalStrategySapSchedule({
-      apiKey: "",
+      apiKey: "test-key",
       model: "x",
       temperature: 0,
       maxTokens: 1,

@@ -1,0 +1,26 @@
+{
+  "keyword": "entity-generator-monthly",
+  "name": "Entity generator",
+  "executionKind": "entity_generator",
+  "description": "Generate entity location rows as bulk CSV from a Local Dominator grid with Wikipedia and entity sitemap validation.",
+  "filters": {
+    "categories": ["local-seo"],
+    "buckets": ["sap"],
+    "verticals": ["local-seo", "general"]
+  },
+  "defaults": {
+    "executionPayload": {
+      "locationSource": "grid",
+      "gridInputSource": "workflow",
+      "entityAdGroupCount": 3,
+      "entityAdsPerGroup": 5,
+      "entityPageCount": 15,
+      "postCount": 15,
+      "focusKeyword": "",
+      "titleTemplate": "{keyword} Near {entity}",
+      "sitemapType": "entity",
+      "targetBucket": "sap",
+      "saveLocalArchive": true
+    }
+  }
+}

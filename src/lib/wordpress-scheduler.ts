@@ -5,6 +5,7 @@
 
 import type { ScheduleOccupancy } from '@/lib/bulk-schedule-gap';
 import { calculateGapScheduledDate } from '@/lib/bulk-schedule-gap';
+import { normalizePublishDays } from '@/lib/schedule-publish-days';
 
 export type ScheduleFrequency = 'immediately' | 'daily' | 'weekly' | 'monthly' | 'custom' | 'everyNDays';
 
@@ -42,6 +43,8 @@ export interface ScheduleOptions {
   useGapScheduling?: boolean;
   /** Prior slot dates in the same bulk run (gap scheduling in-batch dedupe). */
   priorInBatchDates?: Date[];
+  /** Explicit day-of-month slots for times-per-month (unique, 1..lastAllowed). */
+  publishDays?: number[];
 }
 
 function daysInUtcMonth(year: number, month: number): number {
@@ -88,7 +91,17 @@ function calculateCustomTimesPerMonthDate(rowIndex: number, options: ScheduleOpt
   const span = Math.max(1, lastDay - startDay + 1);
 
   let dayOfMonth: number;
-  if (timesPerMonth <= 1) {
+  if (options.publishDays && options.publishDays.length > 0) {
+    const normalized = normalizePublishDays(options.publishDays, timesPerMonth, 31);
+    if (!normalized) {
+      throw new Error("Publish days do not match times per month.");
+    }
+    const slotDay = normalized[slotIndex];
+    if (slotDay == null) {
+      throw new Error("Publish days do not match times per month.");
+    }
+    dayOfMonth = Math.min(lastDay, slotDay);
+  } else if (timesPerMonth <= 1) {
     dayOfMonth = Math.min(lastDay, startDay);
   } else if (span <= 1) {
     dayOfMonth = startDay;

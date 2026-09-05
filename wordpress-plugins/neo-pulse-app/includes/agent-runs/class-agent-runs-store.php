@@ -103,9 +103,21 @@ class Neo_Pulse_App_Agent_Runs_Store {
 		if ( isset( $body['planJson'] ) && is_array( $body['planJson'] ) ) {
 			$plan = $body['planJson'];
 		}
-		if ( $recipe_key === 'post_creator' && empty( $plan['executionMode'] ) ) {
+		if ( in_array( $recipe_key, array( 'post_creator', 'local_dominator_export' ), true ) && empty( $plan['executionMode'] ) ) {
 			$plan['executionMode'] = 'server';
 		}
+
+		$site_id = trim( (string) ( $context['siteId'] ?? '' ) );
+		if ( $site_id !== '' && in_array( $recipe_key, array( 'post_creator', 'content_gap_check' ), true ) ) {
+			$existing = self::find_active_run_for_site( $team_id, $recipe_key, $site_id );
+			if ( is_array( $existing ) ) {
+				return $existing;
+			}
+		}
+
+		$uses_server = in_array( $recipe_key, array( 'post_creator', 'local_dominator_export' ), true )
+			|| ( sanitize_key( (string) ( $plan['executionMode'] ?? '' ) ) === 'server' );
+		$initial_status = $uses_server ? 'running' : 'queued';
 
 		global $wpdb;
 		$table = $wpdb->prefix . 'neo_pulse_agent_runs';
@@ -118,7 +130,7 @@ class Neo_Pulse_App_Agent_Runs_Store {
 				'created_by'        => $user_id,
 				'title'             => $title,
 				'recipe_key'        => $recipe_key,
-				'status'            => 'queued',
+				'status'            => $initial_status,
 				'source'            => $source,
 				'task_id'           => $task_id,
 				'context_json'      => wp_json_encode( $context ),
@@ -126,7 +138,7 @@ class Neo_Pulse_App_Agent_Runs_Store {
 				'result_json'       => null,
 				'error_message'     => null,
 				'client_batch_key'  => '',
-				'started_at'        => null,
+				'started_at'        => $uses_server ? $now : null,
 				'finished_at'       => null,
 				'created_at'        => $now,
 				'updated_at'        => $now,
@@ -144,6 +156,55 @@ class Neo_Pulse_App_Agent_Runs_Store {
 	/**
 	 * @return array<int,array<string,mixed>>
 	 */
+	/**
+	 * One active editorial agent per site (post creator or content gap check).
+	 *
+	 * @return array<string,mixed>|null
+	 */
+	public static function find_active_run_for_site( int $team_id, string $recipe_key, string $site_id ): ?array {
+		$recipe_key = sanitize_key( $recipe_key );
+		$site_id    = trim( $site_id );
+		if ( $team_id <= 0 || $site_id === '' || ! in_array( $recipe_key, array( 'post_creator', 'content_gap_check' ), true ) ) {
+			return null;
+		}
+
+		global $wpdb;
+		$table = $wpdb->prefix . 'neo_pulse_agent_runs';
+		$rows  = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE team_id = %d AND recipe_key = %s AND status IN ('queued','running') ORDER BY id DESC LIMIT 25",
+				$team_id,
+				$recipe_key
+			),
+			ARRAY_A
+		);
+		if ( ! is_array( $rows ) ) {
+			return null;
+		}
+
+		foreach ( $rows as $row ) {
+			if ( ! is_array( $row ) ) {
+				continue;
+			}
+			$context = array();
+			if ( ! empty( $row['context_json'] ) ) {
+				$decoded = json_decode( (string) $row['context_json'], true );
+				if ( is_array( $decoded ) ) {
+					$context = $decoded;
+				}
+			}
+			if ( trim( (string) ( $context['siteId'] ?? '' ) ) !== $site_id ) {
+				continue;
+			}
+			$formatted = self::format_run_row( $row );
+			if ( is_array( $formatted ) ) {
+				return $formatted;
+			}
+		}
+
+		return null;
+	}
+
 	public static function list_runs( int $team_id, array $filters = array() ): array {
 		global $wpdb;
 		$table = $wpdb->prefix . 'neo_pulse_agent_runs';
@@ -669,7 +730,7 @@ class Neo_Pulse_App_Agent_Runs_Store {
 			return true;
 		}
 		$recipe = sanitize_key( (string) ( $run['recipeKey'] ?? '' ) );
-		return $recipe === 'post_creator';
+		return in_array( $recipe, array( 'post_creator', 'local_dominator_export' ), true );
 	}
 
 	/**

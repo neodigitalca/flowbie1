@@ -9,8 +9,8 @@
   },
   "defaults": {
     "executionPayload": {
-      "businessName": "Advance Blinds & Drapery",
-      "keyword": "blinds near me",
+      "businessName": "",
+      "keyword": "auto",
       "saveLocalArchive": true,
       "saveToDisk": true
     }

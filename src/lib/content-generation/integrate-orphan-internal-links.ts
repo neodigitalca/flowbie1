@@ -9,8 +9,12 @@ import {
 } from "@/lib/overview/overview-blog-links-extract";
 import {
   INTERNAL_LINK_PLACEHOLDER_RE,
+  normalizeMalformedHarnessLinkPlaceholders,
   type LinkablePost,
 } from "@/lib/content-generation/internal-link-placeholders";
+import {
+  extractOverviewSectionHtml,
+} from "@/lib/overview/overview-blog-overview-prepend";
 
 export type IntegrateOrphanInternalLinksOptions = {
   siteUrl: string;
@@ -89,14 +93,16 @@ function findOrphanBlockByLink(
   return null;
 }
 
-function stripSurvivingLinkPlaceholders(html: string): string {
-  const re = new RegExp(INTERNAL_LINK_PLACEHOLDER_RE.source, "g");
-  return html.replace(re, (_full, rawQuery: string, rawAnchor: string) => {
-    const anchor = (rawAnchor ?? "").trim();
-    const query = (rawQuery ?? "").trim();
-    console.warn("[Orphan link integration] Stripping unreplaced placeholder:", query || anchor);
-    return anchor || query;
-  });
+function assertNoUnresolvedPlaceholders(html: string): string {
+  return normalizeMalformedHarnessLinkPlaceholders(html);
+}
+
+function blockIsInsideOverviewSection(html: string, blockStart: number): boolean {
+  const overview = extractOverviewSectionHtml(html);
+  if (!overview?.trim()) return false;
+  const overviewStart = html.indexOf(overview);
+  if (overviewStart < 0) return false;
+  return blockStart >= overviewStart && blockStart < overviewStart + overview.length;
 }
 
 /**
@@ -109,7 +115,7 @@ export function integrateOrphanInternalLinksInHtml(
   if (!html?.trim()) return html;
 
   const siteHost = getSiteHost(opts.siteUrl);
-  if (!siteHost) return stripSurvivingLinkPlaceholders(html);
+  if (!siteHost) return assertNoUnresolvedPlaceholders(html);
 
   let result = html;
   let integrated = 0;
@@ -128,6 +134,7 @@ export function integrateOrphanInternalLinksInHtml(
 
     for (let i = orphanIndex - 1; i >= 0; i--) {
       const block = blocks[i]!;
+      if (blockIsInsideOverviewSection(result, block.start)) continue;
       const hit = findPhraseOutsideTags(block.html, parsed.anchor);
       if (!hit) continue;
 
@@ -154,5 +161,5 @@ export function integrateOrphanInternalLinksInHtml(
     console.log(`[Orphan link integration] integrated ${integrated} / removed ${dropped}`);
   }
 
-  return stripSurvivingLinkPlaceholders(result);
+  return assertNoUnresolvedPlaceholders(result);
 }

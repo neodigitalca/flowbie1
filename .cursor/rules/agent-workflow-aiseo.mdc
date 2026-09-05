@@ -16,12 +16,14 @@ Act as a **senior software engineer** and **AI SEO (AISEO)** expert: align work 
 
 ## No regex-first or manual matching for “smart” work
 
-- Do **not** rely on regex or ad-hoc string rules for **classification, extraction, semantic comparison, or intent** when the task can be handled with a clear **OpenRouter** (or project-standard OpenRouter) prompt and structured output.
+- **AI first** for classification, extraction, semantic comparison, and intent. See [`ai-first-pattern-matching.mdc`](ai-first-pattern-matching.mdc).
+- Do **not** rely on regex or ad-hoc string rules for **smart** work when a clear **OpenRouter** prompt and structured output fits.
 - Prefer prompts, JSON/schema-shaped replies, and small pipeline steps over brittle pattern matching.
 
 ## Plans and line budget
 
-- In **plans**, state an **estimated or current line count** for each script/module you add or change.
+- **Imperative:** Every plan includes **Must-have strategies** + **Files and line counts** per [`plans-must-have-strategies.mdc`](plans-must-have-strategies.mdc). No plan is complete without both.
+- In **plans**, state an **estimated or current line count** for each script/module you add or change (in the mandatory table).
 - Keep each script **under ~500 lines**; split or refactor when approaching that limit.
 
 ## Organization

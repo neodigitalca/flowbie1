@@ -6,6 +6,7 @@ import {
   buildInventoryLookupMaps,
   existingPostFromInventoryRow,
 } from "@/lib/wordpress-api/inventory-match";
+import * as acfReader from "@/lib/content-generation/ai-driven-acf-reader";
 
 const getWordPressPostContent = vi.fn();
 const getFieldsForPost = vi.fn();
@@ -262,5 +263,65 @@ describe("bulkOptimizationDoPrefetch", () => {
     expect(getWordPressPostContent).not.toHaveBeenCalled();
     const pending = prefetchedPendingCache.get(0)?.pending as { acfFullPostSnapshot?: { id?: number } };
     expect(pending?.acfFullPostSnapshot?.id).toBe(5);
+  });
+
+  it("rethrows prefetch errors without seeding stub pending row", async () => {
+    const snapshot: WpPostSnapshotFromAcfByUrl = {
+      id: 42,
+      slug: "svc-area",
+      title: "T",
+      content: "<p>body</p>",
+      excerpt: "",
+      date_gmt: "",
+      status: "publish",
+      link: "https://example.com/svc-area/",
+      postTypeEndpoint: "posts",
+      postTypeSubtype: "post",
+    };
+
+    const prefetchedPostPayloadByUrlIndex = new Map<number, WpPostSnapshotFromAcfByUrl>();
+    prefetchedPostPayloadByUrlIndex.set(0, snapshot);
+
+    const prefetchedAcfFieldsCache = new Map<number, Record<string, unknown>>();
+    prefetchedAcfFieldsCache.set(0, {
+      keyword_focus: "test keyword",
+      seo_research: '{"ok":true}',
+    });
+
+    const prefetchedPendingCache = new Map<
+      number,
+      { pending: Record<string, unknown>; primaryKeyword: string }
+    >();
+
+    vi.spyOn(acfReader, "mergeSeoResearchFromAcfIntoContext").mockImplementation(() => {
+      throw new Error("prefetch failed");
+    });
+
+    await expect(
+      bulkOptimizationDoPrefetch(0, {
+        site: {
+          id: "s1",
+          siteUrl: "https://example.com",
+          username: "u",
+          appPassword: "p",
+        } as any,
+        urls: ["https://example.com/svc-area/"],
+        batchKey: "s1-batch",
+        isAcfKeywordMode: true,
+        updateMode: "live" as any,
+        optimizationOptions: {} as any,
+        inContentImageRequest: undefined,
+        wordPressPostsForRun: [],
+        siteServiceContext: null,
+        prefetchedAcfFieldsCache,
+        prefetchedPostPayloadByUrlIndex,
+        prefetchedPendingCache,
+        setBulkOptimizationState: vi.fn(),
+        bulkInventorySnapshot: null,
+      }),
+    ).rejects.toThrow("prefetch failed");
+
+    expect(prefetchedPendingCache.has(0)).toBe(false);
+    vi.restoreAllMocks();
   });
 });

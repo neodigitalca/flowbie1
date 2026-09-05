@@ -1,0 +1,3913 @@
+[
+  {
+    "keyword": "blog-freshness-radar",
+    "name": "Blog Freshness Radar",
+    "description": "Full AISEO on blog posts when total search clicks decline.",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Scope: blog posts (Posts bucket).",
+      "Runs when total clicks from google search fell at least 20% vs the prior 28 days, with at least 150 impressions.",
+      "Higher click-drop threshold (20%) for noisier post-level GSC data.",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "maintenance",
+    "verticals": [
+      "editorial"
+    ],
+    "tags": [
+      "gsc",
+      "posts",
+      "clicks",
+      "blog"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer"
+      ],
+      "targetBuckets": [
+        "posts"
+      ],
+      "triggerSignals": [
+        "clicks_drop"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "blog-freshness",
+        "title": "Refresh blog posts on clicks drop",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer",
+        "executionPayload": {
+          "targetBucket": "posts",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "any",
+          "conditions": [
+            {
+              "signal": "clicks_drop",
+              "operator": "gte",
+              "value": 20,
+              "minImpressions": 150
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 5
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-clicks-drop",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "posts",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "clicks_drop",
+            "operator": "gte",
+            "value": 20,
+            "minImpressions": 150
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-full",
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "targetBucket": "posts",
+        "updateMode": "update"
+      },
+      "title": "Refresh blog posts on clicks drop"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "chatgpt-website-audit",
+    "name": "ChatGPT website audit",
+    "description": "ChatGPT session for client website audits. Log in via AgentMail OTP, send setup questions automatically, and archive replies in one cumulative CSV for RAG.",
+    "notes": [
+      "Run from a Forge workflow with Client as step 1.",
+      "Uses neo-pulse@agentmail.to for ChatGPT login codes.",
+      "Setup Questions are sent when ChatGPT is ready; the session finishes after those replies.",
+      "Each completed URL appends rows to one cumulative CSV for Archive to RAG.",
+      "Type a question during the run only when the Questions list is empty."
+    ],
+    "isAutomation": true,
+    "category": "research",
+    "verticals": [
+      "general",
+      "local-seo",
+      "agency"
+    ],
+    "tags": [
+      "research",
+      "chatgpt",
+      "audit",
+      "website"
+    ],
+    "prerequisites": [
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "chatgpt_website_audit"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "chatgpt-website-audit-run",
+        "title": "ChatGPT website audit",
+        "status": "todo",
+        "assignPulse": true,
+        "executionKind": "chatgpt_website_audit",
+        "executionPayload": {
+          "saveLocalArchive": true,
+          "saveToDisk": true
+        },
+        "scheduleMode": "calendar",
+        "recurrenceRule": "none"
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-once",
+      "kind": "calendar",
+      "frequency": "once",
+      "startDate": "2026-09-01",
+      "time": "09:00"
+    },
+    "actionBlock": {
+      "keyword": "chatgpt-website-audit",
+      "executionKind": "chatgpt_website_audit",
+      "executionPayload": {
+        "saveLocalArchive": true,
+        "saveToDisk": true
+      },
+      "title": "ChatGPT website audit"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "content-optimizer-full",
+    "name": "Full AISEO",
+    "description": "Rewrite title, meta, headings, and body for target pages or posts.",
+    "notes": [
+      "Run from a Forge workflow with Client as step 1.",
+      "Choose target bucket and which SEO aspects to optimize in the What tab.",
+      "Optional RAG context from upstream workflow steps."
+    ],
+    "isAutomation": true,
+    "category": "maintenance",
+    "verticals": [
+      "general",
+      "editorial",
+      "local-seo",
+      "home-services"
+    ],
+    "tags": [
+      "optimize",
+      "aiseo",
+      "content"
+    ],
+    "prerequisites": [
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer"
+      ],
+      "buckets": [
+        "pages",
+        "posts",
+        "sap",
+        "all"
+      ],
+      "execution": [
+        "full-aiseo"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "content-optimizer-full-run",
+        "title": "Full AISEO",
+        "status": "todo",
+        "assignPulse": true,
+        "executionKind": "content_optimizer",
+        "executionPayload": {
+          "updateMode": "update"
+        },
+        "scheduleMode": "calendar",
+        "recurrenceRule": "none"
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-once",
+      "kind": "calendar",
+      "frequency": "once",
+      "startDate": "2026-09-01",
+      "time": "09:00"
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-full",
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "updateMode": "update"
+      },
+      "title": "Full AISEO"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "content-optimizer-meta",
+    "name": "Meta + extra text",
+    "description": "Update title, meta description, and SEO extra text only. Page body is not rewritten.",
+    "notes": [
+      "Run from a Forge workflow with Client as step 1.",
+      "Choose target bucket and meta aspects in the What tab.",
+      "Optional RAG context from upstream workflow steps."
+    ],
+    "isAutomation": true,
+    "category": "maintenance",
+    "verticals": [
+      "general",
+      "editorial"
+    ],
+    "tags": [
+      "optimize",
+      "aiseo",
+      "meta"
+    ],
+    "prerequisites": [
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer_meta"
+      ],
+      "buckets": [
+        "pages",
+        "posts",
+        "sap",
+        "all"
+      ],
+      "execution": [
+        "meta-only"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "content-optimizer-meta-run",
+        "title": "Meta + extra text",
+        "status": "todo",
+        "assignPulse": true,
+        "executionKind": "content_optimizer_meta",
+        "executionPayload": {
+          "updateMode": "update"
+        },
+        "scheduleMode": "calendar",
+        "recurrenceRule": "none"
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-once",
+      "kind": "calendar",
+      "frequency": "once",
+      "startDate": "2026-09-01",
+      "time": "09:00"
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-meta",
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "updateMode": "update"
+      },
+      "title": "Meta + extra text"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "dfs-audit-then-optimize",
+    "name": "DFS audit then optimize",
+    "description": "Grade an existing page with DataForSEO LLM (ChatGPT, Gemini, Perplexity), then optimize content and meta using the audit checklist.",
+    "notes": [
+      "Run from a Forge workflow with Client as step 1.",
+      "Step 1 requires a single target article URL and focus keyword from ACF.",
+      "Step 2 wires RAG from the audit step to apply optimization checklist items.",
+      "Audit uses web search to grade based on what each LLM can verify on the live page."
+    ],
+    "isAutomation": true,
+    "category": "maintenance",
+    "verticals": [
+      "general",
+      "local-seo",
+      "agency",
+      "editorial"
+    ],
+    "tags": [
+      "research",
+      "audit",
+      "dataforseo",
+      "optimize"
+    ],
+    "prerequisites": [
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "dfs_llm_article_audit",
+        "content_optimizer"
+      ],
+      "actionCount": 2
+    },
+    "defaultTasks": [
+      {
+        "keyword": "dfs-audit-then-optimize-audit",
+        "title": "DFS LLM article audit",
+        "status": "todo",
+        "assignPulse": true,
+        "executionKind": "dfs_llm_article_audit",
+        "executionPayload": {
+          "saveLocalArchive": true,
+          "saveToDisk": true
+        },
+        "scheduleMode": "calendar",
+        "recurrenceRule": "none"
+      },
+      {
+        "keyword": "dfs-audit-then-optimize-run",
+        "title": "Full AISEO",
+        "status": "todo",
+        "assignPulse": true,
+        "executionKind": "content_optimizer",
+        "executionPayload": {
+          "targetUrl": "",
+          "updateMode": "update",
+          "saveLocalArchive": true,
+          "ragInputKeys": [
+            "dfs_llm_article_audit_1"
+          ]
+        },
+        "scheduleMode": "calendar",
+        "recurrenceRule": "none"
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-once",
+      "kind": "calendar",
+      "frequency": "once",
+      "startDate": "2026-09-01",
+      "time": "09:00"
+    },
+    "actionBlock": {
+      "keyword": "dfs-llm-article-audit",
+      "executionKind": "dfs_llm_article_audit",
+      "executionPayload": {
+        "saveLocalArchive": true,
+        "saveToDisk": true
+      },
+      "title": "DFS LLM article audit"
+    },
+    "actionBlocks": [
+      {
+        "keyword": "dfs-llm-article-audit",
+        "executionKind": "dfs_llm_article_audit",
+        "executionPayload": {
+          "saveLocalArchive": true,
+          "saveToDisk": true
+        },
+        "title": "DFS LLM article audit"
+      },
+      {
+        "keyword": "content-optimizer-full",
+        "executionKind": "content_optimizer",
+        "executionPayload": {
+          "targetUrl": "",
+          "updateMode": "update",
+          "saveLocalArchive": true,
+          "ragInputKeys": [
+            "dfs_llm_article_audit_1"
+          ]
+        },
+        "title": "Full AISEO"
+      }
+    ],
+    "kind": "template"
+  },
+  {
+    "keyword": "dfs-llm-article-audit",
+    "name": "DFS LLM article audit",
+    "description": "Grade an existing article on a 10-point scorecard via DataForSEO LLM (ChatGPT, Gemini, Perplexity) and archive optimization guidance for downstream steps.",
+    "notes": [
+      "Run from a Forge workflow with Client as step 1.",
+      "Requires a single target article URL and focus keyword from ACF.",
+      "Audit uses web search to grade based on what each LLM can verify on the live page."
+    ],
+    "isAutomation": true,
+    "category": "research",
+    "verticals": [
+      "general",
+      "local-seo",
+      "agency",
+      "editorial"
+    ],
+    "tags": [
+      "research",
+      "audit",
+      "dataforseo"
+    ],
+    "prerequisites": [
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "dfs_llm_article_audit"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "dfs-llm-article-audit-run",
+        "title": "DFS LLM article audit",
+        "status": "todo",
+        "assignPulse": true,
+        "executionKind": "dfs_llm_article_audit",
+        "executionPayload": {
+          "saveLocalArchive": true,
+          "saveToDisk": true
+        },
+        "scheduleMode": "calendar",
+        "recurrenceRule": "none"
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-once",
+      "kind": "calendar",
+      "frequency": "once",
+      "startDate": "2026-09-01",
+      "time": "09:00"
+    },
+    "actionBlock": {
+      "keyword": "dfs-llm-article-audit",
+      "executionKind": "dfs_llm_article_audit",
+      "executionPayload": {
+        "saveLocalArchive": true,
+        "saveToDisk": true
+      },
+      "title": "DFS LLM article audit"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "dual-signal-pages",
+    "name": "Dual Signal Pages",
+    "description": "Static pages must show dual GSC decay signals before meta and extra text updates run.",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Scope: static pages (Pages bucket).",
+      "Both checks below must pass on the same URL before anything runs:",
+      "Impressions rose vs the prior 28 days AND click-through rate fell (Google shows the page more often, but fewer searchers click).",
+      "Total clicks from Google Search fell at least 10% vs the prior 28 days, with at least 100 impressions.",
+      "Updates title, meta description, and SEO extra text. Page body content is not rewritten. Up to 5 pages per cycle.",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "reactive",
+    "verticals": [
+      "general"
+    ],
+    "tags": [
+      "gsc",
+      "pages",
+      "multi-signal",
+      "meta"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer_meta"
+      ],
+      "targetBuckets": [
+        "pages"
+      ],
+      "triggerSignals": [
+        "impressions_up_ctr_down",
+        "clicks_drop"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "dual-signal",
+        "title": "Meta + extra text on pages on dual GSC decay signals",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer_meta",
+        "executionPayload": {
+          "targetBucket": "pages",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "all",
+          "conditions": [
+            {
+              "signal": "impressions_up_ctr_down",
+              "operator": "gte",
+              "value": 0,
+              "minImpressions": 100
+            },
+            {
+              "signal": "clicks_drop",
+              "operator": "gte",
+              "value": 10,
+              "minImpressions": 100
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 5
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-dual-decay",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "pages",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "all",
+        "conditions": [
+          {
+            "signal": "impressions_up_ctr_down",
+            "operator": "gte",
+            "value": 0,
+            "minImpressions": 100
+          },
+          {
+            "signal": "clicks_drop",
+            "operator": "gte",
+            "value": 10,
+            "minImpressions": 100
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-meta",
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "pages",
+        "updateMode": "update"
+      },
+      "title": "Meta + extra text on pages on dual GSC decay signals"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "entity-generator-monthly",
+    "name": "Entity generator",
+    "description": "Generate entity location rows as bulk CSV from a Local Dominator grid with Wikipedia and entity sitemap validation.",
+    "notes": [
+      "Requires a Local Dominator grid CSV upload (or upstream workflow export).",
+      "Outputs entity-bulk.csv with skeleton rows (entity, title template, Wikipedia).",
+      "Does not hydrate GSC keywords or publish WordPress pages.",
+      "Default: 3 ad groups × 5 locations = 15 entity rows.",
+      "Chain with SAP generator to hydrate and schedule pages."
+    ],
+    "isAutomation": true,
+    "category": "local-seo",
+    "verticals": [
+      "local-seo",
+      "general"
+    ],
+    "tags": [
+      "entity",
+      "csv",
+      "grid",
+      "monthly"
+    ],
+    "prerequisites": [
+      "wordpress",
+      "entity-sitemap"
+    ],
+    "filters": {
+      "executionKinds": [
+        "entity_generator"
+      ],
+      "targetBuckets": [
+        "sap"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "entity-generator-run",
+        "title": "Generate entity CSV",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "calendar",
+        "dueDate": "2026-09-01",
+        "dueTime": "09:00",
+        "recurrenceRule": "monthly",
+        "executionKind": "entity_generator",
+        "executionPayload": {
+          "locationSource": "grid",
+          "gridInputSource": "workflow",
+          "entityAdGroupCount": 3,
+          "entityAdsPerGroup": 5,
+          "entityPageCount": 15,
+          "postCount": 15,
+          "focusKeyword": "",
+          "titleTemplate": "{keyword} Near {entity}",
+          "sitemapType": "entity",
+          "targetBucket": "sap",
+          "saveLocalArchive": true
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-monthly",
+      "kind": "calendar",
+      "frequency": "monthly",
+      "startDate": "2026-09-01",
+      "time": "09:00",
+      "targetBucket": "sap"
+    },
+    "actionBlock": {
+      "keyword": "action-entity_generator",
+      "executionKind": "entity_generator",
+      "executionPayload": {
+        "locationSource": "grid",
+        "gridInputSource": "workflow",
+        "entityAdGroupCount": 3,
+        "entityAdsPerGroup": 5,
+        "entityPageCount": 15,
+        "postCount": 15,
+        "focusKeyword": "",
+        "titleTemplate": "{keyword} Near {entity}",
+        "sitemapType": "entity",
+        "targetBucket": "sap",
+        "saveLocalArchive": true
+      },
+      "title": "Generate entity CSV"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "entity-page-creator-monthly",
+    "name": "Entity page creator",
+    "description": "Generate entity locations from a Local Dominator grid, then schedule entity pages across the month.",
+    "notes": [
+      "Requires a Local Dominator grid CSV upload (or use the Grid to entity pages workflow).",
+      "Grid pins drive location picks; Wikipedia and entity sitemap validate and dedupe.",
+      "Creates ad-group structured bulk CSV rows, fills GSC keywords, titles, and meta, then publishes entity pages.",
+      "Default: 3 ad groups × 5 locations = 15 entity pages scheduled evenly across the month.",
+      "Requires WordPress entity sitemap, OpenRouter, DataForSEO, and GSC."
+    ],
+    "isAutomation": true,
+    "category": "local-seo",
+    "verticals": [
+      "local-seo",
+      "general"
+    ],
+    "tags": [
+      "entity",
+      "sap",
+      "grid",
+      "monthly"
+    ],
+    "prerequisites": [
+      "wordpress",
+      "gsc",
+      "entity-sitemap"
+    ],
+    "filters": {
+      "executionKinds": [
+        "entity_page_creator"
+      ],
+      "targetBuckets": [
+        "sap"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "entity-page-creator-run",
+        "title": "Create scheduled entity pages",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "calendar",
+        "dueDate": "2026-09-01",
+        "dueTime": "09:00",
+        "recurrenceRule": "monthly",
+        "executionKind": "entity_page_creator",
+        "executionPayload": {
+          "locationSource": "grid",
+          "gridInputSource": "workflow",
+          "entityAdGroupCount": 3,
+          "entityAdsPerGroup": 5,
+          "entityPageCount": 15,
+          "postCount": 15,
+          "focusKeyword": "",
+          "titleTemplate": "{keyword} Near {entity}",
+          "sitemapType": "entity",
+          "featuredImage": false,
+          "postDestination": "wordpress",
+          "scheduleTimesPerMonth": 15,
+          "scheduleCustomInterval": 15,
+          "scheduleStartDay": 1,
+          "scheduleStartTime": "09:00",
+          "scheduleStaggerOptimized": true,
+          "targetBucket": "sap",
+          "saveLocalArchive": true
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-monthly",
+      "kind": "calendar",
+      "frequency": "monthly",
+      "startDate": "2026-09-01",
+      "time": "09:00",
+      "targetBucket": "sap"
+    },
+    "actionBlock": {
+      "keyword": "action-entity_page_creator",
+      "executionKind": "entity_page_creator",
+      "executionPayload": {
+        "locationSource": "grid",
+        "gridInputSource": "workflow",
+        "entityAdGroupCount": 3,
+        "entityAdsPerGroup": 5,
+        "entityPageCount": 15,
+        "postCount": 15,
+        "focusKeyword": "",
+        "titleTemplate": "{keyword} Near {entity}",
+        "sitemapType": "entity",
+        "featuredImage": false,
+        "postDestination": "wordpress",
+        "scheduleTimesPerMonth": 15,
+        "scheduleCustomInterval": 15,
+        "scheduleStartDay": 1,
+        "scheduleStartTime": "09:00",
+        "scheduleStaggerOptimized": true,
+        "targetBucket": "sap",
+        "saveLocalArchive": true
+      },
+      "title": "Create scheduled entity pages"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "entity-sap-guardian",
+    "name": "Entity SAP Guardian",
+    "description": "Full AISEO on entity/service-area pages when rankings drop.",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Scope: entity and service-area pages in the SAP (entity sitemap) bucket.",
+      "Runs when average ranking position worsened by at least 3 spots, with at least 50 impressions.",
+      "NEO Pulse rewrites the full page, not just title and meta.",
+      "Requires an entity sitemap so SAP URLs are in scope.",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "local-seo",
+    "verticals": [
+      "local-seo",
+      "home-services"
+    ],
+    "tags": [
+      "gsc",
+      "entity",
+      "sap",
+      "position"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress",
+      "entity-sitemap"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer"
+      ],
+      "targetBuckets": [
+        "sap"
+      ],
+      "triggerSignals": [
+        "position_drop"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "sap-position-guard",
+        "title": "Refresh entity pages on position drop",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer",
+        "executionPayload": {
+          "targetBucket": "sap",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "any",
+          "conditions": [
+            {
+              "signal": "position_drop",
+              "operator": "gte",
+              "value": 3,
+              "minImpressions": 50
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 5
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-position-drop",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "sap",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "position_drop",
+            "operator": "gte",
+            "value": 3,
+            "minImpressions": 50
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-full",
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "targetBucket": "sap",
+        "updateMode": "update"
+      },
+      "title": "Refresh entity pages on position drop"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "entity-to-sap-monthly",
+    "name": "Entity to SAP pages",
+    "description": "Generate entity CSV rows, then hydrate and schedule SAP pages.",
+    "notes": [
+      "Sequential workflow: Entity generator, then SAP generator.",
+      "Step 2 reads entity-bulk.csv from step 1 via workflow RAG.",
+      "Default: 3 ad groups × 5 locations = 15 SAP pages scheduled across the month."
+    ],
+    "isAutomation": true,
+    "category": "local-seo",
+    "verticals": [
+      "local-seo",
+      "general"
+    ],
+    "tags": [
+      "entity",
+      "sap",
+      "workflow",
+      "monthly"
+    ],
+    "prerequisites": [
+      "wordpress",
+      "gsc",
+      "entity-sitemap"
+    ],
+    "filters": {
+      "executionKinds": [
+        "entity_generator",
+        "sap_generator"
+      ],
+      "targetBuckets": [
+        "sap"
+      ],
+      "actionCount": 2
+    },
+    "defaultTasks": [
+      {
+        "keyword": "entity-generator-run",
+        "title": "Generate entity CSV",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "calendar",
+        "dueDate": "2026-09-01",
+        "dueTime": "09:00",
+        "recurrenceRule": "monthly",
+        "executionKind": "entity_generator",
+        "executionPayload": {
+          "locationSource": "grid",
+          "gridInputSource": "workflow",
+          "entityAdGroupCount": 3,
+          "entityAdsPerGroup": 5,
+          "entityPageCount": 15,
+          "postCount": 15,
+          "focusKeyword": "",
+          "titleTemplate": "{keyword} Near {entity}",
+          "sitemapType": "entity",
+          "targetBucket": "sap",
+          "saveLocalArchive": true
+        }
+      },
+      {
+        "keyword": "sap-generator-run",
+        "title": "Create SAP pages from entity CSV",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "calendar",
+        "dueDate": "2026-09-01",
+        "dueTime": "09:00",
+        "recurrenceRule": "monthly",
+        "executionKind": "sap_generator",
+        "executionPayload": {
+          "entityAdGroupCount": 3,
+          "entityAdsPerGroup": 5,
+          "entityPageCount": 15,
+          "postCount": 15,
+          "entityCsvInputSource": "workflow",
+          "sitemapType": "entity",
+          "featuredImage": false,
+          "postDestination": "wordpress",
+          "scheduleTimesPerMonth": 15,
+          "scheduleCustomInterval": 15,
+          "scheduleStartDay": 1,
+          "scheduleStartTime": "09:00",
+          "scheduleStaggerOptimized": true,
+          "targetBucket": "sap",
+          "saveLocalArchive": true,
+          "ragInputKeys": [
+            "entity_generator_1"
+          ]
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-monthly",
+      "kind": "calendar",
+      "frequency": "monthly",
+      "startDate": "2026-09-01",
+      "time": "09:00",
+      "targetBucket": "sap"
+    },
+    "actionBlock": {
+      "keyword": "action-entity_generator",
+      "executionKind": "entity_generator",
+      "executionPayload": {
+        "locationSource": "grid",
+        "gridInputSource": "workflow",
+        "entityAdGroupCount": 3,
+        "entityAdsPerGroup": 5,
+        "entityPageCount": 15,
+        "postCount": 15,
+        "focusKeyword": "",
+        "titleTemplate": "{keyword} Near {entity}",
+        "sitemapType": "entity",
+        "targetBucket": "sap",
+        "saveLocalArchive": true
+      },
+      "title": "Generate entity CSV"
+    },
+    "actionBlocks": [
+      {
+        "keyword": "action-entity_generator",
+        "executionKind": "entity_generator",
+        "executionPayload": {
+          "locationSource": "grid",
+          "gridInputSource": "workflow",
+          "entityAdGroupCount": 3,
+          "entityAdsPerGroup": 5,
+          "entityPageCount": 15,
+          "postCount": 15,
+          "focusKeyword": "",
+          "titleTemplate": "{keyword} Near {entity}",
+          "sitemapType": "entity",
+          "targetBucket": "sap",
+          "saveLocalArchive": true
+        },
+        "title": "Generate entity CSV"
+      },
+      {
+        "keyword": "action-sap_generator",
+        "executionKind": "sap_generator",
+        "executionPayload": {
+          "entityAdGroupCount": 3,
+          "entityAdsPerGroup": 5,
+          "entityPageCount": 15,
+          "postCount": 15,
+          "entityCsvInputSource": "workflow",
+          "sitemapType": "entity",
+          "featuredImage": false,
+          "postDestination": "wordpress",
+          "scheduleTimesPerMonth": 15,
+          "scheduleCustomInterval": 15,
+          "scheduleStartDay": 1,
+          "scheduleStartTime": "09:00",
+          "scheduleStaggerOptimized": true,
+          "targetBucket": "sap",
+          "saveLocalArchive": true,
+          "ragInputKeys": [
+            "entity_generator_1"
+          ]
+        },
+        "title": "Create SAP pages from entity CSV"
+      }
+    ],
+    "kind": "workflow_template"
+  },
+  {
+    "keyword": "grid-to-entity-pages-monthly",
+    "name": "Grid to entity pages",
+    "description": "Export a Local Dominator grid, then generate and schedule entity pages from grid locations.",
+    "notes": [
+      "Sequential workflow: Local Dominator grid export, then entity page creator (grid mode only).",
+      "Install creates a workflow with two action steps; step 2 fails if step 1 produces no CSV.",
+      "Default: 3 ad groups × 5 locations = 15 entity pages scheduled evenly across the month."
+    ],
+    "isAutomation": true,
+    "category": "local-seo",
+    "verticals": [
+      "local-seo",
+      "general"
+    ],
+    "tags": [
+      "entity",
+      "grid",
+      "local-dominator",
+      "workflow",
+      "monthly"
+    ],
+    "prerequisites": [
+      "wordpress",
+      "gsc",
+      "entity-sitemap"
+    ],
+    "filters": {
+      "executionKinds": [
+        "local_dominator_export",
+        "entity_page_creator"
+      ],
+      "targetBuckets": [
+        "sap"
+      ],
+      "actionCount": 2
+    },
+    "defaultTasks": [
+      {
+        "keyword": "local-dominator-grid-export",
+        "title": "Export Local Dominator grid CSV",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "calendar",
+        "dueDate": "2026-09-01",
+        "dueTime": "09:00",
+        "recurrenceRule": "monthly",
+        "executionKind": "local_dominator_export",
+        "executionPayload": {
+          "businessName": "",
+          "keyword": "",
+          "saveLocalArchive": true,
+          "saveToDisk": true
+        }
+      },
+      {
+        "keyword": "entity-page-creator-grid-run",
+        "title": "Create entity pages from grid",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "calendar",
+        "dueDate": "2026-09-01",
+        "dueTime": "09:00",
+        "recurrenceRule": "monthly",
+        "executionKind": "entity_page_creator",
+        "executionPayload": {
+          "locationSource": "grid",
+          "gridInputSource": "workflow",
+          "entityAdGroupCount": 3,
+          "entityAdsPerGroup": 5,
+          "entityPageCount": 15,
+          "postCount": 15,
+          "focusKeyword": "",
+          "titleTemplate": "{keyword} Near {entity}",
+          "sitemapType": "entity",
+          "featuredImage": false,
+          "postDestination": "wordpress",
+          "scheduleTimesPerMonth": 15,
+          "scheduleCustomInterval": 15,
+          "scheduleStartDay": 1,
+          "scheduleStartTime": "09:00",
+          "scheduleStaggerOptimized": true,
+          "targetBucket": "sap",
+          "saveLocalArchive": true,
+          "ragInputKeys": [
+            "local_dominator_export_1"
+          ]
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-monthly",
+      "kind": "calendar",
+      "frequency": "monthly",
+      "startDate": "2026-09-01",
+      "time": "09:00"
+    },
+    "actionBlock": {
+      "keyword": "action-local_dominator_export",
+      "executionKind": "local_dominator_export",
+      "executionPayload": {
+        "businessName": "",
+        "keyword": "",
+        "saveLocalArchive": true,
+        "saveToDisk": true
+      },
+      "title": "Export Local Dominator grid CSV"
+    },
+    "actionBlocks": [
+      {
+        "keyword": "action-local_dominator_export",
+        "executionKind": "local_dominator_export",
+        "executionPayload": {
+          "businessName": "",
+          "keyword": "",
+          "saveLocalArchive": true,
+          "saveToDisk": true
+        },
+        "title": "Export Local Dominator grid CSV"
+      },
+      {
+        "keyword": "action-entity_page_creator",
+        "executionKind": "entity_page_creator",
+        "executionPayload": {
+          "locationSource": "grid",
+          "gridInputSource": "workflow",
+          "entityAdGroupCount": 3,
+          "entityAdsPerGroup": 5,
+          "entityPageCount": 15,
+          "postCount": 15,
+          "focusKeyword": "",
+          "titleTemplate": "{keyword} Near {entity}",
+          "sitemapType": "entity",
+          "featuredImage": false,
+          "postDestination": "wordpress",
+          "scheduleTimesPerMonth": 15,
+          "scheduleCustomInterval": 15,
+          "scheduleStartDay": 1,
+          "scheduleStartTime": "09:00",
+          "scheduleStaggerOptimized": true,
+          "targetBucket": "sap",
+          "saveLocalArchive": true,
+          "ragInputKeys": [
+            "local_dominator_export_1"
+          ]
+        },
+        "title": "Create entity pages from grid"
+      }
+    ],
+    "kind": "workflow_template"
+  },
+  {
+    "keyword": "grid-to-entity-to-sap-monthly",
+    "name": "Grid to entity to SAP",
+    "description": "Export a Local Dominator grid, generate entity CSV, then schedule SAP pages.",
+    "notes": [
+      "Three-step workflow: Local Dominator export, Entity generator, SAP generator.",
+      "Each step passes CSV output to the next via workflow RAG.",
+      "Default: 15 SAP pages scheduled evenly across the month."
+    ],
+    "isAutomation": true,
+    "category": "local-seo",
+    "verticals": [
+      "local-seo",
+      "general"
+    ],
+    "tags": [
+      "entity",
+      "grid",
+      "local-dominator",
+      "workflow",
+      "monthly"
+    ],
+    "prerequisites": [
+      "wordpress",
+      "gsc",
+      "entity-sitemap"
+    ],
+    "filters": {
+      "executionKinds": [
+        "local_dominator_export",
+        "entity_generator",
+        "sap_generator"
+      ],
+      "targetBuckets": [
+        "sap"
+      ],
+      "actionCount": 3
+    },
+    "defaultTasks": [
+      {
+        "keyword": "local-dominator-grid-export",
+        "title": "Export Local Dominator grid CSV",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "calendar",
+        "dueDate": "2026-09-01",
+        "dueTime": "09:00",
+        "recurrenceRule": "monthly",
+        "executionKind": "local_dominator_export",
+        "executionPayload": {
+          "businessName": "",
+          "keyword": "",
+          "saveLocalArchive": true,
+          "saveToDisk": true
+        }
+      },
+      {
+        "keyword": "entity-generator-grid-run",
+        "title": "Generate entity CSV from grid",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "calendar",
+        "dueDate": "2026-09-01",
+        "dueTime": "09:00",
+        "recurrenceRule": "monthly",
+        "executionKind": "entity_generator",
+        "executionPayload": {
+          "locationSource": "grid",
+          "gridInputSource": "workflow",
+          "entityAdGroupCount": 3,
+          "entityAdsPerGroup": 5,
+          "entityPageCount": 15,
+          "postCount": 15,
+          "focusKeyword": "",
+          "titleTemplate": "{keyword} Near {entity}",
+          "sitemapType": "entity",
+          "targetBucket": "sap",
+          "saveLocalArchive": true,
+          "ragInputKeys": [
+            "local_dominator_export_1"
+          ]
+        }
+      },
+      {
+        "keyword": "sap-generator-run",
+        "title": "Create SAP pages from entity CSV",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "calendar",
+        "dueDate": "2026-09-01",
+        "dueTime": "09:00",
+        "recurrenceRule": "monthly",
+        "executionKind": "sap_generator",
+        "executionPayload": {
+          "entityAdGroupCount": 3,
+          "entityAdsPerGroup": 5,
+          "entityPageCount": 15,
+          "postCount": 15,
+          "entityCsvInputSource": "workflow",
+          "sitemapType": "entity",
+          "featuredImage": false,
+          "postDestination": "wordpress",
+          "scheduleTimesPerMonth": 15,
+          "scheduleCustomInterval": 15,
+          "scheduleStartDay": 1,
+          "scheduleStartTime": "09:00",
+          "scheduleStaggerOptimized": true,
+          "targetBucket": "sap",
+          "saveLocalArchive": true,
+          "ragInputKeys": [
+            "entity_generator_2"
+          ]
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-monthly",
+      "kind": "calendar",
+      "frequency": "monthly",
+      "startDate": "2026-09-01",
+      "time": "09:00"
+    },
+    "actionBlock": {
+      "keyword": "action-local_dominator_export",
+      "executionKind": "local_dominator_export",
+      "executionPayload": {
+        "businessName": "",
+        "keyword": "",
+        "saveLocalArchive": true,
+        "saveToDisk": true
+      },
+      "title": "Export Local Dominator grid CSV"
+    },
+    "actionBlocks": [
+      {
+        "keyword": "action-local_dominator_export",
+        "executionKind": "local_dominator_export",
+        "executionPayload": {
+          "businessName": "",
+          "keyword": "",
+          "saveLocalArchive": true,
+          "saveToDisk": true
+        },
+        "title": "Export Local Dominator grid CSV"
+      },
+      {
+        "keyword": "action-entity_generator",
+        "executionKind": "entity_generator",
+        "executionPayload": {
+          "locationSource": "grid",
+          "gridInputSource": "workflow",
+          "entityAdGroupCount": 3,
+          "entityAdsPerGroup": 5,
+          "entityPageCount": 15,
+          "postCount": 15,
+          "focusKeyword": "",
+          "titleTemplate": "{keyword} Near {entity}",
+          "sitemapType": "entity",
+          "targetBucket": "sap",
+          "saveLocalArchive": true,
+          "ragInputKeys": [
+            "local_dominator_export_1"
+          ]
+        },
+        "title": "Generate entity CSV from grid"
+      },
+      {
+        "keyword": "action-sap_generator",
+        "executionKind": "sap_generator",
+        "executionPayload": {
+          "entityAdGroupCount": 3,
+          "entityAdsPerGroup": 5,
+          "entityPageCount": 15,
+          "postCount": 15,
+          "entityCsvInputSource": "workflow",
+          "sitemapType": "entity",
+          "featuredImage": false,
+          "postDestination": "wordpress",
+          "scheduleTimesPerMonth": 15,
+          "scheduleCustomInterval": 15,
+          "scheduleStartDay": 1,
+          "scheduleStartTime": "09:00",
+          "scheduleStaggerOptimized": true,
+          "targetBucket": "sap",
+          "saveLocalArchive": true,
+          "ragInputKeys": [
+            "entity_generator_2"
+          ]
+        },
+        "title": "Create SAP pages from entity CSV"
+      }
+    ],
+    "kind": "workflow_template"
+  },
+  {
+    "keyword": "gsc-monthly-mom-report",
+    "name": "GSC Monthly MoM Report",
+    "description": "Generate a full GSC month-over-month report on the 1st of each month. Deliver via workflow Then steps (Google Drive, email, or local archive).",
+    "notes": [
+      "Runs on a calendar schedule (1st of each month, 9:00 Edmonton time).",
+      "Compare preset: last full calendar month vs the prior month.",
+      "Fetches GSC bundle and runs the full reporting pipeline. Add Then steps for delivery.",
+      "Requires Google Search Console, WordPress site link, public site URL, and OpenRouter key."
+    ],
+    "isAutomation": true,
+    "category": "reporting",
+    "verticals": [
+      "general"
+    ],
+    "tags": [
+      "gsc",
+      "reporting",
+      "mom",
+      "monthly"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "gsc_reporting"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "gsc-mom-report",
+        "title": "Generate GSC month-over-month report",
+        "status": "todo",
+        "assignPulse": true,
+        "executionKind": "gsc_reporting",
+        "executionPayload": {
+          "comparePreset": "mom"
+        },
+        "scheduleMode": "calendar",
+        "dueDate": "2026-09-01",
+        "dueTime": "09:00",
+        "recurrenceRule": "monthly"
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-monthly",
+      "kind": "calendar",
+      "frequency": "monthly",
+      "startDate": "2026-09-01",
+      "time": "09:00"
+    },
+    "actionBlock": {
+      "keyword": "gsc-report-mom",
+      "executionKind": "gsc_reporting",
+      "executionPayload": {
+        "comparePreset": "mom"
+      },
+      "title": "Generate GSC month-over-month report"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "gsc-monthly-yoy-report",
+    "name": "GSC Monthly YoY Report",
+    "description": "Generate a full GSC year-over-year report on the 1st of each month and download markdown plus CSV bundle to your PC.",
+    "notes": [
+      "Runs on a calendar schedule (1st of each month, 9:30 Edmonton time).",
+      "Compare preset: last full calendar month vs the same month one year earlier.",
+      "Fetches GSC bundle, runs the full reporting pipeline, and saves artifacts locally.",
+      "Requires Google Search Console, WordPress site link, public site URL, and OpenRouter key."
+    ],
+    "isAutomation": true,
+    "category": "reporting",
+    "verticals": [
+      "general"
+    ],
+    "tags": [
+      "gsc",
+      "reporting",
+      "yoy",
+      "monthly"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "gsc_reporting"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "gsc-yoy-report",
+        "title": "Generate GSC year-over-year report",
+        "status": "todo",
+        "assignPulse": true,
+        "executionKind": "gsc_reporting",
+        "executionPayload": {
+          "comparePreset": "yoy",
+          "saveToDisk": true
+        },
+        "scheduleMode": "calendar",
+        "dueDate": "2026-09-01",
+        "dueTime": "09:30",
+        "recurrenceRule": "monthly"
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-monthly",
+      "kind": "calendar",
+      "frequency": "monthly",
+      "startDate": "2026-09-01",
+      "time": "09:30"
+    },
+    "actionBlock": {
+      "keyword": "gsc-report-yoy",
+      "executionKind": "gsc_reporting",
+      "executionPayload": {
+        "comparePreset": "yoy",
+        "saveToDisk": true
+      },
+      "title": "Generate GSC year-over-year report"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "intent-decay-radar",
+    "name": "Intent Decay Radar",
+    "description": "Meta and extra text on pages when Google shows them more often but fewer people click.",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Scope: static pages (Pages bucket).",
+      "Runs when impressions rose vs the prior 28 days and click-through rate fell (google shows the page more often, but fewer searchers click).",
+      "Updates title, meta description, and SEO extra text. Page body content is not rewritten.",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "reactive",
+    "verticals": [
+      "general",
+      "editorial"
+    ],
+    "tags": [
+      "gsc",
+      "pages",
+      "decay",
+      "meta"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer_meta"
+      ],
+      "targetBuckets": [
+        "pages"
+      ],
+      "triggerSignals": [
+        "impressions_up_ctr_down"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "intent-decay-pages",
+        "title": "Meta + extra text on decaying pages",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer_meta",
+        "executionPayload": {
+          "targetBucket": "pages",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "all",
+          "conditions": [
+            {
+              "signal": "impressions_up_ctr_down",
+              "operator": "gte",
+              "value": 0,
+              "minImpressions": 100
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 5
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-impressions-ctr-decay",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "pages",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "all",
+        "conditions": [
+          {
+            "signal": "impressions_up_ctr_down",
+            "operator": "gte",
+            "value": 0,
+            "minImpressions": 100
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-meta",
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "pages",
+        "updateMode": "update"
+      },
+      "title": "Meta + extra text on decaying pages"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "local-pages-watch",
+    "name": "Local Pages Watch",
+    "description": "Meta and extra text on high-traffic local landing pages when ranking slips.",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Scope: local landing pages in the Pages bucket (not SAP entity grids).",
+      "Runs when average ranking position worsened by at least 2 spots, with at least 200 impressions.",
+      "Lower position threshold (2 spots) because local SERPs move quickly.",
+      "Updates title, meta description, and SEO extra text. Page body content is not rewritten.",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "local-seo",
+    "verticals": [
+      "local-seo",
+      "home-services"
+    ],
+    "tags": [
+      "gsc",
+      "pages",
+      "local",
+      "meta"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer_meta"
+      ],
+      "targetBuckets": [
+        "pages"
+      ],
+      "triggerSignals": [
+        "position_drop"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "local-pages",
+        "title": "Meta + extra text on local pages on position drop",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer_meta",
+        "executionPayload": {
+          "targetBucket": "pages",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "any",
+          "conditions": [
+            {
+              "signal": "position_drop",
+              "operator": "gte",
+              "value": 2,
+              "minImpressions": 200
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 5
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-position-drop",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "pages",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "position_drop",
+            "operator": "gte",
+            "value": 2,
+            "minImpressions": 200
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-meta",
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "pages",
+        "updateMode": "update"
+      },
+      "title": "Meta + extra text on local pages on position drop"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "monthly-3-posts-editorial",
+    "name": "Monthly 3 Posts Editorial",
+    "description": "Create 3 full blog posts on the 1st of each month, scheduled across the month with body, meta, and AI featured images.",
+    "notes": [
+      "Runs on the 1st of each month at 9:00 Edmonton time.",
+      "Creates 3 posts per run, spread across the calendar month.",
+      "AI blog ideas from site inventory and optional topic prompt.",
+      "Requires WordPress, OpenRouter, and DataForSEO keys."
+    ],
+    "isAutomation": true,
+    "category": "editorial",
+    "verticals": [
+      "general",
+      "editorial"
+    ],
+    "tags": [
+      "posts",
+      "editorial",
+      "generator",
+      "monthly",
+      "3-posts"
+    ],
+    "prerequisites": [
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "post_creator"
+      ],
+      "targetBuckets": [
+        "posts"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "monthly-3-posts-run",
+        "title": "Create 3 scheduled blog posts",
+        "status": "todo",
+        "assignPulse": true,
+        "executionKind": "post_creator",
+        "executionPayload": {
+          "postCount": 3,
+          "keywordSource": "prompt",
+          "featuredImage": true,
+          "sitemapType": "post",
+          "postDestination": "wordpress",
+          "scheduleTimesPerMonth": 3,
+          "scheduleStartDay": 1,
+          "scheduleStartTime": "09:00",
+          "scheduleStaggerOptimized": true,
+          "targetBucket": "posts"
+        },
+        "scheduleMode": "calendar",
+        "dueDate": "2026-09-01",
+        "dueTime": "09:00",
+        "recurrenceRule": "monthly"
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-monthly",
+      "kind": "calendar",
+      "frequency": "monthly",
+      "startDate": "2026-09-01",
+      "time": "09:00",
+      "targetBucket": "posts"
+    },
+    "actionBlock": {
+      "keyword": "post-creator-monthly",
+      "executionKind": "post_creator",
+      "executionPayload": {
+        "postCount": 3,
+        "keywordSource": "prompt",
+        "featuredImage": true,
+        "sitemapType": "post",
+        "postDestination": "wordpress",
+        "scheduleTimesPerMonth": 3,
+        "scheduleStartDay": 1,
+        "scheduleStartTime": "09:00",
+        "scheduleStaggerOptimized": true,
+        "targetBucket": "posts"
+      },
+      "title": "Create 3 scheduled blog posts"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "monthly-post-creator",
+    "name": "Monthly Post Creator",
+    "description": "Generate scheduled blog posts on a calendar cadence with full harness body, meta, and AI featured images.",
+    "notes": [
+      "Runs on a calendar schedule (default: 1st of each month, 9:00 Edmonton time).",
+      "Uses the Generator bulk pipeline: AI blog ideas, keyword research, harnessed content, meta, and featured image.",
+      "Posts are scheduled across the month (times per month setting).",
+      "Requires WordPress site link, OpenRouter key, and DataForSEO key."
+    ],
+    "isAutomation": true,
+    "category": "editorial",
+    "verticals": [
+      "general"
+    ],
+    "tags": [
+      "posts",
+      "editorial",
+      "generator",
+      "monthly"
+    ],
+    "prerequisites": [
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "post_creator"
+      ],
+      "targetBuckets": [
+        "posts"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "monthly-post-creator-run",
+        "title": "Create scheduled blog posts",
+        "status": "todo",
+        "assignPulse": true,
+        "executionKind": "post_creator",
+        "executionPayload": {
+          "postCount": 1,
+          "keywordSource": "prompt",
+          "featuredImage": true,
+          "sitemapType": "post",
+          "postDestination": "wordpress",
+          "scheduleTimesPerMonth": 1,
+          "scheduleStartDay": 1,
+          "scheduleStartTime": "09:00",
+          "scheduleStaggerOptimized": true,
+          "targetBucket": "posts"
+        },
+        "scheduleMode": "calendar",
+        "dueDate": "2026-09-01",
+        "dueTime": "09:00",
+        "recurrenceRule": "monthly"
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-monthly",
+      "kind": "calendar",
+      "frequency": "monthly",
+      "startDate": "2026-09-01",
+      "time": "09:00",
+      "targetBucket": "posts"
+    },
+    "actionBlock": {
+      "keyword": "post-creator-monthly",
+      "executionKind": "post_creator",
+      "executionPayload": {
+        "postCount": 1,
+        "keywordSource": "prompt",
+        "featuredImage": true,
+        "sitemapType": "post",
+        "postDestination": "wordpress",
+        "scheduleTimesPerMonth": 1,
+        "scheduleStartDay": 1,
+        "scheduleStartTime": "09:00",
+        "scheduleStaggerOptimized": true,
+        "targetBucket": "posts"
+      },
+      "title": "Create scheduled blog posts"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "pages-clicks-drop",
+    "name": "Pages Clicks Drop",
+    "description": "Meta and extra text on static pages when total search clicks fall.",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Scope: static pages (Pages bucket).",
+      "Runs when total clicks from google search fell at least 15% vs the prior 28 days, with at least 100 impressions.",
+      "Updates title, meta description, and SEO extra text. Page body content is not rewritten.",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "reactive",
+    "verticals": [
+      "general"
+    ],
+    "tags": [
+      "gsc",
+      "pages",
+      "clicks",
+      "meta"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer_meta"
+      ],
+      "targetBuckets": [
+        "pages"
+      ],
+      "triggerSignals": [
+        "clicks_drop"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "pages-clicks",
+        "title": "Meta + extra text on pages on clicks drop",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer_meta",
+        "executionPayload": {
+          "targetBucket": "pages",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "any",
+          "conditions": [
+            {
+              "signal": "clicks_drop",
+              "operator": "gte",
+              "value": 15,
+              "minImpressions": 100
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 5
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-clicks-drop",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "pages",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "clicks_drop",
+            "operator": "gte",
+            "value": 15,
+            "minImpressions": 100
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-meta",
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "pages",
+        "updateMode": "update"
+      },
+      "title": "Meta + extra text on pages on clicks drop"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "pages-intent-decay",
+    "name": "Pages Intent Decay",
+    "description": "Meta and extra text on static pages when Google shows them more but fewer people click.",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Scope: static pages only (Pages bucket).",
+      "Runs when impressions rose vs the prior 28 days and click-through rate fell (google shows the page more often, but fewer searchers click).",
+      "Updates title, meta description, and SEO extra text. Page body content is not rewritten.",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "reactive",
+    "verticals": [
+      "general"
+    ],
+    "tags": [
+      "gsc",
+      "pages",
+      "decay",
+      "meta"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer_meta"
+      ],
+      "targetBuckets": [
+        "pages"
+      ],
+      "triggerSignals": [
+        "impressions_up_ctr_down"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "pages-intent-decay",
+        "title": "Meta + extra text on pages on intent decay signal",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer_meta",
+        "executionPayload": {
+          "targetBucket": "pages",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "all",
+          "conditions": [
+            {
+              "signal": "impressions_up_ctr_down",
+              "operator": "gte",
+              "value": 0,
+              "minImpressions": 100
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 5
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-impressions-ctr-decay",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "pages",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "all",
+        "conditions": [
+          {
+            "signal": "impressions_up_ctr_down",
+            "operator": "gte",
+            "value": 0,
+            "minImpressions": 100
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-meta",
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "pages",
+        "updateMode": "update"
+      },
+      "title": "Meta + extra text on pages on intent decay signal"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "pages-meta-first",
+    "name": "Pages Meta First",
+    "description": "Meta and extra text upkeep on pages when ranking or click-through rate slips.",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Scope: static pages (Pages bucket).",
+      "Runs when average ranking position worsened by at least 3 spots, with at least 100 impressions. OR when click-through rate fell at least 10% vs the prior 28 days (similar visibility, fewer clicks), with at least 100 impressions.",
+      "Updates title, meta description, and SEO extra text. Page body content is not rewritten.",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "maintenance",
+    "verticals": [
+      "general"
+    ],
+    "tags": [
+      "gsc",
+      "pages",
+      "meta"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer_meta"
+      ],
+      "targetBuckets": [
+        "pages"
+      ],
+      "triggerSignals": [
+        "position_drop",
+        "ctr_drop"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "pages-meta",
+        "title": "Meta optimize pages on position or CTR drop",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer_meta",
+        "executionPayload": {
+          "targetBucket": "pages",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "any",
+          "conditions": [
+            {
+              "signal": "position_drop",
+              "operator": "gte",
+              "value": 3,
+              "minImpressions": 100
+            },
+            {
+              "signal": "ctr_drop",
+              "operator": "gte",
+              "value": 10,
+              "minImpressions": 100
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 5
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-position-drop",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "pages",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "position_drop",
+            "operator": "gte",
+            "value": 3,
+            "minImpressions": 100
+          },
+          {
+            "signal": "ctr_drop",
+            "operator": "gte",
+            "value": 10,
+            "minImpressions": 100
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-meta",
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "pages",
+        "updateMode": "update"
+      },
+      "title": "Meta optimize pages on position or CTR drop"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "pages-position-guard",
+    "name": "Pages Position Guard",
+    "description": "Meta and extra text on static pages when average ranking position worsens.",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Scope: static pages (services, about, landing pages).",
+      "Runs when average ranking position worsened by at least 3 spots, with at least 100 impressions.",
+      "Updates title, meta description, and SEO extra text. Page body content is not rewritten.",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "reactive",
+    "verticals": [
+      "general"
+    ],
+    "tags": [
+      "gsc",
+      "pages",
+      "position",
+      "meta"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer_meta"
+      ],
+      "targetBuckets": [
+        "pages"
+      ],
+      "triggerSignals": [
+        "position_drop"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "pages-position",
+        "title": "Meta + extra text on pages when position drops",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer_meta",
+        "executionPayload": {
+          "targetBucket": "pages",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "any",
+          "conditions": [
+            {
+              "signal": "position_drop",
+              "operator": "gte",
+              "value": 3,
+              "minImpressions": 100
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 5
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-position-drop",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "pages",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "position_drop",
+            "operator": "gte",
+            "value": 3,
+            "minImpressions": 100
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-meta",
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "pages",
+        "updateMode": "update"
+      },
+      "title": "Meta + extra text on pages when position drops"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "posts-ctr-rescue",
+    "name": "Posts CTR Rescue",
+    "description": "Full AISEO on blog posts when click-through rate falls.",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Scope: blog posts (Posts bucket).",
+      "Runs when click-through rate fell at least 15% vs the prior 28 days (similar visibility, fewer clicks), with at least 100 impressions.",
+      "NEO Pulse rewrites title, meta, headings, and body when the snippet underperforms.",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "reactive",
+    "verticals": [
+      "editorial",
+      "general"
+    ],
+    "tags": [
+      "gsc",
+      "posts",
+      "ctr"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer"
+      ],
+      "targetBuckets": [
+        "posts"
+      ],
+      "triggerSignals": [
+        "ctr_drop"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "posts-ctr",
+        "title": "Full AISEO on posts when CTR drops",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer",
+        "executionPayload": {
+          "targetBucket": "posts",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "any",
+          "conditions": [
+            {
+              "signal": "ctr_drop",
+              "operator": "gte",
+              "value": 15,
+              "minImpressions": 100
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 5
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-ctr-drop",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "posts",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "ctr_drop",
+            "operator": "gte",
+            "value": 15,
+            "minImpressions": 100
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-full",
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "targetBucket": "posts",
+        "updateMode": "update"
+      },
+      "title": "Full AISEO on posts when CTR drops"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "posts-meta-quick-fix",
+    "name": "Posts Meta Quick Fix",
+    "description": "Meta-only fixes on posts when click-through rate slips.",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Scope: blog posts (Posts bucket).",
+      "Runs when click-through rate fell at least 10% vs the prior 28 days (similar visibility, fewer clicks), with at least 80 impressions.",
+      "Updates title and meta only (does not rewrite post body).",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "maintenance",
+    "verticals": [
+      "editorial",
+      "general"
+    ],
+    "tags": [
+      "gsc",
+      "posts",
+      "meta"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer_meta"
+      ],
+      "targetBuckets": [
+        "posts"
+      ],
+      "triggerSignals": [
+        "ctr_drop"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "posts-meta",
+        "title": "Meta optimize posts on CTR drop",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer_meta",
+        "executionPayload": {
+          "targetBucket": "posts",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "any",
+          "conditions": [
+            {
+              "signal": "ctr_drop",
+              "operator": "gte",
+              "value": 10,
+              "minImpressions": 80
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 5
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-ctr-drop",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "posts",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "ctr_drop",
+            "operator": "gte",
+            "value": 10,
+            "minImpressions": 80
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-meta",
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "posts",
+        "updateMode": "update"
+      },
+      "title": "Meta optimize posts on CTR drop"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "posts-position-recovery",
+    "name": "Posts Position Recovery",
+    "description": "Full AISEO on blog posts when average ranking position worsens.",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Scope: blog posts (Posts bucket).",
+      "Runs when average ranking position worsened by at least 3 spots, with at least 100 impressions.",
+      "NEO Pulse rewrites the full post to compete for the keyword again.",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "reactive",
+    "verticals": [
+      "editorial",
+      "general"
+    ],
+    "tags": [
+      "gsc",
+      "posts",
+      "position"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer"
+      ],
+      "targetBuckets": [
+        "posts"
+      ],
+      "triggerSignals": [
+        "position_drop"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "posts-position",
+        "title": "Full AISEO on posts when position drops",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer",
+        "executionPayload": {
+          "targetBucket": "posts",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "any",
+          "conditions": [
+            {
+              "signal": "position_drop",
+              "operator": "gte",
+              "value": 3,
+              "minImpressions": 100
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 5
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-position-drop",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "posts",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "position_drop",
+            "operator": "gte",
+            "value": 3,
+            "minImpressions": 100
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-full",
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "targetBucket": "posts",
+        "updateMode": "update"
+      },
+      "title": "Full AISEO on posts when position drops"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "posts-quick-win-slipped",
+    "name": "Posts Quick Win Slipped",
+    "description": "Full AISEO when blog posts leave positions 4–10.",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Scope: blog posts (Posts bucket).",
+      "Runs when the url left positions 4–10 (where small ranking gains are easiest).",
+      "NEO Pulse rewrites the post to push it back toward page one.",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "reactive",
+    "verticals": [
+      "editorial",
+      "general"
+    ],
+    "tags": [
+      "gsc",
+      "posts",
+      "quick-win"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer"
+      ],
+      "targetBuckets": [
+        "posts"
+      ],
+      "triggerSignals": [
+        "quick_win_slipped"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "posts-quick-win",
+        "title": "Full AISEO on posts when quick win slips",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer",
+        "executionPayload": {
+          "targetBucket": "posts",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "any",
+          "conditions": [
+            {
+              "signal": "quick_win_slipped",
+              "operator": "gte",
+              "value": 0,
+              "minImpressions": 50
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 5
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-quick-win-slipped",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "posts",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "quick_win_slipped",
+            "operator": "gte",
+            "value": 0,
+            "minImpressions": 50
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-full",
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "targetBucket": "posts",
+        "updateMode": "update"
+      },
+      "title": "Full AISEO on posts when quick win slips"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "research-local-dominator-grid-export",
+    "name": "Local Dominator grid export",
+    "description": "Research automation that exports a Local Dominator grid scan as CSV and saves it to the automation Archive.",
+    "notes": [
+      "Run manually from Forge Execute (no recurring schedule in v1).",
+      "Logs into Local Dominator, opens the configured business grid, and exports CSV.",
+      "Default target uses Auto (first grid) when keyword is empty.",
+      "Requires Node and Puppeteer on the WordPress host (same constraint as maps screenshot)."
+    ],
+    "isAutomation": true,
+    "category": "research",
+    "verticals": [
+      "general",
+      "local-seo",
+      "home-services"
+    ],
+    "tags": [
+      "research",
+      "local-dominator",
+      "grid",
+      "csv"
+    ],
+    "prerequisites": [
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "local_dominator_export"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "research-local-dominator-export",
+        "title": "Export Local Dominator grid CSV",
+        "status": "todo",
+        "assignPulse": true,
+        "executionKind": "local_dominator_export",
+        "executionPayload": {
+          "businessName": "",
+          "keyword": "auto",
+          "saveLocalArchive": true,
+          "saveToDisk": true
+        },
+        "scheduleMode": "calendar",
+        "recurrenceRule": "none"
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-once",
+      "kind": "calendar",
+      "frequency": "once",
+      "startDate": "2026-09-01",
+      "time": "09:00"
+    },
+    "actionBlock": {
+      "keyword": "local-dominator-grid-export",
+      "executionKind": "local_dominator_export",
+      "executionPayload": {
+        "businessName": "",
+        "keyword": "auto",
+        "saveLocalArchive": true,
+        "saveToDisk": true
+      },
+      "title": "Export Local Dominator grid CSV"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "residential-browser-automation",
+    "name": "Residential browser automation",
+    "description": "Browse a URL through Oxylabs residential proxy. Describe the goal in plain language; the agent drives the browser from screenshots. Watch a live preview during the run.",
+    "notes": [
+      "Requires Oxylabs residential proxy credentials in Api Keys.",
+      "Enter the target URL and WYSIWYG instructions before starting the agent run.",
+      "Screenshots and session output are saved to Archive when enabled."
+    ],
+    "isAutomation": true,
+    "category": "browser",
+    "verticals": [
+      "general",
+      "local-seo",
+      "agency"
+    ],
+    "tags": [
+      "browser",
+      "proxy",
+      "oxylabs",
+      "automation"
+    ],
+    "prerequisites": [],
+    "filters": {
+      "executionKinds": [
+        "browser_automation"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "residential-browser-automation-run",
+        "title": "Residential browser automation",
+        "status": "todo",
+        "assignPulse": true,
+        "executionKind": "browser_automation",
+        "executionPayload": {
+          "saveLocalArchive": true,
+          "saveToDisk": true
+        },
+        "scheduleMode": "calendar",
+        "recurrenceRule": "none"
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-once",
+      "kind": "calendar",
+      "frequency": "once",
+      "startDate": "2026-09-01",
+      "time": "09:00"
+    },
+    "actionBlock": {
+      "keyword": "residential-browser-automation",
+      "executionKind": "browser_automation",
+      "executionPayload": {
+        "saveLocalArchive": true,
+        "saveToDisk": true
+      },
+      "title": "Residential browser automation"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "sap-clicks-recovery",
+    "name": "SAP Clicks Recovery",
+    "description": "Full AISEO on entity pages when total search clicks decline.",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Scope: entity/service-area pages (SAP bucket).",
+      "Runs when total clicks from google search fell at least 15% vs the prior 28 days, with at least 50 impressions.",
+      "Useful when rankings look stable but traffic from Google is still slipping.",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "local-seo",
+    "verticals": [
+      "local-seo",
+      "home-services"
+    ],
+    "tags": [
+      "gsc",
+      "sap",
+      "clicks"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress",
+      "entity-sitemap"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer"
+      ],
+      "targetBuckets": [
+        "sap"
+      ],
+      "triggerSignals": [
+        "clicks_drop"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "sap-clicks",
+        "title": "Refresh SAP pages on clicks drop",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer",
+        "executionPayload": {
+          "targetBucket": "sap",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "any",
+          "conditions": [
+            {
+              "signal": "clicks_drop",
+              "operator": "gte",
+              "value": 15,
+              "minImpressions": 50
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 5
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-clicks-drop",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "sap",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "clicks_drop",
+            "operator": "gte",
+            "value": 15,
+            "minImpressions": 50
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-full",
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "targetBucket": "sap",
+        "updateMode": "update"
+      },
+      "title": "Refresh SAP pages on clicks drop"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "sap-ctr-rescue",
+    "name": "SAP CTR Rescue",
+    "description": "Full AISEO on entity pages when click-through rate falls.",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Scope: entity/service-area pages (SAP bucket).",
+      "Runs when click-through rate fell at least 15% vs the prior 28 days (similar visibility, fewer clicks), with at least 50 impressions.",
+      "NEO Pulse rewrites title, meta, headings, and body on the entity page.",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "local-seo",
+    "verticals": [
+      "local-seo",
+      "home-services"
+    ],
+    "tags": [
+      "gsc",
+      "sap",
+      "ctr"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress",
+      "entity-sitemap"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer"
+      ],
+      "targetBuckets": [
+        "sap"
+      ],
+      "triggerSignals": [
+        "ctr_drop"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "sap-ctr-rescue",
+        "title": "Full AISEO on SAP pages when CTR drops",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer",
+        "executionPayload": {
+          "targetBucket": "sap",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "any",
+          "conditions": [
+            {
+              "signal": "ctr_drop",
+              "operator": "gte",
+              "value": 15,
+              "minImpressions": 50
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 5
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-ctr-drop",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "sap",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "ctr_drop",
+            "operator": "gte",
+            "value": 15,
+            "minImpressions": 50
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-full",
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "targetBucket": "sap",
+        "updateMode": "update"
+      },
+      "title": "Full AISEO on SAP pages when CTR drops"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "sap-generator-monthly",
+    "name": "SAP generator",
+    "description": "Hydrate entity CSV rows with GSC keywords and schedule SAP pages to WordPress.",
+    "notes": [
+      "Upload an entity CSV or chain from Entity generator in a workflow.",
+      "Fills keywords, titles, meta, and slugs, then publishes SAP pages.",
+      "Default: 15 pages scheduled evenly across the month."
+    ],
+    "isAutomation": true,
+    "category": "local-seo",
+    "verticals": [
+      "local-seo",
+      "general"
+    ],
+    "tags": [
+      "entity",
+      "sap",
+      "monthly"
+    ],
+    "prerequisites": [
+      "wordpress",
+      "gsc",
+      "entity-sitemap"
+    ],
+    "filters": {
+      "executionKinds": [
+        "sap_generator"
+      ],
+      "targetBuckets": [
+        "sap"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "sap-generator-run",
+        "title": "Create SAP pages from entity CSV",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "calendar",
+        "dueDate": "2026-09-01",
+        "dueTime": "09:00",
+        "recurrenceRule": "monthly",
+        "executionKind": "sap_generator",
+        "executionPayload": {
+          "entityAdGroupCount": 3,
+          "entityAdsPerGroup": 5,
+          "entityPageCount": 15,
+          "postCount": 15,
+          "entityCsvInputSource": "upload",
+          "sitemapType": "entity",
+          "featuredImage": false,
+          "postDestination": "wordpress",
+          "scheduleTimesPerMonth": 15,
+          "scheduleCustomInterval": 15,
+          "scheduleStartDay": 1,
+          "scheduleStartTime": "09:00",
+          "scheduleStaggerOptimized": true,
+          "targetBucket": "sap",
+          "saveLocalArchive": true
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-monthly",
+      "kind": "calendar",
+      "frequency": "monthly",
+      "startDate": "2026-09-01",
+      "time": "09:00",
+      "targetBucket": "sap"
+    },
+    "actionBlock": {
+      "keyword": "action-sap_generator",
+      "executionKind": "sap_generator",
+      "executionPayload": {
+        "entityAdGroupCount": 3,
+        "entityAdsPerGroup": 5,
+        "entityPageCount": 15,
+        "postCount": 15,
+        "entityCsvInputSource": "upload",
+        "sitemapType": "entity",
+        "featuredImage": false,
+        "postDestination": "wordpress",
+        "scheduleTimesPerMonth": 15,
+        "scheduleCustomInterval": 15,
+        "scheduleStartDay": 1,
+        "scheduleStartTime": "09:00",
+        "scheduleStaggerOptimized": true,
+        "targetBucket": "sap",
+        "saveLocalArchive": true
+      },
+      "title": "Create SAP pages from entity CSV"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "sap-quick-win-recovery",
+    "name": "SAP Quick Win Recovery",
+    "description": "Meta-only fix when entity pages leave positions 4–10.",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Scope: entity/service-area pages (SAP bucket).",
+      "Runs when the url left positions 4–10 (where small ranking gains are easiest).",
+      "Updates title and meta description only (faster and cheaper than a full rewrite).",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "local-seo",
+    "verticals": [
+      "local-seo",
+      "home-services"
+    ],
+    "tags": [
+      "gsc",
+      "sap",
+      "meta",
+      "quick-win"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress",
+      "entity-sitemap"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer_meta"
+      ],
+      "targetBuckets": [
+        "sap"
+      ],
+      "triggerSignals": [
+        "quick_win_slipped"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "sap-quick-win",
+        "title": "Meta optimize SAP pages on quick win slip",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer_meta",
+        "executionPayload": {
+          "targetBucket": "sap",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "any",
+          "conditions": [
+            {
+              "signal": "quick_win_slipped",
+              "operator": "gte",
+              "value": 0,
+              "minImpressions": 30
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 5
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-quick-win-slipped",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "sap",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "quick_win_slipped",
+            "operator": "gte",
+            "value": 0,
+            "minImpressions": 30
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-meta",
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "sap",
+        "updateMode": "update"
+      },
+      "title": "Meta optimize SAP pages on quick win slip"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "seo-autopilot-flywheel",
+    "name": "SEO Autopilot Flywheel",
+    "description": "Meta-optimize pages and run full AISEO on posts when GSC metrics slip.",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Covers static pages and blog posts in one installed automation.",
+      "Pages: updates title, meta, and SEO extra text when ranking worsens 3+ spots or the URL leaves positions 4–10.",
+      "Posts: full rewrite when click-through rate falls 15%+ vs the prior 28 days (snippet or body no longer matches what searchers want).",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "reactive",
+    "verticals": [
+      "general"
+    ],
+    "tags": [
+      "gsc",
+      "meta",
+      "posts",
+      "pages",
+      "multi"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer_meta",
+        "content_optimizer"
+      ],
+      "targetBuckets": [
+        "pages",
+        "posts"
+      ],
+      "triggerSignals": [
+        "position_drop",
+        "quick_win_slipped",
+        "ctr_drop"
+      ],
+      "actionCount": 2
+    },
+    "defaultTasks": [
+      {
+        "keyword": "meta-pages",
+        "title": "Meta optimize pages on trigger",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer_meta",
+        "executionPayload": {
+          "targetBucket": "pages",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "any",
+          "conditions": [
+            {
+              "signal": "position_drop",
+              "operator": "gte",
+              "value": 3,
+              "minImpressions": 100
+            },
+            {
+              "signal": "quick_win_slipped",
+              "operator": "gte",
+              "value": 0,
+              "minImpressions": 50
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 5
+        }
+      },
+      {
+        "keyword": "aiseo-posts",
+        "title": "Full AISEO on posts on trigger",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer",
+        "executionPayload": {
+          "targetBucket": "posts",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "any",
+          "conditions": [
+            {
+              "signal": "ctr_drop",
+              "operator": "gte",
+              "value": 15,
+              "minImpressions": 100
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 5
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-position-drop",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "pages",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "position_drop",
+            "operator": "gte",
+            "value": 3,
+            "minImpressions": 100
+          },
+          {
+            "signal": "quick_win_slipped",
+            "operator": "gte",
+            "value": 0,
+            "minImpressions": 50
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-meta",
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "pages",
+        "updateMode": "update"
+      },
+      "title": "Meta optimize pages on trigger"
+    },
+    "actionBlocks": [
+      {
+        "keyword": "content-optimizer-meta",
+        "executionKind": "content_optimizer_meta",
+        "executionPayload": {
+          "targetBucket": "pages",
+          "updateMode": "update"
+        },
+        "title": "Meta optimize pages on trigger"
+      },
+      {
+        "keyword": "content-optimizer-full",
+        "executionKind": "content_optimizer",
+        "executionPayload": {
+          "targetBucket": "posts",
+          "updateMode": "update"
+        },
+        "title": "Full AISEO on posts on trigger"
+      }
+    ],
+    "kind": "template"
+  },
+  {
+    "keyword": "sitewide-decay-radar",
+    "name": "Sitewide Decay Radar",
+    "description": "Full AISEO on posts and entity pages when impressions rise but clicks fall.",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Scope: blog posts and entity/service-area pages (Posts + SAP buckets). Static pages are not in scope.",
+      "Runs when impressions rose vs the prior 28 days and click-through rate fell (google shows the page more often, but fewer searchers click).",
+      "NEO Pulse rewrites matched posts and entity URLs, capped at 3 per bucket per cycle.",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "reactive",
+    "verticals": [
+      "general"
+    ],
+    "tags": [
+      "gsc",
+      "posts",
+      "sap",
+      "decay",
+      "multi"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer"
+      ],
+      "targetBuckets": [
+        "posts",
+        "sap"
+      ],
+      "triggerSignals": [
+        "impressions_up_ctr_down"
+      ],
+      "actionCount": 2
+    },
+    "defaultTasks": [
+      {
+        "keyword": "sitewide-decay-posts",
+        "title": "Full AISEO on posts on intent decay",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer",
+        "executionPayload": {
+          "targetBucket": "posts",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "all",
+          "conditions": [
+            {
+              "signal": "impressions_up_ctr_down",
+              "operator": "gte",
+              "value": 0,
+              "minImpressions": 100
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 3
+        }
+      },
+      {
+        "keyword": "sitewide-decay-sap",
+        "title": "Full AISEO on entity pages on intent decay",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer",
+        "executionPayload": {
+          "targetBucket": "sap",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "all",
+          "conditions": [
+            {
+              "signal": "impressions_up_ctr_down",
+              "operator": "gte",
+              "value": 0,
+              "minImpressions": 100
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 3
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-impressions-ctr-decay",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "posts",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "all",
+        "conditions": [
+          {
+            "signal": "impressions_up_ctr_down",
+            "operator": "gte",
+            "value": 0,
+            "minImpressions": 100
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 3
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-full",
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "targetBucket": "posts",
+        "updateMode": "update"
+      },
+      "title": "Full AISEO on posts on intent decay"
+    },
+    "actionBlocks": [
+      {
+        "keyword": "content-optimizer-full",
+        "executionKind": "content_optimizer",
+        "executionPayload": {
+          "targetBucket": "posts",
+          "updateMode": "update"
+        },
+        "title": "Full AISEO on posts on intent decay"
+      },
+      {
+        "keyword": "content-optimizer-full",
+        "executionKind": "content_optimizer",
+        "executionPayload": {
+          "targetBucket": "sap",
+          "updateMode": "update"
+        },
+        "title": "Full AISEO on entity pages on intent decay"
+      }
+    ],
+    "kind": "template"
+  },
+  {
+    "keyword": "sitewide-meta-sweep",
+    "name": "Sitewide Meta Sweep",
+    "description": "Meta-only sweep across all content types when ranking worsens.",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Scope: pages, posts, and entity URLs (all buckets).",
+      "Runs when average ranking position worsened by at least 4 spots, with at least 80 impressions.",
+      "Updates title and meta only, capped at 3 URLs per cycle.",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "maintenance",
+    "verticals": [
+      "general"
+    ],
+    "tags": [
+      "gsc",
+      "meta",
+      "all"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer_meta"
+      ],
+      "targetBuckets": [
+        "all"
+      ],
+      "triggerSignals": [
+        "position_drop"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "sitewide-meta",
+        "title": "Meta sweep all buckets on position drop",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer_meta",
+        "executionPayload": {
+          "targetBucket": "all",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "any",
+          "conditions": [
+            {
+              "signal": "position_drop",
+              "operator": "gte",
+              "value": 4,
+              "minImpressions": 80
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 3
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-position-drop",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "all",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "position_drop",
+            "operator": "gte",
+            "value": 4,
+            "minImpressions": 80
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 3
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-meta",
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "all",
+        "updateMode": "update"
+      },
+      "title": "Meta sweep all buckets on position drop"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "strict-position-alert",
+    "name": "Strict Position Alert",
+    "description": "Meta and extra text on pages when ranking falls 5+ spots (major slips only).",
+    "notes": [
+      "Polls Google Search Console every 24 hours.",
+      "Scope: static pages (Pages bucket).",
+      "Runs when average ranking position worsened by at least 5 spots, with at least 100 impressions.",
+      "Updates title, meta description, and SEO extra text. Page body content is not rewritten.",
+      "Ignores small daily ranking noise.",
+      "Same URL waits 72 hours before it can run again."
+    ],
+    "isAutomation": true,
+    "category": "reactive",
+    "verticals": [
+      "general"
+    ],
+    "tags": [
+      "gsc",
+      "pages",
+      "meta",
+      "strict"
+    ],
+    "prerequisites": [
+      "gsc",
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "content_optimizer_meta"
+      ],
+      "targetBuckets": [
+        "pages"
+      ],
+      "triggerSignals": [
+        "position_drop"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "strict-position",
+        "title": "Meta optimize pages on major position drop",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "trigger",
+        "executionKind": "content_optimizer_meta",
+        "executionPayload": {
+          "targetBucket": "pages",
+          "updateMode": "update"
+        },
+        "triggerConfig": {
+          "sources": [
+            "gsc"
+          ],
+          "match": "any",
+          "conditions": [
+            {
+              "signal": "position_drop",
+              "operator": "gte",
+              "value": 5,
+              "minImpressions": 100
+            }
+          ],
+          "lookbackDays": 28,
+          "compareDays": 28,
+          "pollHours": 24,
+          "cooldownHours": 72,
+          "maxUrls": 5
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "gsc-position-drop",
+      "kind": "gsc",
+      "source": "gsc",
+      "targetBucket": "pages",
+      "triggerConfig": {
+        "sources": [
+          "gsc"
+        ],
+        "match": "any",
+        "conditions": [
+          {
+            "signal": "position_drop",
+            "operator": "gte",
+            "value": 5,
+            "minImpressions": 100
+          }
+        ],
+        "lookbackDays": 28,
+        "compareDays": 28,
+        "pollHours": 24,
+        "cooldownHours": 72,
+        "maxUrls": 5
+      }
+    },
+    "actionBlock": {
+      "keyword": "content-optimizer-meta",
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "targetBucket": "pages",
+        "updateMode": "update"
+      },
+      "title": "Meta optimize pages on major position drop"
+    },
+    "kind": "template"
+  }
+]

@@ -20,7 +20,7 @@ import {
   wikipediaSearchAugmentFromGridRows,
   type LocalDominatorRow,
 } from "@/lib/local-dominator-csv";
-import { buildSapRowsFromGridDirect } from "@/lib/local-strategy-research/build-sap-rows-from-grid-direct";
+import { buildSapRowsFromGridDirectWithWikiPool } from "@/lib/local-strategy-research/build-sap-rows-from-grid-direct";
 import { fetchLocalSeoStrategyFromGrid, type LocalKeywordTarget } from "@/lib/local-seo-strategy-from-grid";
 
 /** 15 posts/month × 3 months - same total as prior entity-schedule export. */
@@ -366,7 +366,7 @@ export async function runLocalStrategySapSchedule(
   const targetTotal = params.targetTotal ?? LOCAL_STRATEGY_SAP_SCHEDULE_TOTAL_ROWS;
   const gridParsed = params.gridParsedRows;
   if (gridParsed && gridParsed.length > 0) {
-    const sapRows = buildSapRowsFromGridDirect({
+    const sapRows = await buildSapRowsFromGridDirectWithWikiPool({
       rows: gridParsed,
       targetTotal,
       placeHints: params.gridPlaceHints ?? [],
@@ -374,6 +374,8 @@ export async function runLocalStrategySapSchedule(
       entityLocation: params.entityLocation ?? null,
       semrush: params.semrush,
       tiers: params.tiers,
+      apiKey: params.apiKey,
+      siteId: params.siteId,
     });
     return { sapRows, usedFallback: false, builtFromGridDirect: true };
   }
@@ -520,6 +522,8 @@ export async function runLocalStrategySapSchedule(
     proposalKeywordMode,
     proposalGridSap: proposalGridOnly,
     refineSapRowKeywordsWithRag: true,
+    gridParsedRows: params.gridParsedRows,
+    gridPlaceHints: params.gridPlaceHints,
   });
 
   return { sapRows: result.sapRows, usedFallback: result.usedFallback ?? false };

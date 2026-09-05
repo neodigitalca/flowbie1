@@ -367,6 +367,17 @@
   min-width: 0;
 }
 
+.pulse-assist-panel-tablist {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+@container (max-width: 26rem) {
+  .pulse-assist-panel-tablist .pulse-assist-clock__city {
+    display: none;
+  }
+}
+
 .pulse-assist-panel-header__row {
   display: flex;
   align-items: center;

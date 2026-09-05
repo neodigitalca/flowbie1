@@ -1,8 +1,6 @@
 /**
  * WordPress API Wrapper
- * Frontend helpers for WordPress integration. Most routes use the backend;
- * published posts and pages can call the REST API from the browser first when
- * host bot checks block the server (see wp-rest-browser).
+ * Frontend helpers for WordPress integration. All routes use this app's /api.
  */
 
 // Re-export all types

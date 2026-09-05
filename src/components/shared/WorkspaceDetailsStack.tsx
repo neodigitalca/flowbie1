@@ -63,7 +63,9 @@ export function WorkspaceDetailsLiveMessage({
   if (!text) return null;
   return (
     <div className={contentOptimizerRowStripeClass(stripeIndex)}>
-      <div className="border-0 px-2.5 py-1.5 text-base text-white sm:px-3">{text}</div>
+      <div className="select-text whitespace-pre-wrap break-words border-0 px-2.5 py-1.5 text-base text-white sm:px-3">
+        {text}
+      </div>
     </div>
   );
 }

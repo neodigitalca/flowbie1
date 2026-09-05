@@ -25,13 +25,18 @@ import {
   contentOptimizerHeaderProgressFromRun,
   contentOptimizerLiveStatus,
   isContentOptimizerBulkRun,
+  mergeContentOptimizeHarnessSections,
   type ContentOptimizerBulkGeneratorBindingsInput,
 } from "@/lib/content-optimization/content-optimizer-bulk-generator-bindings";
 import {
-  CONTENT_PREP_POST_SECTION_TITLES,
-  resolveContentPrepBatchSectionTitles,
-} from "@/lib/overview/overview-content-prep-harness-sections";
-import { RESEARCH_HARNESS_SECTION_TITLES } from "@/lib/overview/overview-research-harness-sections";
+  CONTENT_OPTIMIZE_PIPELINE_TITLES,
+  resolveContentOptimizePipelineTitlesForRow,
+  resolveContentOptimizePipelineTitlesFromHarness,
+  sanitizeHarnessArticleTitle,
+} from "@/lib/overview/overview-content-optimize-pipeline";
+import { resolveContentPrepBatchSectionTitles } from "@/lib/overview/overview-content-prep-harness-sections";
+import { RESEARCH_HARNESS_PIPELINE_TITLES } from "@/lib/overview/overview-research-harness-sections";
+import { isResearchBatchState, overviewBatchIsResearchContext } from "@/lib/overview/overview-bulk-pipeline-titles";
 import { HEADERS_HARNESS_SECTION_TITLES } from "@/lib/overview/overview-blog-headers-harness-sections";
 import { OVERVIEW_HARNESS_SECTION_TITLES } from "@/lib/overview/overview-blog-overview-harness-sections";
 import { IN_CONTENT_IMAGE_HARNESS_SECTION_TITLES } from "@/lib/overview/overview-blog-in-content-image-harness-sections";
@@ -49,6 +54,7 @@ export {
   contentOptimizerHeaderProgressFromRun,
   contentOptimizerLiveStatus,
   isContentOptimizerBulkRun,
+  mergeContentOptimizeHarnessSections,
   type ContentOptimizerBulkGeneratorBindingsInput,
 };
 
@@ -151,20 +157,62 @@ function resolveMicroCurrentRow(harnessByRow: Map<number, BulkHarnessSectionUi[]
 export function resolveOverviewBulkPipelineTitles(
   runKind: BulkOptimizationState["runKind"] | undefined,
   bulkState?: BulkOptimizationState,
+  overviewRows?: import("@/components/overview/overview-meta-row-types").OverviewRow[],
 ): readonly string[] | undefined {
+  if (
+    runKind === "research" ||
+    isResearchBatchState(bulkState ?? (runKind ? { runKind } : null)) ||
+    overviewBatchIsResearchContext(bulkState, overviewRows)
+  ) {
+    return [...RESEARCH_HARNESS_PIPELINE_TITLES];
+  }
+  if (
+    bulkState?.currentStepProgress?.harnessPlannedSectionCount === RESEARCH_HARNESS_PIPELINE_TITLES.length &&
+    (runKind === "research" ||
+      bulkState.currentStep?.includes("Research") ||
+      bulkState.currentStepProgress?.message?.includes("Research"))
+  ) {
+    return [...RESEARCH_HARNESS_PIPELINE_TITLES];
+  }
+
+  if (bulkState && isContentOptimizerBulkRun(bulkState)) {
+    const currentUrl = bulkState.currentUrl?.trim();
+    const rowHarness =
+      (currentUrl ? bulkState.urlHarnessSections?.[currentUrl] : undefined) ??
+      Object.values(bulkState.urlHarnessSections ?? {})[0];
+    const rowFiles = currentUrl ? bulkState.urlGeneratedFiles?.[currentUrl] : undefined;
+    const articleTitle =
+      sanitizeHarnessArticleTitle(
+        overviewRows?.find((row) => row.url?.trim() === currentUrl)?.title?.trim() ?? "",
+        { pageUrl: currentUrl, keyword: bulkState.urlKeywords?.[currentUrl ?? ""] },
+      );
+    const mergedHarness = mergeContentOptimizeHarnessSections(
+      rowHarness as BulkHarnessSectionUi[],
+      rowFiles,
+      articleTitle,
+      currentUrl,
+      bulkState.urlKeywords?.[currentUrl ?? ""],
+    );
+    return [...resolveContentOptimizePipelineTitlesForRow(mergedHarness, rowFiles)];
+  }
+
   switch (runKind) {
     case undefined:
     case "content":
     case "extraText":
-      return [...CONTENT_PREP_POST_SECTION_TITLES];
+      return [...CONTENT_OPTIMIZE_PIPELINE_TITLES];
     case "research":
-      return [...RESEARCH_HARNESS_SECTION_TITLES];
+      return [...RESEARCH_HARNESS_PIPELINE_TITLES];
     case "aiHeaders":
       return [...HEADERS_HARNESS_SECTION_TITLES];
     case "aiLinks":
       return [...LINKS_PIPELINE_TITLES];
+    case "aiAnswer":
+      return ["Answer"];
     case "aiOverview":
       return [...OVERVIEW_HARNESS_SECTION_TITLES];
+    case "aiScenario":
+      return ["Scenario"];
     case "aiInContentImage":
       return [...IN_CONTENT_IMAGE_HARNESS_SECTION_TITLES];
     case "wpUpload":
@@ -215,6 +263,7 @@ function overviewRowToCsvRowFromOverview(
     meta_description: row.metaDescription?.trim() || undefined,
     publish_date_gmt: row.dateModifier?.trim() || row.wpDateGmt?.trim() || undefined,
     destination_url: url,
+    seo_research: row.seoResearch?.trim() || undefined,
     entity:
       bulkState?.urlEntities?.[url] && bulkState.urlEntities[url] !== "N/A"
         ? String(bulkState.urlEntities[url])
@@ -341,8 +390,20 @@ export function buildOverviewBulkGeneratorDetailsProps(
   input: OverviewBulkDetailsBindingsInput,
   workspaceBusy: boolean,
 ): BulkGeneratorDetailsPanelProps | null {
+  const researchSlice = input.bulkActionProgress?.research;
+  const researchProgressActive = Boolean(
+    researchSlice && researchSlice.total > 0 && researchSlice.completed < researchSlice.total,
+  );
+  const researchBatchActive =
+    overviewBatchIsResearchContext(input.bulkState, input.overviewRows) ||
+    researchProgressActive;
   const microKey = activeMicroActionKey(input.bulkActionProgress);
-  if (!isOverviewBulkDetailsRun(input.bulkState) && microKey && input.bulkActionProgress?.[microKey]) {
+  if (
+    !researchBatchActive &&
+    !isOverviewBulkDetailsRun(input.bulkState) &&
+    microKey &&
+    input.bulkActionProgress?.[microKey]
+  ) {
     return buildOverviewMicroActionDetailsProps(input, microKey, input.bulkActionProgress[microKey]!);
   }
 
@@ -351,7 +412,11 @@ export function buildOverviewBulkGeneratorDetailsProps(
   }
 
   const base = buildContentOptimizerBulkGeneratorDetailsProps(input, workspaceBusy);
-  const pipelineSectionTitles = resolveOverviewBulkPipelineTitles(input.bulkState.runKind, input.bulkState);
+  const pipelineSectionTitles = resolveOverviewBulkPipelineTitles(
+    base.runKind ?? input.bulkState.runKind,
+    input.bulkState,
+    input.overviewRows,
+  );
   return attachInventoryProps(base, input, pipelineSectionTitles);
 }
 
@@ -403,7 +468,11 @@ export function buildMultiSiteBulkGeneratorDetailsProps(
 ): BulkGeneratorDetailsPanelProps | null {
   if (!isOverviewBulkDetailsRun(input.bulkState)) return null;
   const base = buildContentOptimizerBulkGeneratorDetailsProps(input, workspaceBusy);
-  const pipelineSectionTitles = resolveOverviewBulkPipelineTitles(input.bulkState.runKind, input.bulkState);
+  const pipelineSectionTitles = resolveOverviewBulkPipelineTitles(
+    base.runKind ?? input.bulkState.runKind,
+    input.bulkState,
+    input.overviewRows,
+  );
   return attachInventoryProps(
     base,
     {

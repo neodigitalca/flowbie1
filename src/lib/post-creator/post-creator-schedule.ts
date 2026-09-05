@@ -8,6 +8,7 @@ import type {
 } from "@/lib/tasks-types";
 import { clampTimesPerMonth } from "@/lib/wordpress-scheduler";
 import { postCreatorRunStartDate } from "@/lib/post-creator/post-creator-run-start-date";
+import { resolvePostCreatorPostCount } from "@/lib/post-creator/post-creator-post-count";
 
 export { postCreatorRunStartDate };
 
@@ -25,7 +26,7 @@ export type ResolvedPostCreatorSchedule = {
 export function resolvePostCreatorSchedule(
   payload: PostCreatorExecutionPayload,
 ): ResolvedPostCreatorSchedule {
-  const postCount = Math.max(1, Math.min(31, Math.floor(Number(payload.postCount ?? 1) || 1)));
+  const postCount = resolvePostCreatorPostCount(payload);
   const timesPerMonth = clampTimesPerMonth(payload.scheduleTimesPerMonth ?? postCount);
   return {
     postCount,
@@ -81,5 +82,6 @@ export function buildPostCreatorWordPressPosting(
     useCsvPublishDates: false,
     postDestination,
     draftOnly,
+    publishDays: payload?.schedulePublishDays,
   });
 }

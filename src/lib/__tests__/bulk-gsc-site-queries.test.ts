@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   brandExclusionPhrasesFromNames,
   entityGscRowLimitForSapBudget,
+  gscAllQueryStringsForEntityKeywordFill,
   gscSapKeywordBasesForOpenRouter,
+  gscSapKeywordBasesFromAllQueries,
   gscShortTailKeywordsForOpenRouter,
   isShortTailGscQuery,
   isTransactionalSapGscQuery,
@@ -65,6 +67,18 @@ describe("isTransactionalSapKeywordBaseGscQuery", () => {
     expect(
       isTransactionalSapKeywordBaseGscQuery("glamping sites challenges traditional cabin structures"),
     ).toBe(false);
+  });
+});
+
+describe("gscAllQueryStringsForEntityKeywordFill", () => {
+  it("includes queries that fail strict SAP base filter", () => {
+    const queries = [
+      { query: "how to fix cordless blinds that won't go up", clicks: 1, impressions: 1 },
+      { query: "designer roller blinds", clicks: 0, impressions: 332 },
+    ];
+    const bases = gscAllQueryStringsForEntityKeywordFill(queries);
+    expect(bases).toContain("how to fix cordless blinds that won't go up");
+    expect(bases).toContain("designer roller blinds");
   });
 });
 

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { lazy, Suspense, useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -18,7 +18,10 @@ import { ContentCreatorCampaignWorkspace } from "@/components/social/content-cre
 import { SocialCreatorCampaignWorkspace } from "@/components/social/creator/SocialCreatorCampaignWorkspace";
 import { SitemapOptimizerResearchTab } from "@/components/research/sitemap-optimizer/SitemapOptimizerResearchTab";
 import { VerticalBenchmarkShell } from "@/components/vertical-benchmark/VerticalBenchmarkShell";
-import { ApiDocsTabContent } from "@/components/api-docs/ApiDocsTabContent";
+
+const ApiDocsTabContent = lazy(() =>
+  import("@/components/api-docs/ApiDocsTabContent").then((m) => ({ default: m.ApiDocsTabContent })),
+);
 import { saveDataForSEOApiKey } from "@/lib/api";
 import type { ManagerSettingsClusterId } from "@/components/manager/manager-settings-cluster";
 import type { GeneratorFreeFlowBindings } from "@/components/generator/generator-free-flow-bindings";
@@ -27,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { ManagerMegaMenuNav } from "@/components/manager/ManagerMegaMenuNav";
 import { ManagerTopBarDisplayConsole } from "@/components/manager/ManagerTopBarDisplayConsole";
 import { ManagerSeedWorkspaceProvider } from "@/contexts/manager-seed-workspace-context";
+import { ManagerErrorLogProvider } from "@/contexts/manager-error-log-context";
 import {
   MANAGER_TOP_BAR_CLASS,
 } from "@/components/manager/manager-top-bar-nav-styles";
@@ -114,6 +118,15 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
     }
   });
   const embedded = variant === "embedded";
+  const displayConsole = (
+    <ManagerTopBarDisplayConsole
+      variant="embedded"
+      managerTab={managerTab}
+      onManagerTabChange={onManagerTabChange}
+      onResetWorkspace={onResetWorkspace}
+      showReset
+    />
+  );
   const chatFullBleed = embedded && (managerTab === "chat" || managerTab === "tasks" || managerTab === "pulse-forge" || managerTab === "api");
   /** Radix tabpanel must participate in flex-1 chain when embedded; parent-only selectors are unreliable. */
   const embeddedTabPanelStretch = embedded ? "flex h-full min-h-0 flex-1 flex-col overflow-hidden" : undefined;
@@ -124,6 +137,7 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
   const embeddedMainColumnTopClass = embedded ? "pt-3 md:pt-4" : "pt-2 md:pt-3";
 
   const inner = (
+    <ManagerErrorLogProvider>
     <ManagerSeedWorkspaceProvider>
     <div
       className={cn("flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden", !embedded && "mx-auto max-w-[1600px]")}
@@ -154,7 +168,7 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
                 MANAGER_TOP_BAR_CLASS,
               )}
             >
-              <div className="flex w-full min-w-0 flex-nowrap items-center gap-2.5 px-3 py-1.5 md:px-5">
+              <div className="flex w-full min-w-0 flex-nowrap items-center gap-2.5 py-1.5 pl-3 md:pl-5">
                 <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
                   {embeddedTopBarStart ? (
                     <div className="flex shrink-0 items-center">{embeddedTopBarStart}</div>
@@ -168,17 +182,8 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
                       onDashboardClusterChange={onManagerDashboardClusterChange}
                     />
                   </div>
-                  <div className="min-w-0 flex-1" aria-hidden />
                 </div>
-                <div className="flex shrink-0">
-                  <ManagerTopBarDisplayConsole
-                    variant="embedded"
-                    managerTab={managerTab}
-                    onManagerTabChange={onManagerTabChange}
-                    onResetWorkspace={onResetWorkspace}
-                    showReset
-                  />
-                </div>
+                <div className="ml-auto flex shrink-0">{displayConsole}</div>
               </div>
             </div>
             {embeddedTopBarProgress ? (
@@ -421,7 +426,9 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
 
 
         <TabsContent value="api" className={cn(embeddedTabPanelTopClass, "data-[state=inactive]:hidden", embeddedTabPanelStretch)}>
-          <ApiDocsTabContent />
+          <Suspense fallback={null}>
+            <ApiDocsTabContent />
+          </Suspense>
         </TabsContent>
         </div>
         {embedded && embeddedFooter ? <div className="w-full shrink-0">{embeddedFooter}</div> : null}
@@ -429,6 +436,7 @@ export const ManagerWorkspace: React.FC<ManagerWorkspaceProps> = ({
       </Tabs>
     </div>
     </ManagerSeedWorkspaceProvider>
+    </ManagerErrorLogProvider>
   );
 
   if (variant === "overlay") {

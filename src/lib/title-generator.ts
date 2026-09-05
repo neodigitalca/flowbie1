@@ -2,7 +2,7 @@ import { streamChatCompletion } from "./api";
 import type { KeywordData } from "./keyword-types";
 import { getResearchModel } from "./optimization-settings-storage";
 import { truncateTitleForSEO } from "./content-generation/content-sanitizer";
-import { TITLE_ANTI_CLICKBAIT_RULE, TITLE_KEYWORD_WEAVING_RULE, TITLE_CASE_RULE, TITLE_WELL_KNOWN_ACRONYMS_RULE } from "./prompt-builders";
+import { TITLE_ANTI_CLICKBAIT_RULE, TITLE_KEYWORD_WEAVING_RULE, TITLE_CASE_RULE, TITLE_WELL_KNOWN_ACRONYMS_RULE, UNIFIED_COPY_FORMATTING_RULE } from "./prompt-builders";
 
 export interface GenerateTitleOptionsParams {
   apiKey: string;
@@ -64,6 +64,7 @@ Title Requirements:
 - **CRITICAL: Count every single character including spaces and punctuation**
 - **If you generate a title longer than 50 characters, it will be automatically truncated and may lose important information**
 - ${TITLE_CASE_RULE}
+- ${UNIFIED_COPY_FORMATTING_RULE}
 - Include the primary keyword naturally (same words and order; Title Case; but keep it under 50 chars total)
 - ${TITLE_ANTI_CLICKBAIT_RULE}
 - Vary the title structures while keeping each one factual, calm, and descriptive

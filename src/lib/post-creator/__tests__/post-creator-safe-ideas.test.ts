@@ -33,13 +33,26 @@ function mockInventory(urls: string[]): LoadBulkSitemapInventoryResult {
 
 const inventoryLoad = vi.fn();
 const streamChatCompletion = vi.fn();
+const gscIdeation = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   loadApiKey: () => "test-openrouter-key",
   streamChatCompletion: (...args: unknown[]) => streamChatCompletion(...args),
 }));
 
-vi.mock("@/components/IntegrationsTab", () => ({
+vi.mock("@/lib/openrouter-api-key-resolve", () => ({
+  resolveOpenRouterApiKeyForHarness: async () => "test-openrouter-key",
+}));
+
+vi.mock("@/lib/bulk/prompt-bulk-site-kw-scrape", () => ({
+  scrapePromptBulkSiteKwJson: async () => ({ keywordsJsonText: '{"gsc":[],"semrush":[]}' }),
+}));
+
+vi.mock("@/lib/post-creator/post-creator-inventory-ideation", () => ({
+  runPostCreatorInventoryFirstIdeation: (...args: unknown[]) => gscIdeation(...args),
+}));
+
+vi.mock("@/components/integrations/storage", () => ({
   getStoredSites: () => [mockSite],
 }));
 
@@ -59,6 +72,13 @@ describe("post-creator single-pass ideation", () => {
   beforeEach(() => {
     inventoryLoad.mockReset();
     streamChatCompletion.mockReset();
+    gscIdeation.mockReset();
+
+    gscIdeation.mockResolvedValue([
+      { keyword: "a", title: "A", entity: "", featuredImage: "y" },
+      { keyword: "b", title: "B", entity: "", featuredImage: "y" },
+      { keyword: "c", title: "C", entity: "", featuredImage: "y" },
+    ]);
 
     inventoryLoad.mockResolvedValue({
       inventory: mockInventory([
@@ -123,5 +143,32 @@ describe("post-creator single-pass ideation", () => {
     ).rejects.toThrow(/OpenRouter returned 1\/3 blog ideas/i);
 
     expect(streamChatCompletion).toHaveBeenCalledTimes(1);
+  });
+
+  it("GSC ideation uses exact postCount not a buffer multiplier", async () => {
+    await buildPostCreatorSafeChecklistRows({
+      site: mockSite,
+      payload: { postCount: 3, keywordSource: "gsc" },
+    });
+
+    expect(gscIdeation).toHaveBeenCalledTimes(1);
+    expect(gscIdeation.mock.calls[0]?.[0]?.postCount).toBe(3);
+  });
+
+  it("server preflight skips inventory reload", async () => {
+    const inventory = mockInventory(["https://advanceblinds.ca/blog/existing/"]);
+    await buildPostCreatorSafeChecklistRows({
+      site: mockSite,
+      payload: { postCount: 3, keywordSource: "gsc" },
+      preflight: {
+        inventory,
+        bucketJson: inventory.buckets.posts?.json ?? "",
+        siteKwJsonText: '{"gsc":["kw"],"semrush":[]}',
+        bucketFiles: [],
+      },
+    });
+
+    expect(inventoryLoad).not.toHaveBeenCalled();
+    expect(gscIdeation).toHaveBeenCalledTimes(1);
   });
 });

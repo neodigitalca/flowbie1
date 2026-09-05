@@ -1,10 +1,11 @@
+import { useEffect, useState } from "react";
 import { ApiDocsBreadcrumbs } from "@/components/api-docs/ApiDocsBreadcrumbs";
 import { ApiDocsCallout } from "@/components/api-docs/ApiDocsCallout";
 import { ApiDocsMarkdown } from "@/components/api-docs/api-docs-markdown";
 import { ApiDocsSidebar } from "@/components/api-docs/ApiDocsSidebar";
 import { ApiDocsToc } from "@/components/api-docs/ApiDocsToc";
 import { SEO_WORKSPACE_TYPO_CLASS } from "@/components/seo/seo-workspace-layout";
-import { getApiDocArticle, getArticleToc } from "@/lib/api-docs";
+import { getArticleToc, loadApiDocArticle } from "@/lib/api-docs";
 import { setApiDocsHash, useApiDocsSlug } from "@/lib/api-docs/api-docs-hash";
 import type { ApiDocArticle } from "@/lib/api-docs/types";
 import { cn } from "@/lib/utils";
@@ -68,14 +69,29 @@ function ApiDocsNotFound({ slug }: { slug: string }) {
 
 export function ApiDocsTabContent() {
   const resolved = useApiDocsSlug();
-  const article = getApiDocArticle(resolved);
+  const [article, setArticle] = useState<ApiDocArticle | undefined>();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    void loadApiDocArticle(resolved).then((loaded) => {
+      if (!cancelled) {
+        setArticle(loaded);
+        setLoading(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [resolved]);
 
   return (
     <div className={cn("neo-pulse-api-tab flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden font-sans text-base", SEO_WORKSPACE_TYPO_CLASS)}>
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <ApiDocsSidebar />
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 py-6 text-white">
-          {article ? <ApiDocsArticle article={article} /> : <ApiDocsNotFound slug={resolved} />}
+          {loading ? null : article ? <ApiDocsArticle article={article} /> : <ApiDocsNotFound slug={resolved} />}
         </div>
       </div>
     </div>

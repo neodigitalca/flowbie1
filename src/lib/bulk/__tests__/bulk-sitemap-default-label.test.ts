@@ -28,13 +28,13 @@ describe("resolveBulkSitemapDefaultLabel", () => {
     ).toBe("Entity");
   });
 
-  it("defaults to entity when available and unset", () => {
+  it("defaults to posts when sitemap type is unset", () => {
     expect(
       resolveBulkSitemapDefaultLabel({
         siteConfigs: {},
         selectedWordPressSites: new Set(["s1"]),
         entitySitemapAvailable: true,
       }),
-    ).toBe("Entity");
+    ).toBe("Posts");
   });
 });

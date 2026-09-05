@@ -1,3 +1,4 @@
+/* @refresh reset */
 import { NOTIFY_FAILED_TO_CONTINUE_OPTIMIZATION_PLEASE_T, NOTIFY_KEYWORD_SELECTION_CANCELLED, NOTIFY_PLEASE_SELECT_A_POST_OR_ENTER_A_URL_TO_O } from "@/lib/notify-messages";
 import React, {
   createContext,
@@ -83,6 +84,7 @@ export type WordPressOptimizationContextValue = ReturnType<typeof useContentOpti
       optionsOverride?: Partial<OptimizationOptions> & {
         prefilledUrlKeywords?: Record<string, string>;
         prefilledOverviewTargets?: Record<string, PrefilledOverviewTarget>;
+        useSiteWarmCacheOnly?: boolean;
       },
     ) => Promise<void>;
     handleContinueOptimization: (
@@ -303,6 +305,7 @@ export function WordPressOptimizationProvider({ children }: { children: ReactNod
         content?: string;
         excerpt?: string;
         focusKeyword?: string;
+        seoResearch?: string;
       } | null,
     ) => {
       try {
@@ -371,10 +374,16 @@ export function WordPressOptimizationProvider({ children }: { children: ReactNod
       optionsOverride?: Partial<OptimizationOptions> & {
         prefilledUrlKeywords?: Record<string, string>;
         prefilledOverviewTargets?: Record<string, PrefilledOverviewTarget>;
+        useSiteWarmCacheOnly?: boolean;
       },
     ) => {
       try {
-        const { prefilledUrlKeywords, prefilledOverviewTargets, ...optionsOnly } = optionsOverride ?? {};
+        const {
+          prefilledUrlKeywords,
+          prefilledOverviewTargets,
+          useSiteWarmCacheOnly,
+          ...optionsOnly
+        } = optionsOverride ?? {};
         const base = optimizationOptions[site.id] || {
           optimizeTitle: true,
           optimizeMeta: true,
@@ -405,6 +414,7 @@ export function WordPressOptimizationProvider({ children }: { children: ReactNod
               : undefined,
           prefilledUrlKeywords,
           prefilledOverviewTargets,
+          useSiteWarmCacheOnly,
         );
       } catch (error) {
         console.error("[Batch Optimize] Error:", error);

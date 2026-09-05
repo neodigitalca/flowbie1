@@ -1,6 +1,10 @@
 import Papa from 'papaparse';
 import { isConnectedSiteBrandAsKeyword } from '@/lib/bulk/bulk-gsc-site-queries';
-import { normalizeImportedDraftUrl } from '@/lib/bulk/blog-import-draft-links';
+import {
+  collectImportedDraftLinksFromSource,
+  importedDraftLinkUrls,
+  normalizeImportedDraftUrl,
+} from '@/lib/bulk/blog-import-draft-links';
 import { callOpenRouterChatCompletion } from '@/lib/competitor-research/competitor-report-openrouter';
 import { isBlockedContentTopicPhrase } from '@/lib/content-topic-blocklist';
 import { parseJsonWithRepair } from '@/lib/json-repair-utility';
@@ -24,6 +28,8 @@ export interface CSVRow {
   wikipedia_title?: string;
   /** When a prompt modifier is used, AI explains why this idea matches it. */
   rationale?: string;
+  /** Previous-agent / CSV research brief for this row. */
+  seo_research?: string;
   // ACF fields
   date_modifier?: string;
   prompt_modifier?: string;
@@ -43,6 +49,14 @@ export interface CSVRow {
   modifier_links_json?: string;
   /** JSON `ImportedBlogToneProfile` from blog-import tone analysis (voice / sophistication for harness). */
   imported_tone_json?: string;
+  /** Full imported HTML (Direct publish / multi-file Import). */
+  imported_html?: string;
+  /** Full imported markdown (Direct publish / multi-file Import). */
+  imported_markdown?: string;
+  /** Original upload filename for an Import row. */
+  import_file_name?: string;
+  /** Per-row export destination; Import header is the default when unset. */
+  post_destination?: "wordpress" | "local" | "direct";
   /**
    * Optional WordPress publish/schedule instant (CSV cell). ISO 8601 UTC preferred, or `YYYY-MM-DD` with bulk Start Time (UTC).
    * Distinct from `date_modifier` (ACF copy).
@@ -212,6 +226,24 @@ export function modifierLinksFromJson(raw: string | undefined | null): string[] 
   } catch {
     return [""];
   }
+}
+
+/** Links editor URLs for an import row: stored Links first, else hrefs parsed from that piece's content. */
+export function importRowLinkEditorUrls(
+  row: Pick<CSVRow, "modifier_links_json" | "imported_links_json" | "imported_markdown" | "imported_html">,
+): string[] {
+  if (parseModifierLinksJson(row.modifier_links_json)?.length) {
+    return modifierLinksFromJson(row.modifier_links_json);
+  }
+  const fromImported = parseImportedLinksJson(row.imported_links_json);
+  if (fromImported?.length) return importedDraftLinkUrls(fromImported);
+  const fromSource = importedDraftLinkUrls(
+    collectImportedDraftLinksFromSource({
+      markdown: row.imported_markdown,
+      html: row.imported_html,
+    }),
+  );
+  return fromSource.length > 0 ? fromSource : [""];
 }
 
 /** Persist link editor rows; empty strings kept for draft slots. Pipeline reads via parseModifierLinksJson. */

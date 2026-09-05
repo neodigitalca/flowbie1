@@ -27,9 +27,10 @@ class Neo_Pulse_Wp_Search_Elementor {
 
 		add_action( 'elementor/elements/categories_registered', array( __CLASS__, 'register_category' ) );
 		add_action( 'elementor/widgets/register', array( __CLASS__, 'register_widgets' ) );
+		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'register_preview_script' ) );
+		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'register_preview_script' ) );
 		add_action( 'elementor/preview/enqueue_scripts', array( __CLASS__, 'enqueue_preview_assets' ) );
 		add_action( 'elementor/editor/after_enqueue_scripts', array( __CLASS__, 'enqueue_preview_assets' ) );
-		self::register_preview_script();
 		self::$booted = true;
 	}
 
@@ -56,11 +57,13 @@ class Neo_Pulse_Wp_Search_Elementor {
 
 	public static function enqueue_preview_assets(): void {
 		Neo_Pulse_Wp_Search::enqueue_search_assets();
-		self::register_preview_script();
+		if ( ! wp_script_is( 'neo-pulse-search-elementor-preview', 'registered' ) ) {
+			return;
+		}
 		wp_enqueue_script( 'neo-pulse-search-elementor-preview' );
 		wp_localize_script(
 			'neo-pulse-search-elementor-preview',
-			'neo-pulseSearchElementorPreview',
+			'neoPulseSearchElementorPreview',
 			array(
 				'cssVars' => Neo_Pulse_Wp_Ai_Widget_Design_Css::get_search_portal_css_var_names(),
 			)

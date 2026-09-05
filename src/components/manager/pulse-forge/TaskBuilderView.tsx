@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -37,15 +38,20 @@ import {
   recipeToPlan,
   validateAutomationPlan,
 } from "@/lib/automation-planner-compile";
+import { isClientAgnosticExecutionKind } from "@/lib/agent-runs-types";
 import type { AutomationPlan } from "@/lib/automation-planner-types";
 import type { AutomationRecipeCatalogItem } from "@/lib/automation-recipes-types";
 import { saveTemplateFromProject, testFireTaskTrigger } from "@/lib/tasks-api";
 import { resolveTaskForAutomationExecute } from "@/lib/task-automation-ui";
 import type { DefaultTaskCreatePayload, ForgeAutomationVisibility, TaskExecutionPayload, TaskProject, TaskTemplate, TeamTask } from "@/lib/tasks-types";
+import type { WorkflowDefinition } from "@/lib/workflow/workflow-types";
 import { defaultTaskTriggerConfig } from "@/lib/task-trigger-types";
 import type { TeamMember } from "@/lib/teams-types";
-import { isNeoPulseBotMember } from "@/lib/chat-neo-pulse";
-import { mergeExecutionPayloadForSave } from "@/lib/post-creator/post-creator-schedule-payload";
+import { pulseMemberUserId } from "@/lib/chat-neo-pulse";
+import { hydrateWorkflowAgentPlanFromNodes, applyActionScheduleToPlanTrigger, applyTriggerScheduleToPlan } from "@/lib/workflow/workflow-agent-plan";
+import {
+  mergeExecutionPayloadForSave,
+} from "@/lib/post-creator/post-creator-schedule-payload";
 import { effectiveSaveLocalArchive } from "@/lib/schedule-output-destination";
 import type { WordPressSiteOption } from "@/components/manager/tasks/NewProjectDialog";
 import { TaskBuilderClientSitePicker } from "@/components/manager/pulse-forge/TaskBuilderClientSitePicker";
@@ -53,10 +59,16 @@ import { FORGE_TASK_BUILDER_INFIELD_CLASS } from "@/components/manager/pulse-for
 import { resolveAutomationVisibility } from "@/lib/pulse-forge/forge-automation-visibility";
 import {
   readCachedExecutionPayload,
+  readCachedRecipeClientIds,
+  readCachedRecipePlan,
   writeCachedExecutionPayload,
+  writeCachedRecipeClientIds,
+  writeCachedRecipePlan,
 } from "@/lib/forge-automation-plan-cache";
+import { suggestPresetForSiteName } from "@/lib/google-drive/google-drive-folder-presets";
+import { googleDriveFolderIsConfigured } from "@/lib/google-drive/resolve-google-drive-folder";
 
-export type TaskBuilderMode = "recipe" | "create" | "edit";
+export type TaskBuilderMode = "recipe" | "create" | "edit" | "workflow-agent";
 
 export type TaskBuilderTab = "setup" | "what" | "when" | "then" | "preview" | "json" | "archive" | "template";
 
@@ -79,11 +91,6 @@ function emptyPlan(): AutomationPlan {
   };
 }
 
-function pulseMemberUserId(members: TeamMember[]): number | null {
-  const pulse = members.find((m) => isNeoPulseBotMember(m));
-  return pulse?.userId ?? null;
-}
-
 export type TaskBuilderViewProps = {
   mode: TaskBuilderMode;
   teamId: number | null;
@@ -93,6 +100,8 @@ export type TaskBuilderViewProps = {
   recipe?: AutomationRecipeCatalogItem | null;
   editAutomation?: TaskProject | null;
   editAutomationTasks?: TeamTask[];
+  workflowAgentEdit?: { workflow: WorkflowDefinition; nodeId: string } | null;
+  workflowReturn?: { workflowId: number; workflowName?: string | null };
   onCancel: () => void;
   onCreate: (payload: {
     keyword: string;
@@ -120,6 +129,11 @@ export type TaskBuilderViewProps = {
     taskId: number,
     payload: DefaultTaskCreatePayload,
   ) => Promise<{ ok: boolean; task?: TeamTask }>;
+  onSaveWorkflowAgent?: (
+    plan: AutomationPlan,
+    executionPayload: TaskExecutionPayload,
+  ) => Promise<{ ok: boolean; workflow?: WorkflowDefinition; error?: string }>;
+  onInstallAsWorkflow?: (plan: AutomationPlan) => Promise<boolean>;
   onTemplatesChange?: (templates: TaskTemplate[]) => void;
   onTaskExecuted?: () => void;
   initialTab?: TaskBuilderTab;
@@ -135,10 +149,14 @@ export function TaskBuilderView({
   recipe = null,
   editAutomation = null,
   editAutomationTasks = [],
+  workflowAgentEdit = null,
+  workflowReturn,
   onCancel,
   onCreate,
   onUpdate,
   onUpdateTask,
+  onSaveWorkflowAgent,
+  onInstallAsWorkflow,
   onTemplatesChange,
   onTaskExecuted,
   initialTab,
@@ -156,6 +174,7 @@ export function TaskBuilderView({
   const [saveFromName, setSaveFromName] = useState("");
   const [saveFromKeyword, setSaveFromKeyword] = useState("");
   const [planReady, setPlanReady] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
   const thenExecutionPayloadRef = useRef<TaskExecutionPayload | null>(null);
   const jsonPanelRef = useRef<AutomationJsonPanelHandle>(null);
   const planInitializedScopeRef = useRef<string | null>(null);
@@ -163,18 +182,42 @@ export function TaskBuilderView({
   const pulseUserId = useMemo(() => pulseMemberUserId(members), [members]);
   const editTask = editAutomationTasks[0] ?? null;
   const archiveSiteName = useMemo(() => {
-    const siteId = clientId.trim() || editAutomation?.wordpressSiteId?.trim() || "";
+    const siteId =
+      clientId.trim() ||
+      (selectedClientIds.size > 0 ? [...selectedClientIds][0] : "") ||
+      editAutomation?.wordpressSiteId?.trim() ||
+      "";
     if (!siteId) return "";
     return sites.find((site) => site.id === siteId)?.name ?? "";
-  }, [clientId, editAutomation?.wordpressSiteId, sites]);
-  const validationErrors = useMemo(
-    () => (planReady ? validateAutomationPlan(plan) : []),
-    [plan, planReady],
+  }, [clientId, editAutomation?.wordpressSiteId, selectedClientIds, sites]);
+  const clientAgnosticPlan = isClientAgnosticExecutionKind(
+    plan.action.executionKind,
+    plan.action.executionPayload,
   );
-  const canSubmit = planReady && validationErrors.length === 0;
+  const validationErrors = useMemo(() => {
+    const errors = planReady ? validateAutomationPlan(plan) : [];
+    const payload = mergeExecutionPayloadForSave(
+      plan.action.executionPayload,
+      thenExecutionPayloadRef.current,
+    );
+    if (payload.saveToGoogleDrive === true && !googleDriveFolderIsConfigured(payload, archiveSiteName)) {
+      errors.push("Google Drive folder path is required.");
+    }
+    return errors;
+  }, [plan, planReady]);
+  const canSaveDraft = planReady && Boolean(plan.name.trim()) && validationErrors.length === 0;
+  const canInstallOrCreate =
+    canSaveDraft &&
+    (mode !== "recipe" && mode !== "create"
+      ? true
+      : clientAgnosticPlan || selectedClientIds.size > 0);
 
   const submitLabel =
-    mode === "recipe" ? "Install" : mode === "edit" ? "Save" : "Create";
+    mode === "recipe"
+      ? "Install"
+      : mode === "workflow-agent" || mode === "edit"
+        ? "Save"
+        : "Create";
 
   const previewBlocks = useMemo(() => {
     if (!recipe) return [];
@@ -188,9 +231,13 @@ export function TaskBuilderView({
     const base: { id: TaskBuilderTab; label: string }[] = [
       { id: "setup", label: "Setup" },
       { id: "what", label: "What" },
-      { id: "when", label: "When" },
-      { id: "then", label: "Then" },
     ];
+    if (mode !== "workflow-agent") {
+      base.push({ id: "when", label: "When" });
+    }
+    if (mode !== "workflow-agent") {
+      base.push({ id: "then", label: "Then" });
+    }
     if (mode === "recipe" && recipe) {
       base.push({ id: "preview", label: "Preview" });
     }
@@ -203,13 +250,21 @@ export function TaskBuilderView({
   }, [mode, recipe]);
 
   const builderScopeKey =
-    mode === "edit" && editAutomation
+    mode === "workflow-agent" && workflowAgentEdit && recipe
+      ? `workflow-agent:${workflowAgentEdit.workflow.id}:${workflowAgentEdit.nodeId}:${recipe.keyword}`
+      : mode === "edit" && editAutomation
       ? `edit:${editAutomation.id}`
       : mode === "recipe" && recipe
         ? `recipe:${recipe.keyword}`
         : mode === "create"
           ? "create"
           : "none";
+
+  useEffect(() => {
+    if (mode === "workflow-agent" && tab === "when") {
+      setTab("what");
+    }
+  }, [mode, tab]);
 
   useEffect(() => {
     if (!teamId) return;
@@ -225,11 +280,44 @@ export function TaskBuilderView({
     setPlanReady(false);
 
     if (mode === "recipe" && recipe) {
-      const next = recipeToPlan(recipe);
+      const base = recipeToPlan(recipe);
+      const cached = teamId ? readCachedRecipePlan(teamId, recipe.keyword) : null;
+      const next = cached
+        ? {
+            ...cached,
+            keyword: cached.keyword?.trim() || base.keyword,
+            name: cached.name?.trim() || base.name,
+            description: cached.description ?? base.description,
+            category: cached.category ?? base.category,
+            prerequisites: cached.prerequisites ?? base.prerequisites,
+          }
+        : base;
       planInitializedScopeRef.current = builderScopeKey;
       setPlan(next);
       thenExecutionPayloadRef.current = next.action.executionPayload ?? null;
-      setSelectedClientIds(defaultSiteId ? new Set([defaultSiteId]) : new Set());
+      const cachedClientIds = teamId ? readCachedRecipeClientIds(teamId, recipe.keyword) : [];
+      setSelectedClientIds(
+        cachedClientIds.length > 0
+          ? new Set(cachedClientIds)
+          : defaultSiteId
+            ? new Set([defaultSiteId])
+            : new Set(),
+      );
+      setAutomationVisibility("private");
+      setError(null);
+      setPlanReady(true);
+      return;
+    }
+    if (mode === "workflow-agent" && recipe && workflowAgentEdit) {
+      const next = hydrateWorkflowAgentPlanFromNodes({
+        recipe,
+        workflow: workflowAgentEdit.workflow,
+        nodeId: workflowAgentEdit.nodeId,
+      });
+      planInitializedScopeRef.current = builderScopeKey;
+      setPlan(next);
+      thenExecutionPayloadRef.current = next.action.executionPayload ?? null;
+      setSelectedClientIds(new Set());
       setAutomationVisibility("private");
       setError(null);
       setPlanReady(true);
@@ -290,7 +378,7 @@ export function TaskBuilderView({
       setError(null);
       setPlanReady(true);
     }
-  }, [builderScopeKey, defaultSiteId, editAutomation, editTask, mode, recipe]);
+  }, [builderScopeKey, defaultSiteId, editAutomation, editTask, mode, recipe, teamId, workflowAgentEdit]);
 
   const appliedBuilderScopeRef = useRef<string | null>(null);
 
@@ -305,13 +393,51 @@ export function TaskBuilderView({
     }
   }, [builderScopeKey, initialTab]);
 
+  const mergeThenPayloadIntoPlan = useCallback((sourcePlan: AutomationPlan): AutomationPlan => {
+    const mergedPayload = mergeExecutionPayloadForSave(
+      sourcePlan.action.executionPayload,
+      thenExecutionPayloadRef.current,
+    );
+    thenExecutionPayloadRef.current = mergedPayload;
+    return {
+      ...sourcePlan,
+      action: { ...sourcePlan.action, executionPayload: mergedPayload },
+    };
+  }, []);
+
   const selectTab = useCallback(
     (next: TaskBuilderTab) => {
+      if (mode !== "workflow-agent" && (next === "json" || tab === "then")) {
+        setPlan((current) => mergeThenPayloadIntoPlan(current));
+      }
       setTab(next);
       onTabChange?.(next);
     },
-    [onTabChange],
+    [mergeThenPayloadIntoPlan, mode, onTabChange, tab],
   );
+
+  useEffect(() => {
+    if (mode === "workflow-agent" || !archiveSiteName.trim()) return;
+    const suggested = suggestPresetForSiteName(archiveSiteName);
+    if (!suggested) return;
+    const current = mergeExecutionPayloadForSave(
+      plan.action.executionPayload,
+      thenExecutionPayloadRef.current,
+    );
+    if (current.saveToGoogleDrive !== true || String(current.googleDriveFolderId ?? "").trim()) {
+      return;
+    }
+    const mergedPayload = mergeExecutionPayloadForSave(current, {
+      googleDrivePresetKey: suggested.id,
+      googleDriveFolderId: suggested.folderId,
+      googleDriveFolderLabel: suggested.label,
+    });
+    thenExecutionPayloadRef.current = mergedPayload;
+    setPlan((currentPlan) => ({
+      ...currentPlan,
+      action: { ...currentPlan.action, executionPayload: mergedPayload },
+    }));
+  }, [archiveSiteName, mode, plan.action.executionPayload]);
 
   const buildTaskPayloads = useCallback(
     (sourcePlan: AutomationPlan): DefaultTaskCreatePayload[] => {
@@ -336,38 +462,87 @@ export function TaskBuilderView({
     [buildTaskPayloads, plan],
   );
 
-  const handleSubmit = useCallback(async () => {
-    if (!canSubmit) return;
+  const resolvePlanForPersist = useCallback((): AutomationPlan | null => {
     const trimmedName = plan.name.trim();
     if (!trimmedName) {
       setError("Name is required.");
-      return;
+      return null;
     }
-    if ((mode === "recipe" || mode === "create") && selectedClientIds.size === 0) {
-      setError("Select at least one client site.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
     let planForSave = plan;
     const flushedPlan = jsonPanelRef.current?.flushPendingPlan();
+    if (flushedPlan === null) {
+      setError("Fix JSON errors before saving.");
+      return null;
+    }
     if (flushedPlan) {
       planForSave = flushedPlan;
       setPlan(flushedPlan);
       thenExecutionPayloadRef.current = flushedPlan.action.executionPayload ?? null;
     }
-    const mergedPayload = mergeExecutionPayloadForSave(
-      planForSave.action.executionPayload,
-      thenExecutionPayloadRef.current,
-    );
-    planForSave = {
-      ...planForSave,
-      action: { ...planForSave.action, executionPayload: mergedPayload },
-    };
-    thenExecutionPayloadRef.current = mergedPayload;
+    if (mode !== "workflow-agent") {
+      planForSave = mergeThenPayloadIntoPlan(planForSave);
+    }
+    setPlan(planForSave);
+    return planForSave;
+  }, [mergeThenPayloadIntoPlan, mode, plan]);
+
+  const handleSaveDraft = useCallback(async () => {
+    if (!canSaveDraft || !teamId) return;
+    setSaving(true);
+    setError(null);
+    const planForSave = resolvePlanForPersist();
+    if (!planForSave) {
+      setSaving(false);
+      return;
+    }
+    if (mode === "recipe" && recipe) {
+      writeCachedRecipePlan(teamId, recipe.keyword, planForSave);
+      writeCachedRecipeClientIds(teamId, recipe.keyword, [...selectedClientIds]);
+      setDraftSavedAt(Date.now());
+    } else if (mode === "create") {
+      writeCachedRecipePlan(teamId, "create", planForSave);
+      writeCachedRecipeClientIds(teamId, "create", [...selectedClientIds]);
+      setDraftSavedAt(Date.now());
+    }
+    setSaving(false);
+  }, [canSaveDraft, mode, recipe, resolvePlanForPersist, selectedClientIds, teamId]);
+
+  const handleSubmit = useCallback(async () => {
+    if (!canInstallOrCreate) return;
+    const trimmedName = plan.name.trim();
+    if (!trimmedName) {
+      setError("Name is required.");
+      return;
+    }
+    if ((mode === "recipe" || mode === "create") && !clientAgnosticPlan && selectedClientIds.size === 0) {
+      setError("Select at least one client site.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    let planForSave = resolvePlanForPersist();
+    if (!planForSave) {
+      setSaving(false);
+      return;
+    }
+    const mergedPayload = planForSave.action.executionPayload ?? {};
     const baseKeyword = planForSave.keyword.trim() || trimmedName.toLowerCase().replace(/\s+/g, "-");
     let ok = false;
-    if (mode === "edit" && editAutomation && onUpdate) {
+    if (mode === "workflow-agent" && onSaveWorkflowAgent) {
+      const saveResult = await onSaveWorkflowAgent(planForSave, mergedPayload);
+      ok = saveResult.ok;
+      if (ok && saveResult.workflow && recipe && workflowAgentEdit) {
+        const hydrated = hydrateWorkflowAgentPlanFromNodes({
+          recipe,
+          workflow: saveResult.workflow,
+          nodeId: workflowAgentEdit.nodeId,
+        });
+        planForSave = hydrated;
+        setPlan(hydrated);
+        thenExecutionPayloadRef.current = hydrated.action.executionPayload ?? null;
+      }
+      if (!ok) setError(saveResult.error ?? "Could not save agent.");
+    } else if (mode === "edit" && editAutomation && onUpdate) {
       const projectPayload = {
         keyword: baseKeyword,
         title: trimmedName,
@@ -401,9 +576,12 @@ export function TaskBuilderView({
         }
       }
       if (!ok) setError("Could not save automation.");
+    } else if (mode === "recipe" && clientAgnosticPlan && onInstallAsWorkflow) {
+      ok = await onInstallAsWorkflow(planForSave);
+      if (!ok) setError("Could not create workflow.");
     } else {
-      const siteIds = [...selectedClientIds];
-      const multiSite = siteIds.length > 1;
+      const siteIds = clientAgnosticPlan ? [""] : [...selectedClientIds];
+      const multiSite = !clientAgnosticPlan && siteIds.length > 1;
       ok = true;
       for (const siteId of siteIds) {
         const site = sites.find((entry) => entry.id === siteId);
@@ -414,7 +592,7 @@ export function TaskBuilderView({
           keyword,
           title,
           description: planForSave.description?.trim() || undefined,
-          wordpressSiteId: siteId,
+          wordpressSiteId: siteId.trim() || null,
           wordpressSites: sites,
           isAutomation: true,
           sourceTemplateKeyword: mode === "recipe" && recipe ? recipe.keyword : undefined,
@@ -432,31 +610,38 @@ export function TaskBuilderView({
             ? "Could not install automation for all selected sites."
             : "Could not create automation for all selected sites.",
         );
+      } else if (mode === "recipe" && recipe && teamId) {
+        writeCachedRecipePlan(teamId, recipe.keyword, planForSave);
+        writeCachedRecipeClientIds(teamId, recipe.keyword, [...selectedClientIds]);
       }
     }
     setSaving(false);
     if (!ok) return;
-    if (mode === "edit") {
+    if (mode === "edit" || mode === "workflow-agent") {
       return;
     }
     onCancel();
   }, [
     automationVisibility,
-    canSubmit,
+    buildTaskPayloads,
+    canInstallOrCreate,
     clientId,
     editAutomation,
     editTask,
     mode,
     onCancel,
+    onInstallAsWorkflow,
     onCreate,
-    onTaskExecuted,
+    onSaveWorkflowAgent,
     onUpdate,
     onUpdateTask,
     plan,
     recipe,
+    resolvePlanForPersist,
+    clientAgnosticPlan,
     selectedClientIds,
     sites,
-    buildTaskPayloads,
+    teamId,
   ]);
 
   const handleTestFire = useCallback(async () => {
@@ -490,6 +675,17 @@ export function TaskBuilderView({
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-black font-sans">
       <nav className="flex shrink-0 flex-wrap items-center gap-1 px-4 py-3">
+        {workflowReturn ? (
+          <button
+            type="button"
+            className="mr-1 flex shrink-0 items-center gap-1.5 bg-transparent px-2 py-2 text-base text-muted-foreground hover:text-white"
+            disabled={saving}
+            onClick={onCancel}
+          >
+            <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
+            Back to workflow
+          </button>
+        ) : null}
         {tabs.map(({ id, label }) => (
           <WorkspacePill
             key={id}
@@ -519,12 +715,23 @@ export function TaskBuilderView({
             disabled={saving}
             onClick={onCancel}
           >
-            Cancel
+            {workflowReturn ? "Back to workflow" : "Cancel"}
           </Button>
+          {mode === "recipe" || mode === "create" ? (
+            <Button
+              type="button"
+              variant="outline"
+              className={getPropertyListRowBlackLabelButtonClass()}
+              disabled={saving || !canSaveDraft}
+              onClick={() => void handleSaveDraft()}
+            >
+              {saving ? "Save…" : draftSavedAt && Date.now() - draftSavedAt < 3000 ? "Saved" : "Save"}
+            </Button>
+          ) : null}
           <Button
             type="button"
             className="h-10 rounded-none bg-[#77AA00] text-base text-black hover:bg-[#77AA00]/90"
-            disabled={saving || !canSubmit}
+            disabled={saving || !canInstallOrCreate}
             onClick={() => void handleSubmit()}
           >
             {saving ? `${submitLabel}…` : submitLabel}
@@ -536,50 +743,70 @@ export function TaskBuilderView({
         {tab === "setup" ? (
           <TaskBuilderPanelShell>
             <div className="flex h-full min-h-0 flex-col gap-4">
-              <div className="grid shrink-0 grid-cols-1 gap-2 lg:grid-cols-3">
-                <div className={FORGE_TASK_BUILDER_INFIELD_CLASS}>
-                  <span className="shrink-0 text-base text-white">Visibility</span>
-                  <div className="flex min-w-0 flex-wrap items-center gap-1">
-                    <WorkspacePill
-                      label="Private"
-                      square
-                      tone="forge"
-                      active={automationVisibility === "private"}
-                      disabled={saving}
-                      onClick={() => setAutomationVisibility("private")}
-                    />
-                    <WorkspacePill
-                      label="Public"
-                      square
-                      tone="forge"
-                      active={automationVisibility === "public"}
-                      disabled={saving}
-                      onClick={() => setAutomationVisibility("public")}
-                    />
-                  </div>
-                </div>
-                <div className={FORGE_TASK_BUILDER_INFIELD_CLASS}>
-                  <span className="shrink-0 text-base text-white">Keyword</span>
-                  <Input
-                    value={plan.keyword}
-                    onChange={(e) => setPlan((p) => ({ ...p, keyword: e.target.value }))}
-                    placeholder="automation-keyword"
-                    disabled={saving}
-                    className={TASK_FORM_FLAT_CONTROL_CLASS}
-                  />
-                </div>
+              {mode === "workflow-agent" ? (
                 <div className={FORGE_TASK_BUILDER_INFIELD_CLASS}>
                   <span className="shrink-0 text-base text-white">Name</span>
                   <Input
-                    value={plan.name}
-                    onChange={(e) => setPlan((p) => ({ ...p, name: e.target.value }))}
-                    placeholder="Automation name"
+                    value={plan.action.title ?? plan.name}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setPlan((p) => ({
+                        ...p,
+                        name: value,
+                        action: { ...p.action, title: value },
+                      }));
+                    }}
+                    placeholder="Step name"
                     disabled={saving}
                     className={TASK_FORM_FLAT_CONTROL_CLASS}
                   />
                 </div>
-              </div>
-              {sites.length > 0 ? (
+              ) : (
+                <div className="grid shrink-0 grid-cols-1 gap-2 lg:grid-cols-3">
+                  <div className={FORGE_TASK_BUILDER_INFIELD_CLASS}>
+                    <span className="shrink-0 text-base text-white">Visibility</span>
+                    <div className="flex min-w-0 flex-wrap items-center gap-1">
+                      <WorkspacePill
+                        label="Private"
+                        square
+                        tone="forge"
+                        active={automationVisibility === "private"}
+                        disabled={saving}
+                        onClick={() => setAutomationVisibility("private")}
+                      />
+                      <WorkspacePill
+                        label="Public"
+                        square
+                        tone="forge"
+                        active={automationVisibility === "public"}
+                        disabled={saving}
+                        onClick={() => setAutomationVisibility("public")}
+                      />
+                    </div>
+                  </div>
+                  <div className={FORGE_TASK_BUILDER_INFIELD_CLASS}>
+                    <span className="shrink-0 text-base text-white">Keyword</span>
+                    <Input
+                      value={plan.keyword}
+                      onChange={(e) => setPlan((p) => ({ ...p, keyword: e.target.value }))}
+                      placeholder="automation-keyword"
+                      disabled={saving}
+                      className={TASK_FORM_FLAT_CONTROL_CLASS}
+                    />
+                  </div>
+                  <div className={FORGE_TASK_BUILDER_INFIELD_CLASS}>
+                    <span className="shrink-0 text-base text-white">Name</span>
+                    <Input
+                      value={plan.name}
+                      onChange={(e) => setPlan((p) => ({ ...p, name: e.target.value }))}
+                      placeholder="Automation name"
+                      disabled={saving}
+                      className={TASK_FORM_FLAT_CONTROL_CLASS}
+                    />
+                  </div>
+                </div>
+              )}
+              {sites.length > 0 && mode !== "workflow-agent" && !clientAgnosticPlan ? (
                 mode === "edit" ? (
                   <div className="grid shrink-0 grid-cols-1 gap-3 lg:grid-cols-2">
                     <div className="flex min-w-0 flex-col gap-1">
@@ -622,29 +849,70 @@ export function TaskBuilderView({
             <AutomationWhatPanel
               action={plan.action}
               actionBlocks={actionBlocks}
+              clientSiteId={(() => {
+                if (mode === "workflow-agent" && workflowAgentEdit) {
+                  const fromWorkflow = workflowAgentEdit.workflow.wordpressSiteId?.trim();
+                  if (fromWorkflow) return fromWorkflow;
+                  const clientNode = workflowAgentEdit.workflow.nodes.find(
+                    (node) => node.kind === "workflow_client",
+                  );
+                  const fromClient = (
+                    clientNode?.config as { siteIds?: string[] } | undefined
+                  )?.siteIds?.[0]?.trim();
+                  if (fromClient) return fromClient;
+                }
+                return (
+                  clientId.trim() ||
+                  (selectedClientIds.size > 0 ? [...selectedClientIds][0] : "") ||
+                  editAutomation?.wordpressSiteId?.trim() ||
+                  undefined
+                );
+              })()}
               disabled={saving}
               pillTone="forge"
-              onChange={(action) => setPlan((p) => ({ ...p, action }))}
+              onChange={(action) => {
+                setPlan((p) => {
+                  const mergedPayload = mergeExecutionPayloadForSave(
+                    p.action.executionPayload,
+                    thenExecutionPayloadRef.current,
+                    action.executionPayload,
+                  );
+                  thenExecutionPayloadRef.current = mergedPayload;
+                  return {
+                    ...p,
+                    action: { ...action, executionPayload: mergedPayload },
+                  };
+                });
+              }}
             />
           </TaskBuilderPanelShell>
         ) : null}
 
-        {tab === "when" ? (
+        {tab === "when" && mode !== "workflow-agent" ? (
           <TaskBuilderPanelShell>
             <AutomationWhenPanel
               trigger={plan.trigger}
               triggerBlocks={triggerBlocks}
               disabled={saving}
-              onChange={(trigger) => setPlan((p) => ({ ...p, trigger }))}
+              onChange={(trigger) =>
+                setPlan((current) => {
+                  const withTrigger = { ...current, trigger };
+                  if (mode !== "workflow-agent") return withTrigger;
+                  const synced = applyTriggerScheduleToPlan(withTrigger);
+                  thenExecutionPayloadRef.current = synced.action.executionPayload ?? null;
+                  return synced;
+                })
+              }
             />
           </TaskBuilderPanelShell>
         ) : null}
 
-        {tab === "then" ? (
+        {tab === "then" && mode !== "workflow-agent" ? (
           <TaskBuilderPanelShell>
             <AutomationThenPanel
               action={plan.action}
               disabled={saving}
+              siteName={archiveSiteName}
               onChange={(patch) => {
                 if (patch.executionPayload) {
                   thenExecutionPayloadRef.current = patch.executionPayload;
@@ -652,7 +920,13 @@ export function TaskBuilderView({
                     writeCachedExecutionPayload(editAutomation.id, patch.executionPayload);
                   }
                 }
-                setPlan((p) => ({ ...p, action: { ...p.action, ...patch } }));
+                setPlan((current) => {
+                  const next = { ...current, action: { ...current.action, ...patch } };
+                  if (mode !== "workflow-agent" || !patch.executionPayload) return next;
+                  const synced = applyActionScheduleToPlanTrigger(next);
+                  thenExecutionPayloadRef.current = synced.action.executionPayload ?? null;
+                  return synced;
+                });
               }}
             />
           </TaskBuilderPanelShell>
@@ -759,6 +1033,9 @@ export function TaskBuilderView({
       </div>
 
       {error ? <p className="shrink-0 px-4 pb-4 text-base text-red-400">{error}</p> : null}
+      {!error && validationErrors.length > 0 ? (
+        <p className="shrink-0 px-4 pb-4 text-base text-red-400">{validationErrors[0]}</p>
+      ) : null}
     </div>
   );
 }

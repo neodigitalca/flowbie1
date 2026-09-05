@@ -6,17 +6,44 @@ import {
   nodeById,
   outgoingEdges,
 } from "@/lib/workflow/workflow-graph-utils";
+import { inferActionKeyword } from "@/lib/automation-planner-compile";
+import { ensureExecutionSchedulePayload } from "@/lib/post-creator/post-creator-schedule-payload";
+import type { TaskExecutionKind, TaskExecutionPayload } from "@/lib/tasks-types";
 import type {
   WorkflowDefinition,
   WorkflowEdge,
   WorkflowNode,
   WorkflowNodeKind,
 } from "@/lib/workflow/workflow-types";
-import { isWorkflowClientKind, isWorkflowTriggerKind } from "@/lib/workflow/workflow-types";
+import { isWorkflowClientKind, isWorkflowThenKind, isWorkflowTriggerKind } from "@/lib/workflow/workflow-types";
 
 const STEP_Y_GAP = 140;
 const STEP_X = 120;
 const STEP_Y_START = 80;
+
+/** When adding from the column footer, prefer inserting before Then/archive steps. */
+export function resolveDefaultInsertAnchorId(
+  workflow: Pick<WorkflowDefinition, "nodes" | "edges">,
+  afterNodeId?: string | null,
+): string | null {
+  if (afterNodeId) return afterNodeId;
+
+  const ordered = linearOrderedNodes(workflow);
+  const firstThenOrArchive = ordered.find(
+    (node) => isWorkflowThenKind(node.kind) || node.kind === "rag_archive",
+  );
+  if (firstThenOrArchive) {
+    const index = ordered.indexOf(firstThenOrArchive);
+    if (index > 0) return ordered[index - 1]!.id;
+  }
+
+  return (
+    ordered[ordered.length - 1]?.id ??
+    findTriggerNode(workflow)?.id ??
+    findClientNode(workflow)?.id ??
+    null
+  );
+}
 
 export function linearOrderedNodes(workflow: Pick<WorkflowDefinition, "nodes" | "edges">): WorkflowNode[] {
   const client = findClientNode(workflow);
@@ -24,16 +51,8 @@ export function linearOrderedNodes(workflow: Pick<WorkflowDefinition, "nodes" | 
   const ordered: WorkflowNode[] = [];
   const visited = new Set<string>();
 
-  if (client) {
-    ordered.push(client);
-    visited.add(client.id);
-  }
-
-  if (trigger) {
-    ordered.push(trigger);
-    visited.add(trigger.id);
-    let currentId = trigger.id;
-
+  const walkFrom = (startId: string) => {
+    let currentId = startId;
     while (true) {
       const nextEdges = outgoingEdges(workflow.edges, currentId);
       if (nextEdges.length === 0) break;
@@ -45,6 +64,19 @@ export function linearOrderedNodes(workflow: Pick<WorkflowDefinition, "nodes" | 
       visited.add(nextId);
       currentId = nextId;
     }
+  };
+
+  if (client) {
+    ordered.push(client);
+    visited.add(client.id);
+  }
+
+  if (trigger && !visited.has(trigger.id)) {
+    ordered.push(trigger);
+    visited.add(trigger.id);
+    walkFrom(trigger.id);
+  } else if (client) {
+    walkFrom(client.id);
   }
 
   for (const node of workflow.nodes) {
@@ -53,6 +85,16 @@ export function linearOrderedNodes(workflow: Pick<WorkflowDefinition, "nodes" | 
 
   if (ordered.length === 0) return [...workflow.nodes];
   return ordered;
+}
+
+export function findUpstreamActionAgent(
+  workflow: Pick<WorkflowDefinition, "nodes" | "edges">,
+  nodeId: string,
+): WorkflowNode | null {
+  const ordered = linearOrderedNodes(workflow);
+  const index = ordered.findIndex((node) => node.id === nodeId);
+  const before = index >= 0 ? ordered.slice(0, index) : ordered;
+  return [...before].reverse().find((node) => node.kind === "action_agent") ?? null;
 }
 
 export function findRagArchiveNode(workflow: Pick<WorkflowDefinition, "nodes">): WorkflowNode | null {
@@ -91,13 +133,7 @@ export function insertNodesAfter(
   }
 
   const ordered = linearOrderedNodes(workflow);
-  const anchorId =
-    afterNodeId ??
-    findClientNode(workflow)?.id ??
-    ordered.find((node) => node.kind === "rag_archive")?.id ??
-    ordered[ordered.length - 1]?.id ??
-    findTriggerNode(workflow)?.id ??
-    null;
+  const anchorId = resolveDefaultInsertAnchorId(workflow, afterNodeId);
 
   if (!anchorId) {
     const nodes = syncLinearPositions([...newNodes]);
@@ -158,7 +194,7 @@ export function duplicateNode(
 export function defaultNodeConfig(kind: WorkflowNodeKind): Record<string, unknown> {
   switch (kind) {
     case "workflow_client":
-      return { siteIds: [] };
+      return { siteIds: [], clientScope: "selected" };
     case "action_agent":
       return {
         executionKind: "content_optimizer_meta",
@@ -176,8 +212,54 @@ export function defaultNodeConfig(kind: WorkflowNodeKind): Record<string, unknow
       };
     case "trigger_gsc":
       return { targetBucket: "pages", triggerConfig: { conditions: [], match: "any", sources: ["gsc"] } };
+    case "trigger_agentmail":
+      return { fromEmail: "", inbox: "" };
+    case "csv_rows":
+      return {
+        csvInputSource: "upload",
+        csvColumnMap: {},
+        ragVariableKey: `csv_${Date.now()}`,
+      };
     case "rag_archive":
-      return { variableKey: "workflow_output", scope: "run" };
+      return { variableKey: "workflow_output", scope: "run", deliverableScope: "final" };
+    case "then_google_drive":
+      return {
+        inputVariableKey: "",
+        inputMode: "single",
+        executionPayload: {
+          saveLocalArchive: true,
+          saveToGoogleDrive: true,
+          googleDriveFolderSource: "path",
+          googleDriveFolderPath: "reporting",
+        },
+      };
+    case "then_local":
+    case "then_email":
+      return { inputVariableKey: "", executionPayload: { saveLocalArchive: true } };
+    case "then_scheduled":
+      return {
+        inputVariableKey: "",
+        executionPayload: ensureExecutionSchedulePayload({
+          postCount: 15,
+          scheduleFrequency: "custom",
+          scheduleCustomInterval: 15,
+          scheduleTimesPerMonth: 15,
+          scheduleStartDay: 1,
+          scheduleStartTime: "09:00",
+          scheduleStartDateOption: "immediate",
+          scheduleStaggerOptimized: true,
+          postDestination: "wordpress",
+        }),
+      };
+    case "then_draft":
+      return {
+        inputVariableKey: "",
+        executionPayload: {
+          postCount: 1,
+          scheduleDraftOnly: true,
+          postDestination: "draft",
+        },
+      };
     default:
       return {};
   }
@@ -189,6 +271,32 @@ export function createWorkflowNode(kind: WorkflowNodeKind, label?: string): Work
     kind,
     label: label ?? defaultNodeLabel(kind),
     config: defaultNodeConfig(kind),
+    position: { x: STEP_X, y: STEP_Y_START },
+  };
+}
+
+export function createWorkflowActionAgentNode(args: {
+  executionKind: TaskExecutionKind;
+  label: string;
+  executionPayload?: TaskExecutionPayload;
+  actionBlockKeyword?: string;
+}): WorkflowNode {
+  const id = newWorkflowNodeId("action_agent");
+  const actionBlockKeyword =
+    args.actionBlockKeyword?.trim() ||
+    inferActionKeyword(args.executionKind, args.executionPayload);
+  return {
+    id,
+    kind: "action_agent",
+    label: args.label,
+    config: {
+      executionKind: args.executionKind,
+      executionPayload: args.executionPayload ?? {},
+      ragVariableKey: `step_${id}`,
+      ragScope: "run",
+      ragInputKeys: [],
+      actionBlockKeyword,
+    },
     position: { x: STEP_X, y: STEP_Y_START },
   };
 }
@@ -208,7 +316,7 @@ export function ensureRagArchiveNode(
     "workflow_output";
 
   const archive = createWorkflowNode("rag_archive", "Archive to RAG");
-  archive.config = { variableKey, scope: "run" };
+  archive.config = { variableKey, scope: "run", deliverableScope: "final" };
   const anchorId = ordered[ordered.length - 1]?.id ?? findTriggerNode(workflow)?.id ?? null;
   return insertNodeAfter(workflow, anchorId, archive);
 }

@@ -16,11 +16,11 @@ import type { CSVRow } from "@/lib/bulk-auto-generate";
 import {
   BLOG_IMPORT_POST_DESTINATION_CHOICES,
   BULK_POST_DESTINATION_CHOICES,
+  type WordPressPostDestination,
 } from "@/lib/bulk-auto-generate";
 import type { BlogImportFeaturedImage } from "@/lib/bulk/blog-import-parser";
-import {
-  buildBlogImportPlaceholderRow,
-} from "@/lib/bulk/blog-import-openrouter-run";
+import { isBlogImportFileAccepted } from "@/lib/bulk/blog-import-parser";
+import { buildImportCsvRowFromFile } from "@/lib/bulk/blog-import-direct";
 import {
   blogImportHeaderProgressFromBulk,
   buildBlogImportMicroSnapshot,
@@ -29,12 +29,14 @@ import { countBulkCsvRowsDone } from "@/lib/bulk/bulk-csv-row-run-status";
 import { PressReleaseTab } from "@/components/keyword-research/PressReleaseTab";
 import { PressReleaseWorkspaceBody } from "@/components/press-release/PressReleaseWorkspaceBody";
 import { PressReleaseWorkspaceHeader } from "@/components/press-release/PressReleaseWorkspaceHeader";
+import type { PressReleaseWorkspaceBindings } from "@/components/press-release/press-release-workspace-bindings";
 import {
   buildPressReleaseMicroSnapshot,
   pressReleaseHeaderProgressFromState,
 } from "@/lib/press-release/press-release-header-progress";
 import { notify } from "@/lib/app-notifications";
-import { notifyLoadedCsvX } from "@/lib/notify-messages";
+import { notifyLoadedCsvX, NOTIFY_OPENROUTER_API_KEY_IS_REQUIRED } from "@/lib/notify-messages";
+import { resolveOpenRouterApiKeyForHarness } from "@/lib/openrouter-api-key-resolve";
 
 export interface BulkBlogGenerationTabProps {
   variant: "csv" | "prompt" | "blog-import" | "press-release";
@@ -88,6 +90,7 @@ export function BulkBlogGenerationTab({
   const [titleOverride, setTitleOverride] = useState("");
   const [featuredImageMode, setFeaturedImageMode] = useState<BlogImportFeaturedImage>("y");
   const [entity, setEntity] = useState("");
+  const [isParsingImport, setIsParsingImport] = useState(false);
   const [bulkBindings, setBulkBindings] = useState<BulkGeneratorWorkspaceBindings | null>(null);
   const [pressReleaseBindings, setPressReleaseBindings] =
     useState<PressReleaseWorkspaceBindings | null>(null);
@@ -105,21 +108,63 @@ export function BulkBlogGenerationTab({
     setTitleOverride("");
     setFeaturedImageMode("y");
     setEntity("");
-  }, [importedFileName, importedRows.length]);
+  }, []);
 
-  useEffect(() => {
-    if (!uploadedImportFile || !importedFileName) return;
-    setImportedRows([buildBlogImportPlaceholderRow(importedFileName, importForm)]);
-  }, [uploadedImportFile, importedFileName, importForm]);
-
-  const handlePickImportFile = useCallback(
-    (file: File | null) => {
-      if (!file) return;
-      setUploadedImportFile(file);
-      setImportedFileName(file.name);
-      setImportedRows([buildBlogImportPlaceholderRow(file.name, importForm)]);
+  const handlePickImportFiles = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return;
+      const dest: WordPressPostDestination = bulkBindings?.bulkPostDestination ?? "local";
+      let apiKey = "";
+      try {
+        apiKey = (await resolveOpenRouterApiKeyForHarness()).trim();
+      } catch (e) {
+        notify.error(e instanceof Error ? e.message : NOTIFY_OPENROUTER_API_KEY_IS_REQUIRED);
+        return;
+      }
+      setIsParsingImport(true);
+      try {
+        const accepted = files.filter((file) => isBlogImportFileAccepted(file));
+        if (accepted.length === 0) {
+          notify.error("Use .docx, .md, .html, or .txt");
+          return;
+        }
+        if (accepted.length !== files.length) {
+          notify.error("Skipped unsupported file types");
+        }
+        const next: CSVRow[] = [];
+        for (const file of accepted) {
+          try {
+            next.push(
+              await buildImportCsvRowFromFile(file, importForm, dest, apiKey, selectedModel),
+            );
+          } catch (error) {
+            notify.error(error instanceof Error ? error.message : `Failed to read ${file.name}`);
+          }
+        }
+        if (next.length === 0) return;
+        setImportedRows((prev) => {
+          const merged = [...prev, ...next];
+          setImportedFileName(
+            merged.length === 1
+              ? merged[0]?.import_file_name ?? accepted[0]?.name ?? "1 file"
+              : `${merged.length} files`,
+          );
+          return merged;
+        });
+        setUploadedImportFile(accepted[0] ?? null);
+      } finally {
+        setIsParsingImport(false);
+      }
     },
-    [importForm],
+    [bulkBindings?.bulkPostDestination, importForm, selectedModel],
+  );
+
+  const handleImportDestinationChange = useCallback(
+    (v: WordPressPostDestination) => {
+      bulkBindings?.setBulkPostDestination(v);
+      setImportedRows((prev) => prev.map((row) => ({ ...row, post_destination: v })));
+    },
+    [bulkBindings],
   );
 
   const onBulkGeneratorWorkspaceBindings = useCallback((bindings: BulkGeneratorWorkspaceBindings) => {
@@ -227,7 +272,7 @@ export function BulkBlogGenerationTab({
 
   const sitemapMenu = useMemo(() => {
     if (!bulkBindings || isPressRelease) return null;
-    if (!isCsv && !isPrompt) return null;
+    if (!isCsv && !isPrompt && !isBlogImport) return null;
     return (
       <BulkGeneratorSitemapMenu
         postDestination={postDestination}
@@ -237,9 +282,10 @@ export function BulkBlogGenerationTab({
         setSiteConfigs={bulkBindings.setSiteConfigs}
         onSwitchToCustom={bulkBindings.onSwitchToCustom}
         isDisabled={workspaceBusy}
+        showWhenLocal={isBlogImport}
       />
     );
-  }, [bulkBindings, isCsv, isPrompt, isPressRelease, postDestination, workspaceBusy]);
+  }, [bulkBindings, isCsv, isPrompt, isBlogImport, isPressRelease, postDestination, workspaceBusy]);
 
   const csvSitemapGridProps = useMemo(() => {
     if (!bulkBindings) {
@@ -288,9 +334,10 @@ export function BulkBlogGenerationTab({
         useGapScheduling={useGapScheduling}
         scheduleOccupancyLoading={bulkBindings.scheduleOccupancyLoading}
         isDisabled={workspaceBusy}
+        showWhenLocal={isBlogImport}
       />
     );
-  }, [bulkBindings, postDestination, workspaceBusy]);
+  }, [bulkBindings, isBlogImport, postDestination, workspaceBusy]);
 
   const placeholderOnlyBody =
     (isCsv && (bulkBindings?.displayRows?.length ?? 0) < BULK_GENERATOR_EMPTY_ROW_COUNT) ||
@@ -312,6 +359,7 @@ export function BulkBlogGenerationTab({
     displayRows: bulkBindings?.displayRows ?? [],
     postDestination,
     wpConfig,
+    runKind: "content" as const,
   };
 
   const canOpenDetails = isPressRelease
@@ -331,7 +379,9 @@ export function BulkBlogGenerationTab({
   const canRunCsv =
     Boolean((bulkBindings?.rows.length ?? 0) > 0 && !bulkBindings?.isProcessing);
 
-  const canRunImport = Boolean(uploadedImportFile && !bulkBindings?.isProcessing);
+  const canRunImport = Boolean(
+    importedRows.length > 0 && !bulkBindings?.isProcessing,
+  );
 
   const blogContentFile = useMemo((): BulkGeneratedFile | undefined => {
     if (!bulkBindings) return undefined;
@@ -404,6 +454,14 @@ export function BulkBlogGenerationTab({
             postDestination={postDestination}
             onPostDestinationChange={(v) => bulkBindings?.setBulkPostDestination(v)}
             postDestinationChoices={postDestinationChoices}
+            featuredImagePerBlog={bulkBindings?.featuredImagePerBlog ?? true}
+            onFeaturedImagePerBlogChange={(v) => bulkBindings?.setFeaturedImagePerBlog(v)}
+            featuredImageType={bulkBindings?.featuredImageType ?? "ai-generated"}
+            onFeaturedImageTypeChange={(v) => bulkBindings?.setFeaturedImageType(v)}
+            onApplyFeaturedImageToRows={(value) => {
+              const rows = bulkBindings?.rows ?? [];
+              rows.forEach((_, i) => bulkBindings?.onCsvRowChange(i, { featuredImage: value }));
+            }}
             canRun={canRunCsv}
             onRun={() => void bulkBindings?.handleStartProcessing()}
             onCancel={() => bulkBindings?.cancelProcessing()}
@@ -486,11 +544,11 @@ export function BulkBlogGenerationTab({
             onFeaturedImageModeChange={setFeaturedImageMode}
             entity={entity}
             onEntityChange={setEntity}
-            isParsing={false}
+            isParsing={isParsingImport}
             importedFileName={importedFileName}
-            onPickFile={handlePickImportFile}
+            onPickFiles={handlePickImportFiles}
             postDestination={postDestination}
-            onPostDestinationChange={(v) => bulkBindings?.setBulkPostDestination(v)}
+            onPostDestinationChange={handleImportDestinationChange}
             postDestinationChoices={postDestinationChoices}
             canRun={canRunImport}
             isProcessing={Boolean(bulkBindings?.isProcessing)}
@@ -500,6 +558,7 @@ export function BulkBlogGenerationTab({
             canDownloadBlog={canDownloadBlog}
             onDownloadBlog={handleDownloadBlog}
             scheduleMenu={scheduleMenu}
+            sitemapMenu={sitemapMenu}
             detailsProps={{
               ...baseDetailsProps,
               variant: "blog-import",
@@ -602,11 +661,17 @@ export function BulkBlogGenerationTab({
             siteFallbackSitemapType={csvSitemapGridProps.siteFallbackSitemapType}
             onRowSitemapChange={csvSitemapGridProps.onRowSitemapChange}
             sitemapControlDisabled={csvSitemapGridProps.sitemapControlDisabled}
+            onRowChange={bulkBindings?.onCsvRowChange}
             publishDateLabelByIndex={bulkBindings?.publishDateLabelByIndex}
             draftOnly={
               Boolean(bulkBindings?.wordpressDraftOnly) &&
               (bulkBindings?.bulkPostDestination ?? "wordpress") !== "local"
             }
+            showPostDestination
+            postDestinationChoices={BLOG_IMPORT_POST_DESTINATION_CHOICES}
+            headerPostDestination={postDestination}
+            onDropFiles={handlePickImportFiles}
+            dropDisabled={Boolean(bulkBindings?.isProcessing) || isParsingImport}
           />
         ) : null}
 
@@ -632,7 +697,7 @@ export function BulkBlogGenerationTab({
           </>
         ) : (
           <BulkAutoGeneratePanel
-            forcedInputMode={isBlogImport ? "csv" : variant}
+            forcedInputMode={isBlogImport ? "blog-import" : variant}
             injectedRows={isBlogImport ? importedRows : undefined}
             blogImportSourceFile={isBlogImport ? uploadedImportFile : null}
             blogImportForm={isBlogImport ? importForm : undefined}

@@ -1,6 +1,7 @@
 import { isBlockedContentTopicPhrase } from "@/lib/content-topic-blocklist";
 import { isOffensiveGscQuery } from "@/lib/gsc-offensive-word-blocklist";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 /** Phrases that must NEVER be used as primary keyword (wrong-topic / known bad / competitor or wrong business). */
 const BLOCKLISTED_PHRASES: string[] = [
@@ -111,7 +112,7 @@ export async function isCompetitorFocusedKeyword(
   if (!kw || kw.length < 2) return false;
   if (!apiKey || !apiKey.trim()) return false;
   try {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const response = await postOpenRouterAppChatFetch( {
       method: 'POST',
       headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
@@ -445,7 +446,7 @@ CRITICAL OUTPUT REQUIREMENTS:
 Return the primary keyword on the first line, then up to 5 secondary keywords (one per line).`;
 
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await postOpenRouterAppChatFetch( {
       method: "POST",
       headers: openRouterWebAppHeaders(options.apiKey),
       body: JSON.stringify({
@@ -635,7 +636,7 @@ RULES:
 - Return ONLY the cleaned keyword phrase. No quotes, no explanation, no punctuation.`;
 
   try {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const response = await postOpenRouterAppChatFetch( {
       method: 'POST',
       headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({

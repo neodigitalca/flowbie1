@@ -6,6 +6,11 @@
  */
 
 import { isFaqStyleHeadingTitle } from "@/lib/content-generation/faq-heading-policy";
+import {
+  rewriteIllustrativeChecklistItemHeading,
+  stripIllustrativeMarkersFromChecklistItem,
+} from "@/lib/content-optimization/illustrative-h2";
+import { pinSapChecklistMandatoryHeadings, pinBlueprintAgentTitle } from "@/lib/prompt-builders/sap-checklist-pin";
 
 export { isFaqStyleHeadingTitle } from "@/lib/content-generation/faq-heading-policy";
 
@@ -65,11 +70,53 @@ export const GLOBAL_FORBIDDEN_PHRASES = [
   "in today's world",
   "in conclusion",
   "game-changer",
+  " for more.",
+  "fits your SEO plan",
+  "See how",
+  "this article explores",
+  "this article provides",
+  "this article covers",
+  "this article outlines",
+  "this guide explores",
+  "this guide provides",
+  "this guide outlines",
+  "this guide covers",
+  "this article also presents",
+  "in this article,",
+  "in this guide,",
+  "we will explore",
+  "let's explore",
+  "when it comes to",
+  "whether you're looking",
+  "look no further",
+  "rest assured",
+  "tailored to your needs",
+  "functional and aesthetic",
+  "aesthetic appeal and",
+  "we often find",
+  "we often observe",
+  "we frequently recommend that",
+  "we find that many",
+  "this guide walks",
+  "this guide walks through",
+  "families can review",
+  "readers can explore",
+  "our team",
+  "our experts",
+  "our professionals",
+  "it is worth noting",
+  "it's worth noting",
+  "in the realm of",
+  "at the forefront",
+  "stands as a testament",
+  "peace of mind",
 ] as const;
 
 const FORBIDDEN_SENTENCE_SHAPES = `- Never write importance-claim openers like "Understanding [topic] is crucial/vital for [audience] to [verb]…". State facts and actions directly.
 - Example NEVER to write: "Understanding these reforms is crucial for physicians to adapt their practices effectively."
-- Write instead: "Physicians need to update billing workflows before the deadline." (direct fact, no padding.)`;
+- Write instead: "Physicians need to update billing workflows before the deadline." (direct fact, no padding.)
+- Never open with a dictionary definition ("{topic} offers/are/provide {generic benefit}"). Lead with a sourced fact or number.
+- Never use AI-template filler listed above (our team, this article provides, when it comes to, whether you're looking).`;
 
 /** Max uses of understand-forms across one full article (title, body, FAQ, meta). Prefer 1. */
 export const UNDERSTAND_FORMS_ARTICLE_MAX = 2;
@@ -233,12 +280,28 @@ function checklistItemHasFaqStyleHeading(item: string): boolean {
 /** Clean checklist for LLM pipeline (blueprint gen). Sanitize only — no blacklist text. */
 export function prepareChecklistForPipeline(
   checklist: string[],
-  options?: { allowFaqItems?: boolean },
+  options?: { allowFaqItems?: boolean; sapEntity?: string },
 ): string[] {
   if (checklist.length === 0) return checklist;
-  return checklist
-    .map(sanitizeForbiddenWordsInChecklistItem)
-    .filter((item) => {
+  const sapEntity = options?.sapEntity?.trim();
+  let out = checklist.map(sanitizeForbiddenWordsInChecklistItem);
+  if (sapEntity) {
+    out = out.map((item, index) => rewriteIllustrativeChecklistItemHeading(item, index, sapEntity));
+    out = pinSapChecklistMandatoryHeadings(sapEntity, out);
+    out = out.slice(0, 7);
+  } else {
+    const firstIllustrative = out.findIndex(
+      (item) => /\[illustrative\]/i.test(item) && !/\[FAQ\]/i.test(item),
+    );
+    out = out.map((item, index) => {
+      if (/\[FAQ\]/i.test(item)) return item;
+      if (firstIllustrative >= 0 && index === firstIllustrative) {
+        return rewriteIllustrativeChecklistItemHeading(item);
+      }
+      return stripIllustrativeMarkersFromChecklistItem(item);
+    });
+  }
+  return out.filter((item) => {
       if (item.length === 0) return false;
       if (options?.allowFaqItems) return true;
       return !checklistItemHasFaqStyleHeading(item);
@@ -419,10 +482,28 @@ function agentHasFaqFeature(features: unknown[]): boolean {
 }
 
 /** Pipeline/in-memory: sanitize titles, descriptions, features; strip blacklist metadata. */
+function agentHasIllustrativeFeature(features: unknown[]): boolean {
+  return features.some(
+    (f) => typeof f === "string" && f.toLowerCase().trim().startsWith("[illustrative]"),
+  );
+}
+
+function stripIllustrativeFeatures(features: unknown[]): unknown[] {
+  return features.filter((f) => {
+    if (typeof f !== "string") return true;
+    const lo = f.toLowerCase().trim();
+    return !lo.startsWith("[illustrative]") && !lo.startsWith("[blockquote]");
+  });
+}
+
 export function sanitizeBlueprintAgentsForPipeline<T extends BlueprintAgentLike>(
   agents: T[],
-  options?: { allowFaqAgents?: boolean },
+  options?: { allowFaqAgents?: boolean; sapEntity?: string },
 ): T[] {
+  const sapEntity = options?.sapEntity?.trim();
+  const firstIllustrative = !sapEntity
+    ? agents.findIndex((agent) => agentHasIllustrativeFeature(Array.isArray(agent.features) ? agent.features : []))
+    : -1;
   return agents
     .filter((agent) => {
       if (options?.allowFaqAgents) return true;
@@ -434,25 +515,33 @@ export function sanitizeBlueprintAgentsForPipeline<T extends BlueprintAgentLike>
     })
     .map((agent, index) => {
       const rawTitle = typeof agent.title === "string" ? agent.title : "";
+      const features = Array.isArray(agent.features) ? agent.features : [];
       const sanitizedTitle = rawTitle ? sanitizeForbiddenHeadingTitle(rawTitle) : agent.title;
-      const title =
+      let title =
         typeof sanitizedTitle === "string" && sanitizedTitle.trim() ? sanitizedTitle : agent.title;
+      if (typeof title === "string" && title.trim()) {
+        title = pinBlueprintAgentTitle(title, features, index, sapEntity);
+      }
       const description =
         typeof agent.description === "string"
           ? sanitizeForbiddenWordsInPromptText(agent.description)
           : agent.description;
-      const rawFeatures = stripForbiddenWordsFeatures(
-        Array.isArray(agent.features) ? agent.features : [],
-      );
-      const features = rawFeatures.map((f) =>
+      const rawFeatures = stripForbiddenWordsFeatures(features);
+      let sanitizedFeatures = rawFeatures.map((f) =>
         typeof f === "string" ? sanitizeForbiddenWordsInPromptText(f) : f,
       );
+      const keepIllustrative = sapEntity
+        ? index === 3
+        : index === firstIllustrative;
+      if (!keepIllustrative) {
+        sanitizedFeatures = stripIllustrativeFeatures(sanitizedFeatures);
+      }
       return {
         ...agent,
         step: index + 1,
         title,
         description,
-        features,
+        features: sanitizedFeatures,
       };
     });
 }
@@ -463,10 +552,15 @@ export function enforceForbiddenWordsOnBlueprintAgents<T extends BlueprintAgentL
 }
 
 /** In-memory blueprint after generation: sanitize titles; no forbiddenWordsPolicy on object. */
-export function enforceForbiddenWordsOnBlueprint<T extends BlueprintLike>(blueprint: T): T {
+export function enforceForbiddenWordsOnBlueprint<T extends BlueprintLike>(
+  blueprint: T,
+  options?: { sapEntity?: string },
+): T {
   const { forbiddenWordsPolicy: _drop, ...rest } = blueprint as T & { forbiddenWordsPolicy?: string };
   return {
     ...rest,
-    agents: sanitizeBlueprintAgentsForPipeline(blueprint.agents ?? []),
+    agents: sanitizeBlueprintAgentsForPipeline(blueprint.agents ?? [], {
+      sapEntity: options?.sapEntity,
+    }),
   } as T;
 }

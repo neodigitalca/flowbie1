@@ -92,7 +92,7 @@ describe("agentRunCollapsedHint", () => {
       createdAt: "",
       updatedAt: "",
     } as AgentRun;
-    expect(agentRunCollapsedHint(run, null, 0, null)).toBe(
+    expect(agentRunCollapsedHint(run, null, 0)).toBe(
       "Blueprint generation failed: Blueprint missing agents.",
     );
   });
@@ -112,7 +112,25 @@ describe("agentRunCollapsedHint", () => {
       updatedAt: "",
     } as AgentRun;
     expect(
-      agentRunCollapsedHint(run, { progressLabel: "Done", progress: 1, stepLabel: "Done" }, 0, null),
+      agentRunCollapsedHint(run, { progressLabel: "Done", progress: 1, stepLabel: "Done" }, 0),
     ).toBe("GSC MoM report generated");
+  });
+
+  it("hides hint when it only repeats the terminal status pill label", () => {
+    const run = {
+      id: 84,
+      recipeKey: "local_dominator_export",
+      status: "cancelled",
+      recipeTitle: "Grid export",
+      source: "workflow",
+      taskId: 0,
+      context: {},
+      plan: {},
+      createdAt: "",
+      updatedAt: "",
+    } as AgentRun;
+    expect(
+      agentRunCollapsedHint(run, { progressLabel: "Cancelled", progress: 0, stepLabel: "Cancelled" }, 0),
+    ).toBe("");
   });
 });

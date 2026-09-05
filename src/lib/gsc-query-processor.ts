@@ -8,6 +8,7 @@ import { getResearchModel } from "./optimization-settings-storage";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 import { sortGscQueriesByStats } from "@/lib/bulk/bulk-gsc-site-queries";
 import type { GscSiteQueryRow } from "@/lib/competitor-research/types";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 export type GscPageQueryRow = {
   query: string;
@@ -96,7 +97,7 @@ ${queriesList}
 
 Return: [3, 1, 5, 7] (query numbers, best first)`;
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await postOpenRouterAppChatFetch( {
       method: "POST",
       headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({

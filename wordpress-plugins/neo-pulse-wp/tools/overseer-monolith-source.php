@@ -425,7 +425,7 @@ class Neo_Pulse_Wp_Overseer {
 		);
 		wp_localize_script(
 			'neo-pulse-overseer',
-			'neo-pulseOverseer',
+			'neoPulseOverseer',
 			self::beacon_config()
 		);
 	}

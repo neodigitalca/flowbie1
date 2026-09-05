@@ -11,6 +11,7 @@ import { extractEntitiesFromWikipediaList, checkWikipediaPageExists } from './wi
 import { parseTitleTemplate } from './title-template-parser';
 import { generateEntityTitleFromSitemap } from './bulk-auto-generate';
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 export interface ServiceAreaPackResult {
   serviceAreas: Array<{
@@ -225,7 +226,7 @@ What is the Wikipedia page title?`;
   try {
     const { getResearchModel } = await import("./optimization-settings-storage");
     const researchModel = getResearchModel();
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await postOpenRouterAppChatFetch( {
       method: "POST",
       headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({

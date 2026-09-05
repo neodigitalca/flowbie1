@@ -159,6 +159,7 @@ class Neo_Pulse_Wp_Ai_Apply {
 				return array( 'focus_keyword' );
 			case 'seo_research':
 				self::write_acf_or_meta( $post_id, 'seo_research', $value );
+				self::maybe_sync_post_title_from_seo_research( $post_id, $value );
 				return array( 'seo_research' );
 			case 'faq':
 				$key = Neo_Pulse_Wp_Ai_Context::resolve_write_key( $post_id, array( 'faq', 'seo_faq' ) );
@@ -229,5 +230,70 @@ class Neo_Pulse_Wp_Ai_Apply {
 			$value = $ts ? gmdate( 'Y-m-d', $ts ) : gmdate( 'Y-m-d' );
 		}
 		self::write_acf_or_meta( $post_id, 'date_modifier', $value );
+	}
+
+	/**
+	 * When SEO research title matches this post's keyword and post_title does not, write the research title.
+	 */
+	public static function maybe_sync_post_title_from_seo_research( int $post_id, string $research_json = '' ): void {
+		if ( $research_json === '' ) {
+			$research_json = Neo_Pulse_Wp_Ai_Context::read_acf_or_meta( $post_id, array( 'seo_research' ) );
+		}
+		$decoded = json_decode( $research_json, true );
+		if ( ! is_array( $decoded ) ) {
+			return;
+		}
+		$research_title = trim( (string) ( $decoded['title'] ?? '' ) );
+		$primary        = trim( (string) ( $decoded['primary_keyword'] ?? '' ) );
+		if ( $research_title === '' || $primary === '' ) {
+			return;
+		}
+		$focus = Neo_Pulse_Wp_Ai_Context::read_focus_keyword( $post_id );
+		$check = $focus !== '' ? $focus : $primary;
+		if ( ! self::title_covers_keyword( $research_title, $check ) && ! self::title_covers_keyword( $research_title, $primary ) ) {
+			return;
+		}
+		$post = get_post( $post_id );
+		if ( ! $post instanceof WP_Post ) {
+			return;
+		}
+		if ( self::title_covers_keyword( (string) $post->post_title, $check ) ) {
+			return;
+		}
+		self::write_title( $post_id, Neo_Pulse_Wp_Ai_Seo_Limits::normalize_title( $research_title ) );
+	}
+
+	public static function title_covers_keyword( string $title, string $keyword ): bool {
+		$tokens = self::keyword_content_tokens( $keyword );
+		if ( $tokens === array() ) {
+			return true;
+		}
+		$hay = strtolower( $title );
+		foreach ( $tokens as $w ) {
+			if ( strpos( $hay, $w ) === false ) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * @return array<int,string>
+	 */
+	private static function keyword_content_tokens( string $phrase ): array {
+		$stop = array( 'a' => true, 'an' => true, 'and' => true, 'for' => true, 'how' => true, 'in' => true, 'is' => true, 'of' => true, 'on' => true, 'or' => true, 'the' => true, 'to' => true, 'what' => true, 'why' => true );
+		$parts = preg_split( '/\s+/', strtolower( $phrase ) );
+		if ( ! is_array( $parts ) ) {
+			return array();
+		}
+		$out = array();
+		foreach ( $parts as $w ) {
+			$w = preg_replace( '/[^a-z0-9]+/', '', $w );
+			if ( ! is_string( $w ) || strlen( $w ) < 2 || isset( $stop[ $w ] ) ) {
+				continue;
+			}
+			$out[] = $w;
+		}
+		return $out;
 	}
 }

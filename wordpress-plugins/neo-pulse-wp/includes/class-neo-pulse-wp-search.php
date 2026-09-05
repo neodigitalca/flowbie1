@@ -662,7 +662,6 @@ class Neo_Pulse_Wp_Search {
 		$layout       = isset( $sidebar['sidebar_layout'] ) && is_array( $sidebar['sidebar_layout'] )
 			? $sidebar['sidebar_layout']
 			: array( 'heading', 'search', 'results' );
-		$show_heading = in_array( 'heading', $layout, true ) && ! empty( $sidebar['sidebar_heading'] );
 		$show_search  = in_array( 'search', $layout, true );
 		$show_results = in_array( 'results', $layout, true );
 		if ( ! $show_search && ! $show_results ) {
@@ -935,13 +934,16 @@ class Neo_Pulse_Wp_Search {
 	): string {
 		$panel_layout     = (string) ( $sidebar['panel_layout'] ?? 'compact' );
 		$is_discovery     = $panel_layout === 'discovery';
-		$sidebar_heading  = (string) ( $sidebar['sidebar_heading'] ?? '' );
+		$sidebar_heading  = trim( (string) ( $sidebar['sidebar_heading'] ?? '' ) );
 		$sidebar_subtitle = trim( (string) ( $sidebar['sidebar_subtitle'] ?? '' ) );
 		$intro_text       = $sidebar_subtitle;
 		if ( $panel_editor_open && $intro_text === '' ) {
 			$intro_text = __( 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.', 'neo-pulse-wp' );
 		}
-		$show_heading     = in_array( 'heading', $layout, true ) && $sidebar_heading !== '';
+		$show_heading = in_array( 'heading', $layout, true );
+		if ( $show_heading && $sidebar_heading === '' ) {
+			$sidebar_heading = $button_label !== '' ? $button_label : __( 'Search', 'neo-pulse-wp' );
+		}
 
 		$shell_class = 'neo-pulse-search-wrap neo-pulse-search-wrap--sidebar-mode neo-pulse-search-wrap--panel-inner';
 		if ( $is_icon_panel ) {
@@ -1011,7 +1013,7 @@ class Neo_Pulse_Wp_Search {
 		bool $panel_editor_open = false,
 		bool $is_discovery = false
 	): string {
-		$insight_sections = array( 'popular_terms', 'popular_topics' );
+		$insight_sections = array( 'popular_terms' );
 		$has_query_search = $show_search && in_array( 'search', $layout, true );
 		$has_query_results = $show_results && in_array( 'results', $layout, true );
 		ob_start();
@@ -1106,9 +1108,12 @@ class Neo_Pulse_Wp_Search {
 	 */
 	private static function normalize_sidebar_panel_layout( array $layout ): array {
 		$ordered = array( 'heading', 'search', 'results' );
-		$insight = array( 'popular_terms', 'popular_topics' );
-		$out     = array();
+		$insight = array( 'popular_terms' );
+		$out     = array( 'heading' );
 		foreach ( $ordered as $key ) {
+			if ( $key === 'heading' ) {
+				continue;
+			}
 			if ( in_array( $key, $layout, true ) ) {
 				$out[] = $key;
 			}

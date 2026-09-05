@@ -61,7 +61,7 @@ export function buildGscReportingBulkGeneratorDetailsProps(
   const batchPrepHarnessSections: BulkHarnessSectionUi[] = [
     {
       sectionIndex: 0,
-      title: "Fetch GSC bundle",
+      title: "GSC reporting bundle API",
       status: input.cachedFileCount > 0 ? "done" : input.busy ? "generating" : "waiting",
     },
     {

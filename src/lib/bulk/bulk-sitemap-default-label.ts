@@ -16,8 +16,6 @@ export function resolveBulkSitemapDefaultLabel(args: {
 }): string {
   const siteId = Array.from(args.selectedWordPressSites)[0];
   const configured = siteId ? args.siteConfigs[siteId]?.sitemapType : undefined;
-  const type: BulkSitemapMode =
-    configured ??
-    (args.entitySitemapAvailable ? "entity" : "post");
+  const type: BulkSitemapMode = configured ?? "post";
   return bulkSitemapModeLabel(type);
 }

@@ -95,8 +95,69 @@ export function isLikelyNonGeographicOrgTitle(title: string): boolean {
   return false;
 }
 
+/**
+ * Crime, tragedy, legal, biography, and media-event Wikipedia titles — not physical places
+ * for local service-area entity pages (e.g. "Murder of Curtis Klassen").
+ */
+export function isLikelyNonPhysicalPlaceWikiTitle(title: string): boolean {
+  const t = title.replace(/_/g, " ").trim();
+  if (!t) return true;
+  const crimeEventPrefixes = [
+    /^Murder of\b/i,
+    /^Killing of\b/i,
+    /^Death of\b/i,
+    /^Assassination of\b/i,
+    /^Disappearance of\b/i,
+    /^Shooting of\b/i,
+    /^Stabbing of\b/i,
+    /^Kidnapping of\b/i,
+    /^Abduction of\b/i,
+    /^Rape of\b/i,
+    /^Lynching of\b/i,
+    /^Execution of\b/i,
+    /^Suicide of\b/i,
+    /^Massacre of\b/i,
+    /^Massacre in\b/i,
+    /^Mass shooting in\b/i,
+    /^Mass shooting at\b/i,
+    /^Bombing of\b/i,
+    /^Arson of\b/i,
+    /^Robbery of\b/i,
+    /^Hostage taking\b/i,
+    /^Trial of\b/i,
+    /^Conviction of\b/i,
+    /^Sentencing of\b/i,
+    /^Verdict in\b/i,
+    /^Inquest into\b/i,
+    /^Coroner'?s inquest\b/i,
+    /^Disaster of\b/i,
+    /^Crash of\b/i,
+    /^Collision of\b/i,
+    /^Derailment of\b/i,
+    /^Explosion of\b/i,
+    /^Fire at\b/i,
+    /^Collapse of\b/i,
+    /^Sinking of\b/i,
+    /^Shipwreck of\b/i,
+    /^List of murders\b/i,
+    /^List of deaths\b/i,
+    /^List of disasters\b/i,
+  ];
+  for (const re of crimeEventPrefixes) {
+    if (re.test(t)) return true;
+  }
+  if (/\(born\s+\d{4}\)/i.test(t)) return true;
+  if (/\(died\s+\d{4}\)/i.test(t)) return true;
+  if (/\(\d{4}\s*[–—-]\s*\d{4}\)\s*$/.test(t)) return true;
+  if (/\((film|novel|book|album|song|single|episode|season|video game|documentary|miniseries)\)\s*$/i.test(t)) {
+    return true;
+  }
+  return false;
+}
+
 export function isPlaceTitleForHint(title: string, ctx: SubCityEntityContext | null): boolean {
   if (isLikelyNonGeographicOrgTitle(title)) return false;
+  if (isLikelyNonPhysicalPlaceWikiTitle(title)) return false;
   if (!ctx) return true;
   return !isCityUmbrellaTitle(title, ctx.cityWord) && !isListOrBroadIndexTitle(title);
 }

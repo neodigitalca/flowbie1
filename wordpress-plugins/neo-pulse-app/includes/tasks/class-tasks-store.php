@@ -13,7 +13,7 @@ class Neo_Pulse_App_Tasks_Store {
 
 	const RECURRENCE_RULES = array( 'none', 'daily', 'weekly', 'monthly', 'yearly' );
 
-	const EXECUTION_KINDS = array( 'content_optimizer', 'content_optimizer_meta', 'gsc_reporting', 'post_creator', 'local_dominator_export' );
+	const EXECUTION_KINDS = array( 'content_optimizer', 'content_optimizer_meta', 'content_gap_check', 'gsc_reporting', 'post_creator', 'entity_page_creator', 'entity_generator', 'sap_generator', 'local_dominator_export', 'chatgpt_website_audit', 'dfs_llm_article_audit', 'browser_automation' );
 	const EXECUTION_TARGET_BUCKETS = array( 'pages', 'posts', 'sap', 'all' );
 	const SCHEDULE_MODES = array( 'calendar', 'trigger' );
 	const TRIGGER_SOURCES = array( 'gsc', 'schedule', 'ga', 'semrush' );
@@ -842,6 +842,9 @@ class Neo_Pulse_App_Tasks_Store {
 			$payload['triggerConfig'] = self::sanitize_trigger_config( $body['triggerConfig'] );
 		}
 
+		$project = self::get_project( $team_id, $project_id );
+		$payload = self::merge_automation_pulse_assignee_into_payload( $team_id, $payload, $project );
+
 		$sort_order = isset( $body['sortOrder'] ) ? (int) $body['sortOrder'] : 0;
 		$completed  = $status === 'done' ? gmdate( 'Y-m-d H:i:s' ) : null;
 
@@ -967,6 +970,9 @@ class Neo_Pulse_App_Tasks_Store {
 		}
 
 		$completed = $status === 'done' ? gmdate( 'Y-m-d H:i:s' ) : null;
+
+		$project = self::get_project( $team_id, (int) ( $row['project_id'] ?? 0 ) );
+		$payload = self::merge_automation_pulse_assignee_into_payload( $team_id, $payload, $project );
 
 		global $wpdb;
 		$table = $wpdb->prefix . 'neo_pulse_team_tasks';
@@ -1198,12 +1204,50 @@ class Neo_Pulse_App_Tasks_Store {
 	}
 
 	/**
+	 * @return array<int,string>
+	 */
+	private static function research_chatgpt_audit_recipe_keywords(): array {
+		return array( 'chatgpt-website-audit' );
+	}
+
+	/**
+	 * @return array<int,string>
+	 */
+	private static function research_chatgpt_audit_task_keywords(): array {
+		return array( 'chatgpt-website-audit-run' );
+	}
+
+	/**
+	 * @return array<string,mixed>
+	 */
+	private static function default_research_chatgpt_audit_payload(): array {
+		return array(
+			'saveLocalArchive' => true,
+			'saveToDisk'       => true,
+		);
+	}
+
+	/**
+	 * @param array<string,mixed> $payload
+	 * @return array<string,mixed>
+	 */
+	private static function ensure_research_chatgpt_audit_payload( array $payload ): array {
+		if ( ! isset( $payload['saveLocalArchive'] ) ) {
+			$payload['saveLocalArchive'] = true;
+		}
+		if ( ! isset( $payload['saveToDisk'] ) ) {
+			$payload['saveToDisk'] = true;
+		}
+		return $payload;
+	}
+
+	/**
 	 * @return array<string,mixed>
 	 */
 	private static function default_research_local_dominator_payload(): array {
 		return array(
 			'businessName'     => 'Advance Blinds & Drapery',
-			'keyword'          => 'blinds near me',
+			'keyword'          => 'auto',
 			'saveLocalArchive' => true,
 			'saveToDisk'       => true,
 		);
@@ -1217,9 +1261,25 @@ class Neo_Pulse_App_Tasks_Store {
 		if ( empty( $payload['businessName'] ) ) {
 			$payload['businessName'] = 'Advance Blinds & Drapery';
 		}
-		if ( empty( $payload['keyword'] ) ) {
-			$payload['keyword'] = 'blinds near me';
+		if ( ! array_key_exists( 'keyword', $payload ) ) {
+			$payload['keyword'] = 'auto';
 		}
+		if ( ! isset( $payload['saveLocalArchive'] ) ) {
+			$payload['saveLocalArchive'] = true;
+		}
+		if ( ! isset( $payload['saveToDisk'] ) ) {
+			$payload['saveToDisk'] = true;
+		}
+		return $payload;
+	}
+
+	/**
+	 * Workflow Local Dominator export: empty keyword means auto (first grid scan).
+	 *
+	 * @param array<string,mixed> $payload
+	 * @return array<string,mixed>
+	 */
+	private static function ensure_workflow_local_dominator_payload( array $payload ): array {
 		if ( ! isset( $payload['saveLocalArchive'] ) ) {
 			$payload['saveLocalArchive'] = true;
 		}
@@ -1234,10 +1294,16 @@ class Neo_Pulse_App_Tasks_Store {
 	 * @return array<string,mixed>
 	 */
 	private static function default_gsc_reporting_payload_for_recipe( string $recipe_keyword ): array {
-		return array(
-			'comparePreset' => $recipe_keyword === 'gsc-monthly-yoy-report' ? 'yoy' : 'mom',
-			'saveToDisk'    => true,
+		$compare = $recipe_keyword === 'gsc-monthly-yoy-report' ? 'yoy' : 'mom';
+		$payload = array(
+			'comparePreset'      => $compare,
+			'gscComparePresetId' => $compare,
+			'saveToDisk'         => true,
 		);
+		if ( $compare !== 'yoy' ) {
+			$payload['gscTrailingMonthCount'] = 1;
+		}
+		return $payload;
 	}
 
 	/**
@@ -1245,15 +1311,59 @@ class Neo_Pulse_App_Tasks_Store {
 	 * @return array<string,mixed>
 	 */
 	private static function ensure_gsc_reporting_payload( array $payload ): array {
-		$preset = sanitize_key( (string) ( $payload['comparePreset'] ?? 'mom' ) );
-		if ( ! in_array( $preset, array( 'mom', 'yoy' ), true ) ) {
-			$preset = 'mom';
+		$count = isset( $payload['gscTrailingMonthCount'] ) ? (int) $payload['gscTrailingMonthCount'] : 0;
+		if ( $count >= 1 && $count <= 36 ) {
+			$payload['gscTrailingMonthCount'] = $count;
+			$preset_id                        = self::gsc_compare_preset_id_for_trailing_count( $count );
+		} else {
+			$preset_id = sanitize_key( (string) ( $payload['gscComparePresetId'] ?? $payload['comparePreset'] ?? 'mom' ) );
+			if ( ! in_array( $preset_id, self::gsc_compare_preset_ids(), true ) ) {
+				$preset_id = 'mom';
+			}
 		}
-		$payload['comparePreset'] = $preset;
+		$payload['gscComparePresetId'] = $preset_id;
+		$payload['comparePreset']      = $preset_id === 'yoy' ? 'yoy' : 'mom';
 		if ( ! isset( $payload['saveToDisk'] ) ) {
 			$payload['saveToDisk'] = true;
 		}
 		return $payload;
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	public static function gsc_compare_preset_ids(): array {
+		return array( 'mom', 'yoy', 'custom_compare', 'm3', 'm6', 'm12' );
+	}
+
+	public static function gsc_compare_preset_id_for_trailing_count( int $month_count ): string {
+		if ( $month_count === 1 ) {
+			return 'mom';
+		}
+		if ( $month_count === 3 ) {
+			return 'm3';
+		}
+		if ( $month_count === 6 ) {
+			return 'm6';
+		}
+		if ( $month_count === 12 ) {
+			return 'm12';
+		}
+		return 'custom_compare';
+	}
+
+	/**
+	 * @param mixed $raw
+	 */
+	public static function sanitize_gsc_trailing_month_count( $raw ): ?int {
+		if ( $raw === null || $raw === '' ) {
+			return null;
+		}
+		$n = (int) $raw;
+		if ( $n < 1 || $n > 36 ) {
+			return null;
+		}
+		return $n;
 	}
 
 	/**
@@ -1416,12 +1526,16 @@ class Neo_Pulse_App_Tasks_Store {
 			return $task;
 		}
 
-		$defaults = self::default_research_local_dominator_payload();
 		$existing = is_array( $task['executionPayload'] ?? null ) ? $task['executionPayload'] : array();
 
-		$task['executionKind']    = 'local_dominator_export';
-		$task['scheduleMode']     = 'calendar';
-		$task['executionPayload'] = self::ensure_research_local_dominator_payload( array_merge( $defaults, $existing ) );
+		$task['executionKind'] = 'local_dominator_export';
+		$task['scheduleMode']  = 'calendar';
+		if ( $is_research ) {
+			$defaults                 = self::default_research_local_dominator_payload();
+			$task['executionPayload'] = self::ensure_research_local_dominator_payload( array_merge( $defaults, $existing ) );
+		} else {
+			$task['executionPayload'] = self::ensure_workflow_local_dominator_payload( $existing );
+		}
 		if ( ! isset( $task['recurrenceRule'] ) || (string) $task['recurrenceRule'] === '' ) {
 			$task['recurrenceRule'] = 'none';
 		}
@@ -1450,6 +1564,85 @@ class Neo_Pulse_App_Tasks_Store {
 		}
 
 		$stored_payload['executionKind']    = 'local_dominator_export';
+		$stored_payload['scheduleMode']     = 'calendar';
+		$stored_payload['executionPayload'] = $normalized_task['executionPayload'];
+		$stored_payload['recurrenceRule']   = 'none';
+		unset( $stored_payload['triggerConfig'] );
+
+		global $wpdb;
+		$table = $wpdb->prefix . 'neo_pulse_team_tasks';
+		$wpdb->update(
+			$table,
+			array(
+				'payload_json' => self::encode_payload( $stored_payload ),
+				'updated_at'   => gmdate( 'Y-m-d H:i:s' ),
+			),
+			array(
+				'id'      => $task_id,
+				'team_id' => $team_id,
+			),
+			array( '%s', '%s' ),
+			array( '%d', '%d' )
+		);
+	}
+
+	/**
+	 * @param array<string,mixed>      $task
+	 * @param array<string,mixed>|null $project
+	 * @return array<string,mixed>
+	 */
+	private static function normalize_research_chatgpt_audit_task( array $task, ?array $project ): array {
+		$recipe_kw = '';
+		if ( is_array( $project ) ) {
+			$recipe_kw = sanitize_title( (string) ( $project['sourceTemplateKeyword'] ?? '' ) );
+			if ( $recipe_kw === '' ) {
+				$recipe_kw = sanitize_title( (string) ( $project['keyword'] ?? '' ) );
+			}
+		}
+		$task_kw = sanitize_title( (string) ( $task['keyword'] ?? '' ) );
+		$kind    = self::sanitize_execution_kind( $task['executionKind'] ?? '' );
+
+		$is_research = in_array( $recipe_kw, self::research_chatgpt_audit_recipe_keywords(), true )
+			|| in_array( $task_kw, self::research_chatgpt_audit_task_keywords(), true );
+
+		if ( ! $is_research && $kind !== 'chatgpt_website_audit' ) {
+			return $task;
+		}
+
+		$defaults = self::default_research_chatgpt_audit_payload();
+		$existing = is_array( $task['executionPayload'] ?? null ) ? $task['executionPayload'] : array();
+
+		$task['executionKind']    = 'chatgpt_website_audit';
+		$task['scheduleMode']     = 'calendar';
+		$task['executionPayload'] = self::ensure_research_chatgpt_audit_payload( array_merge( $defaults, $existing ) );
+		if ( ! isset( $task['recurrenceRule'] ) || (string) $task['recurrenceRule'] === '' ) {
+			$task['recurrenceRule'] = 'none';
+		}
+		$task['triggerConfig'] = null;
+
+		return $task;
+	}
+
+	/**
+	 * @param array<string,mixed> $stored_payload
+	 * @param array<string,mixed> $normalized_task
+	 */
+	private static function maybe_persist_research_chatgpt_audit_task(
+		int $team_id,
+		int $task_id,
+		array $stored_payload,
+		array $normalized_task
+	): void {
+		if ( self::sanitize_execution_kind( $normalized_task['executionKind'] ?? '' ) !== 'chatgpt_website_audit' ) {
+			return;
+		}
+		$stored_kind = self::sanitize_execution_kind( $stored_payload['executionKind'] ?? '' );
+		$stored_mode = self::sanitize_schedule_mode( $stored_payload['scheduleMode'] ?? 'calendar' );
+		if ( $stored_kind === 'chatgpt_website_audit' && $stored_mode === 'calendar' ) {
+			return;
+		}
+
+		$stored_payload['executionKind']    = 'chatgpt_website_audit';
 		$stored_payload['scheduleMode']     = 'calendar';
 		$stored_payload['executionPayload'] = $normalized_task['executionPayload'];
 		$stored_payload['recurrenceRule']   = 'none';
@@ -1620,7 +1813,7 @@ class Neo_Pulse_App_Tasks_Store {
 			return $task;
 		}
 		$payload = self::decode_payload( $row['payload_json'] );
-		$payload['assigneeIds'] = $assignees;
+		$payload = self::merge_automation_pulse_assignee_into_payload( $team_id, $payload, $project );
 
 		global $wpdb;
 		$table = $wpdb->prefix . 'neo_pulse_team_tasks';
@@ -1638,7 +1831,43 @@ class Neo_Pulse_App_Tasks_Store {
 			array( '%d', '%d' )
 		);
 
+		$task['assigneeIds'] = is_array( $payload['assigneeIds'] ?? null )
+			? array_map( 'intval', $payload['assigneeIds'] )
+			: array();
+
 		return $task;
+	}
+
+	/**
+	 * @param array<string,mixed>      $payload
+	 * @param array<string,mixed>|null $project
+	 * @return array<string,mixed>
+	 */
+	public static function merge_automation_pulse_assignee_into_payload(
+		int $team_id,
+		array $payload,
+		?array $project
+	): array {
+		if ( ! self::project_is_automation( $project ) ) {
+			return $payload;
+		}
+		$kind = self::sanitize_execution_kind( $payload['executionKind'] ?? '' );
+		if ( $kind === '' ) {
+			return $payload;
+		}
+		$pulse_id = self::pulse_bot_user_id();
+		if ( $pulse_id <= 0 ) {
+			return $payload;
+		}
+		$assignees = is_array( $payload['assigneeIds'] ?? null )
+			? array_map( 'intval', $payload['assigneeIds'] )
+			: array();
+		if ( in_array( $pulse_id, $assignees, true ) ) {
+			return $payload;
+		}
+		$assignees[] = $pulse_id;
+		$payload['assigneeIds'] = self::filter_team_assignee_ids( $team_id, $assignees );
+		return $payload;
 	}
 
 	/**
@@ -1693,6 +1922,8 @@ class Neo_Pulse_App_Tasks_Store {
 		self::maybe_persist_gsc_reporting_task( (int) $row['team_id'], (int) $row['id'], $payload, $task );
 		$task = self::normalize_research_local_dominator_task( $task, $project );
 		self::maybe_persist_research_local_dominator_task( (int) $row['team_id'], (int) $row['id'], $payload, $task );
+		$task = self::normalize_research_chatgpt_audit_task( $task, $project );
+		self::maybe_persist_research_chatgpt_audit_task( (int) $row['team_id'], (int) $row['id'], $payload, $task );
 		$task = self::normalize_automation_pulse_assignee( $task, $project, (int) $row['team_id'], (int) $row['id'] );
 		return $task;
 	}
@@ -1778,9 +2009,80 @@ class Neo_Pulse_App_Tasks_Store {
 				$out['targetUrls'] = array_values( array_unique( $urls ) );
 			}
 		}
+		if ( ! empty( $raw['prefilledUrlResearch'] ) && is_array( $raw['prefilledUrlResearch'] ) ) {
+			$research = array();
+			foreach ( $raw['prefilledUrlResearch'] as $url => $text ) {
+				$url_key = esc_url_raw( (string) $url );
+				$brief   = sanitize_textarea_field( (string) $text );
+				if ( $url_key !== '' && $brief !== '' ) {
+					$research[ $url_key ] = $brief;
+				}
+			}
+			if ( count( $research ) > 0 ) {
+				$out['prefilledUrlResearch'] = $research;
+			}
+		}
+		if ( array_key_exists( 'useUpstreamContext', $raw ) ) {
+			$out['useUpstreamContext'] = ! empty( $raw['useUpstreamContext'] );
+		}
+		if ( ! empty( $raw['workflowContextBlock'] ) ) {
+			$out['workflowContextBlock'] = sanitize_textarea_field( (string) $raw['workflowContextBlock'] );
+		}
+		if ( ! empty( $raw['seoResearchBrief'] ) ) {
+			$out['seoResearchBrief'] = sanitize_textarea_field( (string) $raw['seoResearchBrief'] );
+		}
+		if ( ! empty( $raw['prefilledImportRows'] ) && is_array( $raw['prefilledImportRows'] ) ) {
+			$rows = array();
+			foreach ( $raw['prefilledImportRows'] as $row ) {
+				if ( ! is_array( $row ) ) {
+					continue;
+				}
+				$keyword = sanitize_text_field( (string) ( $row['keyword'] ?? '' ) );
+				$title   = sanitize_text_field( (string) ( $row['title'] ?? '' ) );
+				if ( $keyword === '' ) {
+					continue;
+				}
+				$mapped = array(
+					'keyword' => $keyword,
+					'title'   => $title !== '' ? $title : $keyword,
+				);
+				$dest = esc_url_raw( (string) ( $row['destination_url'] ?? '' ) );
+				if ( $dest !== '' ) {
+					$mapped['destination_url'] = $dest;
+				}
+				$seo = sanitize_textarea_field( (string) ( $row['seo_research'] ?? '' ) );
+				if ( $seo !== '' ) {
+					$mapped['seo_research'] = $seo;
+				}
+				$modifier = sanitize_textarea_field( (string) ( $row['prompt_modifier'] ?? '' ) );
+				if ( $modifier !== '' ) {
+					$mapped['prompt_modifier'] = $modifier;
+				}
+				$rows[] = $mapped;
+			}
+			if ( count( $rows ) > 0 ) {
+				$out['prefilledImportRows'] = $rows;
+			}
+		}
 		if ( ! empty( $raw['comparePreset'] ) ) {
 			$preset = sanitize_key( (string) $raw['comparePreset'] );
 			$out['comparePreset'] = $preset === 'yoy' ? 'yoy' : 'mom';
+		}
+		if ( ! empty( $raw['gscComparePresetId'] ) ) {
+			$preset_id = sanitize_key( (string) $raw['gscComparePresetId'] );
+			if ( in_array( $preset_id, self::gsc_compare_preset_ids(), true ) ) {
+				$out['gscComparePresetId'] = $preset_id;
+			}
+		}
+		$trailing_count = self::sanitize_gsc_trailing_month_count( $raw['gscTrailingMonthCount'] ?? null );
+		if ( $trailing_count !== null ) {
+			$out['gscTrailingMonthCount'] = $trailing_count;
+		}
+		if ( ! empty( $raw['gscCompareRanges'] ) && is_array( $raw['gscCompareRanges'] ) ) {
+			$ranges = self::sanitize_gsc_compare_ranges( $raw['gscCompareRanges'] );
+			if ( $ranges ) {
+				$out['gscCompareRanges'] = $ranges;
+			}
 		}
 		if ( array_key_exists( 'saveToDisk', $raw ) ) {
 			$out['saveToDisk'] = ! empty( $raw['saveToDisk'] );
@@ -1811,8 +2113,23 @@ class Neo_Pulse_App_Tasks_Store {
 		if ( ! empty( $raw['businessName'] ) ) {
 			$out['businessName'] = sanitize_text_field( (string) $raw['businessName'] );
 		}
-		if ( ! empty( $raw['keyword'] ) ) {
+		if ( array_key_exists( 'keyword', $raw ) ) {
 			$out['keyword'] = sanitize_text_field( (string) $raw['keyword'] );
+		}
+		if ( isset( $raw['auditQuestions'] ) && is_array( $raw['auditQuestions'] ) ) {
+			$questions = array();
+			foreach ( $raw['auditQuestions'] as $question ) {
+				$text = sanitize_textarea_field( (string) $question );
+				if ( $text !== '' ) {
+					$questions[] = $text;
+				}
+			}
+			if ( count( $questions ) > 0 ) {
+				$out['auditQuestions'] = array_values( $questions );
+			}
+		}
+		if ( ! empty( $raw['browserInstructionsHtml'] ) ) {
+			$out['browserInstructionsHtml'] = wp_kses_post( (string) $raw['browserInstructionsHtml'] );
 		}
 		if ( ! empty( $raw['titleTemplate'] ) ) {
 			$out['titleTemplate'] = sanitize_text_field( (string) $raw['titleTemplate'] );
@@ -1872,6 +2189,72 @@ class Neo_Pulse_App_Tasks_Store {
 		if ( array_key_exists( 'scheduleStaggerOptimized', $raw ) ) {
 			$out['scheduleStaggerOptimized'] = ! empty( $raw['scheduleStaggerOptimized'] );
 		}
+		if ( ! empty( $raw['locationSource'] ) ) {
+			$out['locationSource'] = 'grid';
+		}
+		if ( ! empty( $raw['gridInputSource'] ) ) {
+			$out['gridInputSource'] = 'workflow';
+		}
+		if ( isset( $raw['entityAdGroupCount'] ) ) {
+			$out['entityAdGroupCount'] = max( 1, min( 15, (int) $raw['entityAdGroupCount'] ) );
+		}
+		if ( isset( $raw['entityAdsPerGroup'] ) ) {
+			$out['entityAdsPerGroup'] = max( 1, min( 15, (int) $raw['entityAdsPerGroup'] ) );
+		}
+		if ( isset( $raw['entityPageCount'] ) ) {
+			$out['entityPageCount'] = max( 1, min( 31, (int) $raw['entityPageCount'] ) );
+		}
+		if ( ! empty( $raw['focusKeyword'] ) ) {
+			$out['focusKeyword'] = sanitize_text_field( (string) $raw['focusKeyword'] );
+		}
+		if ( ! empty( $raw['gridCsvUrl'] ) ) {
+			$out['gridCsvUrl'] = esc_url_raw( (string) $raw['gridCsvUrl'] );
+		}
+		if ( ! empty( $raw['gridCsvBase64'] ) ) {
+			$out['gridCsvBase64'] = sanitize_text_field( (string) $raw['gridCsvBase64'] );
+		}
+		if ( ! empty( $raw['entityCsvInputSource'] ) ) {
+			$source = sanitize_key( (string) $raw['entityCsvInputSource'] );
+			if ( in_array( $source, array( 'upload', 'workflow' ), true ) ) {
+				$out['entityCsvInputSource'] = $source;
+			}
+		}
+		if ( ! empty( $raw['entityCsvUrl'] ) ) {
+			$out['entityCsvUrl'] = esc_url_raw( (string) $raw['entityCsvUrl'] );
+		}
+		if ( ! empty( $raw['entityCsvBase64'] ) ) {
+			$out['entityCsvBase64'] = sanitize_text_field( (string) $raw['entityCsvBase64'] );
+		}
+		if ( ! empty( $raw['ragInputKeys'] ) && is_array( $raw['ragInputKeys'] ) ) {
+			$keys = array();
+			foreach ( $raw['ragInputKeys'] as $key ) {
+				$k = sanitize_key( (string) $key );
+				if ( $k !== '' ) {
+					$keys[] = $k;
+				}
+			}
+			if ( count( $keys ) > 0 ) {
+				$out['ragInputKeys'] = array_values( array_unique( $keys ) );
+			}
+		}
+		if ( ! empty( $raw['entityTypeFocus'] ) && is_array( $raw['entityTypeFocus'] ) ) {
+			$focus_types = array();
+			foreach ( $raw['entityTypeFocus'] as $item ) {
+				$t = sanitize_text_field( (string) $item );
+				if ( $t !== '' ) {
+					$focus_types[] = $t;
+				}
+			}
+			if ( count( $focus_types ) > 0 ) {
+				$out['entityTypeFocus'] = array_values( $focus_types );
+			}
+		}
+		if ( ! empty( $raw['radiusPreset'] ) ) {
+			$preset = sanitize_key( (string) $raw['radiusPreset'] );
+			if ( in_array( $preset, array( 'off', 'close', 'medium', 'far' ), true ) ) {
+				$out['radiusPreset'] = $preset;
+			}
+		}
 		if ( array_key_exists( 'sendAutomationEmail', $raw ) ) {
 			$out['sendAutomationEmail'] = ! empty( $raw['sendAutomationEmail'] );
 		}
@@ -1897,7 +2280,71 @@ class Neo_Pulse_App_Tasks_Store {
 		if ( ! empty( $out['sendAutomationEmail'] ) ) {
 			$out['saveLocalArchive'] = true;
 		}
+		if ( array_key_exists( 'saveToGoogleDrive', $raw ) ) {
+			$out['saveToGoogleDrive'] = ! empty( $raw['saveToGoogleDrive'] );
+		}
+		if ( ! empty( $raw['googleDriveFolderId'] ) ) {
+			$folder_id = preg_replace( '/[^a-zA-Z0-9_-]/', '', (string) $raw['googleDriveFolderId'] );
+			if ( strlen( $folder_id ) >= 10 ) {
+				$out['googleDriveFolderId'] = $folder_id;
+			}
+		}
+		if ( ! empty( $raw['googleDriveFolderLabel'] ) ) {
+			$out['googleDriveFolderLabel'] = sanitize_text_field( (string) $raw['googleDriveFolderLabel'] );
+		}
+		if ( ! empty( $raw['googleDrivePresetKey'] ) ) {
+			$out['googleDrivePresetKey'] = sanitize_key( (string) $raw['googleDrivePresetKey'] );
+		}
+		if ( ! empty( $raw['googleDriveFolderSource'] ) ) {
+			$source = sanitize_key( (string) $raw['googleDriveFolderSource'] );
+			if ( in_array( $source, array( 'manual', 'client_root', 'path', 'variable' ), true ) ) {
+				$out['googleDriveFolderSource'] = $source;
+			}
+		}
+		if ( ! empty( $raw['googleDriveFolderPath'] ) ) {
+			$out['googleDriveFolderPath'] = sanitize_text_field( (string) $raw['googleDriveFolderPath'] );
+		}
+		if ( ! empty( $raw['googleDriveFolderVariable'] ) ) {
+			$out['googleDriveFolderVariable'] = sanitize_key( (string) $raw['googleDriveFolderVariable'] );
+		}
+		if ( ! empty( $out['saveToGoogleDrive'] ) ) {
+			$out['saveLocalArchive'] = true;
+		}
 		return $out;
+	}
+
+	/**
+	 * @param mixed $raw
+	 * @return array<string,array<string,string>>|null
+	 */
+	private static function sanitize_gsc_compare_ranges( $raw ) {
+		if ( ! is_array( $raw ) ) {
+			return null;
+		}
+		$primary = is_array( $raw['primary'] ?? null ) ? $raw['primary'] : array();
+		$compare = is_array( $raw['compare'] ?? null ) ? $raw['compare'] : array();
+		$primary_start = sanitize_text_field( (string) ( $primary['startDate'] ?? '' ) );
+		$primary_end   = sanitize_text_field( (string) ( $primary['endDate'] ?? '' ) );
+		$compare_start = sanitize_text_field( (string) ( $compare['startDate'] ?? '' ) );
+		$compare_end   = sanitize_text_field( (string) ( $compare['endDate'] ?? '' ) );
+		if (
+			! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $primary_start ) ||
+			! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $primary_end ) ||
+			! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $compare_start ) ||
+			! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $compare_end )
+		) {
+			return null;
+		}
+		return array(
+			'primary' => array(
+				'startDate' => $primary_start,
+				'endDate'   => $primary_end,
+			),
+			'compare' => array(
+				'startDate' => $compare_start,
+				'endDate'   => $compare_end,
+			),
+		);
 	}
 
 	/**
@@ -1912,6 +2359,30 @@ class Neo_Pulse_App_Tasks_Store {
 			'automationEmailSubject',
 			'automationEmailMessage',
 			'automationEmailAiIntro',
+		);
+		$out       = array();
+		foreach ( $keys as $key ) {
+			if ( array_key_exists( $key, $sanitized ) ) {
+				$out[ $key ] = $sanitized[ $key ];
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * @param array<string,mixed> $payload
+	 * @return array<string,mixed>
+	 */
+	public static function google_drive_contract_fields( array $payload ): array {
+		$sanitized = self::sanitize_execution_payload( $payload );
+		$keys      = array(
+			'saveToGoogleDrive',
+			'googleDriveFolderId',
+			'googleDriveFolderLabel',
+			'googleDrivePresetKey',
+			'googleDriveFolderSource',
+			'googleDriveFolderPath',
+			'googleDriveFolderVariable',
 		);
 		$out       = array();
 		foreach ( $keys as $key ) {
@@ -2608,6 +3079,12 @@ class Neo_Pulse_App_Tasks_Store {
 		}
 		if ( ! empty( $task_def['assigneeIds'] ) && is_array( $task_def['assigneeIds'] ) ) {
 			return self::filter_team_assignee_ids( $team_id, array_map( 'intval', $task_def['assigneeIds'] ) );
+		}
+		if ( ! empty( $task_def['executionKind'] ) ) {
+			$pulse_id = self::pulse_bot_user_id();
+			if ( $pulse_id > 0 ) {
+				return array( $pulse_id );
+			}
 		}
 		return array();
 	}

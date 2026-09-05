@@ -107,6 +107,37 @@ contact_human_cta_assert(
 	'non-lead question does not suggest contact human'
 );
 
+/**
+ * Mirrors the widget JS cfgFlagOn() gate. wp_localize_script stringifies
+ * PHP false to "" and 0 to "0"; those must not show the button.
+ *
+ * @param mixed $value Localized chekkitEnabled value.
+ */
+function contact_human_js_flag_on( $value ): bool {
+	return $value === true || $value === 1 || $value === '1' || $value === 'true';
+}
+
+contact_human_cta_assert(
+	! contact_human_js_flag_on( '' ),
+	'empty localize string hides Talk to a Human button'
+);
+contact_human_cta_assert(
+	! contact_human_js_flag_on( '0' ),
+	'localized 0 hides Talk to a Human button'
+);
+contact_human_cta_assert(
+	! contact_human_js_flag_on( false ),
+	'bool false hides Talk to a Human button'
+);
+contact_human_cta_assert(
+	contact_human_js_flag_on( 1 ),
+	'localized 1 shows Talk to a Human button'
+);
+contact_human_cta_assert(
+	contact_human_js_flag_on( '1' ),
+	'localized string 1 shows Talk to a Human button'
+);
+
 contact_human_cta_assert(
 	! Neo_Pulse_Wp_Chat_Lead::is_chekkit_available( $settings_disabled ),
 	'chekkit unavailable when disabled in settings'

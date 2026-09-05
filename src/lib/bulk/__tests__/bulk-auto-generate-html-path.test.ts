@@ -38,10 +38,13 @@ describe("bulk HTML upload path helpers", () => {
     expect(html).not.toContain("## Overview");
   });
 
-  it("markdownToHtml still converts markdown links in legacy markdown harness", async () => {
-    const md = "## Overview\n\nSee [warranty guide](https://example.com/warranty) for details.";
-    const html = await markdownToHtml(md);
-    expect(html).toContain('<a href="https://example.com/warranty">');
+  it("markdownToHtml converts > quotes to blockquote HTML", () => {
+    const html = markdownToHtml(
+      "## What is Solar Panel Efficiency?\n\n> We size each array for the roof.\n\nNext paragraph.",
+    );
+    expect(html).toContain("<blockquote>");
+    expect(html).toContain("We size each array for the roof.");
+    expect(html).not.toMatch(/<p>\s*blockquote\s*<\/p>/i);
   });
 
   it("sanitizePlaceholders preserves [[EXTERNAL:...]] tokens", () => {

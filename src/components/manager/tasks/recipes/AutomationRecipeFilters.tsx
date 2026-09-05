@@ -124,6 +124,9 @@ export function AutomationRecipeFilters({
         <option value="">Any execution</option>
         <option value="meta-only">{AUTOMATION_RECIPE_EXECUTION_LABELS["meta-only"]}</option>
         <option value="full-aiseo">{AUTOMATION_RECIPE_EXECUTION_LABELS["full-aiseo"]}</option>
+        <option value="entity-page-creator">
+          {AUTOMATION_RECIPE_EXECUTION_LABELS["entity-page-creator"]}
+        </option>
       </FilterSelect>
     </div>
   );

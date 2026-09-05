@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { notify, notifyHeaderError } from "@/lib/app-notifications";
 import { clearAllKeywordData, clearKeywordResearchCache } from "@/lib/keyword-db";
 import { clearKeywordCache } from "@/lib/keyword-api";
-import { ensureServerRunning, stopServer } from "@/lib/server-manager";
+import { ensureServerRunning } from "@/lib/server-manager";
 import type { KeywordAnalysisOptions } from "@/lib/keyword-types";
 
 interface UseKeywordResearchHandlersProps {
@@ -154,23 +154,11 @@ export function useKeywordResearchHandlers({
       } catch (clearError) {
         console.warn('[Keyword Research] Error clearing results in error handler:', clearError);
       }
-    } finally {
-      // Always reset analyzing state
+      } finally {
       try {
         setIsAnalyzingKeyword(false);
       } catch (stateError) {
         console.error('[Keyword Research] Error resetting analyzing state:', stateError);
-      }
-      
-      // Stop server after analysis completes (success or failure)
-      try {
-        const stopResult = await stopServer();
-        if (stopResult && stopResult.success) {
-          console.log('[Keyword Research] Server stopped after analysis:', stopResult.message);
-        }
-      } catch (stopError) {
-        console.error('[Keyword Research] Error stopping server after analysis:', stopError);
-        // Don't throw - server stop failure shouldn't crash the app
       }
     }
   }, [primaryKeyword, location, language, forceRefresh, analyzeKeyword, clearResults, setIsAnalyzingKeyword, setBlueprintAnalysisResult]);

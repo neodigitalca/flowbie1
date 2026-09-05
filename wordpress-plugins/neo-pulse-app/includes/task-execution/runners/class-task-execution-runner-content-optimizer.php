@@ -126,9 +126,10 @@ class Neo_Pulse_App_Task_Execution_Runner_Content_Optimizer {
 				'updateMode'          => $update_mode,
 				'optimizationOptions' => $options,
 				'resolvedPost'        => $resolved_post,
-				'saveLocalArchive'    => ! empty( $payload['saveLocalArchive'] ) || ! empty( $payload['sendAutomationEmail'] ),
+				'saveLocalArchive'    => ! empty( $payload['saveLocalArchive'] ) || ! empty( $payload['sendAutomationEmail'] ) || ! empty( $payload['saveToGoogleDrive'] ),
 			),
-			Neo_Pulse_App_Tasks_Store::automation_email_contract_fields( $payload )
+			Neo_Pulse_App_Tasks_Store::automation_email_contract_fields( $payload ),
+			Neo_Pulse_App_Tasks_Store::google_drive_contract_fields( $payload )
 		);
 
 		return array(
@@ -167,9 +168,10 @@ class Neo_Pulse_App_Task_Execution_Runner_Content_Optimizer {
 			'targetBucket'        => $target_bucket,
 			'updateMode'          => $update_mode,
 			'optimizationOptions' => $options,
-			'saveLocalArchive'    => ! empty( $payload['saveLocalArchive'] ) || ! empty( $payload['sendAutomationEmail'] ),
+			'saveLocalArchive'    => ! empty( $payload['saveLocalArchive'] ) || ! empty( $payload['sendAutomationEmail'] ) || ! empty( $payload['saveToGoogleDrive'] ),
 		);
 		$contract = array_merge( $contract, Neo_Pulse_App_Tasks_Store::automation_email_contract_fields( $payload ) );
+		$contract = array_merge( $contract, Neo_Pulse_App_Tasks_Store::google_drive_contract_fields( $payload ) );
 		if ( ! empty( $payload['targetUrls'] ) && is_array( $payload['targetUrls'] ) ) {
 			$urls = array();
 			foreach ( $payload['targetUrls'] as $url ) {
@@ -180,6 +182,19 @@ class Neo_Pulse_App_Task_Execution_Runner_Content_Optimizer {
 			}
 			if ( count( $urls ) > 0 ) {
 				$contract['targetUrls'] = array_values( array_unique( $urls ) );
+			}
+		}
+		if ( ! empty( $payload['prefilledUrlResearch'] ) && is_array( $payload['prefilledUrlResearch'] ) ) {
+			$research = array();
+			foreach ( $payload['prefilledUrlResearch'] as $url => $text ) {
+				$url_key = esc_url_raw( (string) $url );
+				$brief   = sanitize_textarea_field( (string) $text );
+				if ( $url_key !== '' && $brief !== '' ) {
+					$research[ $url_key ] = $brief;
+				}
+			}
+			if ( count( $research ) > 0 ) {
+				$contract['prefilledUrlResearch'] = $research;
 			}
 		}
 

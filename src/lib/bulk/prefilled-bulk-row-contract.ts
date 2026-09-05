@@ -67,6 +67,56 @@ export function hasCsvFilledTitle(row: Pick<CSVRow, "title">): boolean {
   return Boolean(row.title?.trim());
 }
 
+const TITLE_KEYWORD_STOP = new Set([
+  "a",
+  "an",
+  "and",
+  "for",
+  "how",
+  "in",
+  "is",
+  "of",
+  "on",
+  "or",
+  "the",
+  "to",
+  "what",
+  "why",
+]);
+
+function keywordContentTokens(phrase: string): string[] {
+  return phrase
+    .toLowerCase()
+    .split(/\s+/g)
+    .map((w) => w.replace(/[^a-z0-9]+/g, ""))
+    .filter((w) => w.length >= 2 && !TITLE_KEYWORD_STOP.has(w));
+}
+
+/** True when every content word in `keyword` appears in `title`. */
+export function titleCoversKeyword(title: string, keyword: string): boolean {
+  const tokens = keywordContentTokens(keyword);
+  if (tokens.length === 0) return true;
+  const hay = title.toLowerCase();
+  return tokens.every((w) => hay.includes(w));
+}
+
+/** Colon stitch (`keyword: subtitle`) is not a publishable post title. */
+export function titleHasForbiddenColon(title: string): boolean {
+  return title.includes(":");
+}
+
+/** CSV title is only safe to publish verbatim when it is about this row's keyword. */
+export function hasKeywordAlignedCsvTitle(
+  row: Pick<CSVRow, "title" | "keyword">,
+  focusKeyword?: string,
+): boolean {
+  if (!hasCsvFilledTitle(row)) return false;
+  if (titleHasForbiddenColon(row.title)) return false;
+  const kw = (focusKeyword ?? row.keyword ?? "").trim();
+  if (!kw) return true;
+  return titleCoversKeyword(row.title, kw);
+}
+
 export function hasCsvFilledMeta(row: Pick<CSVRow, "meta_description">): boolean {
   return Boolean(row.meta_description?.trim());
 }

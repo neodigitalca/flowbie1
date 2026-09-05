@@ -78,11 +78,12 @@ function parseIntroJson(raw: string, executionKind: TaskExecutionKind): Automati
         ? parseStringList(parsed.talkingPoints, 10)
         : parseStringList(parsed.meetingPoints, 10);
     const clientQuestions = parseClientQuestions(parsed.clientQuestions, 6);
-    const previewHighlights =
-      highlights.length > 0 ? highlights : talkingPoints.slice(0, 3);
+    if (highlights.length === 0) {
+      throw new Error("OpenRouter email intro missing GSC highlights.");
+    }
     return {
       intro,
-      highlights: previewHighlights,
+      highlights,
       talkingPoints,
       clientQuestions,
       subject,
@@ -104,11 +105,12 @@ function buildIntroSystemPrompt(executionKind: TaskExecutionKind): string {
       "AUDIENCE: The lead presents to the business owner. Write prep notes, not a word-for-word script.",
       "Return JSON only with keys:",
       "intro (1 short sentence for the email teaser),",
-      "highlights (3-5 short stat or theme bullets from the report),",
+      "highlights (3-5 short stat bullets from the report: clicks, impressions, queries, position, or clear themes with numbers when present),",
       "talkingPoints (6-10 discussion notes: what to cover, opportunities, context; do NOT write dialogue or lines starting with Say:),",
       "clientQuestions (4-6 objects with question and answer: likely client questions and concise answers grounded in the report),",
       "subject (optional short email subject).",
       "FORBIDDEN: verbatim script lines, stage directions, timing estimates, or telling the lead exactly what to say word for word.",
+      "If the report discusses seasonality for this city and trade, include exactly one talking point that says busy or not busy. Do not say shoulder, peak, or slow. Do not invent a city or metrics.",
       "Ground everything in the report summary. Do not invent metrics, pages, or queries. No markdown. No em dashes.",
     ].join(" ");
   }

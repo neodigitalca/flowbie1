@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Download, ExternalLink } from "lucide-react";
 import { contentOptimizerRowStripeClass } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import type { AgentRunLogTimelineRow } from "@/lib/agent-runs/agent-run-log-format";
@@ -22,13 +23,25 @@ type AgentRunProgressLogProps = {
   rows: AgentRunLogTimelineRow[];
 };
 
+const NEAR_BOTTOM_PX = 48;
+
 export function AgentRunProgressLog({ rows }: AgentRunProgressLogProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distanceFromBottom > NEAR_BOTTOM_PX) return;
+    container.scrollTop = container.scrollHeight;
+  }, [rows]);
+
   if (rows.length === 0) {
     return <p className="px-2.5 py-2 text-base text-muted-foreground sm:px-3">No log entries yet.</p>;
   }
 
   return (
-    <div className="max-h-56 overflow-y-auto px-2.5 py-2 sm:px-3">
+    <div ref={scrollRef} className="max-h-56 overflow-y-auto px-2.5 py-2 sm:px-3">
       <ul className="space-y-1">
         {rows.map((row, index) => (
           <li

@@ -4,15 +4,12 @@ import { cn } from "@/lib/utils";
 import type { WordPressSiteOption } from "@/components/manager/tasks/NewProjectDialog";
 import {
   getPropertyListRowBlackIconButtonClass,
-  getPropertyListRowIconButtonHoverGlowClass,
 } from "@/components/integrations/wordpress/cyberpunk-theme";
 import {
   workflowCardClassName,
-  workflowCardSummary,
-  workflowCardTags,
+  workflowCardDescriptionText,
   workflowClientSiteIds,
-  workflowStatusLabel,
-  workflowStatusLabelClass,
+  workflowCardTitleCase,
 } from "@/components/manager/workflow/forge-workflow-styles";
 import type { WorkflowDefinition } from "@/lib/workflow/workflow-types";
 
@@ -24,6 +21,13 @@ export type WorkflowCardProps = {
   onDelete?: () => void;
 };
 
+/** Same footprint as the trash control (h-8 w-8) so 1- and 2-digit counts never resize. */
+const META_BOX_CLASS =
+  "inline-flex h-8 w-8 shrink-0 items-center justify-center bg-black text-base font-medium tabular-nums text-lime-400";
+
+const TITLE_FRAME_CLASS =
+  "flex min-h-10 min-w-0 flex-1 items-center overflow-hidden bg-black px-3 py-2 text-left text-base font-semibold text-lime-400";
+
 export function WorkflowCard({
   workflow,
   sites = [],
@@ -31,31 +35,36 @@ export function WorkflowCard({
   onSelect,
   onDelete,
 }: WorkflowCardProps): React.ReactElement {
-  const statusLabel = workflowStatusLabel(workflow.status);
-  const tags = workflowCardTags(workflow);
-  const clientLabels = useMemo(() => {
-    const siteIds = workflowClientSiteIds(workflow);
-    if (siteIds.length === 0) return [];
-    return siteIds.map((siteId) => sites.find((site) => site.id === siteId)?.name ?? siteId);
+  const clientCount = useMemo(() => {
+    const available = sites.map((site) => site.id);
+    return workflowClientSiteIds(workflow, available).length;
   }, [sites, workflow]);
+  const description = workflowCardDescriptionText(workflow.description);
+  const title = workflowCardTitleCase(workflow.name);
 
   return (
-    <article className={cn(workflowCardClassName(workflow.status, selected), "flex flex-col gap-3 p-4")}>
-      <div className="flex min-w-0 flex-col gap-1">
-        <span className={cn("text-base font-medium", workflowStatusLabelClass(workflow.status))}>
-          {statusLabel}
-        </span>
-        <div className="flex min-w-0 items-center gap-1">
-          <button type="button" className="min-w-0 flex-1 text-left" onClick={onSelect}>
-            <h3 className="text-base font-semibold text-white">{workflow.name}</h3>
-          </button>
+    <article className={workflowCardClassName(workflow.status, selected)}>
+      <div className="flex min-h-0 min-w-0 gap-2">
+        <button
+          type="button"
+          className="flex min-h-0 min-w-0 flex-1 flex-col gap-1 overflow-hidden text-left"
+          onClick={onSelect}
+        >
+          <span className={TITLE_FRAME_CLASS}>
+            <span className="overflow-hidden whitespace-nowrap">{title}</span>
+          </span>
+          <p className="h-16 overflow-hidden break-words text-base leading-8 text-muted-foreground">
+            {description || "\u00a0"}
+          </p>
+        </button>
+        <div className="flex w-8 shrink-0 flex-col gap-0 pt-1">
           {onDelete ? (
             <button
               type="button"
-              aria-label={`Delete ${workflow.name}`}
+              aria-label={`Delete ${title}`}
               className={cn(
                 getPropertyListRowBlackIconButtonClass(true),
-                "text-muted-foreground hover:text-red-400",
+                "!h-8 !min-h-8 !w-8 !min-w-8 text-muted-foreground hover:text-red-400 sm:!h-8 sm:!min-h-8 sm:!w-8 sm:!min-w-8",
               )}
               onClick={(event) => {
                 event.stopPropagation();
@@ -64,29 +73,13 @@ export function WorkflowCard({
             >
               <Trash2 className="h-4 w-4" aria-hidden />
             </button>
-          ) : null}
+          ) : (
+            <span className={META_BOX_CLASS} aria-hidden />
+          )}
+          <span className={META_BOX_CLASS} aria-label={`${clientCount} clients`}>
+            {clientCount}
+          </span>
         </div>
-      </div>
-      <button type="button" className="text-left" onClick={onSelect}>
-        <p className="text-base text-muted-foreground">{workflowCardSummary(workflow)}</p>
-      </button>
-      <div className="flex flex-wrap gap-2">
-        {clientLabels.map((label) => (
-          <span key={label} className="bg-black px-2 py-1 text-base text-primary">
-            {label}
-          </span>
-        ))}
-        {tags.map((tag, index) => (
-          <span
-            key={tag}
-            className={cn(
-              "bg-black px-2 py-1 text-base",
-              index === 0 ? "text-white" : "text-muted-foreground",
-            )}
-          >
-            {tag}
-          </span>
-        ))}
       </div>
     </article>
   );

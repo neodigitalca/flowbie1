@@ -1,20 +1,48 @@
 import React, { useMemo } from "react";
-import { Copy, MoreHorizontal, Trash2, Users, Zap } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Copy, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { getPropertyListRowIconButtonHoverGlowClass } from "@/components/integrations/wordpress/cyberpunk-theme";
 import type { WordPressSiteOption } from "@/components/manager/tasks/NewProjectDialog";
 import {
+  WORKFLOW_STEP_ACTION_BAR_CLASS,
+  WORKFLOW_STEP_ACTION_BTN_CLASS,
+  WORKFLOW_STEP_ACTION_SLOT_CLASS,
+  WORKFLOW_STEP_TYPE_ICON_CLASS,
+  WORKFLOW_STEP_TYPE_ICON_SLOT_CLASS,
+  WORKFLOW_STEP_UTILITY_ICON_CLASS,
   workflowKindBadgeClass,
   workflowStepCardClass,
 } from "@/components/manager/workflow/forge-workflow-styles";
-import { forgeClientColorUnique } from "@/lib/pulse-forge/forge-client-colors";
+import { workflowClientPublishSummary, workflowClientSiteSummary } from "@/lib/workflow/workflow-client-config";
 import { defaultNodeLabel } from "@/lib/workflow/workflow-graph-utils";
+import { workflowStepIconForNode } from "@/lib/workflow/workflow-step-icons";
+import { thenEmailDisplayLabel } from "@/lib/workflow/workflow-then-utils";
+import { workflowStepForgeRouteLabel } from "@/lib/workflow/workflow-step-navigation";
 import type { WorkflowClientConfig, WorkflowNode } from "@/lib/workflow/workflow-types";
-import { isWorkflowClientKind, isWorkflowTriggerKind, workflowTriggerLabel } from "@/lib/workflow/workflow-types";
+import {
+  isWorkflowClientKind,
+  isWorkflowTriggerKind,
+  workflowTriggerLabel,
+} from "@/lib/workflow/workflow-types";
+
+const ACTION_BTN_CLASS = cn(
+  WORKFLOW_STEP_ACTION_BTN_CLASS,
+  getPropertyListRowIconButtonHoverGlowClass("powerOn"),
+);
+
+function ActionSlot({
+  children,
+  className,
+}: {
+  children?: React.ReactNode;
+  className?: string;
+}): React.ReactElement {
+  return (
+    <div className={cn(WORKFLOW_STEP_ACTION_SLOT_CLASS, className)}>
+      {children}
+    </div>
+  );
+}
 
 export type WorkflowStepCardProps = {
   node: WorkflowNode;
@@ -22,6 +50,8 @@ export type WorkflowStepCardProps = {
   selected?: boolean;
   sites?: WordPressSiteOption[];
   onSelect: () => void;
+  onOpenDeepLink?: () => void;
+  deepLinkEnabled?: boolean;
   onDelete?: () => void;
   onDuplicate?: () => void;
 };
@@ -32,56 +62,58 @@ export function WorkflowStepCard({
   selected = false,
   sites = [],
   onSelect,
+  onOpenDeepLink,
+  deepLinkEnabled = false,
   onDelete,
   onDuplicate,
 }: WorkflowStepCardProps): React.ReactElement {
   const recipeCategory = (node.config as { recipeCategory?: string }).recipeCategory;
-  const executionKind = (node.config as { executionKind?: string }).executionKind;
   const clientConfig = node.config as WorkflowClientConfig;
   const primaryClientSiteId = clientConfig.siteIds?.[0];
+  const isClientStep = isWorkflowClientKind(node.kind);
   const kindLabel = isWorkflowTriggerKind(node.kind)
     ? workflowTriggerLabel(node.kind)
-    : isWorkflowClientKind(node.kind)
+    : isClientStep
       ? workflowTriggerLabel(node.kind)
       : defaultNodeLabel(node.kind);
 
   const clientSiteSummary = useMemo(() => {
-    if (!isWorkflowClientKind(node.kind)) return null;
-    const siteIds = clientConfig.siteIds ?? [];
-    if (siteIds.length === 0) return "No sites selected";
-    if (siteIds.length === 1) {
-      const site = sites.find((item) => item.id === siteIds[0]);
-      return site?.name ?? "1 site";
-    }
-    return `${siteIds.length} sites`;
-  }, [clientConfig.siteIds, node.kind, sites]);
+    if (!isClientStep) return null;
+    return workflowClientSiteSummary(clientConfig, sites);
+  }, [clientConfig, isClientStep, sites]);
+
+  const clientPublishSummary = useMemo(() => {
+    if (!isClientStep) return null;
+    return workflowClientPublishSummary(clientConfig);
+  }, [clientConfig, isClientStep]);
 
   const primaryTitle = useMemo(() => {
-    if (isWorkflowClientKind(node.kind)) {
+    if (isClientStep) {
       const label = node.label.trim();
       if (label && label !== kindLabel) return label;
       return clientSiteSummary ?? kindLabel;
     }
+    if (node.kind === "then_email") return thenEmailDisplayLabel(node);
     return node.label;
-  }, [clientSiteSummary, kindLabel, node.kind, node.label]);
+  }, [clientSiteSummary, isClientStep, kindLabel, node]);
 
-  const secondaryLine = useMemo(() => {
-    if (!isWorkflowClientKind(node.kind)) return executionKind ?? null;
-    const label = node.label.trim();
-    if (label && label !== kindLabel && clientSiteSummary && clientSiteSummary !== label) {
-      return clientSiteSummary;
-    }
-    return null;
-  }, [clientSiteSummary, executionKind, kindLabel, node.kind, node.label]);
+  const typeIcon = workflowStepIconForNode(node, primaryClientSiteId);
+  const typeIconClassName = cn(typeIcon.className, WORKFLOW_STEP_TYPE_ICON_CLASS);
+  const showForgeLink =
+    deepLinkEnabled && onOpenDeepLink && node.kind === "action_agent";
+  const showUtilityBar = Boolean(onDelete || onDuplicate);
 
   return (
     <div
-      className={workflowStepCardClass({
-        kind: node.kind,
-        selected,
-        recipeCategory,
-        clientSiteId: primaryClientSiteId,
-      })}
+      className={cn(
+        workflowStepCardClass({
+          kind: node.kind,
+          selected,
+          recipeCategory,
+          clientSiteId: primaryClientSiteId,
+        }),
+        "flex flex-col p-0",
+      )}
       role="button"
       tabIndex={0}
       onClick={onSelect}
@@ -92,71 +124,79 @@ export function WorkflowStepCard({
         }
       }}
     >
-      <div className="flex items-start gap-2">
-        {onDelete ? (
-          <button
-            type="button"
-            className="mt-0.5 shrink-0 bg-black p-2 text-muted-foreground hover:text-red-400"
-            aria-label={`Delete ${node.label}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              onDelete();
-            }}
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        ) : (
-          <div className="mt-0.5 w-10 shrink-0" aria-hidden />
-        )}
-        <div className="flex min-w-0 flex-1 items-start gap-3">
-          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center bg-black shadow-tile">
-            {isWorkflowClientKind(node.kind) ? (
-              <Users className={cnIcon(node.kind, primaryClientSiteId)} aria-hidden />
-            ) : (
-              <Zap className={cnIcon(node.kind)} aria-hidden />
-            )}
+      <div className="flex items-start justify-between gap-2 px-4 pt-4 pb-3">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <span className="text-base text-muted-foreground">Step {stepNumber}</span>
+            <span className={workflowKindBadgeClass(node.kind, primaryClientSiteId)}>
+              {kindLabel}
+            </span>
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 flex flex-wrap items-center gap-2">
-              <span className="text-base text-muted-foreground">Step {stepNumber}</span>
-              <span className={workflowKindBadgeClass(node.kind, primaryClientSiteId)}>{kindLabel}</span>
-            </div>
-            <p className="text-base font-semibold text-white">{primaryTitle}</p>
-            {secondaryLine ? (
-              <p className="mt-1 truncate text-base text-muted-foreground">{secondaryLine}</p>
-            ) : null}
-          </div>
+          <p className="text-base font-semibold text-white">{primaryTitle}</p>
+          {clientPublishSummary ? (
+            <p className="mt-1 text-base tabular-nums text-muted-foreground">{clientPublishSummary}</p>
+          ) : null}
         </div>
-        {onDuplicate ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+        <div className={WORKFLOW_STEP_TYPE_ICON_SLOT_CLASS}>
+          {showForgeLink ? (
+            <button
+              type="button"
+              className={cn(
+                WORKFLOW_STEP_ACTION_BTN_CLASS,
+                getPropertyListRowIconButtonHoverGlowClass("powerOn"),
+                "h-10 w-10 hover:text-white",
+              )}
+              aria-label={workflowStepForgeRouteLabel(node)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenDeepLink();
+              }}
+            >
+              <typeIcon.Icon className={typeIconClassName} aria-hidden />
+            </button>
+          ) : (
+            <typeIcon.Icon className={typeIconClassName} aria-hidden />
+          )}
+        </div>
+      </div>
+      {showUtilityBar ? (
+        <div className={WORKFLOW_STEP_ACTION_BAR_CLASS}>
+          <ActionSlot>
+            {onDelete ? (
               <button
                 type="button"
-                className="shrink-0 bg-black p-2 text-muted-foreground hover:text-white"
-                aria-label="Step menu"
-                onClick={(event) => event.stopPropagation()}
+                className={cn(
+                  ACTION_BTN_CLASS,
+                  getPropertyListRowIconButtonHoverGlowClass("destructive"),
+                  "hover:text-red-400",
+                )}
+                aria-label={`Delete ${node.label}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDelete();
+                }}
               >
-                <MoreHorizontal className="h-4 w-4" />
+                <Trash2 className={WORKFLOW_STEP_UTILITY_ICON_CLASS} />
               </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-zinc-950 text-base">
-              <DropdownMenuItem className="text-base" onClick={onDuplicate}>
-                <Copy className="mr-2 h-4 w-4" />
-                Duplicate
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
-      </div>
+            ) : null}
+          </ActionSlot>
+          <ActionSlot>
+            {onDuplicate ? (
+              <button
+                type="button"
+                className={ACTION_BTN_CLASS}
+                aria-label="Duplicate step"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDuplicate();
+                }}
+              >
+                <Copy className={WORKFLOW_STEP_UTILITY_ICON_CLASS} />
+              </button>
+            ) : null}
+          </ActionSlot>
+        </div>
+      ) : null}
     </div>
   );
-}
-
-function cnIcon(kind: WorkflowNode["kind"], clientSiteId?: string): string {
-  if (isWorkflowClientKind(kind)) {
-    return `h-4 w-4 ${forgeClientColorUnique(clientSiteId).textClass}`;
-  }
-  if (isWorkflowTriggerKind(kind)) return "h-4 w-4 text-[hsl(var(--semantic-warning))]";
-  if (kind === "rag_archive") return "h-4 w-4 text-[hsl(var(--semantic-data))]";
-  return "h-4 w-4 text-primary";
 }

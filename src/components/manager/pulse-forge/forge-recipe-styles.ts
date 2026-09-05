@@ -21,6 +21,7 @@ export const FORGE_TASK_BUILDER_INFIELD_CLASS =
   "flex min-h-10 min-w-0 items-center gap-2 rounded-none bg-zinc-950 px-3 shadow-tile";
 
 const RECIPE_CATEGORY_ORDER = [
+  "browser",
   "research",
   "maintenance",
   "reporting",
@@ -30,6 +31,7 @@ const RECIPE_CATEGORY_ORDER = [
 ] as const;
 
 const RECIPE_CATEGORY_FRAME_CLASS: Record<string, string> = {
+  browser: "border-l-[length:var(--tile-accent-width)] border-l-[hsl(160_55%_45%)]",
   research: "border-l-[length:var(--tile-accent-width)] border-l-[hsl(200_70%_52%)]",
   maintenance: "border-l-[length:var(--tile-accent-width)] border-l-[hsl(var(--semantic-data))]",
   reactive: "border-l-[length:var(--tile-accent-width)] border-l-[hsl(var(--semantic-data))]",
@@ -40,6 +42,7 @@ const RECIPE_CATEGORY_FRAME_CLASS: Record<string, string> = {
 };
 
 const RECIPE_CATEGORY_LABEL_CLASS: Record<string, string> = {
+  browser: "text-[hsl(160_55%_65%)]",
   research: "text-[hsl(200_70%_72%)]",
   maintenance: "text-[hsl(var(--semantic-data-foreground))]",
   reactive: "text-[hsl(var(--semantic-data-foreground))]",

@@ -1,11 +1,9 @@
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
 import type { WordPressSite } from "@/components/integrations/types";
-import { extractGeographicEntityWithAI } from "@/lib/content-optimization/entity";
 import { resolveEntityWikipediaMediaWiki, entityWikiLookupCandidates } from "@/lib/wikipedia/resolve-entity-wikipedia-mediawiki";
 import { findPhraseOutsideTags } from "@/lib/overview/overview-blog-links-extract";
-import { lookupOverviewInventoryHitForUrl } from "@/hooks/content-optimization/bulk-seo-extra-text-fast-path";
 import type { OverviewSitemapSource } from "@/lib/overview/overview-sitemap-source";
-import { effectiveHasEntityForContentOptimizer } from "@/lib/entity-endpoint-extractor";
+import { resolveOverviewPlaceEntityForRow } from "@/lib/overview/resolve-overview-place-entity";
 
 export type WikipediaLinkInsertResult = {
   html: string;
@@ -229,12 +227,6 @@ function findEarliestPhraseOutsideAnchors(
   return null;
 }
 
-function readOriginFromInventoryAcf(acf: Record<string, unknown> | undefined): string {
-  if (!acf || typeof acf !== "object") return "";
-  const raw = acf.origin;
-  return typeof raw === "string" ? raw.trim() : "";
-}
-
 export type ResolveEntityWikiParams = {
   row: OverviewRow;
   site: WordPressSite;
@@ -251,55 +243,20 @@ export async function resolveEntityAndWikiForOverviewRow(
   const url = row.url?.trim();
   if (!url) return null;
 
-  let entity = "";
-  const invHit = lookupOverviewInventoryHitForUrl(site, url, sitemapSource);
-  const acf =
-    invHit?.row?.acf && typeof invHit.row.acf === "object"
-      ? (invHit.row.acf as Record<string, unknown>)
-      : undefined;
-  entity = readOriginFromInventoryAcf(acf);
+  const resolvedPlace =
+    (await resolveOverviewPlaceEntityForRow({
+      row,
+      site,
+      sitemapSource,
+      urlEntities,
+      apiKey,
+    })) ?? "";
 
-  if (!entity && urlEntities?.[url]?.trim() && urlEntities[url] !== "N/A") {
-    entity = urlEntities[url]!.trim();
-  }
-
-  if (!entity) {
-    entity = (row.focusKeyword || row.title || "").trim();
-  }
-
-  const endpoint = invHit?.source === "pages" ? "pages" : invHit?.source === "posts" ? "posts" : invHit?.source;
-  const hasEntity = effectiveHasEntityForContentOptimizer(site, endpoint ?? null, undefined);
-  if (!entity && hasEntity !== false && apiKey?.trim()) {
-    try {
-      const slug = (() => {
-        try {
-          const p = new URL(url).pathname.split("/").filter(Boolean);
-          return p[p.length - 1] ?? "";
-        } catch {
-          return "";
-        }
-      })();
-      const extracted = await extractGeographicEntityWithAI(
-        { title: row.title, url, slug: slug || undefined },
-        apiKey.trim(),
-        {
-          siteUrl: site.siteUrl,
-          siteName: site.name,
-          locations: site.locations,
-          napAddress: site.napInfo?.address,
-        },
-      );
-      if (extracted?.trim()) entity = extracted.trim();
-    } catch {
-      /* fall through */
-    }
-  }
-
-  if (!entity || entity === "N/A") {
-    entity = entityHintsFromOverviewUrl(url)[0] ?? "";
-  }
-
-  const baseEntity = entity.trim();
+  const baseEntity =
+    resolvedPlace.trim() ||
+    (row.focusKeyword || row.title || "").trim() ||
+    entityHintsFromOverviewUrl(url)[0] ||
+    "";
   const lookupCandidates = [
     ...new Set([
       baseEntity,

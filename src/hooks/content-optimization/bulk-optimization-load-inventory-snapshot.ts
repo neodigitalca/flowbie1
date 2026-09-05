@@ -22,6 +22,7 @@ import {
   getMergedBulkInventorySessionSnapshot,
   setBulkInventorySessionSnapshot,
 } from "@/lib/wordpress-bulk-inventory-session-cache";
+import { resolveWarmBulkInventorySnapshot, seedBulkInventorySessionFromSiteWarmCache } from "@/lib/bulk/seed-bulk-session-from-site-warm-cache";
 
 const GENERIC_WP_COLLECTIONS = new Set(["posts", "post", "pages", "page"]);
 
@@ -158,12 +159,15 @@ export async function ensureBulkOptimizerInventoryForRun(
   preferredSource?: OverviewSitemapSource,
   onProgress?: (message: string) => void,
   _requirements: BulkOptimizerInventoryRunRequirements = {},
+  options?: { warmCacheOnly?: boolean },
 ): Promise<BulkOptimizerInventorySnapshot> {
   if (!site.username?.trim() || !site.appPassword?.trim() || !site.siteUrl?.trim()) {
     throw new Error(
       "Bulk content optimization requires WordPress inventory. Load the site inventory first (Content tab / Integrations), then retry.",
     );
   }
+
+  seedBulkInventorySessionFromSiteWarmCache(site);
 
   const cached =
     resolveBulkOptimizerInventoryForUrls(site, urls, preferredSource) ??
@@ -173,6 +177,18 @@ export async function ensureBulkOptimizerInventoryForRun(
   if (cached && snapshotHasInventoryEntries(cached) && bulkSnapshotCoversUrls(cached, site, urls)) {
     onProgress?.("Using WordPress inventory from this session (no re-fetch).");
     return cached;
+  }
+
+  const warmSnapshot = resolveWarmBulkInventorySnapshot(site, preferredSource);
+  if (warmSnapshot && snapshotHasInventoryEntries(warmSnapshot)) {
+    onProgress?.("Using WordPress inventory from site cache (no re-fetch).");
+    return warmSnapshot;
+  }
+
+  if (options?.warmCacheOnly) {
+    throw new Error(
+      "WordPress inventory is not in site cache yet. Refresh site data or load the sitemap once, then retry.",
+    );
   }
 
   if (preferredSource) {
@@ -346,6 +362,8 @@ export async function ensurePostsInventoryForHarness(
     );
   }
 
+  seedBulkInventorySessionFromSiteWarmCache(site);
+
   const postsSnap = getBulkInventorySessionSnapshot(site.id, "posts");
   if (postsSnap?.postsMaps?.byLink.size) {
     onProgress?.("Using posts inventory (session cache).");
@@ -376,6 +394,8 @@ export async function ensurePagesInventoryForHarness(
       "Bulk content optimization requires WordPress inventory. Load the site inventory first (Content tab / Integrations), then retry.",
     );
   }
+
+  seedBulkInventorySessionFromSiteWarmCache(site);
 
   const pagesSnap = getBulkInventorySessionSnapshot(site.id, "pages");
   if (pagesSnap?.pagesMaps?.byLink.size) {
@@ -458,6 +478,60 @@ export async function ensurePagesInventoryForLinking(
     pagesMaps: snapshot.pagesMaps,
     customMapsByCollection: {},
   };
+}
+
+/**
+ * Posts + pages for internal link catalog (all bulk runs).
+ * Session first; fetches missing bucket via ensurePostsPagesInventoryForLinking.
+ */
+export async function ensureMergedPostsPagesLinkPool(
+  site: WordPressSite,
+  onProgress?: (message: string) => void,
+  options?: { warmCacheOnly?: boolean },
+): Promise<BulkOptimizerInventorySnapshot> {
+  seedBulkInventorySessionFromSiteWarmCache(site);
+  const fromSession = mergePostsPagesSnapshotFromSession(site.id, site.siteUrl);
+  if (fromSession) {
+    onProgress?.("Using posts and pages inventory for linking (session cache).");
+    return fromSession;
+  }
+
+  const warm = resolveWarmBulkInventorySnapshot(site, "posts");
+  if (warm && warm.postsMaps.byLink.size && warm.pagesMaps.byLink.size) {
+    onProgress?.("Using posts and pages inventory for linking (site cache).");
+    return {
+      postsMaps: warm.postsMaps,
+      pagesMaps: warm.pagesMaps,
+      customMapsByCollection: warm.customMapsByCollection ?? {},
+    };
+  }
+
+  if (options?.warmCacheOnly) {
+    if (warm && warm.postsMaps.byLink.size) {
+      onProgress?.("Using posts inventory for linking (site cache).");
+      return {
+        postsMaps: warm.postsMaps,
+        pagesMaps: warm.pagesMaps.byLink.size ? warm.pagesMaps : buildInventoryLookupMaps([], site.siteUrl),
+        customMapsByCollection: warm.customMapsByCollection ?? {},
+      };
+    }
+    throw new Error(
+      "Posts and pages inventory is not in site cache yet. Refresh site data or load the sitemap once, then retry.",
+    );
+  }
+
+  const snapshot = await ensurePostsPagesInventoryForLinking(site, onProgress);
+  if (!snapshot.postsMaps.byLink.size) {
+    throw new Error(
+      "Posts inventory is empty. Load the posts sitemap in Content Opt, then retry.",
+    );
+  }
+  if (!snapshot.pagesMaps.byLink.size) {
+    throw new Error(
+      "Pages inventory is empty. Load the pages sitemap in Content Opt, then retry.",
+    );
+  }
+  return snapshot;
 }
 
 /** Session cache only; does not fetch WordPress. */

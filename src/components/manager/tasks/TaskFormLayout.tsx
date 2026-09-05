@@ -477,10 +477,12 @@ export function TaskFormMultiSelect({
   );
 }
 
+const SCHEDULE_TICK_MINUTES = 5;
+
 const TASK_TIME_SLOTS: string[] = (() => {
   const slots: string[] = [];
   for (let hour = 0; hour < 24; hour += 1) {
-    for (let minute = 0; minute < 60; minute += 15) {
+    for (let minute = 0; minute < 60; minute += SCHEDULE_TICK_MINUTES) {
       slots.push(`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
     }
   }

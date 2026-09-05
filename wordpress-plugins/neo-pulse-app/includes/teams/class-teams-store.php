@@ -271,6 +271,25 @@ class Neo_Pulse_App_Teams_Store {
 	}
 
 	/**
+	 * @return int[]
+	 */
+	public static function list_all_team_ids(): array {
+		global $wpdb;
+		$rows = $wpdb->get_col( 'SELECT id FROM ' . $wpdb->prefix . 'neo_pulse_teams ORDER BY id ASC' );
+		if ( ! is_array( $rows ) ) {
+			return array();
+		}
+		return array_values(
+			array_filter(
+				array_map( 'intval', $rows ),
+				static function ( $id ) {
+					return $id > 0;
+				}
+			)
+		);
+	}
+
+	/**
 	 * @return array<string,mixed>|null
 	 */
 	public static function get_team( int $team_id ): ?array {

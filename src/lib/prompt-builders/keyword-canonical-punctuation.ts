@@ -1,5 +1,29 @@
 /** Deterministic canonical punctuation for focus keywords at prompt-build time. */
 
+const TWO_LETTER_STATE_RE = /^[a-z]{2}$/i;
+
+function capitalizeToken(token: string): string {
+  if (!token) return token;
+  if (TWO_LETTER_STATE_RE.test(token)) return token.toUpperCase();
+  if (token.includes("-")) {
+    return token
+      .split("-")
+      .map((part) => capitalizeToken(part))
+      .join("-");
+  }
+  if (token.length <= 4 && token === token.toUpperCase() && /[A-Z]/.test(token)) {
+    return token;
+  }
+  return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+}
+
+/** Title Case every word (SAP + blog + keyword — same rule as UNIFIED_COPY_FORMATTING_RULE). */
+export function applyTitleCaseEveryWord(phrase: string): string {
+  const trimmed = phrase.trim();
+  if (!trimmed) return trimmed;
+  return trimmed.split(/\s+/).filter(Boolean).map(capitalizeToken).join(" ");
+}
+
 type CompoundRule = {
   /** Lowercase tokens joined by space (e.g. "x ray"). */
   pattern: string;
@@ -81,6 +105,7 @@ export function applyCanonicalKeywordPunctuation(stored: string): string {
 const KEYWORD_PUNCTUATION_RULES = `**KEYWORD PUNCTUATION (MANDATORY)**:
 - When a compound has a standard hyphenated editorial form (X-ray, e-commerce, COVID-19), you **must** use that form in all generated copy (titles, headings, body, FAQ).
 - Keep the same **words and word order** as the focus keyword; only add standard hyphens or punctuation where editorially required.
+- **WRITING KEYWORD casing**: paste the WRITING KEYWORD string exactly when an exact phrase is required — full Title Case on every word, same as all other generated copy. Never paste the raw lowercase ACF slug.
 - **Forbidden:** collapsing to one word (Xray), decorative punctuation (vs., colons inside the keyword phrase), or inventing hyphens on ordinary words.
 - **Do not** change ACF keyword_focus values; this applies only to generated content you write.`;
 
@@ -91,7 +116,7 @@ export function buildKeywordPunctuationPromptBlock(stored: string, writing?: str
   const storedTrim = stored.trim();
   if (!storedTrim) return "";
 
-  const writingForm = (writing ?? applyCanonicalKeywordPunctuation(storedTrim)).trim();
+  const writingForm = (writing ?? resolveWritingKeyword(storedTrim)).trim();
   if (writingForm.toLowerCase() === storedTrim.toLowerCase()) {
     return `\n=== KEYWORD PUNCTUATION ===\n${KEYWORD_PUNCTUATION_RULES}\nFocus keyword: "${storedTrim}"\n=== END KEYWORD PUNCTUATION ===`;
   }
@@ -103,10 +128,12 @@ ${KEYWORD_PUNCTUATION_RULES}
 === END KEYWORD PUNCTUATION ===`;
 }
 
-/** Returns writing keyword for prompt injection (canonical punctuation applied). */
+/** Returns writing keyword for prompt injection (canonical punctuation + Title Case). */
 export function resolveWritingKeyword(stored: string, writingOverride?: string): string {
   const storedTrim = stored.trim();
   if (!storedTrim) return "";
-  if (writingOverride?.trim()) return writingOverride.trim();
-  return applyCanonicalKeywordPunctuation(storedTrim);
+  if (writingOverride?.trim()) {
+    return applyTitleCaseEveryWord(applyCanonicalKeywordPunctuation(writingOverride.trim()));
+  }
+  return applyTitleCaseEveryWord(applyCanonicalKeywordPunctuation(storedTrim));
 }

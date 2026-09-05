@@ -3,7 +3,7 @@
  * Discover ACF field groups and scan fields across WordPress site
  */
 
-import { BACKEND_API_BASE, BACKEND_CONNECTION_ERROR } from './connection';
+import { BACKEND_CONNECTION_ERROR, backendApiUrl } from './connection';
 import type { WordPressSite } from '@/components/integrations/types';
 
 // Lightweight debug logging (to validate ACF keyword_focus presence + timing).
@@ -63,6 +63,34 @@ export async function siteSupportsSeoExtraTextAcf(site: WordPressSite): Promise<
   }
 }
 
+/** Field-name map from site field groups (keys only). Used when a new post has empty REST `acf`. */
+export function acfNameMapFromDiscovery(result: ACFDiscoveryResult): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const field of result.fields ?? []) {
+    const name = typeof field?.name === "string" ? field.name.trim() : "";
+    if (name) out[name] = "";
+  }
+  for (const group of result.fieldGroups ?? []) {
+    for (const field of group.fields ?? []) {
+      const name = typeof field?.name === "string" ? field.name.trim() : "";
+      if (name) out[name] = "";
+    }
+  }
+  return out;
+}
+
+/**
+ * Prefer values on the post. If the post has no ACF keys yet, use the site's field-group names.
+ */
+export async function resolveAcfFieldsForMapping(
+  site: WordPressSite,
+  existing: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  if (existing && Object.keys(existing).length > 0) return existing;
+  const discovered = await discoverACFFieldGroups(site);
+  return acfNameMapFromDiscovery(discovered);
+}
+
 /**
  * Discover ACF field groups from WordPress site
  */
@@ -72,7 +100,7 @@ export async function discoverACFFieldGroups(
   postTypeEndpoint?: string,
   sampleSize: number = 10
 ): Promise<ACFDiscoveryResult> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/discover-acf-field-groups`;
+  const url = backendApiUrl('/wordpress/discover-acf-field-groups');
   
   try {
     const response = await fetch(url, {
@@ -123,7 +151,7 @@ export async function getACFFieldsForPost(
   postType: string = 'post',
   postTypeEndpoint?: string
 ): Promise<{ success: boolean; fields: Record<string, any>; fullPost?: Record<string, unknown>; error?: string }> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/get-acf-fields`;
+  const url = backendApiUrl('/wordpress/get-acf-fields');
 
   try {
     const response = await fetch(url, {
@@ -240,7 +268,7 @@ export async function getACFFieldsForUrl(
   postSnapshot?: WpPostSnapshotFromAcfByUrl;
   error?: string;
 }> {
-  const endpoint = `${BACKEND_API_BASE}/api/wordpress/get-acf-fields-by-url`;
+  const endpoint = backendApiUrl('/wordpress/get-acf-fields-by-url');
 
   try {
     const response = await fetch(endpoint, {
@@ -322,7 +350,7 @@ export async function getACFFieldsForUrlsBatch(
   }>;
   error?: string;
 }> {
-  const endpoint = `${BACKEND_API_BASE}/api/wordpress/get-acf-fields-by-url-batch`;
+  const endpoint = backendApiUrl('/wordpress/get-acf-fields-by-url-batch');
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -396,7 +424,7 @@ export async function getACFFieldsForPostsBatch(
   }>;
   error?: string;
 }> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/get-acf-fields-batch`;
+  const url = backendApiUrl('/wordpress/get-acf-fields-batch');
   try {
     const response = await fetch(url, {
       method: 'POST',

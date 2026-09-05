@@ -55,16 +55,23 @@ export function WorkflowInspectorKindHeader({
 
 export function WorkflowInspectorGroup({
   title,
+  titleEnd,
   children,
   className,
 }: {
   title?: string;
+  titleEnd?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }): React.ReactElement {
   return (
     <div className={cn(WORKFLOW_INSPECTOR_GROUP_CLASS, className)}>
-      {title ? <p className={WORKFLOW_INSPECTOR_GROUP_TITLE_CLASS}>{title}</p> : null}
+      {title ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0">
+          <p className={WORKFLOW_INSPECTOR_GROUP_TITLE_CLASS}>{title}</p>
+          {titleEnd}
+        </div>
+      ) : null}
       {children}
     </div>
   );

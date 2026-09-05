@@ -204,5 +204,14 @@ chat_rag_assert(
 	str_contains( (string) $blog_card['body'], 'Starter Guide' ),
 	'blog card body uses real post titles'
 );
+chat_rag_assert(
+	! str_contains( strtolower( (string) $blog_card['title'] ), 'window covering' ),
+	'blog discovery card title is not hardcoded to window coverings'
+);
+chat_rag_assert(
+	str_contains( (string) $blog_card['title'], 'Example Site' )
+		&& str_contains( strtolower( (string) $blog_card['title'] ), 'blog' ),
+	'blog discovery card title uses the site name'
+);
 
 echo "All chat RAG index tests passed.\n";

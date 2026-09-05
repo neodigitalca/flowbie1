@@ -39,8 +39,16 @@ export async function generateBlueprintFlow(
     externalUrls?: string[];
     anchorPhrases?: string[];
   },
-  existingContent?: string,
-): Promise<{ blueprintResult: any; checklist: string[] }> {
+  dfsArticleAuditBlock?: string,
+  llmAuditSummary?: string,
+  firstPartyAuthorityBlock?: string,
+  llmAuditAuthorityLinks?: import("@/lib/bulk/modifier-external-links").LlmAuditAuthorityLinkLike[],
+  serpResearchBriefJson?: string,
+  forbiddenLiveH2s?: string[],
+  onArtifactSaved?: () => void,
+  onChecklistReady?: (pipelineChecklist: string[]) => void,
+  onSerpH2OutlineReady?: (bodyHarnessTitles: string[]) => void,
+): Promise<{ blueprintResult: any; checklist: string[]; llmAuditAuthorityExternalPairs: import("@/lib/content-generation/external-link-placeholders").ExternalLinkPair[] }> {
   if (testMode) {
     throw new Error("Test mode is not supported.");
   }
@@ -70,12 +78,21 @@ export async function generateBlueprintFlow(
     existingPost,
     hasEntityOverride,
     semrushForBlueprint,
-    existingContent,
+    dfsArticleAuditBlock,
+    llmAuditSummary,
+    firstPartyAuthorityBlock,
+    llmAuditAuthorityLinks,
+    serpResearchBriefJson,
+    forbiddenLiveH2s,
+    onArtifactSaved,
+    onChecklistReady,
+    onSerpH2OutlineReady,
   );
 
   return {
     blueprintResult: blueprintResultData.blueprintResult,
-    checklist: blueprintResultData.checklist
+    checklist: blueprintResultData.checklist,
+    llmAuditAuthorityExternalPairs: blueprintResultData.llmAuditAuthorityExternalPairs,
   };
 }
 
@@ -118,6 +135,7 @@ export async function generateAndUploadFlow(
     subProgress: number,
     message?: string,
   ) => void,
+  contentPrepHarnessBridge?: import("@/lib/overview/overview-content-prep-harness-run").ContentPrepHarnessBridge,
 ): Promise<{ excerpt: string | undefined; changes?: { titleChanged?: boolean; metaChanged?: boolean; contentChanged?: boolean; title?: string; meta?: string } }> {
   const defaultOptimizationOptions = {
     optimizeTitle: true,
@@ -155,6 +173,10 @@ export async function generateAndUploadFlow(
     inContentImageRequest: inContentImageRequest ? { imageType: inContentImageRequest.imageType as any, userPrompt: inContentImageRequest.userPrompt } : undefined,
     selectedPeopleAlsoAsk,
     acfFullPostSnapshot,
+    llmAuditSummary: String(optimizationOptions?.llmAuditSummary ?? "").trim() || undefined,
+    firstPartyAuthorityBlock: String(optimizationOptions?.firstPartyAuthorityBlock ?? "").trim() || undefined,
+    llmAuditAuthorityExternalPairs: optimizationOptions?.llmAuditAuthorityExternalPairs,
+    linkTargetsPlan: optimizationOptions?.linkTargetsPlan,
   };
 
   const progressReporter =
@@ -176,6 +198,7 @@ export async function generateAndUploadFlow(
     acfFields,
     acfContext,
     setOptimizationProgress,
+    contentPrepHarnessBridge,
   );
 
   const batchKey = `${site.id}-batch`;

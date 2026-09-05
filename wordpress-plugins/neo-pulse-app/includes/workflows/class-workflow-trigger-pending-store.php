@@ -58,6 +58,40 @@ class Neo_Pulse_App_Workflow_Trigger_Pending_Store {
 		);
 	}
 
+	/**
+	 * Atomically remove a pending dispatch when workflowId + runId match (one client wins).
+	 */
+	public static function claim( int $team_id, int $workflow_id, int $run_id ): bool {
+		if ( $workflow_id <= 0 || $run_id <= 0 ) {
+			return false;
+		}
+		$pending = self::list( $team_id );
+		$matched = false;
+		$next    = array();
+		foreach ( $pending as $item ) {
+			if ( ! is_array( $item ) ) {
+				continue;
+			}
+			$item_workflow = (int) ( $item['workflowId'] ?? 0 );
+			$item_run      = (int) ( $item['runId'] ?? 0 );
+			if ( ! $matched && $item_workflow === $workflow_id && $item_run === $run_id ) {
+				$matched = true;
+				continue;
+			}
+			$next[] = $item;
+		}
+		if ( ! $matched ) {
+			return false;
+		}
+		return Neo_Pulse_App_Json_File_Store::write(
+			self::path( $team_id ),
+			array(
+				'pending'   => array_values( $next ),
+				'updatedAt' => gmdate( 'c' ),
+			)
+		);
+	}
+
 	public static function dequeue( int $team_id, int $workflow_id ): bool {
 		$pending = array_values(
 			array_filter(

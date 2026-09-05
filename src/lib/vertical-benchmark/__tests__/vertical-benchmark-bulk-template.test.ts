@@ -4,6 +4,7 @@ import {
   BENCHMARK_BULK_QUARTER_POST_ROW_CAP,
   BULK_BENCHMARK_MODIFIER_VALUES,
   capBulkBenchmarkPostRowsToQuarterGoal,
+  jsonRowsToPitchRows,
   normalizeBulkBenchmarkModifier,
   sortBulkBenchmarkRowsByGsc,
   type BenchmarkClientPlan,
@@ -94,7 +95,7 @@ describe("buildClientGscBulkAdaptPrompt", () => {
     expect(user).toMatch(/Published inventory count: 1/i);
     expect(user).toMatch(/brand a vs brand b/i);
     const invPos = user.indexOf("SITE_INVENTORY");
-    const gscPos = user.indexOf("GSC OUTPUT LINES");
+    const gscPos = user.indexOf("GSC EXEMPLARS");
     expect(invPos).toBeGreaterThan(-1);
     expect(gscPos).toBeGreaterThan(invPos);
   });
@@ -111,16 +112,20 @@ describe("buildClientGscBulkAdaptPrompt", () => {
     }
     expect(system).toMatch(/Never use "y"/i);
     expect(system).toContain("exactly 7");
+    expect(system).toMatch(/CURATE FOR THIS CLIENT/i);
+    expect(system).toMatch(/Never use Bali/i);
     expect(system).toMatch(/Do NOT add or remove rows beyond the required count/i);
     expect(system).toMatch(/TITLE — NO PLACES/i);
     expect(system).toMatch(/Florida Interior Design/i);
-    expect(user).toContain("GSC OUTPUT LINES (7");
-    expect(user).toContain("produce exactly 7");
+    expect(system).toMatch(/ROW COUNT LOCK/i);
+    expect(user).toContain("GSC EXEMPLARS (7");
+    expect(user).toMatch(/write 7 rows for Blind Magic/i);
+    expect(user).toMatch(/Never mention Bali/i);
     expect(user).not.toContain("exactly 10");
     expect(user).toMatch(/CLIENT_OFFERINGS_CONTEXT/);
     expect(system).toMatch(/CLIENT OFFERINGS \(mandatory\)/i);
     expect(system).toMatch(/Forbidden: comparison or product-specific posts for brands NOT listed/i);
-    expect(user).toMatch(/GSC OUTPUT LINES/i);
+    expect(user).toMatch(/GSC EXEMPLARS/i);
   });
 
   it("entity mode requires entity column and allows geo titles", () => {
@@ -220,6 +225,41 @@ describe("sortBulkBenchmarkRowsByGsc", () => {
       { keyword: "c", entity: "", title: "C", modifier: "guide", featuredImage: "y", clientName: "C", verifiedBrands: [], gscClicks: 20, gscImpressions: 500 },
     ]);
     expect(sorted.map((r) => r.title)).toEqual(["C", "B", "A"]);
+  });
+});
+
+describe("jsonRowsToPitchRows", () => {
+  it("uses connected-site keywords from the model and rejects Bali", () => {
+    const pages = [
+      {
+        rank: 1,
+        url: "https://magic.com/alta-vs-hunter-douglas",
+        clicks: 9,
+        impressions: 100,
+        position: 3,
+        content_kind: "post" as const,
+      },
+      {
+        rank: 2,
+        url: "https://magic.com/roman-shades",
+        clicks: 8,
+        impressions: 100,
+        position: 3,
+        content_kind: "post" as const,
+      },
+    ];
+    const rows = jsonRowsToPitchRows(
+      [
+        { keyword: "hunter douglas vs alta", title: "Hunter Douglas vs Alta Shades" },
+        { keyword: "diy tutorial how to safely remove bali blinds from their brackets", title: "Window Treatment Removal Guide" },
+      ],
+      pages,
+      "post",
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.keyword).toBe("hunter douglas vs alta");
+    expect(rows[1]?.keyword).toBe("roman shades");
+    expect(rows.every((r) => !/bali/i.test(r.keyword))).toBe(true);
   });
 });
 

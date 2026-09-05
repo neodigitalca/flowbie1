@@ -11,6 +11,7 @@ import {
   getBulkInventorySessionSnapshot,
   setBulkInventorySessionSnapshot,
 } from "@/lib/wordpress-bulk-inventory-session-cache";
+import { snapshotHasInventoryEntries } from "@/lib/wordpress-api/inventory-match";
 
 const BUCKET_SOURCES: OverviewSitemapSource[] = ["pages", "posts", "sap"];
 
@@ -65,17 +66,47 @@ export function seedBulkInventorySessionFromSiteWarmCache(site: WordPressSite): 
   for (const bucket of BUCKET_SOURCES) {
     const mergedRows = bySource[bucket] ?? [];
     if (!mergedRows.length) continue;
-    if (getBulkInventorySessionSnapshot(site.id, bucket)) {
+    if (!inventoryRowsHaveRealIds(mergedRows)) continue;
+    const existing = getBulkInventorySessionSnapshot(site.id, bucket);
+    if (existing && snapshotHasInventoryEntries(existing)) {
       seeded = true;
       continue;
     }
-    if (!inventoryRowsHaveRealIds(mergedRows)) continue;
     const snapshot = buildOverviewInventorySnapshotFromRows(mergedRows, site.siteUrl);
     setBulkInventorySessionSnapshot(site.id, bucket, snapshot);
     seeded = true;
   }
 
   return seeded;
+}
+
+/** Resolve inventory snapshot from warm CSV cache without network (seeds session when missing). */
+export function resolveWarmBulkInventorySnapshot(
+  site: WordPressSite,
+  preferredSource?: OverviewSitemapSource,
+): BulkOptimizerInventorySnapshot | null {
+  seedBulkInventorySessionFromSiteWarmCache(site);
+
+  const bucket = preferredSource ?? "posts";
+  const fromBucket = resolveTaskExecutionInventoryFromWarmCache(site, bucket);
+  if (fromBucket?.snapshot && snapshotHasInventoryEntries(fromBucket.snapshot)) {
+    if (preferredSource) {
+      setBulkInventorySessionSnapshot(site.id, preferredSource, fromBucket.snapshot);
+    }
+    return fromBucket.snapshot;
+  }
+
+  const fromAll = resolveTaskExecutionInventoryFromWarmCache(site, "all");
+  if (fromAll?.snapshot && snapshotHasInventoryEntries(fromAll.snapshot)) {
+    return fromAll.snapshot;
+  }
+
+  for (const source of BUCKET_SOURCES) {
+    const snap = getBulkInventorySessionSnapshot(site.id, source);
+    if (snap && snapshotHasInventoryEntries(snap)) return snap;
+  }
+
+  return null;
 }
 
 /** Resolve task execution inventory from warm cache without network calls. */

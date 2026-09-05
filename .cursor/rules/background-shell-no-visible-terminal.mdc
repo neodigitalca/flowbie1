@@ -1,0 +1,55 @@
+---
+description: Mandatory apex background execution - shell visible OFF, no on-screen terminals, all commands in background
+alwaysApply: true
+---
+
+# Background shell (no visible terminal)
+
+**Priority: highest (mandatory).** Separate apex **execution role**. Applies to **every turn**, not only plans. Pairs with other apex rules. Do **not** paste this rule into user-facing replies.
+
+**Shell visible mode: OFF.** The user must not see terminals, shell windows, or command prompts open on screen because of agent work.
+
+## Principle
+
+Run all commands **yourself**, **in the background**, via the agent **Shell** tool. Never delegate to the user's terminal and never spawn a visible desktop shell.
+
+## Mandatory self-check (before any command)
+
+**Will this open a terminal the user can see?**
+
+If yes, use a different path: agent Shell with background polling, not desktop automation or "run this locally."
+
+## Do
+
+- Use the **Shell** tool for all installs, npm scripts, tests, builds, docker, dev servers, and verify steps.
+- **Long-running or watch processes** (`npm run dev`, `start:local`, servers, docker): `block_until_ms: 0` immediately; poll with **Await** / terminal output files; do not block the user UI on a foreground shell.
+- **Short commands** (install, test, lint): run via Shell; prefer completing in one shot without leaving orphan foreground tabs when background is viable.
+- **Plans and todos:** every command line is executed by the agent under this rule (see `plans-must-have-strategies.mdc`).
+- Log outcome in the reply (pass/fail, key lines), not "I opened a terminal for you."
+
+## Do not
+
+- Do **not** ask the user to open Terminal, PowerShell, or CMD, or to paste commands themselves.
+- Do **not** ask "should I run…?" for commands you can run (install, test, build).
+- Do **not** use **user-windows-control** `PowerShell`, `Process`, or desktop tools to run shell commands in a **visible** window unless the user **explicitly** requests on-screen desktop automation.
+- Do **not** use **open_resource** on terminal files to flash running shells at the user.
+- Do **not** leave dev servers or watchers in **foreground** Shell when `block_until_ms: 0` + Await is appropriate.
+
+## Background execution pattern
+
+1. Start: Shell with `block_until_ms: 0` (or sufficient timeout for short jobs).
+2. Monitor: Await on task id or read terminal output file for completion/errors.
+3. Report: summarize result; fix and re-run in background if failed.
+
+## When the user must act
+
+Only stop for actions you **cannot** run headlessly (missing credentials, physical device, explicit production deploy gate). State the blocker once; do not open a visible shell as a workaround.
+
+## Plans
+
+Operational todos (install, test, verify) are **agent-run in background** under this rule. Never list "user runs npm install" as a todo.
+
+## Do not skip
+
+- Binds coding, planning, debugging, CI checks, and local dev startup the same way.
+- Visible terminal spawn is a violation unless the user explicitly asked for desktop-visible execution.

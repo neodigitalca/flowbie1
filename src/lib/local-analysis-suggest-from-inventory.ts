@@ -58,6 +58,7 @@ import {
 } from "@/lib/local-analysis-entity-hint-dedupe";
 import { dropCityUmbrellaTitlesWhenFinerExist } from "@/lib/wikipedia/entity-hint-subcity";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 import {
   extractArticleTitlesFromGranularPoolMarkdown,
   orderWikipediaTitlesByGridPlaces,
@@ -203,7 +204,6 @@ function applyFinalizeEntityHintsAndPropagate(
   return propagateSeedEntityHintsToMembers(withSeeds);
 }
 
-const OR = "https://openrouter.ai/api/v1/chat/completions";
 const MAX_POSTS_IN_PROMPT = 120;
 const MAX_SEED_RANKED_KEYWORDS_IN_JSON = 45;
 
@@ -591,7 +591,7 @@ Rules: (1) Sum sapPagesSeed = totalSapPages. (2) Each sapPagesSeed between sapMi
   const systemForModel = appendMasterInstructionsToSystemPrompt(system, options?.siteId ?? null);
 
   const callModel = async (messages: { role: string; content: string }[]): Promise<string> => {
-    const res = await fetch(OR, {
+    const res = await postOpenRouterAppChatFetch( {
       method: "POST",
       headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({

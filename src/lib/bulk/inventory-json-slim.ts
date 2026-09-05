@@ -154,6 +154,39 @@ function parseContentBucketPostsJson(block: string): string[] {
   );
 }
 
+/** Rich rows from content bucket JSON (url + title + slug-derived keyword). */
+export function parseContentBucketRichRows(
+  block: string,
+): Array<{ url?: string; fields?: { keyword?: string; title?: string } }> {
+  const trimmed = block.trim();
+  if (!trimmed || trimmed[0] !== "{") return [];
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+    const posts = (parsed as { posts?: unknown[] }).posts;
+    if (!Array.isArray(posts)) return [];
+    return posts
+      .map((item) => {
+        if (!item || typeof item !== "object") return null;
+        const record = item as { link?: string; url?: string; slug?: string; title?: string };
+        const url = inventoryFieldString(record.link) || inventoryFieldString(record.url);
+        if (!url) return null;
+        const title = decodeInventoryTitleText(record.title ?? "");
+        const slug = inventoryFieldString(record.slug);
+        return {
+          url,
+          fields: {
+            title,
+            keyword: slug ? slug.replace(/-/g, " ") : "",
+          },
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null);
+  } catch {
+    return [];
+  }
+}
+
 export function parseCompactInventoryUrls(block: string): string[] {
   const trimmed = block.trim();
   if (!trimmed) return [];

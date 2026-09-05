@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  assertConfiguredEntityRowCount,
+  configuredEntityPageTotal,
   entityAdGroupCountFromInput,
   entityAdsPerGroupFromInput,
   entitySapTotalFromParts,
@@ -38,5 +40,17 @@ describe("entity-ad-group-budget", () => {
   it("cycles entity picks when fewer than ad group count", () => {
     const expanded = expandEntityLabelsForLayout(["A", "B"], 3, 2);
     expect(expanded).toEqual(["A", "A", "B", "B", "A", "A"]);
+  });
+
+  it("configuredEntityPageTotal follows pipeline ad group layout", () => {
+    expect(configuredEntityPageTotal(3, 5)).toBe(15);
+    expect(configuredEntityPageTotal(4, 6)).toBe(24);
+    expect(configuredEntityPageTotal(1, 1)).toBe(1);
+  });
+
+  it("assertConfiguredEntityRowCount throws when count mismatches pipeline", () => {
+    expect(() => assertConfiguredEntityRowCount(5, 15, "Grid clustering")).toThrow(
+      "Grid clustering produced 5 of 15 configured entity rows.",
+    );
   });
 });

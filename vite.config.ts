@@ -3,6 +3,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import { dataforseoLlmResponsesDevPlugin } from "./scripts/vite-dataforseo-llm-responses-plugin.mjs";
 import { localDominatorDevExportPlugin } from "./scripts/vite-local-dominator-export-plugin.mjs";
 import { localWpApiProxyPlugin } from "./scripts/vite-local-wp-api-proxy-plugin.mjs";
 
@@ -55,8 +56,9 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     mode === "development" && componentTagger(),
-    mode === "development" && isLocalWpProxy && localWpApiProxyPlugin(),
+    mode === "development" && dataforseoLlmResponsesDevPlugin(),
     mode === "development" && isLocalWpProxy && localDominatorDevExportPlugin(),
+    mode === "development" && isLocalWpProxy && localWpApiProxyPlugin(),
   ].filter(Boolean),
   resolve: {
     alias: {

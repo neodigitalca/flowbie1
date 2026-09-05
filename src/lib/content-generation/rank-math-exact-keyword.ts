@@ -28,6 +28,27 @@ export function containsCaseInsensitive(haystack: string, needle: string): boole
   return haystack.toLowerCase().includes(needle.toLowerCase());
 }
 
+function keywordTokensAllPresentInTitle(title: string, kw: string): boolean {
+  const tokens = kw
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length > 2);
+  if (tokens.length === 0) return false;
+  const titleLower = title.toLowerCase();
+  return tokens.every((t) => titleLower.includes(t));
+}
+
+/** True when Rank Math focus keyword is already represented in an SEO title. */
+export function focusKeywordRepresentedInSeoTitle(title: string, exactKw: string): boolean {
+  const candidate = title.trim();
+  const kw = exactKw.trim();
+  if (!kw) return true;
+  if (sliceCaseInsensitiveMatch(candidate, kw)) return true;
+  if (containsCaseInsensitive(candidate, kw)) return true;
+  if (/\bnear\b/i.test(candidate) && keywordTokensAllPresentInTitle(candidate, kw)) return true;
+  return false;
+}
+
 /** Substring of `haystack` at the case-insensitive match of `needle`, for truncation that preserves the real casing. */
 export function sliceCaseInsensitiveMatch(haystack: string, needle: string): string | null {
   if (!needle) return null;
@@ -104,9 +125,12 @@ export function ensureExactKeywordInSeoTitle(
   if (!kw) {
     return truncateTitleForSEO(candidate, maxLen);
   }
-  const matchSpan = sliceCaseInsensitiveMatch(candidate, kw);
-  if (matchSpan) {
-    return truncatePreservingMandatorySubstring(candidate, matchSpan, maxLen);
+  if (focusKeywordRepresentedInSeoTitle(candidate, kw)) {
+    const matchSpan = sliceCaseInsensitiveMatch(candidate, kw);
+    if (matchSpan) {
+      return truncatePreservingMandatorySubstring(candidate, matchSpan, maxLen);
+    }
+    return truncateTitleForSEO(candidate, maxLen);
   }
   const displayKw = formatKeywordForDisplay(kw);
   const rest = stripRedundantPrefixAgainstKeyword(candidate, kw);

@@ -7,33 +7,90 @@ alwaysApply: true
 
 **Priority: highest.** Overrides default assistant habits. Do **not** paste this checklist into user-facing replies. Apply it silently before planning, coding, and answering.
 
+## Logic (mandatory, apex)
+
+**Run this first.** Logic is the art of **non-contradictory identification**: convert what you observe (tool output, code, errors, user statements) into valid knowledge.
+
+Before every action, ask:
+
+**What do the facts identify, and do any of my claims contradict that or each other?**
+
+Ground claims in evidence. Resolve or discard contradictions before acting. See `logic-non-contradictory-identification.mdc`.
+
+## Occam's razor (mandatory, apex)
+
+**Run second.** When two or more **non-contradictory** ideas fit the facts, choose the one with **fewer assumptions**. The simplest explanation is usually the best.
+
+Before every action, ask:
+
+**What is the smallest thing that could explain or solve this?**
+
+Start there. Add complexity only when simpler options are ruled out by evidence, the user explicitly asks for more, or a barrier below requires it. See `occams-razor-parsimony.mdc`.
+
+## Server-side only (mandatory, apex)
+
+**Run third.** External data, credentials, and API logic stay on the **server**. The browser calls this app's API only. No direct browser fetch to WordPress or third-party APIs.
+
+Before every action, ask:
+
+**Should this fetch or logic run server-side instead of in the browser?**
+
+If yes, use a server route, worker, or script. See `server-side-only-no-browser-fetch.mdc`.
+
+## Background shell (mandatory, apex)
+
+**Run fourth (execution role).** **Shell visible mode: OFF.** All commands run in the **background** via agent Shell. The user must not see terminals open on screen.
+
+Before any install, npm script, test, build, or dev server, ask:
+
+**Am I running this in background with no visible terminal for the user?**
+
+Use `block_until_ms: 0` for long-running processes; poll with Await. Never ask the user to open Terminal or run commands themselves. See `background-shell-no-visible-terminal.mdc`.
+
+## Murphy's Law (mandatory)
+
+Before shipping, ask:
+
+**What is most likely to break, and what happens when it does?**
+
+Anticipate empty data, API/auth failures, races, bad LLM output, and missed ops steps. Prevent or fail fast visibly; no silent assumptions. See `murphys-law-check.mdc`.
+
+**Plans:** every plan must include **Must-have strategies**, **Files and line counts**, and a **final review todo** as the last step. See `plans-must-have-strategies.mdc`.
+
 ## Before every action, ask yourself
 
 **How do I complete this task within these barriers?**
 
-Use that question to steer scope, code, UI, and API calls. If a choice violates a barrier, pick a different approach or ask the user—do not add silent workarounds.
+Use that question to steer scope, code, UI, and API calls. If a choice violates a barrier, pick a different approach—do not add silent workarounds and do not ask whether to add fallbacks. Ask the user only when genuinely blocked on something they must decide (not fallback-related, not "run npm install", not "should I test").
 
 ## Barriers (internal only — do not repeat verbatim to the user)
 
 ### Scope and behavior
 
 - **No fallbacks** unless the user explicitly requests them.
+- **Never ask about fallbacks.** Do not offer, suggest, or ask "do you want a fallback?" (or similar). The default is no fallback; only add one when the user explicitly asks. Do not treat fallback as an open product choice.
+- **No workarounds.** Do not patch bad model or API output in code with regex, silent retries, or compensating branches. Fix the prompt/harness contract instead. See `no-workarounds-prompt-level-fix.mdc`.
 - **No notifications** (`notify`, toasts, success pings) unless the user explicitly requests them.
 - **No extra conditions**, feature flags, guards, or behavior the user did not ask for.
 
 ### Code
 
 - **Short, efficient code**: smallest correct diff; no unused scaffolding, helpers, or abstractions.
+- **AI first for matching:** classification, extraction, and semantic compare via OpenRouter + schema—not complicated regex or keyword ladders. See `ai-first-pattern-matching.mdc`.
 
 ### UI
 
 - **Flat design**: no decorative borders; use spacing, surface color, and typography.
+- **Flat inline forms**: labels as **inline placeholders**, not stacked above fields; colored flat wells (`bg-zinc-900`); selects styled like inputs with placeholder labels on `SelectValue`. Semantic grouping and Figma rhythm for form rows. See `flat-inline-forms.mdc`.
+- **Minimal stacking**: no redundant wrapper divs, z-index towers, or nested frames. One container per section; flex/grid with gap. See `minimal-stacking-zero-cls.mdc`.
+- **Zero CLS (forbidden)**: no layout shift after paint. Reserve space for async content, fixed toolbar/header heights, stable slots for conditional controls, `tabular-nums` for changing counts. Never mount/unmount chrome that changes band height. See `minimal-stacking-zero-cls.mdc`.
 - **Typography**: **1rem minimum** for all UI copy; use **Lato** (`font-sans` / `tailwind.config.ts` sans stack). No sub-1rem sizes (`text-[10px]`, `text-[0.75rem]`, etc.). See `typography-min-1rem` rule.
 - **Semantic grouping**: related controls and data stay together.
-- **Figma-optimized layout**: clear sections, consistent rhythm, tight frames; no ornamental chrome.
+- Form sections follow **Figma-optimized** rhythm: clear columns, fixed control widths where needed, no ornamental chrome. Inline placeholder labels per `flat-inline-forms.mdc`.
 
 ### WordPress API
 
+- **Server-side only**: browser calls `backendApiUrl` / `/api/*`; no direct client fetch to WordPress or external origins. See `server-side-only-no-browser-fetch.mdc`.
 - **Minimal calls**: prefer bulk/list endpoints over per-item loops.
 - **Sheet export**: when pulling inventory or posts, fetch aggregate data once and surface it as a sheet/CSV/export instead of repeated single-record requests unless the user asks otherwise.
 

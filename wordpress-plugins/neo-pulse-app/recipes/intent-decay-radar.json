@@ -9,7 +9,7 @@
     "Updates title, meta description, and SEO extra text. Page body content is not rewritten.",
     "Same URL waits 72 hours before it can run again."
   ],
-  "category": "maintenance",
+  "category": "reactive",
   "verticals": [
     "general",
     "editorial"
@@ -42,13 +42,12 @@
       "title": "Meta + extra text on decaying pages",
       "status": "todo",
       "assignPulse": true,
+      "scheduleMode": "trigger",
       "executionKind": "content_optimizer_meta",
       "executionPayload": {
         "targetBucket": "pages",
         "updateMode": "update"
       },
-      "scheduleMode": "trigger",
-      "recurrenceRule": "none",
       "triggerConfig": {
         "sources": [
           "gsc"
@@ -70,8 +69,6 @@
       }
     }
   ],
-  "isAutomation": true,
-  "kind": "template",
   "triggerBlock": {
     "keyword": "gsc-impressions-ctr-decay",
     "kind": "gsc",
@@ -105,5 +102,7 @@
       "updateMode": "update"
     },
     "title": "Meta + extra text on decaying pages"
-  }
+  },
+  "isAutomation": true,
+  "kind": "template"
 }

@@ -10,7 +10,7 @@ import {
 } from "@/lib/task-automation-ui";
 import { executeAutomationTaskTrigger, fetchTaskDetail } from "@/lib/tasks-api";
 import { useActiveWordPressSite } from "@/contexts/active-wordpress-site-context";
-import { resolveTaskExecuteSiteId } from "@/lib/agent-runs-types";
+import { resolveTaskExecuteSiteId, isClientAgnosticExecutionKind } from "@/lib/agent-runs-types";
 import type { TaskTriggerEvaluateResult } from "@/lib/task-trigger-types";
 import type { TaskProject, TeamTask } from "@/lib/tasks-types";
 
@@ -77,7 +77,10 @@ export function AutomationTaskExecuteButton({
         return;
       }
 
-      if (!resolveTaskExecuteSiteId(prepared, activeWordPressSiteId)) {
+      if (
+        !isClientAgnosticExecutionKind(prepared.executionKind, prepared.executionPayload)
+        && !resolveTaskExecuteSiteId(prepared, activeWordPressSiteId)
+      ) {
         setError("Set a client on the project.");
         return;
       }

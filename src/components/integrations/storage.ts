@@ -10,6 +10,13 @@ import { WORDPRESS_SITES_STORAGE_KEY } from "./types";
 
 const ACTIVE_WP_SITE_STORAGE_KEY = "neo-pulse-active-wp-site-id";
 
+/** Node worker override for server post creator harness (no browser localStorage). */
+let serverHarnessSitesOverride: WordPressSite[] | null = null;
+
+export function setServerHarnessSitesOverride(sites: WordPressSite[] | null): void {
+  serverHarnessSitesOverride = sites;
+}
+
 /** Shallow-sorted copy for cloud backup; preserves each site `id` and does not mutate the live list order. */
 export function sortWordPressSitesByName(sites: WordPressSite[]): WordPressSite[] {
   return [...sites].sort((a, b) =>
@@ -161,6 +168,12 @@ function tryPersistSitesJson(json: string): boolean {
 }
 
 export function getStoredSites(): WordPressSite[] {
+  if (serverHarnessSitesOverride?.length) {
+    return serverHarnessSitesOverride;
+  }
+  if (typeof localStorage === "undefined") {
+    return [];
+  }
   try {
     const stored = localStorage.getItem(WORDPRESS_SITES_STORAGE_KEY);
     if (stored) {
@@ -326,12 +339,14 @@ export function hasUsableLocalSites(sites: WordPressSite[]): boolean {
   return sites.some((s) => Boolean(s.siteUrl?.trim() && s.username?.trim()));
 }
 
-/** Restore properties from server mirror when local is empty or stale vs server. */
+/** Restore properties from server mirror only when local storage has no usable sites. */
 export async function restoreSitesFromServerMirrorIfEmpty(): Promise<WordPressSite[]> {
   const local = getStoredSites();
+  if (hasUsableLocalSites(local)) return local;
+
   const mirror = await fetchWordPressSitesMirror();
   if (mirror.length === 0) return local;
-  if (hasUsableLocalSites(local) && local.length >= mirror.length) return local;
+
   saveSites(mirror);
   const persisted = getStoredSites();
   return hasUsableLocalSites(persisted) ? persisted : mirror;

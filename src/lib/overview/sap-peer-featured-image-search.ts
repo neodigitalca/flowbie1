@@ -10,7 +10,7 @@
  */
 
 import type { WordPressSite } from "@/components/integrations/types";
-import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
+import { backendApiUrl } from "@/lib/wordpress-api/connection";
 import { getSiteInventoryBulk } from "@/lib/wordpress-api";
 import type { SiteInventoryBulkRow } from "@/lib/wordpress-api/types";
 import { fetchOverviewSapInventoryFromEntitySitemap } from "@/lib/overview/overview-sap-entity-inventory";
@@ -158,7 +158,7 @@ async function resolveFeaturedMediaUrls(
   mediaIds: number[],
 ): Promise<Record<number, string>> {
   if (!mediaIds.length) return {};
-  const res = await fetch(`${BACKEND_API_BASE}/api/wordpress/resolve-featured-media`, {
+  const res = await fetch(backendApiUrl("/wordpress/resolve-featured-media"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

@@ -1,9 +1,21 @@
 import { ChevronDown, ChevronUp, ExternalLink, GripVertical, Loader2, MapPin } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import type { CSVRow } from "@/lib/bulk-auto-generate";
 import {
-  modifierLinksFromJson,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { CSVRow, WordPressPostDestination } from "@/lib/bulk-auto-generate";
+import {
+  BLOG_IMPORT_POST_DESTINATION_CHOICES,
+  WORDPRESS_POST_DESTINATION_SHORT,
+} from "@/lib/bulk-auto-generate";
+import { resolveRowPostDestination } from "@/lib/bulk-post-destination-normalize";
+import {
+  importRowLinkEditorUrls,
   serializeModifierLinksJson,
 } from "@/lib/bulk/bulk-csv-parser";
 import { BlogIdeaModifierLinksEditor } from "@/components/keyword-research/bulk/BlogIdeaModifierLinksEditor";
@@ -39,8 +51,14 @@ const BLOG_PROMPT_SLOT_INPUT_CLASS = cn(PPC_DETAIL_INPUT_CLASS, "h-9 w-full min-
 const BLOG_IDEA_ROW_GRID_NO_SELECT_CLASS = cn(
   "grid w-full min-w-0 min-h-[3rem] grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(4.75rem,auto)] items-center gap-x-2 sm:min-h-[3.25rem] sm:gap-x-3",
 );
+const BLOG_IDEA_ROW_GRID_NO_SELECT_WITH_DEST_CLASS = cn(
+  "grid w-full min-w-0 min-h-[3rem] grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(7.5rem,0.7fr)_minmax(4.75rem,auto)] items-center gap-x-2 sm:min-h-[3.25rem] sm:gap-x-3",
+);
 const BLOG_IDEA_ROW_GRID_NO_SELECT_WITH_DATE_CLASS = cn(
   "grid w-full min-w-0 min-h-[3rem] grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(7.5rem,0.7fr)_minmax(4.75rem,auto)] items-center gap-x-2 sm:min-h-[3.25rem] sm:gap-x-3",
+);
+const BLOG_IDEA_ROW_GRID_NO_SELECT_WITH_DEST_DATE_CLASS = cn(
+  "grid w-full min-w-0 min-h-[3rem] grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(7.5rem,0.7fr)_minmax(7.5rem,0.7fr)_minmax(4.75rem,auto)] items-center gap-x-2 sm:min-h-[3.25rem] sm:gap-x-3",
 );
 
 export const BLOG_IDEA_ROW_SELECT_CHECKBOX_CLASS = DASHBOARD_LIST_CHECKBOX_CLASS;
@@ -78,6 +96,9 @@ export type BlogIdeaRowCompactProps = {
   onToggleSelect: () => void;
   onToggleExpand: () => void;
   onRowChange: (patch: Partial<CSVRow>) => void;
+  showPostDestination?: boolean;
+  postDestinationChoices?: WordPressPostDestination[];
+  headerPostDestination?: WordPressPostDestination;
   /** Connected site / business name for Google directions search links. */
   directionsSiteName?: string;
   /** When set, shown in the keyword column instead of `row.keyword`. */
@@ -121,16 +142,9 @@ function publishDisplayValue(
   return "";
 }
 
-function featuredImageDisplay(row: CSVRow): string {
-  if (!row.featuredImage) return "Yes";
-  if (row.featuredImage === "y") return "Yes";
-  if (row.featuredImage === "n") return "No";
-  return row.featuredImage;
-}
-
-function featuredImageFromInput(value: string): string {
-  const v = value.trim().toLowerCase();
-  if (v === "n" || v === "no") return "n";
+function featuredImageSelectValue(row: CSVRow): "y" | "n" | "google-maps" {
+  if (row.featuredImage === "n") return "n";
+  if (row.featuredImage === "google-maps") return "google-maps";
   return "y";
 }
 
@@ -378,7 +392,7 @@ function ExpandedFields({
   const slugDisplay =
     row.target_slug?.trim() ||
     sapUrlPathFromRow(row).replace(/^\/+|\/+$/g, "");
-  const linkUrls = modifierLinksFromJson(row.modifier_links_json);
+  const linkUrls = importRowLinkEditorUrls(row);
 
   const handleLinksChange = (urls: string[]) => {
     onRowChange({ modifier_links_json: serializeModifierLinksJson(urls) });
@@ -504,24 +518,87 @@ function ExpandedFields({
         onChange={(e) => onRowChange({ publish_date_gmt: e.target.value.trim() || undefined })}
         onClick={stopFieldBubble}
       />
-      <WorkspaceNestedInput
-        id={fieldId("featured-image")}
-        layout="inline"
-        label="Image"
-        labelClassName={EXPANDED_FIELD_LABEL}
-        value={featuredImageDisplay(row)}
-        disabled={isProcessing}
-        placeholder="Yes or No"
-        className={EXPANDED_INPUT_CLASS}
-        onChange={(e) => onRowChange({ featuredImage: featuredImageFromInput(e.target.value) })}
+      <div
+        className="flex min-h-9 min-w-0 flex-row items-stretch overflow-hidden rounded-md bg-zinc-800"
         onClick={stopFieldBubble}
-      />
+      >
+        <span className={`${EXPANDED_FIELD_LABEL} flex items-center self-stretch bg-black px-2.5 py-2 text-base`}>
+          Image
+        </span>
+        <div className="flex min-w-0 flex-1 items-center px-2.5">
+          <Select
+            value={featuredImageSelectValue(row)}
+            onValueChange={(v) => onRowChange({ featuredImage: v })}
+            disabled={isProcessing}
+          >
+            <SelectTrigger
+              id={fieldId("featured-image")}
+              className="h-8 min-h-0 w-full border-0 bg-transparent px-0 text-base shadow-none focus:ring-0"
+              aria-label="Featured image"
+            >
+              <SelectValue placeholder="Image" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem className="text-base" value="y">
+                AI image
+              </SelectItem>
+              <SelectItem className="text-base" value="google-maps">
+                Google Maps
+              </SelectItem>
+              <SelectItem className="text-base" value="n">
+                None
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
       <BlogIdeaModifierLinksEditor
         idPrefix={fieldId("links")}
         links={linkUrls}
         disabled={isProcessing}
         onChange={handleLinksChange}
       />
+    </div>
+  );
+}
+
+function DestinationCell({
+  value,
+  choices,
+  disabled,
+  placeholder,
+  onChange,
+}: {
+  value: WordPressPostDestination;
+  choices: WordPressPostDestination[];
+  disabled?: boolean;
+  placeholder?: boolean;
+  onChange: (value: WordPressPostDestination) => void;
+}) {
+  if (placeholder) {
+    return <div className="min-w-[7.5rem]" aria-hidden />;
+  }
+  return (
+    <div className="min-w-[7.5rem]" onClick={stopFieldBubble}>
+      <Select
+        value={value}
+        onValueChange={(v) => onChange(v as WordPressPostDestination)}
+        disabled={disabled}
+      >
+        <SelectTrigger
+          className="h-8 min-h-0 w-full border-0 bg-transparent px-0 text-base shadow-none focus:ring-0"
+          aria-label="Destination"
+        >
+          <SelectValue placeholder="Destination" />
+        </SelectTrigger>
+        <SelectContent>
+          {choices.map((choice) => (
+            <SelectItem key={choice} value={choice} className="text-base">
+              {WORDPRESS_POST_DESTINATION_SHORT[choice]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
@@ -544,6 +621,9 @@ export function BlogIdeaRowCompact({
   onToggleSelect,
   onToggleExpand,
   onRowChange,
+  showPostDestination = false,
+  postDestinationChoices = BLOG_IMPORT_POST_DESTINATION_CHOICES,
+  headerPostDestination = "local",
   directionsSiteName,
   keywordDisplay,
   showDirections = true,
@@ -558,9 +638,13 @@ export function BlogIdeaRowCompact({
       ? showPublishDate
         ? BLOG_IDEA_ROW_GRID_WITH_DATE_CLASS
         : BLOG_IDEA_ROW_GRID_CLASS
-      : showPublishDate
-        ? BLOG_IDEA_ROW_GRID_NO_SELECT_WITH_DATE_CLASS
-        : BLOG_IDEA_ROW_GRID_NO_SELECT_CLASS;
+      : showPostDestination
+        ? showPublishDate
+          ? BLOG_IDEA_ROW_GRID_NO_SELECT_WITH_DEST_DATE_CLASS
+          : BLOG_IDEA_ROW_GRID_NO_SELECT_WITH_DEST_CLASS
+        : showPublishDate
+          ? BLOG_IDEA_ROW_GRID_NO_SELECT_WITH_DATE_CLASS
+          : BLOG_IDEA_ROW_GRID_NO_SELECT_CLASS;
 
   if (placeholder) {
     if (slotMode) {
@@ -688,6 +772,16 @@ export function BlogIdeaRowCompact({
 
       <KeywordCell keywordLabel={keywordLabel} placeholder={placeholder} />
 
+      {showPostDestination ? (
+        <DestinationCell
+          value={resolveRowPostDestination(row, headerPostDestination)}
+          choices={postDestinationChoices}
+          disabled={isProcessing || busy}
+          placeholder={placeholder}
+          onChange={(v) => onRowChange({ post_destination: v })}
+        />
+      ) : null}
+
       {showPublishDate ? (
         <PublishDateCell
           publishDateLabel={publishDisplayValue(row, publishDateLabel, draftOnly)}
@@ -741,6 +835,16 @@ export function BlogIdeaRowCompact({
       />
 
       <KeywordCell keywordLabel={keywordLabel} placeholder={placeholder} />
+
+      {showPostDestination ? (
+        <DestinationCell
+          value={resolveRowPostDestination(row, headerPostDestination)}
+          choices={postDestinationChoices}
+          disabled={isProcessing || busy}
+          placeholder={placeholder}
+          onChange={(v) => onRowChange({ post_destination: v })}
+        />
+      ) : null}
 
       {showPublishDate ? (
         <PublishDateCell

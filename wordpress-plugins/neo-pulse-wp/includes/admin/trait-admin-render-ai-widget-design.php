@@ -17,7 +17,7 @@ trait Neo_Pulse_Wp_Admin_Trait_Render_Ai_Widget_Design {
 			'neo-pulse-wp_page_neo_pulse-wp-chat',
 			'neo-pulse-wp_page_neo_pulse-wp-search',
 		);
-		if ( ! in_array( $hook_suffix, $hooks, true ) ) {
+		if ( ! Neo_Pulse_Wp_Admin::admin_hook_matches( $hook_suffix, $hooks ) ) {
 			return;
 		}
 
@@ -48,7 +48,7 @@ trait Neo_Pulse_Wp_Admin_Trait_Render_Ai_Widget_Design {
 			);
 			wp_localize_script(
 				'neo-pulse-ai-widget-design-preview',
-				'neo-pulseDesignPreview',
+				'neoPulseDesignPreview',
 				array(
 					'searchTokens' => Neo_Pulse_Wp_Ai_Widget_Design::resolve( 'search' ),
 					'chatTokens'   => Neo_Pulse_Wp_Ai_Widget_Design::resolve( 'chat' ),

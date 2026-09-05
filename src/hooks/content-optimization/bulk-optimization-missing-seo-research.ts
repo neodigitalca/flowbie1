@@ -1,16 +1,15 @@
 import pLimit from "p-limit";
 import { notify } from "@/lib/app-notifications";
-import { notifyFilledSeoResearchFromSerpForXUrl, notifySeoResearchCouldNotLoadSerpJsonFo, notifySeoResearchErrorForX, notifySeoResearchNoSerpFileReturnedForX } from "@/lib/notify-messages";
+import { notifyFilledSeoResearchFromSerpForXUrl, notifySeoResearchErrorForX } from "@/lib/notify-messages";
 import {
   getSeoResearchFromAcf,
   mergeSeoResearchFromAcfIntoContext,
 } from "@/lib/content-generation/ai-driven-acf-reader";
-import { buildMergedSeoContentBrief } from "@/lib/overview-seo-content-brief";
-import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
-import {
-  mcp_DataForSEO_serp_organic_live_advanced,
-} from "@/lib/mcp-tools";
+import { fetchMergedSeoContentBriefLive } from "@/lib/llm-audit/fetch-merged-seo-content-brief";
+import type { WordPressSite } from "@/components/integrations/types";
 import { pageGscQueryStringsFromPending } from "./bulk-optimization-prefetch-page-gsc";
+import type { PrefilledOverviewTarget } from "./bulk-optimization-params";
+import { hasSubstantiveSeoResearchBrief } from "@/lib/content-optimization/seo-research-brief-for-optimize";
 
 /** Caps parallel MCP / DataForSEO SERP calls during bulk content run research. */
 const BULK_SERP_RESEARCH_CONCURRENCY = 8;
@@ -18,14 +17,8 @@ const BULK_SERP_RESEARCH_CONCURRENCY = 8;
 /** Throttle React updates during concurrent research (progress + urlSerpResearchReady). */
 const BULK_SERP_RESEARCH_PROGRESS_EVERY = 5;
 
-function serpDumpFilenameUrl(filename: string): string {
-  const base = (BACKEND_API_BASE || "").replace(/\/$/, "");
-  if (base) return `${base}/api/dataforseo/serp-dump/${encodeURIComponent(filename)}`;
-  return `/api/dataforseo/serp-dump/${encodeURIComponent(filename)}`;
-}
-
 /**
- * True when ACF already has usable `seo_research` (skip live SERP fetch).
+ * True when ACF already has usable `seo_research`.
  * Empty strings, `{}`, `[]`, and JSON objects/arrays with no entries are not substantive.
  */
 export function hasSubstantiveSeoResearch(acfRow: Record<string, unknown> | undefined): boolean {
@@ -52,53 +45,26 @@ export async function fetchDataForSeoSerpBriefJson(opts: {
   muteToasts?: boolean;
   /** Page-scoped GSC query strings from batch prefetch (optional). */
   gscQueries?: string[];
-}): Promise<string | null> {
-  const { keyword, pageUrl, muteToasts, gscQueries = [] } = opts;
+  site?: WordPressSite | null;
+}): Promise<string> {
+  const { keyword, pageUrl, muteToasts, gscQueries = [], site } = opts;
   const k = keyword.trim();
-  if (!k) return null;
+  if (!k) {
+    throw new Error("fetchDataForSeoSerpBriefJson requires a non-empty keyword");
+  }
 
   try {
-    const json = await mcp_DataForSEO_serp_organic_live_advanced({
+    const merged = await fetchMergedSeoContentBriefLive({
       keyword: k,
-      location_name: "United States",
-      language_code: "en",
-      depth: 10,
-      people_also_ask_click_depth: 4,
-    });
-    const storedFile =
-      (json && (json.stored_file || json.storedFile || json.storedFilename)) || null;
-
-    if (!storedFile || typeof storedFile !== "string") {
-      if (!muteToasts) notify.warning(notifySeoResearchNoSerpFileReturnedForX(k));
-      return null;
-    }
-
-    const serpRes = await fetch(serpDumpFilenameUrl(storedFile));
-    const serpDumpJson = serpRes.ok ? await serpRes.json().catch(() => null) : null;
-    if (!serpDumpJson || typeof serpDumpJson !== "object") {
-      if (!muteToasts) {
-        notify.warning(
-          `SEO research: could not load SERP JSON for "${k}".` +
-            (serpRes.ok ? "" : ` (HTTP ${serpRes.status})`),
-        );
-      }
-      return null;
-    }
-
-    const merged = buildMergedSeoContentBrief({
-      serpDumpJson,
       pageUrl: pageUrl.trim(),
-      focusKeyword: k,
-      gscPageUrl: pageUrl.trim(),
+      site,
       gscQueries,
-      semrushOverviewJson: null,
     });
-    const brief = JSON.stringify(merged, null, 2);
-    return brief;
+    return JSON.stringify(merged, null, 2);
   } catch (e) {
     console.warn("[Bulk Optimization] fetchDataForSeoSerpBriefJson:", e);
     if (!muteToasts) notify.warning(notifySeoResearchErrorForX(k));
-    return null;
+    throw e instanceof Error ? e : new Error(String(e));
   }
 }
 
@@ -158,9 +124,70 @@ export function applyBriefToCaches(
   }
 }
 
+/** Inject overview grid `seoResearch` into prefetch caches (no live SERP). ACF brief wins when present. */
+export function seedOverviewSeoResearchFromPrefilledTargets(opts: {
+  urls: string[];
+  prefilledOverviewTargets?: Record<string, PrefilledOverviewTarget>;
+  prefetchedAcfFieldsCache: Map<number, Record<string, any>>;
+  prefetchedPendingCache: Map<number, { pending: Record<string, unknown>; primaryKeyword: string }>;
+  batchKey: string;
+  setBulkOptimizationState: (fn: (prev: any) => any) => void;
+}): void {
+  const {
+    urls,
+    prefilledOverviewTargets,
+    prefetchedAcfFieldsCache,
+    prefetchedPendingCache,
+    batchKey,
+    setBulkOptimizationState,
+  } = opts;
+  if (!prefilledOverviewTargets || Object.keys(prefilledOverviewTargets).length === 0) return;
+
+  const urlSerpReady: Record<string, boolean> = {};
+  for (let i = 0; i < urls.length; i++) {
+    const url = urls[i]?.trim();
+    if (!url) continue;
+    const brief = prefilledOverviewTargets[url]?.seoResearch?.trim();
+    if (!brief || !hasSubstantiveSeoResearchBrief(brief)) continue;
+    const acfBrief = getSeoResearchFromAcf(prefetchedAcfFieldsCache.get(i)).trim();
+    if (hasSubstantiveSeoResearchBrief(acfBrief)) continue;
+    applyBriefToCaches(i, brief, prefetchedAcfFieldsCache, prefetchedPendingCache);
+    urlSerpReady[url] = true;
+  }
+
+  if (Object.keys(urlSerpReady).length === 0) return;
+
+  setBulkOptimizationState((prev: any) => {
+    const current = prev[batchKey];
+    if (!current) return prev;
+    return {
+      ...prev,
+      [batchKey]: {
+        ...current,
+        urlSerpResearchReady: {
+          ...(current.urlSerpResearchReady || {}),
+          ...urlSerpReady,
+        },
+      },
+    };
+  });
+}
+
+export function indexHasStoredSeoResearchBrief(
+  index: number,
+  prefetchedAcfFieldsCache: Map<number, Record<string, unknown>>,
+  prefetchedPendingCache: Map<number, { pending: Record<string, unknown>; primaryKeyword: string }>,
+): boolean {
+  const acfRow = prefetchedAcfFieldsCache.get(index) ?? {};
+  const acfBrief = getSeoResearchFromAcf(acfRow).trim();
+  if (hasSubstantiveSeoResearchBrief(acfBrief)) return true;
+  const ctx = prefetchedPendingCache.get(index)?.pending?.acfContext as { seoResearch?: string } | undefined;
+  return hasSubstantiveSeoResearchBrief(ctx?.seoResearch);
+}
+
 /**
- * After ACF prefetch: for each URL with `keyword_focus` but empty `seo_research`, run DataForSEO SERP
- * and write merged JSON into caches so Content Optimizer does not skip and `acfContext.seoResearch` is set.
+ * After ACF prefetch: for each URL with `keyword_focus`, run DataForSEO SERP
+ * and write merged JSON into caches so Content Optimizer uses this-run research.
  */
 export async function fillMissingBulkSeoResearchFromSerp(opts: {
   urls: string[];
@@ -179,7 +206,7 @@ export async function fillMissingBulkSeoResearchFromSerp(opts: {
     pageUrl: string;
     muteToasts?: boolean;
     gscQueries?: string[];
-  }) => Promise<string | null>;
+  }) => Promise<string>;
 }): Promise<void> {
   const {
     urls,
@@ -207,8 +234,6 @@ export async function fillMissingBulkSeoResearchFromSerp(opts: {
     if (!url) continue;
     const acfCachedKw = String(prefetchedAcfFieldsCache.get(i)?.["keyword_focus"] ?? "").trim();
     const cachedPrimaryKeyword = acfCachedKw;
-    const acfRow = prefetchedAcfFieldsCache.get(i) ?? {};
-    if (hasSubstantiveSeoResearch(acfRow)) continue;
     if (!cachedPrimaryKeyword) {
       // Never skip: keyword will be derived by SERP warmup from URL when warmIndex runs.
       continue;
@@ -275,11 +300,9 @@ export async function fillMissingBulkSeoResearchFromSerp(opts: {
 
         if (bulkCancelled(batchKey, setBulkOptimizationState)) return;
 
-        if (brief) {
-          applyBriefToCaches(job.index, brief, prefetchedAcfFieldsCache, prefetchedPendingCache);
-          filled += 1;
-          pendingUrlReady[job.url] = true;
-        }
+        applyBriefToCaches(job.index, brief, prefetchedAcfFieldsCache, prefetchedPendingCache);
+        filled += 1;
+        pendingUrlReady[job.url] = true;
 
         completed += 1;
         if (

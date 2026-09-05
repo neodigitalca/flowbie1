@@ -42,13 +42,12 @@
       "title": "Full AISEO on SAP pages when CTR drops",
       "status": "todo",
       "assignPulse": true,
+      "scheduleMode": "trigger",
       "executionKind": "content_optimizer",
       "executionPayload": {
         "targetBucket": "sap",
         "updateMode": "update"
       },
-      "scheduleMode": "trigger",
-      "recurrenceRule": "none",
       "triggerConfig": {
         "sources": [
           "gsc"
@@ -70,8 +69,6 @@
       }
     }
   ],
-  "isAutomation": true,
-  "kind": "template",
   "triggerBlock": {
     "keyword": "gsc-ctr-drop",
     "kind": "gsc",
@@ -105,5 +102,7 @@
       "updateMode": "update"
     },
     "title": "Full AISEO on SAP pages when CTR drops"
-  }
+  },
+  "isAutomation": true,
+  "kind": "template"
 }

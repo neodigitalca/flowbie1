@@ -69,6 +69,26 @@ export async function createWorkflow(
   return { ok: false, error: data.error ?? "Could not create workflow" };
 }
 
+export async function summarizeWorkflow(
+  teamId: number,
+  payload: {
+    name: string;
+    nodes: WorkflowDefinition["nodes"];
+    edges: WorkflowDefinition["edges"];
+  },
+): Promise<{ ok: boolean; description?: string; error?: string }> {
+  const res = await tasksApi(workflowsPath(teamId, "summarize"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await parseJson<{ description?: string }>(res);
+  if (!res.ok) return { ok: false, error: apiError(res, data) };
+  const description = data.description?.trim();
+  if (!description) return { ok: false, error: data.error ?? "Could not summarize workflow" };
+  return { ok: true, description };
+}
+
 export async function updateWorkflow(
   teamId: number,
   workflowId: number,
@@ -202,6 +222,8 @@ export async function saveWorkflowStepOutput(
     textPreview: string;
     fileRefs?: WorkflowStepOutput["fileRefs"];
     agentRunId?: number | null;
+    siteId?: string | null;
+    deliveryMeta?: WorkflowStepOutput["deliveryMeta"];
   },
 ): Promise<{ ok: boolean; output?: WorkflowStepOutput; error?: string }> {
   const res = await tasksApi(workflowsPath(teamId, `${workflowId}/runs/${runId}/outputs`), {
@@ -260,4 +282,23 @@ export async function ackPendingWorkflowTrigger(
   });
   const data = await parseJson<Record<string, never>>(res);
   return { ok: Boolean(data.ok), error: data.error };
+}
+
+/** Claim a pending workflow dispatch so only one browser tab executes it. */
+export async function claimPendingWorkflowDispatch(
+  teamId: number,
+  workflowId: number,
+  runId: number,
+): Promise<{ ok: boolean; claimed: boolean; error?: string }> {
+  const res = await tasksApi(workflowsPath(teamId, `trigger-pending/${workflowId}/claim`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ runId }),
+  });
+  const data = await parseJson<{ claimed?: boolean }>(res);
+  return {
+    ok: Boolean(data.ok),
+    claimed: Boolean(data.claimed),
+    error: data.error,
+  };
 }

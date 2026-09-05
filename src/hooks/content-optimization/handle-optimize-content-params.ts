@@ -59,6 +59,8 @@ export interface HandleOptimizeContentParams {
     excerpt?: string;
     /** Sheet focus keyword (CSV / grid). Skips ACF keyword_focus WordPress read. */
     focusKeyword?: string;
+    /** Overview grid SERP brief when WordPress ACF seo_research is empty. */
+    seoResearch?: string;
   };
   testMode: boolean;
   semTaskContext?: {

@@ -63,14 +63,6 @@ export default function Login() {
     );
   }
 
-  if (typeof window !== "undefined" && window.__NEO_PULSE_WP_LOGGED_IN__) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground">Loading…</div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="neo-pulse-panel-neon w-full max-w-sm space-y-8 p-8">

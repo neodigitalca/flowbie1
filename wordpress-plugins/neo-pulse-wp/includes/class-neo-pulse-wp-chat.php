@@ -15,14 +15,19 @@ class Neo_Pulse_Wp_Chat {
 
 	const OPTION_KEY              = 'neo_pulse_wp_chat_settings';
 	const REST_NAMESPACE          = 'neo-pulse/v1';
+	const SHORTCODE_TAG           = 'neo-pulse_chat';
 	const PREFETCH_TRANSIENT_PREFIX = 'neo_pulse_chat_pf_';
 	const PREFETCH_TTL            = 60;
 	const RESPONSE_PREFETCH_TTL   = 120;
+
+	/** @var bool */
+	private static $shortcode_rendered = false;
 
 	/**
 	 * Hook registrations.
 	 */
 	public static function init(): void {
+		add_shortcode( self::SHORTCODE_TAG, array( __CLASS__, 'render_shortcode' ) );
 		add_action( 'rest_api_init', array( __CLASS__, 'register_routes' ) );
 		add_action( 'wp_head', array( __CLASS__, 'render_mobile_guard_script' ), 0 );
 		add_action( 'wp_head', array( __CLASS__, 'render_mobile_launcher_critical_css' ), 1 );
@@ -43,6 +48,7 @@ class Neo_Pulse_Wp_Chat {
 		add_action( 'wp_ajax_nopriv_neo_pulse_chat_response_prefetch', array( __CLASS__, 'ajax_chat_response_prefetch' ) );
 		add_action( 'wp_ajax_neo_pulse_chat_page_context', array( __CLASS__, 'ajax_chat_page_context' ) );
 		add_action( 'wp_ajax_nopriv_neo_pulse_chat_page_context', array( __CLASS__, 'ajax_chat_page_context' ) );
+		Neo_Pulse_Wp_Chat_Starters::maybe_schedule();
 	}
 
 	/**
@@ -59,16 +65,125 @@ class Neo_Pulse_Wp_Chat {
 	/**
 	 * Whether the chat widget should load for the current frontend visitor.
 	 * When logged_in_only is set, guests do not see the widget or receive chat API access.
+	 * When admin_only is set, only WordPress administrators see it.
 	 */
 	public static function should_show_for_visitor(): bool {
 		if ( ! self::is_enabled() ) {
 			return false;
 		}
 		$settings = self::get_settings();
+		if ( ! empty( $settings['admin_only'] ) && ! current_user_can( 'manage_options' ) ) {
+			return false;
+		}
 		if ( ! empty( $settings['logged_in_only'] ) && ! is_user_logged_in() ) {
 			return false;
 		}
+		$whitelist = isset( $settings['whitelist_url'] ) ? trim( (string) $settings['whitelist_url'] ) : '';
+		if ( $whitelist !== '' && ! wp_doing_ajax() && ! ( defined( 'REST_REQUEST' ) && REST_REQUEST ) && ! self::current_path_matches_whitelist( $whitelist ) ) {
+			return false;
+		}
 		return true;
+	}
+
+	/**
+	 * Whether the current frontend request includes the chat shortcode.
+	 */
+	private static function page_has_chat_shortcode(): bool {
+		if ( self::$shortcode_rendered ) {
+			return true;
+		}
+		if ( is_admin() ) {
+			return false;
+		}
+		if ( is_singular() ) {
+			$post = get_queried_object();
+			if ( $post instanceof WP_Post && has_shortcode( $post->post_content, self::SHORTCODE_TAG ) ) {
+				return true;
+			}
+			$post_id = $post instanceof WP_Post ? (int) $post->ID : get_queried_object_id();
+			if ( $post_id > 0 ) {
+				$elementor_data = get_post_meta( $post_id, '_elementor_data', true );
+				if ( is_string( $elementor_data ) && strpos( $elementor_data, '[' . self::SHORTCODE_TAG ) !== false ) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Shortcode: place AI chat on a specific page (floating bubble + sidebar).
+	 *
+	 * @param array<string,string>|string $atts Shortcode attributes.
+	 * @return string
+	 */
+	public static function render_shortcode( $atts = array() ): string {
+		shortcode_atts( array(), is_array( $atts ) ? $atts : array(), self::SHORTCODE_TAG );
+		if ( ! self::is_enabled() ) {
+			return '';
+		}
+		if ( ! is_admin() && ! self::should_show_for_visitor() ) {
+			return '';
+		}
+		self::$shortcode_rendered = true;
+		if ( ! is_admin() ) {
+			self::enqueue_assets();
+		}
+		return '';
+	}
+
+	/**
+	 * Compare current request path to a whitelist URL path (trailing slash ignored).
+	 * Uses the request URI and the current page permalink so password-protected
+	 * pages still match after the visitor enters the page password.
+	 */
+	public static function normalize_url_path( string $url ): string {
+		$url = trim( $url );
+		if ( $url === '' ) {
+			return '';
+		}
+		$lower = strtolower( $url );
+		$has_scheme = substr( $lower, 0, 7 ) === 'http://' || substr( $lower, 0, 8 ) === 'https://';
+		if ( ! $has_scheme && ( ! isset( $url[0] ) || $url[0] !== '/' ) ) {
+			$url = 'https://' . $url;
+		}
+		$path = wp_parse_url( $url, PHP_URL_PATH );
+		if ( ! is_string( $path ) || $path === '' ) {
+			$path = '/';
+		}
+		$trimmed = rtrim( $path, '/' );
+		return $trimmed === '' ? '/' : $trimmed;
+	}
+
+	/**
+	 * @param string $whitelist_url Configured frontend URL or path.
+	 * @param string $candidate_url Request URI, permalink, or full URL.
+	 */
+	public static function url_path_matches_whitelist( string $whitelist_url, string $candidate_url ): bool {
+		$allowed = self::normalize_url_path( $whitelist_url );
+		if ( $allowed === '' ) {
+			return false;
+		}
+		return self::normalize_url_path( $candidate_url ) === $allowed;
+	}
+
+	private static function current_path_matches_whitelist( string $whitelist_url ): bool {
+		$candidates = array();
+		if ( ! empty( $_SERVER['REQUEST_URI'] ) ) {
+			$candidates[] = (string) wp_unslash( $_SERVER['REQUEST_URI'] );
+		}
+		if ( function_exists( 'is_singular' ) && is_singular() && function_exists( 'get_permalink' ) ) {
+			$link = get_permalink();
+			if ( is_string( $link ) && $link !== '' ) {
+				$candidates[] = $link;
+			}
+		}
+		foreach ( $candidates as $candidate ) {
+			if ( self::url_path_matches_whitelist( $whitelist_url, $candidate ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -91,6 +206,10 @@ class Neo_Pulse_Wp_Chat {
 		if ( ! self::is_enabled() && ! current_user_can( 'manage_options' ) ) {
 			return false;
 		}
+		$settings = self::get_settings();
+		if ( ! empty( $settings['admin_only'] ) ) {
+			return current_user_can( 'manage_options' );
+		}
 		if ( is_user_logged_in() ) {
 			return true;
 		}
@@ -106,6 +225,8 @@ class Neo_Pulse_Wp_Chat {
 		$defaults = array(
 			'enabled'             => false,
 			'logged_in_only'        => false,
+			'admin_only'            => false,
+			'whitelist_url'       => '',
 			'welcome_message'     => __( 'Hi! Ask me anything about this website.', 'neo-pulse-wp' ),
 			'color'               => '#3b82f6',
 			'assistant_name'      => 'Flow Assist',
@@ -124,6 +245,7 @@ class Neo_Pulse_Wp_Chat {
 				'contact' => 0,
 				'pricing' => 0,
 			),
+			'god_mode_enabled'       => true,
 			'chekkit_enabled'        => true,
 			'chekkit_teaser_enabled' => true,
 			'chekkit_cta_label'      => __( 'Send Us A Text', 'neo-pulse-wp' ),
@@ -164,6 +286,35 @@ class Neo_Pulse_Wp_Chat {
 		$current = self::get_settings();
 		$merged  = array_merge( $current, $settings );
 		update_option( self::OPTION_KEY, $merged );
+	}
+
+	/**
+	 * Whether the current user may use God Mode (backend chat pipeline).
+	 * Requires the Chat setting plus a Neo Digital staff email.
+	 */
+	public static function current_user_can_backend_mode(): bool {
+		if ( ! is_user_logged_in() ) {
+			return false;
+		}
+		$settings = self::get_settings();
+		if ( empty( $settings['god_mode_enabled'] ) ) {
+			return false;
+		}
+		return self::current_user_email_is_neodigital();
+	}
+
+	/**
+	 * God Mode whitelist: Neo Digital staff emails only.
+	 */
+	public static function current_user_email_is_neodigital(): bool {
+		$user  = wp_get_current_user();
+		$email = strtolower( trim( (string) $user->user_email ) );
+		$at    = strrpos( $email, '@' );
+		if ( $at === false ) {
+			return false;
+		}
+		$domain = substr( $email, $at + 1 );
+		return $domain === 'neodigital.ca';
 	}
 
 	/**
@@ -372,10 +523,21 @@ class Neo_Pulse_Wp_Chat {
 	 * Enqueue chat widget assets on the frontend when enabled.
 	 */
 	public static function maybe_enqueue_assets(): void {
-		if ( ! self::should_show_on_current_screen() ) {
+		if ( is_admin() ) {
+			if ( ! self::should_show_on_current_screen() ) {
+				return;
+			}
+		} elseif ( ! self::should_show_on_current_screen() ) {
 			return;
 		}
 
+		self::enqueue_assets();
+	}
+
+	/**
+	 * Enqueue chat widget scripts and styles.
+	 */
+	public static function enqueue_assets(): void {
 		$base = plugin_dir_url( NEO_PULSE_WP_PLUGIN_FILE ) . 'assets/frontend/';
 		$ver  = NEO_PULSE_WP_VERSION;
 		$widget_css = NEO_PULSE_WP_PLUGIN_DIR . 'assets/frontend/neo-pulse-chat-widget.css';
@@ -498,14 +660,17 @@ class Neo_Pulse_Wp_Chat {
 		);
 
 		if ( is_user_logged_in() ) {
-			$backend_starters = wp_json_encode( Neo_Pulse_Wp_Chat_Super_Admin::get_backend_starters() );
+			$can_backend      = self::current_user_can_backend_mode();
+			$backend_starters = $can_backend
+				? wp_json_encode( Neo_Pulse_Wp_Chat_Super_Admin::get_backend_starters() )
+				: '[]';
 			wp_add_inline_script(
 				'neo-pulse-chat-widget',
-				'window.neo-pulseChatConfig=window.neo-pulseChatConfig||{};'
-				. 'window.neo-pulseChatConfig.canCopyLog=true;'
-				. 'window.neo-pulseChatConfig.canBackendMode=true;'
-				. 'window.neo-pulseChatConfig.isLoggedIn=true;'
-				. 'window.neo-pulseChatConfig.backendStarters=' . $backend_starters . ';',
+				'window.neoPulseChatConfig=window.neoPulseChatConfig||{};'
+				. 'window.neoPulseChatConfig.canCopyLog=true;'
+				. 'window.neoPulseChatConfig.canBackendMode=' . ( $can_backend ? 'true' : 'false' ) . ';'
+				. 'window.neoPulseChatConfig.isLoggedIn=true;'
+				. 'window.neoPulseChatConfig.backendStarters=' . $backend_starters . ';',
 				'before'
 			);
 		}
@@ -530,7 +695,7 @@ class Neo_Pulse_Wp_Chat {
 		$starters       = self::conversation_starters( $settings );
 		if ( ! empty( $page_context['postId'] ) ) {
 			array_unshift( $starters, __( 'Summarize this page', 'neo-pulse-wp' ) );
-			$starters = array_slice( array_values( array_unique( $starters ) ), 0, 3 );
+			$starters = array_values( array_unique( $starters ) );
 		}
 		if ( ! empty( $page_context['postId'] ) && ! empty( $page_context['typeLabel'] ) ) {
 			$composer_placeholder = sprintf(
@@ -548,7 +713,6 @@ class Neo_Pulse_Wp_Chat {
 			);
 		}
 
-		$chekkit_enabled = ! isset( $settings['chekkit_enabled'] ) || ! empty( $settings['chekkit_enabled'] );
 		$config          = array(
 			'restUrl'                => esc_url_raw( rest_url( self::REST_NAMESPACE . '/chat' ) ),
 			'acceptUrl'              => esc_url_raw( rest_url( self::REST_NAMESPACE . '/chat/accept' ) ),
@@ -579,23 +743,25 @@ class Neo_Pulse_Wp_Chat {
 			'conversationStarters'   => $starters,
 			'composerPlaceholder'    => $composer_placeholder,
 			'pageContext'            => $page_context,
-			'chekkitEnabled'         => $chekkit_enabled,
-			'chekkitSubmitUrl'       => esc_url_raw( rest_url( self::REST_NAMESPACE . '/chekkit/contact' ) ),
+			'chekkitEnabled'         => $chekkit_enabled ? 1 : 0,
+			'chekkitSubmitUrl'       => $chekkit_enabled
+				? esc_url_raw( rest_url( self::REST_NAMESPACE . '/chekkit/contact' ) )
+				: '',
 			'chekkitCtaLabel'        => isset( $settings['chekkit_cta_label'] ) && trim( (string) $settings['chekkit_cta_label'] ) !== ''
 				? (string) $settings['chekkit_cta_label']
 				: __( 'Send Us A Text', 'neo-pulse-wp' ),
-			'chekkitTeaserEnabled'   => $chekkit_enabled && ( ! isset( $settings['chekkit_teaser_enabled'] ) || ! empty( $settings['chekkit_teaser_enabled'] ) ),
+			'chekkitTeaserEnabled'   => $chekkit_teaser ? 1 : 0,
 			'chekkitTeaserAvatarUrl' => esc_url_raw( plugin_dir_url( NEO_PULSE_WP_PLUGIN_FILE ) . 'assets/frontend/chekkit-teaser-avatar.png' ),
 			'canCopyLog'             => is_user_logged_in(),
 			'isLoggedIn'             => is_user_logged_in(),
-			'canBackendMode'         => is_user_logged_in(),
+			'canBackendMode'         => self::current_user_can_backend_mode(),
 			'canAnalytics'           => current_user_can( 'manage_options' ),
 			'canEditContent'         => current_user_can( 'edit_posts' ),
-			'backendStarters'        => is_user_logged_in() ? Neo_Pulse_Wp_Chat_Super_Admin::get_backend_starters() : array(),
+			'backendStarters'        => self::current_user_can_backend_mode() ? Neo_Pulse_Wp_Chat_Super_Admin::get_backend_starters() : array(),
 			'backendAssistUrl'       => esc_url_raw( rest_url( self::REST_NAMESPACE . '/backend-assist' ) ),
 			'backendAssistUndoUrl'   => esc_url_raw( rest_url( self::REST_NAMESPACE . '/backend-assist/undo' ) ),
 			'isWpAdmin'              => $in_admin,
-			'defaultAdminMode'       => $in_admin ? 'backend' : 'visitor',
+			'defaultAdminMode'       => ( $in_admin && self::current_user_can_backend_mode() ) ? 'backend' : 'visitor',
 			'currentUserId'          => is_user_logged_in() ? get_current_user_id() : 0,
 		);
 		if ( is_user_logged_in() && current_user_can( 'edit_posts' ) ) {
@@ -608,7 +774,7 @@ class Neo_Pulse_Wp_Chat {
 
 		wp_localize_script(
 			'neo-pulse-chat-widget',
-			'neo-pulseChatConfig',
+			'neoPulseChatConfig',
 			$config
 		);
 	}
@@ -676,7 +842,11 @@ class Neo_Pulse_Wp_Chat {
 	 * Render the widget mount point in the footer.
 	 */
 	public static function maybe_render_widget(): void {
-		if ( ! self::should_show_on_current_screen() ) {
+		if ( is_admin() ) {
+			if ( ! self::should_show_on_current_screen() ) {
+				return;
+			}
+		} elseif ( ! self::should_show_on_current_screen() ) {
 			return;
 		}
 

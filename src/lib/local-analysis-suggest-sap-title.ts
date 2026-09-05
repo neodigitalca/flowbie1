@@ -1,5 +1,6 @@
-import { BULK_WORDPRESS_POST_TITLE_RULE, TITLE_WELL_KNOWN_ACRONYMS_RULE } from "@/lib/prompt-builders/system-user";
+import { BULK_WORDPRESS_POST_TITLE_RULE, TITLE_WELL_KNOWN_ACRONYMS_RULE } from "@/lib/prompt-builders/title-rules";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 /**
  * One-shot SAP page title from keyword + entity (Local Analysis wand).
@@ -60,7 +61,7 @@ ${gridBlock}
 
 Return {"title":"Your single title here"}.`;
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await postOpenRouterAppChatFetch( {
     method: "POST",
     headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({

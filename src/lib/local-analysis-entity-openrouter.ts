@@ -6,9 +6,8 @@
 import { appendMasterInstructionsToSystemPrompt, ensureMasterInstructionsInMemory } from "@/lib/master-instructions-storage";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { extractFirstBalancedJsonValue } from "@/lib/competitor-research/competitor-report-json-parse";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
-
-const OR = "https://openrouter.ai/api/v1/chat/completions";
 
 // ---------------------------------------------------------------------------
 // OpenRouter system prompt (authoritative). No parallel rules implemented in code.
@@ -116,7 +115,7 @@ async function postOpenRouter(
 ): Promise<string> {
   let res: Response;
   try {
-    res = await fetch(OR, {
+    res = await postOpenRouterAppChatFetch({
       method: "POST",
       headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({

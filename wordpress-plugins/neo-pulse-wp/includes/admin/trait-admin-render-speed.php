@@ -797,7 +797,7 @@ trait Neo_Pulse_Wp_Admin_Trait_Render_Speed {
 	 * @param string $hook_suffix Admin hook.
 	 */
 	public static function enqueue_speed_images_assets( string $hook_suffix ): void {
-		if ( 'neo-pulse-wp_page_neo_pulse-wp-speed' !== $hook_suffix ) {
+		if ( ! Neo_Pulse_Wp_Admin::admin_hook_matches( $hook_suffix, array( 'neo-pulse-wp_page_neo_pulse-wp-speed' ) ) ) {
 			return;
 		}
 		$tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( (string) $_GET['tab'] ) ) : 'general';

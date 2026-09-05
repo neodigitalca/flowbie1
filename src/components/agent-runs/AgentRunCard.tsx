@@ -11,7 +11,6 @@ import {
 import { cn } from "@/lib/utils";
 import { AgentRunsDetailsDrawer } from "./AgentRunsDetailsDrawer";
 import { useAgentRunLiveSnapshot } from "./use-agent-run-live-snapshot";
-import { useAgentRunPostCreatorProof } from "./use-agent-run-post-creator-proof";
 
 function statusClass(status: AgentRunStatus): string {
   return `agent-runs-status-pill agent-runs-status-pill--${status}`;
@@ -39,8 +38,7 @@ export function AgentRunCard({
   resumable = false,
 }: AgentRunCardProps) {
   const live = useAgentRunLiveSnapshot(run);
-  const proof = useAgentRunPostCreatorProof(run);
-  const hint = agentRunCollapsedHint(run, live, 0, proof);
+  const hint = agentRunCollapsedHint(run, live, 0);
   const cardTitle = agentRunCardTitle(run, clientLabel);
   const drawerId = `agent-run-drawer-${run.id}`;
   const isActive = run.status === "running";
@@ -49,6 +47,10 @@ export function AgentRunCard({
   const showResume = resumable || isAgentRunResumable(run);
   const showCancel = !isAgentRunTerminal(run.status);
   const showResumeAction = showResume && Boolean(onResume);
+  const statusDetail =
+    hint ||
+    (!hint && expanded && isServerRun && isActive && serverStatus ? serverStatus : null) ||
+    "\u00a0";
 
   const handleRowClick = (e: MouseEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest("button, a")) return;
@@ -75,12 +77,11 @@ export function AgentRunCard({
           }
         }}
       >
-        <div className="agent-runs-card__title">{cardTitle}</div>
-        <div className="agent-runs-card__meta">
-          {!expanded && hint ? <span className="agent-runs-card__hint">{hint}</span> : null}
-          {expanded && isServerRun && isActive && serverStatus ? (
-            <span className="agent-runs-card__server-status">{serverStatus}</span>
-          ) : null}
+        <div className="agent-runs-card__lead">
+          <div className="agent-runs-card__title">{cardTitle}</div>
+          <span className="agent-runs-card__hint" aria-live="polite">
+            {statusDetail}
+          </span>
         </div>
         <span className={statusClass(run.status)}>{AGENT_RUN_STATUS_LABELS[run.status]}</span>
         <button

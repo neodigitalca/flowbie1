@@ -20,6 +20,7 @@ import {
 import { stripContentH1Blocks } from "@/lib/overview/overview-content-cleanup";
 import { runBlogHeadersPlanStream } from "@/lib/overview/overview-blog-headers-plan-stream";
 import type { BlogHeadersRowPatch } from "@/lib/overview/overview-blog-headers-run";
+import { isGenericHarnessHeadingTitle } from "@/lib/content-optimization/harness-heading-titles";
 import {
   buildWaitingHeadersHarnessSections,
   formatHeadersAnalyzeMarkdown,
@@ -199,6 +200,8 @@ function applyAndVerifyLocally(
   const verified = verifyLocalHeadersApply(row.html, applied.updatedHtml, {
     maxExtraH2: row.missingLeadingH2 && plan.leadingH2?.trim() ? 1 : 0,
   });
+  const hadGenericBefore = beforeH2s.some(isGenericHarnessHeadingTitle);
+  const stillGenericAfter = afterH2s.some(isGenericHarnessHeadingTitle);
   if (!anyReplaced || !verified.ok) {
     const reason = !anyReplaced ? "No H2 replacements applied" : verified.reason;
     emitHeadersHarnessPayload(
@@ -208,6 +211,24 @@ function applyAndVerifyLocally(
         row.index,
         HEADERS_STEP_VERIFY,
         formatHeadersVerifyMarkdown(beforeH2s, afterH2s, plan, false, reason),
+      ),
+    );
+    return null;
+  }
+  if (hadGenericBefore && stillGenericAfter) {
+    emitHeadersHarnessPayload(
+      url,
+      setters,
+      makeHeadersHarnessDonePayload(
+        row.index,
+        HEADERS_STEP_VERIFY,
+        formatHeadersVerifyMarkdown(
+          beforeH2s,
+          afterH2s,
+          plan,
+          false,
+          "Placeholder H2 titles remain (Section/Intro)",
+        ),
       ),
     );
     return null;

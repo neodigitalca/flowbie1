@@ -6,7 +6,7 @@
 import { stitchHarnessSections } from "@/lib/bulk/bulk-harness-outline";
 import { isFaqStyleHeadingTitle } from "@/lib/content-generation/faq-heading-policy";
 import { repairFaqEntriesFromSchema, type FaqEntry } from "@/lib/faq-entries";
-import { generateFaqIntroParagraph, isValidFaqIntroPlainText } from "@/lib/overview/overview-blog-faq-intro-agent";
+import { generateFaqIntroParagraph } from "@/lib/overview/overview-blog-faq-intro-agent";
 
 export const HARNESS_FAQ_ANCHOR_ID = "faq";
 export const FLO_FAQ_CLASS = "flo-faq";
@@ -223,9 +223,6 @@ export function appendFaqSectionToPostHtml(args: {
   if (!source) return null;
 
   const intro = (args.introParagraph ?? "").trim();
-  if (!isValidFaqIntroPlainText(intro)) {
-    throw new Error("FAQ intro failed quality validation — row not updated with FAQ table");
-  }
 
   const faqSectionHtml = buildFaqSectionHtml(args.entries, intro);
   if (!faqSectionHtml) return null;

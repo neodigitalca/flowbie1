@@ -200,7 +200,7 @@ class Neo_Pulse_App_Gsc_Service_Account {
 	}
 
 	/**
-	 * @return array{match:?string,accessibleSiteUrls:array<int,string>,requestedDomain:string}
+	 * @return array{match:?string,accessibleSiteUrls:array<int,string>,requestedDomain:string,listError?:string}
 	 */
 	public static function find_matching_property( string $site_url ): array {
 		$requested = self::requested_domain_from_site_url( $site_url );
@@ -216,13 +216,13 @@ class Neo_Pulse_App_Gsc_Service_Account {
 
 		$cache_key = 'neo-pulse_app_gsc_prop_' . md5( $requested );
 		$cached    = get_transient( $cache_key );
-		if ( is_array( $cached ) ) {
+		if ( is_array( $cached ) && ! empty( $cached['match'] ) ) {
 			return $cached;
 		}
 
 		$sites = self::list_sites();
 		if ( is_wp_error( $sites ) ) {
-			set_transient( $cache_key, $empty, self::PROPERTY_CACHE_TTL );
+			$empty['listError'] = $sites->get_error_message();
 			return $empty;
 		}
 
@@ -249,13 +249,11 @@ class Neo_Pulse_App_Gsc_Service_Account {
 			}
 		}
 
-		$no_match = array(
+		return array(
 			'match'              => null,
 			'accessibleSiteUrls' => $accessible,
 			'requestedDomain'    => $requested,
 		);
-		set_transient( $cache_key, $no_match, self::PROPERTY_CACHE_TTL );
-		return $no_match;
 	}
 
 	/**

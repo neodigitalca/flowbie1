@@ -11,11 +11,55 @@ export type WorkflowNodeKind =
   | "trigger_calendar"
   | "trigger_gsc"
   | "trigger_document"
+  | "trigger_agentmail"
   | "trigger_manual"
   | "trigger_agent_done"
   | "action_agent"
+  | "csv_rows"
   | "path_rules"
-  | "rag_archive";
+  | "rag_archive"
+  | "then_local"
+  | "then_google_drive"
+  | "then_email"
+  | "then_scheduled"
+  | "then_draft";
+
+export const WORKFLOW_THEN_KINDS: WorkflowNodeKind[] = [
+  "then_local",
+  "then_google_drive",
+  "then_email",
+  "then_scheduled",
+  "then_draft",
+];
+
+export type ThenInputMode = "single" | "all_from_node" | "all_deliverables";
+
+export type ThenEmailBatchScope = "single" | "per_client" | "workflow_run";
+
+export type ThenWaitMode = "immediate" | "upstream_terminal" | "all_parallel_clients";
+
+export type WorkflowThenStepConfig = {
+  inputVariableKey: string;
+  inputNodeId?: string;
+  executionPayload?: TaskExecutionPayload;
+  inputMode?: ThenInputMode;
+  emailBatchScope?: ThenEmailBatchScope;
+  waitMode?: ThenWaitMode;
+};
+
+export type WorkflowStepDeliveryMeta = {
+  googleDriveUrl?: string;
+  googleDriveFileId?: string;
+  googleDriveFileName?: string;
+  googleDriveFolderUrl?: string;
+  googleDriveFolderLabel?: string;
+  googleDriveTargetFolderId?: string;
+  googleDriveFoldersCreated?: string[];
+  emailSent?: boolean;
+  emailError?: string;
+  localSaved?: boolean;
+  scheduled?: boolean;
+};
 
 export type WorkflowRagScope = "run" | "agent" | "shared";
 
@@ -25,6 +69,8 @@ export type WorkflowCalendarTriggerConfig = {
   frequency: "once" | "daily" | "weekly" | "monthly" | "yearly";
   startDate: string;
   time: string;
+  dayOfMonth?: number;
+  startMonthChoice?: "this" | "next" | "custom";
   recurrenceRule?: TaskRecurrenceRule;
   cronExpression?: string;
   timezone?: string;
@@ -42,6 +88,11 @@ export type WorkflowDocumentTriggerConfig = {
   nameContains?: string;
 };
 
+export type WorkflowAgentMailTriggerConfig = {
+  fromEmail: string;
+  inbox?: string;
+};
+
 export type WorkflowAgentDoneTriggerConfig = {
   recipeKey?: AgentRunRecipeKey | string;
   executionKind?: TaskExecutionKind;
@@ -56,6 +107,9 @@ export type WorkflowActionConfig = {
   ragScope?: WorkflowRagScope;
   ragInputKeys?: string[];
   title?: string;
+  actionBlockKeyword?: string;
+  recipeKeyword?: string;
+  recipeCategory?: string;
 };
 
 export type WorkflowPathConditionKind =
@@ -84,14 +138,27 @@ export type WorkflowPathRulesConfig = {
   branches: WorkflowPathBranchConfig[];
 };
 
+export type WorkflowRagArchiveDeliverableScope = "final" | "all";
+
 export type WorkflowRagArchiveConfig = {
   variableKey: string;
   scope: WorkflowRagScope;
   label?: string;
+  deliverableScope?: WorkflowRagArchiveDeliverableScope;
 };
 
 export type WorkflowClientConfig = {
   siteIds: string[];
+  /** When `all`, every enabled team site runs. Otherwise `siteIds` is used. */
+  clientScope?: "all" | "selected";
+  frequency?: WorkflowCalendarTriggerConfig["frequency"];
+  startDate?: string;
+  time?: string;
+  dayOfMonth?: number;
+  startMonthChoice?: WorkflowCalendarTriggerConfig["startMonthChoice"];
+  recurrenceRule?: TaskRecurrenceRule;
+  cronExpression?: string;
+  timezone?: string;
 };
 
 export type WorkflowNodeConfig =
@@ -99,10 +166,13 @@ export type WorkflowNodeConfig =
   | WorkflowCalendarTriggerConfig
   | WorkflowGscTriggerConfig
   | WorkflowDocumentTriggerConfig
+  | WorkflowAgentMailTriggerConfig
   | WorkflowAgentDoneTriggerConfig
   | WorkflowActionConfig
   | WorkflowPathRulesConfig
   | WorkflowRagArchiveConfig
+  | WorkflowThenStepConfig
+  | import("@/lib/workflow/csv-rows-types").WorkflowCsvRowsConfig
   | Record<string, unknown>;
 
 export type WorkflowNode = {
@@ -159,6 +229,8 @@ export type WorkflowStepOutput = {
   textPreview: string;
   fileRefs: WorkflowStepOutputFileRef[];
   agentRunId?: number | null;
+  siteId?: string | null;
+  deliveryMeta?: WorkflowStepDeliveryMeta;
   createdAt: string;
 };
 
@@ -197,9 +269,9 @@ export type WorkflowPendingDispatch = {
 };
 
 export const WORKFLOW_TRIGGER_KINDS: WorkflowNodeKind[] = [
-  "trigger_calendar",
   "trigger_gsc",
   "trigger_document",
+  "trigger_agentmail",
   "trigger_manual",
   "trigger_agent_done",
 ];
@@ -208,8 +280,16 @@ export function isWorkflowTriggerKind(kind: WorkflowNodeKind): boolean {
   return WORKFLOW_TRIGGER_KINDS.includes(kind);
 }
 
+export function isWorkflowScheduleKind(kind: WorkflowNodeKind): boolean {
+  return kind === "trigger_calendar";
+}
+
 export function isWorkflowClientKind(kind: WorkflowNodeKind): boolean {
   return kind === "workflow_client";
+}
+
+export function isWorkflowThenKind(kind: WorkflowNodeKind): boolean {
+  return WORKFLOW_THEN_KINDS.includes(kind);
 }
 
 export function workflowTriggerLabel(kind: WorkflowNodeKind): string {
@@ -222,10 +302,14 @@ export function workflowTriggerLabel(kind: WorkflowNodeKind): string {
       return "GSC signal";
     case "trigger_document":
       return "Document received";
+    case "trigger_agentmail":
+      return "Agent Mail received";
     case "trigger_manual":
       return "Manual";
     case "trigger_agent_done":
       return "Agent completed";
+    case "csv_rows":
+      return "CSV rows";
     default:
       return kind;
   }

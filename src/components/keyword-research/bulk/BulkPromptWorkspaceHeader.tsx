@@ -26,11 +26,8 @@ import type { BulkGeneratorDetailsPanelProps } from "@/components/keyword-resear
 import { BULK_HEADER_RUN_BTN } from "@/components/keyword-research/bulk/bulk-workspace-header-styles";
 import type { MetaBulkMicroSnapshot } from "@/components/overview/OverviewBulkMicroProgress";
 import type { WordPressPostDestination } from "@/lib/bulk-auto-generate";
+import { WORDPRESS_POST_DESTINATION_SHORT } from "@/lib/bulk-auto-generate";
 
-const POST_DESTINATION_SHORT: Record<WordPressPostDestination, string> = {
-  wordpress: "WordPress",
-  local: "Local files",
-};
 
 type FeaturedImageMode = "off" | "ai-generated" | "google-maps";
 
@@ -219,7 +216,7 @@ export function BulkPromptWorkspaceHeader({
               <SelectContent position="popper">
                 {postDestinationChoices.map((choice) => (
                   <SelectItem key={choice} className="text-base" value={choice}>
-                    {POST_DESTINATION_SHORT[choice]}
+                    {WORDPRESS_POST_DESTINATION_SHORT[choice]}
                   </SelectItem>
                 ))}
               </SelectContent>

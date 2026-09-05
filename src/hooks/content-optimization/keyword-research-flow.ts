@@ -14,7 +14,7 @@ import { OptimizationFileManager } from "@/lib/optimization-file-manager";
 import { patchOptimizationProgress } from "./optimization-helpers";
 import {
   hasSubstantiveSeoResearchBrief,
-  mergeOptimizeResearchInputs,
+  buildOptimizeSelectionsFromStoredBrief,
 } from "@/lib/content-optimization/seo-research-brief-for-optimize";
 
 export async function performKeywordResearchFlow(
@@ -57,41 +57,24 @@ export async function performKeywordResearchFlow(
 
   const useSeoBriefPath = hasSubstantiveSeoResearchBrief(seoResearchBrief);
   if (useSeoBriefPath) {
-    const merged = mergeOptimizeResearchInputs({
+    const selections = buildOptimizeSelectionsFromStoredBrief({
       primaryKeyword,
       selectedKeyword,
       gscResult,
-      seoResearchBrief,
+      seoResearchBrief: seoResearchBrief!,
+      clusterKeywords,
     });
-    const briefRelated = merged.relatedGSCKeywords;
-    const combinedRelated = clusterKeywords?.length
-      ? [...new Set([...briefRelated, ...clusterKeywords, ...relatedGSCKeywords])]
-      : [...new Set([...briefRelated, ...relatedGSCKeywords])];
 
     if (!getMuteOptimizationToasts()) {
       notify.info(notifySkippingExternalKeywordApiUsingPrim(primaryKeyword));
     }
 
-    const researchModel = getResearchModel(site.id);
-    const aiAnalysis = await performAIAnalysis(
-      merged.keywordData,
-      site,
-      null,
-      (progress) => patchOptimizationProgress(setOptimizationProgress, siteId, progress),
-      combinedRelated,
-      researchModel,
-    );
-
-    if (merged.paaItems.length > 0) {
-      aiAnalysis.peopleAlsoAsk = merged.paaItems;
-    }
-
     return {
-      keywordData: merged.keywordData,
-      aiAnalysis,
-      paaResult: { items: merged.paaItems },
+      keywordData: selections.keywordData,
+      aiAnalysis: selections.aiAnalysis,
+      paaResult: { items: selections.selectedPeopleAlsoAsk },
       paaRawResponse: null,
-      relatedKeywords: combinedRelated,
+      relatedKeywords: selections.relatedKeywords,
     };
   }
 

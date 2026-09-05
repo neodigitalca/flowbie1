@@ -2,6 +2,7 @@ import { Key } from "lucide-react";
 import { ApiKeyContent } from "@/components/ApiKeyContent";
 import { DataForSEOApiKeyContent } from "@/components/DataForSEOApiKeyContent";
 import { AgentMailApiKeyContent } from "@/components/AgentMailApiKeyContent";
+import { ResidentialProxySettingsContent } from "@/components/manager/ResidentialProxySettingsContent";
 import { ManagerCloudSettingsCard } from "@/components/manager/ManagerCloudSettingsCard";
 import {
   DASHBOARD_SETTINGS_GROUP_CLASS,
@@ -59,6 +60,7 @@ export function ApiKeysSettingsContent({
             saveApiKey={saveDataForSEOApiKey}
           />
           <AgentMailApiKeyContent />
+          <ResidentialProxySettingsContent />
         </div>
       </div>
     </div>

@@ -50,6 +50,22 @@ $semrush_fixture = array(
 
 $gsc_queries = array( 'window coverings ideas', 'best window treatments' );
 
+$llm_fixture = array(
+	'siteUrl'   => 'https://example.com/window-coverings',
+	'location'  => 'Example City, ST',
+	'platforms' => array(
+		array(
+			'platform'      => 'chat_gpt',
+			'label'         => 'ChatGPT',
+			'model_name'    => 'o4-mini',
+			'status'        => 'ok',
+			'webSearchUsed' => true,
+			'responseText'  => 'Cover sidelight sizing.',
+			'liveLinks'     => array( 'https://example.com/source' ),
+		),
+	),
+);
+
 $merged = Neo_Pulse_Wp_Seo_Brief_Merge::build_merged_brief(
 	array(
 		'serpDumpJson'        => $serp_fixture,
@@ -58,6 +74,7 @@ $merged = Neo_Pulse_Wp_Seo_Brief_Merge::build_merged_brief(
 		'gscPageUrl'          => 'https://example.com/window-coverings',
 		'gscQueries'          => $gsc_queries,
 		'semrushOverviewJson' => $semrush_fixture,
+		'llmAudit'            => $llm_fixture,
 	)
 );
 
@@ -88,5 +105,8 @@ $extracted = Neo_Pulse_Wp_Seo_Brief_Merge::extract_semrush_brief( $semrush_fixtu
 foreach ( $semrush_keys as $key ) {
 	assert( ! empty( $extracted[ $key ] ), 'extract_semrush_brief empty: ' . $key );
 }
+
+assert( ! empty( $merged['llmAudit']['platforms'] ), 'llmAudit platforms populated' );
+assert( 'ok' === $merged['llmAudit']['platforms'][0]['status'], 'llmAudit platform status ok' );
 
 echo "test-seo-brief-merge-parity: OK\n";

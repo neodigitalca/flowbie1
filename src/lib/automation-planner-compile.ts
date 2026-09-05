@@ -1,3 +1,5 @@
+import { auditQuestionsForSave } from "@/lib/chatgpt-audit-questions";
+import { auditPlatformsForSave } from "@/lib/dfs-article-audit/dfs-article-audit-types";
 import type { AutomationRecipeCatalogItem } from "@/lib/automation-recipes-types";
 import type { TaskRecurrenceRule, TaskTemplateTaskDef } from "@/lib/tasks-types";
 import {
@@ -39,10 +41,13 @@ function inferGscTriggerKeyword(config: TaskTriggerConfig): string {
   return "gsc-custom";
 }
 
-function inferActionKeyword(kind: string, payload?: { targetBucket?: string }): string {
+export function inferActionKeyword(kind: string, payload?: { targetBucket?: string }): string {
   if (kind === "content_optimizer_meta") return "content-optimizer-meta";
   if (kind === "content_optimizer") return "content-optimizer-full";
   if (kind === "post_creator") return "post-creator-monthly";
+  if (kind === "entity_page_creator") return "entity-page-creator-monthly";
+  if (kind === "entity_generator") return "entity-generator-monthly";
+  if (kind === "sap_generator") return "sap-generator-monthly";
   if (kind === "gsc_reporting") {
     return payload && "comparePreset" in payload && payload.comparePreset === "yoy"
       ? "gsc-report-yoy"
@@ -50,6 +55,18 @@ function inferActionKeyword(kind: string, payload?: { targetBucket?: string }): 
   }
   if (kind === "local_dominator_export") {
     return "local-dominator-grid-export";
+  }
+  if (kind === "chatgpt_website_audit") {
+    return "chatgpt-website-audit";
+  }
+  if (kind === "dfs_llm_article_audit") {
+    return "dfs-llm-article-audit";
+  }
+  if (kind === "browser_automation") {
+    return "residential-browser-automation";
+  }
+  if (kind === "content_gap_check") {
+    return "content-gap-check";
   }
   return `action-${kind || "custom"}`;
 }
@@ -180,6 +197,20 @@ export function planToTaskDef(plan: AutomationPlan, taskKeyword?: string): TaskT
   }
   if (payload.sendAutomationEmail === true) {
     payload.saveLocalArchive = true;
+  }
+  if (payload.saveToGoogleDrive === true) {
+    payload.saveLocalArchive = true;
+  }
+  if (plan.action.executionKind === "chatgpt_website_audit" || plan.action.executionKind === "dfs_llm_article_audit") {
+    const questions = auditQuestionsForSave(payload.auditQuestions);
+    if (questions.length > 0) {
+      payload.auditQuestions = questions;
+    } else {
+      delete payload.auditQuestions;
+    }
+  }
+  if (plan.action.executionKind === "dfs_llm_article_audit") {
+    payload.auditPlatforms = auditPlatformsForSave(payload.auditPlatforms);
   }
 
   return {

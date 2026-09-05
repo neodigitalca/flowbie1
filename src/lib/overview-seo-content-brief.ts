@@ -46,6 +46,92 @@ export type PeopleAlsoAskBriefEntry = {
   }>;
 };
 
+export type LlmAuditPlatformBrief = {
+  platform: "chat_gpt" | "gemini" | "perplexity";
+  label: string;
+  model_name: string;
+  status: "ok" | "error";
+  webSearchUsed?: boolean;
+  responseText?: string;
+  annotations?: Array<{ title?: string; url?: string }>;
+  liveLinks?: string[];
+  input_tokens?: number;
+  output_tokens?: number;
+  cost?: number;
+  error?: string;
+};
+
+export type LlmAuditBrief = {
+  siteUrl: string;
+  location: string;
+  focusKeyword?: string;
+  queryFanout?: QueryFanout;
+  platforms: LlmAuditPlatformBrief[];
+};
+
+export type VerifiedFact = {
+  claimLabel: string;
+  status: "confirmed" | "contradicted" | "not_found";
+  fact: string;
+  sourceUrl: string;
+  sourceDomain: string;
+  asOf: string;
+};
+
+export type IllustrativeExample = {
+  leadIn: string;
+  quoteBody: string;
+  asOf: string;
+  illustrativeH2Title?: string;
+  personaName?: string;
+  householdProfile?: string;
+  situationHook?: string;
+  /** Brief question for the illustrative intro or blockquote (OpenRouter extract). Never used as a heading. */
+  scenarioQuestion?: string;
+  /** One named persona narrative for blockquote (OpenRouter extract). */
+  scenarioNarrative?: string;
+  recommendationTitle?: string;
+  recommendationParagraph?: string;
+};
+
+export type SerpOrganicTopEntry = {
+  domain?: string;
+  url?: string;
+  title?: string;
+  description?: string;
+};
+
+export type QueryFanoutSerpRow = {
+  query: string;
+  organicTop: SerpOrganicTopEntry[];
+  paa: string[];
+  /** Legacy rows may only have titles */
+  organicTitles?: string[];
+};
+
+export type QueryFanout = {
+  queries: string[];
+  namedPrograms: string[];
+  plannerModel?: string;
+  plannedAt?: string;
+  /** e.g. "August 2026" — when fanout research was planned */
+  researchAsOf?: string;
+  /** SERP query for a real-world local example used in [ILLUSTRATIVE] sections */
+  illustrativeExampleQuery?: string;
+  /** Extracted A-vs-B hypothetical for [ILLUSTRATIVE] blockquote + Overview Real-World Example bullet */
+  illustrativeExample?: IllustrativeExample;
+  /** SERP query for current rebate/program open-closed status */
+  programStatusQuery?: string;
+  /** Up to 3 dynamic official-source verification queries */
+  factualVerificationQueries?: string[];
+  /** Extracted facts bound to official source URLs */
+  verifiedFacts?: VerifiedFact[];
+  serpByQuery?: QueryFanoutSerpRow[];
+  chatGptByQuery?: Array<{ query: string; responseText: string }>;
+};
+
+export type FirstPartyClaim = { text: string; source: string };
+
 export type SeoContentBriefV1 = {
   version: 1;
   generatedAt: string;
@@ -92,6 +178,9 @@ export type SeoContentBriefV1 = {
     phraseOrganicUrls: string[];
     externalSemrushUrls: string[];
   };
+  llmAudit?: LlmAuditBrief;
+  queryFanout?: QueryFanout;
+  firstPartyClaims?: FirstPartyClaim[];
 };
 
 function parsePaaItem(el: Record<string, unknown>): PeopleAlsoAskBriefEntry | null {
@@ -361,6 +450,8 @@ export function buildMergedSeoContentBrief(input: {
   gscPageUrl: string;
   gscQueries: string[];
   semrushOverviewJson: unknown | null;
+  llmAudit?: LlmAuditBrief | null;
+  queryFanout?: QueryFanout | null;
 }): SeoContentBriefV1 {
   const dataforseo = extractDataForSeoSerpBrief(input.serpDumpJson);
   const semrush = input.semrushOverviewJson
@@ -378,5 +469,7 @@ export function buildMergedSeoContentBrief(input: {
       queries: dedupeStrings(input.gscQueries),
     },
     semrush,
+    ...(input.llmAudit ? { llmAudit: input.llmAudit } : {}),
+    ...(input.queryFanout ? { queryFanout: input.queryFanout } : {}),
   };
 }

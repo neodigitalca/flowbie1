@@ -31,6 +31,7 @@ import type { MetaBulkActionKey, BulkProgressSlice } from "@/components/overview
 import {
   OverviewContentDetailsPanel,
   overviewContentDetailsCanOpen,
+  isOverviewResearchWorkerActive,
   type OverviewSinglePageDetailsContext,
 } from "@/components/overview/overview-tab/OverviewContentDetailsPanel";
 
@@ -143,11 +144,26 @@ export function OverviewContentHeader({
   );
 
   const detailsOpenSignal =
-    batchBulkState?.runKind === "aiOverview" && batchBulkState.harnessStartedAt
-      ? `${bulkBatchKey}-${batchBulkState.harnessStartedAt}`
-      : site && isSinglePageOptimizing
-        ? `single-opt-${site.id}`
-        : null;
+    batchBulkState?.runKind === "research" && batchBulkState.harnessStartedAt
+      ? `research-${bulkBatchKey}-${batchBulkState.harnessStartedAt}`
+      : batchBulkState?.runKind === "aiAnswer" && batchBulkState.harnessStartedAt
+        ? `answer-${bulkBatchKey}-${batchBulkState.harnessStartedAt}`
+      : batchBulkState?.runKind === "aiOverview" && batchBulkState.harnessStartedAt
+        ? `${bulkBatchKey}-${batchBulkState.harnessStartedAt}`
+      : batchBulkState?.runKind === "aiScenario" && batchBulkState.harnessStartedAt
+        ? `scenario-${bulkBatchKey}-${batchBulkState.harnessStartedAt}`
+        : site && isSinglePageOptimizing
+          ? `single-opt-${site.id}`
+          : null;
+
+  const researchWorkerActive = site
+    ? isOverviewResearchWorkerActive(
+        batchBulkState,
+        bulkBatchKey,
+        site.id,
+        opt.isOptimizingContent,
+      )
+    : false;
 
   const bulkPostTicker =
     isBatchContentRunning && batchBulkState ? resolveBulkPostTicker(batchBulkState) : null;
@@ -237,7 +253,7 @@ export function OverviewContentHeader({
     canOpenDetails: canOpenBatchDetails,
     detailsOpenSignal,
     onDetailsOpenChange,
-    isProcessing: isBatchContentRunning || isSinglePageOptimizing,
+    isProcessing: isBatchContentRunning || isSinglePageOptimizing || researchWorkerActive,
     detailsPanelId: "overview-batch-details-panel" as const,
     detailsPanel,
     toolbar: toolbarContent,

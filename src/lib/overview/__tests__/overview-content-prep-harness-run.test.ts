@@ -6,6 +6,11 @@ import {
   markContentPrepHarnessSection,
 } from "@/lib/overview/overview-content-prep-harness-run";
 import { buildWaitingBatchPrepHarnessSections } from "@/lib/overview/overview-content-prep-harness-sections";
+import { buildContentOptimizePipelineTitles, buildPredeterminedBlogBodyHarnessTitles, contentOptimizeHarnessSectionIndex } from "@/lib/overview/overview-content-optimize-pipeline";
+
+const INIT_OPTIMIZE_PIPELINE_TITLES = buildContentOptimizePipelineTitles(
+  buildPredeterminedBlogBodyHarnessTitles(""),
+);
 import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
 
 function makeSetters() {
@@ -48,21 +53,32 @@ describe("overview-content-prep-harness-run batch vs post harness", () => {
     expect(afterStart?.batchPrepHarnessSections).toHaveLength(2);
     expect(afterStart?.batchPrepHarnessSections?.[0]?.title).toBe("Posts sitemap");
     expect(afterStart?.batchPrepHarnessSections?.[0]?.status).toBe("generating");
-    expect(afterStart?.urlHarnessSections?.["https://example.com/a/"]).toHaveLength(2);
+    expect(afterStart?.urlHarnessSections?.["https://example.com/a/"]).toHaveLength(
+      INIT_OPTIMIZE_PIPELINE_TITLES.length,
+    );
   });
 
-  it("post harness updates urlHarnessSections for SERP and blueprint steps", () => {
+  it("post harness updates urlHarnessSections for SERP and checklist steps", () => {
     const harness = makeSetters();
     harness.seedBatch(["https://example.com/a/"]);
     const url = "https://example.com/a/";
 
-    markContentPrepHarnessSection(url, 0, "start", harness.setters);
-    expect(harness.getBatch()?.urlHarnessSections?.[url]?.[0]?.status).toBe("generating");
+    markContentPrepHarnessSection(
+      url,
+      contentOptimizeHarnessSectionIndex("SERP research brief"),
+      "start",
+      harness.setters,
+    );
+    const serpIndex = contentOptimizeHarnessSectionIndex("SERP research brief");
+    const checklistIndex = contentOptimizeHarnessSectionIndex("Checklist");
+    expect(harness.getBatch()?.urlHarnessSections?.[url]?.[serpIndex]?.status).toBe("generating");
+    expect(harness.getBatch()?.urlHarnessSections?.[url]?.[serpIndex]?.title).toBe("SERP research brief");
     expect(harness.getBatch()?.batchPrepHarnessSections?.[0]?.status).toBe("waiting");
 
-    markContentPrepHarnessSection(url, 0, "done", harness.setters);
-    markContentPrepHarnessSection(url, 1, "start", harness.setters);
-    expect(harness.getBatch()?.urlHarnessSections?.[url]?.[1]?.status).toBe("generating");
+    markContentPrepHarnessSection(url, serpIndex, "done", harness.setters);
+    markContentPrepHarnessSection(url, checklistIndex, "start", harness.setters);
+    expect(harness.getBatch()?.urlHarnessSections?.[url]?.[checklistIndex]?.status).toBe("generating");
+    expect(harness.getBatch()?.urlHarnessSections?.[url]?.[checklistIndex]?.title).toBe("Checklist");
   });
 
   it("computeContentPrepBatchProgress counts batch inventory + per-post steps", () => {
@@ -81,7 +97,10 @@ describe("overview-content-prep-harness-run batch vs post harness", () => {
       urlHarnessSections: {
         "https://example.com/b/": [
           { sectionIndex: 0, title: "SERP research brief", status: "done" },
-          { sectionIndex: 1, title: "Blueprint and content", status: "waiting" },
+          { sectionIndex: 1, title: "Checklist", status: "waiting" },
+          { sectionIndex: 2, title: "Blueprint", status: "waiting" },
+          { sectionIndex: 3, title: "Content HTML", status: "waiting" },
+          { sectionIndex: 4, title: "Content Markdown", status: "waiting" },
         ],
       },
     };

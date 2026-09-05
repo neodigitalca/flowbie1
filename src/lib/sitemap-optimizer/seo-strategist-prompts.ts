@@ -1,4 +1,4 @@
-import { BULK_WORDPRESS_POST_TITLE_RULE } from "@/lib/prompt-builders/system-user";
+import { BULK_WORDPRESS_POST_TITLE_RULE } from "@/lib/prompt-builders/title-rules";
 
 /** Shared role for sitemap optimizer AI passes. */
 export const TECHNICAL_SEO_STRATEGIST_ROLE = `You are a senior technical SEO strategist and content architect for professional services sites (accounting, tax, advisory).

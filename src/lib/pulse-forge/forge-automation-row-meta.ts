@@ -35,7 +35,16 @@ export function formatAutomationScheduleLabel(task?: TeamTask | null): string {
 }
 
 export function formatAutomationCompareLabel(task?: TeamTask | null): string {
-  const preset = task?.executionPayload?.comparePreset?.trim();
+  const payload = task?.executionPayload;
+  if (payload?.gscTrailingMonthCount != null) {
+    return `${payload.gscTrailingMonthCount} mo`;
+  }
+  const presetId = payload?.gscComparePresetId?.trim();
+  if (presetId === "m3") return "3 mo";
+  if (presetId === "m6") return "6 mo";
+  if (presetId === "m12") return "12 mo";
+  if (presetId === "custom_compare") return "Custom";
+  const preset = payload?.comparePreset?.trim() ?? presetId;
   if (preset === "mom") return "MoM";
   if (preset === "yoy") return "YoY";
   return "—";

@@ -18,41 +18,41 @@ describe("resolveBulkWordPressPostTitle", () => {
     mockCall.mockReset();
   });
 
-  it("includes focus keyword and all candidates in the user prompt", async () => {
+  it("uses the OpenRouter wordpress_title as the post title", async () => {
     mockCall.mockResolvedValue({
       content: JSON.stringify({
-        compliant: true,
-        wordpress_title: "Veneers vs Crowns Which Dental Restoration Wins",
+        wordpress_title: "How To Choose Between Hunter Douglas And Alta Shades",
       }),
     });
 
-    await resolveBulkWordPressPostTitle({
+    const result = await resolveBulkWordPressPostTitle({
       apiKey: "test-key",
-      focusKeyword: "veneers vs crowns",
+      focusKeyword: "hunter douglas vs alta",
       candidates: {
-        researchSeoTitle: "Veneers vs. Crowns: Which Dental Restoration Guide",
-        csvTitle: "Veneers Vs Crowns",
-        blueprintTitle: "Veneers vs Crowns Compared",
+        researchSeoTitle: "Hunter Douglas vs. Alta Shades",
+        csvTitle: "Hunter Douglas Vs Alta",
+        blueprintTitle: "Hunter Douglas Versus Alta Shades",
       },
     });
 
+    expect(result).toBe("How To Choose Between Hunter Douglas And Alta Shades");
     expect(mockCall).toHaveBeenCalledTimes(1);
     const call = mockCall.mock.calls[0]![0];
-    expect(call.user).toContain("veneers vs crowns");
+    expect(call.user).toContain("hunter douglas vs alta");
+    expect(call.user).toContain("do not paste as the title");
     expect(call.user).toContain("research_seo_title:");
     expect(call.user).toContain("csv_title:");
     expect(call.user).toContain("blueprint_title:");
     expect(call.system).toContain("WORDPRESS POST TITLE");
-    expect(call.user).toContain("synthesize ONE new complete title");
-    expect(call.user).not.toContain("max_chars:");
+    expect(call.system).toContain("Keyword is the topic signal, not the title");
+    expect(call.system).not.toContain("Front-load naturally");
   });
 
-  it("returns the full agent title without truncating past 60 chars", async () => {
+  it("returns the full OpenRouter title without truncating", async () => {
     const title =
-      "2026 Alberta Physician Privatization Changes Changes for Alberta Physicians";
-    expect(title.length).toBeGreaterThan(60);
+      "What Alberta Physician Privatization Changes Mean For Clinics In 2026";
     mockCall.mockResolvedValue({
-      content: JSON.stringify({ compliant: true, wordpress_title: title }),
+      content: JSON.stringify({ wordpress_title: title }),
     });
 
     const result = await resolveBulkWordPressPostTitle({
@@ -65,34 +65,16 @@ describe("resolveBulkWordPressPostTitle", () => {
     });
 
     expect(result).toBe(title);
-    expect(result).not.toMatch(/for Al$/);
   });
 
-  it("returns full CSV title without calling OpenRouter when api key is empty", async () => {
-    const csvTitle =
-      "2026 Alberta Physician Privatization Changes: Changes for Alberta";
-    expect(csvTitle.length).toBeGreaterThan(60);
-    const result = await resolveBulkWordPressPostTitle({
-      apiKey: "",
-      focusKeyword: "Alberta physician privatization changes",
-      candidates: {
-        csvTitle,
-        blueprintTitle: "Blueprint Only",
-      },
-    });
+  it("calls OpenRouter only when an API key is present", async () => {
+    await expect(
+      resolveBulkWordPressPostTitle({
+        apiKey: "",
+        focusKeyword: "hunter douglas vs alta",
+        candidates: { csvTitle: "Hunter Douglas Vs Alta" },
+      }),
+    ).rejects.toThrow(/OpenRouter API key/);
     expect(mockCall).not.toHaveBeenCalled();
-    expect(result).toBe(csvTitle);
-  });
-
-  it("uses preferred full title when OpenRouter fails", async () => {
-    mockCall.mockRejectedValue(new Error("network"));
-
-    const result = await resolveBulkWordPressPostTitle({
-      apiKey: "test-key",
-      focusKeyword: "veneers vs crowns",
-      candidates: { csvTitle: "Veneers Vs Crowns Guide" },
-    });
-
-    expect(result).toBe("Veneers Vs Crowns Guide");
   });
 });

@@ -89,6 +89,8 @@ class Neo_Pulse_App_Workflow_Trigger_Agent_Done {
 			'gsc_reporting'             => 'gsc_reporting',
 			'post_creator'              => 'post_creator',
 			'local_dominator_export'    => 'local_dominator_export',
+			'chatgpt_website_audit'     => 'chatgpt_website_audit',
+			'browser_automation'        => 'browser_automation',
 		);
 		return $map[ sanitize_key( $recipe_key ) ] ?? '';
 	}

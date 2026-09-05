@@ -31,15 +31,29 @@ class Neo_Pulse_App_Task_Execution_Runner_Local_Dominator_Export {
 		$payload       = is_array( $context['payload'] ?? null ) ? $context['payload'] : array();
 		$sanitized     = Neo_Pulse_App_Tasks_Store::sanitize_execution_payload( $payload );
 		$business_name = trim( (string) ( $sanitized['businessName'] ?? '' ) );
+		if ( $business_name === '' ) {
+			$business_name = trim( (string) ( $site['name'] ?? '' ) );
+		}
+		$business_name = Neo_Pulse_App_Local_Dominator_Export::normalize_business_name( $business_name );
 		$keyword       = trim( (string) ( $sanitized['keyword'] ?? '' ) );
-		if ( $business_name === '' || $keyword === '' ) {
-			return array( 'ok' => false, 'error' => 'businessName and keyword are required.' );
+		if ( strtolower( $keyword ) === 'auto' ) {
+			$keyword = '';
+		}
+		if (
+			strtolower( $keyword ) === 'blinds near me'
+			&& strtolower( $business_name ) !== 'advance blinds & drapery'
+		) {
+			$keyword = '';
+		}
+		if ( $business_name === '' ) {
+			return array( 'ok' => false, 'error' => 'businessName is required.' );
 		}
 
 		$save_to_disk = ! array_key_exists( 'saveToDisk', $payload ) || ! empty( $payload['saveToDisk'] );
 		$save_local   = ! empty( $sanitized['saveLocalArchive'] )
 			|| ! array_key_exists( 'saveLocalArchive', $payload )
-			|| ! empty( $payload['saveLocalArchive'] );
+			|| ! empty( $payload['saveLocalArchive'] )
+			|| ! empty( $sanitized['saveToGoogleDrive'] );
 		$execution_id = (int) ( $execution['id'] ?? 0 );
 
 		$contract = array_merge(
@@ -53,12 +67,19 @@ class Neo_Pulse_App_Task_Execution_Runner_Local_Dominator_Export {
 			),
 			Neo_Pulse_App_Tasks_Store::automation_email_contract_fields( $payload )
 		);
+		$contract = array_merge( $contract, Neo_Pulse_App_Tasks_Store::google_drive_contract_fields( $payload ) );
+
+		if ( class_exists( 'Neo_Pulse_App_Agent_Run_Worker_Cron' ) ) {
+			Neo_Pulse_App_Agent_Run_Worker_Cron::kick();
+		}
 
 		return array(
 			'ok'      => true,
-			'status'  => 'awaiting_client',
+			'status'  => 'running',
+			'message' => 'Queued for server Local Dominator export worker.',
 			'payload' => array(
 				'clientRunContract' => $contract,
+				'executionMode'     => 'server',
 			),
 		);
 	}

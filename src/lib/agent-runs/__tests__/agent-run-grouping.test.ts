@@ -5,6 +5,9 @@ import {
   buildAgentRunGroups,
   buildAgentRunSiteNameMap,
   buildAutoExpandedAgentRunFolderKeys,
+  buildAutoExpandedAgentRunClientKeys,
+  mergeEnabledSiteClientGroups,
+  resolveAgentRunBucketTabSelections,
   AGENT_RUN_UNASSIGNED_CLIENT_ID,
 } from "@/lib/agent-runs/agent-run-grouping";
 import type { AgentRun } from "@/lib/agent-runs-types";
@@ -15,7 +18,7 @@ function makeRun(partial: Partial<AgentRun> = {}): AgentRun {
     teamId: 1,
     createdBy: 1,
     title: "Run",
-    recipeKey: "content_optimizer_bulk",
+    recipeKey: "",
     recipeTitle: "Content optimizer",
     status: "running",
     source: "task_manager",
@@ -96,7 +99,7 @@ describe("agentRunBucketKey", () => {
   });
 
   it("falls back to other when no bucket metadata", () => {
-    expect(agentRunBucketKey(makeRun())).toBe("other");
+    expect(agentRunBucketKey(makeRun({ recipeKey: "unknown_recipe" }))).toBe("other");
   });
 
   it("uses reporting for gsc_reporting recipe", () => {
@@ -135,6 +138,35 @@ describe("agentRunBucketKey", () => {
     expect(agentRunBucketKey(run)).toBe("meta");
   });
 
+  it("uses dfs_llm_article_audit bucket for dfs_llm_article_audit recipe", () => {
+    const run = makeRun({
+      recipeKey: "dfs_llm_article_audit",
+      plan: { clientRunContract: { siteId: "site-a" } as never },
+    });
+    expect(agentRunBucketKey(run)).toBe("dfs_llm_article_audit");
+  });
+
+  it("keeps dfs_llm_article_audit bucket when resolvedPost is a post", () => {
+    const run = makeRun({
+      recipeKey: "dfs_llm_article_audit",
+      plan: {
+        clientRunContract: {
+          siteId: "site-a",
+          resolvedPost: { endpoint: "posts", subtype: "post" },
+        } as never,
+      },
+    });
+    expect(agentRunBucketKey(run)).toBe("dfs_llm_article_audit");
+  });
+
+  it("uses meta for content_optimizer_bulk recipe", () => {
+    const run = makeRun({
+      recipeKey: "content_optimizer_bulk",
+      plan: { clientRunContract: { siteId: "site-a" } as never },
+    });
+    expect(agentRunBucketKey(run)).toBe("meta");
+  });
+
   it("keeps sitemap bucket for content optimizer when recipe is bulk", () => {
     const run = makeRun({
       recipeKey: "content_optimizer_bulk",
@@ -168,7 +200,7 @@ describe("buildAgentRunGroups", () => {
       makeRun({ id: 1, context: { siteId: "site-a" }, plan: { clientRunContract: { siteId: "site-a", targetBucket: "posts" } as never } }),
       makeRun({ id: 2, context: { siteId: "site-a" }, plan: { clientRunContract: { siteId: "site-a", targetBucket: "pages" } as never } }),
       makeRun({ id: 3, context: { siteId: "site-b" }, plan: { clientRunContract: { siteId: "site-b", targetBucket: "pages" } as never } }),
-      makeRun({ id: 4, context: {} }),
+      makeRun({ id: 4, context: {}, recipeKey: "unknown_recipe" }),
     ];
 
     const groups = buildAgentRunGroups(runs, siteNames);
@@ -217,5 +249,202 @@ describe("buildAutoExpandedAgentRunFolderKeys", () => {
     expect(keys.has("bucket:site-a:pages")).toBe(true);
     expect(keys.has("client:site-b")).toBe(true);
     expect(keys.has("bucket:site-b:posts")).toBe(true);
+  });
+});
+
+describe("resolveAgentRunBucketTabSelections", () => {
+  const siteNames = buildAgentRunSiteNameMap([{ id: "site-a", name: "Advance Blinds" }]);
+
+  function groupsFor(runs: AgentRun[]) {
+    return buildAgentRunGroups(runs, siteNames);
+  }
+
+  it("defaults to first bucket when user has not picked a tab", () => {
+    const runs = [
+      makeRun({
+        id: 1,
+        status: "running",
+        recipeKey: "local_dominator_export",
+        plan: { clientRunContract: { siteId: "site-a" } as never },
+      }),
+      makeRun({
+        id: 2,
+        status: "done",
+        plan: { clientRunContract: { siteId: "site-a", targetBucket: "other" } as never },
+      }),
+    ];
+    const groups = groupsFor(runs);
+    const selections = resolveAgentRunBucketTabSelections(groups);
+    expect(selections["site-a"]).toBe("research");
+  });
+
+  it("keeps user pick when that bucket has no runs", () => {
+    const runs = [
+      makeRun({
+        id: 1,
+        status: "running",
+        recipeKey: "local_dominator_export",
+        plan: { clientRunContract: { siteId: "site-a" } as never },
+      }),
+      makeRun({
+        id: 2,
+        status: "done",
+        plan: { clientRunContract: { siteId: "site-a" } as never },
+      }),
+    ];
+    const groups = groupsFor(runs);
+    const selections = resolveAgentRunBucketTabSelections(groups, {
+      "site-a": "other",
+    });
+    expect(selections["site-a"]).toBe("other");
+  });
+
+  it("keeps user pick when another bucket has an active run", () => {
+    const runs = [
+      makeRun({
+        id: 1,
+        status: "running",
+        recipeKey: "local_dominator_export",
+        plan: { clientRunContract: { siteId: "site-a" } as never },
+      }),
+      makeRun({
+        id: 2,
+        status: "running",
+        recipeKey: "post_creator",
+        plan: { clientRunContract: { siteId: "site-a" } as never },
+      }),
+    ];
+    const groups = groupsFor(runs);
+    const selections = resolveAgentRunBucketTabSelections(groups, {
+      "site-a": "editorial",
+    });
+    expect(selections["site-a"]).toBe("editorial");
+  });
+
+  it("keeps user pick when that bucket still has runs", () => {
+    const runs = [
+      makeRun({
+        id: 1,
+        status: "done",
+        plan: { clientRunContract: { siteId: "site-a", targetBucket: "posts" } as never },
+      }),
+      makeRun({
+        id: 2,
+        status: "done",
+        plan: { clientRunContract: { siteId: "site-a", targetBucket: "pages" } as never },
+      }),
+    ];
+    const groups = groupsFor(runs);
+    const selections = resolveAgentRunBucketTabSelections(groups, {
+      "site-a": "posts",
+    });
+    expect(selections["site-a"]).toBe("posts");
+  });
+
+  it("keeps empty user pick instead of switching to a bucket with runs", () => {
+    const runs = [
+      makeRun({
+        id: 1,
+        status: "running",
+        recipeKey: "dfs_llm_article_audit",
+        plan: { clientRunContract: { siteId: "site-a" } as never },
+      }),
+    ];
+    const groups = groupsFor(runs);
+    const selections = resolveAgentRunBucketTabSelections(groups, {
+      "site-a": "reporting",
+    });
+    expect(selections["site-a"]).toBe("reporting");
+  });
+
+  it("defaults empty client to reporting tab", () => {
+    const siteNameById = new Map([["site-a", "Alpha"]]);
+    const merged = mergeEnabledSiteClientGroups(["site-a"], [], siteNameById);
+    const selections = resolveAgentRunBucketTabSelections(merged);
+    expect(selections["site-a"]).toBe("reporting");
+  });
+
+  it("preserves user tab pick", () => {
+    const runs = [
+      makeRun({
+        id: 1,
+        status: "done",
+        plan: { clientRunContract: { siteId: "site-a", targetBucket: "pages" } as never },
+      }),
+      makeRun({
+        id: 2,
+        status: "done",
+        plan: { clientRunContract: { siteId: "site-a", targetBucket: "posts" } as never },
+      }),
+    ];
+    const groups = groupsFor(runs);
+    const selections = resolveAgentRunBucketTabSelections(groups, {
+      "site-a": "posts",
+    });
+    expect(selections["site-a"]).toBe("posts");
+  });
+});
+
+describe("buildAutoExpandedAgentRunClientKeys", () => {
+  it("expands client folders only for active and selected runs", () => {
+    const runs = [
+      makeRun({
+        id: 10,
+        status: "running",
+        plan: { clientRunContract: { siteId: "site-a", targetBucket: "pages" } as never },
+      }),
+      makeRun({
+        id: 11,
+        status: "done",
+        plan: { clientRunContract: { siteId: "site-b", targetBucket: "posts" } as never },
+      }),
+    ];
+
+    const keys = buildAutoExpandedAgentRunClientKeys(runs, 11);
+    expect(keys.has("client:site-a")).toBe(true);
+    expect(keys.has("client:site-b")).toBe(true);
+    expect([...keys].some((k) => k.startsWith("bucket:"))).toBe(false);
+  });
+});
+
+describe("mergeEnabledSiteClientGroups", () => {
+  it("includes every enabled site even when no runs exist", () => {
+    const siteNameById = new Map([
+      ["site-a", "Alpha"],
+      ["site-b", "Beta"],
+    ]);
+    const runGroups = buildAgentRunGroups(
+      [
+        makeRun({
+          id: 1,
+          plan: { clientRunContract: { siteId: "site-a", targetBucket: "pages" } as never },
+        }),
+      ],
+      siteNameById,
+    );
+
+    const merged = mergeEnabledSiteClientGroups(["site-a", "site-b"], runGroups, siteNameById);
+
+    expect(merged.map((g) => g.siteId)).toEqual(["site-a", "site-b"]);
+    const empty = merged.find((g) => g.siteId === "site-b");
+    expect(empty?.runCount).toBe(0);
+    expect(empty?.buckets).toEqual([]);
+  });
+
+  it("appends unassigned runs after enabled sites", () => {
+    const siteNameById = new Map([["site-a", "Alpha"]]);
+    const runGroups = buildAgentRunGroups(
+      [
+        makeRun({
+          id: 2,
+          plan: { clientRunContract: { siteId: AGENT_RUN_UNASSIGNED_CLIENT_ID, targetBucket: "pages" } as never },
+        }),
+      ],
+      siteNameById,
+    );
+
+    const merged = mergeEnabledSiteClientGroups(["site-a"], runGroups, siteNameById);
+
+    expect(merged.some((g) => g.siteId === AGENT_RUN_UNASSIGNED_CLIENT_ID)).toBe(true);
   });
 });

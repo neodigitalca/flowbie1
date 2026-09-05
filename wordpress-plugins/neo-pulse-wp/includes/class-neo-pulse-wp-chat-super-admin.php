@@ -15,7 +15,7 @@ class Neo_Pulse_Wp_Chat_Super_Admin {
 	 * @param array<string, mixed>|null $body Request body.
 	 */
 	public static function is_backend_mode_request( ?array $body ): bool {
-		if ( ! is_user_logged_in() ) {
+		if ( ! Neo_Pulse_Wp_Chat::current_user_can_backend_mode() ) {
 			return false;
 		}
 		if ( ! is_array( $body ) ) {

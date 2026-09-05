@@ -9,16 +9,21 @@ defined( 'ABSPATH' ) || exit;
 
 class Neo_Pulse_Wp_Fields_Storage {
 
-	const CPT_GROUP     = 'neo-pulse-field-group';
+	const CPT_GROUP     = 'np-field-group';
 	const CPT_FIELD     = 'neo-pulse-field';
 	const CPT_POST_TYPE = 'neo-pulse-post-type';
 	const CPT_TAXONOMY  = 'neo-pulse-taxonomy';
-	const CPT_OPTIONS   = 'neo-pulse-options-page';
+	const CPT_OPTIONS   = 'np-options-page';
+
+	const CPT_GROUP_LEGACY   = 'neo-pulse-field-group';
+	const CPT_OPTIONS_LEGACY = 'neo-pulse-options-page';
 
 	/** @var array<string, array<string, mixed>>|null */
 	private static $groups_cache = null;
 
 	public static function register_post_types(): void {
+		self::migrate_legacy_storage_post_types();
+
 		register_post_type(
 			self::CPT_GROUP,
 			array(
@@ -86,6 +91,19 @@ class Neo_Pulse_Wp_Fields_Storage {
 				'delete_with_user' => false,
 			)
 		);
+	}
+
+	/**
+	 * WordPress caps post type keys at 20 characters.
+	 */
+	private static function migrate_legacy_storage_post_types(): void {
+		if ( get_option( 'neo_pulse_wp_storage_cpt_slugs', '' ) === '2' ) {
+			return;
+		}
+		global $wpdb;
+		$wpdb->update( $wpdb->posts, array( 'post_type' => self::CPT_GROUP ), array( 'post_type' => self::CPT_GROUP_LEGACY ) );
+		$wpdb->update( $wpdb->posts, array( 'post_type' => self::CPT_OPTIONS ), array( 'post_type' => self::CPT_OPTIONS_LEGACY ) );
+		update_option( 'neo_pulse_wp_storage_cpt_slugs', '2', true );
 	}
 
 	public static function flush_cache(): void {

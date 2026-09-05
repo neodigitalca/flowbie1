@@ -20,10 +20,18 @@ alwaysApply: true
 
 ## Logic and parsing
 
+- **AI first** for pattern matching and semantic work: OpenRouter + schema before complicated regex or manual parsers. See [`ai-first-pattern-matching.mdc`](ai-first-pattern-matching.mdc).
 - **No regex** for branching, validation, extraction, or “smart” string work **unless** the user requests regex **or** the pattern is **numeric-only** matching (e.g. digits, counts, IDs).
 - Prefer **structured conditions**, typed parsers, APIs, and **OpenRouter** with schema-shaped outputs over manual string hacks.
 
 ## How you work
 
 - **Agentic by default**: use tools, read code, run checks, and implement end-to-end; avoid large hand-written scaffolding when automation fits.
-- **Plans** (when you produce them): for each file or logical change, include **line counts** - current and/or estimated after edit (approximate is fine).
+- **Plans** (when you produce them): **imperative** per [`plans-must-have-strategies.mdc`](plans-must-have-strategies.mdc):
+  - **Must-have strategies** section (Logic, Occam's razor, Server-side only, Minimal stacking / zero CLS, No fallbacks, No workarounds / prompt-level fix, Flat inline forms, Background shell, AI first pattern matching, Murphy's Law check, Harness UI when relevant) with plan-specific bullets.
+  - **Prompt-level strategy** subsection when LLM/agents/prompts are in scope (separate from code tasks).
+  - **Final review todo** as the last implementation step in every plan.
+  - **Scannable todos:** plain language, no jargon-heavy lines; quick to read (see [`cursor-plans-human-todos.mdc`](cursor-plans-human-todos.mdc)).
+  - **Complete execution:** every install, npm script, test, and verify step in todos; agent runs them in background Shell (shell visible OFF); do not ask the user to run or opt in.
+  - **Files and line counts** table for every file touched (current and/or estimated after edit).
+  - A plan without must-have strategies, line counts, or the final review todo is incomplete.

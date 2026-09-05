@@ -1,0 +1,65 @@
+---
+description: Mandatory flat inline forms - placeholder labels, colored wells, stylized selects, semantic Figma grouping
+globs: src/**/*.{tsx,ts,css}
+alwaysApply: true
+---
+
+# Flat inline forms (modern)
+
+Flowbie forms are **flat**, **inline**, and **modern**. Labels live **inside** fields as placeholders, not stacked above inputs. Related fields group semantically with consistent colored backgrounds and rhythm.
+
+## Mandatory self-check (form UI)
+
+**Are labels inline placeholders on flat colored fields, with selects styled the same way?**
+
+If not, restyle before shipping. Do not add stacked `<Label>` + `<Input>` rows unless the user explicitly asks.
+
+## Inline labels (placeholders, not stacked)
+
+### Do
+
+- Use **`placeholder`** on `Input`, `Textarea`, and **`SelectValue placeholder`** on selects for field identity.
+- One horizontal row per control cluster; **single-line** field height (`h-8` toolbar pattern or equivalent).
+- Empty state reads the label from placeholder text; filled state shows value only.
+
+### Do not
+
+- Do **not** stack a visible label above the field (`<Label>` row then `<Input>` row) for standard forms.
+- Do **not** use helper text under fields that restates the placeholder (see `copy-no-emdash-notifications.mdc`).
+- Do **not** mix stacked labels and placeholder-only fields in the same form section.
+
+**Accessibility:** use `aria-label` or `aria-labelledby` when placeholder alone is insufficient; keep visual label inline in the field.
+
+## Flat forms with colored backgrounds
+
+- Fields sit on **flat colored wells**, not bordered cards. No decorative borders.
+- Default field surface: **`bg-zinc-900`** on black toolbars and form rows (see `BULK_HEADER_FIELD` in `bulk-workspace-header-styles.ts`).
+- Use **surface color + spacing** to separate groups; not nested boxes or shadows.
+- **`rounded-none`**, **`border-0`**, focus via ring only (`focus-visible:ring-2`).
+- Placeholder text: **`placeholder:text-muted-foreground`**.
+
+## Dropdowns and selects (stylized)
+
+- Selects use the **same well styling** as text inputs (`BULK_HEADER_SELECT`, `BULK_HEADER_SELECT_TRIGGER`).
+- **`SelectValue`** must set a **placeholder** that names the field (e.g. `placeholder="Reporting periods"`), not bare "Select".
+- Selected value: full label visible (`[&>span]:line-clamp-none`, `whitespace-nowrap` on trigger).
+- Chevron/icon: **`text-muted-foreground`**; trigger height matches inputs (`h-8`).
+
+## Semantic grouping (forms)
+
+- Group **related fields in one row or one tight block** (filters together, dates together, execution target together).
+- Separate unrelated groups with **gap** or **`BULK_TOOLBAR_GROUP_DIVIDER`**, not extra wrappers.
+- Form sections follow **Figma-optimized** rhythm: clear columns, fixed control widths where needed, no ornamental chrome.
+- Dialog/side-panel forms: same inline placeholder pattern; group primary fields first, actions on one row.
+
+## Workspace and plan alignment
+
+- Toolbar forms: `bulk-workspace-header-styles.ts`, `generator-toolbar-theme.ts`.
+- Task/workflow forms: match `AutomationTaskFlatRow`, `TaskExecutionTargetFields` placeholder patterns.
+- Plans must call out form touchpoints in **Must-have strategies** per `plans-must-have-strategies.mdc`.
+
+## Reference
+
+- `src/components/keyword-research/bulk/bulk-workspace-header-styles.ts` — `BULK_HEADER_FIELD`, `BULK_HEADER_SELECT_TRIGGER`
+- `src/components/manager/tasks/AutomationTaskFlatRow.tsx` — inline placeholder row
+- `src/components/manager/tasks/GscReportingPeriodFields.tsx` — select placeholder as label

@@ -40,7 +40,11 @@ describe("generateSEOSlug", () => {
   it("returns empty when model content empty", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ choices: [{ message: { content: "" } }] }),
+      json: async () => ({
+        ok: true,
+        content: "",
+        raw: { choices: [{ message: { content: "" } }] },
+      }),
     });
     await expect(generateSEOSlug("Title", "keyword", "Marietta, GA", "sk-test")).resolves.toBe("");
   });
@@ -49,7 +53,11 @@ describe("generateSEOSlug", () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        choices: [{ message: { content: "chiro-sports-injury-douglasdale-calgary-ab" } }],
+        ok: true,
+        content: "chiro-sports-injury-douglasdale-calgary-ab",
+        raw: {
+          choices: [{ message: { content: "chiro-sports-injury-douglasdale-calgary-ab" } }],
+        },
       }),
     });
     await expect(

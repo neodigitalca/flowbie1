@@ -6,6 +6,7 @@
 
 import { loadApiKey } from "@/lib/api";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 const SLUG_MAX_LENGTH = 80;
 
@@ -134,7 +135,7 @@ ${locationBlock}
 - **Glue words — delete, never keep:** Prepositions, articles, conjunctions, and other short connector or filler words from the title or keyword must be **omitted entirely** from the slug. Do not hyphenate them. Do not abbreviate them. If a token only links other words and adds no search intent, it does not belong in the URL.`;
 
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await postOpenRouterAppChatFetch( {
       method: "POST",
       headers: openRouterWebAppHeaders(key),
       body: JSON.stringify({

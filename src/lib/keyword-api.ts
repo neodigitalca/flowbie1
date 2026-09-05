@@ -593,13 +593,7 @@ export async function getKeywordOverview(
         });
         
         if (validResults.length === 0) {
-          if (mcpResults.length === 0) {
-            throw new Error("No keyword data returned from API. Check browser console and backend logs for details.");
-          } else {
-            // We got results but they were filtered out - still return them (might have keyword but no data)
-            console.warn('[KeywordAPI] All results filtered out, but returning original results:', mcpResults);
-            return [...cachedResults, ...dbResults, ...mcpResults];
-          }
+          return [...cachedResults, ...dbResults, ...mcpResults];
         }
         
         // Cache the results

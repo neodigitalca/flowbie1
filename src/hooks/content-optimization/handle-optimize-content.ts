@@ -19,29 +19,30 @@ import {
 import type { PendingOptimization } from "./use-optimization-state";
 import { getFieldsForPost } from "@/lib/wordpress-api/fields-client";
 import { mergeSeoResearchFromAcfIntoContext } from "@/lib/content-generation/ai-driven-acf-reader";
+import {
+  mergeStoredSeoResearchBriefIntoContext,
+} from "@/lib/content-optimization/seo-research-brief-for-optimize";
+import { resolveOptimizeFocusKeyword } from "@/lib/content-optimization/ensure-seo-research-brief-for-optimize";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { interpretPromptModifier } from "@/lib/prompt-modifier-interpreter";
 import { type HandleOptimizeContentParams } from "./handle-optimize-content-params";
 import { loadHandleOptimizePostAndIntent } from "./handle-optimize-content-post-load";
-import { hasSubstantiveSeoResearch } from "./bulk-optimization-missing-seo-research";
 import { fetchGSCPagePerformance } from "@/lib/wordpress-api/gsc";
 import { gscResultFromPagePerformance } from "./bulk-optimization-prefetch-page-gsc";
 import { DEATH_STAR_NO_GSC } from "./bulk-optimization-constants";
 
 export type HandleOptimizeContentResult = { optimizationChanges: Record<string, unknown> } | void | undefined;
 
-function requireAcfKeyword(acfFields: Record<string, unknown>, url: string): string {
-  const kw = String(acfFields.keyword_focus ?? "").trim();
+function resolveAcfKeyword(acfFields: Record<string, unknown>, url: string, selectedQuery?: string): string {
+  const kw = resolveOptimizeFocusKeyword({
+    url,
+    acfFields,
+    selectedKeywordQuery: selectedQuery,
+  });
   if (!kw) {
-    throw new Error(`ACF keyword_focus is required for ${url}. Set it in WordPress before optimizing.`);
+    throw new Error(`Cannot derive a focus keyword for ${url}. Set keyword_focus in WordPress or use a URL with a slug.`);
   }
   return kw;
-}
-
-function requireSeoResearch(acfFields: Record<string, unknown>, url: string): void {
-  if (!hasSubstantiveSeoResearch(acfFields)) {
-    throw new Error(`ACF seo_research is required for ${url}. Run bulk prep or fill the field in WordPress.`);
-  }
 }
 
 export async function handleOptimizeContent(params: HandleOptimizeContentParams): Promise<HandleOptimizeContentResult> {
@@ -74,7 +75,10 @@ export async function handleOptimizeContent(params: HandleOptimizeContentParams)
       ...prev,
       [site.id]: { ...(prev[site.id] || {}), [url]: null },
     }));
-    updateOptimizationProgress(setOptimizationProgress, site.id, "load", 0, "Loading page and ACF…");
+    updateOptimizationProgress(setOptimizationProgress, site.id, "load", 0, "Loading page and ACF…", {
+      generatedFiles: [],
+      harnessSections: [],
+    });
     patchOptimizationProgress(setOptimizationProgress, site.id, { pageUrl: url.trim() });
   } catch (stateError) {
     console.error("[Optimize Content] Error setting initial state:", stateError);
@@ -127,12 +131,13 @@ export async function handleOptimizeContent(params: HandleOptimizeContentParams)
       acfFields = acfResult.fields;
     }
 
-    const acfKeyword = requireAcfKeyword(acfFields, url);
-    requireSeoResearch(acfFields, url);
+    const acfKeyword = resolveAcfKeyword(acfFields, url);
 
-    let acfContext = mergeSeoResearchFromAcfIntoContext(acfFields, {
-      keywordFocus: acfKeyword,
-    });
+    let acfContext = mergeStoredSeoResearchBriefIntoContext(
+      acfFields,
+      mergeSeoResearchFromAcfIntoContext(acfFields, { keywordFocus: acfKeyword }),
+      resolvedPost?.seoResearch,
+    );
 
     const promptModifierKey = Object.keys(acfFields).find((k) =>
       /prompt_modifier|prompt_mod|seo_prompt_modifier/i.test(k),

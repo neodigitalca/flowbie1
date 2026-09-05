@@ -37,6 +37,60 @@ export function getLocalDayKey(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Local calendar month bounds for WordPress REST `after` / `before`. */
+export function getLocalCalendarMonthAfterBefore(now: Date): { after: string; before: string; label: string } {
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  return getLocalCalendarMonthAfterBeforeForParts(y, m);
+}
+
+export function defaultLocalCalendarMonthKey(now = new Date()): string {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+export function formatLocalCalendarMonthKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+export function parseLocalCalendarMonthKey(monthKey: string, fallback = new Date()): Date {
+  const match = /^(\d{4})-(\d{2})$/.exec(monthKey.trim());
+  if (!match) return new Date(fallback.getFullYear(), fallback.getMonth(), 1);
+  return new Date(Number(match[1]), Number(match[2]) - 1, 1);
+}
+
+/** `monthKey` is YYYY-MM in local calendar. */
+export function getLocalCalendarMonthAfterBeforeForMonthKey(monthKey: string): {
+  after: string;
+  before: string;
+  label: string;
+} {
+  const match = /^(\d{4})-(\d{2})$/.exec(monthKey.trim());
+  if (!match) return getLocalCalendarMonthAfterBefore(new Date());
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  if (!Number.isInteger(year) || monthIndex < 0 || monthIndex > 11) {
+    return getLocalCalendarMonthAfterBefore(new Date());
+  }
+  return getLocalCalendarMonthAfterBeforeForParts(year, monthIndex);
+}
+
+function getLocalCalendarMonthAfterBeforeForParts(year: number, monthIndex: number): {
+  after: string;
+  before: string;
+  label: string;
+} {
+  const start = new Date(year, monthIndex, 1, 0, 0, 0, 0);
+  const endExclusive = new Date(year, monthIndex + 1, 1, 0, 0, 0, 0);
+  const monthLabel = start.toLocaleString("en-US", { month: "long", year: "numeric" });
+  return {
+    after: start.toISOString(),
+    before: endExclusive.toISOString(),
+    label: monthLabel,
+  };
+}
+
 export function formatQuarterLabel(quarter: CalendarQuarter, year: number): string {
   return `Q${quarter} ${year}`;
 }

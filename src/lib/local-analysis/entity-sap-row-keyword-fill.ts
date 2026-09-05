@@ -9,11 +9,11 @@ import {
 import type { PromptBulkSitemapInventoryBuckets, PromptBulkSitemapInventoryLink } from "@/lib/bulk/prompt-bulk-sitemap-inventory";
 import {
   fetchEntityGscKeywordBundle,
-  gscSapKeywordBasesForOpenRouter,
+  gscAllQueryStringsForEntityKeywordFill,
 } from "@/lib/bulk/bulk-gsc-site-queries";
 import {
   ensureEntitySiteWarmCache,
-  gscQueriesFromWarmBundleForSapBudget,
+  gscAllQueriesFromWarmBundle,
 } from "@/lib/local-analysis/entity-site-warm-cache";
 import type { GscCompetitorDateRange, GscSiteQueryRow } from "@/lib/competitor-research/types";
 import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
@@ -21,14 +21,18 @@ import { keywordUniquenessKey } from "@/lib/local-analysis-fill-keywords-from-wp
 import { normalizeEntityHintCommaLabel } from "@/lib/comma-place-label";
 import { buildEntityAdGroupSections, type EntityAdGroupSection } from "@/lib/local-analysis/sap-entity-ad-groups";
 import {
-  aiFilterAllowedBrandTexts,
-  aiRejectBrandOrBlockedTexts,
-} from "@/lib/content-brand-ai-gate";
-import {
   GLOBAL_BLOCKED_TOPIC_PROMPT_BLOCK,
 } from "@/lib/content-topic-blocklist";
 import { isOffensiveGscQuery } from "@/lib/gsc-offensive-word-blocklist";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
+import {
+  collectBlockedForEntity,
+  entityKeywordPairKey,
+  findEntitySapRowCollision,
+  reserveEntitySapSlug,
+  type EntitySapOccupancy,
+} from "@/lib/local-analysis/entity-sap-inventory-collision";
 
 /** Collapse repeated comma segments (e.g. "Fort Saskatchewan, Fort Saskatchewan, AB"). */
 export function collapseRepeatedPlaceSegmentsInKeyword(keyword: string): string {
@@ -419,6 +423,15 @@ export function normalizeSapKeywordWithPlaceSuffix(
   return composeServiceKeywordWithAdGroupEntity(service, entity);
 }
 
+/** Service phrase only (no entity suffix) for SAP title agent and template fallback. */
+export function serviceKeywordForSapTitle(keyword: string, entity: string): string {
+  const ent = (entity ?? "").trim();
+  const collapsed = collapseRepeatedPlaceSegmentsInKeyword(keyword).replace(/,/g, " ").trim();
+  if (!ent) return collapsed;
+  const service = stripAllPlaceTokensFromKeyword(collapsed, [ent]).trim();
+  return service || collapsed;
+}
+
 /**
  * Strip foreign / native place tokens from the GSC base, then append this AdGroup
  * entity (lowercase, no commas). Place lives on the keyword for SEO.
@@ -434,22 +447,146 @@ export function sapKeywordFromShortBaseAndEntity(
   return composeServiceKeywordWithAdGroupEntity(service, entity);
 }
 
-const OR = "https://openrouter.ai/api/v1/chat/completions";
+const CLIENT_AWARE_SAP_SERVICE_RULES = `
+- Pick **services the client actually offers** (from \`clientAudienceContextMarkdown\`, site inventory, and \`seedKeywords\` when present).
+- Prefer transactional **client service lines** (e.g. tax preparation, bookkeeping, corporate accounting, bare trust reporting).
+- Deprioritize generic informational queries (tax brackets, tax rates, income tax tables, provincial or federal reference lookups) unless they clearly map to a stated client service.
+- Each base is a **2–3 word** service or product phrase only. Extract the service phrase from GSC; **never** return the full geographic GSC string as a base.
+- Bad bases: "alberta tax brackets", "tax rates sherwood park", "blinds edmonton".
+- Good bases: "tax preparation", "bookkeeping services", "bare trust reporting", "corporate accounting".`;
 
-const GROUP_KEYWORDS_SYSTEM = `You assign focus keywords for **one entity ad group** of Local Analysis SAP landing pages.
+const GROUP_KEYWORDS_SYSTEM_BASE = `You assign focus keywords for **one entity ad group** of Local Analysis SAP landing pages.
 
 Return **only** valid JSON: {"keywords":["..."]} with **exactly** \`count\` keywords.
 
 Rules:
-- Every keyword must be **unique** within your response **and** must not match any string in \`keywordsAlreadyUsedInGroup\` (case-insensitive).
+- Each keyword is the **full entity focus keyword** (service phrase + entity place). Every row in this ad group must have a **different keyword+entity pair** (case-insensitive). Duplicates across **other** ad groups are fine.
 - Format: **2–3 word** service / product phrase only. Do **not** append city, neighbourhood, or province — code appends the AdGroup entity afterward.
-- Bad: "blinds edmonton", "blind repair sherwood park", "blinds Westmount Edmonton".
-- Good: "blinds", "blind repair", "hunter douglas blinds", "roman shades".
-- Base phrases on **unused** entries in \`gscKeywords\` first (strip any place words); when those run out, invent distinct service angles from \`seedKeywords\` and site services (not the brand name).
-- **NEVER** use the site's own trading name from \`siteName\` as the keyword (fuzzy / word-reorder: "Blind Magic" ↔ "Magic Blinds"). Never use blocked topics (Bali Blinds). Product lines the dealer sells (Hunter Douglas, Alta, etc.) are fine.
+${CLIENT_AWARE_SAP_SERVICE_RULES}
+- Pick from **gscKeywords** (full site export). The same GSC phrase may appear in other ad groups with different entities. Within **this** group, each composed keyword+entity must differ from \`keywordsAlreadyUsedInGroup\`.
+- When GSC runs out, invent distinct service angles from \`seedKeywords\` and site services (not the brand name).
+- **NEVER** use the site's own trading name from \`siteName\` as the keyword (fuzzy / word-reorder matches).
 - Never use vulgar, profane, or offensive language.
 ${GLOBAL_BLOCKED_TOPIC_PROMPT_BLOCK}
 No markdown outside JSON.`;
+
+const GROUP_KEYWORDS_INVENTORY_BLOCK = `
+- **Existing SAP pages for this entity (mandatory):** Do not reuse any keyword, slug, or title angle already used for this place. Pick a different service or product line.
+- Forbidden keywords (case-insensitive): any in \`blockedKeywords\`.
+- Forbidden slugs: any in \`blockedSlugs\`.
+- Forbidden titles: any in \`blockedTitles\`.
+- See \`existingSapPagesForEntity\` for pages already live or scheduled for this entity.`;
+
+const PICK_GSC_PRODUCT_BASES_SYSTEM_BASE = `You pick product/service keyword bases for Local Analysis SAP landing pages from a Google Search Console export.
+
+Return **only** valid JSON: {"bases":["..."]} with **exactly** \`count\` strings.
+
+Rules:
+- Each base must come from **gscKeywords** (real GSC queries for this site).
+${CLIENT_AWARE_SAP_SERVICE_RULES}
+- Return **count** distinct bases when possible. Do not repeat the same base in the array.
+- Do not use vulgar or offensive language.
+${GLOBAL_BLOCKED_TOPIC_PROMPT_BLOCK}
+No markdown outside JSON.`;
+
+export type EntitySapKeywordPickPromptArgs = {
+  mode: "pick" | "group";
+  hasInventoryBlock?: boolean;
+  clientAudienceContextMarkdown?: string;
+  entityTypeFocus?: readonly string[];
+};
+
+export function buildEntitySapKeywordPickSystemPrompt(args: EntitySapKeywordPickPromptArgs): string {
+  const base =
+    args.mode === "pick" ? PICK_GSC_PRODUCT_BASES_SYSTEM_BASE : GROUP_KEYWORDS_SYSTEM_BASE;
+  const inventory =
+    args.mode === "group" && args.hasInventoryBlock ? GROUP_KEYWORDS_INVENTORY_BLOCK : "";
+  const focus = args.entityTypeFocus?.map((f) => f.trim()).filter(Boolean);
+  const focusBlock = focus?.length ? `\n- **Entity type emphasis:** ${focus.join(", ")}` : "";
+  const clientCtx = args.clientAudienceContextMarkdown?.trim();
+  const clientBlock = clientCtx
+    ? `\n--- Client & site context (pick services this client actually offers) ---\n${clientCtx}\n`
+    : "";
+  return `${base}${inventory}${focusBlock}${clientBlock}`;
+}
+
+export type EntitySapKeywordPickUserPayloadArgs = {
+  siteName: string;
+  siteUrl: string;
+  entity: string;
+  count: number;
+  seedKeywords: string[];
+  gscKeywords: string[];
+  gridLocations: string[];
+  clientAudienceContextMarkdown?: string;
+  entityTypeFocus?: readonly string[];
+  keywordPlace?: string;
+  keywordsAlreadyUsedInGroup?: string[];
+  existingSapPagesForEntity?: Array<{ title: string; keyword: string; slug: string }>;
+  blockedSlugs?: string[];
+  blockedKeywords?: string[];
+  blockedTitles?: string[];
+};
+
+export function buildEntitySapKeywordPickUserPayload(args: EntitySapKeywordPickUserPayloadArgs): string {
+  const payload: Record<string, unknown> = {
+    siteName: args.siteName,
+    siteUrl: args.siteUrl,
+    entity: args.entity,
+    count: args.count,
+    gscKeywords: args.gscKeywords,
+    seedKeywords: args.seedKeywords,
+    gridLocations: args.gridLocations,
+  };
+  if (args.keywordPlace) payload.keywordPlace = args.keywordPlace;
+  if (args.keywordsAlreadyUsedInGroup) {
+    payload.keywordsAlreadyUsedInGroup = args.keywordsAlreadyUsedInGroup;
+  }
+  if (args.existingSapPagesForEntity) {
+    payload.existingSapPagesForEntity = args.existingSapPagesForEntity;
+  }
+  if (args.blockedSlugs) payload.blockedSlugs = args.blockedSlugs;
+  if (args.blockedKeywords) payload.blockedKeywords = args.blockedKeywords;
+  if (args.blockedTitles) payload.blockedTitles = args.blockedTitles;
+  const clientCtx = args.clientAudienceContextMarkdown?.trim();
+  if (clientCtx) payload.clientAudienceContextMarkdown = clientCtx;
+  const focus = args.entityTypeFocus?.map((f) => f.trim()).filter(Boolean);
+  if (focus?.length) payload.entityTypeFocus = focus;
+  return JSON.stringify(payload);
+}
+
+/** Strip place tokens from AI/GSC bases; pad only with stripped service phrases. */
+export function padGscProductBasesFromCandidates(args: {
+  bases: string[];
+  count: number;
+  gscKeywords: string[];
+  entity: string;
+  gridLocations: readonly string[];
+}): string[] {
+  const places = [args.entity, ...args.gridLocations].filter((p) => p.trim());
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of args.bases) {
+    const stripped = stripAllPlaceTokensFromKeyword(raw, places).trim();
+    if (!stripped) continue;
+    const key = stripped.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(stripped);
+  }
+  let cursor = 0;
+  while (out.length < args.count && args.gscKeywords.length > 0 && cursor < args.gscKeywords.length) {
+    const candidate = args.gscKeywords[cursor]!;
+    cursor += 1;
+    const stripped = stripAllPlaceTokensFromKeyword(candidate, places).trim();
+    if (!stripped) continue;
+    const key = stripped.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(stripped);
+  }
+  return out.slice(0, args.count);
+}
 
 export type EntitySapKeywordSources = {
   links: PromptBulkSitemapInventoryLink[];
@@ -470,9 +607,13 @@ export type FillEntitySapRowKeywordsArgs = {
   gscQueries: GscSiteQueryRow[];
   gridLocations: string[];
   entityTypeFocus?: string[];
+  clientAudienceContextMarkdown?: string;
   temperature?: number;
   topP?: number;
   onGroupComplete?: (rows: CSVRow[], doneGroups: number, totalGroups: number) => void;
+  sapOccupancy?: EntitySapOccupancy;
+  reservedSlugsInRun?: Set<string>;
+  titleTemplate?: string;
 };
 
 export async function fetchEntitySapKeywordSources(
@@ -493,7 +634,7 @@ export async function fetchEntitySapKeywordSources(
   return {
     links: warm.inventory.links,
     buckets: warm.inventory.buckets,
-    gscQueries: gscQueriesFromWarmBundleForSapBudget(warm, rowCount),
+    gscQueries: gscAllQueriesFromWarmBundle(warm),
     gscDateRange: warm.gsc.dateRange,
   };
 }
@@ -526,7 +667,7 @@ async function postOpenRouter(args: {
   temperature: number;
   topP: number;
 }): Promise<string> {
-  const res = await fetch(OR, {
+  const res = await postOpenRouterAppChatFetch( {
     method: "POST",
     headers: openRouterWebAppHeaders(args.apiKey),
     body: JSON.stringify({
@@ -565,18 +706,42 @@ function isRejectedEntitySapKeywordSync(keyword: string): boolean {
   return false;
 }
 
+type KeywordCollisionContext = {
+  sapOccupancy?: EntitySapOccupancy;
+  reservedSlugsInRun?: Set<string>;
+  titleTemplate?: string;
+};
+
+function keywordWouldCollide(
+  keyword: string,
+  entity: string,
+  ctx?: KeywordCollisionContext,
+): boolean {
+  if (!ctx?.sapOccupancy) return false;
+  return (
+    findEntitySapRowCollision(
+      { keyword, entity, titleTemplate: ctx.titleTemplate },
+      ctx.sapOccupancy,
+      ctx.reservedSlugsInRun,
+    ) !== null
+  );
+}
+
 function assignGscKeywordsForSection(
   section: EntityAdGroupSection,
   rows: CSVRow[],
   gscKeywords: string[],
   fills: Map<number, string>,
   placeCorpus: readonly string[] = [],
+  collisionCtx?: KeywordCollisionContext,
 ): number {
   if (gscKeywords.length === 0) return 0;
-  const usedInGroup = new Set<string>();
+  const usedPairsInGroup = new Set<string>();
   for (const globalIdx of section.rowIndices) {
-    const key = keywordUniquenessKey(fills.get(globalIdx) ?? "");
-    if (key) usedInGroup.add(key);
+    const entity = normalizeEntityHintCommaLabel((rows[globalIdx]?.entity ?? section.entity).trim());
+    const kw = fills.get(globalIdx) ?? "";
+    const pairKey = entity && kw ? entityKeywordPairKey(kw, entity) : "";
+    if (pairKey) usedPairsInGroup.add(pairKey);
   }
   let assigned = 0;
   let cursor = 0;
@@ -589,14 +754,108 @@ function assignGscKeywordsForSection(
       if (isRejectedEntitySapKeywordSync(base)) continue;
       const keyword = sapKeywordFromShortBaseAndEntity(base, entity, placeCorpus);
       if (isRejectedEntitySapKeywordSync(keyword)) continue;
-      const key = keywordUniquenessKey(keyword);
-      if (!key || usedInGroup.has(key)) continue;
+      const pairKey = entityKeywordPairKey(keyword, entity);
+      if (!pairKey || usedPairsInGroup.has(pairKey)) continue;
+      if (keywordWouldCollide(keyword, entity, collisionCtx)) continue;
       fills.set(globalIdx, keyword);
-      usedInGroup.add(key);
+      usedPairsInGroup.add(pairKey);
+      if (collisionCtx?.reservedSlugsInRun) {
+        reserveEntitySapSlug(collisionCtx.reservedSlugsInRun, keyword, entity);
+      }
       assigned++;
       cursor = (cursor + attempt + 1) % gscKeywords.length;
       break;
     }
+  }
+  return assigned;
+}
+
+/** One OpenRouter call: pick exactly `count` product bases from the GSC export. */
+async function pickProductKeywordBasesFromGsc(args: {
+  apiKey: string;
+  model: string;
+  siteId: string | undefined;
+  siteName: string;
+  siteUrl: string;
+  entity: string;
+  count: number;
+  seedKeywords: string[];
+  gscKeywords: string[];
+  gridLocations: string[];
+  clientAudienceContextMarkdown?: string;
+  entityTypeFocus?: readonly string[];
+  temperature: number;
+  topP: number;
+}): Promise<string[]> {
+  const user = buildEntitySapKeywordPickUserPayload({
+    siteName: args.siteName,
+    siteUrl: args.siteUrl,
+    entity: args.entity,
+    count: args.count,
+    gscKeywords: args.gscKeywords.slice(0, 500),
+    seedKeywords: args.seedKeywords,
+    gridLocations: args.gridLocations,
+    clientAudienceContextMarkdown: args.clientAudienceContextMarkdown,
+    entityTypeFocus: args.entityTypeFocus,
+  });
+  const content = await postOpenRouter({
+    apiKey: args.apiKey,
+    model: args.model,
+    siteId: args.siteId,
+    messages: [
+      {
+        role: "system",
+        content: buildEntitySapKeywordPickSystemPrompt({
+          mode: "pick",
+          clientAudienceContextMarkdown: args.clientAudienceContextMarkdown,
+          entityTypeFocus: args.entityTypeFocus,
+        }),
+      },
+      { role: "user", content: user },
+    ],
+    temperature: args.temperature,
+    topP: args.topP,
+  });
+  let bases: string[] = [];
+  try {
+    const parsed = JSON.parse(content) as { bases?: unknown };
+    if (Array.isArray(parsed.bases)) {
+      bases = parsed.bases.map((b) => String(b ?? "").trim()).filter((b) => b.length > 0);
+    }
+  } catch {
+    bases = [];
+  }
+  return padGscProductBasesFromCandidates({
+    bases,
+    count: args.count,
+    gscKeywords: args.gscKeywords,
+    entity: args.entity,
+    gridLocations: args.gridLocations,
+  });
+}
+
+/** Apply AI-picked GSC bases to rows in order (no post-pick filter pass). */
+function applyPickedBasesToSection(
+  section: EntityAdGroupSection,
+  rows: CSVRow[],
+  bases: string[],
+  fills: Map<number, string>,
+  placeCorpus: readonly string[] = [],
+): number {
+  if (bases.length === 0) return 0;
+  let assigned = 0;
+  for (let i = 0; i < section.rowIndices.length; i++) {
+    const globalIdx = section.rowIndices[i]!;
+    if (fills.get(globalIdx)?.trim()) continue;
+    const entity = normalizeEntityHintCommaLabel((rows[globalIdx]?.entity ?? section.entity).trim());
+    if (!entity) continue;
+    const base = (bases[i] ?? bases[i % bases.length] ?? "").trim();
+    if (!base) continue;
+    const keyword =
+      sapKeywordFromShortBaseAndEntity(base, entity, placeCorpus) ||
+      composeServiceKeywordWithAdGroupEntity(base, entity);
+    fills.set(globalIdx, keyword);
+    assigned += 1;
   }
   return assigned;
 }
@@ -614,11 +873,23 @@ async function inventGroupKeywordsViaOpenRouter(args: {
   gscKeywords: string[];
   gridLocations: string[];
   keywordsAlreadyUsedInGroup: string[];
+  clientAudienceContextMarkdown?: string;
+  entityTypeFocus?: readonly string[];
   temperature: number;
   topP: number;
+  blockedForEntity?: ReturnType<typeof collectBlockedForEntity>;
 }): Promise<string[]> {
   const keywordPlace = keywordPlaceSuffixFromEntity(args.entity);
-  const user = JSON.stringify({
+  const hasInventoryBlock =
+    (args.blockedForEntity?.existingPages.length ?? 0) > 0 ||
+    (args.blockedForEntity?.slugs.length ?? 0) > 0;
+  const system = buildEntitySapKeywordPickSystemPrompt({
+    mode: "group",
+    hasInventoryBlock,
+    clientAudienceContextMarkdown: args.clientAudienceContextMarkdown,
+    entityTypeFocus: args.entityTypeFocus,
+  });
+  const user = buildEntitySapKeywordPickUserPayload({
     siteName: args.siteName,
     siteUrl: args.siteUrl,
     entity: args.entity,
@@ -628,13 +899,27 @@ async function inventGroupKeywordsViaOpenRouter(args: {
     gscKeywords: args.gscKeywords,
     gridLocations: args.gridLocations,
     keywordsAlreadyUsedInGroup: args.keywordsAlreadyUsedInGroup,
+    clientAudienceContextMarkdown: args.clientAudienceContextMarkdown,
+    entityTypeFocus: args.entityTypeFocus,
+    ...(args.blockedForEntity
+      ? {
+          existingSapPagesForEntity: args.blockedForEntity.existingPages.map((p) => ({
+            title: p.title,
+            keyword: p.keyword,
+            slug: p.slug,
+          })),
+          blockedSlugs: args.blockedForEntity.slugs,
+          blockedKeywords: args.blockedForEntity.keywords,
+          blockedTitles: args.blockedForEntity.titles,
+        }
+      : {}),
   });
   const content = await postOpenRouter({
     apiKey: args.apiKey,
     model: args.model,
     siteId: args.siteId,
     messages: [
-      { role: "system", content: GROUP_KEYWORDS_SYSTEM },
+      { role: "system", content: system },
       { role: "user", content: user },
     ],
     temperature: args.temperature,
@@ -652,13 +937,7 @@ async function inventGroupKeywordsViaOpenRouter(args: {
         ),
       )
       .filter((k) => k.length > 0 && !isRejectedEntitySapKeywordSync(k));
-    return await aiFilterAllowedBrandTexts({
-      apiKey: args.apiKey,
-      model: args.model,
-      companyName: args.siteName,
-      candidates: normalized,
-      kind: "keyword",
-    });
+    return normalized;
   } catch {
     return [];
   }
@@ -668,18 +947,22 @@ async function inventGroupKeywordsViaOpenRouter(args: {
 function duplicateGlobalIndicesInSection(
   section: EntityAdGroupSection,
   fills: Map<number, string>,
+  rows: CSVRow[],
 ): number[] {
   const seen = new Set<string>();
   const dupes: number[] = [];
   for (const globalIdx of section.rowIndices) {
     const kw = fills.get(globalIdx)?.trim();
     if (!kw) continue;
-    const key = keywordUniquenessKey(kw);
-    if (!key) continue;
-    if (seen.has(key)) {
+    const entity = normalizeEntityHintCommaLabel(
+      (rows[globalIdx]?.entity ?? section.entity).trim(),
+    );
+    const pairKey = entity ? entityKeywordPairKey(kw, entity) : keywordUniquenessKey(kw);
+    if (!pairKey) continue;
+    if (seen.has(pairKey)) {
       dupes.push(globalIdx);
     } else {
-      seen.add(key);
+      seen.add(pairKey);
     }
   }
   return dupes;
@@ -690,12 +973,12 @@ type AdGroupKeywordSubAgentResult = {
   aiAssigned: number;
 };
 
-/** One entity ad group sub-agent: GSC first, then parallel OpenRouter per child. */
+/** One entity ad group: AI picks N GSC product bases, then applies them directly. */
 async function runEntityAdGroupKeywordSubAgent(args: {
   section: EntityAdGroupSection;
-  groupRows: GroupRowRequest[];
   rows: CSVRow[];
   gscKeywords: string[];
+  seedKeywords: string[];
   allFills: Map<number, string>;
   apiKey: string;
   model: string;
@@ -703,14 +986,16 @@ async function runEntityAdGroupKeywordSubAgent(args: {
   siteName: string;
   siteUrl: string;
   gridLocations: string[];
+  clientAudienceContextMarkdown?: string;
+  entityTypeFocus?: readonly string[];
   fillTemperature: number;
   topP: number;
 }): Promise<AdGroupKeywordSubAgentResult> {
   const {
     section,
-    groupRows,
     rows,
     gscKeywords,
+    seedKeywords,
     allFills,
     apiKey,
     model,
@@ -718,66 +1003,36 @@ async function runEntityAdGroupKeywordSubAgent(args: {
     siteName,
     siteUrl,
     gridLocations,
+    clientAudienceContextMarkdown,
+    entityTypeFocus,
     fillTemperature,
     topP,
   } = args;
 
-  const gscAssigned = assignGscKeywordsForSection(
-    section,
-    rows,
+  const pickCount = section.rowIndices.length;
+  const bases = await pickProductKeywordBasesFromGsc({
+    apiKey,
+    model,
+    siteId,
+    siteName,
+    siteUrl,
+    entity: section.entity,
+    count: pickCount,
+    seedKeywords: section.rowIndices
+      .map((i) => (seedKeywords[i] ?? "").trim())
+      .filter(Boolean),
     gscKeywords,
-    allFills,
     gridLocations,
-  );
-  let aiAssigned = 0;
-
-  // One batch OpenRouter call per pass: the agent sees the whole ad group and
-  // returns exactly N unique keywords (missing rows + duplicate rows together).
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const dupeIndices = new Set(duplicateGlobalIndicesInSection(section, allFills));
-    const needy = groupRows.filter(
-      (r) => dupeIndices.has(r.globalRowIndex) || !allFills.get(r.globalRowIndex)?.trim(),
-    );
-    if (needy.length === 0) break;
-    const needySet = new Set(needy.map((r) => r.globalRowIndex));
-    const used = section.rowIndices
-      .filter((i) => !needySet.has(i))
-      .map((i) => allFills.get(i)?.trim())
-      .filter(Boolean) as string[];
-    const usedKeys = new Set(used.map((k) => keywordUniquenessKey(k)));
-    const candidates = await inventGroupKeywordsViaOpenRouter({
-      apiKey,
-      model,
-      siteId,
-      siteName,
-      siteUrl,
-      entity: section.entity,
-      count: needy.length,
-      seedKeywords: [...new Set(needy.map((r) => r.seedKeyword).filter(Boolean))],
-      gscKeywords,
-      gridLocations,
-      keywordsAlreadyUsedInGroup: used,
-      temperature: Math.min(fillTemperature + 0.15 * attempt, 0.75),
-      topP,
-    });
-    let cursor = 0;
-    for (const row of needy) {
-      while (cursor < candidates.length) {
-        const kw = candidates[cursor++]!;
-        const key = keywordUniquenessKey(kw);
-        if (!key || usedKeys.has(key)) continue;
-        usedKeys.add(key);
-        allFills.set(row.globalRowIndex, kw);
-        aiAssigned++;
-        break;
-      }
-    }
-  }
-
-  return { gscAssigned, aiAssigned };
+    clientAudienceContextMarkdown,
+    entityTypeFocus,
+    temperature: fillTemperature,
+    topP,
+  });
+  const aiAssigned = applyPickedBasesToSection(section, rows, bases, allFills, gridLocations);
+  return { gscAssigned: 0, aiAssigned };
 }
 
-/** GSC first per entity group; all ad groups run in parallel. */
+/** AI picks N GSC product bases per ad group; applies them directly (no post-pick filter). */
 export async function fillEntitySapRowKeywordsFromInventoryAndGsc(
   args: FillEntitySapRowKeywordsArgs,
 ): Promise<CSVRow[]> {
@@ -793,22 +1048,20 @@ export async function fillEntitySapRowKeywordsFromInventoryAndGsc(
     gridLocations,
     temperature = 0.35,
     topP = 1,
+    sapOccupancy,
+    reservedSlugsInRun: reservedSlugsInRunArg,
+    titleTemplate,
+    clientAudienceContextMarkdown,
+    entityTypeFocus,
   } = args;
 
   if (rows.length === 0) return rows;
   await ensureMasterInstructionsInMemory(siteId);
 
+  const reservedSlugsInRun = reservedSlugsInRunArg ?? new Set<string>();
+
   const fillTemperature = rows.length >= 2 ? Math.max(temperature, 0.45) : temperature;
-  const gscKeywords = await aiFilterAllowedBrandTexts({
-    apiKey,
-    model,
-    companyName: siteName,
-    candidates: gscSapKeywordBasesForOpenRouter(
-      gscQueries,
-      Math.max(rows.length * 4, 40),
-    ),
-    kind: "keyword",
-  });
+  const gscKeywords = gscAllQueryStringsForEntityKeywordFill(gscQueries);
   const sections = buildEntityAdGroupSections(rows);
   const allFills = new Map<number, string>();
 
@@ -816,17 +1069,12 @@ export async function fillEntitySapRowKeywordsFromInventoryAndGsc(
   let doneGroups = 0;
   await Promise.all(
     sections.map(async (section) => {
-      const groupRows: GroupRowRequest[] = section.rowIndices.map((globalRowIndex, localRowIndex) => ({
-        localRowIndex,
-        globalRowIndex,
-        seedKeyword: (seedKeywords[globalRowIndex] ?? "").trim(),
-      }));
       const localFills = new Map<number, string>();
       await runEntityAdGroupKeywordSubAgent({
         section,
-        groupRows,
         rows,
         gscKeywords,
+        seedKeywords,
         allFills: localFills,
         apiKey,
         model,
@@ -834,6 +1082,8 @@ export async function fillEntitySapRowKeywordsFromInventoryAndGsc(
         siteName,
         siteUrl,
         gridLocations,
+        clientAudienceContextMarkdown,
+        entityTypeFocus,
         fillTemperature,
         topP,
       });
@@ -844,71 +1094,6 @@ export async function fillEntitySapRowKeywordsFromInventoryAndGsc(
       args.onGroupComplete?.(applyKeywordFillsToSapRows(rows, allFills), doneGroups, totalGroups);
     }),
   );
-  const filledPairs = [...allFills.entries()].filter(([, kw]) => kw.trim());
-  if (filledPairs.length > 0) {
-    const rejected = await aiRejectBrandOrBlockedTexts({
-      apiKey,
-      model,
-      companyName: siteName,
-      candidates: filledPairs.map(([, kw]) => kw),
-      kind: "keyword",
-    });
-    if (rejected.length > 0) {
-      const rejectKeys = new Set(rejected.map((k) => k.trim().toLowerCase().replace(/\s+/g, " ")));
-      for (const [idx, kw] of filledPairs) {
-        const key = kw.trim().toLowerCase().replace(/\s+/g, " ");
-        if (rejectKeys.has(key)) allFills.delete(idx);
-      }
-    }
-  }
-
-  const blankAfterGate = rows
-    .map((_, i) => i)
-    .filter((i) => !allFills.get(i)?.trim() && (rows[i]?.entity ?? "").trim());
-  if (blankAfterGate.length > 0) {
-    const byEntity = new Map<string, number[]>();
-    for (const idx of blankAfterGate) {
-      const entity = normalizeEntityHintCommaLabel((rows[idx]?.entity ?? "").trim());
-      if (!entity) continue;
-      const list = byEntity.get(entity) ?? [];
-      list.push(idx);
-      byEntity.set(entity, list);
-    }
-    await Promise.all(
-      [...byEntity.entries()].map(async ([entity, indices]) => {
-        const used = rows
-          .map((_, i) => allFills.get(i)?.trim())
-          .filter(Boolean) as string[];
-        const candidates = await inventGroupKeywordsViaOpenRouter({
-          apiKey,
-          model,
-          siteId,
-          siteName,
-          siteUrl,
-          entity,
-          count: indices.length,
-          seedKeywords: indices.map((i) => (seedKeywords[i] ?? "").trim()).filter(Boolean),
-          gscKeywords,
-          gridLocations,
-          keywordsAlreadyUsedInGroup: used,
-          temperature: Math.min(fillTemperature + 0.2, 0.75),
-          topP,
-        });
-        const usedKeys = new Set(used.map((k) => keywordUniquenessKey(k)));
-        let cursor = 0;
-        for (const idx of indices) {
-          while (cursor < candidates.length) {
-            const kw = candidates[cursor++]!;
-            const key = keywordUniquenessKey(kw);
-            if (!key || usedKeys.has(key)) continue;
-            usedKeys.add(key);
-            allFills.set(idx, kw);
-            break;
-          }
-        }
-      }),
-    );
-  }
 
   return applyKeywordFillsToSapRows(rows, allFills);
 }

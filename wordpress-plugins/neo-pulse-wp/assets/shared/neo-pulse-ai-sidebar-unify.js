@@ -180,7 +180,7 @@
         btn.setAttribute('role', 'tab');
         btn.setAttribute('data-fai-tab', id);
         btn.setAttribute('aria-selected', id === 'chat' ? 'true' : 'false');
-        btn.textContent = id === 'chat' ? 'Chat' : 'AI Search';
+        btn.textContent = id === 'chat' ? 'Chat' : 'Search';
         btn.addEventListener('click', function () {
           setActiveTab(id);
         });

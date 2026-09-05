@@ -9,15 +9,20 @@ import { patchTaskExecutionProgress } from "@/lib/tasks-api";
 import type { AgentRun } from "@/lib/agent-runs-types";
 import type { TaskArchiveFileInput } from "@/lib/task-execution-archive";
 import type { TaskExecutionClientRunContract, TaskExecutionKind } from "@/lib/tasks-types";
+import { inferAutomationDeliveryStepKey } from "@/lib/workflow/automation-delivery-log";
 
 export type AutomationEmailTokenContext = {
   siteName: string;
+  siteUrl?: string;
   automationTitle: string;
   executionKind: TaskExecutionKind;
   compareLabel?: string;
   comparePreset?: "mom" | "yoy";
   summary?: string;
   attachmentDateStamp?: number;
+  driveLinks?: string;
+  deliverableCount?: number;
+  deliverableList?: string;
 };
 
 export type AutomationEmailDeliveryResult = {
@@ -45,6 +50,7 @@ export function executionKindFromRun(run: AgentRun): TaskExecutionKind {
   const recipe = String(run.recipeKey ?? "");
   if (recipe === "gsc_reporting") return "gsc_reporting";
   if (recipe === "post_creator") return "post_creator";
+  if (recipe === "dfs_llm_article_audit") return "dfs_llm_article_audit";
   if (recipe === "overview_pages_meta_batch") return "content_optimizer_meta";
   if (recipe === "content_optimizer_bulk") return "content_optimizer";
   return "";
@@ -63,6 +69,9 @@ export function resolveAutomationEmailTokens(
   ctx: AutomationEmailTokenContext,
 ): string {
   const kindLabel = ctx.executionKind.replace(/_/g, " ").trim();
+  const deliverableCount = String(ctx.deliverableCount ?? 0);
+  const deliverableList = ctx.deliverableList ?? "";
+  const driveLinks = ctx.driveLinks ?? "";
   return template
     .split("{siteName}")
     .join(ctx.siteName)
@@ -75,7 +84,13 @@ export function resolveAutomationEmailTokens(
     .split("{compareLabel}")
     .join(ctx.compareLabel ?? "")
     .split("{summary}")
-    .join(ctx.summary ?? "");
+    .join(ctx.summary ?? "")
+    .split("{driveLinks}")
+    .join(driveLinks)
+    .split("{deliverableCount}")
+    .join(deliverableCount)
+    .split("{deliverableList}")
+    .join(deliverableList);
 }
 
 function defaultSubject(ctx: AutomationEmailTokenContext): string {
@@ -83,6 +98,24 @@ function defaultSubject(ctx: AutomationEmailTokenContext): string {
     "{siteName} automation summary ({date})",
     ctx,
   );
+}
+
+function composeGscEmailBody(args: {
+  intro: string;
+  highlights: string[];
+  driveLinksBlock?: string;
+}): string {
+  const lines = [args.intro.trim(), "", "Highlights:"];
+  for (const item of args.highlights) {
+    const bullet = item.trim();
+    if (bullet) lines.push(`- ${bullet}`);
+  }
+  const linkBlock = args.driveLinksBlock?.trim() ?? "";
+  if (linkBlock) {
+    lines.push("", "Links:", linkBlock);
+  }
+  lines.push("", GSC_ATTACHMENTS_FOOTER);
+  return lines.join("\n");
 }
 
 function composeEmailBody(
@@ -102,11 +135,14 @@ function composeEmailBody(
   return lines.join("\n");
 }
 
-function composeGscTeaserEmailBody(previewPoints: string[]): string {
-  const opener =
-    "Use the attached meeting notes in your client call. The GSC report is attached for backup detail.";
-  const preview = previewPoints.slice(0, 3);
-  return composeEmailBody(opener, preview, GSC_ATTACHMENTS_FOOTER, "Quick preview:");
+function formatGscEmailDriveLinks(driveLinks: string): string {
+  const trimmed = driveLinks.trim();
+  if (!trimmed) return "";
+  return trimmed
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
 }
 
 function composeStaticEmailBody(
@@ -143,59 +179,66 @@ async function resolveEmailSubjectAndBody(args: {
     ? resolveAutomationEmailTokens(subjectTemplate, args.tokenContext)
     : defaultSubject(args.tokenContext);
 
-  if (args.contract.automationEmailAiIntro) {
-    try {
-      const apiKey = (await resolveOpenRouterApiKeyForHarness()).trim();
-      if (apiKey) {
-        const intro = await buildAutomationEmailIntro({
-          apiKey,
-          executionKind: args.tokenContext.executionKind,
-          siteName: args.tokenContext.siteName,
-          automationTitle: args.tokenContext.automationTitle,
-          summaryText: args.summaryText,
-          compareLabel: args.tokenContext.compareLabel,
-        });
-        if (intro.subject?.trim()) {
-          subject = resolveAutomationEmailTokens(intro.subject.trim(), args.tokenContext);
-        }
+  const requiresAiIntro =
+    args.contract.automationEmailAiIntro === true ||
+    args.tokenContext.executionKind === "gsc_reporting";
 
-        if (args.tokenContext.executionKind === "gsc_reporting") {
-          const comparePreset = args.tokenContext.comparePreset ?? "mom";
-          const dateStamp = args.tokenContext.attachmentDateStamp ?? Date.now();
-          const scriptMarkdown = formatGscMeetingScriptMarkdown({
-            siteName: args.tokenContext.siteName,
-            compareLabel: args.tokenContext.compareLabel,
-            comparePreset,
-            highlights: intro.highlights,
-            talkingPoints: intro.talkingPoints ?? intro.highlights,
-            clientQuestions: intro.clientQuestions ?? [],
-          });
-          const meetingScriptFile = gscMeetingScriptFile({
-            siteName: args.tokenContext.siteName,
-            comparePreset,
-            content: scriptMarkdown,
-            dateStamp,
-          });
-          return {
-            subject,
-            body: composeGscTeaserEmailBody(intro.highlights),
-            meetingScriptFile,
-          };
-        }
-
-        return {
-          subject,
-          body: composeEmailBody(
-            intro.intro,
-            intro.highlights,
-            args.hasReportAttachment ? ATTACHMENT_FOOTER : ARCHIVE_FOOTER,
-            intro.bulletHeading,
-          ),
-        };
-      }
-    } catch {
-      /* fall back to static intro below */
+  if (requiresAiIntro) {
+    const apiKey = (await resolveOpenRouterApiKeyForHarness()).trim();
+    if (!apiKey) {
+      throw new Error("OpenRouter API key is required for automation email intro.");
     }
+    const intro = await buildAutomationEmailIntro({
+      apiKey,
+      executionKind: args.tokenContext.executionKind,
+      siteName: args.tokenContext.siteName,
+      automationTitle: args.tokenContext.automationTitle,
+      summaryText: args.summaryText,
+      compareLabel: args.tokenContext.compareLabel,
+    });
+    if (intro.subject?.trim()) {
+      subject = resolveAutomationEmailTokens(intro.subject.trim(), args.tokenContext);
+    }
+
+    const driveLinksBlock = formatGscEmailDriveLinks(args.tokenContext.driveLinks ?? "");
+
+    if (args.tokenContext.executionKind === "gsc_reporting") {
+      const comparePreset = args.tokenContext.comparePreset ?? "mom";
+      const dateStamp = args.tokenContext.attachmentDateStamp ?? Date.now();
+      const scriptMarkdown = formatGscMeetingScriptMarkdown({
+        siteName: args.tokenContext.siteName,
+        compareLabel: args.tokenContext.compareLabel,
+        comparePreset,
+        highlights: intro.highlights,
+        talkingPoints: intro.talkingPoints ?? intro.highlights,
+        clientQuestions: intro.clientQuestions ?? [],
+      });
+      const meetingScriptFile = gscMeetingScriptFile({
+        siteName: args.tokenContext.siteName,
+        comparePreset,
+        content: scriptMarkdown,
+        dateStamp,
+      });
+      return {
+        subject,
+        body: composeGscEmailBody({
+          intro: intro.intro,
+          highlights: intro.highlights,
+          driveLinksBlock,
+        }),
+        meetingScriptFile,
+      };
+    }
+
+    return {
+      subject,
+      body: composeEmailBody(
+        intro.intro,
+        intro.highlights,
+        args.hasReportAttachment ? ATTACHMENT_FOOTER : ARCHIVE_FOOTER,
+        intro.bulletHeading,
+      ),
+    };
   }
 
   return {
@@ -215,7 +258,8 @@ export async function sendAutomationEmailIfConfigured(args: {
   onStep?: (label: string, status?: EmailStepStatus) => void | Promise<void>;
 }): Promise<AutomationEmailDeliveryResult> {
   const reportStep = async (label: string, status: EmailStepStatus = "running") => {
-    await args.onStep?.(label, status);
+    const stepKey = inferAutomationDeliveryStepKey(label, status);
+    await args.onStep?.(label, status, { phase: "automation_delivery" }, stepKey);
   };
 
   if (args.runOk === false) {
@@ -228,7 +272,6 @@ export async function sendAutomationEmailIfConfigured(args: {
 
   const contract = args.contract as TaskExecutionClientRunContract;
   if (!contract.sendAutomationEmail) {
-    await reportStep("Email skipped (not configured on run)", "done");
     return {
       emailSkipped: true,
       emailSkipReason: "sendAutomationEmail not set on run contract.",
@@ -241,7 +284,7 @@ export async function sendAutomationEmailIfConfigured(args: {
     return { emailSent: false, emailError: "Recipient email is required." };
   }
 
-  await reportStep("Sending email…", "running");
+  await reportStep(`Email: sending · ${to}`, "running");
   await patchTaskExecutionProgress(args.teamId, args.executionId, {
     message: "Sending email…",
     progress: 0.98,
@@ -286,7 +329,7 @@ export async function sendAutomationEmailIfConfigured(args: {
     return { emailSent: false, emailError: message, transport: mail.transport };
   }
 
-  await reportStep("Email sent", "done");
+  await reportStep("Email: sent", "done");
   return {
     emailSent: true,
     transport: mail.transport,

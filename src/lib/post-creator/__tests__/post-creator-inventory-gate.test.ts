@@ -6,57 +6,96 @@ import {
 } from "@/lib/post-creator/post-creator-cannibalization-tools";
 import {
   buildPostCreatorInventoryContext,
-  runDeterministicPostCreatorGate,
+  buildRowReviewEntries,
+  filterPostCreatorChecklistRows,
 } from "@/lib/post-creator/post-creator-inventory-gate";
 import type { LoadBulkSitemapInventoryResult } from "@/lib/bulk/bulk-sitemap-inventory-session";
 
-function postsBucketJson(urls: string[]): string {
+function postsBucketJson(
+  posts: Array<{ link: string; slug?: string; title?: string }>,
+): string {
   return JSON.stringify({
     source: "posts",
-    posts: urls.map((link, i) => ({
+    posts: posts.map((post, i) => ({
       id: i + 1,
-      slug: "",
-      title: "",
-      link,
+      slug: post.slug ?? "",
+      title: post.title ?? "",
+      link: post.link,
     })),
   });
 }
 
-function emptyInventory(urls: string[]): LoadBulkSitemapInventoryResult {
-  const json = postsBucketJson(urls);
+function inventoryFromPosts(
+  posts: Array<{ link: string; slug?: string; title?: string }>,
+): LoadBulkSitemapInventoryResult {
+  const json = postsBucketJson(posts);
   return {
     links: [],
     buckets: {
       pages: { json: "", rowCount: 0 },
-      posts: { json, rowCount: urls.length },
+      posts: { json, rowCount: posts.length },
       sap: { json: "", rowCount: 0 },
     },
-    totalRows: urls.length,
+    totalRows: posts.length,
     sources: ["posts"],
     errors: {},
   };
 }
 
-describe("post-creator inventory gate", () => {
-  it("blocks row when slug matches inventory URL", () => {
-    const inventory = emptyInventory(["https://example.com/blog/sheer-shades/"]);
+describe("post-creator inventory context", () => {
+  it("loads inventory titles from content bucket JSON for AI review", () => {
+    const inventory = inventoryFromPosts([
+      {
+        link: "https://neodigital.ca/digital-mktg-blinds-co-3/",
+        slug: "digital-mktg-blinds-co-3",
+        title: "Digital Marketing for Blinds Companies: Complete Guide",
+      },
+    ]);
     const context = buildPostCreatorInventoryContext(inventory);
-    const results = runDeterministicPostCreatorGate(
-      [{ keyword: "sheer shades", title: "Sheer Shades Guide", featuredImage: "y" }],
-      context,
-    );
-    expect(results[0]?.status).toBe("blocked");
-    expect(results[0]?.conflictingUrl).toContain("sheer-shades");
+    expect(context.catalog.rows[0]?.title).toContain("Digital Marketing for Blinds");
+    expect(context.keywordInventoryJson).toContain("Digital Marketing for Blinds");
   });
 
-  it("allows distinct keyword with no inventory overlap", () => {
-    const inventory = emptyInventory(["https://example.com/blog/cellular-shades/"]);
-    const context = buildPostCreatorInventoryContext(inventory);
-    const results = runDeterministicPostCreatorGate(
-      [{ keyword: "plantation shutters", title: "Plantation Shutters Guide", featuredImage: "y" }],
-      context,
-    );
-    expect(results[0]?.status).toBe("ok");
+  it("builds row review entries for cannibalization agent input", () => {
+    const entries = buildRowReviewEntries([
+      { keyword: "plantation shutters", title: "Plantation Shutters Guide", featuredImage: "y" },
+    ]);
+    expect(entries[0]?.status).toBe("ok");
+    expect(entries[0]?.rowIndex).toBe(0);
+  });
+
+  it("blocks inventory conflicts and duplicate checklist rows", () => {
+    const inventory = inventoryFromPosts([
+      {
+        link: "https://neodigital.ca/seo-for-window-installers/",
+        slug: "seo-for-window-installers",
+        title: "SEO for Window Installers: Attracting Local Homeowners and Businesses",
+      },
+    ]);
+    const filtered = filterPostCreatorChecklistRows({
+      inventory,
+      postCount: 2,
+      rows: [
+        {
+          keyword: "seo for window installers",
+          title: "SEO for Window Installers: Attracting Local Homeowners and Businesses",
+          featuredImage: "y",
+        },
+        {
+          keyword: "seo for window installers",
+          title: "SEO for Window Installers: Attracting Local Homeowners and Businesses",
+          featuredImage: "y",
+        },
+        {
+          keyword: "local seo for contractors",
+          title: "Local SEO for Contractors in Alberta",
+          featuredImage: "y",
+        },
+      ],
+    });
+    expect(filtered.blockedRows.length).toBeGreaterThanOrEqual(2);
+    expect(filtered.rows).toHaveLength(1);
+    expect(filtered.rows[0]?.keyword).toBe("local seo for contractors");
   });
 });
 

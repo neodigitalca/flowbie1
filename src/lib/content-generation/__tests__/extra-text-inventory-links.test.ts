@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWordPressPostsForLinkingFromInventory } from "../extra-text-inventory-links";
+import { buildMergedLinkPoolRows, buildWordPressPostsForLinkingFromInventory } from "../extra-text-inventory-links";
 import { buildInventoryLookupMaps, type BulkOptimizerInventorySnapshot } from "@/lib/wordpress-api/inventory-match";
 
 describe("buildWordPressPostsForLinkingFromInventory", () => {
@@ -80,5 +80,35 @@ describe("buildWordPressPostsForLinkingFromInventory", () => {
     });
     expect(rows).toHaveLength(1);
     expect(rows[0]?.link).toBe("https://example.com/blog-one/");
+  });
+
+  it("buildMergedLinkPoolRows puts pages before posts", () => {
+    const posts = [
+      {
+        id: 1,
+        slug: "blog-one",
+        url: "https://example.com/blog/blog-one/",
+        date_gmt: "2024-01-01",
+        fields: { title: "Blog One", meta: "", keyword: "", excerpt: "Excerpt" },
+      },
+    ];
+    const pages = [
+      {
+        id: 2,
+        slug: "partner",
+        url: "https://example.com/partner/",
+        date_gmt: "2024-01-02",
+        fields: { title: "Partner", meta: "", keyword: "", excerpt: "" },
+      },
+    ];
+    const snapshot: BulkOptimizerInventorySnapshot = {
+      postsMaps: buildInventoryLookupMaps(posts, "https://example.com"),
+      pagesMaps: buildInventoryLookupMaps(pages, "https://example.com"),
+      customMapsByCollection: {},
+    };
+    const rows = buildMergedLinkPoolRows(snapshot, "https://example.com");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.postType).toBe("page");
+    expect(rows[1]?.postType).toBe("post");
   });
 });

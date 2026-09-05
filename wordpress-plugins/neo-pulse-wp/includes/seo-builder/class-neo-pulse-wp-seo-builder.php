@@ -74,7 +74,7 @@ class Neo_Pulse_Wp_Seo_Builder {
 			'neo-pulse-wp_page_neo_pulse-wp-agent-hub-edit',
 			'admin_page_neo_pulse-wp-agent-hub-edit',
 		);
-		if ( ! $screen || ! in_array( $screen->id, $hub_screens, true ) ) {
+		if ( ! $screen || ! Neo_Pulse_Wp_Admin::admin_hook_matches( (string) $screen->id, $hub_screens ) ) {
 			return;
 		}
 		if ( Neo_Pulse_Wp_Seo_Blocks_Library::elementor_available() ) {

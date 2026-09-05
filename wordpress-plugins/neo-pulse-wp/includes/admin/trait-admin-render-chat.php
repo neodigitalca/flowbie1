@@ -109,6 +109,52 @@ trait Neo_Pulse_Wp_Admin_Trait_Render_Chat {
 				__( 'Show chat on the frontend for logged-in WordPress users only', 'neo-pulse-wp' ),
 				! empty( $chat_settings['logged_in_only'] )
 			);
+			self::panel_form_toggle(
+				'neo_pulse_chat_admin_only',
+				__( 'Show chat on the frontend for WordPress administrators only', 'neo-pulse-wp' ),
+				! empty( $chat_settings['admin_only'] )
+			);
+			self::panel_form_toggle(
+				'neo_pulse_chat_god_mode_enabled',
+				__( 'Enable God Mode for Neo Digital staff (@neodigital.ca)', 'neo-pulse-wp' ),
+				! isset( $chat_settings['god_mode_enabled'] ) || ! empty( $chat_settings['god_mode_enabled'] )
+			);
+			self::panel_form_field_input(
+				'neo-pulse-wp-chat-whitelist-url',
+				'neo_pulse_chat_whitelist_url',
+				__( 'Whitelist URL', 'neo-pulse-wp' ),
+				isset( $chat_settings['whitelist_url'] ) ? (string) $chat_settings['whitelist_url'] : '',
+				'full',
+				'url',
+				false,
+				__( 'When set, the chat bubble only appears on this frontend URL, including after a page password. Leave blank to show on the whole site.', 'neo-pulse-wp' ),
+				' placeholder="https://example.com/demo/"'
+			);
+			?>
+			<div class="neo-pulse-schema-cell neo-pulse-schema-cell--full">
+				<div class="neo-pulse-field neo-pulse-field--text neo-pulse-field--stacked">
+					<label class="neo-pulse-field__label neo-pulse-field__label--above" for="neo-pulse-chat-shortcode"><?php esc_html_e( 'Shortcode', 'neo-pulse-wp' ); ?></label>
+					<div class="neo-pulse-wp-search-shortcode-box">
+						<div class="neo-pulse-field neo-pulse-field--text neo-pulse-field--stacked">
+							<input
+								id="neo-pulse-chat-shortcode"
+								class="neo-pulse-field__control"
+								type="text"
+								value="[neo-pulse_chat]"
+								readonly
+								onclick="this.select();"
+							/>
+						</div>
+						<button type="button" class="button" onclick="navigator.clipboard.writeText('[neo-pulse_chat]');this.textContent='Copied!';setTimeout(()=>{this.textContent='Copy'},1500);">
+							<?php esc_html_e( 'Copy', 'neo-pulse-wp' ); ?>
+						</button>
+					</div>
+					<p class="neo-pulse-field__note">
+						<?php esc_html_e( 'Add this shortcode to any page or Elementor Shortcode widget to show the chat bubble on that page only.', 'neo-pulse-wp' ); ?>
+					</p>
+				</div>
+			</div>
+			<?php
 			self::panel_form_field_input(
 				'neo-pulse-wp-chat-welcome',
 				'neo_pulse_chat_welcome_message',
@@ -289,7 +335,7 @@ trait Neo_Pulse_Wp_Admin_Trait_Render_Chat {
 						$system_prompt,
 						'full',
 						6,
-						__( 'These instructions shape the assistant\'s personality, tone, and boundaries. Leave blank for the default helpful assistant.', 'neo-pulse-wp' )
+						__( 'These instructions shape personality and tone. Leave blank for the default. Do not use this field to limit the assistant to one product category; it answers from this site\'s published content.', 'neo-pulse-wp' )
 					);
 					self::panel_form_field_select(
 						'neo-pulse-chat-greeting-style',

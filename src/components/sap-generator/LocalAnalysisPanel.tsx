@@ -11,6 +11,7 @@ import {
   SEO_WORKSPACE_INNER_CLASS,
 } from "@/components/seo/seo-workspace-layout";
 import {
+  buildLocalGridSummary,
   defaultSeedEntityHintFromGrid,
   dominantKeywordFromRows,
   entityMatchesCsvPlaceHints,
@@ -744,6 +745,68 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
     [],
   );
 
+  const clientAudienceContextMarkdown = useMemo(() => {
+    let inv: { title: string; keyword: string }[] | undefined;
+    if (typeof window !== "undefined") {
+      try {
+        const raw = sessionStorage.getItem(localAnalysisInventoryStorageKey(site.id));
+        if (raw) {
+          const trimmed = raw.trim();
+          if (!trimmed) {
+            /* empty */
+          } else if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) {
+            inv = trimmed
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter(Boolean)
+              .slice(0, 12)
+              .map((keyword) => ({ title: keyword, keyword }));
+          } else {
+            const p = JSON.parse(raw) as
+              | string[]
+              | { posts?: Array<{ title?: string; fields?: { title?: string; keyword?: string } }> };
+            if (Array.isArray(p) && p.length > 0 && typeof p[0] === "string") {
+              inv = p.slice(0, 12).map((keyword) => ({
+                title: keyword.trim(),
+                keyword: keyword.trim(),
+              }));
+            } else if (!Array.isArray(p) && p.posts?.length) {
+              inv = p.posts.slice(0, 12).map((post) => ({
+                title: post.title ?? post.fields?.title ?? "",
+                keyword: post.fields?.keyword ?? "",
+              }));
+            }
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    const name = businessName.trim() || site.name?.trim();
+    return buildLocalAnalysisClientAudienceMarkdown({
+      ...(name ? { businessName: name } : {}),
+      siteName: site.name,
+      siteUrl: isTempWorkspace ? workspace.tempSeedUrl : site.siteUrl,
+      focusKeyword: suggestFocusKeyword,
+      focusLocation: suggestFocusLocation,
+      entityGeographicLevel,
+      ...(entityTypeFocus.length > 0 ? { entityTypeFocusLabels: entityTypeFocus } : {}),
+      inventorySample: inv,
+      themeMixGovernedByMasterRules: !isTempWorkspace && hasMasterInstructions(site.id),
+    }).trim();
+  }, [
+    businessName,
+    site.name,
+    site.siteUrl,
+    site.id,
+    isTempWorkspace,
+    workspace.tempSeedUrl,
+    suggestFocusKeyword,
+    suggestFocusLocation,
+    entityGeographicLevel,
+    entityTypeFocus,
+  ]);
+
   const resolveNeighbourhoodRowsFromGrid = useCallback(
     async (gridText: string, onPhase?: (phase: string, completed?: number, total?: number) => void) => {
       const parsed = parseLocalDominatorCsv(gridText);
@@ -754,6 +817,10 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
       }
       const limit = Math.ceil(maxSapBudget / LOCAL_ANALYSIS_SUGGEST_SAP_MIN_PER_TARGET) + 10;
       const hints = extractTopPlaceHintsFromRows(parsed.rows, limit);
+      const gridSummaryMd =
+        gridSummaryMarkdown.trim() ||
+        buildLocalGridSummary(parsed.rows, { rowsForGeographicScope: parsed.rows }).summaryMarkdown;
+      const wikiAugment = gridCsvWikipediaAugment ?? wikipediaSearchAugmentFromGridRows(parsed.rows);
       return resolveNeighbourhoodSapSlotsForLayout({
         gridRows: parsed.rows,
         adGroupCount: entityAdGroupCount,
@@ -761,6 +828,12 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
         apiKey: openRouterKey,
         siteId: isTempWorkspace ? undefined : site.id,
         gridLocations: hints,
+        gridSummaryMarkdown: gridSummaryMd,
+        wikipediaSearchAugment: wikiAugment,
+        ...(clientAudienceContextMarkdown.length > 0
+          ? { clientAudienceContextMarkdown }
+          : {}),
+        ...(entityTypeFocus.length > 0 ? { entityTypeFocus } : {}),
         onProgress: onPhase,
       });
     },
@@ -771,6 +844,10 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
       entityAdsPerGroup,
       isTempWorkspace,
       site.id,
+      gridSummaryMarkdown,
+      gridCsvWikipediaAugment,
+      clientAudienceContextMarkdown,
+      entityTypeFocus,
     ],
   );
 
@@ -895,68 +972,6 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
   }, [site.id]);
 
   const granularPoolTitlesKey = useMemo(() => granularPoolTitles.slice(0, 400).join("\t"), [granularPoolTitles]);
-
-  const clientAudienceContextMarkdown = useMemo(() => {
-    let inv: { title: string; keyword: string }[] | undefined;
-    if (typeof window !== "undefined") {
-      try {
-        const raw = sessionStorage.getItem(localAnalysisInventoryStorageKey(site.id));
-        if (raw) {
-          const trimmed = raw.trim();
-          if (!trimmed) {
-            /* empty */
-          } else if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) {
-            inv = trimmed
-              .split(/\r?\n/)
-              .map((line) => line.trim())
-              .filter(Boolean)
-              .slice(0, 12)
-              .map((keyword) => ({ title: keyword, keyword }));
-          } else {
-            const p = JSON.parse(raw) as
-              | string[]
-              | { posts?: Array<{ title?: string; fields?: { title?: string; keyword?: string } }> };
-            if (Array.isArray(p) && p.length > 0 && typeof p[0] === "string") {
-              inv = p.slice(0, 12).map((keyword) => ({
-                title: keyword.trim(),
-                keyword: keyword.trim(),
-              }));
-            } else if (!Array.isArray(p) && p.posts?.length) {
-              inv = p.posts.slice(0, 12).map((post) => ({
-                title: post.title ?? post.fields?.title ?? "",
-                keyword: post.fields?.keyword ?? "",
-              }));
-            }
-          }
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-    const name = businessName.trim() || site.name?.trim();
-    return buildLocalAnalysisClientAudienceMarkdown({
-      ...(name ? { businessName: name } : {}),
-      siteName: site.name,
-      siteUrl: isTempWorkspace ? workspace.tempSeedUrl : site.siteUrl,
-      focusKeyword: suggestFocusKeyword,
-      focusLocation: suggestFocusLocation,
-      entityGeographicLevel,
-      ...(entityTypeFocus.length > 0 ? { entityTypeFocusLabels: entityTypeFocus } : {}),
-      inventorySample: inv,
-      themeMixGovernedByMasterRules: !isTempWorkspace && hasMasterInstructions(site.id),
-    }).trim();
-  }, [
-    businessName,
-    site.name,
-    site.siteUrl,
-    site.id,
-    isTempWorkspace,
-    workspace.tempSeedUrl,
-    suggestFocusKeyword,
-    suggestFocusLocation,
-    entityGeographicLevel,
-    entityTypeFocus,
-  ]);
 
   const localAnalysisWikiLookupOptions = useMemo(
     () => ({
@@ -1402,9 +1417,10 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
         gscQueries: sources.gscQueries,
         gridLocations,
         ...(entityTypeFocus.length > 0 ? { entityTypeFocus } : {}),
+        ...(clientAudienceContextMarkdown.length > 0 ? { clientAudienceContextMarkdown } : {}),
       });
     },
-    [openRouterKey, site, businessName, isTempWorkspace, workspace.tempSeedUrl, researchModel, entityTypeFocus, gridLocations],
+    [openRouterKey, site, businessName, isTempWorkspace, workspace.tempSeedUrl, researchModel, entityTypeFocus, gridLocations, clientAudienceContextMarkdown],
   );
 
   const runAnalysis = useCallback(async (targetsOverride?: KeywordTargetRow[]) => {
@@ -1898,12 +1914,20 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
           gscQueries: keywordSources.gscQueries,
           gridFallbackKeywordBases: gridKw ? [gridKw] : [],
           gridLocations,
+          gridSummaryMarkdown:
+            gridSummaryMarkdown.trim() ||
+            buildLocalGridSummary(pr.rows, { rowsForGeographicScope: pr.rows }).summaryMarkdown,
+          wikipediaSearchAugment:
+            gridCsvWikipediaAugment ?? wikipediaSearchAugmentFromGridRows(pr.rows),
           totalSapBudget: total,
           entityAdGroupCount: adGroupCount,
           entityAdsPerGroup: adsPerGroup,
           entityTypeFocus,
           businessName: name,
           siteName: site.name?.trim() || name,
+          ...(clientAudienceContextMarkdown.length > 0
+            ? { clientAudienceContextMarkdown }
+            : {}),
           onClusterProgress: (_done, _clusterTotal, placeLabel, cumulativeSapRows) => {
             setHeaderProgress({
               kind: "suggest",
@@ -1939,6 +1963,7 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
         apiKey: openRouterKey,
         model: researchModel,
         siteId: isTempWorkspace ? undefined : site.id,
+        site: isTempWorkspace ? undefined : site,
         siteName: name,
         siteUrl: siteUrlForFill,
         rows,
@@ -1951,6 +1976,7 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
         skipKeywordFill: false,
         ...(clusterWikipedia && clusterWikipedia.length > 0 ? { clusterWikipedia } : {}),
         ...(entityTypeFocus.length > 0 ? { entityTypeFocus } : {}),
+        ...(clientAudienceContextMarkdown.length > 0 ? { clientAudienceContextMarkdown } : {}),
         onPhase: (phase, completed = 0) => {
           setHeaderProgress({ kind: "suggest", phase, completed, total });
         },

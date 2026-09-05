@@ -9,8 +9,13 @@ export type DeviceAuth = {
   sessionToken?: string;
 };
 
+function hasBrowserStorage(): boolean {
+  return typeof window !== "undefined" && typeof sessionStorage !== "undefined";
+}
+
 export function setSessionToken(sessionToken: string | null): void {
   memorySessionToken = sessionToken;
+  if (!hasBrowserStorage()) return;
   if (sessionToken) {
     sessionStorage.setItem(SESSION_TOKEN_KEY, sessionToken);
     return;
@@ -20,15 +25,18 @@ export function setSessionToken(sessionToken: string | null): void {
 
 export function getSessionToken(): string | null {
   if (memorySessionToken) return memorySessionToken;
-  const fromSession = sessionStorage.getItem(SESSION_TOKEN_KEY);
-  if (fromSession) {
-    memorySessionToken = fromSession;
-    return fromSession;
+  if (hasBrowserStorage()) {
+    const fromSession = sessionStorage.getItem(SESSION_TOKEN_KEY);
+    if (fromSession) {
+      memorySessionToken = fromSession;
+      return fromSession;
+    }
   }
   return loadDeviceAuth()?.sessionToken?.trim() || null;
 }
 
 export function loadDeviceAuth(): DeviceAuth | null {
+  if (typeof localStorage === "undefined") return null;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
@@ -45,6 +53,10 @@ export function loadDeviceAuth(): DeviceAuth | null {
 }
 
 export function saveDeviceAuth(email: string, password: string, sessionToken?: string): void {
+  if (typeof localStorage === "undefined") {
+    if (sessionToken) setSessionToken(sessionToken);
+    return;
+  }
   localStorage.setItem(
     STORAGE_KEY,
     JSON.stringify({
@@ -72,6 +84,8 @@ export function loadSessionToken(): string | null {
 }
 
 export function clearDeviceAuth(): void {
-  localStorage.removeItem(STORAGE_KEY);
+  if (typeof localStorage !== "undefined") {
+    localStorage.removeItem(STORAGE_KEY);
+  }
   setSessionToken(null);
 }

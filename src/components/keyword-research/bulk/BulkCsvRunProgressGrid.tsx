@@ -21,7 +21,8 @@ import {
 import { BULK_GENERATOR_EMPTY_ROW_COUNT } from "@/components/keyword-research/blog-generator-tab-classes";
 import { bulkCsvRowRunStatus } from "@/lib/bulk/bulk-csv-row-run-status";
 import type { BulkGeneratedFile } from "@/lib/bulk-file-manager";
-import type { CSVRow } from "@/lib/bulk-auto-generate";
+import type { CSVRow, WordPressPostDestination } from "@/lib/bulk-auto-generate";
+import { BLOG_IMPORT_POST_DESTINATION_CHOICES } from "@/lib/bulk-auto-generate";
 import type { BulkRowSitemapType, BulkSitemapMode } from "@/lib/bulk/bulk-sitemap-mode";
 import { resolveRowSitemapType } from "@/lib/bulk/bulk-sitemap-mode";
 import { getStatusIcon, isImageWithPreview } from "@/components/keyword-research/bulk/bulk-utils";
@@ -49,6 +50,11 @@ export type BulkCsvRunProgressGridProps = {
   directionsSiteName?: string;
   publishDateLabelByIndex?: Record<number, string>;
   draftOnly?: boolean;
+  showPostDestination?: boolean;
+  postDestinationChoices?: WordPressPostDestination[];
+  headerPostDestination?: WordPressPostDestination;
+  onDropFiles?: (files: File[]) => void;
+  dropDisabled?: boolean;
 };
 
 function rowCanDownload(files: BulkGeneratedFile[]): boolean {
@@ -227,6 +233,11 @@ export function BulkCsvRunProgressGrid({
   directionsSiteName,
   publishDateLabelByIndex = {},
   draftOnly = false,
+  showPostDestination = false,
+  postDestinationChoices = BLOG_IMPORT_POST_DESTINATION_CHOICES,
+  headerPostDestination = "local",
+  onDropFiles,
+  dropDisabled = false,
 }: BulkCsvRunProgressGridProps) {
   const [expandedRowIndex, setExpandedRowIndex] = useState<number | null>(null);
 
@@ -304,6 +315,9 @@ export function BulkCsvRunProgressGrid({
         onToggleSelect={() => {}}
         onToggleExpand={() => toggleRow(rowIndex)}
         onRowChange={(patch) => onRowChange?.(rowIndex, patch)}
+        showPostDestination={showPostDestination}
+        postDestinationChoices={postDestinationChoices}
+        headerPostDestination={headerPostDestination}
       />
     );
 
@@ -375,6 +389,23 @@ export function BulkCsvRunProgressGrid({
         hasTrailingPlaceholders && "flex min-h-0 flex-1 flex-col overflow-hidden",
       )}
       aria-label="CSV rows"
+      onDragOver={
+        onDropFiles
+          ? (e) => {
+              e.preventDefault();
+            }
+          : undefined
+      }
+      onDrop={
+        onDropFiles
+          ? (e) => {
+              e.preventDefault();
+              if (dropDisabled) return;
+              const files = Array.from(e.dataTransfer.files ?? []);
+              if (files.length) onDropFiles(files);
+            }
+          : undefined
+      }
     >
       <div
         className={cn(hasTrailingPlaceholders && "flex min-h-0 flex-1 flex-col overflow-hidden")}

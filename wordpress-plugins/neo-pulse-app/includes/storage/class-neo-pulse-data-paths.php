@@ -107,6 +107,10 @@ class Neo_Pulse_App_Data_Paths {
 		return self::root() . '/gmb-tokens.json';
 	}
 
+	public static function google_mcp_tokens_path(): string {
+		return self::root() . '/google-mcp-tokens.json';
+	}
+
 	public static function gmb_schedule_queue_path(): string {
 		return self::root() . '/gmb-schedule-queue.json';
 	}

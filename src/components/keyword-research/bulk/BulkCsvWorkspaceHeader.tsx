@@ -23,15 +23,12 @@ import {
 } from "@/components/keyword-research/bulk/bulk-workspace-header-styles";
 import type { MetaBulkMicroSnapshot } from "@/components/overview/OverviewBulkMicroProgress";
 import type { WordPressPostDestination } from "@/lib/bulk-auto-generate";
+import { WORDPRESS_POST_DESTINATION_SHORT } from "@/lib/bulk-auto-generate";
 import {
   BULK_AUTO_GENERATE_TEMPLATE_FILENAME,
   BULK_AUTO_GENERATE_TEMPLATE_HREF,
 } from "@/lib/bulk/bulk-auto-generate-template-columns";
 
-const POST_DESTINATION_SHORT: Record<WordPressPostDestination, string> = {
-  wordpress: "WordPress",
-  local: "Local files",
-};
 
 export type BulkCsvWorkspaceHeaderProps = {
   activeSection: BlogGeneratorSectionId;
@@ -47,6 +44,11 @@ export type BulkCsvWorkspaceHeaderProps = {
   postDestination: WordPressPostDestination;
   onPostDestinationChange: (v: WordPressPostDestination) => void;
   postDestinationChoices: WordPressPostDestination[];
+  featuredImagePerBlog: boolean;
+  onFeaturedImagePerBlogChange: (v: boolean) => void;
+  featuredImageType: "ai-generated" | "google-maps";
+  onFeaturedImageTypeChange: (v: "ai-generated" | "google-maps") => void;
+  onApplyFeaturedImageToRows: (value: "y" | "n" | "google-maps") => void;
   canRun: boolean;
   onRun: () => void;
   onCancel: () => void;
@@ -71,6 +73,11 @@ export function BulkCsvWorkspaceHeader({
   postDestination,
   onPostDestinationChange,
   postDestinationChoices,
+  featuredImagePerBlog,
+  onFeaturedImagePerBlogChange,
+  featuredImageType,
+  onFeaturedImageTypeChange,
+  onApplyFeaturedImageToRows,
   canRun,
   onRun,
   onCancel,
@@ -81,6 +88,17 @@ export function BulkCsvWorkspaceHeader({
   onDetailsOpenChange,
 }: BulkCsvWorkspaceHeaderProps) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const featuredImageMode = featuredImagePerBlog ? featuredImageType : "off";
+  const handleFeaturedImageMode = (value: "off" | "ai-generated" | "google-maps") => {
+    if (value === "off") {
+      onFeaturedImagePerBlogChange(false);
+      onApplyFeaturedImageToRows("n");
+      return;
+    }
+    onFeaturedImagePerBlogChange(true);
+    onFeaturedImageTypeChange(value);
+    onApplyFeaturedImageToRows(value === "google-maps" ? "google-maps" : "y");
+  };
 
   return (
     <BlogGeneratorWorkspaceChrome
@@ -159,17 +177,37 @@ export function BulkCsvWorkspaceHeader({
             <>
               <div className={BULK_TOOLBAR_GROUP_DIVIDER} aria-hidden />
               <Select
+                value={featuredImageMode}
+                onValueChange={(v) => handleFeaturedImageMode(v as "off" | "ai-generated" | "google-maps")}
+                disabled={workspaceBusy}
+              >
+                <SelectTrigger className={GENERATOR_SELECT} aria-label="Image">
+                  <SelectValue placeholder="Image" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectItem className="text-base" value="ai-generated">
+                    AI image
+                  </SelectItem>
+                  <SelectItem className="text-base" value="google-maps">
+                    Google Maps
+                  </SelectItem>
+                  <SelectItem className="text-base" value="off">
+                    None
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
                 value={postDestination}
                 onValueChange={(v) => onPostDestinationChange(v as WordPressPostDestination)}
                 disabled={workspaceBusy}
               >
                 <SelectTrigger className={GENERATOR_SELECT} aria-label="Export destination">
-                  <SelectValue />
+                  <SelectValue placeholder="Destination" />
                 </SelectTrigger>
                 <SelectContent position="popper">
                   {postDestinationChoices.map((choice) => (
                     <SelectItem key={choice} className="text-base" value={choice}>
-                      {POST_DESTINATION_SHORT[choice]}
+                      {WORDPRESS_POST_DESTINATION_SHORT[choice]}
                     </SelectItem>
                   ))}
                 </SelectContent>

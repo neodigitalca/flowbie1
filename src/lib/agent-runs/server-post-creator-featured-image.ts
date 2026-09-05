@@ -1,5 +1,5 @@
 import type { WordPressSite } from "@/components/integrations/types";
-import { loadApiKey } from "@/lib/api";
+import { resolveOpenRouterApiKeyForHarness } from "@/lib/openrouter-api-key-resolve";
 import { generateFeaturedImage, generateImageChecklist } from "@/lib/bulk/bulk-image-generator";
 import { buildFocusedArticlePurpose } from "@/lib/content-generation/article-length-policy";
 import { generateSEOImageFilename } from "@/lib/image-filename-generator";
@@ -21,7 +21,7 @@ export async function generateServerPostCreatorFeaturedImage(args: {
   markdownContent: string;
   blueprintPurpose?: string;
 }): Promise<ServerPostCreatorFeaturedImageResult> {
-  const apiKey = loadApiKey()?.trim();
+  const apiKey = (await resolveOpenRouterApiKeyForHarness()).trim();
   if (!apiKey) {
     throw new Error("OpenRouter API key required for featured image.");
   }

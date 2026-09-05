@@ -160,10 +160,10 @@ class Neo_Pulse_Wp_Forms {
 			'admin_page_neo_pulse-wp-forms-entries',
 			'neo-pulse-wp_page_neo_pulse-wp-forms-entries',
 		);
-		if ( ! in_array( $hook, $screens, true ) ) {
+		if ( ! Neo_Pulse_Wp_Admin::admin_hook_matches( $hook, $screens ) ) {
 			return;
 		}
-		if ( in_array( $hook, array( 'admin_page_neo_pulse-wp-forms-edit', 'neo-pulse-wp_page_neo_pulse-wp-forms-edit' ), true ) ) {
+		if ( Neo_Pulse_Wp_Admin::admin_hook_matches( $hook, array( 'admin_page_neo_pulse-wp-forms-edit', 'neo-pulse-wp_page_neo_pulse-wp-forms-edit' ) ) ) {
 			$base   = 'assets/admin/';
 			$js     = NEO_PULSE_WP_PLUGIN_DIR . $base . 'admin-forms-builder.js';
 			$js_ver = NEO_PULSE_WP_VERSION;
@@ -181,7 +181,7 @@ class Neo_Pulse_Wp_Forms {
 			);
 			wp_localize_script(
 				'neo-pulse-wp-admin-forms-builder',
-				'neo-pulseFormsBuilder',
+				'neoPulseFormsBuilder',
 				array(
 					'fieldTypes'  => Neo_Pulse_Wp_Forms_Field_Registry::choices(),
 					'fieldGroups' => Neo_Pulse_Wp_Forms_Field_Registry::choices_grouped(),

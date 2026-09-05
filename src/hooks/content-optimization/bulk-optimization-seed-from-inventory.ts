@@ -9,11 +9,11 @@ import {
   typeHintFromCachedPost,
 } from "@/lib/wordpress-api/inventory-match";
 import { mergeSeoResearchFromAcfIntoContext } from "@/lib/content-generation/ai-driven-acf-reader";
-import { effectiveHasEntityForContentOptimizer } from "@/lib/entity-endpoint-extractor";
 import type { HandleOptimizeMultipleContentParams } from "./bulk-optimization-params";
 import { DEATH_STAR_NO_GSC, bulkOptimizationWpStr } from "./bulk-optimization-constants";
 import { inventoryRowToAcfKeywordFields } from "./bulk-optimization-grep-acf";
 import type { SitePostInventoryRow } from "@/lib/wordpress-api/types";
+import { resolveSapEntityForOptimize } from "./continue-optimization-entity-helpers";
 
 export function fullPostSnapshotFromInventoryRow(
   row: SitePostInventoryRow,
@@ -172,6 +172,25 @@ export function seedAllBulkPrefetchCachesFromInventory(
     if (primaryKeyword) {
       acfFields.keyword_focus = primaryKeyword;
     }
+
+    const isSapBulkRun = optimizationOptions?.inventorySitemapSource === "sap";
+    if (isSapBulkRun) {
+      const postTitle =
+        bulkOptimizationWpStr(existingPostFromInventoryRow(hit).title)
+        || String(hit.row.fields?.title ?? "").trim();
+      const resolvedEntity = resolveSapEntityForOptimize({
+        site,
+        url: targetUrl,
+        title: postTitle,
+        keyword: primaryKeyword,
+        acfFields,
+      });
+      if (resolvedEntity) {
+        if (!String(acfFields.origin ?? "").trim()) acfFields.origin = resolvedEntity;
+        if (!String(acfFields.service_area ?? "").trim()) acfFields.service_area = resolvedEntity;
+      }
+    }
+
     prefetchedAcfFieldsCache.set(urlIndex, acfFields);
     if (primaryKeyword) {
       urlKeywords[targetUrl] = primaryKeyword;
@@ -189,11 +208,7 @@ export function seedAllBulkPrefetchCachesFromInventory(
     const existingPost = existingPostFromInventoryRow(hit);
     const postTypeEndpoint = postSnapshot.postTypeEndpoint;
     const postTypeSubtype = postSnapshot.postTypeSubtype;
-    const effectiveHasEntity = effectiveHasEntityForContentOptimizer(
-      site,
-      postTypeEndpoint,
-      optimizationOptions?.hasEntity,
-    );
+    const pendingHasEntity = isSapBulkRun;
 
     let acfContext = mergeSeoResearchFromAcfIntoContext(
       acfFields,
@@ -228,7 +243,7 @@ export function seedAllBulkPrefetchCachesFromInventory(
           optimizeFeaturedImage: optimizationOptions?.optimizeFeaturedImage === true,
           optimizeExtraText: optimizationOptions?.optimizeExtraText === true,
           optimizeExtraImage: optimizationOptions?.optimizeExtraImage === true,
-          hasEntity: effectiveHasEntity,
+          hasEntity: pendingHasEntity,
           bulkFaqMinimum4: optimizationOptions?.bulkFaqMinimum4 === true,
           contentOnlyUpload: true,
           useAcfKeyword: true,

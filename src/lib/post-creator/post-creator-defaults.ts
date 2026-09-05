@@ -20,16 +20,8 @@ export function defaultPostCreatorExecutionPayload(): TaskExecutionPayload {
 }
 
 export function defaultPostCreatorExecutionPayloadForRecipe(
-  recipeKeyword: string,
+  _recipeKeyword: string,
 ): TaskExecutionPayload {
-  if (recipeKeyword === "monthly-3-posts-editorial") {
-    return {
-      ...defaultPostCreatorExecutionPayload(),
-      postCount: 3,
-      scheduleCustomInterval: 3,
-      scheduleTimesPerMonth: 3,
-    };
-  }
   return defaultPostCreatorExecutionPayload();
 }
 

@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { prefetchChatSession } from "@/lib/chat-session-cache";
 import { readTeamMembersCache, prefetchTeamMembers, writeTeamMembersCache } from "@/lib/team-members-cache";
@@ -60,11 +61,20 @@ type TeamContextValue = {
 
 const TeamContext = createContext<TeamContextValue | null>(null);
 
+const PROJECT_BUNDLE_FETCH_CONCURRENCY = 3;
+
+type ProjectBundleQueueEntry = {
+  projectId: number;
+  resolve: () => void;
+};
+
 function emptyProjectBundle(): TaskProjectBundle {
   return { tasks: [], sections: [], files: [] };
 }
 
 export function TeamProvider({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const onAuthPage = location.pathname === "/login" || location.pathname === "/register";
   const { user, loading: authLoading, activeTeam: authActiveTeam, permissions: authPermissions, checkAuth, setActiveTeam: setAuthActiveTeam, setPermissions: setAuthPermissions } = useAuth();
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [activeTeam, setActiveTeam] = useState<TeamSummary | null>(authActiveTeam);
@@ -111,6 +121,9 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     return readTasksWorkspaceCache(id)?.completedToday ?? 0;
   });
   const [projectBundles, setProjectBundles] = useState<Record<number, TaskProjectBundle>>({});
+  const projectBundleInflightRef = useRef(new Map<number, Promise<void>>());
+  const projectBundleQueueRef = useRef<ProjectBundleQueueEntry[]>([]);
+  const projectBundleActiveCountRef = useRef(0);
 
   useEffect(() => {
     setActiveTeam(authActiveTeam);
@@ -118,10 +131,10 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   }, [authActiveTeam, authPermissions]);
 
   useEffect(() => {
-    if (authLoading || !user || !activeTeam?.id) return;
+    if (onAuthPage || authLoading || !user || !activeTeam?.id) return;
     void prefetchChatSession(activeTeam.id);
     void prefetchTeamMembers(activeTeam.id);
-  }, [authLoading, user, activeTeam?.id]);
+  }, [onAuthPage, authLoading, user, activeTeam?.id]);
 
   useLayoutEffect(() => {
     if (!activeTeam?.id) {
@@ -147,6 +160,12 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   }, [activeTeam?.id]);
 
   const clearTasksWorkspace = useCallback(() => {
+    projectBundleInflightRef.current.clear();
+    for (const entry of projectBundleQueueRef.current) {
+      entry.resolve();
+    }
+    projectBundleQueueRef.current = [];
+    projectBundleActiveCountRef.current = 0;
     setTaskProjects([]);
     setTaskTags([]);
     setTaskTemplates([]);
@@ -202,20 +221,60 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     }
   }, [activeTeam, clearTasksWorkspace]);
 
+  const pumpProjectBundleQueue = useCallback(() => {
+    const teamId = activeTeam?.id;
+    if (!teamId) return;
+
+    while (
+      projectBundleActiveCountRef.current < PROJECT_BUNDLE_FETCH_CONCURRENCY &&
+      projectBundleQueueRef.current.length > 0
+    ) {
+      const entry = projectBundleQueueRef.current.shift();
+      if (!entry) break;
+
+      projectBundleActiveCountRef.current += 1;
+      void (async () => {
+        try {
+          const [tasks, sections, files] = await Promise.all([
+            fetchProjectTasks(teamId, entry.projectId),
+            fetchProjectSections(teamId, entry.projectId),
+            fetchProjectFiles(teamId, entry.projectId),
+          ]);
+          setProjectBundles((prev) => ({
+            ...prev,
+            [entry.projectId]: { tasks, sections, files },
+          }));
+        } catch {
+          setProjectBundles((prev) => ({
+            ...prev,
+            [entry.projectId]: prev[entry.projectId] ?? emptyProjectBundle(),
+          }));
+        } finally {
+          projectBundleInflightRef.current.delete(entry.projectId);
+          projectBundleActiveCountRef.current -= 1;
+          entry.resolve();
+          pumpProjectBundleQueue();
+        }
+      })();
+    }
+  }, [activeTeam?.id]);
+
   const refreshProjectBundle = useCallback(
     async (projectId: number) => {
       if (!activeTeam) return;
-      const [tasks, sections, files] = await Promise.all([
-        fetchProjectTasks(activeTeam.id, projectId),
-        fetchProjectSections(activeTeam.id, projectId),
-        fetchProjectFiles(activeTeam.id, projectId),
-      ]);
-      setProjectBundles((prev) => ({
-        ...prev,
-        [projectId]: { tasks, sections, files },
-      }));
+      const inflight = projectBundleInflightRef.current.get(projectId);
+      if (inflight) return inflight;
+
+      let resolve!: () => void;
+      const promise = new Promise<void>((resolvePromise) => {
+        resolve = resolvePromise;
+      });
+      projectBundleInflightRef.current.set(projectId, promise);
+      projectBundleQueueRef.current.push({ projectId, resolve });
+      pumpProjectBundleQueue();
+      return promise;
     },
-    [activeTeam],
+    [activeTeam, pumpProjectBundleQueue],
   );
 
   const updateProjectBundle = useCallback((projectId: number, patch: Partial<TaskProjectBundle>) => {
@@ -266,20 +325,26 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   }, [user, checkAuth, authActiveTeam, authPermissions, setAuthActiveTeam, setAuthPermissions, clearTasksWorkspace]);
 
   useEffect(() => {
+    if (onAuthPage) {
+      setLoading(false);
+      return;
+    }
     void refresh();
-  }, [user?.id]);
+  }, [onAuthPage, user?.id]);
 
   useEffect(() => {
+    if (onAuthPage) return;
     void refreshMembers();
-  }, [refreshMembers]);
+  }, [onAuthPage, refreshMembers]);
 
   useEffect(() => {
+    if (onAuthPage) return;
     if (!activeTeam?.id) {
       clearTasksWorkspace();
       return;
     }
     void refreshTasksWorkspace();
-  }, [activeTeam?.id, clearTasksWorkspace, refreshTasksWorkspace]);
+  }, [onAuthPage, activeTeam?.id, clearTasksWorkspace, refreshTasksWorkspace]);
 
   const switchTeam = useCallback(
     async (teamId: number) => {

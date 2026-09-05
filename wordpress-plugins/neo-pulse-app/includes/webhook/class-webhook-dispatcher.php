@@ -1,6 +1,6 @@
 <?php
 /**
- * Early /webhook dispatcher (Chekkit messaging + contact hub).
+ * Early /webhook dispatcher (Chekkit messaging + AgentMail inbound).
  *
  * @package Neo_Pulse_App
  */
@@ -18,15 +18,23 @@ class Neo_Pulse_App_Webhook_Dispatcher {
 	 */
 	public static function maybe_dispatch( $wp ): void {
 		unset( $wp );
-		if ( self::request_path() === null ) {
+		$path = self::request_path();
+		if ( $path === null ) {
 			return;
 		}
 		while ( ob_get_level() > 0 ) {
 			ob_end_clean();
 		}
 
-		$method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( (string) $_SERVER['REQUEST_METHOD'] ) : 'GET';
-		$body   = self::read_json_body();
+		$method   = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( (string) $_SERVER['REQUEST_METHOD'] ) : 'GET';
+		$raw_body = file_get_contents( 'php://input' );
+		$body     = self::decode_json_body( is_string( $raw_body ) ? $raw_body : '' );
+
+		if ( $path === '/webhook/agentmail' || $path === '/webhook/agentmail/' ) {
+			Neo_Pulse_App_Agentmail_Webhook::handle( $method, $body, is_string( $raw_body ) ? $raw_body : '' );
+			exit;
+		}
+
 		Neo_Pulse_App_Chekkit_Webhook::handle( $method, $body );
 		exit;
 	}
@@ -37,15 +45,17 @@ class Neo_Pulse_App_Webhook_Dispatcher {
 		if ( $path === '/webhook' || $path === '/webhook/' ) {
 			return $path;
 		}
+		if ( $path === '/webhook/agentmail' || $path === '/webhook/agentmail/' ) {
+			return $path;
+		}
 		return null;
 	}
 
 	/**
 	 * @return array<string,mixed>
 	 */
-	private static function read_json_body(): array {
-		$raw = file_get_contents( 'php://input' );
-		if ( ! is_string( $raw ) || $raw === '' ) {
+	private static function decode_json_body( string $raw ): array {
+		if ( $raw === '' ) {
 			return array();
 		}
 		$data = json_decode( $raw, true );

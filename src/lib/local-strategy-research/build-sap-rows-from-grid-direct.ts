@@ -5,14 +5,25 @@ import type {
   TieredCompetitorsResult,
 } from "@/lib/competitor-research/types";
 import {
+  buildLocalGridSummary,
+  dominantKeywordFromRows,
   firstCityStateLabelFromAddress,
   lastCityStateLabelFromAddress,
+  wikipediaSearchAugmentFromGridRows,
   type LocalDominatorRow,
 } from "@/lib/local-dominator-csv";
 import {
   LOCAL_ANALYSIS_SAP_MIN,
 } from "@/lib/local-analysis-target-constants";
-import { dedupeRepeatedCommaPlaceSegments, mergePlaceHintWithGeoSuffix } from "@/lib/comma-place-label";
+import {
+  buildCityLocationBucketsFromRows,
+  type GridLocationBucket,
+} from "@/lib/local-analysis/grid-location-buckets";
+import { dedupeRepeatedCommaPlaceSegments, mergePlaceHintWithGeoSuffix, normalizeEntityHintCommaLabel } from "@/lib/comma-place-label";
+import {
+  harvestWikiPlacesForCity,
+  pickWikiEntriesFromPool,
+} from "@/lib/wikipedia/wiki-entity-pool";
 
 function clampTargetTotal(n: number): number {
   return Math.max(LOCAL_ANALYSIS_SAP_MIN, Math.floor(n));
@@ -83,6 +94,93 @@ export type BuildSapRowsFromGridDirectParams = {
   semrush: CompetitorResearchSemrushResponse;
   tiers: TieredCompetitorsResult;
 };
+
+export type BuildSapRowsFromGridDirectWikiParams = BuildSapRowsFromGridDirectParams & {
+  apiKey: string;
+  siteId?: string;
+};
+
+function parentCityFromBucket(bucket: GridLocationBucket): string {
+  for (const addr of bucket.sampleAddresses) {
+    const city = firstCityStateLabelFromAddress(addr);
+    if (city) return normalizeEntityHintCommaLabel(city);
+  }
+  return normalizeEntityHintCommaLabel(bucket.placeLabel.trim());
+}
+
+/**
+ * SAP bulk rows from grid pins with entities from Wikipedia harvest → AI pick (exactly one entity per row).
+ */
+export async function buildSapRowsFromGridDirectWithWikiPool(
+  params: BuildSapRowsFromGridDirectWikiParams,
+): Promise<CSVRow[]> {
+  const target = clampTargetTotal(params.targetTotal);
+  if (params.rows.length === 0) {
+    return [];
+  }
+  if (!params.apiKey.trim()) {
+    throw new Error("OpenRouter API key is required for wiki pool grid SAP rows.");
+  }
+
+  const buckets = buildCityLocationBucketsFromRows(params.rows);
+  const bucket = buckets[0];
+  if (!bucket) {
+    throw new Error("Grid CSV has no city buckets for wiki pool SAP rows.");
+  }
+
+  const hints = params.placeHints.map((h) => h.trim()).filter(Boolean);
+  const parentCity = parentCityFromBucket(bucket);
+  const gridSummaryMarkdown = buildLocalGridSummary(params.rows, {
+    rowsForGeographicScope: params.rows,
+  }).summaryMarkdown;
+  const wikipediaSearchAugment = wikipediaSearchAugmentFromGridRows(params.rows);
+  const { pool } = await harvestWikiPlacesForCity({
+    bucket,
+    gridPlaceHints: hints,
+    minCount: target,
+    wikipediaSearchAugment,
+  });
+  const picked = await pickWikiEntriesFromPool({
+    pool,
+    count: target,
+    parentCity,
+    sampleAddresses: bucket.sampleAddresses,
+    gridLocations: hints,
+    gridSummaryMarkdown,
+    excludeTitles: [],
+    apiKey: params.apiKey,
+    siteId: params.siteId,
+  });
+
+  const originBits = [
+    params.semrush.seedDomain?.trim() ? `seed:${params.semrush.seedDomain.trim()}` : "",
+    tierLabelForSeed(params.semrush, params.tiers),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const sorted = [...params.rows].sort((a, b) => b.rank - a.rank);
+  const slice = sorted.slice(0, target);
+  if (picked.length === 0) {
+    return [];
+  }
+
+  return slice.map((row, i) => {
+    const entry = picked[i % picked.length]!;
+    const entity = normalizeEntityHintCommaLabel(entry.entityLabel);
+    return {
+      keyword: row.keyword.trim(),
+      entity,
+      title: "",
+      modifier: "google-maps",
+      featuredImage: "google-maps",
+      keyword_questions_json: "[]",
+      origin: originBits || undefined,
+      wikipedia_url: entry.wikipediaUrl,
+      wikipedia_title: entry.wikipediaTitle,
+    };
+  });
+}
 
 /**
  * Deterministic SAP bulk rows from Local Dominator grid pins + local analysis context (no LLM).

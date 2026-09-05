@@ -5,6 +5,7 @@ import type {
 } from "@/lib/automation-recipes-types";
 
 export const AUTOMATION_RECIPE_CATEGORY_LABELS: Record<string, string> = {
+  browser: "Browser",
   maintenance: "Maintenance",
   "local-seo": "Local SEO",
   onboarding: "Onboarding",
@@ -14,6 +15,7 @@ export const AUTOMATION_RECIPE_CATEGORY_LABELS: Record<string, string> = {
 };
 
 export const AUTOMATION_RECIPE_CATEGORY_ORDER = [
+  "browser",
   "research",
   "editorial",
   "reporting",
@@ -65,6 +67,7 @@ export const AUTOMATION_RECIPE_SIGNAL_LABELS: Record<string, string> = {
 export const AUTOMATION_RECIPE_EXECUTION_LABELS: Record<string, string> = {
   "meta-only": "Meta only",
   "full-aiseo": "Full AISEO",
+  "entity-page-creator": "Entity page creator",
 };
 
 export const AUTOMATION_RECIPE_PREREQUISITE_LABELS: Record<string, string> = {
@@ -90,6 +93,12 @@ export function filterAutomationRecipesClient(
       return false;
     }
     if (query.execution === "full-aiseo" && !recipe.filters.executionKinds?.includes("content_optimizer")) {
+      return false;
+    }
+    if (
+      query.execution === "entity-page-creator" &&
+      !recipe.filters.executionKinds?.includes("entity_page_creator")
+    ) {
       return false;
     }
     if (q) {

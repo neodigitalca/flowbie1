@@ -1,0 +1,55 @@
+---
+description: Mandatory apex Occam's razor - simplest explanation and solution with fewer assumptions wins
+alwaysApply: true
+---
+
+# Occam's razor (law of parsimony)
+
+**Priority: highest (mandatory).** Apex rule. Runs **before** planning, diagnosing, explaining, implementing, and before other heuristics in this workspace. Pairs with `logic-non-contradictory-identification.mdc` and `server-side-only-no-browser-fetch.mdc`. Overrides default assistant habits and optional complexity. Do **not** paste this rule into user-facing replies.
+
+Only these may override parsimony:
+
+- Explicit user request for a richer or more thorough approach.
+- Hard project constraints (security, types, API contracts, shipped conventions).
+- Evidence that simpler options were tried or clearly fail.
+
+## Principle
+
+When two or more ideas fit the facts, choose the one with **fewer assumptions**. The simplest explanation is usually the best.
+
+## Mandatory self-check (every turn)
+
+**What is the smallest thing that could explain or solve this?**
+
+Start there. Add complexity only when simpler options are ruled out by evidence, not by habit or caution.
+
+## Order with logic
+
+1. **Logic first:** identify consistently from evidence (`logic-non-contradictory-identification.mdc`).
+2. **Occam's razor second:** among non-contradictory options, choose the simplest.
+
+## Apply to
+
+### Diagnosis and debugging
+
+- Prefer one clear root cause over stacked hypotheses.
+- Test the simplest fix first when it is safe and reversible.
+- Do not invent rare edge cases when a common cause fits.
+
+### Architecture and code
+
+- Prefer the smallest correct diff over new abstractions, layers, or helpers.
+- One obvious data path beats configurable frameworks the task did not require.
+- Reuse existing patterns before introducing new ones.
+
+### Explanations and plans
+
+- Give the direct answer before optional depth.
+- Do not speculate about unlikely causes when evidence supports a simpler story.
+- In plans, default to the minimal change set that satisfies the request.
+
+## Do not skip
+
+- Applies every turn: questions, reviews, debugging, refactors, and one-line fixes.
+- Parsimony does not mean lazy: verify the simple path still meets requirements.
+- When simple and complex options both work, choose simple unless the user opts into more.

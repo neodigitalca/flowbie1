@@ -11,11 +11,7 @@ import {
   overviewInventoryCollectionsForOverviewLoad,
   type OverviewSitemapSource,
 } from "@/lib/overview/overview-sitemap-source";
-import {
-  buildOverviewRowPatchFromInventory,
-  hydrateOverviewRowsFromPrefetchInventory,
-  mergeOverviewRowScrapeFields,
-} from "@/lib/overview/overview-row-scrape";
+import { applyInventoryPatchesToOverviewRows } from "@/lib/overview/overview-inventory-progressive-hydrate";
 import {
   getOverviewRowsSessionCache,
   mergeOverviewRowsForSitemapLoad,
@@ -24,17 +20,13 @@ import {
 import {
   buildOverviewSitemapLoadFingerprint,
   setOverviewSitemapLoadFingerprint,
-  shouldSkipOverviewSitemapLoad,
 } from "@/lib/overview/overview-sitemap-load-cache";
 import {
   warmEntitySiteCache,
   getSitePrefetchUrlsForSource,
-  getSitePrefetchOverviewRowsForSource,
-  ensureEntitySiteWarmInventory,
   NEO_PULSE_SITE_DATA_REFRESHED_EVENT,
 } from "@/lib/local-analysis/entity-site-warm-cache";
 import type { WordPressSite } from "@/components/integrations/types";
-import type { OverviewBinding } from "@/hooks/overview/use-overview-wordpress-binding";
 import type { OverviewTabBase } from "@/hooks/overview/use-overview-tab-base";
 
 type Args = Pick<
@@ -55,38 +47,6 @@ type LoadOptions = {
   applyToUi?: boolean;
   generation?: number;
 };
-
-function applyInventoryPatches(
-  rows: OverviewRow[],
-  site: WordPressSite,
-  source: OverviewSitemapSource,
-  bindingMap: Record<string, OverviewBinding>,
-  getInventoryMatchForUrl: Args["getInventoryMatchForUrl"],
-): OverviewRow[] {
-  return rows.map((row) => {
-    const invMatch = getInventoryMatchForUrl(site, row.url, source);
-    const invPatch = buildOverviewRowPatchFromInventory(row, invMatch, bindingMap[row.url], site.siteUrl);
-    const patch =
-      invPatch ??
-      mergeOverviewRowScrapeFields(
-        row,
-        { title: row.title || "", metaDescription: row.metaDescription || "" },
-        null,
-      );
-    return { ...row, ...patch, status: "idle" as const };
-  });
-}
-
-function buildOverviewUrlShellRows(
-  urls: string[],
-  existingByUrl: Map<string, OverviewRow>,
-  sessionByUrl: Map<string, OverviewRow>,
-): OverviewRow[] {
-  const urlRows = urls.map(
-    (url) => existingByUrl.get(url) ?? sessionByUrl.get(url) ?? createEmptyOverviewRow(url),
-  );
-  return applyFaqPlaceholderCountToRows(urlRows, OVERVIEW_BULK_AI_FAQ_SEED_COUNT);
-}
 
 export function useOverviewTabSitemapLoad({
   rowsRef,
@@ -160,13 +120,24 @@ export function useOverviewTabSitemapLoad({
       const applyToUi =
         options?.applyToUi !== false && source === sitemapSourceRef.current;
 
+      const commitRows = (rowsToStore: OverviewRow[]) => {
+        const filtered = rowsToStore.filter((row) => Boolean(row.url?.trim()));
+        if (!filtered.length) return;
+        setOverviewRowsSessionCache(activeSite.id, source, filtered);
+        setOverviewSitemapLoadFingerprint(
+          activeSite.id,
+          source,
+          buildOverviewSitemapLoadFingerprint(activeSite, source),
+        );
+        if (!isStaleLoad(generation) && source === sitemapSourceRef.current) {
+          setRows(filtered);
+        }
+      };
+
       if (!force) {
         const cachedRows = getOverviewRowsSessionCache(activeSite.id, source);
-        const cachedHasBodies = cachedRows?.some((r) => (r.postContent ?? "").trim().length > 0);
-        const skipCache = cachedHasBodies &&
-          shouldSkipOverviewSitemapLoad(activeSite.id, source, activeSite, cachedRows);
-        if (skipCache) {
-          if (source === sitemapSourceRef.current && cachedRows?.length) {
+        if (cachedRows?.length) {
+          if (source === sitemapSourceRef.current) {
             setRows(cachedRows);
           }
           return;
@@ -190,72 +161,10 @@ export function useOverviewTabSitemapLoad({
         const sessionRows = getOverviewRowsSessionCache(activeSite.id, source) ?? [];
         const sessionByUrl = new Map(sessionRows.map((r) => [r.url, r]));
 
-        let firstUrlBatchPainted = false;
-        const applyUrlBatch = (urls: string[]) => {
-          if (isStaleLoad(generation) || !applyToUi) return;
-          if (!urls.length) return;
-          const currentCount = rowsRef.current.filter((r) => r.url?.trim()).length;
-          // Never shrink the grid (e.g. stale prefetch / late paint after full REST).
-          if (urls.length < currentCount && currentCount > 0) return;
-          const existingByUrl = new Map(
-            rowsRef.current.filter((r) => r.url?.trim()).map((r) => [r.url, r]),
-          );
-          setRows(buildOverviewUrlShellRows(urls, existingByUrl, sessionByUrl));
-          if (!firstUrlBatchPainted && urls.length > 0) {
-            firstUrlBatchPainted = true;
-            if (uiLoadOpen) {
-              endUiLoad(generation);
-              uiLoadOpen = false;
-            }
-          }
-        };
-
-        const paintPrefetchUrls = (): number => {
-          const prefetchUrls = getSitePrefetchUrlsForSource(activeSite.id, source);
-          if (prefetchUrls?.length) applyUrlBatch(prefetchUrls);
-          return prefetchUrls?.length ?? 0;
-        };
-
-        const applyPrefetchMetadata = () => {
-          if (isStaleLoad(generation) || !applyToUi) return;
-          const prefetchRows = getSitePrefetchOverviewRowsForSource(activeSite, source);
-          setRows((current) =>
-            hydrateOverviewRowsFromPrefetchInventory(current, activeSite, prefetchRows),
-          );
-        };
-
-        // Instant first paint: session / current rows / warm URLs before any network await.
-        if (applyToUi) {
-          paintPrefetchUrls();
-          if (!firstUrlBatchPainted && sessionRows.length) {
-            setRows(sessionRows);
-            firstUrlBatchPainted = true;
-            if (uiLoadOpen) {
-              endUiLoad(generation);
-              uiLoadOpen = false;
-            }
-          } else if (!firstUrlBatchPainted && rowsRef.current.length) {
-            firstUrlBatchPainted = true;
-            if (uiLoadOpen) {
-              endUiLoad(generation);
-              uiLoadOpen = false;
-            }
-          }
-        } else {
-          paintPrefetchUrls();
-        }
-
-        void ensureEntitySiteWarmInventory(activeSite).then(() => {
-          if (isStaleLoad(generation)) return;
-          if (!firstUrlBatchPainted) paintPrefetchUrls();
-          applyPrefetchMetadata();
-        });
-
-        // ONE WordPress REST inventory call (no Yoast/sitemap XML crawl).
         const inv = await prefetchOverviewInventory(activeSite, {
           downloadCsv: false,
           collections: inventoryCollections,
-          includeContent: true,
+          includeContent: false,
           includePageHeading: true,
           source,
           silent: true,
@@ -323,7 +232,7 @@ export function useOverviewTabSitemapLoad({
 
         if (isStaleLoad(generation)) return;
 
-        const hydratedRows = applyInventoryPatches(
+        const hydratedRows = applyInventoryPatchesToOverviewRows(
           rowsFinal,
           activeSite,
           source,
@@ -331,23 +240,7 @@ export function useOverviewTabSitemapLoad({
           getInventoryMatchForUrl,
         );
 
-        const rowsToStore = hydratedRows.length ? hydratedRows : rowsFinal;
-        if (rowsToStore.length) {
-          setOverviewRowsSessionCache(
-            activeSite.id,
-            source,
-            rowsToStore.filter((row) => Boolean(row.url?.trim())),
-          );
-        }
-        setOverviewSitemapLoadFingerprint(
-          activeSite.id,
-          source,
-          buildOverviewSitemapLoadFingerprint(activeSite, source),
-        );
-
-        if (!isStaleLoad(generation) && source === sitemapSourceRef.current) {
-          setRows(rowsToStore);
-        }
+        commitRows(hydratedRows.length ? hydratedRows : rowsFinal);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Failed to load sitemap.";
         if (!silent || force) {
@@ -449,7 +342,7 @@ export function useOverviewTabSitemapLoad({
     const generation = loadGenerationRef.current;
 
     void loadOverviewSourceRef.current(site, activeSource, {
-      force: sourceChanged,
+      force: false,
       silent: false,
       applyToUi: true,
       generation,

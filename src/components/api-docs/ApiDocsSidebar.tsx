@@ -1,5 +1,5 @@
 import { useApiDocsSlug, setApiDocsHash } from "@/lib/api-docs/api-docs-hash";
-import { apiDocsManifest } from "@/lib/api-docs";
+import { apiDocsManifest } from "@/lib/api-docs/api-docs-manifest";
 import type { ApiDocNavItem, ApiDocNavSection } from "@/lib/api-docs/types";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight } from "lucide-react";

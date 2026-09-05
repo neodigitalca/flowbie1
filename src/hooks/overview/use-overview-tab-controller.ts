@@ -4,6 +4,8 @@ import { useOverviewTabContentCleanup } from "@/hooks/overview/use-overview-tab-
 import { useOverviewTabBlogLinks } from "@/hooks/overview/use-overview-tab-blog-links";
 import { useOverviewTabBlogWikipediaLink } from "@/hooks/overview/use-overview-tab-blog-wikipedia-link";
 import { useOverviewTabBlogOverview } from "@/hooks/overview/use-overview-tab-blog-overview";
+import { useOverviewTabBlogAnswer } from "@/hooks/overview/use-overview-tab-blog-answer";
+import { useOverviewTabBlogScenario } from "@/hooks/overview/use-overview-tab-blog-scenario";
 import { useOverviewTabBlogInContentImage } from "@/hooks/overview/use-overview-tab-blog-in-content-image";
 import { useOverviewTabBase } from "@/hooks/overview/use-overview-tab-base";
 import { useOverviewTabSitemapLoad } from "@/hooks/overview/use-overview-tab-sitemap-load";
@@ -49,7 +51,11 @@ export function useOverviewTabController(props: OverviewTabContentProps) {
 
   const faq = useOverviewTabFaqHandlers({
     site,
+    sitemapSource: base.sitemapSource,
     rows: base.visibleRows,
+    bindings: base.bindings,
+    resolveBindings: base.resolveBindings,
+    prefetchOverviewInventory: base.prefetchOverviewInventory,
     optimizeFaq: base.optimizeFaq,
     optimizeFaqQuestion: base.optimizeFaqQuestion,
     optimizeFaqAnswer: base.optimizeFaqAnswer,
@@ -58,6 +64,7 @@ export function useOverviewTabController(props: OverviewTabContentProps) {
     bulkAiFaqSeedCount: base.bulkAiFaqSeedCount,
     opt: base.opt,
     bulkScopeUrlKeys: base.bulkScopeUrlKeys,
+    getInventoryMatchForUrl: base.getInventoryMatchForUrl,
   });
 
   const aiCsv = useOverviewTabAiTitleMetaUrlCsv({
@@ -226,6 +233,36 @@ export function useOverviewTabController(props: OverviewTabContentProps) {
     prefetchOverviewInventory: base.prefetchOverviewInventory,
   });
 
+  const blogAnswer = useOverviewTabBlogAnswer({
+    site,
+    sitemapSource: base.sitemapSource,
+    rows: base.visibleRows,
+    bindings: base.bindings,
+    resolveBindings: base.resolveBindings,
+    updateRow: base.updateRow,
+    opt: base.opt,
+    apiKey: props.apiKey,
+    selectedModel: props.selectedModel,
+    bulkScopeUrlKeys: base.bulkScopeUrlKeys,
+    getInventoryMatchForUrl: base.getInventoryMatchForUrl,
+    prefetchOverviewInventory: base.prefetchOverviewInventory,
+  });
+
+  const blogScenario = useOverviewTabBlogScenario({
+    site,
+    sitemapSource: base.sitemapSource,
+    rows: base.visibleRows,
+    bindings: base.bindings,
+    resolveBindings: base.resolveBindings,
+    updateRow: base.updateRow,
+    opt: base.opt,
+    apiKey: props.apiKey,
+    selectedModel: props.selectedModel,
+    bulkScopeUrlKeys: base.bulkScopeUrlKeys,
+    getInventoryMatchForUrl: base.getInventoryMatchForUrl,
+    prefetchOverviewInventory: base.prefetchOverviewInventory,
+  });
+
   const blogInContentImage = useOverviewTabBlogInContentImage({
     site,
     sitemapSource: base.sitemapSource,
@@ -260,6 +297,8 @@ export function useOverviewTabController(props: OverviewTabContentProps) {
     ...blogLinks,
     ...blogWikipediaLink,
     ...blogOverview,
+    ...blogAnswer,
+    ...blogScenario,
     ...blogInContentImage,
   };
 }

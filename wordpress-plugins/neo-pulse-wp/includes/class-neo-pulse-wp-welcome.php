@@ -117,7 +117,7 @@ class Neo_Pulse_Wp_Welcome {
 	}
 
 	public static function enqueue_assets( string $hook_suffix ): void {
-		if ( 'toplevel_page_neo_pulse-wp' !== $hook_suffix || ! self::should_show_welcome() ) {
+		if ( ! Neo_Pulse_Wp_Admin::admin_hook_matches( $hook_suffix, array( 'toplevel_page_neo_pulse-wp' ) ) || ! self::should_show_welcome() ) {
 			return;
 		}
 
@@ -177,7 +177,7 @@ class Neo_Pulse_Wp_Welcome {
 		}
 
 		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
-		if ( ! $screen || 'toplevel_page_neo_pulse-wp' !== $screen->id ) {
+		if ( ! $screen || ! Neo_Pulse_Wp_Admin::admin_hook_matches( (string) $screen->id, array( 'toplevel_page_neo_pulse-wp' ) ) ) {
 			return;
 		}
 

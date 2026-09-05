@@ -1,0 +1,62 @@
+---
+description: When the user says launch, startup, start local, run local, run it, start docker, or neopulse.local — start the offline dev stack
+alwaysApply: false
+---
+
+# Local dev startup (neopulse.local)
+
+When the user asks to **launch**, **startup**, **start**, **run** local dev, the **.local site**, or **Docker + localhost**, run the repo startup script instead of improvising steps.
+
+**Execution:** run via agent **Shell** in **background** (`block_until_ms: 0`); poll until ready. **Shell visible mode: OFF** — do not open a terminal the user sees. See `background-shell-no-visible-terminal.mdc`.
+
+## Command
+
+From repo root:
+
+```powershell
+npm run start:local
+```
+
+Optional:
+
+```powershell
+npm run start:local -- -OpenBrowser
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-local-dev.ps1 -SkipDev
+```
+
+## What it does
+
+1. Ensures `scripts/local-wp-staging.config.json` exists
+2. Starts **Docker Desktop** if the engine is not up
+3. Starts **neopulse.local** with `docker compose up` (no WP Staging license / CLI)
+4. Waits for **https://neopulse.local/** to respond
+5. Starts **Vite** on **http://localhost:8080** if port 8080 is free (log: `.local-dev-vite.log`)
+
+## URLs after startup
+
+| Service | URL |
+|---------|-----|
+| React UI | http://localhost:8080/ |
+| Login | http://localhost:8080/login |
+| WordPress | https://neopulse.local/ |
+| WP Admin | https://neopulse.local/wp-admin/ |
+
+## Auth troubleshooting
+
+- **Unauthorized** in Forge with an empty workflow list: browser session stale, not deleted data. Hard-refresh or open `/login`.
+- Local app user is usually **pulse@neodigital.ca** (NEO Pulse app DB, not WP admin).
+- Workflow API auth uses Bearer tokens via `tasks-api.ts` (same as `teams-api.ts`).
+
+## One-time setup (not startup)
+
+```powershell
+npm run setup:local-wp
+```
+
+## Do not
+
+- Use headless Cursor browser for the user's desktop Chrome unless they ask for desktop automation.
+- Point the UI at WP Admin NEO Pulse iframe locally; dev UI is always Vite on port 8080.
+- Ask the user to open Terminal or run startup commands in a visible shell.
+
+Reference: [docs/local-wp-staging-dev.md](../docs/local-wp-staging-dev.md), [scripts/start-local-dev.ps1](../scripts/start-local-dev.ps1)

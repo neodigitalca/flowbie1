@@ -72,30 +72,37 @@ class Neo_Pulse_App_Automation_Recipe_Registry {
 		if ( $keyword === '' || $name === '' ) {
 			return null;
 		}
-		if ( empty( $data['defaultTasks'] ) || ! is_array( $data['defaultTasks'] ) ) {
-			return null;
-		}
 
+		$kind          = sanitize_key( (string) ( $data['kind'] ?? 'template' ) );
+		$action_blocks = is_array( $data['actionBlocks'] ?? null ) ? $data['actionBlocks'] : null;
 		$default_tasks = array();
-		foreach ( $data['defaultTasks'] as $task ) {
-			if ( ! is_array( $task ) ) {
-				continue;
+		if ( is_array( $data['defaultTasks'] ?? null ) ) {
+			foreach ( $data['defaultTasks'] as $task ) {
+				if ( ! is_array( $task ) ) {
+					continue;
+				}
+				$title = sanitize_text_field( (string) ( $task['title'] ?? '' ) );
+				if ( $title === '' ) {
+					continue;
+				}
+				$default_tasks[] = $task;
 			}
-			$title = sanitize_text_field( (string) ( $task['title'] ?? '' ) );
-			if ( $title === '' ) {
-				continue;
-			}
-			$default_tasks[] = $task;
 		}
 		if ( count( $default_tasks ) === 0 ) {
-			return null;
+			if ( $kind !== 'workflow_template' || ! is_array( $action_blocks ) || count( $action_blocks ) === 0 ) {
+				return null;
+			}
 		}
 
 		$filters = is_array( $data['filters'] ?? null ) ? $data['filters'] : array();
+		$action_count = max( 1, (int) ( $filters['actionCount'] ?? 0 ) );
+		if ( $action_count <= 1 ) {
+			$action_count = max( 1, count( $default_tasks ), is_array( $action_blocks ) ? count( $action_blocks ) : 0 );
+		}
 
 		return array(
 			'keyword'        => $keyword,
-			'kind'           => 'template',
+			'kind'           => $kind === 'workflow_template' ? 'workflow_template' : 'template',
 			'name'           => $name,
 			'description'    => sanitize_textarea_field( (string) ( $data['description'] ?? '' ) ),
 			'notes'          => self::sanitize_notes_list( $data['notes'] ?? array() ),
@@ -108,7 +115,7 @@ class Neo_Pulse_App_Automation_Recipe_Registry {
 				'executionKinds'  => self::sanitize_string_list( $filters['executionKinds'] ?? array() ),
 				'targetBuckets'   => self::sanitize_string_list( $filters['targetBuckets'] ?? array() ),
 				'triggerSignals'  => self::sanitize_string_list( $filters['triggerSignals'] ?? array() ),
-				'actionCount'     => max( 1, (int) ( $filters['actionCount'] ?? count( $default_tasks ) ) ),
+				'actionCount'     => $action_count,
 			),
 			'triggerBlock'   => is_array( $data['triggerBlock'] ?? null ) ? $data['triggerBlock'] : self::derive_trigger_block( $default_tasks[0] ),
 			'actionBlock'    => is_array( $data['actionBlock'] ?? null ) ? $data['actionBlock'] : self::derive_action_block( $default_tasks[0] ),
@@ -268,6 +275,9 @@ class Neo_Pulse_App_Automation_Recipe_Registry {
 					continue;
 				}
 				if ( $execution === 'full-aiseo' && ! in_array( 'content_optimizer', $kinds, true ) ) {
+					continue;
+				}
+				if ( $execution === 'entity-page-creator' && ! in_array( 'entity_page_creator', $kinds, true ) ) {
 					continue;
 				}
 			}

@@ -1,7 +1,7 @@
 import {
   applyBriefToCaches,
   fetchDataForSeoSerpBriefJson,
-  hasSubstantiveSeoResearch,
+  indexHasStoredSeoResearchBrief,
 } from "./bulk-optimization-missing-seo-research";
 import { pageGscQueryStringsFromPending } from "./bulk-optimization-prefetch-page-gsc";
 import { readKeywordFocusFromAcfFields } from "@/lib/content-generation/ai-driven-acf-reader";
@@ -10,9 +10,10 @@ import {
   markContentPrepHarnessSection,
   type ContentPrepHarnessSetters,
 } from "@/lib/overview/overview-content-prep-harness-run";
+import { contentOptimizeHarnessSectionIndex } from "@/lib/overview/overview-content-optimize-pipeline";
 
-/** Always keep SERP research this many posts ahead of the active optimization index. */
-export const BULK_SERP_WARMUP_BUFFER_AHEAD = 2;
+/** Content optimize runs one post at a time; no SERP warmup for posts not yet started. */
+export const BULK_SERP_WARMUP_BUFFER_AHEAD = 0;
 
 export type BulkSerpWarmupController = ReturnType<typeof createBulkSerpWarmupController>;
 
@@ -74,20 +75,13 @@ export function createBulkSerpWarmupController(params: CreateBulkSerpWarmupParam
     if (index < 0 || index >= urls.length) return false;
     if (readyIndices.has(index)) return true;
     if (skipUrlSet.has(urls[index]!)) return true;
-    return hasSubstantiveSeoResearch(prefetchedAcfFieldsCache.get(index));
+    return false;
   };
 
   const markUrlSerpReady = (index: number, reason: "existing" | "filled" | "skipped" = "existing") => {
     const url = urls[index];
     if (!url) return;
-    const alreadyReady = readyIndices.has(index);
     readyIndices.add(index);
-    if (
-      !alreadyReady &&
-      reason === "existing" &&
-      hasSubstantiveSeoResearch(prefetchedAcfFieldsCache.get(index))
-    ) {
-    }
     setBulkOptimizationState((prev: Record<string, unknown>) => {
       const current = (prev as Record<string, Record<string, unknown>>)[batchKey];
       if (!current) return prev;
@@ -108,7 +102,13 @@ export function createBulkSerpWarmupController(params: CreateBulkSerpWarmupParam
       };
     });
     if (harnessSetters) {
-      markContentPrepHarnessSection(url, 0, "done", harnessSetters, index);
+      markContentPrepHarnessSection(
+        url,
+        contentOptimizeHarnessSectionIndex("SERP research brief"),
+        "done",
+        harnessSetters,
+        index,
+      );
     }
   };
 
@@ -132,6 +132,10 @@ export function createBulkSerpWarmupController(params: CreateBulkSerpWarmupParam
   const warmIndex = (index: number): Promise<boolean> => {
     if (index < 0 || index >= urls.length) return Promise.resolve(false);
     if (skipUrlSet.has(urls[index]!)) return Promise.resolve(false);
+    if (indexHasStoredSeoResearchBrief(index, prefetchedAcfFieldsCache, prefetchedPendingCache)) {
+      markUrlSerpReady(index, "existing");
+      return Promise.resolve(true);
+    }
     if (isIndexReady(index)) {
       markUrlSerpReady(index);
       return Promise.resolve(true);
@@ -149,7 +153,13 @@ export function createBulkSerpWarmupController(params: CreateBulkSerpWarmupParam
         throw err;
       }
       if (harnessSetters) {
-        markContentPrepHarnessSection(url, 0, "active", harnessSetters, index);
+        markContentPrepHarnessSection(
+          url,
+          contentOptimizeHarnessSectionIndex("SERP research brief"),
+          "active",
+          harnessSetters,
+          index,
+        );
       }
       const brief = await fetchDataForSeoSerpBriefJson({
         keyword,
@@ -158,16 +168,21 @@ export function createBulkSerpWarmupController(params: CreateBulkSerpWarmupParam
         gscQueries: pageGscQueryStringsFromPending(prefetchedPendingCache.get(index)?.pending),
       });
       if (bulkCancelled(batchKey, setBulkOptimizationState)) return false;
-      if (!brief) {
-        if (harnessSetters) {
-          markContentPrepHarnessSection(url, 0, "error", harnessSetters, index);
-        }
-        return false;
-      }
       applyBriefToCaches(index, brief, prefetchedAcfFieldsCache, prefetchedPendingCache);
       markUrlSerpReady(index, "filled");
       return true;
-    })().finally(() => {
+    })().catch((err) => {
+      if (harnessSetters) {
+        markContentPrepHarnessSection(
+          url,
+          contentOptimizeHarnessSectionIndex("SERP research brief"),
+          "error",
+          harnessSetters,
+          index,
+        );
+      }
+      throw err;
+    }).finally(() => {
       inFlight.delete(index);
     });
 
@@ -201,8 +216,9 @@ export function createBulkSerpWarmupController(params: CreateBulkSerpWarmupParam
 
   const seedReadyFromAcf = (): void => {
     for (let i = 0; i < urls.length; i++) {
-      if (hasSubstantiveSeoResearch(prefetchedAcfFieldsCache.get(i))) {
-        markUrlSerpReady(i);
+      if (skipUrlSet.has(urls[i]!)) continue;
+      if (indexHasStoredSeoResearchBrief(i, prefetchedAcfFieldsCache, prefetchedPendingCache)) {
+        markUrlSerpReady(i, "existing");
       }
     }
   };

@@ -13,17 +13,14 @@ import type { PressReleaseWorkspaceBindings } from "@/components/press-release/p
 import { getPublicSiteUrl } from "@/lib/wordpress-site-public-url";
 import { buildPortfolioBlockedHosts } from "@/lib/portfolio-link-blocklist";
 import { notify } from "@/lib/app-notifications";
-import { NOTIFY_CONNECT_A_WORDPRESS_SITE_IN_PROPERTIES_F, NOTIFY_COULD_NOT_COPY_TO_CLIPBOARD, NOTIFY_COULD_NOT_FETCH_SERP_CHECK_DATAFORSEO_AN, NOTIFY_DATAFORSEO_API_KEY_IS_REQUIRED_DASHBOARD, NOTIFY_ENTER_A_KEYWORD, NOTIFY_FETCHING_WORDPRESS_POST_INVENTORY, NOTIFY_MARKDOWN_COPIED, NOTIFY_NO_EXTERNAL_ORGANIC_URL_FOR_THAT_SEARCH_, NOTIFY_NO_PUBLISHED_POSTS_OR_PAGES_IN_INVENTORY, NOTIFY_OPENROUTER_API_KEY_IS_REQUIRED, NOTIFY_PRESS_RELEASE_GENERATED } from "@/lib/notify-messages";
+import { NOTIFY_CONNECT_A_WORDPRESS_SITE_IN_PROPERTIES_F, NOTIFY_COULD_NOT_COPY_TO_CLIPBOARD, NOTIFY_ENTER_A_KEYWORD, NOTIFY_FETCHING_WORDPRESS_POST_INVENTORY, NOTIFY_MARKDOWN_COPIED, NOTIFY_NO_PUBLISHED_POSTS_OR_PAGES_IN_INVENTORY, NOTIFY_OPENROUTER_API_KEY_IS_REQUIRED, NOTIFY_PRESS_RELEASE_GENERATED } from "@/lib/notify-messages";
 import type { CSVRow, BulkProcessingOptions, BulkHarnessSectionPayload } from "@/lib/bulk-auto-generate";
 import type { KeywordData } from "@/lib/keyword-types";
 import { generateMarkdownContentHarnessed } from "@/lib/bulk/bulk-content-generator";
 import { reduceHarnessSectionList } from "@/lib/bulk/harness-sections-reducer";
 import type { BulkHarnessSectionUi } from "@/hooks/use-bulk-auto-generate";
+import { resolveInternalLinkPlaceholdersInMarkdown } from "@/lib/content-generation/internal-link-placeholders";
 import { buildPressReleaseBlueprint } from "@/lib/press-release/press-release-blueprint";
-import {
-  fetchSerpRootForKeyword,
-  pickFirstExternalOrganicUrl,
-} from "@/lib/press-release/serp-first-external-url";
 import { getProductionModel } from "@/lib/optimization-settings-storage";
 import { appendPressReleaseAnchorLinksSection } from "@/lib/press-release/press-release-anchor-links-table";
 import {
@@ -33,6 +30,7 @@ import {
 import {
   createPressReleaseInventoryHostedLink,
   fetchPressReleaseSiteInventory,
+  inventoryRowsToLinkablePosts,
   revokePressReleaseInventoryHostedLink,
   type PressReleaseInventoryHostedLink,
 } from "@/lib/press-release/press-release-site-inventory";
@@ -134,10 +132,6 @@ export function PressReleaseTab({
 
   const runGenerate = useCallback(async () => {
     const keywordTopic = keyword.trim();
-    if (!dataForSEOApiKey?.trim()) {
-      notify.error(NOTIFY_DATAFORSEO_API_KEY_IS_REQUIRED_DASHBOARD);
-      return;
-    }
     if (!openRouterApiKey?.trim()) {
       notify.error(NOTIFY_OPENROUTER_API_KEY_IS_REQUIRED);
       return;
@@ -158,7 +152,6 @@ export function PressReleaseTab({
     clearInventoryJsonLink();
 
     try {
-      const serpQuery = keywordTopic;
       const publicUrl = getPublicSiteUrl(wordPressSite);
       const connectedSite = { name: wordPressSite.name, siteUrl: publicUrl };
 
@@ -176,17 +169,7 @@ export function PressReleaseTab({
         notify.warning(NOTIFY_NO_PUBLISHED_POSTS_OR_PAGES_IN_INVENTORY);
       }
 
-      setRunPhase("Fetching SERP citation…");
-      const serpRoot = await fetchSerpRootForKeyword(serpQuery);
-      if (!serpRoot) {
-        notify.error(NOTIFY_COULD_NOT_FETCH_SERP_CHECK_DATAFORSEO_AN);
-        return;
-      }
-      const citationUrl = pickFirstExternalOrganicUrl(serpRoot, publicUrl);
-      if (!citationUrl) {
-        notify.error(NOTIFY_NO_EXTERNAL_ORGANIC_URL_FOR_THAT_SEARCH_);
-        return;
-      }
+      const wordPressPosts = inventoryRowsToLinkablePosts(inventoryResult.rows);
 
       const wireDateline = buildPressReleaseWireDateline(wordPressSite);
 
@@ -226,8 +209,9 @@ export function PressReleaseTab({
       };
 
       const options: BulkProcessingOptions = {
-        apiKey: dataForSEOApiKey.trim(),
+        apiKey: dataForSEOApiKey?.trim() ?? "",
         openRouterApiKey: openRouterApiKey.trim(),
+        openRouterOnly: true,
         selectedModel: selectedModel || getProductionModel(wordPressSite.id),
         temperature: temperature ?? 1.0,
         maxTokens: maxTokens ?? 16000,
@@ -246,11 +230,11 @@ export function PressReleaseTab({
         options,
         0,
         connectedSite,
+        wordPressPosts,
         undefined,
         undefined,
         undefined,
         undefined,
-        [citationUrl],
         {
           acfContextOverride: {
             keywordFocus: keywordTopic,
@@ -260,9 +244,16 @@ export function PressReleaseTab({
           },
           primaryKeyword: keywordTopic,
           contentKind: "press_release",
+          siteId: wordPressSite.id,
         },
       );
-      const markdown = finishPressReleaseMarkdown(rawMarkdown, wireDateline);
+      const finished = finishPressReleaseMarkdown(rawMarkdown, wireDateline);
+      const markdown = await resolveInternalLinkPlaceholdersInMarkdown(finished, {
+        siteId: wordPressSite.id,
+        siteUrl: publicUrl,
+        wordPressPosts,
+        apiKey: openRouterApiKey.trim(),
+      });
       setResultMarkdown(
         appendPressReleaseAnchorLinksSection(markdown, {
           primaryKeyword: keywordTopic,
@@ -386,7 +377,7 @@ export function PressReleaseTab({
               id="pr-keyword"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
-              placeholder="Topic and SERP query for the citation link"
+              placeholder="Topic keyword"
               disabled={isProcessing}
             />
           </div>

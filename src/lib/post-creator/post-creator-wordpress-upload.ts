@@ -2,7 +2,7 @@ import type { WordPressSite } from "@/components/integrations/types";
 import type { AgentConfig } from "@/types/agent-config";
 import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
 import type { BulkGenerationLinkable } from "@/lib/bulk/bulk-generation-wp-inventory";
-import { loadApiKey } from "@/lib/api";
+import { resolveOpenRouterApiKeyForHarness } from "@/lib/openrouter-api-key-resolve";
 import { resolveRankMathFromKeywordResearch } from "@/lib/bulk-auto-generate";
 import {
   buildPostMarkdownAcfSeoFaqBundle,
@@ -15,6 +15,7 @@ import { buildAcfPayload } from "@/lib/content-generation/apply-meta-acf-payload
 import { sanitizeContentForUpload } from "@/lib/content-generation/content-sanitizer";
 import { prepareHarnessContentForUpload } from "@/lib/content-generation/harness-upload-prep";
 import type { KeywordData } from "@/lib/keyword-types";
+import { extractEndpointFromEntitySitemapUrl } from "@/lib/entity-endpoint-extractor";
 import { generateExcerpt } from "@/lib/markdown-to-html";
 import {
   appendVisibleFaqTableWithIntro,
@@ -26,7 +27,7 @@ import { extractOriginFromSapTitle } from "@/lib/sap-origin-from-title";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { updateACFFields } from "@/lib/wordpress-acf-origin";
 import { createWordPressPost, updateWordPressPost, updateWordPressPostMeta } from "@/lib/wordpress-api";
-import { getACFFieldsForPost } from "@/lib/wordpress-api/acf-discovery";
+import { getACFFieldsForPost, resolveAcfFieldsForMapping } from "@/lib/wordpress-api/acf-discovery";
 
 export type PostCreatorWordPressUploadResult = {
   postId: number;
@@ -92,11 +93,11 @@ export async function uploadPostCreatorRowToWordPress(
     keywordResearch,
     postDestination = "wordpress",
     featuredImageId,
-    openRouterApiKey = loadApiKey(),
+    openRouterApiKey,
     onProgress,
   } = args;
 
-  const apiKey = openRouterApiKey.trim();
+  const apiKey = (openRouterApiKey?.trim() || (await resolveOpenRouterApiKeyForHarness())).trim();
   if (!apiKey) {
     throw new Error("OpenRouter API key required for upload prep.");
   }
@@ -116,6 +117,14 @@ export async function uploadPostCreatorRowToWordPress(
     row.meta_description?.trim() ||
     rankMeta.metaDescription ||
     generateExcerpt(markdownContent);
+
+  const isEntityRow = row.sitemap_type === "entity";
+  const entityEndpoint =
+    isEntityRow && site.entitySitemapUrl?.trim()
+      ? extractEndpointFromEntitySitemapUrl(site.entitySitemapUrl)
+      : "posts";
+  const postTypeSubtype = isEntityRow ? entityEndpoint : "post";
+  const postTypeEndpoint = isEntityRow ? entityEndpoint : "posts";
 
   onProgress?.("Preparing harness content for upload...");
   let htmlContent = await prepareHarnessContentForUpload({
@@ -203,8 +212,8 @@ export async function uploadPostCreatorRowToWordPress(
     featuredImageId,
     undefined,
     undefined,
-    undefined,
-    "posts",
+    postTypeSubtype,
+    postTypeEndpoint,
     slug,
   );
 
@@ -237,17 +246,24 @@ export async function uploadPostCreatorRowToWordPress(
   );
 
   onProgress?.("Writing ACF and Rank Math meta...");
-  const acfResult = await getACFFieldsForPost(site, postResult.postId, "post", "posts");
+  const acfResult = await getACFFieldsForPost(
+    site,
+    postResult.postId,
+    postTypeSubtype,
+    postTypeEndpoint,
+  );
   const existingAcfFields =
     acfResult.success && acfResult.fields ? (acfResult.fields as Record<string, unknown>) : {};
+  const fieldsForMapping = await resolveAcfFieldsForMapping(site, existingAcfFields);
   const fieldMapping = {
-    ...fallbackFieldMapping(existingAcfFields),
-    ...(await discoverACFFieldMapping(existingAcfFields, "post", apiKey, site.siteUrl)),
+    ...fallbackFieldMapping(fieldsForMapping),
+    ...(await discoverACFFieldMapping(fieldsForMapping, postTypeSubtype, apiKey, site.siteUrl)),
   };
 
   const entity =
     row.entity?.trim() && row.entity.trim() !== "N/A" ? row.entity.trim() : undefined;
   const acfWrite: Record<string, string> = {};
+  acfWrite[fieldMapping.dateModifier || "date_modifier"] = new Date().toISOString().split("T")[0]!;
   acfWrite[fieldMapping.keywordFocus || "keyword_focus"] = primaryKw.slice(0, 500);
   acfWrite[fieldMapping.seoResearch || "seo_research"] = seoResearchJson;
   if (faqBundle?.faqForAcf) {
@@ -278,8 +294,8 @@ export async function uploadPostCreatorRowToWordPress(
     site.appPassword,
     postResult.postId,
     acfWrite,
-    "post",
-    "posts",
+    postTypeSubtype,
+    postTypeEndpoint,
   );
 
   await updateWordPressPostMeta(
@@ -287,8 +303,8 @@ export async function uploadPostCreatorRowToWordPress(
     site.username,
     site.appPassword,
     postResult.postId,
-    "post",
-    "posts",
+    postTypeSubtype,
+    postTypeEndpoint,
     {
       rank_math_title: optimizedMeta.rank_math_title,
       rank_math_description: optimizedMeta.rank_math_description,
@@ -310,12 +326,12 @@ export async function uploadPostCreatorRowToWordPress(
       htmlContent,
       excerpt,
       undefined,
-      "post",
+      postTypeSubtype,
       undefined,
       undefined,
       undefined,
       slug,
-      "posts",
+      postTypeEndpoint,
     );
   }
 

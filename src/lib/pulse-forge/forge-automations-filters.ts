@@ -8,6 +8,7 @@ import { resolveEffectiveExecutionKind } from "@/lib/task-automation-ui";
 import type { TaskExecutionKind, TaskProject, TeamTask } from "@/lib/tasks-types";
 
 export type ForgeAutomationCategory =
+  | "browser"
   | "maintenance"
   | "editorial"
   | "reporting"
@@ -41,6 +42,7 @@ export type ForgeAutomationFilterOptions = {
 };
 
 export const FORGE_AUTOMATION_CATEGORY_ORDER: ForgeAutomationCategory[] = [
+  "browser",
   "research",
   "editorial",
   "reporting",
@@ -59,8 +61,13 @@ export const FORGE_AUTOMATION_SORT_OPTIONS: { value: ForgeAutomationsSort; label
 
 export const FORGE_AUTOMATION_EXECUTION_KIND_LABELS: Record<string, string> = {
   post_creator: "Post creator",
+  entity_page_creator: "Entity page creator",
+  entity_generator: "Entity generator",
+  sap_generator: "SAP generator",
   gsc_reporting: "GSC reporting",
   local_dominator_export: "Research export",
+  chatgpt_website_audit: "ChatGPT website audit",
+  browser_automation: "Residential browser automation",
   content_optimizer: "Content optimizer",
   content_optimizer_meta: "Meta optimizer",
 };
@@ -109,7 +116,10 @@ function inferDemoCategory(title: string): ForgeAutomationCategory {
 function inferCategoryFromExecutionKind(kind: TaskExecutionKind): ForgeAutomationCategory {
   if (kind === "gsc_reporting") return "reporting";
   if (kind === "post_creator") return "editorial";
+  if (kind === "entity_page_creator" || kind === "entity_generator" || kind === "sap_generator") return "local-seo";
   if (kind === "local_dominator_export") return "research";
+  if (kind === "chatgpt_website_audit") return "research";
+  if (kind === "browser_automation") return "browser";
   return "maintenance";
 }
 
@@ -187,6 +197,9 @@ export function buildForgeAutomationFilterOptions(
 
   const kindOrder: TaskExecutionKind[] = [
     "post_creator",
+    "entity_page_creator",
+    "entity_generator",
+    "sap_generator",
     "gsc_reporting",
     "content_optimizer",
     "content_optimizer_meta",

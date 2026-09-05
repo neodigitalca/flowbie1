@@ -122,8 +122,12 @@ trait Neo_Pulse_Wp_Admin_Trait_Handlers_Settings {
 		}
 		check_admin_referer( 'neo_pulse_wp_save_chat', 'neo_pulse_wp_chat_nonce' );
 
-		$enabled         = ! empty( $_POST['neo_pulse_chat_enabled'] );
-		$logged_in_only  = ! empty( $_POST['neo_pulse_chat_logged_in_only'] );
+		$enabled          = ! empty( $_POST['neo_pulse_chat_enabled'] );
+		$logged_in_only   = ! empty( $_POST['neo_pulse_chat_logged_in_only'] );
+		$admin_only       = ! empty( $_POST['neo_pulse_chat_admin_only'] );
+		$god_mode_enabled = ! empty( $_POST['neo_pulse_chat_god_mode_enabled'] );
+		$whitelist_raw   = isset( $_POST['neo_pulse_chat_whitelist_url'] ) ? wp_unslash( $_POST['neo_pulse_chat_whitelist_url'] ) : '';
+		$whitelist_url   = esc_url_raw( trim( (string) $whitelist_raw ) );
 		$welcome_raw     = isset( $_POST['neo_pulse_chat_welcome_message'] ) ? wp_unslash( $_POST['neo_pulse_chat_welcome_message'] ) : '';
 		$welcome_message = sanitize_text_field( trim( (string) $welcome_raw ) );
 
@@ -146,6 +150,9 @@ trait Neo_Pulse_Wp_Admin_Trait_Handlers_Settings {
 			array(
 				'enabled'              => $enabled,
 				'logged_in_only'       => $logged_in_only,
+				'admin_only'           => $admin_only,
+				'god_mode_enabled'     => $god_mode_enabled,
+				'whitelist_url'        => $whitelist_url,
 				'welcome_message'      => $welcome_message !== '' ? $welcome_message : __( 'Hi! Ask me anything about this website.', 'neo-pulse-wp' ),
 				'chekkit_enabled'        => $chekkit_enabled,
 				'chekkit_teaser_enabled' => $chekkit_teaser_enabled,

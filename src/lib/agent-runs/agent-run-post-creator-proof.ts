@@ -10,6 +10,7 @@ import type { AgentRunArtifactRecord } from "@/lib/agent-runs-api";
 import { agentRunIsServerExecution } from "@/lib/agent-runs/agent-run-display";
 import { resolveAgentRunRecipeKey } from "@/lib/agent-runs/agent-run-navigation";
 import type { AgentRun, AgentRunStepArtifact, AgentRunUploadedPost } from "@/lib/agent-runs-types";
+import { resolvePostCreatorPostCount } from "@/lib/post-creator/post-creator-post-count";
 import type { BulkGeneratedFile } from "@/lib/bulk-file-manager";
 import {
   clearPostCreatorContentBucketBlobs,
@@ -781,26 +782,11 @@ export function postCreatorProofCollapsedHint(snapshot: PostCreatorProofSnapshot
 }
 
 export function resolvePostCreatorPostCountFromRun(run: AgentRun): number {
-  const fromResult = run.result?.postCount;
-  if (typeof fromResult === "number" && fromResult >= 1) return fromResult;
-
-  const contract = run.plan?.clientRunContract;
-  const fromContract = Number(contract?.postCount ?? 0);
-  if (fromContract >= 1) return fromContract;
-
-  const fromPlan = Number(run.plan?.postCount ?? 0);
-  if (fromPlan >= 1) return fromPlan;
-
-  const taskKw = (run.context?.taskKeyword ?? "").trim();
-  if (taskKw === "monthly-3-posts-run") return 3;
-
-  const titleMatch = run.title?.match(/Create\s+(\d+)\s+scheduled/i);
-  if (titleMatch) {
-    const parsed = Number(titleMatch[1]);
-    if (parsed >= 1) return parsed;
+  try {
+    return resolvePostCreatorPostCount(null, run);
+  } catch {
+    return 0;
   }
-
-  return 0;
 }
 
 export function buildStaticWaitingProofSnapshot(

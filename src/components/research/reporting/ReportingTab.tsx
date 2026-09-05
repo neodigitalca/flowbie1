@@ -13,9 +13,8 @@ import {
 } from "@/components/ui/table";
 import { useWordPressSites } from "@/hooks/use-wordpress-sites";
 import { useWordPressOptimization } from "@/contexts/wordpress-optimization-context";
-import { loadApiKey } from "@/lib/api";
 import { notify } from "@/lib/app-notifications";
-import { NOTIFY_ADD_AN_OPENROUTER_API_KEY_IN_SETTINGS, NOTIFY_COULD_NOT_COPY, NOTIFY_DOWNLOADED_MARKDOWN_FILE, NOTIFY_DOWNLOADED_OUTLINE_JSON, NOTIFY_DOWNLOADED_OUTLINE_POST_BODY, NOTIFY_GENERATE_A_REPORT_FIRST, NOTIFY_GSC_REPORT_GENERATED, NOTIFY_MARKDOWN_COPIED, NOTIFY_REPORT_ADDED_TO_KNOWLEDGE_BASE, NOTIFY_REPORT_CANCELLED, NOTIFY_SET_A_PUBLIC_SITE_URL_FOR_THIS_PROPERTY_ } from "@/lib/notify-messages";
+import { NOTIFY_COULD_NOT_COPY, NOTIFY_DOWNLOADED_MARKDOWN_FILE, NOTIFY_DOWNLOADED_OUTLINE_JSON, NOTIFY_DOWNLOADED_OUTLINE_POST_BODY, NOTIFY_GENERATE_A_REPORT_FIRST, NOTIFY_GSC_REPORT_GENERATED, NOTIFY_MARKDOWN_COPIED, NOTIFY_REPORT_ADDED_TO_KNOWLEDGE_BASE, NOTIFY_REPORT_CANCELLED, NOTIFY_SET_A_PUBLIC_SITE_URL_FOR_THIS_PROPERTY_ } from "@/lib/notify-messages";
 import { runGscReportingAgentHarness } from "@/lib/gsc-reporting/gsc-reporting-agent-harness";
 import { getPublicSiteUrl } from "@/lib/wordpress-site-public-url";
 import type {
@@ -25,10 +24,10 @@ import type {
 } from "@/lib/gsc-reporting/gsc-reporting-types";
 import { KB_FILES_STORAGE_KEY, type StoredFile } from "@/components/integrations/types";
 import { cn } from "@/lib/utils";
-import { pickClusterMarkdownForPipeline } from "@/lib/gsc-reporting/gsc-query-cluster-ai";
 import type { GscFetchDateRange } from "@/lib/gsc-reporting/gsc-console-ui-url";
 import {
   computeCompareRangesForPreset,
+  computeTrailingFullMonthsCompareRanges,
   formatLocalYmd,
   validateGscCompareFetchRanges,
   type GscCompareRanges,
@@ -128,6 +127,8 @@ export function ReportingTab({ activeSection, onSectionChange }: ReportingTabPro
   const [compareRangeDraft, setCompareRangeDraft] = useState<GscCompareRanges>(() =>
     computeCompareRangesForPreset("mom"),
   );
+  const [trailingMonthCount, setTrailingMonthCount] = useState<number | null>(null);
+  const [trailingMonthCountDraft, setTrailingMonthCountDraft] = useState("");
   const todayYmdMax = useMemo(() => formatLocalYmd(new Date()), []);
   const [lastOutline, setLastOutline] = useState<GscReportingOutlineResult | null>(null);
   const [outlinePostJson, setOutlinePostJson] = useState<string | null>(null);
@@ -137,15 +138,9 @@ export function ReportingTab({ activeSection, onSectionChange }: ReportingTabPro
 
   useEffect(() => {
     if (gscFetchPreset === "custom_compare") return;
+    if (trailingMonthCount != null) return;
     setCompareRangeDraft(computeCompareRangesForPreset(gscFetchPreset));
-  }, [gscFetchPreset]);
-
-  const filesForPipeline = useMemo(() => {
-    const base = files.map((f) => ({ ...f }));
-    const md = pickClusterMarkdownForPipeline(files, {});
-    if (md) base.push({ name: "Queries-AI-clusters.md", content: md });
-    return base;
-  }, [files]);
+  }, [gscFetchPreset, trailingMonthCount]);
 
   const onProgress = useCallback((p: GscReportingPipelineProgress) => {
     setProgress(p);
@@ -161,37 +156,27 @@ export function ReportingTab({ activeSection, onSectionChange }: ReportingTabPro
 
   const handleRun = useCallback(async () => {
     if (!site) return;
-    const apiKey = loadApiKey()?.trim();
-    if (!apiKey) {
-      notify.error(NOTIFY_ADD_AN_OPENROUTER_API_KEY_IN_SETTINGS);
-      return;
-    }
     abortRef.current?.abort();
     abortRef.current = new AbortController();
     setBusy(true);
     setProgress({ step: 0, total: 1, label: "Starting…" });
     resetReportArtifacts();
     try {
-      const comparePreset =
-        gscFetchPreset === "yoy" ? "yoy" : gscFetchPreset === "mom" ? "mom" : undefined;
-      const useCached = files.length > 0;
-      if (!useCached && !reportingPublicSiteUrl.trim()) {
+      const comparePreset = gscFetchPreset === "yoy" ? "yoy" : "mom";
+      if (!reportingPublicSiteUrl.trim()) {
         notify.error(NOTIFY_SET_A_PUBLIC_SITE_URL_FOR_THIS_PROPERTY_);
         return;
       }
-      if (!useCached) {
-        const check = validateGscCompareFetchRanges(compareRangeDraft.primary, compareRangeDraft.compare);
-        if (!check.ok) {
-          notify.error(check.error);
-          return;
-        }
+      const check = validateGscCompareFetchRanges(compareRangeDraft.primary, compareRangeDraft.compare);
+      if (!check.ok) {
+        notify.error(check.error);
+        return;
       }
 
       const result = await runGscReportingAgentHarness({
         site,
-        comparePreset: comparePreset ?? "mom",
-        compareRanges: gscFetchPreset === "custom_compare" ? compareRangeDraft : undefined,
-        cachedFiles: useCached ? filesForPipeline : undefined,
+        comparePreset,
+        compareRanges: compareRangeDraft,
         signal: abortRef.current.signal,
         onProgress,
         onOutlineReady: ({ outline, outlineRequestBodyJson }) => {
@@ -206,11 +191,9 @@ export function ReportingTab({ activeSection, onSectionChange }: ReportingTabPro
         },
       });
 
-      if (!useCached) {
-        setFiles(result.files);
-        setGscFetchRange(result.fetchRange);
-        setGscCompareFetchRange(result.compareFetchRange);
-      }
+      setFiles(result.files);
+      setGscFetchRange(result.fetchRange);
+      setGscCompareFetchRange(result.compareFetchRange);
 
       setReportMd(result.markdown);
       setLastOutline(result.outline);
@@ -232,8 +215,6 @@ export function ReportingTab({ activeSection, onSectionChange }: ReportingTabPro
     }
   }, [
     site,
-    files.length,
-    filesForPipeline,
     reportingPublicSiteUrl,
     compareRangeDraft,
     gscFetchPreset,
@@ -312,7 +293,21 @@ export function ReportingTab({ activeSection, onSectionChange }: ReportingTabPro
   const outlineSections = lastOutline?.sections;
 
   const handleGscFetchPresetChange = useCallback((preset: GscReportingComparePresetId) => {
+    setTrailingMonthCount(null);
+    setTrailingMonthCountDraft("");
     setGscFetchPreset(preset);
+  }, []);
+
+  const handleApplyTrailingMonths = useCallback((monthCount: number) => {
+    setTrailingMonthCount(monthCount);
+    setGscFetchPreset("custom_compare");
+    setCompareRangeDraft(computeTrailingFullMonthsCompareRanges(monthCount));
+  }, []);
+
+  const handleCompareRangeDraftChange = useCallback((updater: (prev: GscCompareRanges) => GscCompareRanges) => {
+    setTrailingMonthCount(null);
+    setTrailingMonthCountDraft("");
+    setCompareRangeDraft(updater);
   }, []);
 
   const canOpenDetails = useMemo(
@@ -370,7 +365,11 @@ export function ReportingTab({ activeSection, onSectionChange }: ReportingTabPro
                 gscFetchPreset,
                 onGscFetchPresetChange: handleGscFetchPresetChange,
                 compareRangeDraft,
-                onCompareRangeDraftChange: setCompareRangeDraft,
+                onCompareRangeDraftChange: handleCompareRangeDraftChange,
+                trailingMonthCount,
+                trailingMonthCountDraft,
+                onTrailingMonthCountDraftChange: setTrailingMonthCountDraft,
+                onApplyTrailingMonths: handleApplyTrailingMonths,
                 todayYmdMax,
                 hasReport: Boolean(reportMd?.trim()),
                 onGenerate: () => void handleRun(),

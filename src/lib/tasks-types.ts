@@ -1,4 +1,5 @@
 import type { TaskScheduleMode, TaskTriggerConfig, TaskTriggerMeta } from "@/lib/task-trigger-types";
+import type { GscCompareRanges, GscReportingComparePresetId } from "@/lib/gsc-reporting/gsc-fetch-date-presets";
 
 export type { TaskScheduleMode, TaskTriggerConfig, TaskTriggerMeta };
 
@@ -26,8 +27,30 @@ export type TaskExecutionKind =
   | "content_optimizer_meta"
   | "gsc_reporting"
   | "post_creator"
+  | "entity_page_creator"
+  | "entity_generator"
+  | "sap_generator"
   | "local_dominator_export"
+  | "chatgpt_website_audit"
+  | "dfs_llm_article_audit"
+  | "browser_automation"
+  | "content_gap_check"
   | "";
+
+export type ContentGapSitemapSource = "posts" | "sap";
+
+export type ContentGapCountMode = "sitemap" | "scheduled_month" | "posted_month" | "editorial_month";
+
+export type BrowserTargetUrlSource = "manual" | "client_site" | "variable";
+
+export type GoogleDriveFolderSource = "manual" | "client_root" | "path" | "variable";
+
+/** Grid is the only supported path; "wiki" is legacy JSON only. */
+export type EntityPageLocationSource = "wiki" | "grid";
+
+export type EntityPageGridInputSource = "upload" | "workflow";
+
+export type EntityCsvInputSource = "upload" | "workflow";
 
 export type GscReportingComparePreset = "mom" | "yoy";
 
@@ -43,6 +66,8 @@ export type PostCreatorExecutionPayload = {
   postCount?: number;
   keywordSource?: PostCreatorKeywordSource;
   optionalPrompt?: string;
+  agentMailMessageId?: string;
+  prefilledImportRows?: import("@/lib/bulk/bulk-csv-parser").CSVRow[];
   entityMode?: PostCreatorEntityMode;
   entityValue?: string;
   keywordValue?: string;
@@ -54,6 +79,8 @@ export type PostCreatorExecutionPayload = {
   scheduleStartDay?: number;
   scheduleStartTime?: string;
   scheduleStaggerOptimized?: boolean;
+  /** Unique day-of-month slots when cadence is times per month. */
+  schedulePublishDays?: number[];
   /** Full WordPress publish schedule (same model as Generator bulk). */
   scheduleFrequency?: import("@/lib/wordpress-scheduler").ScheduleFrequency;
   scheduleCustomInterval?: number;
@@ -63,6 +90,25 @@ export type PostCreatorExecutionPayload = {
   scheduleCustomStartDate?: string;
   scheduleDraftOnly?: boolean;
   saveLocalArchive?: boolean;
+  useUpstreamContext?: boolean;
+  workflowContextBlock?: string;
+};
+
+export type EntityPageCreatorExecutionPayload = PostCreatorExecutionPayload & {
+  locationSource?: EntityPageLocationSource;
+  gridInputSource?: EntityPageGridInputSource;
+  entityAdGroupCount?: number;
+  entityAdsPerGroup?: number;
+  entityPageCount?: number;
+  focusKeyword?: string;
+  gridCsvUrl?: string;
+  gridCsvBase64?: string;
+  entityCsvInputSource?: EntityCsvInputSource;
+  entityCsvUrl?: string;
+  entityCsvBase64?: string;
+  ragInputKeys?: string[];
+  entityTypeFocus?: string[];
+  radiusPreset?: import("@/components/integrations/entity-generation/types").RadiusDistancePreset;
 };
 
 export type TaskExecutionTargetBucket = "pages" | "posts" | "sap" | "all";
@@ -75,12 +121,31 @@ export type TaskExecutionPayload = {
   postId?: number | null;
   updateMode?: "update" | "draft";
   comparePreset?: GscReportingComparePreset;
+  gscComparePresetId?: GscReportingComparePresetId;
+  gscCompareRanges?: GscCompareRanges;
+  gscTrailingMonthCount?: number;
+  /** Workflow client / connected property for this run (not the header active site). */
+  siteId?: string;
+  siteUrl?: string;
+  productionSiteUrl?: string;
   businessName?: string;
   keyword?: string;
+  /** Pre-set ChatGPT audit questions (optional blanks allowed). */
+  auditQuestions?: string[];
+  /** DFS article audit LLM platforms (chat_gpt, gemini, perplexity). Default all three when unset. */
+  auditPlatforms?: import("@/lib/dfs-article-audit/dfs-article-audit-types").DfsArticleAuditPlatform[];
+  /** WYSIWYG browser automation instructions (HTML). */
+  browserInstructionsHtml?: string;
+  /** How browser automation resolves its start URL. Defaults to manual. */
+  targetUrlSource?: BrowserTargetUrlSource;
+  /** Upstream workflow variable key when targetUrlSource is variable. */
+  targetUrlVariable?: string;
   saveToDisk?: boolean;
   postCount?: number;
   keywordSource?: PostCreatorKeywordSource;
   optionalPrompt?: string;
+  agentMailMessageId?: string;
+  prefilledImportRows?: import("@/lib/bulk/bulk-csv-parser").CSVRow[];
   entityMode?: PostCreatorEntityMode;
   entityValue?: string;
   keywordValue?: string;
@@ -92,6 +157,7 @@ export type TaskExecutionPayload = {
   scheduleStartDay?: number;
   scheduleStartTime?: string;
   scheduleStaggerOptimized?: boolean;
+  schedulePublishDays?: number[];
   scheduleFrequency?: import("@/lib/wordpress-scheduler").ScheduleFrequency;
   scheduleCustomInterval?: number;
   scheduleDayOfWeek?: number;
@@ -102,12 +168,58 @@ export type TaskExecutionPayload = {
   saveLocalArchive?: boolean;
   /** Injected upstream workflow RAG context for downstream agents. */
   workflowContextBlock?: string;
+  locationSource?: EntityPageLocationSource;
+  gridInputSource?: EntityPageGridInputSource;
+  entityAdGroupCount?: number;
+  entityAdsPerGroup?: number;
+  entityPageCount?: number;
+  focusKeyword?: string;
+  /** Clipped ACF seo_research snippet for DFS article audit. */
+  seoResearchBrief?: string;
+  /** CSV step: optimizer research keyed by URL. */
+  prefilledUrlResearch?: Record<string, string>;
+  /** CSV step file source. */
+  csvInputSource?: "upload" | "workflow";
+  csvBase64?: string;
+  csvFileName?: string;
+  csvHeaders?: string[];
+  csvColumnMap?: import("@/lib/workflow/csv-rows-types").CsvRowsColumnMap;
+  /** Post creator: inject previous-agent / CSV research into article prompts. */
+  useUpstreamContext?: boolean;
+  gridCsvUrl?: string;
+  gridCsvBase64?: string;
+  entityCsvInputSource?: EntityCsvInputSource;
+  entityCsvUrl?: string;
+  entityCsvBase64?: string;
+  ragInputKeys?: string[];
+  entityTypeFocus?: string[];
+  radiusPreset?: import("@/components/integrations/entity-generation/types").RadiusDistancePreset;
   /** Then tab Email delivery (AgentMail). */
   sendAutomationEmail?: boolean;
   automationEmailTo?: string;
   automationEmailSubject?: string;
   automationEmailMessage?: string;
   automationEmailAiIntro?: boolean;
+  /** Then tab Google Drive delivery. */
+  saveToGoogleDrive?: boolean;
+  googleDriveFolderId?: string;
+  googleDriveFolderLabel?: string;
+  googleDrivePresetKey?: string;
+  googleDriveFolderSource?: GoogleDriveFolderSource;
+  googleDriveFolderPath?: string;
+  googleDriveFolderPathManual?: boolean;
+  googleDriveFolderYear?: string;
+  googleDriveFolderMonth?: string;
+  googleDriveFolderVariable?: string;
+  /** Leaf month folder from step test; uploads skip folder resolve when set. */
+  googleDriveTargetFolderId?: string;
+  contentGapSitemapSource?: ContentGapSitemapSource;
+  contentGapCountMode?: ContentGapCountMode;
+  contentGapTargetCount?: number;
+  /** Calendar month for scheduled/posted counts (YYYY-MM). Defaults to current month at run time. */
+  contentGapCountMonth?: string;
+  /** Day of every month this check is for (1–31). */
+  contentGapDayOfMonth?: number;
   optimizationOptions?: {
     optimizeTitle?: boolean;
     optimizeMeta?: boolean;
@@ -120,6 +232,9 @@ export type TaskExecutionPayload = {
     manualKeyword?: string;
     testMode?: boolean;
     autoOptimize?: boolean;
+    dfsArticleAuditBlock?: string;
+    workflowContextBlock?: string;
+    workflowAuditOutputs?: import("@/lib/workflow/workflow-types").WorkflowStepOutput[];
   };
 };
 
@@ -155,8 +270,17 @@ export type TaskExecutionClientRunContract = {
   updateMode?: "update" | "draft";
   optimizationOptions?: NonNullable<TaskExecutionPayload["optimizationOptions"]>;
   comparePreset?: GscReportingComparePreset;
+  gscComparePresetId?: GscReportingComparePresetId;
+  gscCompareRanges?: GscCompareRanges;
+  gscTrailingMonthCount?: number;
   businessName?: string;
   keyword?: string;
+  seoResearchBrief?: string;
+  prefilledUrlResearch?: Record<string, string>;
+  useUpstreamContext?: boolean;
+  auditQuestions?: string[];
+  auditPlatforms?: import("@/lib/dfs-article-audit/dfs-article-audit-types").DfsArticleAuditPlatform[];
+  browserInstructionsHtml?: string;
   saveToDisk?: boolean;
   saveLocalArchive?: boolean;
   executionMode?: "client" | "server";
@@ -165,9 +289,22 @@ export type TaskExecutionClientRunContract = {
   automationEmailSubject?: string;
   automationEmailMessage?: string;
   automationEmailAiIntro?: boolean;
+  saveToGoogleDrive?: boolean;
+  googleDriveFolderId?: string;
+  googleDriveFolderLabel?: string;
+  googleDrivePresetKey?: string;
+  googleDriveFolderSource?: GoogleDriveFolderSource;
+  googleDriveFolderPath?: string;
+  googleDriveFolderPathManual?: boolean;
+  googleDriveFolderYear?: string;
+  googleDriveFolderMonth?: string;
+  googleDriveFolderVariable?: string;
+  googleDriveTargetFolderId?: string;
   postCount?: number;
   keywordSource?: PostCreatorKeywordSource;
   optionalPrompt?: string;
+  agentMailMessageId?: string;
+  prefilledImportRows?: import("@/lib/bulk/bulk-csv-parser").CSVRow[];
   entityMode?: PostCreatorEntityMode;
   entityValue?: string;
   keywordValue?: string;
@@ -179,6 +316,8 @@ export type TaskExecutionClientRunContract = {
   scheduleStartDay?: number;
   scheduleStartTime?: string;
   scheduleStaggerOptimized?: boolean;
+  useUpstreamContext?: boolean;
+  workflowContextBlock?: string;
   resolvedPost?: {
     id: number;
     subtype: string;

@@ -163,4 +163,19 @@ describe("parseSiteTotalsCompareCsv", () => {
     expect(parsed!.aggregatePrimary?.clicks).toBe(94);
     expect(parsed!.aggregateCompare?.impressions).toBe(24546);
   });
+
+  it("parses Canadian grouped counts", () => {
+    const csv = [
+      "Metric,Jul 2026,Jun 2026,% change vs prior",
+      "Total clicks,94,106,-11.3%",
+      'Total impressions,"26,631","24,546",+8.5%',
+      'Search queries,"2,951","2,674",+10.3%',
+      "Average CTR,0.35%,0.43%,-18.6%",
+      "Average position,28.09,25.19,+11.5%",
+    ].join("\n");
+
+    const parsed = parseSiteTotalsCompareCsv(csv);
+    expect(parsed!.aggregatePrimary?.impressions).toBe(26631);
+    expect(parsed!.queryCountPrimary).toBe(2951);
+  });
 });

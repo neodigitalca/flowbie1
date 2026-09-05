@@ -6,6 +6,8 @@
  * - Blueprint JSON structures by agent IDs
  */
 
+import { INTERNAL_LINK_PLACEHOLDER_FEATURE_SUFFIX } from "@/lib/content-generation/internal-link-placeholders";
+
 export interface MarkdownSection {
   header: string;
   headerLevel: number;
@@ -411,7 +413,7 @@ export function validateAndEnforceLinkRequirement(agents: BlueprintAgent[]): Blu
     );
     
     if (!hasLinkFeature) {
-      const updatedFeatures = [...features, "[LINK]: 3-5 internal links - use full URLs from WordPress posts list (copy exact URLs)"];
+      const updatedFeatures = [...features, `[LINK]: ${INTERNAL_LINK_PLACEHOLDER_FEATURE_SUFFIX}`];
       console.warn(`Agent "${agent.title || agent.id}" was missing mandatory [LINK] feature. Added automatically.`);
       return {
         ...agent,

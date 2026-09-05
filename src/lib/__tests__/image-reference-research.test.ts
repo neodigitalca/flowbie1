@@ -602,13 +602,17 @@ describe("generateImage multi-ref attach", () => {
     globalThis.fetch = vi.fn(async () => ({
       ok: true,
       json: async () => ({
-        choices: [
-          {
-            message: {
-              images: [{ image_url: { url: "data:image/png;base64,AAA" } }],
+        ok: true,
+        content: "",
+        raw: {
+          choices: [
+            {
+              message: {
+                images: [{ image_url: { url: "data:image/png;base64,AAA" } }],
+              },
             },
-          },
-        ],
+          ],
+        },
       }),
       text: async () => "",
     })) as unknown as typeof fetch;

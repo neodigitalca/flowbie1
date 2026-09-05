@@ -8,7 +8,7 @@ import { analyzeKeywordWithAI } from "@/lib/keyword-ai-analyzer";
 import type { KeywordData, KeywordAIAnalysis } from "@/lib/keyword-types";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import type { WordPressSite } from "@/components/integrations/types";
-import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChat } from "@/lib/openrouter-app-api";
 
 export interface KeywordSelection {
   query: string;
@@ -153,32 +153,22 @@ export async function analyzeEntityWithAI(
   model?: string
 ): Promise<string> {
   const researchModel = model ?? getResearchModel();
-  const systemPrompt = `You are an expert SEO content analyst specializing in entity analysis for local SEO optimization.
-Your task is to analyze the provided entity (location/place) and provide rich context that can be naturally scattered throughout content.
-Return a concise analysis (2-3 sentences): key characteristics, geographic context, and any cultural/historical/demographic info useful for content.`;
-  const userPrompt = `Analyze this entity and provide context for content optimization:\n\n"${entity}"\n\nProvide a concise analysis.`;
+  const systemPrompt = `You analyze a place entity for a local service-area page.
+Return a concise analysis (2-3 sentences) of trade-relevant local conditions: housing or building pattern, typical exposure or street context, and what that implies for the service. Forbidden: chamber-of-commerce history, cultural trivia, census or demographic fluff, invented project counts.`;
+  const userPrompt = `Analyze this place for service-area copy. Name concrete local conditions only:\n\n"${entity}"`;
 
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: openRouterWebAppHeaders(apiKey),
-      body: JSON.stringify({
-        model: researchModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.7,
-        max_tokens: 300,
-      }),
+    const { content } = await postOpenRouterAppChat({
+      apiKey,
+      model: researchModel,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.7,
+      maxTokens: 300,
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`AI entity analysis failed: ${response.status} ${response.statusText}. ${errorText.substring(0, 200)}`);
-    }
-    const data = await response.json();
-    return (data.choices?.[0]?.message?.content ?? "").trim();
+    return content.trim();
   } catch (error) {
     console.error("[Entity Analysis] Error analyzing entity:", error);
     return "";

@@ -2,6 +2,8 @@
  * OpenRouter completion (`max_tokens`) per research model - conservative caps to avoid 400s
  * and huge stalls; provider may still clamp to the model’s real max.
  */
+import type { OpenRouterAppResponseFormat } from "@/lib/openrouter-app-api";
+
 export const REPORT_PIPELINE_MICRO_TOTAL = 9 as const;
 
 export type ReportPipelineMicroStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
@@ -45,7 +47,7 @@ export function buildOpenRouterChatPostBodyJson(args: {
   system: string;
   userMessage: string;
   temperature?: number;
-  responseFormat?: { type: "json_object" };
+  responseFormat?: OpenRouterAppResponseFormat;
 }): string {
   const body: Record<string, unknown> = {
     model: args.model,

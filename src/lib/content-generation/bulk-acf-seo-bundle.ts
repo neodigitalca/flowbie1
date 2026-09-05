@@ -17,6 +17,11 @@ import {
 } from '@/lib/content-generation/bulk-faq-in-context';
 import type { FaqEntry } from '@/lib/faq-entries';
 import { parseFaqEntries, repairFaqEntriesFromSchema } from '@/lib/faq-entries';
+import {
+  appendVisibleFaqTableWithIntro,
+  FLO_FAQ_CLASS,
+  stripTrailingFaqSection,
+} from '@/lib/overview/overview-blog-faq-append';
 
 export interface PreBlogSeoSkeletonInput {
   keywordData: KeywordData;
@@ -94,6 +99,8 @@ export interface BuildPostMarkdownAcfSeoFaqBundleParams {
   /** Placeholder URL for FAQ LLM before post exists */
   placeholderPostUrl: string;
   onProgress?: (message: string) => void;
+  /** Content Optimizer: always regenerate in-context FAQ; ignore enrichedRow.faq / ACF FAQ text. */
+  forceRegenerateFaq?: boolean;
 }
 
 /**
@@ -117,6 +124,7 @@ export async function buildPostMarkdownAcfSeoFaqBundle(
     openRouterApiKey,
     placeholderPostUrl,
     onProgress,
+    forceRegenerateFaq = false,
   } = params;
 
   const entity =
@@ -153,7 +161,7 @@ export async function buildPostMarkdownAcfSeoFaqBundle(
 
   let faqForAcf = '';
   let faqEntries: FaqEntry[] | undefined;
-  if (enrichedRow.faq && enrichedRow.faq.trim()) {
+  if (!forceRegenerateFaq && enrichedRow.faq && enrichedRow.faq.trim()) {
     faqForAcf = enrichedRow.faq.trim();
     const parsed = parseFaqEntries(faqForAcf);
     if (parsed.length > 0) {
@@ -257,4 +265,82 @@ export function patchPostLinkInSeoResearchJson(
     rank_math_robots: optimizedMeta.rank_math_robots,
   };
   return mergeSeoResearchWithMeta(JSON.stringify(base), optimizedMeta, primaryKw);
+}
+
+export interface ApplyOptimizeFaqToHarnessHtmlParams {
+  htmlContent: string;
+  markdownContent: string;
+  site: WordPressSite;
+  primaryKw: string;
+  postTitle: string;
+  excerpt: string;
+  apiKey: string;
+  postUrl: string;
+  preBlogSkeleton?: Record<string, unknown>;
+  entity?: string;
+  onProgress?: (message: string) => void;
+}
+
+/** Content Optimizer: strip stale flo-faq, regenerate FAQ bundle, append visible table (post-creator parity). */
+export async function applyOptimizeFaqToHarnessHtml(
+  params: ApplyOptimizeFaqToHarnessHtmlParams,
+): Promise<{ html: string; faqBundle: PrecomputedAcfSeoBundle | null }> {
+  const apiKey = params.apiKey.trim();
+  if (!apiKey) {
+    throw new Error('OpenRouter API key required for FAQ generation during content optimization.');
+  }
+
+  let html = stripTrailingFaqSection(params.htmlContent);
+
+  const preBlogSkeleton = params.preBlogSkeleton ?? {
+    primary_keyword: params.primaryKw,
+    title: params.postTitle,
+    generatedAt: new Date().toISOString(),
+    post_link: params.postUrl,
+  };
+
+  const enrichedRow = {
+    title: params.postTitle,
+    keyword: params.primaryKw,
+    ...(params.entity?.trim() ? { entity: params.entity.trim() } : {}),
+  } as CSVRow;
+
+  const faqBundle = await buildPostMarkdownAcfSeoFaqBundle({
+    preBlogSkeleton,
+    markdownContent: params.markdownContent,
+    enrichedRow,
+    keywordData: { keyword: params.primaryKw } as KeywordData,
+    blueprintTitle: params.postTitle,
+    excerpt: params.excerpt,
+    site: params.site,
+    postTitle: params.postTitle,
+    primaryKw: params.primaryKw,
+    rankMeta: { focusKeyword: params.primaryKw },
+    openRouterApiKey: apiKey,
+    placeholderPostUrl: params.postUrl,
+    onProgress: params.onProgress,
+    forceRegenerateFaq: true,
+  });
+
+  const visibleFaqEntries = resolveFaqEntriesForVisibleTable(faqBundle?.faqEntries);
+  if (!visibleFaqEntries.length) {
+    throw new Error('FAQ generation failed: no Q/A pairs were produced for the optimized article.');
+  }
+
+  if (!html.toLowerCase().includes(`class="${FLO_FAQ_CLASS}"`)) {
+    params.onProgress?.('Appending FAQ table to post body...');
+    const appended = await appendVisibleFaqTableWithIntro({
+      sourceHtml: html,
+      entries: visibleFaqEntries,
+      apiKey,
+      focusKeyword: params.primaryKw,
+      pageTitle: params.postTitle,
+    });
+    if (!appended?.html) {
+      throw new Error('FAQ table append failed for optimized content.');
+    }
+    html = appended.html;
+  }
+
+  return { html, faqBundle };
 }

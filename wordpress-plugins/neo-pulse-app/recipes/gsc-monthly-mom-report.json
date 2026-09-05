@@ -1,11 +1,11 @@
 {
   "keyword": "gsc-monthly-mom-report",
   "name": "GSC Monthly MoM Report",
-  "description": "Generate a full GSC month-over-month report on the 1st of each month and download markdown plus CSV bundle to your PC.",
+  "description": "Generate a full GSC month-over-month report on the 1st of each month. Deliver via workflow Then steps (Google Drive, email, or local archive).",
   "notes": [
     "Runs on a calendar schedule (1st of each month, 9:00 Edmonton time).",
     "Compare preset: last full calendar month vs the prior month.",
-    "Fetches GSC bundle, runs the full reporting pipeline, and saves artifacts locally.",
+    "Fetches GSC bundle and runs the full reporting pipeline. Add Then steps for delivery.",
     "Requires Google Search Console, WordPress site link, public site URL, and OpenRouter key."
   ],
   "category": "reporting",
@@ -36,8 +36,7 @@
       "assignPulse": true,
       "executionKind": "gsc_reporting",
       "executionPayload": {
-        "comparePreset": "mom",
-        "saveToDisk": true
+        "comparePreset": "mom"
       },
       "scheduleMode": "calendar",
       "dueDate": "2026-09-01",
@@ -58,8 +57,7 @@
     "keyword": "gsc-report-mom",
     "executionKind": "gsc_reporting",
     "executionPayload": {
-      "comparePreset": "mom",
-      "saveToDisk": true
+      "comparePreset": "mom"
     },
     "title": "Generate GSC month-over-month report"
   }

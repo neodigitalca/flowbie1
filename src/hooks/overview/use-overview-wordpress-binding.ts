@@ -149,6 +149,42 @@ function inventoryRowsHaveRealIds(rows: OverviewInventoryRow[]): boolean {
   return rows.some((r) => Number(r.id) > 0);
 }
 
+function inventoryRowDisplayKeyword(row: OverviewInventoryRow): string {
+  const acf =
+    row.acf && typeof row.acf === "object" ? (row.acf as Record<string, unknown>) : {};
+  const fromAcf = typeof acf.keyword_focus === "string" ? acf.keyword_focus.trim() : "";
+  return fromAcf || (row.fields?.keyword ?? "").trim();
+}
+
+function inventoryRowDisplayDate(row: OverviewInventoryRow): string {
+  const acf =
+    row.acf && typeof row.acf === "object" ? (row.acf as Record<string, unknown>) : {};
+  const fromAcf =
+    (typeof acf.date_modifier === "string" ? acf.date_modifier.trim() : "") ||
+    (typeof acf.seo_date_modifier === "string" ? acf.seo_date_modifier.trim() : "");
+  return fromAcf || (row.date_gmt ?? "").trim();
+}
+
+function inventoryRowsHaveMetadata(rows: OverviewInventoryRow[]): boolean {
+  return rows.some(
+    (r) =>
+      Number(r.id) > 0 &&
+      ((r.fields?.title ?? "").trim() || (r.fields?.pageHeading ?? "").trim()),
+  );
+}
+
+function inventoryRowsHaveDisplayMetadata(rows: OverviewInventoryRow[]): boolean {
+  if (!rows.length) return false;
+  const withUrl = rows.filter((r) => r.url?.trim() && Number(r.id) > 0);
+  if (!withUrl.length) return false;
+  return withUrl.every((row) => {
+    const title = ((row.fields?.title ?? "").trim() || (row.fields?.pageHeading ?? "").trim());
+    const keyword = inventoryRowDisplayKeyword(row);
+    const date = inventoryRowDisplayDate(row);
+    return title.length > 0 && keyword.length > 0 && date.length > 0;
+  });
+}
+
 function inventoryRowSeedQuality(rows: OverviewInventoryRow[]): number {
   let withIds = 0;
   let withAcf = 0;
@@ -174,6 +210,9 @@ function seedOverviewInventoryCacheFromPrefetch(
     for (const bucket of bucketSources) {
       const mergedRows = bySource[bucket] ?? [];
       if (!mergedRows.length) continue;
+      if (!inventoryRowsHaveMetadata(mergedRows) && !inventoryCacheHasContent(mergedRows)) {
+        continue;
+      }
       const key = inventoryCacheMapKey(site.id, bucket);
       const existing = cacheByKey.get(key);
       if (
@@ -201,7 +240,7 @@ function seedOverviewInventoryCacheFromPrefetch(
 
   for (const bucket of bucketSources) {
     const rows = getSitePrefetchOverviewRowsForSource(site, bucket);
-    if (!rows?.length) continue;
+    if (!rows?.length || !inventoryRowsHaveMetadata(rows)) continue;
     const key = inventoryCacheMapKey(site.id, bucket);
     const existing = cacheByKey.get(key);
     if (
@@ -433,10 +472,11 @@ export function useOverviewWordPressBinding(
           if (warmEntry?.mergedRows.length) {
             const hasRealIds = inventoryRowsHaveRealIds(warmEntry.mergedRows);
             const hasContent = inventoryCacheHasContent(warmEntry.mergedRows);
+            const hasMetadata = inventoryRowsHaveMetadata(warmEntry.mergedRows);
             const bucketUrlCount = getSitePrefetchUrlsForSource(site.id, source)?.length ?? 0;
             const warmShorterThanBuckets =
               bucketUrlCount > 0 && warmEntry.mergedRows.length < bucketUrlCount;
-            if (hasRealIds) {
+            if (hasRealIds && hasMetadata) {
               activeInventoryRef.current = warmEntry;
               if (!silent) {
                 setInventoryLoading(false);
@@ -445,9 +485,6 @@ export function useOverviewWordPressBinding(
                     warmEntry.mergedRows.length > 0,
                 );
               }
-              // Warm seed is URL/meta only unless persist already has bodies. When the caller
-              // needs full HTML (Overview, scrape, etc.), fall through to includeContent fetch.
-              // Also fall through when URL buckets are larger than bulk rows (stale truncated cache).
               if ((!includeContent || hasContent) && !warmShorterThanBuckets) {
                 return {
                   ok: true,
@@ -463,7 +500,8 @@ export function useOverviewWordPressBinding(
       if (!forceRefresh) {
         if (cachedEntry?.siteId === site.id && cachedEntry.mergedRows.length > 0) {
           const hasContent = inventoryCacheHasContent(cachedEntry.mergedRows);
-          if (!includeContent || hasContent) {
+          const hasMetadata = inventoryRowsHaveMetadata(cachedEntry.mergedRows);
+          if (hasMetadata && (!includeContent || hasContent)) {
             activeInventoryRef.current = cachedEntry;
             if (!silent) {
               setInventoryLoading(false);

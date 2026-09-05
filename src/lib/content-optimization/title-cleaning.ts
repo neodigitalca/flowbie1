@@ -1,6 +1,7 @@
 import { loadApiKey } from "@/lib/api";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 /**
  * Cleans location mentions and placeholders from title when entity is N/A (no entity).
@@ -21,7 +22,7 @@ export async function cleanTitleForNonEntityAsync(
   const key = apiKey || loadApiKey();
   if (!key?.trim()) return title;
   try {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const res = await postOpenRouterAppChatFetch( {
       method: "POST",
       headers: openRouterWebAppHeaders(key),
       body: JSON.stringify({

@@ -1,10 +1,12 @@
 import type { WordPressSite } from "@/components/integrations/types";
 import { getStoredSites } from "@/components/integrations/storage";
-import { loadApiKey, loadDataForSEOApiKey } from "@/lib/api";
+import { loadDataForSEOApiKey } from "@/lib/api";
+import { resolveOpenRouterApiKeyForHarness } from "@/lib/openrouter-api-key-resolve";
 import type { LoadBulkSitemapInventoryResult } from "@/lib/bulk/bulk-sitemap-inventory-session";
 import {
   getBulkGenerationWpInventoryIfReady,
-  inventoryRowsToWordPressLinkables,
+  loadBlogPlayLinkablesForSite,
+  inventoryRowsToWordPressPagesForOffer,
   type BulkGenerationLinkable,
 } from "@/lib/bulk/bulk-generation-wp-inventory";
 import {
@@ -18,7 +20,7 @@ import {
   type WordPressPostingOptions,
 } from "@/lib/bulk-auto-generate";
 import { buildBlogImportKeywordResearchStub } from "@/lib/bulk/blog-import-parse";
-import { runIntelligentKeywordResearchMerge } from "@/lib/bulk/intelligent-keyword-research-merge";
+import { runIntelligentKeywordResearchMerge, type IntelligentKeywordResearchMergeResult } from "@/lib/bulk/intelligent-keyword-research-merge";
 import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
 import { BulkFileManager } from "@/lib/bulk-file-manager";
 import { loadKnowledgeBaseForBulkIdeas } from "@/lib/kb-for-bulk-ideas";
@@ -30,14 +32,29 @@ import { fetchSemrushBulkEnrichment } from "@/lib/wordpress-api/semrush";
 import { generateSEOSlug } from "@/lib/seo-slug-generator";
 import type { KeywordAnalysisComplete, KeywordAnalysisOptions } from "@/lib/keyword-types";
 import type { ResolvedPostCreatorSchedule } from "@/lib/post-creator/post-creator-schedule";
+import { extractChecklistItemTitle } from "@/lib/post-creator/post-creator-checklist-post-process";
+import {
+  clearGoogleMapsImageSessionCache,
+  fetchGoogleMapsImageForEntity,
+} from "@/lib/content-generation/google-maps-image-api";
+import {
+  countSapMapsRowsByEntity,
+  createSapMapsMediaBank,
+} from "@/lib/bulk/sap-maps-media-bank";
 
 export type PostCreatorBulkProgress = {
   rowIndex: number;
   totalRows: number;
   message: string;
+  intraRowPhase: IntraRowPhase;
   progress?: number;
   uploadedPosts?: PostCreatorUploadedPost[];
-  intraRowPhase?: string;
+  harnessSectionIndex?: number;
+};
+
+type PostCreatorBulkOptions = BulkProcessingOptions & {
+  postCreatorPhase: { current: IntraRowPhase };
+  harnessSectionIndex?: number;
 };
 
 export type PostCreatorBulkRunResult = {
@@ -57,10 +74,16 @@ async function stubAnalyzeKeyword(
 
 type IntraRowPhase = "keyword" | "checklist" | "blueprint" | "content" | "upload" | "done";
 
+export type PostCreatorIntraRowPhase = IntraRowPhase;
+
 const INTRA_ROW_PHASE_ORDER: IntraRowPhase[] = ["keyword", "checklist", "blueprint", "content", "upload", "done"];
 
 function phaseIndex(phase: IntraRowPhase): number {
   return INTRA_ROW_PHASE_ORDER.indexOf(phase);
+}
+
+function normalizePeerSiteUrl(url: string): string {
+  return url.replace(/\/+$/, "").toLowerCase();
 }
 
 function shouldSkipPhase(resumePhase: IntraRowPhase | undefined, target: IntraRowPhase): boolean {
@@ -68,8 +91,49 @@ function shouldSkipPhase(resumePhase: IntraRowPhase | undefined, target: IntraRo
   return phaseIndex(resumePhase) > phaseIndex(target);
 }
 
+function reportPostPhaseProgress(
+  options: BulkProcessingOptions,
+  rowIndex: number,
+  totalRows: number,
+  phase: IntraRowPhase,
+): void {
+  const ext = options as PostCreatorBulkOptions;
+  ext.postCreatorPhase.current = phase;
+  ext.harnessSectionIndex = undefined;
+  const labels: Record<IntraRowPhase, string> = {
+    keyword: "keyword research",
+    checklist: "checklist",
+    blueprint: "blueprint",
+    content: "content",
+    upload: "WordPress upload",
+    done: "complete",
+  };
+  options.onProgress?.(
+    rowIndex,
+    totalRows,
+    `Post ${rowIndex + 1}/${totalRows}: ${labels[phase]}`,
+  );
+}
+
+/** Keyword merge outputs passed into blueprint generation (hoisted out of block scope). */
+export function postCreatorBlueprintMergeFields(
+  mergeResult?: {
+    merge: IntelligentKeywordResearchMergeResult;
+    primaryExternalCitationUrl: string | null;
+  } | null,
+): {
+  primaryExternalCitationUrl: string | null;
+  intelligentMerge: IntelligentKeywordResearchMergeResult | null;
+} {
+  return {
+    primaryExternalCitationUrl: mergeResult?.primaryExternalCitationUrl ?? null,
+    intelligentMerge: mergeResult?.merge ?? null,
+  };
+}
+
 async function processPostCreatorRow(
   rowIndex: number,
+  totalRows: number,
   row: CSVRow,
   options: BulkProcessingOptions,
   fileManager: BulkFileManager,
@@ -85,7 +149,7 @@ async function processPostCreatorRow(
     resumePayload?: Record<string, unknown>;
   }) => Promise<void>,
 ): Promise<void> {
-  const openRouterApiKey = options.openRouterApiKey || loadApiKey() || "";
+  const openRouterApiKey = options.openRouterApiKey || (await resolveOpenRouterApiKeyForHarness());
   const selectedModel = options.selectedModel || getResearchModel();
 
   if (shouldSkipPhase(resumeFromPhase, "upload")) {
@@ -109,6 +173,7 @@ async function processPostCreatorRow(
 
   let keywordResearchFromRow: Awaited<ReturnType<typeof generateRowOutputs>>["research"] | null = null;
   if (!shouldSkipPhase(resumeFromPhase, "keyword")) {
+    reportPostPhaseProgress(options, rowIndex, totalRows, "keyword");
     const { files: initialFiles, research } = await generateRowOutputs(
       rowIndex,
       row,
@@ -125,8 +190,13 @@ async function processPostCreatorRow(
   let finalAiAnalysis = keywordResearchFromRow?.aiAnalysis ?? stub.aiAnalysis;
   const semrushResult = shouldSkipPhase(resumeFromPhase, "keyword") ? null : await semrushPromise;
 
+  let keywordMergeResult: {
+    merge: IntelligentKeywordResearchMergeResult;
+    primaryExternalCitationUrl: string | null;
+  } | null = null;
+
   if (!shouldSkipPhase(resumeFromPhase, "keyword")) {
-    const mergeResult = await runIntelligentKeywordResearchMerge(row, finalKeywordData, semrushResult, {
+    keywordMergeResult = await runIntelligentKeywordResearchMerge(row, finalKeywordData, semrushResult, {
       apiKey: openRouterApiKey,
       model: selectedModel,
     });
@@ -139,8 +209,8 @@ async function processPostCreatorRow(
       paaRawResponse: keywordResearchFromRow?.paaRawResponse ?? null,
       primaryKeyword: row.keyword?.trim() || stub.primaryKeyword,
       semrush: semrushResult,
-      intelligentMerge: mergeResult.merge,
-      primaryExternalCitationUrl: mergeResult.primaryExternalCitationUrl,
+      intelligentMerge: keywordMergeResult.merge,
+      primaryExternalCitationUrl: keywordMergeResult.primaryExternalCitationUrl,
     });
     const keywordJson = fileManager
       .getAllFiles()
@@ -161,6 +231,8 @@ async function processPostCreatorRow(
     return;
   }
 
+  reportPostPhaseProgress(options, rowIndex, totalRows, "blueprint");
+
   const volumeDataForBlueprint = keywordResearchFromRow?.keywordsVolumeData ?? [];
 
   const { activeKnowledgeBaseText } = loadKnowledgeBaseForBulkIdeas();
@@ -171,11 +243,15 @@ async function processPostCreatorRow(
     onHarnessSection: (payload: BulkHarnessSectionPayload) => {
       options.onHarnessSection?.(payload);
       if (payload.phase === "start") {
+        const ext = options as PostCreatorBulkOptions;
+        ext.postCreatorPhase.current = "content";
+        ext.harnessSectionIndex = payload.sectionIndex;
         options.onProgress?.(
           rowIndex,
-          0,
-          `Harness ${payload.sectionIndex + 1}/${payload.totalSections}: ${payload.title}…`,
+          totalRows,
+          `Harness ${payload.sectionIndex + 1}/${payload.totalSections}: ${extractChecklistItemTitle(payload.title)}…`,
         );
+        ext.harnessSectionIndex = undefined;
       }
     },
   };
@@ -195,8 +271,7 @@ async function processPostCreatorRow(
     wordPressPosts,
     {
       semrush: semrushResult,
-      primaryExternalCitationUrl: mergeResult.primaryExternalCitationUrl,
-      intelligentMerge: mergeResult.merge,
+      ...postCreatorBlueprintMergeFields(keywordMergeResult),
     },
   );
 }
@@ -238,10 +313,13 @@ export async function runPostCreatorBulkRows(args: {
   startRowIndex?: number;
   priorUploadedPosts?: PostCreatorUploadedPost[];
   resumeIntraRowPhase?: string;
+  clearMapsCache?: boolean;
   onProgress?: (p: PostCreatorBulkProgress) => void;
   onFilesChanged?: (files: import("@/lib/bulk-file-manager").BulkGeneratedFile[]) => void;
   onHarnessSection?: (payload: BulkHarnessSectionPayload) => void;
   isCancelled?: () => Promise<boolean>;
+  workflowSerpResearch?: BulkProcessingOptions["workflowSerpResearch"];
+  workflowDfsArticleAudit?: BulkProcessingOptions["workflowDfsArticleAudit"];
   onArtifact?: (input: {
     stepKey: string;
     stepLabel: string;
@@ -260,15 +338,17 @@ export async function runPostCreatorBulkRows(args: {
     startRowIndex = 0,
     priorUploadedPosts = [],
     resumeIntraRowPhase,
+    clearMapsCache = true,
     onProgress,
     onFilesChanged,
     onHarnessSection,
     isCancelled,
+    workflowSerpResearch,
+    workflowDfsArticleAudit,
     onArtifact,
   } = args;
   const dataForSeoKey = loadDataForSEOApiKey()?.trim() || "";
-  const openRouterKey = loadApiKey()?.trim() || "";
-  if (!openRouterKey) throw new Error("Add an OpenRouter API key in Settings.");
+  const openRouterKey = await resolveOpenRouterApiKeyForHarness();
   if (!dataForSeoKey) throw new Error("Add a DataForSEO API key in Settings.");
 
   const fileManager = new BulkFileManager();
@@ -277,9 +357,10 @@ export async function runPostCreatorBulkRows(args: {
   });
   const connectedSite = { name: site.name, siteUrl: site.siteUrl };
 
-  const wpInventory = getBulkGenerationWpInventoryIfReady(site.id);
-  const wordPressPosts = wpInventory?.rows?.length
-    ? inventoryRowsToWordPressLinkables(wpInventory.rows)
+  const wpInventoryRows = getBulkGenerationWpInventoryIfReady(site.id);
+  const wordPressPosts = await loadBlogPlayLinkablesForSite(site, wpInventoryRows ?? []);
+  const wordPressPagesForOfferTable = wpInventoryRows?.length
+    ? inventoryRowsToWordPressPagesForOffer(wpInventoryRows)
     : [];
 
   const storedSites = getStoredSites();
@@ -296,20 +377,55 @@ export async function runPostCreatorBulkRows(args: {
 
   const featuredImageType = schedule.featuredImage ? "ai-generated" : "google-maps";
 
-  const bulkOptions: BulkProcessingOptions = {
+  if (clearMapsCache) {
+    clearGoogleMapsImageSessionCache();
+  }
+  const sapMapsMediaBank = createSapMapsMediaBank();
+  const sapMapsEntityRowCounts = countSapMapsRowsByEntity(rows);
+
+  const peerExcludedIds = new Set<string>();
+  const peerExcludedUrls = new Set<string>();
+  for (const entry of sitesToPost) {
+    if (entry.site?.id) peerExcludedIds.add(entry.site.id);
+    const url = entry.site?.siteUrl?.trim();
+    if (url) peerExcludedUrls.add(normalizePeerSiteUrl(url));
+  }
+  if (site.id) peerExcludedIds.add(site.id);
+  if (site.siteUrl) peerExcludedUrls.add(normalizePeerSiteUrl(site.siteUrl));
+  const peerSitesForRun = storedSites.filter(
+    (s) => !peerExcludedIds.has(s.id) && !peerExcludedUrls.has(normalizePeerSiteUrl(s.siteUrl)),
+  );
+
+  const postCreatorPhase = { current: "keyword" as IntraRowPhase };
+  const bulkOptions: PostCreatorBulkOptions = {
     apiKey: dataForSeoKey,
     openRouterApiKey: openRouterKey,
     selectedModel: getResearchModel(site.id),
     featuredImageType,
     wordPressPosting,
     linkPrefetchPromise,
+    reservedUploadSlugsBySite: new Map(),
     portfolioBlockedHosts: portfolioBlockedHosts.length > 0 ? portfolioBlockedHosts : undefined,
+    sapMapsMediaBank,
+    sapMapsEntityRowCounts,
+    peerSites: peerSitesForRun.length > 0 ? peerSitesForRun : undefined,
+    wordPressPagesForOfferTable:
+      wordPressPagesForOfferTable.length > 0 ? wordPressPagesForOfferTable : undefined,
+    workflowSerpResearch,
+    workflowDfsArticleAudit,
+    skipWikipediaLookup: true,
+    sequentialHarnessSections: true,
+    postCreatorPhase,
     onProgress: (rowIndex, _total, status) => {
+      if (!status?.trim()) return;
       onProgress?.({
         rowIndex,
         totalRows: rows.length,
         message: status,
         progress: rows.length > 0 ? (rowIndex + 0.5) / rows.length : undefined,
+        intraRowPhase: postCreatorPhase.current,
+        harnessSectionIndex: bulkOptions.harnessSectionIndex,
+        uploadedPosts,
       });
     },
     onError: (rowIndex, error) => {
@@ -317,6 +433,8 @@ export async function runPostCreatorBulkRows(args: {
         rowIndex,
         totalRows: rows.length,
         message: error.message,
+        intraRowPhase: postCreatorPhase.current,
+        uploadedPosts,
       });
     },
     onHarnessSection: (payload) => {
@@ -325,7 +443,6 @@ export async function runPostCreatorBulkRows(args: {
   };
 
   let created = priorUploadedPosts.length;
-  let failed = 0;
   const urls: string[] = priorUploadedPosts.map((p) => p.url);
   const scheduledDates: string[] = priorUploadedPosts
     .map((p) => p.scheduledFor)
@@ -338,17 +455,34 @@ export async function runPostCreatorBulkRows(args: {
       i === startRowIndex && resumeIntraRowPhase
         ? (resumeIntraRowPhase as IntraRowPhase)
         : undefined;
-    onProgress?.({
-      rowIndex: i,
-      totalRows: rows.length,
-      message: `Post ${i + 1}/${rows.length}: ${rows[i]?.keyword || "starting"}…`,
-      progress: i / rows.length,
-      uploadedPosts,
-      intraRowPhase: rowResumePhase ?? "keyword",
-    });
+    if (i === startRowIndex && resumeIntraRowPhase && !INTRA_ROW_PHASE_ORDER.includes(rowResumePhase!)) {
+      throw new Error(`Invalid resume intraRowPhase: ${resumeIntraRowPhase}`);
+    }
+    if (rowResumePhase) {
+      postCreatorPhase.current = rowResumePhase;
+      onProgress?.({
+        rowIndex: i,
+        totalRows: rows.length,
+        message: `Post ${i + 1}/${rows.length}: resuming`,
+        progress: i / rows.length,
+        uploadedPosts,
+        intraRowPhase: rowResumePhase,
+      });
+    }
     try {
+      if (featuredImageType === "google-maps") {
+        const entity = rows[i]?.entity?.trim();
+        if (entity && entity !== "N/A") {
+          try {
+            await fetchGoogleMapsImageForEntity(entity);
+          } catch (error) {
+            console.warn("[Post creator] Google Maps image prefetch failed:", error);
+          }
+        }
+      }
       await processPostCreatorRow(
         i,
+        rows.length,
         rows[i]!,
         bulkOptions,
         fileManager,
@@ -365,23 +499,23 @@ export async function runPostCreatorBulkRows(args: {
       if (wpFile?.content) {
         const parsed = parseWordPressArtifact(wpFile.content);
         if (parsed) {
-          uploadedPosts.push(parsed);
-          urls.push(parsed.url);
-          if (parsed.scheduledFor) scheduledDates.push(parsed.scheduledFor);
+          const alreadyUploaded = uploadedPosts.some(
+            (p) => p.url === parsed.url || (parsed.postId && p.postId === parsed.postId),
+          );
+          if (!alreadyUploaded) {
+            uploadedPosts.push(parsed);
+            urls.push(parsed.url);
+            if (parsed.scheduledFor) scheduledDates.push(parsed.scheduledFor);
+          }
         }
       }
     } catch (err) {
-      failed += 1;
+      if (await isCancelled?.()) throw new Error("Cancelled");
       const message = err instanceof Error ? err.message : "Post failed";
-      onProgress?.({
-        rowIndex: i,
-        totalRows: rows.length,
-        message: `Post ${i + 1}/${rows.length} failed: ${message}`,
-        uploadedPosts,
-      });
+      throw err instanceof Error ? err : new Error(`Post ${i + 1}/${rows.length}: ${message}`);
     }
     onFilesChanged?.(fileManager.getAllFiles());
   }
 
-  return { created, failed, urls, scheduledDates, uploadedPosts };
+  return { created, failed: 0, urls, scheduledDates, uploadedPosts };
 }

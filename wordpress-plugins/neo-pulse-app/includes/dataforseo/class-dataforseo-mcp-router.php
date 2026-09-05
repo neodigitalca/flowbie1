@@ -26,12 +26,20 @@ class Neo_Pulse_App_Dataforseo_Mcp_Router {
 		'DataForSEO_business_data_google_my_business_info_live'     => 'business_data/google/my_business_info/live',
 	);
 
+	/** @var array<string,string> LLM Responses Live platform slug => REST path segment. */
+	const LLM_RESPONSES_PLATFORMS = array(
+		'chat_gpt'   => 'ai_optimization/chat_gpt/llm_responses/live',
+		'gemini'     => 'ai_optimization/gemini/llm_responses/live',
+		'perplexity' => 'ai_optimization/perplexity/llm_responses/live',
+	);
+
 	/**
 	 * @return string[]
 	 */
 	public static function supported_tools(): array {
 		$tools = array_keys( self::TOOL_ENDPOINTS );
 		$tools[] = 'DataForSEO_serp_google_ai_mode';
+		$tools[] = 'DataForSEO_llm_responses_live';
 		return $tools;
 	}
 
@@ -53,6 +61,10 @@ class Neo_Pulse_App_Dataforseo_Mcp_Router {
 			return Neo_Pulse_App_Dataforseo_Ai_Mode::run( $body );
 		}
 
+		if ( $tool === 'DataForSEO_llm_responses_live' ) {
+			return self::dispatch_llm_responses_live( $body );
+		}
+
 		if ( ! isset( self::TOOL_ENDPOINTS[ $tool ] ) ) {
 			return new WP_Error( 'neo-pulse_dfs_tool', 'Unknown DataForSEO MCP tool.', array( 'status' => 404 ) );
 		}
@@ -64,7 +76,7 @@ class Neo_Pulse_App_Dataforseo_Mcp_Router {
 		}
 
 		$timeout = self::timeout_for_tool( $tool );
-		$result  = Neo_Pulse_App_Dataforseo_Client::post( $endpoint, $built['tasks'], array( 'timeout' => $timeout ) );
+		$result  = self::retry_transient_post( $endpoint, $built['tasks'], $timeout );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
@@ -93,7 +105,15 @@ class Neo_Pulse_App_Dataforseo_Mcp_Router {
 				(string) ( $body['keyword'] ?? 'keyword' ),
 				$result
 			);
+			if ( $stored === null || $stored === '' ) {
+				return new WP_Error(
+					'neo-pulse_dfs_serp_store',
+					'SERP response received but failed to save dump file on the server.',
+					array( 'status' => 500 )
+				);
+			}
 			$result['stored_file'] = $stored;
+			$result['storedFile']  = $stored;
 		}
 
 		return $result;
@@ -361,13 +381,149 @@ class Neo_Pulse_App_Dataforseo_Mcp_Router {
 	}
 
 	private static function timeout_for_tool( string $tool ): int {
+		if ( $tool === 'DataForSEO_llm_responses_live' ) {
+			return 130000;
+		}
 		if ( $tool === 'DataForSEO_kw_data_dfs_trends_explore' || $tool === 'DataForSEO_on_page_lighthouse' ) {
 			return 120000;
 		}
 		if ( $tool === 'DataForSEO_business_data_google_my_business_info_live' ) {
 			return 180000;
 		}
+		if ( strpos( $tool, 'serp_' ) === 0 ) {
+			return 120000;
+		}
 		return 60000;
+	}
+
+	private static function is_transient_dataforseo_error( string $message ): bool {
+		$m = strtolower( $message );
+		return str_contains( $m, 'timeout' )
+			|| str_contains( $m, 'timed out' )
+			|| str_contains( $m, 'temporarily unavailable' )
+			|| str_contains( $m, 'internal se server error' )
+			|| str_contains( $m, '503' )
+			|| str_contains( $m, '502' )
+			|| str_contains( $m, '504' );
+	}
+
+	/**
+	 * @param array<int,mixed> $tasks
+	 * @return array<string,mixed>|WP_Error
+	 */
+	private static function retry_transient_post( string $endpoint, array $tasks, int $timeout ) {
+		$max_attempts = 4;
+		$last_error   = null;
+		for ( $attempt = 1; $attempt <= $max_attempts; $attempt++ ) {
+			if ( $attempt > 1 ) {
+				sleep( min( 8, 2 * ( $attempt - 1 ) ) );
+			}
+
+			$result = Neo_Pulse_App_Dataforseo_Client::post(
+				$endpoint,
+				$tasks,
+				array( 'timeout' => $timeout )
+			);
+			if ( ! is_wp_error( $result ) ) {
+				return $result;
+			}
+
+			$last_error = $result;
+			if ( ! self::is_transient_dataforseo_error( $result->get_error_message() ) || $attempt >= $max_attempts ) {
+				return $result;
+			}
+		}
+
+		return $last_error ?? new WP_Error( 'neo-pulse_dataforseo_retry', 'DataForSEO request failed' );
+	}
+
+	/**
+	 * @param array<string,mixed> $body
+	 * @return array<string,mixed>|WP_Error
+	 */
+	public static function run_llm_responses_live( array $body ) {
+		return self::dispatch_llm_responses_live( $body );
+	}
+
+	/**
+	 * @param array<string,mixed> $body
+	 * @return array<string,mixed>|WP_Error
+	 */
+	private static function dispatch_llm_responses_live( array $body ) {
+		$platform = isset( $body['platform'] ) ? trim( (string) $body['platform'] ) : '';
+		if ( $platform === '' || ! isset( self::LLM_RESPONSES_PLATFORMS[ $platform ] ) ) {
+			return new WP_Error(
+				'neo-pulse_dfs_validate',
+				'platform must be one of: chat_gpt, gemini, perplexity',
+				array( 'status' => 400 )
+			);
+		}
+		if ( empty( $body['model_name'] ) || empty( $body['user_prompt'] ) ) {
+			return new WP_Error(
+				'neo-pulse_dfs_validate',
+				'model_name and user_prompt are required',
+				array( 'status' => 400 )
+			);
+		}
+
+		$task = array(
+			'model_name'  => trim( (string) $body['model_name'] ),
+			'user_prompt' => trim( (string) $body['user_prompt'] ),
+		);
+		foreach ( array( 'system_message', 'web_search_country_iso_code', 'web_search_city' ) as $f ) {
+			if ( ! empty( $body[ $f ] ) && is_string( $body[ $f ] ) ) {
+				$task[ $f ] = trim( $body[ $f ] );
+			}
+		}
+		if ( isset( $body['web_search'] ) ) {
+			$task['web_search'] = (bool) $body['web_search'];
+		}
+		if ( isset( $body['force_web_search'] ) ) {
+			$task['force_web_search'] = (bool) $body['force_web_search'];
+		}
+		if ( isset( $body['max_output_tokens'] ) && is_numeric( $body['max_output_tokens'] ) ) {
+			$task['max_output_tokens'] = (int) $body['max_output_tokens'];
+		}
+		if ( isset( $body['message_chain'] ) && is_array( $body['message_chain'] ) ) {
+			$chain = array();
+			foreach ( $body['message_chain'] as $entry ) {
+				if ( ! is_array( $entry ) ) {
+					continue;
+				}
+				$role    = isset( $entry['role'] ) ? trim( (string) $entry['role'] ) : '';
+				$message = isset( $entry['message'] ) ? trim( (string) $entry['message'] ) : '';
+				if ( $role !== 'user' || $message === '' ) {
+					continue;
+				}
+				$chain[] = array(
+					'role'    => 'user',
+					'message' => $message,
+				);
+				if ( count( $chain ) >= 10 ) {
+					break;
+				}
+			}
+			if ( ! empty( $chain ) ) {
+				$task['message_chain'] = $chain;
+			}
+		}
+
+		$endpoint = self::LLM_RESPONSES_PLATFORMS[ $platform ];
+		$result   = Neo_Pulse_App_Dataforseo_Client::post(
+			$endpoint,
+			array( $task ),
+			array( 'timeout' => 130000 )
+		);
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		$check = Neo_Pulse_App_Dataforseo_Client::assert_task_ok( $result, false );
+		if ( is_wp_error( $check ) ) {
+			return $check;
+		}
+
+		return $result;
 	}
 
 }

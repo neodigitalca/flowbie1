@@ -1,3 +1,4 @@
+/* @refresh reset */
 import {
   createContext,
   useCallback,
@@ -14,6 +15,16 @@ import { useWordPressSites } from "@/hooks/use-wordpress-sites";
 import { usePulseTaskScheduleRunner } from "@/hooks/use-pulse-task-schedule-runner";
 import { usePulseTaskTriggerRunner } from "@/hooks/use-pulse-task-trigger-runner";
 import { useWorkflowTriggerRunner } from "@/hooks/use-workflow-trigger-runner";
+import { useWorkflowLdContinueWatchdog } from "@/hooks/use-workflow-ld-continue-watchdog";
+import { handlePendingWorkflowDispatch, dispatchWorkflowRunExecution, cancelWorkflowRunForAgentRun } from "@/lib/workflow/workflow-runner";
+import { registerWorkflowGridExportChain } from "@/lib/workflow/workflow-grid-export-chain";
+import { tryContinueWorkflowAfterAgentComplete } from "@/lib/workflow/workflow-ld-continue-watchdog";
+import { listWorkflowAvailableSiteIds } from "@/lib/workflow/workflow-available-sites";
+import { ackPendingWorkflowTrigger, fetchPendingWorkflowTriggers } from "@/lib/workflow/workflow-api";
+import {
+  cancelAllRegisteredLocalDominatorExportJobs,
+  cancelLocalDominatorExportJobForAgentRun,
+} from "@/lib/local-dominator/local-dominator-export-job-registry";
 import {
   createAgentRun,
   cancelAgentRun,
@@ -28,30 +39,73 @@ import { agentRunHasResumeProgress } from "@/lib/agent-runs/agent-run-resume";
 import { agentRunIsServerExecution } from "@/lib/agent-runs/agent-run-display";
 import {
   executeAgentRun,
-  filterRunnableRuns,
+  clearClientRunAttempted,
+  hasClientRunAttempted,
   hasTerminalRuns,
+  hydrateAgentRunCancellationsForTeam,
+  isAgentRunActive,
+  isAgentRunInflight,
+  markAgentRunCancelledLocally,
+  markAgentRunsCancelledLocally,
+  clearLocalAgentRunCancellations,
+  isAgentRunCancelledLocally,
+  waitForAgentRunInflight,
 } from "@/lib/agent-runs/executor";
 import { registerAgentRunListPatcher, type AgentRunListPatch } from "@/lib/agent-runs/agent-runs-local-patch";
 import { isAgentRunInterrupted } from "@/lib/agent-runs/agent-run-checkpoint";
-import type { AgentRun, StartAgentRunPayload } from "@/lib/agent-runs-types";
+import type { AgentRun, AgentRunContext, StartAgentRunPayload } from "@/lib/agent-runs-types";
 import { isAgentRunTerminal, resolveTaskExecuteSiteId, taskExecutionKindToRecipe } from "@/lib/agent-runs-types";
 import { prepareTaskForAutomationExecute, resolveEffectiveExecutionKind } from "@/lib/task-automation-ui";
 import { readCachedExecutionPayload } from "@/lib/forge-automation-plan-cache";
 import { mergeExecutionPayloadForSave } from "@/lib/post-creator/post-creator-schedule-payload";
 import { writeAgentRunsSidebarOpen } from "@/lib/agent-runs/storage";
 import { writeSidebarOpen, writeSidebarPanel, type SidebarPanel } from "@/lib/pulse-assist/storage";
-import { startTaskExecution, reopenTaskExecutionForResume } from "@/lib/tasks-api";
+import { startTaskExecution, reopenTaskExecutionForResume, cancelTaskExecution } from "@/lib/tasks-api";
 import {
-  maybeUploadServerPostCreatorRows,
-  serverPostCreatorAwaitingUpload,
-  tickServerPostCreatorRun,
+  advanceServerAgentRun,
   warmInventoryForServerPostCreatorRun,
 } from "@/lib/agent-runs/run-server-post-creator-upload";
 import type { TeamTask } from "@/lib/tasks-types";
+import { rememberWorkflowAgentBinding } from "@/lib/workflow/workflow-agent-binding";
+import { resolveWorkflowActionPayload } from "@/lib/workflow/resolve-workflow-action-payload";
+import { wordpressSiteDisplayName } from "@/lib/wordpress-site-display-name";
+import { resolveDefaultAgentsSiteFilter } from "@/lib/agent-runs/agent-runs-site-filter";
 
 type StartRunOptions = {
   openSidebar?: boolean;
+  workflowBinding?: {
+    workflowId: number;
+    workflowRunId: number;
+    workflowNodeId: string;
+    ragVariableKey?: string;
+    workflowThenDelivery?: boolean;
+  };
 };
+
+function applyWorkflowBinding(
+  payload: StartAgentRunPayload,
+  binding: StartRunOptions["workflowBinding"],
+): StartAgentRunPayload {
+  if (!binding) return payload;
+  return {
+    ...payload,
+    source: "workflow",
+    context: {
+      ...payload.context,
+      workflowId: binding.workflowId,
+      workflowRunId: binding.workflowRunId,
+      workflowNodeId: binding.workflowNodeId,
+    },
+    plan: {
+      ...payload.plan,
+      workflowId: binding.workflowId,
+      workflowRunId: binding.workflowRunId,
+      workflowNodeId: binding.workflowNodeId,
+      ragVariableKey: binding.ragVariableKey,
+      workflowThenDelivery: binding.workflowThenDelivery === true,
+    },
+  };
+}
 
 type AgentRunsContextValue = {
   runs: AgentRun[];
@@ -61,6 +115,8 @@ type AgentRunsContextValue = {
   setSidebarOpen: (open: boolean) => void;
   sidebarPanel: SidebarPanel;
   setSidebarPanel: (panel: SidebarPanel) => void;
+  agentsSiteFilter: string;
+  setAgentsSiteFilter: (siteId: string) => void;
   openSidebar: (runId?: number) => void;
   selectRun: (runId: number | null) => void;
   refreshRuns: () => Promise<void>;
@@ -73,9 +129,20 @@ type AgentRunsContextValue = {
     task: TeamTask,
     options?: StartRunOptions,
   ) => Promise<{ ok: boolean; run?: AgentRun; error?: string }>;
+  dispatchWorkflowRun: (
+    workflowId: number,
+    runId: number,
+    options?: {
+      openAgentSidebar?: boolean;
+      stopAfterNodeId?: string;
+      clientSiteId?: string;
+      skipSetupSteps?: boolean;
+    },
+  ) => Promise<{ ok: boolean; error?: string }>;
   cancelRun: (runId: number) => Promise<void>;
   resumeRun: (runId: number) => Promise<void>;
   clearHistory: () => Promise<void>;
+  cancelActiveRuns: () => Promise<void>;
   hasTerminalHistory: boolean;
 };
 
@@ -96,6 +163,20 @@ type AgentRunsContextProviderProps = {
   sidebarPanel: SidebarPanel;
   setSidebarPanel: (panel: SidebarPanel) => void;
 };
+
+function applyCancelledRunState(run: AgentRun, teamId: number): AgentRun {
+  if (run.status === "cancelled" || isAgentRunCancelledLocally(run.id, teamId)) {
+    if (run.status === "cancelled") {
+      markAgentRunCancelledLocally(run.id, teamId);
+    }
+    return {
+      ...run,
+      status: "cancelled",
+      errorMessage: run.errorMessage?.trim() || "Cancelled",
+    };
+  }
+  return run;
+}
 
 function agentRunListRowStable(existing: AgentRun, incoming: AgentRun): boolean {
   return (
@@ -137,9 +218,41 @@ export function AgentRunsContextProvider({
 
   const [runs, setRuns] = useState<AgentRun[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
-  const executingRef = useRef(false);
+  const runsRef = useRef(runs);
+  runsRef.current = runs;
 
   const { sites } = useWordPressSites();
+  const agentsSiteIds = useMemo(() => sites.map((site) => site.id), [sites]);
+
+  const kickClientAgentRuns = useCallback(
+    (candidates: AgentRun[]) => {
+      for (const run of candidates) {
+        if (agentRunIsServerExecution(run)) continue;
+        if (isAgentRunCancelledLocally(run.id, teamId ?? undefined)) continue;
+        const stalledRunning =
+          run.status === "running"
+          && !isAgentRunInflight(run.id)
+          && !isAgentRunActive(run.id)
+          && agentRunHasResumeProgress(run);
+        if (run.status !== "queued" && !stalledRunning) continue;
+        if (hasClientRunAttempted(run.id) && !stalledRunning) continue;
+        if (isAgentRunInflight(run.id)) continue;
+        if (stalledRunning) {
+          clearClientRunAttempted(run.id);
+        }
+        void executeAgentRun(run, sites);
+      }
+    },
+    [sites, teamId],
+  );
+  const [agentsSiteFilter, setAgentsSiteFilterState] = useState<string>("");
+  const setAgentsSiteFilter = useCallback((siteId: string) => {
+    setAgentsSiteFilterState(siteId);
+  }, []);
+
+  useEffect(() => {
+    setAgentsSiteFilterState(resolveDefaultAgentsSiteFilter(activeWordPressSiteId, agentsSiteIds));
+  }, [activeWordPressSiteId, agentsSiteIds]);
 
   const refreshRuns = useCallback(async () => {
     if (!teamId) {
@@ -164,19 +277,32 @@ export function AgentRunsContextProvider({
       const mergedById = new Map<number, AgentRun>();
 
       for (const incoming of hydrated) {
-        const existing = prevById.get(incoming.id);
-        mergedById.set(incoming.id, existing ? mergeAgentRunListRow(existing, incoming) : incoming);
+        const normalized = applyCancelledRunState(incoming, teamId);
+        const existing = prevById.get(normalized.id);
+        mergedById.set(
+          normalized.id,
+          existing ? mergeAgentRunListRow(existing, normalized) : normalized,
+        );
       }
 
       for (const run of prev) {
         if (mergedById.has(run.id)) continue;
-        if (isAgentRunTerminal(run.status)) continue;
-        mergedById.set(run.id, run);
+        if (run.id < 0) continue;
+        const normalized = applyCancelledRunState(run, teamId);
+        if (isAgentRunTerminal(normalized.status)) continue;
+        mergedById.set(normalized.id, normalized);
       }
 
       return [...mergedById.values()].sort((a, b) => b.id - a.id);
     });
-  }, [teamId]);
+    kickClientAgentRuns(
+      hydrated.filter(
+        (run) =>
+          !isAgentRunTerminal(run.status)
+          && !agentRunIsServerExecution(run),
+      ),
+    );
+  }, [kickClientAgentRuns, teamId]);
 
   const patchRunInList = useCallback(
     (runId: number, patch: AgentRunListPatch) => {
@@ -212,40 +338,138 @@ export function AgentRunsContextProvider({
 
   const startRun = useCallback(
     async (payload: StartAgentRunPayload, options?: StartRunOptions) => {
-      const result = await createAgentRun(payload);
+      const result = await createAgentRun(applyWorkflowBinding(payload, options?.workflowBinding));
       if (result.ok && result.run) {
+        const binding = options?.workflowBinding;
+        if (binding) {
+          rememberWorkflowAgentBinding(result.run.id, {
+            workflowId: binding.workflowId,
+            workflowRunId: binding.workflowRunId,
+            workflowNodeId: binding.workflowNodeId,
+          });
+        }
         const clientBatchKey = buildAgentRunBatchKey(result.run.id);
         const run = { ...result.run, clientBatchKey };
         void patchAgentRun(result.run.teamId, result.run.id, { clientBatchKey });
         setRuns((prev) => {
-          const idx = prev.findIndex((r) => r.id === run.id);
+          const withoutOptimistic = prev.filter((run) => run.id > 0);
+          const idx = withoutOptimistic.findIndex((r) => r.id === run.id);
           if (idx >= 0) {
-            const next = [...prev];
+            const next = [...withoutOptimistic];
             next[idx] = run;
             return next;
           }
-          return [run, ...prev];
+          return [run, ...withoutOptimistic];
         });
         if (options?.openSidebar !== false) {
           openSidebar(result.run.id);
         }
-        void tickServerPostCreatorRun(payload.teamId, run, sites).then((latest) => {
-          if (latest) patchRunInList(run.id, latest);
-        });
+        if (agentRunIsServerExecution(run)) {
+          void advanceServerAgentRun(payload.teamId, run, sites)
+            .then((latest) => {
+              patchRunInList(run.id, latest);
+            })
+            .catch((err) => {
+              console.error("[Agent runs] Server run advance failed:", err);
+            });
+        } else if (!agentRunIsServerExecution(run)) {
+          if (!options?.workflowBinding) {
+            kickClientAgentRuns([run]);
+          }
+        }
       } else {
         void refreshRuns();
       }
       return result;
     },
-    [openSidebar, patchRunInList, refreshRuns, sites],
+    [kickClientAgentRuns, openSidebar, patchRunInList, refreshRuns, sites],
+  );
+
+  const mapStartRunResult = useCallback(
+    (result: { ok: boolean; run?: AgentRun; error?: string }) => ({
+      ok: result.ok,
+      run: result.run
+        ? {
+            id: result.run.id,
+            status: result.run.status,
+            result: result.run.result as Record<string, unknown> | undefined,
+          }
+        : undefined,
+      error: result.error,
+    }),
+    [],
+  );
+
+  const awaitClientAgentRunHarness = useCallback(
+    async (run: AgentRun | undefined): Promise<AgentRun | undefined> => {
+      if (!run || !teamId || agentRunIsServerExecution(run)) return run;
+      if (!isAgentRunTerminal(run.status)) {
+        await executeAgentRun(run, sites);
+      }
+      await waitForAgentRunInflight(run.id);
+      return (await fetchAgentRun(teamId, run.id)) ?? runsRef.current.find((item) => item.id === run.id) ?? run;
+    },
+    [sites, teamId],
+  );
+
+  const awaitServerAgentRunHarness = useCallback(
+    async (run: AgentRun | undefined): Promise<AgentRun | undefined> => {
+      if (!run || !teamId || !agentRunIsServerExecution(run)) return run;
+      let active = run;
+      while (active && !isAgentRunTerminal(active.status)) {
+        active = await advanceServerAgentRun(teamId, active, sites);
+        patchRunInList(active.id, active);
+        if (!isAgentRunTerminal(active.status)) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1500));
+        }
+      }
+      return active;
+    },
+    [patchRunInList, sites, teamId],
+  );
+
+  const finishWorkflowAgentRun = useCallback(
+    async (run: AgentRun | undefined): Promise<AgentRun | undefined> => {
+      if (!run) return run;
+      if (agentRunIsServerExecution(run)) {
+        return awaitServerAgentRunHarness(run);
+      }
+      return awaitClientAgentRunHarness(run);
+    },
+    [awaitClientAgentRunHarness, awaitServerAgentRunHarness],
+  );
+
+  const startRunForWorkflow = useCallback(
+    async (payload: StartAgentRunPayload, options?: StartRunOptions) => {
+      const result = await startRun(payload, options);
+      if (!result.ok || !result.run) return mapStartRunResult(result);
+      const latest = await finishWorkflowAgentRun(result.run);
+      const terminal = latest ?? result.run;
+      const failed =
+        terminal.status === "failed" || terminal.status === "cancelled";
+      if (failed) {
+        const message =
+          terminal.errorMessage?.trim()
+          || (typeof terminal.result?.message === "string" ? terminal.result.message.trim() : "")
+          || "Agent run failed";
+        return mapStartRunResult({ ok: false, run: terminal, error: message });
+      }
+      return mapStartRunResult({ ok: true, run: terminal });
+    },
+    [finishWorkflowAgentRun, mapStartRunResult, startRun],
   );
 
   const startRunFromTask = useCallback(
     async (task: TeamTask, options?: StartRunOptions) => {
       if (!teamId) return { ok: false, error: "No active team" };
+      const workflowExecutionKind = options?.workflowBinding
+        ? (task.executionKind ?? "").trim()
+        : "";
       const prepared = prepareTaskForAutomationExecute(task, null, activeWordPressSiteId);
       const kind =
-        (prepared.executionKind ?? "").trim() || resolveEffectiveExecutionKind(prepared);
+        workflowExecutionKind ||
+        (prepared.executionKind ?? "").trim() ||
+        resolveEffectiveExecutionKind(prepared);
       const recipeKey = taskExecutionKindToRecipe(kind);
       if (!recipeKey) return { ok: false, error: "Task has no execution recipe" };
 
@@ -255,12 +479,31 @@ export function AgentRunsContextProvider({
         return { ok: false, error: "Set a client on the project." };
       }
 
+      const executionPayload = options?.workflowBinding
+        ? {
+            targetBucket: "posts",
+            ...(prepared.executionPayload ?? {}),
+            ...(task.executionPayload ?? {}),
+          }
+        : mergeExecutionPayloadForSave(
+            readCachedExecutionPayload(prepared.projectId),
+            prepared.executionPayload,
+          );
+      const site = sites.find((item) => item.id === siteId);
+      const payloadForExecution =
+        options?.workflowBinding &&
+        (kind === "entity_page_creator" || kind === "entity_generator" || kind === "local_dominator_export")
+          ? resolveWorkflowActionPayload(
+              kind as "entity_page_creator" | "entity_generator" | "local_dominator_export",
+              executionPayload,
+              { name: site ? wordpressSiteDisplayName(site) : undefined },
+              options.workflowBinding.workflowRunId,
+            )
+          : executionPayload;
+
       const exec = await startTaskExecution(teamId, prepared.id, {
         executionKind: kind as TeamTask["executionKind"],
-        executionPayload: mergeExecutionPayloadForSave(
-          prepared.executionPayload,
-          readCachedExecutionPayload(prepared.projectId),
-        ),
+        executionPayload: payloadForExecution,
         wordpressSiteId: siteId,
       });
       if (!exec.ok || !exec.execution) {
@@ -308,14 +551,112 @@ export function AgentRunsContextProvider({
           },
           plan: {
             taskExecutionId: exec.execution.id,
+            executionKind: kind,
             clientRunContract: exec.execution.clientRunContract ?? undefined,
+            executionPayload: payloadForExecution,
             executionMode,
           },
         },
         options,
       );
     },
-    [activeWordPressSiteId, startRun, teamId],
+    [activeWordPressSiteId, sites, startRun, teamId],
+  );
+
+  const startRunFromTaskForWorkflow = useCallback(
+    async (task: TeamTask, options?: StartRunOptions) => {
+      const result = await startRunFromTask(task, options);
+      if (!result.ok || !result.run) return mapStartRunResult(result);
+      const latest = await finishWorkflowAgentRun(result.run);
+      const terminal = latest ?? result.run;
+      const failed =
+        terminal.status === "failed" || terminal.status === "cancelled";
+      if (failed) {
+        const message =
+          terminal.errorMessage?.trim()
+          || (typeof terminal.result?.message === "string" ? terminal.result.message.trim() : "")
+          || "Agent run failed";
+        return mapStartRunResult({ ok: false, run: terminal, error: message });
+      }
+      return mapStartRunResult({ ok: true, run: terminal });
+    },
+    [finishWorkflowAgentRun, mapStartRunResult, startRunFromTask],
+  );
+
+  const workflowDispatchCallbacks = useMemo(
+    () => ({
+      startRun: async (payload: StartAgentRunPayload, options?: StartRunOptions) =>
+        mapStartRunResult(await startRun(payload, options)),
+      startRunAndWait: startRunForWorkflow,
+      startRunFromTask: async (task: TeamTask, options?: StartRunOptions) =>
+        mapStartRunResult(await startRunFromTask(task, options)),
+      startRunFromTaskAndWait: startRunFromTaskForWorkflow,
+      listAvailableSiteIds: listWorkflowAvailableSiteIds,
+    }),
+    [mapStartRunResult, startRun, startRunForWorkflow, startRunFromTask, startRunFromTaskForWorkflow],
+  );
+
+  const workflowChainRef = useRef({
+    teamId: null as number | null,
+    callbacks: workflowDispatchCallbacks,
+    refreshRuns,
+    openAgentSidebar: false,
+  });
+  workflowChainRef.current = {
+    teamId,
+    callbacks: workflowDispatchCallbacks,
+    refreshRuns,
+    openAgentSidebar: workflowChainRef.current.openAgentSidebar,
+  };
+
+  const dispatchWorkflowRun = useCallback(
+    async (
+      workflowId: number,
+      runId: number,
+      options?: {
+        openAgentSidebar?: boolean;
+        stopAfterNodeId?: string;
+        clientSiteId?: string;
+        skipSetupSteps?: boolean;
+      },
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!teamId) return { ok: false, error: "No active team." };
+      workflowChainRef.current.openAgentSidebar = options?.openAgentSidebar === true;
+      if (options?.openAgentSidebar) {
+        const clientSiteId = options.clientSiteId?.trim();
+        setAgentsSiteFilterState(
+          clientSiteId && agentsSiteIds.includes(clientSiteId)
+            ? clientSiteId
+            : resolveDefaultAgentsSiteFilter(activeWordPressSiteId, agentsSiteIds),
+        );
+      }
+      const callbacks = {
+        ...(options?.openAgentSidebar
+          ? { ...workflowDispatchCallbacks, openAgentSidebar: true }
+          : workflowDispatchCallbacks),
+        ...(options?.stopAfterNodeId ? { stopAfterNodeId: options.stopAfterNodeId } : {}),
+        ...(options?.skipSetupSteps ? { skipSetupSteps: true } : {}),
+      };
+      try {
+        return await dispatchWorkflowRunExecution(teamId, workflowId, runId, callbacks);
+      } catch (err) {
+        return {
+          ok: false,
+          error: err instanceof Error ? err.message : "Workflow dispatch failed.",
+        };
+      } finally {
+        await refreshRuns();
+      }
+    },
+    [
+      activeWordPressSiteId,
+      agentsSiteIds,
+      refreshRuns,
+      setSidebarOpen,
+      setSidebarPanel,
+      teamId,
+      workflowDispatchCallbacks,
+    ],
   );
 
   usePulseTaskScheduleRunner({
@@ -342,48 +683,62 @@ export function AgentRunsContextProvider({
 
   useWorkflowTriggerRunner({
     teamId,
-    startRun: async (payload, options) => {
-      const result = await startRun(payload, options);
-      return {
-        ok: result.ok,
-        run: result.run
-          ? {
-              id: result.run.id,
-              status: result.run.status,
-              result: result.run.result as Record<string, unknown> | undefined,
-            }
-          : undefined,
-        error: result.error,
-      };
-    },
-    startRunFromTask: async (task, options) => {
-      const result = await startRunFromTask(task, options);
-      return {
-        ok: result.ok,
-        run: result.run
-          ? {
-              id: result.run.id,
-              status: result.run.status,
-              result: result.run.result as Record<string, unknown> | undefined,
-            }
-          : undefined,
-        error: result.error,
-      };
-    },
+    callbacks: workflowDispatchCallbacks,
     onWorkflowRun: () => {
       void refreshRuns();
     },
   });
 
+  useWorkflowLdContinueWatchdog({
+    teamId,
+    runs,
+    callbacks: workflowDispatchCallbacks,
+    onContinued: () => {
+      void refreshRuns();
+    },
+  });
+
+  useEffect(() => {
+    registerWorkflowGridExportChain(async (run, payload) => {
+      const ctx = workflowChainRef.current;
+      if (!ctx.teamId) {
+        throw new Error("No active team for workflow grid export chain.");
+      }
+      const chainCallbacks = {
+        startRun: ctx.callbacks.startRunAndWait ?? ctx.callbacks.startRun,
+        startRunAndWait: ctx.callbacks.startRunAndWait,
+        startRunFromTask: ctx.callbacks.startRunFromTaskAndWait ?? ctx.callbacks.startRunFromTask,
+        startRunFromTaskAndWait: ctx.callbacks.startRunFromTaskAndWait,
+        listAvailableSiteIds: ctx.callbacks.listAvailableSiteIds,
+        openAgentSidebar: ctx.openAgentSidebar,
+      };
+      await tryContinueWorkflowAfterAgentComplete(ctx.teamId, run, chainCallbacks);
+      void ctx.refreshRuns();
+    });
+    return () => registerWorkflowGridExportChain(null);
+  }, []);
+
   const cancelRun = useCallback(
     async (runId: number) => {
       if (!teamId) return;
-      const { cancelAgentRun } = await import("@/lib/agent-runs-api");
+      if (runId < 0) {
+        setRuns((prev) => prev.filter((run) => run.id !== runId));
+        return;
+      }
+      const existing = runsRef.current.find((run) => run.id === runId);
+      markAgentRunCancelledLocally(runId, teamId);
+      patchRunInList(runId, { status: "cancelled", errorMessage: "Cancelled" });
+      void cancelLocalDominatorExportJobForAgentRun(runId);
+      if (existing) {
+        void cancelWorkflowRunForAgentRun(teamId, existing);
+      }
+      const executionId = existing?.plan?.taskExecutionId;
+      if (executionId) {
+        void cancelTaskExecution(teamId, executionId);
+      }
       const result = await cancelAgentRun(teamId, runId);
       if (result.ok && result.run) {
-        patchRunInList(runId, result.run);
-      } else {
-        patchRunInList(runId, { status: "cancelled" });
+        patchRunInList(runId, applyCancelledRunState(result.run, teamId));
       }
     },
     [patchRunInList, teamId],
@@ -406,8 +761,8 @@ export function AgentRunsContextProvider({
           }
         }
         await warmInventoryForServerPostCreatorRun(active, sites);
-        const latest = await tickServerPostCreatorRun(teamId, active, sites);
-        if (latest) patchRunInList(runId, latest);
+        const latest = await advanceServerAgentRun(teamId, active, sites);
+        patchRunInList(runId, latest);
         return;
       }
       const executionId = existing?.plan?.taskExecutionId;
@@ -420,27 +775,65 @@ export function AgentRunsContextProvider({
         step: { label: "Queued for resume", status: "pending" },
       });
       if (result.ok && result.run) {
+        clearClientRunAttempted(runId);
         patchRunInList(runId, result.run);
+        kickClientAgentRuns([result.run]);
       }
     },
-    [patchRunInList, runs, sites, teamId],
+    [kickClientAgentRuns, patchRunInList, runs, sites, teamId],
   );
 
   const clearHistory = useCallback(async () => {
     if (!teamId) return;
     const list = runs.length > 0 ? runs : await fetchAgentRuns(teamId);
     const active = list.filter((run) => !isAgentRunTerminal(run.status));
-    await Promise.all(active.map((run) => cancelAgentRun(teamId, run.id)));
-    await clearAgentRuns(teamId);
+    markAgentRunsCancelledLocally(list.map((run) => run.id), teamId);
     setSelectedRunId(null);
     setRuns([]);
+    try {
+      await cancelAllRegisteredLocalDominatorExportJobs();
+      const pending = await fetchPendingWorkflowTriggers(teamId);
+      await Promise.all(
+        pending.map((item) => ackPendingWorkflowTrigger(teamId, item.workflowId)),
+      );
+      await Promise.all(active.map((run) => cancelWorkflowRunForAgentRun(teamId, run)));
+      await Promise.all(active.map((run) => cancelAgentRun(teamId, run.id)));
+      await clearAgentRuns(teamId);
+    } finally {
+      clearLocalAgentRunCancellations(teamId);
+    }
   }, [runs, teamId]);
+
+  const cancelActiveRuns = useCallback(async () => {
+    if (!teamId) return;
+    const list = runs.length > 0 ? runs : await fetchAgentRuns(teamId);
+    const active = list.filter((run) => !isAgentRunTerminal(run.status));
+    if (active.length === 0) return;
+    markAgentRunsCancelledLocally(active.map((run) => run.id), teamId);
+    for (const run of active) {
+      patchRunInList(run.id, { status: "cancelled", errorMessage: "Cancelled" });
+      void cancelLocalDominatorExportJobForAgentRun(run.id);
+      void cancelWorkflowRunForAgentRun(teamId, run);
+      const executionId = run.plan?.taskExecutionId;
+      if (executionId) {
+        void cancelTaskExecution(teamId, executionId);
+      }
+    }
+    try {
+      await cancelAllRegisteredLocalDominatorExportJobs();
+      await Promise.all(active.map((run) => cancelAgentRun(teamId, run.id)));
+    } finally {
+      clearLocalAgentRunCancellations(teamId);
+      void refreshRuns();
+    }
+  }, [patchRunInList, refreshRuns, runs, teamId]);
 
   useEffect(() => {
     if (!teamId) {
       setRuns([]);
       return;
     }
+    hydrateAgentRunCancellationsForTeam(teamId);
     void refreshRuns();
     // Fetch once per team; local patches handle run updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -462,18 +855,6 @@ export function AgentRunsContextProvider({
     };
   }, [teamId]);
 
-  useEffect(() => {
-    if (!teamId || executingRef.current) return;
-    const queued = filterRunnableRuns(runs);
-    if (queued.length === 0) return;
-    executingRef.current = true;
-    void Promise.all(queued.map((run) => executeAgentRun(run, sites))).finally(() => {
-      executingRef.current = false;
-    });
-  }, [runs, sites, teamId]);
-
-  const runsRef = useRef(runs);
-  runsRef.current = runs;
   const serverProcessInFlight = useRef(new Set<number>());
 
   useEffect(() => {
@@ -486,30 +867,17 @@ export function AgentRunsContextProvider({
       ) {
         serverProcessInFlight.current.add(run.id);
         void warmInventoryForServerPostCreatorRun(run, sites);
-        void tickServerPostCreatorRun(teamId, run, sites)
+        void advanceServerAgentRun(teamId, run, sites)
           .then((latest) => {
-            if (latest) patchRunInList(run.id, latest);
+            patchRunInList(run.id, latest);
+          })
+          .catch((err) => {
+            console.error("[Agent runs] Server run advance failed:", err);
           })
           .finally(() => {
             serverProcessInFlight.current.delete(run.id);
           });
       }
-    }
-  }, [patchRunInList, runs, sites, teamId]);
-
-  useEffect(() => {
-    if (!teamId || sites.length === 0) return;
-    for (const run of runs) {
-      if (
-        (run.status !== "queued" && run.status !== "running") ||
-        !agentRunIsServerExecution(run) ||
-        !serverPostCreatorAwaitingUpload(run)
-      ) {
-        continue;
-      }
-      void maybeUploadServerPostCreatorRows(teamId, run, sites).then((uploaded) => {
-        if (uploaded) patchRunInList(run.id, uploaded);
-      });
     }
   }, [patchRunInList, runs, sites, teamId]);
 
@@ -524,13 +892,13 @@ export function AgentRunsContextProvider({
       if (active.length === 0) return;
       await Promise.all(
         active.map(async (run) => {
-          const latest = await tickServerPostCreatorRun(teamId, run, sites);
-          if (latest) patchRunInList(run.id, latest);
+          const latest = await advanceServerAgentRun(teamId, run, sites);
+          patchRunInList(run.id, latest);
         }),
       );
     };
     void tick();
-    const id = window.setInterval(tick, 15000);
+    const id = window.setInterval(tick, 3000);
     return () => window.clearInterval(id);
   }, [patchRunInList, sites, teamId]);
 
@@ -538,6 +906,12 @@ export function AgentRunsContextProvider({
     () => runs.find((r) => r.id === selectedRunId) ?? null,
     [runs, selectedRunId],
   );
+
+  useEffect(() => {
+    if (selectedRunId != null && !runs.some((run) => run.id === selectedRunId)) {
+      setSelectedRunId(null);
+    }
+  }, [runs, selectedRunId]);
 
   const hasTerminalHistory = useMemo(() => hasTerminalRuns(runs), [runs]);
 
@@ -550,18 +924,24 @@ export function AgentRunsContextProvider({
       setSidebarOpen,
       sidebarPanel,
       setSidebarPanel,
+      agentsSiteFilter,
+      setAgentsSiteFilter,
       openSidebar,
       selectRun: setSelectedRunId,
       refreshRuns,
       patchRunInList,
       startRun,
       startRunFromTask,
+      dispatchWorkflowRun,
       cancelRun,
       resumeRun,
       clearHistory,
+      cancelActiveRuns,
       hasTerminalHistory,
     }),
     [
+      agentsSiteFilter,
+      cancelActiveRuns,
       cancelRun,
       clearHistory,
       hasTerminalHistory,
@@ -572,12 +952,14 @@ export function AgentRunsContextProvider({
       runs,
       selectedRun,
       selectedRunId,
+      setAgentsSiteFilter,
       sidebarOpen,
       setSidebarOpen,
       sidebarPanel,
       setSidebarPanel,
       startRun,
       startRunFromTask,
+      dispatchWorkflowRun,
     ],
   );
 

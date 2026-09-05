@@ -1,5 +1,6 @@
 import type { AgentConfig } from "@/types/agent-config";
 import { BLOG_HARNESS_SUMMARY_AGENT_ID } from "@/lib/bulk/blog-harness-summary-agent";
+import { BLOG_HARNESS_ANSWER_AGENT_ID } from "@/lib/bulk/blog-harness-answer-agent";
 
 const TOKEN_SANITY_MIN = 256;
 const BASE_NEED_PER_WEIGHT_UNIT = 480;
@@ -8,6 +9,7 @@ export type HarnessSectionTokenInput = {
   sectionKey: string;
   agent: AgentConfig;
   isOverview: boolean;
+  isAnswer?: boolean;
   isSeoOpener?: boolean;
   importedExcerptChars?: number;
   bodySectionCount?: number;
@@ -21,6 +23,7 @@ export type HarnessSectionTokenSlot = {
 };
 
 function computeSectionWeight(input: HarnessSectionTokenInput): number {
+  if (input.isAnswer) return 0.15;
   if (input.isOverview) {
     const n = input.bodySectionCount ?? 0;
     return 0.85 + 0.08 * n;
@@ -100,5 +103,9 @@ export function assertHarnessTokenBudgetPreflight(
 }
 
 export function isHarnessSeoOpenerBodyAgent(agent: AgentConfig): boolean {
-  return agent.id !== BLOG_HARNESS_SUMMARY_AGENT_ID && agent.step === 1;
+  return (
+    agent.id !== BLOG_HARNESS_SUMMARY_AGENT_ID &&
+    agent.id !== BLOG_HARNESS_ANSWER_AGENT_ID &&
+    agent.step === 1
+  );
 }

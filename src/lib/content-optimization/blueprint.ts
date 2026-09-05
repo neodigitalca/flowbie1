@@ -2,8 +2,7 @@ import { notify } from "@/lib/app-notifications";
 import { NOTIFY_GENERATING_OPTIMIZED_BLUEPRINT_THIS_STEP, notifyBlueprintCreatedXSectionsStartingCo, notifyChecklistCreatedXItemsBuildingBluep } from "@/lib/notify-messages";
 import { getMuteOptimizationToasts } from "@/hooks/content-optimization/optimization-toast-mute";
 import { loadApiKey } from "@/lib/api";
-import { generateChecklistFromSelections } from "@/lib/blog-template-builder";
-import { generateBlueprintFromTemplate, type BlogTemplateContext } from "@/lib/blog-template-builder";
+import { generateChecklistFromSelections, generateBlueprintFromTemplate, buildBlueprintFromChecklistRows, type BlogTemplateContext } from "@/lib/blog-template-builder";
 import {
   enforceForbiddenWordsOnBlueprint,
   formatBlueprintFileContent,
@@ -17,17 +16,22 @@ import { OptimizationFileManager } from "@/lib/optimization-file-manager";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { truncateTitleForSEO } from "@/lib/content-generation/content-sanitizer";
 import { progressWithGeneratedFiles } from "@/hooks/content-optimization/optimization-helpers";
-import { extractGeographicEntityWithAI } from "./entity";
 import { cleanTitleForNonEntity } from "./title-cleaning";
-import { analyzeEntityWithAI } from "./keyword-research";
 import type { SemrushClusterScatterPlan } from "@/lib/semrush-cluster-scatter";
 import { buildSemrushScatterContextJson } from "@/lib/semrush-cluster-scatter";
-import { extractMediaFromContent } from "./images-extract";
+import { extractMediaFromHtmlTags } from "./images-extract";
 import {
   buildForcedMediaUserPrompt,
   mergeForcedMediaIntoChecklist,
 } from "./media-checklist-force";
+import {
+  injectLlmAuditAuthorityLinksIntoBlueprintAgents,
+  injectLlmAuditAuthorityLinksIntoChecklist,
+  type LlmAuditAuthorityLinkLike,
+} from "@/lib/bulk/modifier-external-links";
+import type { ExternalLinkPair } from "@/lib/content-generation/external-link-placeholders";
 
+/** Blog optimize only. SAP optimize uses generateBlueprintAndContent via runOptimizeViaBulkGenerate. */
 export async function generateOptimizedBlueprint(
   selectedKeywords: string[],
   selectedH2Sections: string[],
@@ -51,82 +55,27 @@ export async function generateOptimizedBlueprint(
     externalUrls?: string[];
     anchorPhrases?: string[];
   },
-  /** Original post HTML — used to force existing image/video URLs into checklist + blueprint. */
-  existingContent?: string,
-): Promise<{ blueprintResult: any; checklist: string[] }> {
+  dfsArticleAuditBlock?: string,
+  llmAuditSummary?: string,
+  firstPartyAuthorityBlock?: string,
+  llmAuditAuthorityLinks?: LlmAuditAuthorityLinkLike[],
+  serpResearchBriefJson?: string,
+  forbiddenLiveH2s?: string[],
+  onArtifactSaved?: () => void,
+  onChecklistReady?: (pipelineChecklist: string[]) => void,
+  onSerpH2OutlineReady?: (bodyHarnessTitles: string[]) => void,
+): Promise<{ blueprintResult: any; checklist: string[]; llmAuditAuthorityExternalPairs: ExternalLinkPair[] }> {
   const openRouterApiKey = loadApiKey();
   if (!openRouterApiKey?.trim()) throw new Error("OpenRouter API key not found. Please set it in settings.");
 
   if (!getMuteOptimizationToasts()) notify.info(NOTIFY_GENERATING_OPTIMIZED_BLUEPRINT_THIS_STEP);
-  setProgress({ step: "Generating optimized blueprint...", progress: 60, message: "Extracting and analyzing entity from title/origin..." });
 
-  let extractedEntity: string | undefined;
-  let entityAnalysis: string | undefined;
-
-  try {
-    const slug = currentPageUrl
-      ? (() => {
-          try {
-            const p = new URL(currentPageUrl).pathname.split("/").filter(Boolean);
-            return p[p.length - 1] ?? "";
-          } catch {
-            return "";
-          }
-        })()
-      : "";
-
-    const origin = await extractGeographicEntityWithAI(
-      { title: existingTitle, url: currentPageUrl, excerpt: existingPost?.excerpt, slug: slug || undefined },
-      openRouterApiKey,
-      {
-        siteUrl: site.siteUrl,
-        siteName: site.name,
-        locations: site.locations,
-        napAddress: site.napInfo?.address,
-      }
-    );
-    if (origin?.trim()) {
-      extractedEntity = origin.trim();
-      console.log("[Optimize Content] Extracted entity (agentic AI):", extractedEntity);
-    }
-
-    if (hasEntityOverride === false) {
-      extractedEntity = "N/A";
-      console.log("[Optimize Content] Entity mode MANUALLY DISABLED by user - treating as regular blog post");
-    } else if (hasEntityOverride === true && !extractedEntity?.trim()) {
-      extractedEntity = existingTitle || primaryKeyword;
-      console.log("[Optimize Content] Entity mode MANUALLY ENABLED by user, using title as entity:", extractedEntity);
-    } else if (!extractedEntity?.trim()) {
-      extractedEntity = "N/A";
-      console.log("[Optimize Content] No entity found in post - treating as regular blog post (N/A)");
-    }
-
-    if (extractedEntity && extractedEntity !== "N/A" && extractedEntity.trim()) {
-      setProgress({ step: "Generating optimized blueprint...", progress: 62, message: `Analyzing entity "${extractedEntity}" with AI...` });
-      entityAnalysis = await analyzeEntityWithAI(extractedEntity, openRouterApiKey, undefined);
-      if (entityAnalysis) console.log("[Optimize Content] Entity analysis complete:", entityAnalysis.substring(0, 100) + "...");
-    }
-  } catch (error) {
-    console.warn("[Optimize Content] Error during entity extraction/analysis:", error);
-    if (hasEntityOverride === false) extractedEntity = "N/A";
-  }
-
-  setProgress({ step: "Generating optimized blueprint...", progress: 65, message: "From keywords and H2 sections" });
+  setProgress({ step: "Generating optimized blueprint...", progress: 62, message: "Generating checklist…" });
   const researchModel = getResearchModel(site.id);
 
-  const bodyHtml =
-    (typeof existingContent === "string" && existingContent.trim()) ||
-    (typeof existingPost?.content === "string" ? existingPost.content : "") ||
-    "";
-  let existingMedia: Awaited<ReturnType<typeof extractMediaFromContent>> = [];
-  if (bodyHtml.trim()) {
-    setProgress({
-      step: "Generating optimized blueprint...",
-      progress: 64,
-      message: "Reading existing image/video URLs for checklist…",
-    });
-    existingMedia = await extractMediaFromContent(bodyHtml, openRouterApiKey, researchModel);
-  }
+  const bodyHtmlForMedia =
+    (typeof existingPost?.content === "string" ? existingPost.content : "") || "";
+  const existingMedia = bodyHtmlForMedia.trim() ? extractMediaFromHtmlTags(bodyHtmlForMedia) : [];
   const forcedMediaPrompt = buildForcedMediaUserPrompt(existingMedia);
 
   const semrushScatterStr = buildSemrushScatterContextJson(semrushForBlueprint?.clusterScatter);
@@ -135,7 +84,7 @@ export async function generateOptimizedBlueprint(
       ? semrushForBlueprint.keywordsRag
       : undefined;
 
-  let checklist = await generateChecklistFromSelections(
+  let checklistResult = await generateChecklistFromSelections(
     selectedKeywords,
     selectedH2Sections,
     existingTitle || primaryKeyword,
@@ -153,11 +102,7 @@ export async function generateOptimizedBlueprint(
       wordPressPosts,
       wordPressPagesForOfferTable,
       currentPageUrl,
-      entity: extractedEntity === "N/A" ? undefined : extractedEntity,
-      entityAnalysis: extractedEntity === "N/A" ? undefined : entityAnalysis,
-      runExternalResearch: true,
-      locationName: "United States",
-      languageCode: "en",
+      runExternalResearch: false,
       siteId: site.id,
       primaryKeyword,
       setProgress,
@@ -166,16 +111,31 @@ export async function generateOptimizedBlueprint(
       semrushApprovedExternalUrls: semrushForBlueprint?.externalUrls,
       semrushAnchorPhrases: semrushForBlueprint?.anchorPhrases,
       ...(forcedMediaPrompt ? { userPrompt: forcedMediaPrompt } : {}),
+      ...(dfsArticleAuditBlock?.trim() ? { dfsArticleAuditBlock } : {}),
+      ...(llmAuditSummary?.trim() ? { llmAuditSummary } : {}),
+      ...(firstPartyAuthorityBlock?.trim() ? { firstPartyAuthorityBlock } : {}),
+      ...(llmAuditAuthorityLinks?.length ? { llmAuditAuthorityLinks } : {}),
+      ...(serpResearchBriefJson?.trim() ? { serpResearchBriefJson } : {}),
+      ...(forbiddenLiveH2s?.length ? { forbiddenLiveH2s } : {}),
+      ...(onSerpH2OutlineReady ? { onSerpH2OutlineReady } : {}),
     } as any
   );
 
-  if (!checklist.length) throw new Error("Failed to generate checklist");
+  let checklist = checklistResult.items;
+
+  if (llmAuditAuthorityLinks?.length) {
+    checklist = injectLlmAuditAuthorityLinksIntoChecklist(checklist, llmAuditAuthorityLinks);
+  }
+
+  if (!checklist.length) {
+    throw new Error("Checklist is empty; new template did not return items");
+  }
 
   checklist = mergeForcedMediaIntoChecklist(checklist, existingMedia);
   const pipelineChecklist = prepareChecklistForPipeline(checklist);
 
   if (!pipelineChecklist.length) {
-    throw new Error("Failed to generate checklist (empty after sanitize)");
+    throw new Error("Checklist is empty after sanitize; new template did not return items");
   }
 
   const checklistFileName = OptimizationFileManager.generateFilename("checklist", primaryKeyword, "txt");
@@ -184,6 +144,8 @@ export async function generateOptimizedBlueprint(
     formatChecklistFileContent(checklist),
     "text/plain"
   );
+  onArtifactSaved?.();
+  onChecklistReady?.(pipelineChecklist);
 
   if (!getMuteOptimizationToasts()) notify.success(notifyChecklistCreatedXItemsBuildingBluep(pipelineChecklist.length), { duration: 4000 });
   setProgress(
@@ -200,61 +162,58 @@ export async function generateOptimizedBlueprint(
     ...(forcedMediaPrompt ? { userPrompt: forcedMediaPrompt } : {}),
   };
 
-  const entityForTemplate = extractedEntity === "N/A" ? undefined : extractedEntity;
   let blueprintResult: Awaited<ReturnType<typeof generateBlueprintFromTemplate>>;
-  try {
-    blueprintResult = await generateBlueprintFromTemplate(pipelineChecklist, blueprintContext, {
-      apiKey: openRouterApiKey,
-      model: researchModel,
-      temperature: 1.0,
-      maxTokens: 8000,
-      topP: 0.9,
-      connectedSite: { name: site.name, siteUrl: site.siteUrl },
-      wordPressPosts,
-      currentPageUrl,
-      siteId: site.id,
-      primaryKeyword,
-      entity: entityForTemplate,
-      semrushKeywordsContext: semrushKeywordsCtx,
-      semrushScatterContext: semrushScatterStr,
-      semrushApprovedExternalUrls: semrushForBlueprint?.externalUrls,
-      semrushAnchorPhrases: semrushForBlueprint?.anchorPhrases,
-      ...(forcedMediaPrompt ? { userPrompt: forcedMediaPrompt } : {}),
-    } as any);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Blueprint generation failed";
-    setProgress(
-      progressWithGeneratedFiles(
-        { step: "Blueprint failed", progress: 70, message },
-        fileManager,
-      ),
-    );
-    throw error;
-  }
 
-  if (!blueprintResult.agents?.length) throw new Error("Failed to generate blueprint");
+  blueprintResult = await generateBlueprintFromTemplate(pipelineChecklist, blueprintContext, {
+    apiKey: openRouterApiKey,
+    model: researchModel,
+    temperature: 1.0,
+    maxTokens: 8000,
+    topP: 0.9,
+    connectedSite: { name: site.name, siteUrl: site.siteUrl },
+    wordPressPosts,
+    currentPageUrl,
+    siteId: site.id,
+    primaryKeyword,
+    semrushKeywordsContext: semrushKeywordsCtx,
+    semrushScatterContext: semrushScatterStr,
+    semrushApprovedExternalUrls: semrushForBlueprint?.externalUrls,
+    semrushAnchorPhrases: semrushForBlueprint?.anchorPhrases,
+    ...(forcedMediaPrompt ? { userPrompt: forcedMediaPrompt } : {}),
+    ...(dfsArticleAuditBlock?.trim() ? { dfsArticleAuditBlock } : {}),
+    ...(llmAuditSummary?.trim() ? { llmAuditSummary } : {}),
+    ...(firstPartyAuthorityBlock?.trim() ? { firstPartyAuthorityBlock } : {}),
+    ...(llmAuditAuthorityLinks?.length ? { llmAuditAuthorityLinks } : {}),
+  } as any);
+
+  if (!blueprintResult.agents?.length) {
+    Object.assign(
+      blueprintResult,
+      buildBlueprintFromChecklistRows(pipelineChecklist, blueprintContext),
+    );
+  }
 
   const enforcedBlueprint = enforceForbiddenWordsOnBlueprint(blueprintResult);
   Object.assign(blueprintResult, enforcedBlueprint);
 
-  const entityForBlueprint = extractedEntity === "N/A" ? undefined : extractedEntity;
-  (blueprintResult as any).entity = entityForBlueprint;
-  (blueprintResult as any).entityAnalysis = entityForBlueprint ? entityAnalysis : undefined;
-
-  if (extractedEntity === "N/A" && blueprintResult.title) {
-    const cleaned = cleanTitleForNonEntity(blueprintResult.title, extractedEntity);
-    if (cleaned !== blueprintResult.title) {
-      console.log("[Optimize Content] Cleaned location mentions from blueprint title:", { original: blueprintResult.title, cleaned, entity: extractedEntity });
-      blueprintResult.title = cleaned;
-    }
+  if (llmAuditAuthorityLinks?.length) {
+    blueprintResult.agents = injectLlmAuditAuthorityLinksIntoBlueprintAgents(
+      blueprintResult.agents,
+      llmAuditAuthorityLinks,
+    );
   }
 
-  // Entity page: enforce "near" in title. If AI omitted it, fix it.
-  if (entityForBlueprint && blueprintResult.title && !/near\s/i.test(blueprintResult.title)) {
-    const keywordOnly = primaryKeyword.replace(/\s+(in|near)\s+.*$/i, '').trim();
-    const fixedTitle = `${keywordOnly} Near ${entityForBlueprint}`.replace(/\s+/g, ' ');
-    console.log("[Optimize Content] Blueprint title missing 'near' - enforcing:", { original: blueprintResult.title, fixed: fixedTitle });
-    blueprintResult.title = truncateTitleForSEO(fixedTitle, 50);
+  (blueprintResult as any).entityAnalysis = undefined;
+  if (checklistResult.h2Outline?.length) {
+    (blueprintResult as any).h2Outline = checklistResult.h2Outline;
+  }
+
+  if (blueprintResult.title) {
+    const cleaned = cleanTitleForNonEntity(blueprintResult.title, "N/A");
+    if (cleaned !== blueprintResult.title) {
+      console.log("[Optimize Content] Cleaned location mentions from blueprint title:", { original: blueprintResult.title, cleaned });
+      blueprintResult.title = cleaned;
+    }
   }
 
   if (blueprintResult.title) {
@@ -268,16 +227,11 @@ export async function generateOptimizedBlueprint(
     }
   }
 
-  console.log("[Optimize Content] Stored entity in blueprint:", {
-    hasEntity: !!entityForBlueprint,
-    entity: entityForBlueprint || "N/A (regular blog post)",
-    blueprintTitle: blueprintResult.title,
-  });
-
   if (!getMuteOptimizationToasts()) notify.success(notifyBlueprintCreatedXSectionsStartingCo(blueprintResult.agents.length), { duration: 4000 });
 
   const blueprintFileName = OptimizationFileManager.generateFilename("blueprint", primaryKeyword, "json");
   fileManager.addFile(blueprintFileName, formatBlueprintFileContent(blueprintResult as Record<string, unknown>), "application/json");
+  onArtifactSaved?.();
 
   setProgress(
     progressWithGeneratedFiles(
@@ -290,5 +244,12 @@ export async function generateOptimizedBlueprint(
     ),
   );
 
-  return { blueprintResult, checklist: pipelineChecklist };
+  return {
+    blueprintResult,
+    checklist: pipelineChecklist,
+    llmAuditAuthorityExternalPairs: (llmAuditAuthorityLinks ?? []).map((link) => ({
+      url: link.url,
+      anchor: link.anchorText,
+    })),
+  };
 }

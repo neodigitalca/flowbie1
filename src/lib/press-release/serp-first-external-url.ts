@@ -1,12 +1,10 @@
 import { extractDataForSeoSerpBrief } from "@/lib/overview-seo-content-brief";
-import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
+import { backendApiUrl } from "@/lib/wordpress-api/connection";
 import { mcp_DataForSEO_serp_organic_live_advanced } from "@/lib/mcp-tools";
 
 /** Same URL shape as Overview / bulk SERP helper ([bulk-optimization-missing-seo-research.ts](b:/USE THIS/NEO Pulse/src/hooks/content-optimization/bulk-optimization-missing-seo-research.ts)). */
 function serpDumpFilenameUrl(filename: string): string {
-  const base = (BACKEND_API_BASE || "").replace(/\/$/, "");
-  if (base) return `${base}/api/dataforseo/serp-dump/${encodeURIComponent(filename)}`;
-  return `/api/dataforseo/serp-dump/${encodeURIComponent(filename)}`;
+  return backendApiUrl(`/dataforseo/serp-dump/${encodeURIComponent(filename)}`);
 }
 
 /**

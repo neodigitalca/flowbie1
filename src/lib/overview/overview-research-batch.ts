@@ -1,20 +1,37 @@
 import pLimit from "p-limit";
 import type { BulkHarnessSectionPayload } from "@/lib/bulk-auto-generate";
-import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
 import type { WordPressSite } from "@/components/integrations/types";
-import { OVERVIEW_RESEARCH_ROW_CONCURRENCY_MAX } from "@/lib/overview/overview-research-batch-constants";
 import type { ResearchHarnessDoneSummary } from "@/lib/overview/overview-research-harness-sections";
+import { OVERVIEW_RESEARCH_ROW_CONCURRENCY_MAX } from "@/lib/overview/overview-research-batch-constants";
 import {
   exportOverviewGscForPageUrls,
   runOverviewResearchForRow,
   type OverviewResearchRowInput,
+  type ResearchArtifactFile,
 } from "@/lib/overview/overview-research-row";
 
 export type OverviewResearchEligibleRow = {
   index: number;
   row: OverviewRow;
 };
+
+/** Merge keyword-prep results into grid rows (rowsRef can lag behind setRows). */
+export function resolveResearchBatchEligibleRows(
+  eligible: ReadonlyArray<{ index: number }>,
+  getRow: (index: number) => OverviewRow | undefined,
+  keywordsByIndex: ReadonlyMap<number, string>,
+): OverviewResearchEligibleRow[] {
+  const out: OverviewResearchEligibleRow[] = [];
+  for (const { index } of eligible) {
+    const row = getRow(index);
+    if (!row) continue;
+    const focusKeyword =
+      keywordsByIndex.get(index)?.trim() || row.focusKeyword?.trim() || "";
+    out.push({ index, row: { ...row, focusKeyword } });
+  }
+  return out;
+}
 
 export type OverviewResearchBatchDeps = {
   site: WordPressSite | undefined;
@@ -41,6 +58,7 @@ export type OverviewResearchRowResult = {
   index: number;
   patch: Partial<OverviewRow> | null;
   failed: boolean;
+  errorMessage?: string;
   harnessSummaries?: ResearchHarnessDoneSummary;
 };
 
@@ -67,8 +85,9 @@ export type OverviewResearchBatchCallbacks = {
   onProgress?: (p: OverviewResearchBatchProgress) => void;
   /** Fired before sources run for this page (mark row active). */
   onPageStart?: (index: number, row: OverviewRow) => void;
-  onPageComplete?: (r: OverviewResearchRowResult) => void;
+  onPageComplete?: (r: OverviewResearchRowResult) => void | Promise<void>;
   onHarnessSection?: (index: number, payload: BulkHarnessSectionPayload) => void;
+  onResearchArtifact?: (index: number, file: ResearchArtifactFile) => void;
   onBatchGscExportStart?: (urlCount: number) => void;
   onBatchGscExportDone?: (filename: string | null) => void;
 };
@@ -82,7 +101,7 @@ export async function runOverviewResearchBatch(
   results: OverviewResearchRowResult[];
   stats: { briefUpdated: number; serpOnly: number; failed: number };
 }> {
-  const { onProgress, onPageStart, onPageComplete, onHarnessSection, onBatchGscExportStart, onBatchGscExportDone } =
+  const { onProgress, onPageStart, onPageComplete, onHarnessSection, onResearchArtifact, onBatchGscExportStart, onBatchGscExportDone } =
     callbacks ?? {};
   const results: OverviewResearchRowResult[] = [];
   let briefUpdated = 0;
@@ -115,21 +134,22 @@ export async function runOverviewResearchBatch(
 
   const siteGsc = deps.gscQuickWinsFile ?? null;
   let resolvedBatchGsc: string | null = siteGsc;
-  const needsBatchGscExport =
-    !skipGsc && !siteGsc && deps.site?.siteUrl && BACKEND_API_BASE;
+  const needsBatchGscExport = !skipGsc && !siteGsc && deps.site?.siteUrl;
   if (needsBatchGscExport) {
     const urls = eligible.map((e) => e.row.url?.trim() ?? "").filter(Boolean);
     onBatchGscExportStart?.(urls.length);
-    resolvedBatchGsc = await exportOverviewGscForPageUrls(deps.site!.siteUrl, urls);
+    try {
+      resolvedBatchGsc = await exportOverviewGscForPageUrls(deps.site!.siteUrl, urls);
+    } catch {
+      resolvedBatchGsc = null;
+    }
     onBatchGscExportDone?.(resolvedBatchGsc);
   }
 
-  const concurrency = Math.min(eligible.length, OVERVIEW_RESEARCH_ROW_CONCURRENCY_MAX);
-  const limit = pLimit(Math.max(1, concurrency));
-
+  const rowLimit = pLimit(OVERVIEW_RESEARCH_ROW_CONCURRENCY_MAX);
   await Promise.all(
     eligible.map(({ index, row }) =>
-      limit(async () => {
+      rowLimit(async () => {
         let rowResult: OverviewResearchRowResult = {
           index,
           patch: null,
@@ -151,22 +171,34 @@ export async function runOverviewResearchBatch(
             onHarnessSection: onHarnessSection
               ? (payload) => onHarnessSection(index, payload)
               : undefined,
+            onResearchArtifact: onResearchArtifact
+              ? (file) => onResearchArtifact(index, file)
+              : undefined,
           };
           const { patch, harnessSummaries } = await runOverviewResearchForRow(rowInput);
           const c = classifyPatch(patch);
-          rowResult = { index, patch, failed: c.failed, harnessSummaries };
+          rowResult = {
+            index,
+            patch,
+            failed: c.failed,
+            harnessSummaries,
+            errorMessage: c.failed && !patch ? "Research returned no brief" : undefined,
+          };
           results.push(rowResult);
-        } catch {
-          rowResult = { index, patch: null, failed: true };
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          rowResult = { index, patch: null, failed: true, errorMessage };
           results.push(rowResult);
         } finally {
           completedInBatch += 1;
-          onPageComplete?.(rowResult);
+          await onPageComplete?.(rowResult);
           emitProgress();
         }
       }),
     ),
   );
+
+  results.sort((a, b) => a.index - b.index);
 
   for (const r of results) {
     const c = classifyPatch(r.patch);

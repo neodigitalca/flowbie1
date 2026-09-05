@@ -18,7 +18,7 @@ God Mode is implemented in the **neo-pulse-wp** WordPress plugin, not in the Nod
 | Visitor | `admin_mode: visitor` | Everyone | Public RAG chat |
 | God Mode | `admin_mode: backend` | Logged-in users | Backend Assist |
 
-The chat widget toolbar shows **Visitor** and **God Mode** toggle buttons when `canBackendMode` is true (`is_user_logged_in()`). In wp-admin, God Mode is the default.
+The chat widget toolbar shows **Visitor** and **God Mode** toggle buttons when `canBackendMode` is true (logged-in user and Chat → General → Enable God Mode). In wp-admin, God Mode is the default when that setting is on.
 
 Mode is persisted in `sessionStorage` under `neo_pulse_chat_admin_mode`.
 
@@ -50,7 +50,7 @@ NEO Pulse Chat widget (frontend)
 
 | Requirement | Scope |
 | --- | --- |
-| Logged in | God Mode toggle visible |
+| Logged in and Chat → General → Enable God Mode | God Mode toggle visible |
 | `edit_posts` | Backend Assist REST, writes, site inventory |
 | `manage_options` | Chat insights, GSC quick wins starter |
 | `edit_post` | Per-post edits |

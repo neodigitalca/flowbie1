@@ -9,7 +9,7 @@
     "NEO Pulse rewrites matched posts and entity URLs, capped at 3 per bucket per cycle.",
     "Same URL waits 72 hours before it can run again."
   ],
-  "category": "maintenance",
+  "category": "reactive",
   "verticals": [
     "general"
   ],
@@ -43,13 +43,12 @@
       "title": "Full AISEO on posts on intent decay",
       "status": "todo",
       "assignPulse": true,
+      "scheduleMode": "trigger",
       "executionKind": "content_optimizer",
       "executionPayload": {
         "targetBucket": "posts",
         "updateMode": "update"
       },
-      "scheduleMode": "trigger",
-      "recurrenceRule": "none",
       "triggerConfig": {
         "sources": [
           "gsc"
@@ -75,13 +74,12 @@
       "title": "Full AISEO on entity pages on intent decay",
       "status": "todo",
       "assignPulse": true,
+      "scheduleMode": "trigger",
       "executionKind": "content_optimizer",
       "executionPayload": {
         "targetBucket": "sap",
         "updateMode": "update"
       },
-      "scheduleMode": "trigger",
-      "recurrenceRule": "none",
       "triggerConfig": {
         "sources": [
           "gsc"
@@ -103,8 +101,6 @@
       }
     }
   ],
-  "isAutomation": true,
-  "kind": "template",
   "triggerBlock": {
     "keyword": "gsc-impressions-ctr-decay",
     "kind": "gsc",
@@ -158,5 +154,7 @@
       },
       "title": "Full AISEO on entity pages on intent decay"
     }
-  ]
+  ],
+  "isAutomation": true,
+  "kind": "template"
 }

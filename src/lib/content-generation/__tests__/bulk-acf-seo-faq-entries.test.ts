@@ -28,10 +28,10 @@ describe("resolveFaqEntriesForVisibleTable", () => {
     );
     expect(html).toContain(`<div class="${FLO_FAQ_CLASS}">`);
     expect(html).toContain(`<h2 id="${HARNESS_FAQ_ANCHOR_ID}">FAQ</h2>`);
-    expect(html).toContain("<th>Question</th>");
-    expect(html).toContain("<th>Answer</th>");
-    expect(html).toContain("<td>When will the BC PST expansion rules for businesses take effect?</td>");
-    expect(html).toContain("<td>The BC PST expansion rules for businesses take effect in 2026.</td>");
+    expect(html).toContain("Question</th>");
+    expect(html).toContain("Answer</th>");
+    expect(html).toContain("When will the BC PST expansion rules for businesses take effect?</td>");
+    expect(html).toContain("The BC PST expansion rules for businesses take effect in 2026.</td>");
   });
 
   it("returns empty when there are no backend entries (no schema fallback)", () => {

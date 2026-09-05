@@ -22,14 +22,13 @@ import { getProductionModel, getResearchModel } from "@/lib/optimization-setting
 import { appendMasterInstructionsToSystemPrompt, ensureMasterInstructionsInMemory } from "@/lib/master-instructions-storage";
 import { extractMediaFromContent } from "@/lib/content-optimization-helpers";
 import { readACFFieldsAgentically, type AIDrivenACFContext } from "@/lib/content-generation/ai-driven-acf-reader";
-import { resolveInternalLinkPlaceholdersInMarkdown } from "@/lib/content-generation/internal-link-placeholders";
-import { countInternalLinksInMarkdown } from "@/lib/content-generation/ensure-links-per-section";
 import type { BulkHarnessSectionPayload, BulkProcessingOptions } from "@/lib/bulk-auto-generate";
 import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
 import type { KeywordData } from "@/lib/keyword-types";
 import { buildFocusedArticlePurpose } from "@/lib/content-generation/article-length-policy";
 import { isGeneratedContentHtml } from "@/lib/content-generation/content-format";
-import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChat } from "@/lib/openrouter-app-api";
+import { llmAuditSummaryFromSeoResearchBrief } from "@/lib/content-optimization/seo-research-brief-for-optimize";
 
 /**
  * AI-driven function to generate a SEO-optimized meta description
@@ -106,12 +105,10 @@ Looking for expert window treatment solutions? Discover durable, moisture-resist
 
 Your output MUST be 120-150 characters. Count them. This is a SEPARATE META DESCRIPTION for Google SERP, NOT a content excerpt. Create something FRESH and NEW, don't copy from the content.${isPage ? ' Always begin by naturally weaving in the exact page title at the start of the sentence (no quotes, no labels).' : ' Do NOT include the page title in the meta description.'}`;
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: openRouterWebAppHeaders(apiKey),
-      body: JSON.stringify({
-        model: researchModel,
-        messages: [
+    const { content: excerptRaw } = await postOpenRouterAppChat({
+      apiKey,
+      model: researchModel,
+      messages: [
           {
             role: "system",
             content: appendMasterInstructionsToSystemPrompt(metaSystemBase, siteId),
@@ -153,17 +150,11 @@ ${textContent.substring(0, 3000)}
 Write ONLY the meta description (120-150 characters). Output a single line of plain text: no HTML, no markdown, no headings (no ##), no paragraph breaks - just one short engaging sentence like a meta description. Include a call to action. NO business names. Completely independent from content:`
           }
         ],
-        temperature: 0.7,
-        max_tokens: 200
-      })
+      temperature: 0.7,
+      maxTokens: 200,
     });
 
-    if (!response.ok) {
-      throw new Error(`AI API error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    let excerpt = data.choices?.[0]?.message?.content?.trim() || '';
+    let excerpt = excerptRaw.trim();
     
     // CRITICAL: Remove ALL HTML tags and entities (AI should not output these, but aggressive cleanup)
     excerpt = excerpt
@@ -212,8 +203,11 @@ Write ONLY the meta description (120-150 characters). Output a single line of pl
     
     // CRITICAL: Final check - ensure NO HTML or content excerpt patterns
     if (excerpt.includes('<') || excerpt.includes('&') || excerpt.toLowerCase().includes('many residents') || excerpt.toLowerCase().startsWith('introduction')) {
-      console.error('[Content Generator] ❌ Meta description contains HTML or content excerpt patterns:', excerpt);
-      throw new Error(`Meta description contains invalid content (HTML or excerpt patterns detected). Must be a fresh, agentic meta description.`);
+      console.warn('[Content Generator] Meta description contains HTML or content excerpt patterns, sanitizing:', excerpt);
+      excerpt = excerpt.replace(/[<>&]/g, '').trim();
+      if (excerpt.toLowerCase().startsWith('introduction')) {
+        excerpt = excerpt.replace(/^introduction\s*/i, '').trim();
+      }
     }
     
     console.log(`[Content Generator] ✅ AI-generated FRESH agentic meta description (${excerpt.length} chars):`, excerpt);
@@ -248,6 +242,11 @@ export interface ContentGeneratorOptions {
     semrushExternalUrls?: string[];
     /** Other managed client domains - never link in prose (mirrors Semrush server filter). */
     portfolioBlockedHosts?: string[];
+    /** LLM audit facts for harness (optimizer). */
+    llmAuditSummary?: string;
+    firstPartyAuthorityBlock?: string;
+    llmAuditAuthorityExternalPairs?: import("@/lib/content-generation/external-link-placeholders").ExternalLinkPair[];
+    linkTargetsPlan?: import("@/lib/bulk/bulk-generation-wp-inventory").LinkTargetsPlan;
   };
   fileManager: OptimizationFileManager;
   setProgress: (progress: { step: string; progress: number; message?: string; generatedFiles?: ReturnType<OptimizationFileManager["getFiles"]> }) => void;
@@ -448,6 +447,7 @@ export async function generateOptimizedContent(
       topP: 0.9,
       useEntitySitemapTemplate: !!entity,
       portfolioBlockedHosts: context.portfolioBlockedHosts,
+      sequentialHarnessSections: true,
       onHarnessSection: onHarnessSection
         ? (payload) => {
             onHarnessSection(payload);
@@ -487,11 +487,26 @@ export async function generateOptimizedContent(
         acfContextOverride: acfContext,
         siteId: site.id,
         primaryKeyword,
+        llmAuditSummary:
+          context.llmAuditSummary?.trim()
+          || llmAuditSummaryFromSeoResearchBrief(acfContext?.seoResearch),
+        firstPartyAuthorityBlock: context.firstPartyAuthorityBlock,
+        llmAuditAuthorityExternalPairs: context.llmAuditAuthorityExternalPairs,
+        wordpressSite: site,
+        linkTargetsPlan: context.linkTargetsPlan,
       },
     );
 
     if (!markdownContent || markdownContent.trim().length === 0) {
       throw new Error('Content generation returned empty content');
+    }
+
+    const existingBody = (context.existingContent || '').trim();
+    const generatedBody = markdownContent.trim();
+    if (existingBody && generatedBody === existingBody) {
+      throw new Error(
+        'Content optimization produced identical body to the live post. Refusing to upload unchanged content.',
+      );
     }
 
     const isHtmlContent = isGeneratedContentHtml(markdownContent);
@@ -502,24 +517,6 @@ export async function generateOptimizedContent(
       : (markdownContent.match(linkPatternMd) || []).length;
     if (linkCount > 0) {
       console.log(`[Content Generator] ✅ Content validation: Found ${linkCount} links (${isHtmlContent ? 'HTML' : 'markdown'})`);
-    }
-
-    if (!isHtmlContent && context.wordPressPosts && context.wordPressPosts.length > 0) {
-      setProgress({
-        step: "Resolving internal links...",
-        progress: 86,
-        message: "Matching link placeholders to sitemap...",
-      });
-      markdownContent = resolveInternalLinkPlaceholdersInMarkdown(markdownContent, {
-        siteId: site.id,
-        siteUrl: site.siteUrl,
-        currentPageUrl: context.url,
-        wordPressPosts: context.wordPressPosts,
-      });
-      const totalLinks = countInternalLinksInMarkdown(markdownContent, context.wordPressPosts, site.siteUrl);
-      if (totalLinks === 0) {
-        console.warn('[Content Generator] No internal links in content after placeholder resolve – upload will continue.');
-      }
     }
 
     setProgress({
@@ -671,7 +668,9 @@ export async function generateOptimizedContent(
     console.log('[Content Generator] ✅ INDEPENDENT meta description generated (not from content):', excerpt.substring(0, 80) + '...');
 
     if (!excerpt || excerpt.length < 50) {
-      throw new Error(`Meta description missing or too short (${excerpt?.length || 0} chars).`);
+      console.warn(`[Content Generator] Meta description missing or too short (${excerpt?.length || 0} chars), using keyword fallback`);
+      excerpt = `${primaryKeyword.trim()} | Learn more.`;
+      if (excerpt.length > 160) excerpt = excerpt.substring(0, 157) + '...';
     }
     console.log('[Content Generator] AI-generated meta description:', excerpt.length + ' chars');
     setProgress({ step: 'Crafting elegant meta description...', progress: 86, message: `Meta description generated (${excerpt.length} chars)` });

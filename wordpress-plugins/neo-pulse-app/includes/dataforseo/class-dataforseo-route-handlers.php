@@ -56,6 +56,16 @@ class Neo_Pulse_App_Dataforseo_Route_Handlers {
 			)
 		);
 
+		register_rest_route(
+			self::REST_NAMESPACE,
+			'/dataforseo/llm-responses-live',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( __CLASS__, 'handle_llm_responses_live' ),
+				'permission_callback' => array( __CLASS__, 'can_access' ),
+			)
+		);
+
 		$competitor_routes = array(
 			'/dataforseo/competitor-research'              => 'handle_competitor_research',
 			'/dataforseo/competitor-research/manual-domain' => 'handle_competitor_manual_domain',
@@ -156,6 +166,34 @@ class Neo_Pulse_App_Dataforseo_Route_Handlers {
 		}
 
 		return new WP_REST_Response( $result, 200 );
+	}
+
+	/**
+	 * @param WP_REST_Request $request
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public static function handle_llm_responses_live( WP_REST_Request $request ) {
+		$body = $request->get_json_params();
+		if ( ! is_array( $body ) ) {
+			$body = array();
+		}
+		$result = self::handle_llm_responses_live_body( $body );
+		if ( isset( $result['error'] ) && ! isset( $result['tasks'] ) ) {
+			return new WP_REST_Response( $result, 502 );
+		}
+		return new WP_REST_Response( $result, 200 );
+	}
+
+	/**
+	 * @param array<string,mixed> $body
+	 * @return array<string,mixed>
+	 */
+	public static function handle_llm_responses_live_body( array $body ): array {
+		$result = Neo_Pulse_App_Dataforseo_Mcp_Router::run_llm_responses_live( $body );
+		if ( is_wp_error( $result ) ) {
+			return array( 'error' => $result->get_error_message() );
+		}
+		return is_array( $result ) ? $result : array( 'result' => $result );
 	}
 
 	/**
@@ -380,6 +418,10 @@ class Neo_Pulse_App_Dataforseo_Route_Handlers {
 		}
 		if ( $subpath === 'google-images' && $method === 'POST' ) {
 			Neo_Pulse_App_Api_Dispatcher::send_json( self::handle_google_images_body( $body ), 200 );
+			return;
+		}
+		if ( $subpath === 'llm-responses-live' && $method === 'POST' ) {
+			Neo_Pulse_App_Api_Dispatcher::send_json( self::handle_llm_responses_live_body( $body ), 200 );
 			return;
 		}
 

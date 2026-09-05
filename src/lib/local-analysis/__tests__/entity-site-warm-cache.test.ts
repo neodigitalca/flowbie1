@@ -50,6 +50,7 @@ import {
   invalidateEntitySiteWarmCacheIfCredentialsChanged,
   isSitePrefetchStale,
   refreshSitePrefetch,
+  seedOverviewSessionCachesFromWarm,
   SITE_PREFETCH_TTL_MS,
   siteWarmCredentialsKey,
   warmEntitySiteCache,
@@ -96,6 +97,10 @@ function mockGscOk() {
   });
 }
 
+import {
+  getOverviewRowsSessionCache,
+} from "@/lib/overview/overview-rows-session-cache";
+
 describe("entity-site-warm-cache", () => {
   beforeEach(() => {
     clearEntitySiteWarmCache();
@@ -113,6 +118,35 @@ describe("entity-site-warm-cache", () => {
     persistReadMock.mockResolvedValue(null);
     persistWriteMock.mockResolvedValue(undefined);
     persistDeleteMock.mockResolvedValue(undefined);
+  });
+
+  it("seedOverviewSessionCachesFromWarm writes overview session rows from bulk inventory", async () => {
+    await ensureEntitySiteWarmCache(site);
+    bulkReadyMock.mockReturnValue([
+      {
+        id: 1,
+        url: "https://example.com/post-a/",
+        slug: "post-a",
+        collection: "posts",
+        date_gmt: "2024-01-01T00:00:00",
+        fields: { title: "Post A", meta: "", keyword: "widgets" },
+      },
+      {
+        id: 2,
+        url: "https://example.com/page-b/",
+        slug: "page-b",
+        collection: "pages",
+        date_gmt: "2024-02-01T00:00:00",
+        fields: { title: "Page B", meta: "", keyword: "pages" },
+      },
+    ]);
+
+    seedOverviewSessionCachesFromWarm(site);
+
+    const posts = getOverviewRowsSessionCache(site.id, "posts");
+    expect(posts?.length).toBe(1);
+    expect(posts?.[0]?.title).toBe("Post A");
+    expect(posts?.[0]?.focusKeyword).toBe("widgets");
   });
 
   it("siteWarmCredentialsKey tracks url username password", () => {
@@ -217,6 +251,14 @@ describe("entity-site-warm-cache", () => {
     const bundle = await pending;
     expect(bundle.counts.inventoryTotal).toBe(45);
     expect(getEntitySiteWarmCacheIfReady(site.id)?.counts.inventoryTotal).toBe(45);
+  });
+
+  it("ensureEntitySiteWarmCache resolves when inventory load fails", async () => {
+    loadInventoryMock.mockRejectedValueOnce(new Error("<html>504 Gateway Time-out</html>"));
+    await expect(ensureEntitySiteWarmCache(site)).resolves.toMatchObject({
+      counts: { inventoryTotal: 0 },
+    });
+    expect(fetchGscMock).toHaveBeenCalled();
   });
 
   it("warmEntitySiteCache starts GSC with site URL only", async () => {

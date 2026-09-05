@@ -46,3 +46,12 @@ if ( ! defined( 'NEO_PULSE_APP_LOCAL_DOMINATOR_WORKER_URL' ) ) {
 if ( ! defined( 'NEO_PULSE_APP_LOCAL_DOMINATOR_WORKER_AUTH' ) ) {
 	define( 'NEO_PULSE_APP_LOCAL_DOMINATOR_WORKER_AUTH', '' );
 }
+if ( ! defined( 'NEO_PULSE_APP_POST_CREATOR_WORKER_URL' ) ) {
+	define( 'NEO_PULSE_APP_POST_CREATOR_WORKER_URL', 'https://flowbie-prod-worker.onrender.com' );
+}
+if ( ! defined( 'NEO_PULSE_APP_POST_CREATOR_WORKER_AUTH' ) ) {
+	define( 'NEO_PULSE_APP_POST_CREATOR_WORKER_AUTH', '' );
+}
+if ( ! defined( 'NEO_PULSE_APP_POST_CREATOR_API_BASE' ) ) {
+	define( 'NEO_PULSE_APP_POST_CREATOR_API_BASE', 'https://neodigital.ca' );
+}

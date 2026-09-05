@@ -1,4 +1,5 @@
 import type { BulkHarnessOutlineSection } from "@/lib/bulk/bulk-harness-outline";
+import { agentHasIllustrativeFeature } from "@/lib/bulk/bulk-harness-outline";
 import {
   BLOG_HARNESS_SUMMARY_AGENT_ID,
   isBlogHarnessSummaryAgent,
@@ -11,6 +12,8 @@ export type HarnessSectionAnchorEntry = {
   sectionIndex: number;
   displayTitle: string;
   anchorId: string;
+  /** Body H2 that carries [ILLUSTRATIVE] — Overview Real-World Example bullet target */
+  isIllustrative?: boolean;
 };
 
 const MAX_ANCHOR_LEN = 64;
@@ -65,9 +68,11 @@ export function headingTitleToHarnessAnchorId(title: string): string {
  */
 export function buildHarnessSectionAnchorMap(
   outline: BulkHarnessOutlineSection[],
+  opts?: { illustrativeDisplayTitle?: string },
 ): HarnessSectionAnchorEntry[] {
   const used = new Set<string>();
   const entries: HarnessSectionAnchorEntry[] = [];
+  const illustrativeTitleNorm = opts?.illustrativeDisplayTitle?.trim().toLowerCase() ?? "";
 
   for (const section of outline) {
     if (section.agent.id === BLOG_HARNESS_SUMMARY_AGENT_ID) continue;
@@ -85,10 +90,14 @@ export function buildHarnessSectionAnchorMap(
       n += 1;
     }
     used.add(anchorId);
+    const titleNorm = section.displayTitle.trim().toLowerCase();
     entries.push({
       sectionIndex: section.index,
       displayTitle: section.displayTitle,
       anchorId,
+      isIllustrative:
+        agentHasIllustrativeFeature(section.agent) ||
+        (illustrativeTitleNorm.length > 0 && titleNorm === illustrativeTitleNorm),
     });
   }
 
@@ -152,13 +161,17 @@ export function formatHarnessInPageAnchorBlock(
 ): string {
   if (map.length === 0) return "";
   if (opts?.contextOnly) {
-    const lines = map.map(
-      (e, i) => `Section ${i + 1} → #${e.anchorId} → "${e.displayTitle}"`,
-    );
+    const lines = map.map((e, i) => {
+      const tag = e.isIllustrative
+        ? ` — ILLUSTRATIVE (Real-World Example bullet — required label **Real-World Example** → #${e.anchorId})`
+        : "";
+      return `Section ${i + 1} → #${e.anchorId} → "${e.displayTitle}"${tag}`;
+    });
     return (
       `=== OVERVIEW SCROLL-LINK TARGETS (write contextual <ul> after lead <p>) ===\n` +
       `NON-NEGOTIABLE: exactly ${map.length} bullets for ${map.length} body sections — one <li> per line below, in order.\n` +
       `Each <li>: <strong>2–3 word label</strong>: contextual sentence with [[SCROLL:#exact-id|2–4 word phrase]] woven in (code inserts the <a href>). Example: <li><strong>Local Care</strong>: Families choose our [[SCROLL:#${map[0]?.anchorId ?? "section-id"}|preventive cleaning]] for routine visits.</li>\n` +
+      `The line tagged ILLUSTRATIVE MUST use bullet label **Real-World Example** (exact words) linking to that #id.\n` +
       `Use the exact #id from each line for href. Anchor text = subtle phrase only — never paste the full H2 title into the link.\n` +
       `FORBIDDEN in Overview: http/https URLs, boilerplate "see … below", or skipping any anchor.\n` +
       `${lines.join("\n")}\n` +
@@ -166,9 +179,12 @@ export function formatHarnessInPageAnchorBlock(
     );
   }
   const n = map.length;
-  const lines = map.map(
-    (e, i) => `Bullet ${i + 1} → #${e.anchorId} → "${e.displayTitle}"`,
-  );
+  const lines = map.map((e, i) => {
+    const tag = e.isIllustrative
+      ? ` — ILLUSTRATIVE (Real-World Example bullet — required label **Real-World Example** → #${e.anchorId})`
+      : "";
+    return `Bullet ${i + 1} → #${e.anchorId} → "${e.displayTitle}"${tag}`;
+  });
   return (
     `=== IN-PAGE SECTION ANCHORS (same-page citation targets) ===\n` +
     `NON-NEGOTIABLE: exactly ${n} Overview bullets for ${n} body sections — one <li> per line below, in order.\n` +

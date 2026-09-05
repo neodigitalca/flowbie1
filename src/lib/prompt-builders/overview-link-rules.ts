@@ -1,13 +1,23 @@
 /**
- * Overview scroll-link rules: model writes contextual <ul>; code completes exact # hrefs.
+ * Overview scroll-link rules: model writes contextual <ul>; code completes exact # hrefs only.
  */
 import type { HarnessSectionAnchorEntry } from "@/lib/bulk/harness-section-anchor-ids";
 import { stripHtmlTagsForSentenceCheck } from "@/lib/bulk/harness-section-complete-sentences";
+import { ensureOverviewBulletBoldLabels } from "@/lib/overview/overview-bullet-bold-labels";
+import { findPhraseOutsideTags } from "@/lib/overview/overview-blog-links-extract";
+import {
+  labelFromHashId,
+  repairBareHashParenLeaks,
+  repairHarnessPlaceholderLeaks,
+} from "@/lib/content-generation/harness-link-leak-repair";
 
 export type OverviewAnchorTarget = { id: string; label: string };
 
 const SCROLL_PLACEHOLDER_RE = /\[\[SCROLL:#([^|\]]+)\|([^\]]+)\]\]/gi;
 const BOILERPLATE_SCROLL_LINK_RE = /\bsee\s+.+\s+below\b/i;
+const SEO_STUB_RE = /\bfits your seo plan\b/i;
+const MARKDOWN_HASH_LINK_RE = /\[([^\]]+)\]\(#([^)]+)\)/g;
+const HASH_LINK_RE = /<a\b[^>]*href\s*=\s*(["'])#([^"']*)\1[^>]*>([\s\S]*?)<\/a>/gi;
 
 /** Parse anchor targets from formatHarnessInPageAnchorBlock output. */
 export function parseInPageAnchorsFromBlock(block: string): OverviewAnchorTarget[] {
@@ -48,21 +58,7 @@ export function expandOverviewScrollLinkPlaceholdersInMarkdown(markdown: string)
 
 export function overviewScrollLinkUsesBoilerplate(liInnerHtml: string): boolean {
   const plain = stripHtmlTagsForSentenceCheck(liInnerHtml);
-  return BOILERPLATE_SCROLL_LINK_RE.test(plain);
-}
-
-function normalizeBoilerplateLiInner(inner: string): string {
-  return inner.replace(
-    /\bSee\s+(<a\b[^>]*>[\s\S]*?<\/a>)\s+below\.?/gi,
-    "Explore $1 as part of this guide.",
-  );
-}
-
-function findScrollLinkInLiInner(inner: string): { index: number; length: number; linkText: string } | null {
-  const expanded = expandOverviewScrollLinkPlaceholders(inner);
-  const aMatch = expanded.match(/<a\s+[^>]*href\s*=\s*(["'])#?[^"']*\1[^>]*>([\s\S]*?)<\/a>/i);
-  if (!aMatch || aMatch.index === undefined) return null;
-  return { index: aMatch.index, length: aMatch[0].length, linkText: aMatch[2].trim() };
+  return BOILERPLATE_SCROLL_LINK_RE.test(plain) || SEO_STUB_RE.test(plain);
 }
 
 function extractStrongLabel(inner: string): string | null {
@@ -105,12 +101,195 @@ function splitOverviewUlParts(html: string): { before: string; liInners: string[
   return { before, liInners, after };
 }
 
-function removeOverviewHashLinks(fragment: string): string {
-  let out = fragment.replace(/<a\b[^>]*href\s*=\s*(["'])#?[^"']*\1[^>]*>[\s\S]*?<\/a>/gi, "");
-  out = out.replace(/,\s*including\s*/gi, " ");
-  out = out.replace(/\s{2,}/g, " ");
-  out = out.replace(/\s+([,.!?;:])/g, "$1");
-  return out.trim();
+function expandMarkdownHashLinksInHtml(html: string): string {
+  return html.replace(MARKDOWN_HASH_LINK_RE, (_match, rawText, rawId) => {
+    const id = String(rawId).trim().replace(/^#/, "");
+    const text = String(rawText).trim();
+    return `<a href="#${id}">${text}</a>`;
+  });
+}
+
+function overviewHashLinksAreCorrupted(body: string): boolean {
+  return /<a\b[^>]*href\s*=\s*["'][^"']*(?:<|&lt;|&quot;)/i.test(body);
+}
+
+const REWAVE_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "are",
+  "at",
+  "by",
+  "for",
+  "in",
+  "is",
+  "of",
+  "on",
+  "or",
+  "our",
+  "the",
+  "to",
+  "with",
+  "your",
+]);
+
+function plainLinkText(raw: string): string {
+  return raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function buildRewavePhraseCandidates(linkText: string): string[] {
+  const candidates: string[] = [];
+  const clean = plainLinkText(linkText);
+  if (!clean) return candidates;
+
+  candidates.push(clean);
+  const words = clean.split(/\s+/).filter(Boolean);
+  for (let len = Math.min(4, words.length); len >= 2; len -= 1) {
+    for (let start = 0; start <= words.length - len; start += 1) {
+      const phrase = words.slice(start, start + len).join(" ");
+      if (!candidates.includes(phrase)) candidates.push(phrase);
+    }
+  }
+  for (const word of [...words].sort((a, b) => b.length - a.length)) {
+    if (word.length >= 3 && !REWAVE_STOP_WORDS.has(word.toLowerCase()) && !candidates.includes(word)) {
+      candidates.push(word);
+    }
+  }
+  return candidates;
+}
+
+function tryWeaveHashLinkAtPhrase(prose: string, phrase: string, anchorId: string): string | null {
+  const hit = findPhraseOutsideTags(prose, phrase);
+  if (!hit) return null;
+  const actual = prose.slice(hit.start, hit.start + hit.length);
+  return (
+    prose.slice(0, hit.start) +
+    `<a href="#${anchorId}">${actual}</a>` +
+    prose.slice(hit.start + hit.length)
+  );
+}
+
+function moveAppendedHashLinkBeforePunctuation(
+  prose: string,
+  punct: string,
+  anchorId: string,
+  linkText: string,
+): string {
+  return `${prose.trimEnd()} <a href="#${anchorId}">${linkText}</a>${punct}`;
+}
+
+/** Move a period-then-link append into the sentence when the anchor phrase exists in prose. */
+export function rewaveAppendedOverviewHashLink(body: string, anchorId: string): string {
+  const trimmed = body.trim();
+
+  const periodAppendedRe =
+    /^([\s\S]+?)([.!?])\s*<a\b[^>]*href\s*=\s*(["'])#([^"']*)\3[^>]*>([\s\S]*?)<\/a>\s*$/i;
+  const periodMatch = trimmed.match(periodAppendedRe);
+  if (periodMatch) {
+    const prose = periodMatch[1]!;
+    const punct = periodMatch[2]!;
+    const linkText = plainLinkText(periodMatch[5] ?? "");
+    if (linkText) {
+      for (const phrase of buildRewavePhraseCandidates(linkText)) {
+        const woven = tryWeaveHashLinkAtPhrase(prose, phrase, anchorId);
+        if (woven) return `${woven}${punct}`;
+      }
+      return moveAppendedHashLinkBeforePunctuation(prose, punct, anchorId, linkText);
+    }
+  }
+
+  const bareAppendedRe =
+    /^([\s\S]+?)\s*<a\b[^>]*href\s*=\s*(["'])#([^"']*)\2[^>]*>([\s\S]*?)<\/a>\s*$/i;
+  const bareMatch = trimmed.match(bareAppendedRe);
+  if (bareMatch) {
+    const prose = bareMatch[1]!.trimEnd();
+    const linkText = plainLinkText(bareMatch[4] ?? "");
+    if (prose && linkText) {
+      for (const phrase of buildRewavePhraseCandidates(linkText)) {
+        const woven = tryWeaveHashLinkAtPhrase(prose, phrase, anchorId);
+        if (woven) return woven;
+      }
+      if (/[.!?]\s*$/.test(prose)) {
+        const punct = prose.match(/([.!?])\s*$/)?.[1] ?? ".";
+        const proseNoPunct = prose.replace(/[.!?]\s*$/, "").trimEnd();
+        return moveAppendedHashLinkBeforePunctuation(proseNoPunct, punct, anchorId, linkText);
+      }
+      return moveAppendedHashLinkBeforePunctuation(prose, ".", anchorId, linkText);
+    }
+  }
+
+  return body;
+}
+
+export function overviewBulletsHaveRequiredScrollLinks(
+  html: string,
+  anchors: OverviewAnchorTarget[] | HarnessSectionAnchorEntry[],
+): boolean {
+  const targets: OverviewAnchorTarget[] =
+    anchors.length > 0 && "anchorId" in anchors[0]!
+      ? anchorsFromHarnessEntries(anchors as HarnessSectionAnchorEntry[])
+      : (anchors as OverviewAnchorTarget[]);
+  if (targets.length === 0) return true;
+
+  const { liInners } = splitOverviewUlParts(expandMarkdownHashLinksInHtml(html));
+  if (liInners.length < targets.length) return false;
+
+  for (let i = 0; i < targets.length; i += 1) {
+    const id = targets[i]!.id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (!new RegExp(`href\\s*=\\s*(["'])#${id}\\1`, "i").test(liInners[i] ?? "")) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function normalizeOverviewBulletHashLinks(
+  body: string,
+  anchorId: string,
+): { body: string; hadHashLink: boolean } {
+  let hadHashLink = false;
+  let keepFirst = true;
+  const normalized = body.replace(HASH_LINK_RE, (_full, _quote, _id, text) => {
+    hadHashLink = true;
+    if (keepFirst) {
+      keepFirst = false;
+      return `<a href="#${anchorId}">${String(text).trim()}</a>`;
+    }
+    return String(text).trim();
+  });
+  return {
+    body: normalized.replace(/\s{2,}/g, " ").replace(/\s+([,.!?;:])/g, "$1").trim(),
+    hadHashLink,
+  };
+}
+
+function deriveOverviewBulletLabel(anchor: OverviewAnchorTarget, inner: string): string {
+  const fromStrong = extractStrongLabel(inner);
+  if (fromStrong) return fromStrong;
+  const plain = inner.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const colonAt = plain.indexOf(":");
+  if (colonAt > 0) return plain.slice(0, colonAt).trim();
+  const words = anchor.label.trim().split(/\s+/).filter(Boolean);
+  return words.slice(0, 2).join(" ") || "Topic";
+}
+
+/** Unwrap same-site http(s) links; keep hash scroll links for phrase extraction. */
+function stripInternalLinksFromOverviewBulletBody(inner: string): string {
+  return inner.replace(/<a\b[^>]*href\s*=\s*(["'])(?!#)[^"']*\1[^>]*>([\s\S]*?)<\/a>/gi, "$2");
+}
+
+function warnOverviewBulletScrollLink(body: string, anchor: OverviewAnchorTarget, index: number): void {
+  const idPattern = anchor.id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (!new RegExp(`href\\s*=\\s*(["'])#${idPattern}\\1`, "i").test(body)) {
+    console.warn(
+      `[Overview scroll links] bullet ${index + 1} for "${anchor.label}" (#${anchor.id}) missing expected hash link — shipping model output as-is`,
+    );
+  }
+}
+
+function passthroughOverviewScrollLi(inner: string): string {
+  const trimmed = inner.trim();
+  return trimmed.startsWith("<li") ? trimmed : `<li>${trimmed}</li>`;
 }
 
 function finalizeOverviewScrollLi(
@@ -119,57 +298,106 @@ function finalizeOverviewScrollLi(
   index: number,
 ): string {
   if (!existingInner?.trim()) {
-    throw new Error(
-      `Overview scroll links: missing bullet for anchor #${anchor.id} (index ${index + 1})`,
+    console.warn(
+      `[Overview scroll links] bullet ${index + 1} for "${anchor.label}" (#${anchor.id}) is missing — skipping`,
     );
+    return "";
   }
 
   let inner = existingInner.trim();
+  const passthrough = () => passthroughOverviewScrollLi(inner);
+
   if (overviewScrollLinkUsesBoilerplate(inner)) {
-    throw new Error(`Overview scroll links: boilerplate bullet for anchor #${anchor.id}`);
+    console.warn(
+      `[Overview scroll links] bullet ${index + 1} for "${anchor.label}" uses forbidden boilerplate — shipping as-is`,
+    );
+    return passthrough();
   }
 
-  inner = normalizeBoilerplateLiInner(inner);
   inner = expandOverviewScrollLinkPlaceholders(inner);
-  const label = extractStrongLabel(inner);
-  const labelPrefix = label ? `<strong>${label}</strong>: ` : "";
-  const body = inner.replace(/^\s*<strong>[^<]*<\/strong>:?\s*/i, "").trim();
+  inner = expandMarkdownHashLinksInHtml(inner);
+  inner = repairHarnessPlaceholderLeaks(inner);
+  inner = stripInternalLinksFromOverviewBulletBody(inner);
 
-  const hit = findScrollLinkInLiInner(body);
-  if (!hit?.linkText) {
-    throw new Error(`Overview scroll links: no scroll link in bullet for anchor #${anchor.id}`);
+  const labelById = new Map<string, string>([[anchor.id.toLowerCase(), anchor.label.trim()]]);
+  inner = repairBareHashParenLeaks(inner, labelById);
+
+  const label = deriveOverviewBulletLabel(anchor, inner);
+  let body = inner.replace(/^\s*<strong>[^<]*<\/strong>:?\s*/i, "").trim();
+
+  if (overviewHashLinksAreCorrupted(body)) {
+    console.warn(
+      `[Overview scroll links] bullet ${index + 1} for "${anchor.label}" has corrupted anchor markup — shipping as-is`,
+    );
+    return passthrough();
   }
 
-  const beforeLink = body.slice(0, hit.index).trimEnd();
-  let afterLink = body.slice(hit.index + hit.length);
-  afterLink = removeOverviewHashLinks(afterLink);
+  let normalized = normalizeOverviewBulletHashLinks(body, anchor.id);
+  body = normalized.body;
+  if (!normalized.hadHashLink) {
+    body = repairBareHashParenLeaks(body, labelById);
+    normalized = normalizeOverviewBulletHashLinks(body, anchor.id);
+    body = normalized.body;
+  }
+  if (!normalized.hadHashLink) {
+    const fallbackText = labelFromHashId(anchor.id);
+    const id = anchor.id.replace(/^#/, "");
+    body = `${body.replace(/\.\s*$/, "").trim()} <a href="#${id}">${fallbackText}</a>.`.replace(
+      /\s+/g,
+      " ",
+    );
+  }
 
-  const fixedLink = `<a href="#${anchor.id}">${hit.linkText}</a>`;
-  const sentence = [beforeLink, fixedLink, afterLink].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
-  return `<li>${labelPrefix}${sentence}</li>`;
+  body = rewaveAppendedOverviewHashLink(body, anchor.id);
+  warnOverviewBulletScrollLink(body, anchor, index);
+
+  return `<li><strong>${label}</strong>: ${body.replace(/\s+/g, " ").trim()}</li>`;
 }
 
 /**
- * Model writes contextual overview prose and bullets; code completes exact # hrefs on existing bullets.
- * Throws when bullets are missing or malformed — upload prep uses OpenRouter for bullet copy instead.
+ * Model writes contextual overview prose and bullets; code completes exact # hrefs on existing bullets only.
  */
 export function completeOverviewScrollLinks(
   html: string,
   anchors: OverviewAnchorTarget[] | HarnessSectionAnchorEntry[],
 ): string {
   const targets: OverviewAnchorTarget[] =
-    anchors.length > 0 && 'anchorId' in anchors[0]!
+    anchors.length > 0 && "anchorId" in anchors[0]!
       ? anchorsFromHarnessEntries(anchors as HarnessSectionAnchorEntry[])
       : (anchors as OverviewAnchorTarget[]);
 
   if (targets.length === 0) return html.trim();
 
-  const prepared = expandOverviewScrollLinkPlaceholders(html);
+  const prepared = expandOverviewScrollLinkPlaceholders(expandMarkdownHashLinksInHtml(html));
   const { before, liInners, after } = splitOverviewUlParts(prepared);
 
-  const fixedLis = targets.map((anchor, i) => finalizeOverviewScrollLi(liInners[i], anchor, i));
+  if (liInners.length < targets.length) {
+    console.warn(
+      `[Overview scroll links] expected ${targets.length} model-written bullets, found ${liInners.length} — processing available bullets only`,
+    );
+  }
+
+  if (liInners.length === 0) {
+    return ensureOverviewBulletBoldLabels(prepared.trim());
+  }
+
+  const pairCount = Math.min(liInners.length, targets.length);
+  const fixedLis: string[] = [];
+  for (let i = 0; i < pairCount; i++) {
+    const li = finalizeOverviewScrollLi(liInners[i], targets[i]!, i);
+    if (li) fixedLis.push(li);
+  }
+  for (let i = pairCount; i < liInners.length; i++) {
+    fixedLis.push(passthroughOverviewScrollLi(liInners[i]!));
+  }
+
+  if (fixedLis.length === 0) {
+    return ensureOverviewBulletBoldLabels(prepared.trim());
+  }
+
   const newUl = `<ul>\n${fixedLis.join("\n")}\n</ul>`;
-  return after ? `${before}\n${newUl}\n${after}` : `${before}\n${newUl}`;
+  const merged = after ? `${before}\n${newUl}\n${after}` : `${before}\n${newUl}`;
+  return ensureOverviewBulletBoldLabels(merged.trim());
 }
 
 /** @deprecated Use completeOverviewScrollLinks */
@@ -180,6 +408,7 @@ export function enforceOverviewScrollLinkHrefs(html: string, anchors: OverviewAn
 export function buildOverviewLinkRulesBlock(opts?: {
   entity?: string;
   wikipediaUrl?: string;
+  hasIllustrativeAnchor?: boolean;
 }): string {
   const entity = opts?.entity?.trim() ?? "";
   const wikipediaUrl = opts?.wikipediaUrl?.trim() ?? "";
@@ -187,25 +416,24 @@ export function buildOverviewLinkRulesBlock(opts?: {
     Boolean(entity) && entity !== "N/A" && Boolean(wikipediaUrl);
 
   const base =
-    "Overview rules: (1) First sentence answers the primary keyword. (2) Lead paragraphs = plain prose only (optional entity Wikipedia in first paragraph when required). NO em dashes (Unicode U+2014 or U+2013) anywhere in Overview; use comma, period, or hyphen. Obey WORD BLACKLIST in system and user prompts. " +
-    "(3) Mandatory - bullet list after lead paragraphs: exactly one item per IN-PAGE anchor, in order. " +
-    "(4) Each bullet starts **2-3 word label**: then one short contextual sentence with exactly ONE [2-4 word phrase](#exact-id) woven in. " +
-    "(5) FORBIDDEN per bullet: two links, duplicate #id links, keyword-echo second links, or \"including [link]\" phrasing. " +
-    '(6) FORBIDDEN: "see below", "below", "click here", boilerplate pointers. (7) Stop after the bullet list.';
+    "Overview rules: (1) Lead with what remaining sections cover. Do not answer the article question again. Forbidden: restating Answer's dates, rates, percentages, dollar figures, statute-name stack, or closing company sentence. Do not open with \"{keyword} offers/are/provide\" or \"This article/guide provides\". Do not weave Answer's headline cost/ROI figure into the Overview lead. (2) Lead paragraphs = plain prose only (optional entity Wikipedia in first paragraph when required). NO em dashes (Unicode U+2014 or U+2013) anywhere in Overview; use comma, period, or hyphen. Obey WORD BLACKLIST in system and user prompts. " +
+    "(3) Mandatory <ul><li> bullet list after lead paragraphs (HTML harness: never markdown * bullets): exactly one item per IN-PAGE anchor, in order. " +
+    "(4) Each bullet starts <strong>2-3 word label</strong>: then one short contextual sentence with exactly ONE <a href=\"#exact-id\">2-4 word phrase</a> woven in. " +
+    "(5) Anchor text MUST be a natural keyword phrase from the sentence (2-4 words) in **sentence case** (lowercase generic words; capitalize brand names only). NEVER use the full Title Case H2 as link text. NEVER append the link after the final period. " +
+    "(6) FORBIDDEN per bullet: two links, duplicate #id links, bullet-label echo links, period-then-link append, \"including [link]\" phrasing, \"See how\", or \"fits your SEO plan\". " +
+    '(7) FORBIDDEN: "see below", "below", "click here", SEO-stub templates. (8) Stop after </ul>.';
+
+  const illustrativeRule = opts?.hasIllustrativeAnchor
+    ? " (9) Real-World Example (mandatory when IN-PAGE ANCHORS tags ILLUSTRATIVE): second lead paragraph must state the article includes a labeled real-world hypothetical (one genderless named persona with a site-level business recommendation) without pasting the full scenario. Exactly one bullet MUST use label **Real-World Example** (exact words) with one # link to the ILLUSTRATIVE anchor id."
+    : "";
 
   if (hasEntityWiki) {
     return (
-      `\nOverview LINKS: ${base} ` +
+      `\nOverview LINKS: ${base}${illustrativeRule} ` +
       `Optional entity Wikipedia in lead prose only: [${entity}](${wikipediaUrl}). ` +
       `No other http(s) URLs.\n`
     );
   }
 
-  return `\nOverview LINKS: ${base} No links in lead prose unless entity Wikipedia is required. No http(s) URLs.\n`;
-}
-
-export function buildOverviewScrollLinkExampleLi(anchor: OverviewAnchorTarget): string {
-  const words = anchor.label.trim().split(/\s+/).filter(Boolean);
-  const phrase = words.slice(0, 3).join(" ").toLowerCase() || "learn more";
-  return `<li><strong>${words.slice(0, 2).join(" ") || "Topic"}</strong>: See how [[SCROLL:#${anchor.id}|${phrase}]] fits your SEO plan.</li>`;
+  return `\nOverview LINKS: ${base}${illustrativeRule} No links in lead prose unless entity Wikipedia is required. No http(s) URLs.\n`;
 }

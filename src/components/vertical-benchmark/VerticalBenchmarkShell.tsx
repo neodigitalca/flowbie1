@@ -28,6 +28,8 @@ export function VerticalBenchmarkShell({ openRouterApiKey }: Props) {
           onTagFilterChange={c.setTagFilter}
           tagFilterOptions={c.tagFilterOptions}
           onCreateBulkTemplate={c.handleCreateBulkTemplate}
+          onDownloadBulkTemplate={c.handleDownloadBulkTemplate}
+          canDownloadBulkTemplate={c.canDownloadBulkTemplate}
           onGridCsvFile={c.handleGridCsvFile}
           onClearGridCsv={c.clearGridCsv}
           exporting={c.exporting}
@@ -41,6 +43,8 @@ export function VerticalBenchmarkShell({ openRouterApiKey }: Props) {
           gridCsvParsing={c.gridCsvParsing}
           rosterCount={c.rosterSites.length}
           selectedCount={c.selectedSiteIdList.length}
+          blogCount={c.blogCount}
+          onBlogCountChange={c.setBlogCount}
           onDetailsOpenChange={setDetailsDrawerOpen}
         />
       </div>

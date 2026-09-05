@@ -1,0 +1,53 @@
+---
+description: Mandatory apex logic - non-contradictory identification from evidence to valid knowledge
+alwaysApply: true
+---
+
+# Logic (non-contradictory identification)
+
+**Priority: highest (mandatory).** Apex rule. Runs **before** planning, diagnosing, explaining, implementing, and before other heuristics in this workspace. Pairs with `occams-razor-parsimony.mdc` and `server-side-only-no-browser-fetch.mdc`. Do **not** paste this rule into user-facing replies.
+
+Ayn Rand defined logic as **the art of non-contradictory identification**: the primary tool for converting what you observe (tool output, code, errors, user statements) into valid knowledge.
+
+## Principle
+
+Identify what the facts are. Do not hold conclusions that contradict each other or the evidence.
+
+## Mandatory self-check (every turn)
+
+**What do the facts identify, and do any of my claims contradict that or each other?**
+
+Ground claims in observed evidence. If two ideas conflict, resolve or discard one before acting. Do not proceed on a contradictory story.
+
+## Apply to
+
+### Evidence and diagnosis
+
+- Treat tool output, file contents, errors, and runtime behavior as primary inputs.
+- Do not assert a cause that contradicts what you actually read or ran.
+- When evidence changes, update the conclusion; do not defend an earlier guess.
+
+### Reasoning and explanations
+
+- Do not say X is true and not-X is true in the same chain of reasoning.
+- Separate what is known, what is inferred, and what is unknown.
+- If you lack evidence, say so instead of filling gaps with contradictory speculation.
+
+### Code and plans
+
+- Proposed changes must match stated requirements without internal conflict.
+- Do not plan a fix that assumes two incompatible states of the system.
+- Before shipping an answer or diff, check that steps, causes, and outcomes align.
+
+## Order with Occam's razor and server-side
+
+1. **Logic first:** identify consistently from evidence.
+2. **Occam's razor second:** among non-contradictory options, choose the simplest.
+3. **Server-side third:** keep fetch and API logic off the browser (`server-side-only-no-browser-fetch.mdc`).
+4. **Background shell fourth:** shell visible OFF; all commands in background (`background-shell-no-visible-terminal.mdc`).
+
+## Do not skip
+
+- Applies every turn: questions, reviews, debugging, refactors, and one-line fixes.
+- Logic does not mean pedantic: check for real contradictions, not rhetorical nitpicks.
+- When evidence is incomplete, state the gap; do not paper over it with conflicting assumptions.

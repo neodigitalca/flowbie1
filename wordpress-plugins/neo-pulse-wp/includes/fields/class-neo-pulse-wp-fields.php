@@ -92,12 +92,12 @@ class Neo_Pulse_Wp_Fields {
 			'admin_page_neo_pulse-wp-fields-elementor',
 			'neo-pulse-wp_page_neo_pulse-wp-fields-elementor',
 		);
-		if ( ! in_array( $hook, $screens, true ) ) {
+		if ( ! Neo_Pulse_Wp_Admin::admin_hook_matches( $hook, $screens ) ) {
 			return;
 		}
-		$post_type_js = in_array( $hook, array( 'admin_page_neo_pulse-wp-post-types-edit', 'neo-pulse-wp_page_neo_pulse-wp-post-types-edit' ), true );
-		$builder_js   = in_array( $hook, array( 'admin_page_neo_pulse-wp-fields-edit', 'neo-pulse-wp_page_neo_pulse-wp-fields-edit' ), true );
-		$gallery_js   = in_array( $hook, array( 'admin_page_neo_pulse-wp-fields-gallery', 'neo-pulse-wp_page_neo_pulse-wp-fields-gallery' ), true );
+		$post_type_js = Neo_Pulse_Wp_Admin::admin_hook_matches( $hook, array( 'admin_page_neo_pulse-wp-post-types-edit', 'neo-pulse-wp_page_neo_pulse-wp-post-types-edit' ) );
+		$builder_js   = Neo_Pulse_Wp_Admin::admin_hook_matches( $hook, array( 'admin_page_neo_pulse-wp-fields-edit', 'neo-pulse-wp_page_neo_pulse-wp-fields-edit' ) );
+		$gallery_js   = Neo_Pulse_Wp_Admin::admin_hook_matches( $hook, array( 'admin_page_neo_pulse-wp-fields-gallery', 'neo-pulse-wp_page_neo_pulse-wp-fields-gallery' ) );
 		self::enqueue_admin_fields_styles( $builder_js, $post_type_js, $gallery_js );
 	}
 
@@ -146,7 +146,7 @@ class Neo_Pulse_Wp_Fields {
 			);
 			wp_localize_script(
 				'neo-pulse-fields-builder',
-				'neo-pulseFieldsBuilder',
+				'neoPulseFieldsBuilder',
 				array(
 					'fieldTypes'     => Neo_Pulse_Wp_Fields_Registry::choices(),
 					'locationParams' => Neo_Pulse_Wp_Fields_Location::param_choices(),

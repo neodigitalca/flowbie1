@@ -307,7 +307,8 @@ export class BulkFileManager {
       | 'infographic'
       | 'sem_rush'
       | 'dfs_research'
-      | 'blog_checklist',
+      | 'blog_checklist'
+      | 'seo_research_brief',
     timestamp: number
   ): string {
     const sanitizedTitle = sanitizeFileName(rowData.title);
@@ -324,6 +325,8 @@ export class BulkFileManager {
         return `keyword-research-dfs-${sanitizedTitle}-${timestamp}.json`;
       case 'blog_checklist':
         return `blog-checklist-${sanitizedTitle}-${timestamp}.json`;
+      case 'seo_research_brief':
+        return `serp-research-brief-${sanitizedTitle}-${timestamp}.json`;
       case 'wikipedia':
         return `wikipedia-${sanitizedEntity}-${timestamp}.csv`;
       case 'image':

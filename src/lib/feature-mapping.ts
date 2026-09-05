@@ -7,7 +7,21 @@ function parseImageFeature(feature: string): { alt: string; url: string } | null
   return null;
 }
 
-export const mapFeatureToInstruction = (feature: string, format: 'markdown' | 'html' = 'html'): string => {
+import { TABLE_NO_LINK_ONLY_COLUMN_RULE } from "@/lib/prompt-builders/table-prompt-rules";
+
+/** Writer contract: markdown quotes use `>`, never the word blockquote as a wrapper. */
+export const MARKDOWN_QUOTE_OUTPUT_RULE =
+  "Quotes: start the line with > then a space then the sentence (example: > We size each array for the roof). Forbidden: wrapping the quote with the word blockquote, [BLOCKQUOTE] in the article, or HTML quote tags.";
+
+/** Writer contract: HTML quotes use real tags, never the word blockquote as a wrapper. */
+export const HTML_QUOTE_OUTPUT_RULE =
+  "Quotes: output <blockquote><p>sentence</p></blockquote>. Forbidden: wrapping the quote with the word blockquote or [BLOCKQUOTE] in the article.";
+
+export const mapFeatureToInstruction = (
+  feature: string,
+  format: 'markdown' | 'html' = 'html',
+  opts?: { illustrativeContext?: boolean },
+): string => {
   const normalizedFeature = feature.toLowerCase().trim();
   const useMarkdown = format === 'markdown';
 
@@ -33,10 +47,43 @@ export const mapFeatureToInstruction = (feature: string, format: 'markdown' | 'h
   // 1. Check for table-like instructions (e.g., user supplies column headers)
   if (feature.includes('|')) {
     return useMarkdown
-      ? `[CRITICAL: Markdown table ONLY. Use | Col1 | Col2 |, newline, | --- | --- |, newline, | A | B |. Links as [text](url) in cells. NEVER HTML <table>.]`
-      : `[CRITICAL: HTML table ONLY. NEVER markdown (| col | or |---|). Use <table><thead><tr><th>H1</th><th>H2</th></tr></thead><tbody><tr><td>...</td><td>...</td></tr></tbody></table>. Integrate links as <a href="url" title="Page Title">text</a> in the first column - title attribute REQUIRED on every internal link.]`;
+      ? `[CRITICAL: Markdown table ONLY. Use | Col1 | Col2 |, newline, | --- | --- |, newline, | A | B |. Same-site links as [[LINK:query|anchor]] in substantive cells only. Never [text](https://...). ${TABLE_NO_LINK_ONLY_COLUMN_RULE}]`
+      : `[CRITICAL: HTML table ONLY. NEVER markdown (| col | or |---|). Use <table><thead><tr><th>H1</th><th>H2</th></tr></thead><tbody><tr><td>...</td><td>...</td></tr></tbody></table>. Same-site links as [[LINK:query|anchor]] inside substantive cells only. Never raw <a href> or [text](url). ${TABLE_NO_LINK_ONLY_COLUMN_RULE}]`;
+  }
+
+  if (normalizedFeature.startsWith("[table]")) {
+    return useMarkdown
+      ? `[TABLE - MANDATORY]: Markdown pipe table with substantive columns only. ${TABLE_NO_LINK_ONLY_COLUMN_RULE}`
+      : `[TABLE - MANDATORY]: HTML table with substantive columns only. ${TABLE_NO_LINK_ONLY_COLUMN_RULE}`;
+  }
+
+  if (normalizedFeature.startsWith("[illustrative]")) {
+    return useMarkdown
+      ? "[ILLUSTRATIVE - MANDATORY]: Copy ILLUSTRATIVE EXAMPLE — one decision matching Answer and Keyword, compact. Forbidden: Homeowner A/B, a different vertical than Answer, product tours, keyword slug phrasing."
+      : "[ILLUSTRATIVE - MANDATORY]: Copy ILLUSTRATIVE EXAMPLE — one decision matching Answer and Keyword, compact (fixed H2: A Local Homeowner Example + summary p + blockquote + Recommendation h3 + p). Forbidden: Homeowner A/B, a different vertical than Answer, product catalog tours, keyword slug phrasing, Scenario: label, links in headings.";
+  }
+
+  if (normalizedFeature.startsWith("[blockquote]")) {
+    if (opts?.illustrativeContext) {
+      return useMarkdown
+        ? `[BLOCKQUOTE - MANDATORY ILLUSTRATIVE]: After the summary paragraph, scenario prose inside > blockquote. Persona name in quote only. Forbidden: "Scenario:" label; Scenario as a ### heading. ${MARKDOWN_QUOTE_OUTPUT_RULE}`
+        : `[BLOCKQUOTE - MANDATORY ILLUSTRATIVE]: After the summary <p>, scenario prose inside <blockquote><p>…</p></blockquote>. Persona name in quote only. Forbidden: "Scenario:" label; Scenario as an H3 heading. ${HTML_QUOTE_OUTPUT_RULE}`;
+    }
+    return useMarkdown
+      ? `[BLOCKQUOTE - MANDATORY]: After the first paragraph, output one entity fact as a markdown quote. ${MARKDOWN_QUOTE_OUTPUT_RULE}`
+      : `[BLOCKQUOTE - MANDATORY]: After the first paragraph, output one entity fact as an HTML quote. ${HTML_QUOTE_OUTPUT_RULE}`;
   }
   
+  if (normalizedFeature.startsWith("[decision]")) {
+    return "[DECISION]: Include one chooser object in this section: an If you have / choose table, or a short Choose A when / Choose B when pair. Include If {named constraint}, choose {option} sentences here and/or in [RECOMMENDATION] (article total 2-4). Use only facts in the prompt sources. Forbidden: empty if-you-want-quality chains.";
+  }
+  if (normalizedFeature.startsWith("[recommendation]")) {
+    return "[RECOMMENDATION]: Answer so what should I actually buy. Output an extractable Best for {job}: {option} list (4-6 rows when sources have options) then one closing sentence with the connected business name and a sourced installer constraint. Use only options in prompt sources. Forbidden: generic next-step with no pick.";
+  }
+  if (normalizedFeature.startsWith("[tradeoff]")) {
+    return "[TRADEOFF]: State a real limitation or skip-this-when case. Do not invent drawbacks that contradict supplied sources.";
+  }
+
   // 2. Check for FAQ feature — body FAQ is appended later as flo-faq Question/Answer table (Content Opt parity).
   if (normalizedFeature.includes('[faq]') || normalizedFeature.includes('faq')) {
     return useMarkdown
@@ -47,8 +94,8 @@ export const mapFeatureToInstruction = (feature: string, format: 'markdown' | 'h
   // 3. Link placeholders (harness internal links)
   if (normalizedFeature.startsWith("[link]")) {
     return useMarkdown
-      ? "[LINK: Use 3–5 [[LINK:sitemap search phrase|anchor text]] placeholders woven into sentences. No raw https:// internal URLs.]"
-      : "[LINK: Use 3–5 [[LINK:sitemap search phrase|anchor text]] placeholders woven into sentences. No raw https:// internal URLs in body HTML.]";
+      ? "[LINK: Use 3–5 [[LINK:query|anchor]] placeholders woven into sentences. Brand, product, and service queries use PAGES titles. Informational queries use BLOG POSTS titles. No raw https:// internal URLs.]"
+      : "[LINK: Use 3–5 [[LINK:query|anchor]] placeholders woven into sentences. Brand, product, and service queries use PAGES titles. Informational queries use BLOG POSTS titles. No raw https:// internal URLs in body HTML.]";
   }
 
   // 4. Original switch for predefined features

@@ -1,7 +1,5 @@
 import { formatAgentRunTimestamp } from "@/lib/edmonton-time";
 import type { AgentRunLiveSnapshot } from "@/components/agent-runs/use-agent-run-live-snapshot";
-import type { PostCreatorProofSnapshot } from "@/lib/agent-runs/agent-run-post-creator-proof";
-import { postCreatorProofCollapsedHint } from "@/lib/agent-runs/agent-run-post-creator-proof";
 import { resolveAgentRunRecipeKey } from "@/lib/agent-runs/agent-run-navigation";
 import { humanizeSlugFromUrl } from "@/hooks/content-optimization/bulk-optimization-constants";
 import type { AgentRun } from "@/lib/agent-runs-types";
@@ -133,26 +131,24 @@ export function agentRunInlineStatus(label: string | null | undefined): string {
   return trimmed;
 }
 
+function hintDuplicatesStatus(hint: string, status: AgentRun["status"]): boolean {
+  const normalized = hint.trim().toLowerCase();
+  if (!normalized) return true;
+  return normalized === AGENT_RUN_STATUS_LABELS[status].trim().toLowerCase();
+}
+
 export function agentRunCollapsedHint(
   run: AgentRun,
   live: AgentRunLiveSnapshot | null,
   hostedFileCount = 0,
-  proof: PostCreatorProofSnapshot | null = null,
 ): string {
-  if (resolveAgentRunRecipeKey(run) === "post_creator") {
-    if (isAgentRunTerminal(run.status)) {
-      const snippet = agentRunResultSnippet(run);
-      if (snippet) return snippet;
-    }
-    const proofHint = postCreatorProofCollapsedHint(proof);
-    if (proofHint) return proofHint;
-  }
   if (live) {
     const hint = agentRunStatusHint(live.progressLabel);
     if (hint) {
-      if (isAgentRunTerminal(run.status) && hint === AGENT_RUN_STATUS_LABELS[run.status]) {
+      if (isAgentRunTerminal(run.status) && hintDuplicatesStatus(hint, run.status)) {
         const snippet = agentRunResultSnippet(run);
-        if (snippet) return snippet;
+        if (snippet && !hintDuplicatesStatus(snippet, run.status)) return snippet;
+        return "";
       }
       if (hostedFileCount > 0 && !isAgentRunTerminal(run.status)) {
         return `${hint} · ${hostedFileCount} file${hostedFileCount === 1 ? "" : "s"} ready`;
@@ -161,7 +157,10 @@ export function agentRunCollapsedHint(
     }
   }
   const snippet = agentRunResultSnippet(run);
-  if (snippet && isAgentRunTerminal(run.status)) return snippet;
+  if (snippet && isAgentRunTerminal(run.status)) {
+    if (!hintDuplicatesStatus(snippet, run.status)) return snippet;
+    return "";
+  }
   const target = agentRunTargetLabel(run);
   if (target !== "—") {
     return target.startsWith("http") ? humanizeSlugFromUrl(target) : target;

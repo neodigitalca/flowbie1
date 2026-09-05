@@ -213,7 +213,7 @@ export function notifyKeywordResearchCompleteSearchVolume(searchVolume: number, 
 }
 
 export function notifyFoundXPeopleAlsoAskQuestions(countNumber: string | number): string {
-  return `Found ${count} People Also Ask questions.`;
+  return `Found ${countNumber} People Also Ask questions.`;
 }
 
 export function notifyAiAnalysisCompleteRelatedgsckeywords(relatedCount?: number): string {

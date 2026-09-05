@@ -7,7 +7,7 @@ import {
   buildKeywordAnalysisSystemPrompt,
   buildKeywordAnalysisUserPrompt,
 } from "@/lib/post-creator/post-creator-generator-prompts";
-import { parseBlogTemplateChecklist } from "@/lib/post-creator/post-creator-checklist-post-process";
+import { parseBlogTemplateChecklist, extractChecklistItemTitle, rewriteChecklistItemHeading } from "@/lib/post-creator/post-creator-checklist-post-process";
 
 const fixture = {
   title: "Alta Window Fashions Explained",
@@ -35,10 +35,25 @@ describe("post-creator-generator-prompts", () => {
   it("builds checklist prompts without ## examples in system", () => {
     const { system, user } = buildChecklistPromptMessages(fixture);
     expect(system).toContain("Do NOT use ## markdown headings");
-    expect(system).toContain("WORDPRESS POSTS SOURCE");
+    expect(system).toContain("INTERNAL LINK TARGETS");
     expect(system).toContain("FOCUS KEYWORD DENSITY");
     expect(user).toContain("5-6 checklist items");
+    expect(system).toContain("[DECISION]");
+    expect(system).toContain("[TRADEOFF]");
+    expect(system).toContain("AUTHENTICITY CHECKLIST");
     expect(system).not.toMatch(/^## /m);
+  });
+
+  it("uses SAP page template when entity is set", () => {
+    const { system, user } = buildChecklistPromptMessages({
+      ...fixture,
+      entity: "Ben Hill, Atlanta",
+    });
+    expect(user).toContain("SAP PAGE TEMPLATE");
+    expect(user).toContain("Product | Best for | Budget | Reason");
+    expect(user).toContain("6-7 checklist items");
+    expect(system).toContain("Our Recommendation for Homeowners in Ben Hill, Atlanta");
+    expect(user).not.toContain("how it works, vs adjacent, apply, measure");
   });
 
   it("builds blueprint prompts with intro rename rule", () => {
@@ -69,6 +84,73 @@ describe("post-creator-generator-prompts", () => {
     }
   });
 
+  it("extracts H2 title before harness markers", () => {
+    const item =
+      "Tax Implications of Your RRSP Beneficiary Choice [STRUCTURE]: 1-2 paragraphs. [EXACT PRIMARY PER H2]. [LINK]: 3-5 links.";
+    expect(extractChecklistItemTitle(item)).toBe(
+      "Tax Implications of Your RRSP Beneficiary Choice",
+    );
+    expect(extractChecklistItemTitle("1. ## Why Alta Matters [STRUCTURE]: 2 paragraphs.")).toBe(
+      "Why Alta Matters",
+    );
+  });
+
+  it("unwraps Create an H2 section agent instruction boilerplate", () => {
+    expect(
+      extractChecklistItemTitle(
+        'Create an H2 section agent with the header "Optimizing Your Website for Window Installation Searches".',
+      ),
+    ).toBe("Optimizing Your Website for Window Installation Searches");
+    expect(
+      extractChecklistItemTitle(
+        'Create an H2 section agent with the header "Attracting Local Clients with Window Installation SEO". [STRUCTURE]: 2 paragraphs.',
+      ),
+    ).toBe("Attracting Local Clients with Window Installation SEO");
+    expect(
+      extractChecklistItemTitle('Create an agent for H2 "Smart Home Integration". [LINK]: 3-5 links.'),
+    ).toBe("Smart Home Integration");
+    expect(
+      extractChecklistItemTitle(
+        'Create an H2 section titled "Core Digital Marketing Channels for Window Businesses".',
+      ),
+    ).toBe("Core Digital Marketing Channels for Window Businesses");
+    expect(
+      extractChecklistItemTitle(
+        'Create an H2 section agent for "Boosting Visibility: SEO for Window Contractors".',
+      ),
+    ).toBe("Boosting Visibility: SEO for Window Contractors");
+    expect(
+      extractChecklistItemTitle(
+        'Create a first section agent with the SEO-friendly header: "Why Digital Marketing Matters for Window Companies". [STRUCTURE]: 2 paragraphs.',
+      ),
+    ).toBe("Why Digital Marketing Matters for Window Companies");
+    expect(
+      extractChecklistItemTitle(
+        'Create the first section agent with an active, SEO-friendly header like "Your Guide to Blinds in Edmonton, AB". [STRUCTURE]: 2 paragraphs.',
+      ),
+    ).toBe("Your Guide to Blinds in Edmonton, AB");
+    expect(
+      extractChecklistItemTitle('Create an agent for the H2 section "What We Offer". [LINK]: 3-5 links.'),
+    ).toBe("What We Offer");
+    expect(
+      extractChecklistItemTitle(
+        'Create an agent for an H2 section focusing on a key product type or benefit relevant to blinds in Edmonton, for example, "Energy-Efficient Window Treatments for Alberta Homes". [STRUCTURE]: 2 paragraphs.',
+      ),
+    ).toBe("Energy-Efficient Window Treatments for Alberta Homes");
+  });
+
+  it("rewrites checklist lines to drop instruction boilerplate", () => {
+    const raw =
+      '1. Create a first section agent with the SEO-friendly header: "Why Digital Marketing Matters for Window Companies". [STRUCTURE]: 2 paragraphs. [LINK]: 3-5 links.';
+    const parsed = parseBlogTemplateChecklist(raw);
+    expect(parsed[0]).toMatch(/^Why Digital Marketing Matters for Window Companies \[STRUCTURE\]/);
+    expect(
+      rewriteChecklistItemHeading(
+        'Create a first section agent with the SEO-friendly header: "Why Digital Marketing Matters for Window Companies".',
+      ),
+    ).toBe("Why Digital Marketing Matters for Window Companies");
+  });
+
   it("strips ## from parsed checklist lines", () => {
     const raw = [
       "1. ## Experience the Future of Window Coverings [STRUCTURE]: 2 paragraphs.",
@@ -89,8 +171,23 @@ describe("post-creator-generator-prompts", () => {
 
   it("exports keyword analysis prompt shape", () => {
     expect(buildKeywordAnalysisSystemPrompt()).toContain("JSON");
-    expect(buildKeywordAnalysisUserPrompt("alta window fashions", "{}")).toContain(
-      "alta window fashions",
-    );
+    expect(buildKeywordAnalysisSystemPrompt()).toContain("buyer-decision");
+    const user = buildKeywordAnalysisUserPrompt("alta window fashions", "{}");
+    expect(user).toContain("alta window fashions");
+    expect(user).toContain("buyer-decision");
+    expect(user).toContain("how to choose");
+  });
+
+  it("copies decision markers into blueprint agent features", () => {
+    const { system } = buildBlueprintPromptMessages({
+      title: fixture.title,
+      purpose: "Focused guide (max 3200 words) about alta window fashions",
+      keyword: "alta window fashions",
+      checklist: ["How to Choose Alta [DECISION]: chooser table [EXACT PRIMARY PER H2]"],
+      connectedSite: fixture.connectedSite,
+      wordPressPosts: fixture.wordPressPosts,
+    });
+    expect(system).toContain("[DECISION]");
+    expect(system).toContain("[TRADEOFF]");
   });
 });

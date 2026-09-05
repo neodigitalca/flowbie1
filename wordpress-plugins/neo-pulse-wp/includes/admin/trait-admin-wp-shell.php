@@ -57,11 +57,40 @@ trait Neo_Pulse_Wp_Admin_Trait_Wp_Shell {
 	}
 
 	/**
+	 * WordPress 6.8+ / 7.x keep hyphens in plugin page hook names
+	 * (`neo-pulse-wp_page_neo-pulse-wp-chat`). Older lists used an underscore
+	 * after `neo` (`neo_pulse-wp-chat`). Compare them as the same screen.
+	 *
+	 * @param array<int, string> $ids
+	 */
+	public static function admin_hook_matches( string $hook_suffix, array $ids ): bool {
+		if ( $hook_suffix === '' ) {
+			return false;
+		}
+		$want = str_replace( '-', '_', strtolower( $hook_suffix ) );
+		foreach ( $ids as $id ) {
+			if ( str_replace( '-', '_', strtolower( (string) $id ) ) === $want ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public static function is_neo_pulse_plugin_screen( string $hook_suffix = '' ): bool {
+		if ( $hook_suffix !== '' && self::admin_hook_matches( $hook_suffix, self::neo_pulse_admin_screen_ids() ) ) {
+			return true;
+		}
+		$page = isset( $_GET['page'] ) ? sanitize_key( (string) wp_unslash( $_GET['page'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		return $page !== '' && str_starts_with( $page, 'neo-pulse-wp' );
+	}
+
+	/**
 	 * @param string $classes Space-separated admin body classes.
 	 */
 	public static function admin_body_class( string $classes ): string {
 		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
-		if ( $screen && in_array( $screen->id, self::neo_pulse_admin_screen_ids(), true ) ) {
+		$hook   = $screen ? (string) $screen->id : '';
+		if ( self::is_neo_pulse_plugin_screen( $hook ) ) {
 			$classes .= ' neo-pulse-wp-admin-screen';
 		}
 		return $classes;
@@ -87,8 +116,7 @@ trait Neo_Pulse_Wp_Admin_Trait_Wp_Shell {
 	}
 
 	public static function enqueue_admin_assets( string $hook_suffix ): void {
-		$neo_pulse_screens = self::neo_pulse_admin_screen_ids();
-		if ( ! in_array( $hook_suffix, $neo_pulse_screens, true ) ) {
+		if ( ! self::is_neo_pulse_plugin_screen( $hook_suffix ) ) {
 			return;
 		}
 
@@ -147,28 +175,31 @@ trait Neo_Pulse_Wp_Admin_Trait_Wp_Shell {
 			'admin_page_neo_pulse-wp-agent-hub-edit',
 			'neo-pulse-wp_page_neo_pulse-wp-agent-hub-edit',
 		);
-		if ( in_array( $hook_suffix, $agent_hub_hooks, true ) ) {
+		if ( self::admin_hook_matches( $hook_suffix, $agent_hub_hooks ) ) {
 			$agent_hub_deps = ! empty( $deps ) ? array( (string) end( $deps ) ) : array( 'neo-pulse-wp-lato' );
 			self::enqueue_agent_hub_styles( $agent_hub_deps );
 		}
 
 		if (
-			in_array( $hook_suffix, array( 'neo-pulse-wp_page_neo_pulse-wp-backend-assist', 'neo-pulse-wp_page_neo_pulse-wp-chat' ), true )
+			self::admin_hook_matches(
+				$hook_suffix,
+				array( 'neo-pulse-wp_page_neo_pulse-wp-backend-assist', 'neo-pulse-wp_page_neo_pulse-wp-chat' )
+			)
 			&& Neo_Pulse_Wp_OpenRouter::get_api_key() !== ''
 		) {
 			// Head load so inline page scripts can use NeoPulseVoice / safe unlock helpers.
 			Neo_Pulse_Wp_Voice::enqueue_assets( array(), false );
 		}
 
-		if ( 'neo-pulse-wp_page_neo_pulse-wp-backend-assist' === $hook_suffix ) {
+		if ( self::admin_hook_matches( $hook_suffix, array( 'neo-pulse-wp_page_neo_pulse-wp-backend-assist' ) ) ) {
 			self::enqueue_backend_assist_script();
 		}
 
-		if ( 'neo-pulse-wp_page_neo_pulse-wp-chat' === $hook_suffix ) {
+		if ( self::admin_hook_matches( $hook_suffix, array( 'neo-pulse-wp_page_neo_pulse-wp-chat' ) ) ) {
 			self::enqueue_chat_demo_assets();
 		}
 
-		if ( 'toplevel_page_neo_pulse-wp' === $hook_suffix ) {
+		if ( self::admin_hook_matches( $hook_suffix, array( 'toplevel_page_neo_pulse-wp' ) ) ) {
 			self::enqueue_dashboard_reorder_script();
 		}
 	}
@@ -273,7 +304,7 @@ trait Neo_Pulse_Wp_Admin_Trait_Wp_Shell {
 		$chat_settings = Neo_Pulse_Wp_Chat::get_settings();
 		wp_localize_script(
 			'neo-pulse-chat-demo',
-			'neo-pulseChatDemo',
+			'neoPulseChatDemo',
 			array(
 				'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
 				'streamNonce'   => wp_create_nonce( 'neo_pulse_chat_stream' ),
@@ -304,7 +335,7 @@ trait Neo_Pulse_Wp_Admin_Trait_Wp_Shell {
 			return;
 		}
 		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
-		if ( $screen && in_array( $screen->id, self::neo_pulse_admin_screen_ids(), true ) ) {
+		if ( $screen && self::is_neo_pulse_plugin_screen( (string) $screen->id ) ) {
 			return;
 		}
 		if ( get_user_meta( get_current_user_id(), self::NOTICE_USER_META, true ) ) {

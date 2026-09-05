@@ -115,15 +115,6 @@ export function PulseForgeAutomationsList({
     setPageIndex(0);
   }, []);
 
-  useEffect(() => {
-    if (viewMode !== "live") return;
-    for (const project of automationProjects) {
-      if (!projectBundles[project.id]) {
-        onRefreshProject(project.id);
-      }
-    }
-  }, [automationProjects, onRefreshProject, projectBundles, viewMode]);
-
   const siteNameById = useMemo(() => {
     const map = new Map<string, string>();
     for (const site of sites) map.set(site.id, site.name);
@@ -189,6 +180,15 @@ export function PulseForgeAutomationsList({
     () => sliceForgeAutomationsPage(filteredProjects, safePageIndex),
     [filteredProjects, safePageIndex],
   );
+
+  useEffect(() => {
+    if (viewMode !== "live") return;
+    for (const project of paginatedProjects) {
+      if (!projectBundles[project.id]) {
+        onRefreshProject(project.id);
+      }
+    }
+  }, [onRefreshProject, paginatedProjects, projectBundles, viewMode]);
 
   useEffect(() => {
     setPageIndex(0);

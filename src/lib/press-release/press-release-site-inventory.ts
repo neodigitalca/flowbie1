@@ -5,6 +5,7 @@ import {
   compactInventoryKeywordsForJson,
   stringifyInventoryJsonFromKeywords,
 } from "@/lib/bulk/inventory-json-slim";
+import type { LinkablePost } from "@/lib/content-generation/internal-link-placeholders";
 import type { PressReleaseInventoryRow } from "@/lib/press-release/press-release-anchor-from-inventory";
 
 function hostSlugForInventoryFile(siteUrl: string): string {
@@ -44,6 +45,24 @@ export function revokePressReleaseInventoryHostedLink(href: string | null | unde
   if (href?.startsWith("blob:")) {
     URL.revokeObjectURL(href);
   }
+}
+
+/** Same shape blogs pass into the harness and [[LINK:]] resolver. */
+export function inventoryRowsToLinkablePosts(rows: PressReleaseInventoryRow[]): LinkablePost[] {
+  const out: LinkablePost[] = [];
+  for (const row of rows) {
+    const link = (row.url ?? "").trim();
+    if (!link) continue;
+    out.push({
+      id: row.id ?? 0,
+      slug: (row.slug ?? "").trim(),
+      title: (row.fields?.title ?? "").trim() || (row.fields?.keyword ?? "").trim(),
+      excerpt: (row.fields?.excerpt ?? row.fields?.meta ?? "").trim(),
+      link,
+      date_gmt: (row.date_gmt ?? "").trim(),
+    });
+  }
+  return out;
 }
 
 /** Fetch published posts + pages (single bulk API call). */

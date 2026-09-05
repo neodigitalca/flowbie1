@@ -12,7 +12,7 @@ export type TaskBuilderClientSitePickerProps = {
 };
 
 const SITE_CHECKBOX_CLASS =
-  "border-white/50 data-[state=checked]:border-white data-[state=checked]:bg-white data-[state=checked]:text-black data-[state=indeterminate]:border-white data-[state=indeterminate]:bg-white data-[state=indeterminate]:text-black pointer-events-none";
+  "border-white/50 data-[state=checked]:border-white data-[state=checked]:bg-white data-[state=checked]:text-black data-[state=indeterminate]:border-white data-[state=indeterminate]:bg-white data-[state=indeterminate]:text-black";
 
 export function TaskBuilderClientSitePicker({
   sites,
@@ -41,19 +41,19 @@ export function TaskBuilderClientSitePicker({
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col gap-3", className)}>
       <div className="flex shrink-0 flex-nowrap items-center gap-3 overflow-x-auto">
-        <button
-          type="button"
-          disabled={disabled || sites.length === 0}
-          aria-label="Select all client sites"
-          onClick={() => {
-            if (allSelected) onChange(new Set());
-            else onChange(new Set(sites.map((site) => site.id)));
-          }}
-          className="flex shrink-0 items-center gap-2 border-0 bg-transparent p-0 text-base text-white hover:opacity-90 disabled:opacity-50"
-        >
-          <Checkbox checked={masterChecked} disabled={disabled || sites.length === 0} tabIndex={-1} aria-hidden className={SITE_CHECKBOX_CLASS} />
-          Select all
-        </button>
+        <div className="flex shrink-0 items-center gap-2 text-base text-white">
+          <Checkbox
+            checked={masterChecked}
+            disabled={disabled || sites.length === 0}
+            onCheckedChange={() => {
+              if (allSelected) onChange(new Set());
+              else onChange(new Set(sites.map((site) => site.id)));
+            }}
+            aria-label="Select all client sites"
+            className={SITE_CHECKBOX_CLASS}
+          />
+          <span>Select all</span>
+        </div>
         <button
           type="button"
           disabled={disabled || selectedIds.size === 0}

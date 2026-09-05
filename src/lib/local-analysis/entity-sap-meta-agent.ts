@@ -1,5 +1,6 @@
 import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 import {
   appendMasterInstructionsToSystemPrompt,
   buildSapMasterRulesWorkflowPrefix,
@@ -23,6 +24,20 @@ Each input row has:
 - Weave \`keyword\` and the **full \`entity\`** string — **not** a repeat of \`title\`.
 - **Forbidden:** duplicating the title string, pipe suffixes, brand/site name, em dash.
 - Vary phrasing across rows in the batch.`;
+
+const BLOG_META_AGENT_SYSTEM = `You are an SEO meta description agent for national blog posts.
+
+Output **only** valid JSON: {"metas":["..."]} with **exactly one** meta description per input row in \`rows[]\`, same order.
+
+Each input row has \`title\` and \`keyword\`. \`entity\` may be empty.
+
+**Meta rules (mandatory):**
+- 150-160 characters (count spaces; stay in range).
+- Include the keyword exactly once. Do not copy the title verbatim.
+- Educational or commercial blog framing. No city, state, or country names.
+- Never mention Bali or Bali blinds.
+- Forbidden: pipe suffixes, brand/site name, em dash.
+- Vary phrasing across rows.`;
 
 type MetaAgentResponse = {
   metas?: unknown;
@@ -51,16 +66,17 @@ async function fetchMetasBatch(
   model: string,
   siteId: string | undefined,
   rows: CSVRow[],
+  systemPrompt: string,
 ): Promise<string[]> {
   if (rows.length === 0) return [];
   await ensureMasterInstructionsInMemory(siteId);
   const payload = buildMetaFillPayload(rows);
   const systemForModel = appendMasterInstructionsToSystemPrompt(
-    `${buildSapMasterRulesWorkflowPrefix(siteId ?? null)}${SAP_META_AGENT_SYSTEM}`,
+    `${buildSapMasterRulesWorkflowPrefix(siteId ?? null)}${systemPrompt}`,
     siteId ?? null,
   );
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await postOpenRouterAppChatFetch( {
     method: "POST",
     headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
@@ -140,7 +156,55 @@ export async function fillSapRowMetaFromOpenRouter(
       const chunkIndices = pendingIndices.slice(chunkStart, chunkStart + META_FILL_CHUNK);
       const chunkRows = chunkIndices.map((i) => out[i]!);
       try {
-        const metas = await fetchMetasBatch(apiKey, model, siteId, chunkRows);
+        const metas = await fetchMetasBatch(apiKey, model, siteId, chunkRows, SAP_META_AGENT_SYSTEM);
+        applyMetasAtIndices(out, chunkIndices, metas);
+      } catch {
+        // Keep static rows; skip failed chunk
+      }
+      options.onRowsUpdate?.(out.map((row) => ({ ...row })));
+      options.onProgress?.(
+        out.filter((r) => (r.meta_description ?? "").trim().length > 0).length,
+        total,
+      );
+    }),
+  );
+
+  return out;
+}
+
+/** OpenRouter meta descriptions for blog CSV rows (no entity required). */
+export async function fillBlogRowMetaFromOpenRouter(
+  rows: CSVRow[],
+  options: FillSapRowMetaOptions,
+): Promise<CSVRow[]> {
+  if (rows.length === 0) return rows;
+  const apiKey = options.apiKey.trim();
+  const model = options.model.trim();
+  const siteId = options.siteId;
+  const out = rows.map((r) => ({ ...r }));
+  const total = out.length;
+
+  const pendingIndices = out
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => !(row.meta_description ?? "").trim())
+    .map(({ index }) => index);
+
+  if (pendingIndices.length === 0) {
+    options.onProgress?.(total, total);
+    return out;
+  }
+
+  const chunkStarts: number[] = [];
+  for (let chunkStart = 0; chunkStart < pendingIndices.length; chunkStart += META_FILL_CHUNK) {
+    chunkStarts.push(chunkStart);
+  }
+
+  await Promise.all(
+    chunkStarts.map(async (chunkStart) => {
+      const chunkIndices = pendingIndices.slice(chunkStart, chunkStart + META_FILL_CHUNK);
+      const chunkRows = chunkIndices.map((i) => out[i]!);
+      try {
+        const metas = await fetchMetasBatch(apiKey, model, siteId, chunkRows, BLOG_META_AGENT_SYSTEM);
         applyMetasAtIndices(out, chunkIndices, metas);
       } catch {
         // Keep static rows; skip failed chunk

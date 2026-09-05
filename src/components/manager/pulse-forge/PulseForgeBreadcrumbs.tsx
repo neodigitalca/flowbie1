@@ -45,17 +45,34 @@ function buildCrumbs(
     return crumbs;
   }
 
+  if (route.section === "recipes" && "view" in route && route.view === "builder") {
+    if (route.workflowId) {
+      const workflowRoute = {
+        section: "workflows" as const,
+        view: "edit" as const,
+        workflowId: route.workflowId,
+      };
+      crumbs.push({ label: SECTION_LABELS.workflows, route: workflowRoute });
+      crumbs.push({
+        label: workflowName?.trim() || `Workflow ${route.workflowId}`,
+        route: workflowRoute,
+      });
+    } else {
+      crumbs.push({ label: SECTION_LABELS.recipes, route: { section: "recipes" } });
+    }
+    crumbs.push({
+      label: recipeName?.trim() || route.recipeKeyword,
+      route: route.workflowId
+        ? null
+        : { section: "recipes", view: "builder", recipeKeyword: route.recipeKeyword },
+    });
+    return crumbs;
+  }
+
   crumbs.push({
     label: SECTION_LABELS[route.section],
     route: { section: route.section },
   });
-
-  if (route.section === "recipes" && "view" in route && route.view === "builder") {
-    crumbs.push({
-      label: recipeName?.trim() || route.recipeKeyword,
-      route: { section: "recipes", view: "builder", recipeKeyword: route.recipeKeyword },
-    });
-  }
 
   return crumbs;
 }
@@ -64,7 +81,6 @@ export type PulseForgeBreadcrumbsProps = {
   route: PulseForgeRoute;
   recipeName?: string | null;
   workflowName?: string | null;
-  statusMessage?: string | null;
   /** When true, omit the leaf crumb (e.g. workflow name lives in an adjacent field). */
   hideLeaf?: boolean;
   className?: string;
@@ -74,7 +90,6 @@ export function PulseForgeBreadcrumbs({
   route,
   recipeName,
   workflowName,
-  statusMessage,
   hideLeaf = false,
   className,
 }: PulseForgeBreadcrumbsProps): React.ReactElement {
@@ -104,11 +119,6 @@ export function PulseForgeBreadcrumbs({
           );
         })}
       </nav>
-      {statusMessage ? (
-        <p className="ml-auto shrink-0 text-base text-red-400" role="status">
-          {statusMessage}
-        </p>
-      ) : null}
     </div>
   );
 }

@@ -1,5 +1,5 @@
-import React from "react";
 import { X } from "lucide-react";
+import React, { useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -9,9 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  TaskFormDatePicker,
   TaskFormFlatSelectPlaceholder,
-  TaskFormTimePicker,
 } from "@/components/manager/tasks/TaskFormLayout";
 import type { WordPressSiteOption } from "@/components/manager/tasks/NewProjectDialog";
 import {
@@ -21,40 +19,77 @@ import {
   WorkflowInspectorKindHeader,
   WorkflowInspectorTile,
 } from "@/components/manager/workflow/WorkflowInspectorLayout";
+import { WorkflowStepTestPanel } from "@/components/manager/workflow/WorkflowStepTestPanel";
 import {
   WORKFLOW_INSPECTOR_FIELD_CELL_CLASS,
   WORKFLOW_FORM_FLAT_CONTROL_CLASS,
   WORKFLOW_FORM_SELECT_CONTENT_CLASS,
   WORKFLOW_FORM_SELECT_ITEM_CLASS,
   WORKFLOW_FORM_SELECT_TRIGGER_CLASS,
+  WORKFLOW_SIDEBAR_BG_CLASS,
+  WORKFLOW_SIDEBAR_FIELD_CLASS,
 } from "@/components/manager/workflow/forge-workflow-styles";
-import { defaultGscTriggerConfig } from "@/lib/workflow/workflow-migrate-from-planner";
+import { inferActionKeyword } from "@/lib/automation-planner-compile";
 import {
   resolveRagInputKeys,
   upstreamRagVariablesForNode,
 } from "@/lib/workflow/workflow-rag-utils";
+import { defaultGscReportingExecutionPayload } from "@/lib/gsc-reporting/resolve-gsc-reporting-run-config";
+import { workflowNodeSupportsStepTest, type WorkflowStepTestResult } from "@/lib/workflow/workflow-step-test";
+import { isWorkflowThenKind } from "@/lib/workflow/workflow-types";
 import type {
+  WorkflowActionConfig,
   WorkflowClientConfig,
   WorkflowEdge,
   WorkflowNode,
   WorkflowNodeKind,
   WorkflowPathBranchConfig,
+  WorkflowRagArchiveConfig,
+  WorkflowRagArchiveDeliverableScope,
   WorkflowRagVariable,
 } from "@/lib/workflow/workflow-types";
+import { GscReportingExecutionFields } from "@/components/manager/tasks/GscReportingExecutionFields";
+import { ChatGptAuditExecutionFields } from "@/components/manager/tasks/ChatGptAuditExecutionFields";
+import { DfsArticleAuditExecutionFields } from "@/components/manager/tasks/DfsArticleAuditExecutionFields";
+import { BrowserAutomationExecutionFields } from "@/components/manager/tasks/BrowserAutomationExecutionFields";
+import { ContentGapCheckExecutionFields, ensureContentGapCheckPayload } from "@/components/manager/tasks/ContentGapCheckExecutionFields";
+import { LocalDominatorExportExecutionFields } from "@/components/manager/tasks/LocalDominatorExportExecutionFields";
+import { EntityPageCreatorExecutionFields } from "@/components/manager/tasks/EntityPageCreatorExecutionFields";
+import { EntityGeneratorExecutionFields } from "@/components/manager/tasks/EntityGeneratorExecutionFields";
+import { SapGeneratorExecutionFields } from "@/components/manager/tasks/SapGeneratorExecutionFields";
+import { ContentOptimizerExecutionFields } from "@/components/manager/tasks/ContentOptimizerExecutionFields";
+import { WorkflowClientInspectorFields } from "@/components/manager/workflow/WorkflowClientInspectorFields";
+import { WorkflowCalendarWhenFields } from "@/components/manager/workflow/WorkflowCalendarWhenFields";
+import { WorkflowThenStepInspector } from "@/components/manager/workflow/WorkflowThenStepInspector";
+import { WorkflowCsvRowsInspector } from "@/components/manager/workflow/WorkflowCsvRowsInspector";
+import { thenEmailDisplayLabel, withThenEmailRecipientSync } from "@/lib/workflow/workflow-then-utils";
+import { scheduleHasUpstream } from "@/lib/workflow/workflow-schedule-upstream";
+import { cn } from "@/lib/utils";
+import { wordpressSiteDisplayName } from "@/lib/wordpress-site-display-name";
 import type { TaskExecutionKind } from "@/lib/tasks-types";
+
+const RAG_ARCHIVE_DELIVERABLE_OPTIONS: Array<{
+  value: WorkflowRagArchiveDeliverableScope;
+  label: string;
+}> = [
+  { value: "final", label: "Final deliverable" },
+  { value: "all", label: "All files" },
+];
 
 const EXECUTION_KINDS: TaskExecutionKind[] = [
   "content_optimizer_meta",
   "content_optimizer",
   "gsc_reporting",
   "post_creator",
+  "entity_page_creator",
+  "entity_generator",
+  "sap_generator",
   "local_dominator_export",
+  "chatgpt_website_audit",
+  "dfs_llm_article_audit",
+  "browser_automation",
+  "content_gap_check",
 ];
-
-const FREQUENCY_OPTIONS = ["once", "daily", "weekly", "monthly", "yearly"].map((freq) => ({
-  value: freq,
-  label: freq.charAt(0).toUpperCase() + freq.slice(1),
-}));
 
 export type WorkflowNodeInspectorProps = {
   node: WorkflowNode | null;
@@ -62,7 +97,12 @@ export type WorkflowNodeInspectorProps = {
   edges: WorkflowEdge[];
   ragVariables: WorkflowRagVariable[];
   sites: WordPressSiteOption[];
+  stepTestResult?: WorkflowStepTestResult | null;
+  testingStepId?: string | null;
+  onTestStep?: (nodeId: string) => void;
   onChange: (node: WorkflowNode) => void;
+  clientsMenuOpen?: boolean;
+  onClientsMenuOpenChange?: (open: boolean) => void;
 };
 
 export function WorkflowNodeInspector({
@@ -71,42 +111,116 @@ export function WorkflowNodeInspector({
   edges,
   ragVariables,
   sites,
+  stepTestResult,
+  testingStepId,
+  onTestStep,
   onChange,
+  clientsMenuOpen = false,
+  onClientsMenuOpenChange,
 }: WorkflowNodeInspectorProps): React.ReactElement {
   if (!node) {
     return (
-      <div className="flex h-full items-center justify-center bg-black p-4">
+      <div className={cn("flex h-full items-center justify-center px-5 py-6", WORKFLOW_SIDEBAR_BG_CLASS)}>
         <p className="text-lg text-muted-foreground">Select a step to edit.</p>
       </div>
     );
   }
 
+  const workflowClientNode = nodes.find((item) => item.kind === "workflow_client");
+  const workflowClientConfig = (workflowClientNode?.config ?? {}) as WorkflowClientConfig;
+  const clientSiteId = workflowClientConfig.siteIds?.[0]?.trim() ?? "";
+  const clientSiteName = clientSiteId
+    ? (() => {
+        const site = sites.find((item) => item.id === clientSiteId);
+        return site ? wordpressSiteDisplayName(site) : "";
+      })()
+    : "";
+
   const patchConfig = (patch: Record<string, unknown>) => {
     onChange({ ...node, config: { ...(node.config as Record<string, unknown>), ...patch } });
   };
 
-  const clientConfig = node.config as WorkflowClientConfig;
+  const actionConfig = node.config as WorkflowActionConfig;
+  const executionKind = String(actionConfig.executionKind ?? "content_optimizer_meta");
+  const executionPayload = actionConfig.executionPayload ?? {};
+
+  const patchExecutionPayload = (nextPayload: typeof executionPayload) => {
+    onChange({
+      ...node,
+      config: { ...actionConfig, executionPayload: nextPayload },
+    });
+  };
+
+  const upstreamUrlVariables = useMemo(
+    () =>
+      upstreamRagVariablesForNode({ nodes, edges, ragVariables }, node.id).map((variable) => ({
+        key: variable.key,
+        label: variable.label || variable.key,
+      })),
+    [nodes, edges, ragVariables, node.id],
+  );
+
+  const patchAgentKind = (value: string) => {
+    const nextPayload =
+      value === "gsc_reporting"
+        ? { ...defaultGscReportingExecutionPayload(), ...executionPayload }
+        : value === "content_gap_check"
+          ? ensureContentGapCheckPayload(executionPayload)
+          : executionPayload;
+    const nextKind = value as TaskExecutionKind;
+    onChange({
+      ...node,
+      config: {
+        ...actionConfig,
+        executionKind: nextKind,
+        actionBlockKeyword: inferActionKeyword(nextKind, nextPayload),
+        executionPayload: nextPayload,
+      },
+    });
+  };
+
+  const clientConfig =
+    node.kind === "workflow_client" ? (node.config as WorkflowClientConfig) : workflowClientConfig;
   const primaryClientSiteId = clientConfig.siteIds?.[0];
 
   return (
     <WorkflowInspectorTile>
       {node.kind === "workflow_client" ? (
-        <WorkflowInspectorGroup>
-          <TaskFormFlatSelectPlaceholder
-            placeholder="Client"
-            value={primaryClientSiteId ?? ""}
-            onChange={(value) => patchConfig({ siteIds: value ? [value] : [] })}
-            options={sites.map((site) => ({ value: site.id, label: site.name }))}
-            className={WORKFLOW_INSPECTOR_FIELD_CELL_CLASS}
-          />
-        </WorkflowInspectorGroup>
+        <WorkflowClientInspectorFields
+          config={clientConfig}
+          sites={sites}
+          onChange={(nextConfig) => patchConfig(nextConfig)}
+          open={clientsMenuOpen}
+          onOpenChange={(next) => onClientsMenuOpenChange?.(next)}
+        />
       ) : (
         <WorkflowInspectorKindHeader
           kind={node.kind as WorkflowNodeKind}
-          title={node.label}
-          onTitleChange={(label) => onChange({ ...node, label })}
+          title={node.kind === "then_email" ? thenEmailDisplayLabel(node) : node.label}
+          onTitleChange={(label) =>
+            onChange(
+              node.kind === "then_email" ? withThenEmailRecipientSync(node, label) : { ...node, label },
+            )
+          }
         />
       )}
+
+      {workflowNodeSupportsStepTest(node) && onTestStep ? (
+        <WorkflowStepTestPanel
+          node={node}
+          stepTestResult={stepTestResult}
+          testingStepId={testingStepId}
+          onTestStep={onTestStep}
+        />
+      ) : null}
+
+      {node.kind === "workflow_client" ? (
+        <WorkflowCalendarWhenFields
+          title="Publish"
+          config={clientConfig}
+          onChange={(patch) => patchConfig(patch)}
+        />
+      ) : null}
 
       {node.kind === "trigger_manual" ? (
         <WorkflowInspectorGroup title="When">
@@ -117,27 +231,16 @@ export function WorkflowNodeInspector({
       ) : null}
 
       {node.kind === "trigger_calendar" ? (
-        <WorkflowInspectorGroup title="When">
-          <WorkflowInspectorFieldGrid>
-            <TaskFormFlatSelectPlaceholder
-              placeholder="Frequency"
-              value={String((node.config as { frequency?: string }).frequency ?? "daily")}
-              onChange={(value) => patchConfig({ frequency: value })}
-              options={FREQUENCY_OPTIONS}
-              className={WORKFLOW_INSPECTOR_FIELD_CELL_CLASS}
-            />
-            <TaskFormDatePicker
-              placeholder="Start date"
-              value={String((node.config as { startDate?: string }).startDate ?? "")}
-              onChange={(startDate) => patchConfig({ startDate })}
-            />
-            <TaskFormTimePicker
-              placeholder="Time"
-              value={String((node.config as { time?: string }).time ?? "09:00")}
-              onChange={(time) => patchConfig({ time })}
-            />
-          </WorkflowInspectorFieldGrid>
-        </WorkflowInspectorGroup>
+        <WorkflowCalendarWhenFields
+          title="When"
+          config={node.config as Record<string, unknown>}
+          onChange={(patch) => patchConfig(patch)}
+          error={
+            scheduleHasUpstream({ nodes, edges }, node.id)
+              ? null
+              : "Place Schedule after a Client or agent step."
+          }
+        />
       ) : null}
 
       {node.kind === "trigger_gsc" ? (
@@ -182,6 +285,31 @@ export function WorkflowNodeInspector({
         </WorkflowInspectorGroup>
       ) : null}
 
+      {node.kind === "trigger_agentmail" ? (
+        <WorkflowInspectorGroup title="When">
+          <WorkflowInspectorFieldGrid>
+            <WorkflowInspectorField>
+              <Input
+                id="wf-agentmail-from"
+                value={String((node.config as { fromEmail?: string }).fromEmail ?? "")}
+                onChange={(event) => patchConfig({ fromEmail: event.target.value })}
+                className={WORKFLOW_FORM_FLAT_CONTROL_CLASS}
+                placeholder="Sender email"
+              />
+            </WorkflowInspectorField>
+            <WorkflowInspectorField>
+              <Input
+                id="wf-agentmail-inbox"
+                value={String((node.config as { inbox?: string }).inbox ?? "")}
+                onChange={(event) => patchConfig({ inbox: event.target.value })}
+                className={WORKFLOW_FORM_FLAT_CONTROL_CLASS}
+                placeholder="Inbox override (optional)"
+              />
+            </WorkflowInspectorField>
+          </WorkflowInspectorFieldGrid>
+        </WorkflowInspectorGroup>
+      ) : null}
+
       {node.kind === "trigger_agent_done" ? (
         <WorkflowInspectorGroup title="When">
           <WorkflowInspectorFieldGrid>
@@ -210,8 +338,8 @@ export function WorkflowNodeInspector({
             <WorkflowInspectorFieldGrid>
               <TaskFormFlatSelectPlaceholder
                 placeholder="Agent kind"
-                value={String((node.config as { executionKind?: string }).executionKind ?? "content_optimizer_meta")}
-                onChange={(value) => patchConfig({ executionKind: value })}
+                value={executionKind}
+                onChange={patchAgentKind}
                 options={EXECUTION_KINDS.map((kind) => ({ value: kind, label: kind }))}
                 className={WORKFLOW_INSPECTOR_FIELD_CELL_CLASS}
               />
@@ -226,6 +354,93 @@ export function WorkflowNodeInspector({
               </WorkflowInspectorField>
             </WorkflowInspectorFieldGrid>
           </WorkflowInspectorGroup>
+          {executionKind === "gsc_reporting" ? (
+            <GscReportingExecutionFields
+              layout="workflow"
+              executionPayload={executionPayload}
+              onChange={patchExecutionPayload}
+            />
+          ) : null}
+          {executionKind === "chatgpt_website_audit" ? (
+            <ChatGptAuditExecutionFields
+              clientSiteId={clientSiteId}
+              executionPayload={executionPayload}
+              onChange={patchExecutionPayload}
+            />
+          ) : null}
+          {executionKind === "dfs_llm_article_audit" ? (
+            <DfsArticleAuditExecutionFields
+              executionPayload={executionPayload}
+              onChange={patchExecutionPayload}
+            />
+          ) : null}
+          {executionKind === "browser_automation" ? (
+            <BrowserAutomationExecutionFields
+              layout="workflow"
+              clientSiteId={clientSiteId}
+              urlVariableOptions={upstreamUrlVariables}
+              executionPayload={executionPayload}
+              onChange={patchExecutionPayload}
+            />
+          ) : null}
+          {executionKind === "content_gap_check" ? (
+            <ContentGapCheckExecutionFields
+              layout="workflow"
+              clientSiteId={clientSiteId}
+              executionPayload={executionPayload}
+              onChange={patchExecutionPayload}
+            />
+          ) : null}
+          {executionKind === "entity_page_creator" ? (
+            <EntityPageCreatorExecutionFields
+              surface="what"
+              executionPayload={executionPayload}
+              onChange={patchExecutionPayload}
+            />
+          ) : null}
+          {executionKind === "entity_generator" ? (
+            <EntityGeneratorExecutionFields
+              surface="what"
+              executionPayload={executionPayload}
+              onChange={patchExecutionPayload}
+            />
+          ) : null}
+          {executionKind === "sap_generator" ? (
+            <SapGeneratorExecutionFields
+              executionPayload={executionPayload}
+              workflowEntityCsvLocked={
+                (executionPayload as { entityCsvInputSource?: string }).entityCsvInputSource === "workflow"
+              }
+              onChange={patchExecutionPayload}
+            />
+          ) : null}
+          {executionKind === "local_dominator_export" ? (
+            <LocalDominatorExportExecutionFields
+              layout="inline"
+              executionPayload={executionPayload}
+              clientSiteName={clientSiteName}
+              onChange={patchExecutionPayload}
+            />
+          ) : null}
+          {executionKind === "content_optimizer" || executionKind === "content_optimizer_meta" ? (
+            <ContentOptimizerExecutionFields
+              layout="workflow"
+              actionBlockKeyword={actionConfig.actionBlockKeyword}
+              executionKind={executionKind as TaskExecutionKind}
+              executionPayload={executionPayload}
+              onChange={({ executionKind: nextKind, actionBlockKeyword: nextKeyword, executionPayload: nextPayload }) =>
+                onChange({
+                  ...node,
+                  config: {
+                    ...actionConfig,
+                    executionKind: nextKind,
+                    actionBlockKeyword: nextKeyword,
+                    executionPayload: nextPayload,
+                  },
+                })
+              }
+            />
+          ) : null}
           <ActionAgentRagInputs
             node={node}
             nodes={nodes}
@@ -236,6 +451,29 @@ export function WorkflowNodeInspector({
         </>
       ) : null}
 
+      {node.kind === "csv_rows" ? (
+        <WorkflowCsvRowsInspector
+          config={node.config as import("@/lib/workflow/csv-rows-types").WorkflowCsvRowsConfig}
+          onChange={(config) =>
+            onChange({
+              ...node,
+              config: { ...(node.config as Record<string, unknown>), ...config },
+            })
+          }
+        />
+      ) : null}
+
+      {isWorkflowThenKind(node.kind) ? (
+        <WorkflowThenStepInspector
+          node={node}
+          nodes={nodes}
+          edges={edges}
+          ragVariables={ragVariables}
+          sites={sites}
+          onChange={onChange}
+        />
+      ) : null}
+
       {node.kind === "path_rules" ? (
         <WorkflowInspectorGroup title="Paths">
           <PathRulesInspector node={node} onChange={onChange} />
@@ -243,27 +481,87 @@ export function WorkflowNodeInspector({
       ) : null}
 
       {node.kind === "rag_archive" ? (
-        <WorkflowInspectorGroup title="Archive">
-          <WorkflowInspectorField>
-            <Select
-              value={String((node.config as { variableKey?: string }).variableKey ?? "")}
-              onValueChange={(value) => patchConfig({ variableKey: value, scope: "run" })}
-            >
-              <SelectTrigger className={WORKFLOW_FORM_SELECT_TRIGGER_CLASS}>
-                <SelectValue placeholder="Variable to archive" />
-              </SelectTrigger>
-              <SelectContent className={WORKFLOW_FORM_SELECT_CONTENT_CLASS}>
-                {ragVariables.map((variable) => (
-                  <SelectItem key={variable.key} value={variable.key} className={WORKFLOW_FORM_SELECT_ITEM_CLASS}>
-                    {variable.label || variable.key}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </WorkflowInspectorField>
-        </WorkflowInspectorGroup>
+        <RagArchiveInspector
+          node={node}
+          nodes={nodes}
+          edges={edges}
+          ragVariables={ragVariables}
+          onChange={onChange}
+        />
       ) : null}
     </WorkflowInspectorTile>
+  );
+}
+
+function RagArchiveInspector({
+  node,
+  nodes,
+  edges,
+  ragVariables,
+  onChange,
+}: {
+  node: WorkflowNode;
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+  ragVariables: WorkflowRagVariable[];
+  onChange: (node: WorkflowNode) => void;
+}): React.ReactElement {
+  const config = node.config as WorkflowRagArchiveConfig;
+  const upstream = upstreamRagVariablesForNode({ nodes, edges, ragVariables }, node.id);
+
+  const patchConfig = (patch: Partial<WorkflowRagArchiveConfig>) => {
+    onChange({
+      ...node,
+      config: {
+        ...config,
+        ...patch,
+      },
+    });
+  };
+
+  return (
+    <WorkflowInspectorGroup title="Archive">
+      <WorkflowInspectorField>
+        <Select
+          value={String(config.variableKey ?? "")}
+          onValueChange={(value) => patchConfig({ variableKey: value, scope: "run" })}
+        >
+          <SelectTrigger className={WORKFLOW_FORM_SELECT_TRIGGER_CLASS}>
+            <SelectValue placeholder="Source variable" />
+          </SelectTrigger>
+          <SelectContent className={WORKFLOW_FORM_SELECT_CONTENT_CLASS}>
+            {upstream.map((variable) => (
+              <SelectItem key={variable.key} value={variable.key} className={WORKFLOW_FORM_SELECT_ITEM_CLASS}>
+                {variable.label || variable.key}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </WorkflowInspectorField>
+      <WorkflowInspectorField>
+        <Select
+          value={config.deliverableScope ?? "final"}
+          onValueChange={(value) =>
+            patchConfig({ deliverableScope: value as WorkflowRagArchiveDeliverableScope })
+          }
+        >
+          <SelectTrigger className={WORKFLOW_FORM_SELECT_TRIGGER_CLASS}>
+            <SelectValue placeholder="Deliverables" />
+          </SelectTrigger>
+          <SelectContent className={WORKFLOW_FORM_SELECT_CONTENT_CLASS}>
+            {RAG_ARCHIVE_DELIVERABLE_OPTIONS.map((option) => (
+              <SelectItem
+                key={option.value}
+                value={option.value}
+                className={WORKFLOW_FORM_SELECT_ITEM_CLASS}
+              >
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </WorkflowInspectorField>
+    </WorkflowInspectorGroup>
   );
 }
 
@@ -316,7 +614,7 @@ function ActionAgentRagInputs({
           {selectedKeys.map((key) => (
             <li
               key={key}
-              className="flex items-center justify-between gap-3 bg-zinc-900/50 px-3 py-2"
+              className={cn(WORKFLOW_SIDEBAR_FIELD_CLASS, "flex items-center justify-between gap-3 px-3 py-2")}
             >
               <span className="truncate text-base text-emerald-400">{`{{${key}}}`}</span>
               <span className="truncate text-base text-muted-foreground">{labelForKey(key)}</span>

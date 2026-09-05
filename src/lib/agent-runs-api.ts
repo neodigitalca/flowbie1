@@ -25,14 +25,23 @@ export async function fetchAgentRuns(
   if (filters?.source) params.set("source", filters.source);
   if (filters?.taskId) params.set("task_id", String(filters.taskId));
   const res = await api(`/agent-runs?${params.toString()}`);
-  const data = (await res.json()) as { ok?: boolean; runs?: AgentRun[] };
-  return data.runs ?? [];
+  try {
+    const data = (await res.json()) as { ok?: boolean; runs?: AgentRun[] };
+    return data.runs ?? [];
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchAgentRun(teamId: number, runId: number): Promise<AgentRun | null> {
   const res = await api(`/agent-runs/${runId}?teamId=${teamId}`);
-  const data = (await res.json()) as { ok?: boolean; run?: AgentRun };
-  return data.run ?? null;
+  if (res.status === 404) return null;
+  try {
+    const data = (await res.json()) as { ok?: boolean; run?: AgentRun };
+    return data.run ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function createAgentRun(payload: StartAgentRunPayload): Promise<{ ok: boolean; run?: AgentRun; error?: string }> {
@@ -51,10 +60,13 @@ export async function createAgentRun(payload: StartAgentRunPayload): Promise<{ o
       }),
     });
     const data = (await res.json()) as { ok?: boolean; run?: AgentRun; error?: string };
-    if (!data.ok && !data.error && !res.ok) {
-      return { ok: false, error: `Could not create agent run (HTTP ${res.status})` };
+    if (!data.ok) {
+      return {
+        ok: false,
+        error: data.error?.trim() || `Could not create agent run (HTTP ${res.status})`,
+      };
     }
-    return { ok: Boolean(data.ok), run: data.run, error: data.error };
+    return { ok: true, run: data.run };
   } catch {
     return { ok: false, error: "Could not create agent run (network error)" };
   }
@@ -135,6 +147,33 @@ export async function fetchAgentRunArtifacts(
   const res = await api(`/agent-runs/${runId}/artifacts?teamId=${teamId}`);
   const data = (await res.json()) as { ok?: boolean; artifacts?: AgentRunArtifactRecord[] };
   return data.artifacts ?? [];
+}
+
+export async function fetchAgentRunDeliverableFiles(
+  teamId: number,
+  runId: number,
+): Promise<Array<{ fileName: string; mime: string; content: string }>> {
+  const res = await api(`/agent-runs/${runId}/deliverables?teamId=${teamId}`);
+  const data = (await res.json()) as {
+    ok?: boolean;
+    files?: Array<{ fileName: string; mime: string; content: string }>;
+  };
+  return data.files ?? [];
+}
+
+/** Load CSV text from agent run artifacts via WP API (never a public upload URL). */
+export async function fetchAgentRunCsvContent(
+  teamId: number,
+  runId: number,
+): Promise<string | undefined> {
+  const files = await fetchAgentRunDeliverableFiles(teamId, runId);
+  const csvFile = files.find(
+    (file) =>
+      file.mime?.trim().toLowerCase() === "text/csv"
+      || file.fileName.trim().toLowerCase().endsWith(".csv"),
+  );
+  const content = csvFile?.content?.trim();
+  return content || undefined;
 }
 
 export async function processAgentRun(

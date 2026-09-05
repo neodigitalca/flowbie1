@@ -1,6 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { AgentConfig } from "@/types/agent-config";
 import { prepareHarnessContentForUpload } from "../harness-upload-prep";
+
+vi.mock("@/lib/competitor-research/competitor-report-openrouter", () => ({
+  callOpenRouterChatCompletion: vi.fn(),
+}));
+
+import { callOpenRouterChatCompletion } from "@/lib/competitor-research/competitor-report-openrouter";
+
+beforeEach(() => {
+  vi.mocked(callOpenRouterChatCompletion).mockReset();
+});
 
 const BODY_AGENTS: AgentConfig[] = [
   {
@@ -98,7 +108,7 @@ Body two paragraph.
     expect(html.match(/Body two paragraph/g)?.length).toBe(1);
   });
 
-  it("throws when Overview is missing scroll-link bullets", async () => {
+  it("ships when Overview bullets are missing", async () => {
     const markdown = `## Overview
 
 Lead paragraph only.
@@ -108,11 +118,219 @@ Lead paragraph only.
 Body section.
 `;
 
-    await expect(
-      prepareHarnessContentForUpload({
-        markdownContent: markdown,
-        blueprintAgents: [OVERVIEW_AGENT, BODY_AGENTS[0]!],
-      }),
-    ).rejects.toThrow(/missing bullet|scroll link/i);
+    const html = await prepareHarnessContentForUpload({
+      markdownContent: markdown,
+      blueprintAgents: [OVERVIEW_AGENT, BODY_AGENTS[0]!],
+    });
+    expect(html).toContain("Lead paragraph only");
+    expect(html).toContain("Body section");
+  });
+
+  it("ships when bullet copy lacks a hash link", async () => {
+    const markdown = `## Overview
+
+Lead paragraph only.
+
+- **Options:** Plain text without a scroll link.
+
+## Sliding Glass Door Blinds: Your Options
+
+Body section.
+`;
+
+    const html = await prepareHarnessContentForUpload({
+      markdownContent: markdown,
+      blueprintAgents: [OVERVIEW_AGENT, BODY_AGENTS[0]!],
+      keyword: "sliding glass door blinds",
+      articleTitle: "Sliding Glass Door Blinds",
+    });
+    expect(html).toContain("Plain text without a scroll link");
+    expect(html).toContain("Body section");
+  });
+
+  it("keeps Answer before Overview when fixing scroll links", async () => {
+    const markdown = `## Answer
+
+Solar panel efficiency is how well a panel converts sunlight into electricity under standard test conditions.
+
+## Overview
+
+Lead paragraph about solar efficiency.
+
+- **Choosing Panels:** Compare [[SCROLL:#choosing-the-right-solar-panels-for-your-home|panel options]] for your roof.
+- **Real-World Example:** See a [[SCROLL:#choosing-the-right-solar-panels-for-your-home|worked comparison]] in this guide.
+
+## Choosing the Right Solar Panels for Your Home
+
+Body with decision table.
+
+## Ridgeline Solar: Your Partner
+
+Contact section.
+`;
+
+    const html = await prepareHarnessContentForUpload({
+      markdownContent: markdown,
+      blueprintAgents: [
+        OVERVIEW_AGENT,
+        {
+          id: "section-1",
+          title: "Choosing the Right Solar Panels for Your Home",
+          description: "",
+          features: ["[ILLUSTRATIVE]: scenario", "[BLOCKQUOTE]: quote"],
+        },
+        {
+          id: "section-2",
+          title: "Ridgeline Solar: Your Partner",
+          description: "",
+          features: [],
+        },
+      ],
+    });
+
+    const answerPos = html.toLowerCase().indexOf('id="answer"');
+    const overviewPos = html.toLowerCase().indexOf('id="overview"');
+    expect(answerPos).toBeGreaterThanOrEqual(0);
+    expect(overviewPos).toBeGreaterThan(answerPos);
+    expect(html).toContain('href="#choosing-the-right-solar-panels-for-your-home"');
+  });
+
+  it("resolves [[LINK:query|anchor]] placeholders when wordPressPosts are provided", async () => {
+    const markdown = `## What We Offer
+
+| Service/Product Name | Description |
+| --- | --- |
+| [[LINK:motorized blinds|Motorized Blinds]] | Automated blinds for your home. |
+`;
+
+    vi.mocked(callOpenRouterChatCompletion).mockResolvedValueOnce({
+      raw: {},
+      content: "1",
+    });
+
+    const html = await prepareHarnessContentForUpload({
+      markdownContent: markdown,
+      blueprintAgents: [
+        OVERVIEW_AGENT,
+        { id: "section-1", title: "What We Offer", description: "", features: [] },
+      ],
+      siteId: "site-1",
+      siteUrl: "https://example.com",
+      apiKey: "test-key",
+      wordPressPosts: [
+        {
+          id: 42,
+          slug: "motorized-blinds",
+          title: "Motorized Blinds",
+          excerpt: "Smart blinds",
+          link: "https://example.com/motorized-blinds/",
+          date_gmt: "2026-01-01",
+        },
+      ],
+    });
+
+    expect(html).toContain('href="https://example.com/motorized-blinds/"');
+    expect(html).toContain("Motorized Blinds");
+    expect(html).not.toContain("[[LINK:");
+  });
+
+  it("keeps Answer before Overview on onePassOptimize when order is reversed", async () => {
+    const markdown = `## Overview
+
+Lead paragraph about blinds.
+
+- **Cost:** See [[SCROLL:#cost-comparison|cost comparison]] below.
+
+## Answer
+
+Smart blinds automation costs more upfront but saves energy over time.
+
+## Cost Comparison
+
+Body section with details.
+`;
+
+    const html = await prepareHarnessContentForUpload({
+      markdownContent: markdown,
+      blueprintAgents: [
+        OVERVIEW_AGENT,
+        { id: "section-1", title: "Cost Comparison", description: "", features: [] },
+      ],
+      onePassOptimize: true,
+    });
+
+    const answerPos = html.toLowerCase().indexOf('id="answer"');
+    const overviewPos = html.toLowerCase().indexOf('id="overview"');
+    expect(answerPos).toBeGreaterThanOrEqual(0);
+    expect(overviewPos).toBeGreaterThan(answerPos);
+  });
+
+  it("resolves brand [[LINK]] queries to page hrefs on one pass", async () => {
+    const markdown = `## Hunter Douglas Product Lines
+
+Compare [[LINK:Hunter Douglas|Hunter Douglas shades]] with other options.
+
+## Energy Efficiency Features
+
+Review [[LINK:Energy Efficiency|energy efficiency]] before you buy.
+`;
+
+    vi.mocked(callOpenRouterChatCompletion).mockResolvedValueOnce({
+      raw: {},
+      content: "1",
+    }).mockResolvedValueOnce({
+      raw: {},
+      content: "2",
+    });
+
+    const html = await prepareHarnessContentForUpload({
+      markdownContent: markdown,
+      blueprintAgents: [
+        OVERVIEW_AGENT,
+        { id: "section-1", title: "Hunter Douglas Product Lines", description: "", features: [] },
+        { id: "section-2", title: "Energy Efficiency Features", description: "", features: [] },
+      ],
+      siteId: "site-1",
+      siteUrl: "https://blindmagic.com",
+      apiKey: "test-key",
+      onePassOptimize: true,
+      wordPressPosts: [
+        {
+          id: 21,
+          slug: "hunter-douglas",
+          title: "Hunter Douglas",
+          excerpt: "",
+          link: "https://blindmagic.com/hunter-douglas/",
+          date_gmt: "2026-09-01",
+          collection: "pages",
+          postType: "page",
+        },
+        {
+          id: 22,
+          slug: "energy-efficiency",
+          title: "Energy Efficiency",
+          excerpt: "",
+          link: "https://blindmagic.com/technology/energy-efficiency/",
+          date_gmt: "2026-09-01",
+          collection: "pages",
+          postType: "page",
+        },
+        {
+          id: 12,
+          slug: "powerview-guide",
+          title: "PowerView Guide",
+          excerpt: "",
+          link: "https://blindmagic.com/blog/powerview-guide/",
+          date_gmt: "2026-01-01",
+          collection: "posts",
+          postType: "post",
+        },
+      ],
+    });
+
+    expect(html).toContain('href="https://blindmagic.com/hunter-douglas/"');
+    expect(html).toContain('href="https://blindmagic.com/technology/energy-efficiency/"');
+    expect(html).not.toContain("[[LINK:");
+    expect(html).not.toContain("/blog/powerview-guide/");
   });
 });

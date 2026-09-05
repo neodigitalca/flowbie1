@@ -38,7 +38,7 @@ export type BlogImportHeaderProgressFromBulkArgs = {
   currentRow?: number;
   csvRowProgress?: { done: number; total: number };
   /** Prompt / blog-import batch: row index (0-based) and batch size for the top progress bar. */
-  batchRowProgress?: { current: number; total: number };
+  batchRowProgress?: { current: number; total: number; activeRowOptimizing?: boolean };
 };
 
 export function blogImportHeaderProgressFromBulk(
@@ -63,16 +63,19 @@ export function blogImportHeaderProgressFromBulk(
 
   const batchProgress = args.batchRowProgress;
   if (batchProgress && batchProgress.total > 0 && isProcessing) {
-    const { current, total } = batchProgress;
+    const { current, total, activeRowOptimizing } = batchProgress;
     const harnessSections = args.harnessSections ?? [];
     const planned =
       typeof args.harnessPlannedSectionCount === "number" && args.harnessPlannedSectionCount > 0
         ? args.harnessPlannedSectionCount
         : harnessSections.length;
-    let intraRow = status ? 0.08 : 0;
-    if (harnessSections.length > 0 && planned > 0) {
-      const harnessDone = harnessSections.filter((s) => s.status === "done").length;
-      intraRow = harnessDone / planned;
+    let intraRow = 0;
+    if (activeRowOptimizing) {
+      intraRow = status ? 0.08 : 0;
+      if (harnessSections.length > 0 && planned > 0) {
+        const harnessDone = harnessSections.filter((s) => s.status === "done").length;
+        intraRow = harnessDone / planned;
+      }
     }
     const completed = Math.min(current + intraRow, total);
     const progressPct = Math.round((completed / total) * 100);

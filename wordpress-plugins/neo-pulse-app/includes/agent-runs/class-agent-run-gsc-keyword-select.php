@@ -31,18 +31,22 @@ class Neo_Pulse_App_Agent_Run_Gsc_Keyword_Select {
 			return array();
 		}
 
-		$topic    = trim( (string) ( $contract['optionalPrompt'] ?? '' ) );
+		$topic               = trim( (string) ( $contract['optionalPrompt'] ?? '' ) );
+		$inventory_url_count = isset( $contract['inventoryUrlCount'] ) ? (int) $contract['inventoryUrlCount'] : null;
+		$content_bucket_json = trim( (string) ( $contract['contentBucketJson'] ?? '' ) );
 		$site_ctx = self::connected_site_context( $site );
-		$user     = wp_json_encode(
-			array(
-				'numberOfBlogs'     => $limit,
-				'topic'             => $topic,
-				'modifier'          => $topic,
-				'inventoryUrlCount' => null,
-				'CONNECTED_SITE'    => $site_ctx,
-				'SITE_KW_JSON'      => $doc,
-			)
+		$payload  = array(
+			'numberOfBlogs'       => $limit,
+			'topic'               => $topic,
+			'modifier'            => $topic,
+			'inventoryUrlCount'   => $inventory_url_count,
+			'CONNECTED_SITE'      => $site_ctx,
+			'SITE_KW_JSON'        => $doc,
 		);
+		if ( $content_bucket_json !== '' ) {
+			$payload['SITE_INVENTORY_JSON'] = json_decode( $content_bucket_json, true );
+		}
+		$user = wp_json_encode( $payload );
 
 		try {
 			$parsed = Neo_Pulse_App_Chat_Openrouter::json_completion(
@@ -57,7 +61,7 @@ class Neo_Pulse_App_Agent_Run_Gsc_Keyword_Select {
 			);
 			return self::parse_keywords( $parsed, $limit );
 		} catch ( Exception $e ) {
-			return self::fallback_keywords( $doc, $limit );
+			return array();
 		}
 	}
 

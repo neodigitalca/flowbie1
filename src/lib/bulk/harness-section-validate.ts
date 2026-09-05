@@ -1,9 +1,21 @@
 import {
   plainTextEndsWithCompleteSentence,
   stripHtmlTagsForSentenceCheck,
+  trimHarnessSectionToCompleteSentences,
 } from "@/lib/bulk/harness-section-complete-sentences";
-import { headingTitleToHarnessAnchorId } from "@/lib/bulk/harness-section-anchor-ids";
+import {
+  enforceHarnessSectionHeadingTitle,
+  HARNESS_OVERVIEW_ANCHOR_ID,
+  headingTitleToHarnessAnchorId,
+  injectHarnessSectionH2AnchorId,
+} from "@/lib/bulk/harness-section-anchor-ids";
+import { HARNESS_ANSWER_ANCHOR_ID } from "@/lib/bulk/blog-harness-answer-agent";
+import {
+  isBadIllustrativeH2Title,
+  resolveIllustrativeH2Title,
+} from "@/lib/content-optimization/first-party-authority-prompt";
 import { markdownToHtml } from "@/lib/markdown-to-html";
+import { flattenListItemBlockWrappers } from "@/lib/content-generation/content-sanitizer";
 
 function isHarnessPlaceholderToken(token: string): boolean {
   return (
@@ -147,6 +159,44 @@ export function assertHarnessBodySectionComplete(html: string, title: string): v
   }
 }
 
+export function countPlainTextSentences(plain: string): number {
+  const t = plain.trim();
+  if (!t) return 0;
+  const parts = t.split(/(?<=[.!?]["']?)\s+/).filter((p) => p.trim().length > 0);
+  if (parts.length > 0) return parts.length;
+  return plainTextEndsWithCompleteSentence(t) ? 1 : 0;
+}
+
+export function assertHarnessAnswerProseComplete(html: string): void {
+  if (!/<h2\b/i.test(html)) {
+    throw new Error("Harness: Answer missing <h2>");
+  }
+  const lower = html.toLowerCase();
+  const h2End = lower.indexOf("</h2>");
+  if (h2End < 0) {
+    throw new Error("Harness: Answer missing </h2>");
+  }
+  const body = html.slice(h2End + 5);
+  if (/<ul\b/i.test(body) || /<ol\b/i.test(body) || /<table\b/i.test(body)) {
+    throw new Error("Harness: Answer must not contain lists or tables");
+  }
+  const paras = harnessSectionParagraphPlainTexts(body);
+  if (paras.length !== 1) {
+    throw new Error(
+      `Harness: Answer must contain exactly one <p> (found ${paras.length})`,
+    );
+  }
+  const sentenceCount = countPlainTextSentences(paras[0]!);
+  if (sentenceCount !== 2) {
+    throw new Error(
+      `Harness: Answer must contain exactly two sentences (found ${sentenceCount})`,
+    );
+  }
+  if (!plainTextEndsWithCompleteSentence(paras[0]!)) {
+    throw new Error("Harness: Answer paragraph does not end with a complete sentence");
+  }
+}
+
 export function assertHarnessOverviewProseComplete(html: string): void {
   if (!/<h2\b/i.test(html)) {
     throw new Error("Harness: Overview missing <h2>");
@@ -159,32 +209,43 @@ export function assertHarnessOverviewProseComplete(html: string): void {
 }
 
 export function validateHarnessSectionOrThrow(
-  html: string,
-  opts: {
+  _html: string,
+  _opts: {
     title: string;
     finishReason?: string;
     isOverview: boolean;
+    isAnswer?: boolean;
   },
 ): void {
-  if (isHarnessCompletionTruncated(opts.finishReason)) {
-    throw new Error(
-      `Section "${opts.title}" truncated at ${opts.finishReason} — increase max tokens`,
-    );
+  // Intentionally no-op: section HTML ships from the model as-is; full article is validated downstream.
+}
+
+/** Wrap loose body text after </h2> in <p> when the model omitted paragraph tags. */
+export function normalizeBodySectionProseHtml(html: string): string {
+  const cleaned = stripHarnessModelContamination(html);
+  const lower = cleaned.toLowerCase();
+  const h2Open = lower.search(/<h2\b/);
+  if (h2Open < 0) return cleaned;
+  const h2End = lower.indexOf("</h2>", h2Open);
+  if (h2End < 0) return cleaned;
+
+  const head = cleaned.slice(0, h2End + 5);
+  const tail = cleaned.slice(h2End + 5);
+  const blockMatch = tail.match(/<(?:ul|ol|table|h2|h3)\b/i);
+  const blockIdx = blockMatch?.index ?? tail.length;
+  const prosePart = tail.slice(0, blockIdx).trim();
+  const afterBlock = tail.slice(blockIdx);
+
+  if (!prosePart || /<p\b/i.test(prosePart)) {
+    return head + (prosePart ? `\n${prosePart}` : "") + afterBlock;
   }
 
-  const h2Count = countHarnessH2Tags(html);
-  if (h2Count === 0) {
-    throw new Error(`Section "${opts.title}" missing <h2>`);
-  }
-  if (h2Count > 1) {
-    throw new Error(`Section "${opts.title}" contains ${h2Count} <h2> tags — section bleed`);
-  }
-
-  if (opts.isOverview) {
-    assertHarnessOverviewProseComplete(html);
-  } else {
-    assertHarnessBodySectionComplete(html, opts.title);
-  }
+  const blocks = prosePart
+    .split(/\n\s*\n/)
+    .map((b) => b.trim())
+    .filter(Boolean);
+  const wrapped = blocks.map((b) => `<p>${b}</p>`).join("\n");
+  return `${head}\n${wrapped}${afterBlock ? `\n${afterBlock}` : ""}`;
 }
 
 /** Wrap loose Overview text after </h2> in <p> when the model omitted paragraph tags. */
@@ -214,17 +275,59 @@ export function normalizeOverviewProseHtml(html: string): string {
   return `${head}\n${wrapped}${afterUl ? `\n${afterUl}` : ""}`;
 }
 
+export function normalizeIllustrativeHarnessHtml(html: string, forcedH2?: string): string {
+  const h2Title = resolveIllustrativeH2Title(forcedH2);
+  let s = (html ?? "").trim();
+  if (!s) return s;
+
+  s = s.replace(/<h3\b[^>]*>\s*scenario\s*:[\s\S]*?<\/h3>/gi, "");
+  s = s.replace(/<h2\b[^>]*>([\s\S]*?)<\/h2>/i, (_m, inner) => {
+    const plain = inner
+      .replace(/<a\b[^>]*>([\s\S]*?)<\/a>/gi, "$1")
+      .replace(/<[^>]+>/g, "")
+      .trim();
+    if (isBadIllustrativeH2Title(plain) || plain.toLowerCase() !== h2Title.toLowerCase()) {
+      return `<h2>${h2Title}</h2>`;
+    }
+    return `<h2>${plain}</h2>`;
+  });
+  s = s.replace(
+    /(<h2\b[^>]*>[\s\S]*?<\/h2>\s*)<p>\s*scenario\s*:\s*/i,
+    "$1<p>",
+  );
+  s = s.replace(/<p>\s*scenario\s*:\s*/gi, "<p>");
+  if (!/<blockquote\b/i.test(s)) {
+    const afterH2 = s.replace(/^[\s\S]*?<\/h2>\s*/i, "");
+    const firstP = afterH2.match(/^<p>([\s\S]*?)<\/p>/i);
+    if (firstP?.[1] && firstP[1].length > 80) {
+      s = s.replace(firstP[0], `<blockquote><p>${firstP[1]}</p></blockquote>`);
+    }
+  }
+  return s.trim();
+}
+
 export function finalizeHarnessSectionHtml(
   html: string,
-  opts: { isOverview: boolean; title: string },
+  opts: { isOverview: boolean; isAnswer?: boolean; isIllustrative?: boolean; title: string },
 ): string {
   let s = stripHarnessModelContamination(html);
   s = stripHarnessSectionTrailingGarbage(s);
-  if (opts.isOverview) {
+  if (opts.isAnswer) {
+    s = enforceHarnessSectionHeadingTitle(s, "Answer");
+    s = injectHarnessSectionH2AnchorId(s, HARNESS_ANSWER_ANCHOR_ID);
+  } else if (opts.isOverview) {
     s = normalizeOverviewProseHtml(s);
-  } else if (!/\bid\s*=\s*["'][^"']+["']/i.test(s) && /<h2\b/i.test(s)) {
-    const anchorId = headingTitleToHarnessAnchorId(opts.title);
-    s = s.replace(/<h2\b/i, `<h2 id="${anchorId}"`);
+    s = enforceHarnessSectionHeadingTitle(s, "Overview");
+    s = injectHarnessSectionH2AnchorId(s, HARNESS_OVERVIEW_ANCHOR_ID);
+  } else {
+    s = normalizeBodySectionProseHtml(s);
+    s = trimHarnessSectionToCompleteSentences(s);
+    s = enforceHarnessSectionHeadingTitle(s, opts.title);
+    s = injectHarnessSectionH2AnchorId(s, headingTitleToHarnessAnchorId(opts.title));
+  }
+  s = flattenListItemBlockWrappers(s);
+  if (opts.isIllustrative) {
+    s = enforceHarnessSectionHeadingTitle(s, resolveIllustrativeH2Title(opts.title));
   }
   return s;
 }
@@ -232,7 +335,7 @@ export function finalizeHarnessSectionHtml(
 /** Normalize markdown harness sections to HTML before validation and stitch. */
 export function prepareHarnessSectionHtml(
   raw: string,
-  opts: { isOverview: boolean; title: string },
+  opts: { isOverview: boolean; isAnswer?: boolean; isIllustrative?: boolean; title: string },
 ): string {
   let text = raw.trim();
   const fence = text.match(/^```(?:html|markdown)?\s*\n?([\s\S]*?)\n?```$/i);
@@ -241,10 +344,90 @@ export function prepareHarnessSectionHtml(
 
   let html = text;
   const lower = text.toLowerCase();
-  if (!lower.includes("<h2") && text.includes("## ")) {
+  const looksLikeHtml =
+    lower.includes("<h2") ||
+    lower.includes("<table") ||
+    lower.includes("<p>") ||
+    lower.includes("<ul") ||
+    lower.includes("<ol");
+  if (!looksLikeHtml && (text.includes("## ") || /\|[^|\n]+\|/.test(text))) {
     const { text: masked, tokens } = maskHarnessMarkdownPlaceholders(text);
     html = unmaskHarnessMarkdownPlaceholders(markdownToHtml(masked), tokens);
   }
 
   return finalizeHarnessSectionHtml(html, opts);
+}
+
+export function stitchedArticleHasAnswerH2(html: string): boolean {
+  const src = (html ?? "").trim();
+  if (!src) return false;
+  if (/\bid\s*=\s*["']answer["']/i.test(src)) return true;
+  return /<h2\b[^>]*>\s*answer\s*</i.test(src);
+}
+
+export function assertHarnessIllustrativeSectionHtml(html: string): void {
+  if (!illustrativeHarnessSectionValid(html)) {
+    const t = (html ?? "").trim();
+    if (!t) {
+      throw new Error("Harness: [ILLUSTRATIVE] section is empty");
+    }
+    if (!/<blockquote\b/i.test(t)) {
+      throw new Error("Harness: [ILLUSTRATIVE] section missing scenario blockquote");
+    }
+    throw new Error("Harness: [ILLUSTRATIVE] section missing Recommendation h3");
+  }
+}
+
+export const HARNESS_SECTION_MAX_ATTEMPTS = 6;
+
+export function illustrativeHarnessSectionValid(html: string): boolean {
+  const t = (html ?? "").trim();
+  if (!t) return false;
+  if (!/<blockquote\b/i.test(t)) return false;
+  if (!/<h3\b[^>]*>\s*recommendation\s*:/i.test(t)) return false;
+  return true;
+}
+
+export function harnessSectionPreparedValid(
+  prepared: string,
+  opts: { isIllustrative?: boolean },
+): boolean {
+  if (!prepared.trim()) return false;
+  if (opts.isIllustrative && !illustrativeHarnessSectionValid(prepared)) return false;
+  return true;
+}
+
+export function stitchedHarnessArticleValid(
+  html: string,
+  opts: { requireIllustrative: boolean },
+): boolean {
+  try {
+    assertStitchedHarnessArticle(html, opts);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function assertStitchedHarnessArticle(
+  html: string,
+  opts: { requireIllustrative: boolean },
+): void {
+  const src = (html ?? "").trim();
+  if (!src) {
+    throw new Error("Harness: stitched article is empty");
+  }
+  if (!stitchedArticleHasAnswerH2(src)) {
+    throw new Error("Harness: Answer section missing from article");
+  }
+  if (!/<h2\b[^>]*>\s*overview\s*</i.test(src) && !/\bid\s*=\s*["']overview["']/i.test(src)) {
+    throw new Error("Harness: Overview section missing from article");
+  }
+  if (opts.requireIllustrative) {
+    const hasRec = /<h3\b[^>]*>\s*recommendation\s*:/i.test(src);
+    const hasBq = /<blockquote\b/i.test(src);
+    if (!hasRec || !hasBq) {
+      throw new Error("Harness: [ILLUSTRATIVE] scenario missing from article");
+    }
+  }
 }

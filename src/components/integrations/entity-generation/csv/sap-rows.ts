@@ -8,6 +8,8 @@ export interface SapBulkRowOptions {
   modifier: string;
   /** WordPress site name - strips trailing " | Site Name" from titles if present. */
   siteName?: string;
+  /** When true, leave title empty for the SAP title agent to fill later. */
+  skipTitlePrefill?: boolean;
 }
 
 /**
@@ -19,10 +21,13 @@ export function buildSapBulkRows(entities: string[], options: SapBulkRowOptions)
   const placeholderKeyword = "service area";
 
   return entities.map((entity) => {
-    let title = options.titleFormat.trim()
-      ? replaceTemplateVariables(options.titleFormat, entity, kw || placeholderKeyword)
-      : entity;
-    title = stripPipeBrandSuffixFromTitle(title, options.siteName);
+    let title = "";
+    if (!options.skipTitlePrefill) {
+      title = options.titleFormat.trim()
+        ? replaceTemplateVariables(options.titleFormat, entity, kw || placeholderKeyword)
+        : entity;
+      title = stripPipeBrandSuffixFromTitle(title, options.siteName);
+    }
 
     return {
       keyword: kw || placeholderKeyword,

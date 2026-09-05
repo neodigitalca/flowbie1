@@ -1,0 +1,104 @@
+{
+  "keyword": "dfs-audit-then-optimize",
+  "name": "DFS audit then optimize",
+  "description": "Grade an existing page with DataForSEO LLM (ChatGPT, Gemini, Perplexity), then optimize content and meta using the audit checklist.",
+  "notes": [
+    "Run from a Forge workflow with Client as step 1.",
+    "Step 1 requires a single target article URL and focus keyword from ACF.",
+    "Step 2 wires RAG from the audit step to apply optimization checklist items.",
+    "Audit uses web search to grade based on what each LLM can verify on the live page."
+  ],
+  "category": "maintenance",
+  "verticals": [
+    "general",
+    "local-seo",
+    "agency",
+    "editorial"
+  ],
+  "tags": [
+    "research",
+    "audit",
+    "dataforseo",
+    "optimize"
+  ],
+  "prerequisites": [
+    "wordpress"
+  ],
+  "filters": {
+    "executionKinds": [
+      "dfs_llm_article_audit",
+      "content_optimizer"
+    ],
+    "actionCount": 2
+  },
+  "defaultTasks": [
+    {
+      "keyword": "dfs-audit-then-optimize-audit",
+      "title": "DFS LLM article audit",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "dfs_llm_article_audit",
+      "executionPayload": {
+        "saveLocalArchive": true,
+        "saveToDisk": true
+      },
+      "scheduleMode": "calendar",
+      "recurrenceRule": "none"
+    },
+    {
+      "keyword": "dfs-audit-then-optimize-run",
+      "title": "Full AISEO",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "targetUrl": "",
+        "updateMode": "update",
+        "saveLocalArchive": true,
+        "ragInputKeys": ["dfs_llm_article_audit_1"]
+      },
+      "scheduleMode": "calendar",
+      "recurrenceRule": "none"
+    }
+  ],
+  "isAutomation": true,
+  "kind": "template",
+  "triggerBlock": {
+    "keyword": "schedule-once",
+    "kind": "calendar",
+    "frequency": "once",
+    "startDate": "2026-09-01",
+    "time": "09:00"
+  },
+  "actionBlock": {
+    "keyword": "dfs-llm-article-audit",
+    "executionKind": "dfs_llm_article_audit",
+    "executionPayload": {
+      "saveLocalArchive": true,
+      "saveToDisk": true
+    },
+    "title": "DFS LLM article audit"
+  },
+  "actionBlocks": [
+    {
+      "keyword": "dfs-llm-article-audit",
+      "executionKind": "dfs_llm_article_audit",
+      "executionPayload": {
+        "saveLocalArchive": true,
+        "saveToDisk": true
+      },
+      "title": "DFS LLM article audit"
+    },
+    {
+      "keyword": "content-optimizer-full",
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "targetUrl": "",
+        "updateMode": "update",
+        "saveLocalArchive": true,
+        "ragInputKeys": ["dfs_llm_article_audit_1"]
+      },
+      "title": "Full AISEO"
+    }
+  ]
+}

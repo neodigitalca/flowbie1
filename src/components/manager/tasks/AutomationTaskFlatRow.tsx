@@ -75,10 +75,34 @@ function handleExecutionKindChange(
       scheduleMode: "calendar",
       recurrenceRule: "none",
       executionPayload: {
-        businessName: draft.executionPayload.businessName ?? "Advance Blinds & Drapery",
-        keyword: draft.executionPayload.keyword ?? "blinds near me",
+        businessName: draft.executionPayload.businessName ?? "",
+        keyword: draft.executionPayload.keyword ?? "",
         saveLocalArchive: draft.executionPayload.saveLocalArchive ?? true,
         saveToDisk: draft.executionPayload.saveToDisk !== false,
+      },
+    };
+  }
+  if (kind === "chatgpt_website_audit") {
+    return {
+      executionKind: kind,
+      scheduleMode: "calendar",
+      recurrenceRule: "none",
+      executionPayload: {
+        saveLocalArchive: true,
+        saveToDisk: draft.executionPayload.saveToDisk !== false,
+      },
+    };
+  }
+  if (kind === "browser_automation") {
+    return {
+      executionKind: kind,
+      scheduleMode: "calendar",
+      recurrenceRule: "none",
+      executionPayload: {
+        saveLocalArchive: true,
+        saveToDisk: draft.executionPayload.saveToDisk !== false,
+        targetUrl: draft.executionPayload.targetUrl ?? "",
+        browserInstructionsHtml: draft.executionPayload.browserInstructionsHtml ?? "",
       },
     };
   }

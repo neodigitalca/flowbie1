@@ -1,10 +1,10 @@
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 /**
  * Single AI path: send full WordPress post (API response) to OpenRouter research model.
  * AI reads everything and returns the primary SEO keyword. No pattern matching, no fallbacks.
  */
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const MAX_POST_CHARS = 18000; // Leave room for system prompt in 20k context
 
 export interface ExtractPrimaryKeywordOptions {
@@ -68,7 +68,7 @@ Rules:
 
   const userPrompt = `Below is the full WordPress post data (JSON). Extract the primary SEO keyword or focus for this page. Return only that phrase.\n\n${truncated}`;
 
-  const response = await fetch(OPENROUTER_URL, {
+  const response = await postOpenRouterAppChatFetch( {
     method: "POST",
     headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({

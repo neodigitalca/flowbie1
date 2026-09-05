@@ -37,6 +37,8 @@ import {
   readSitePrefetchPersist,
   writeSitePrefetchPersist,
 } from "@/lib/local-analysis/site-prefetch-persist";
+import { setOverviewRowsSessionCache } from "@/lib/overview/overview-rows-session-cache";
+import { buildOverviewSessionRowsFromWarmBulk } from "@/lib/overview/overview-inventory-progressive-hydrate";
 
 export const SITE_PREFETCH_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -77,6 +79,7 @@ let warmCacheEpoch = 0;
 /** WP inventory leg of the warm fetch; resolves before GSC so hydration never waits on GSC. */
 const inventoryLegBySiteId = new Map<string, Promise<void>>();
 const inventoryLegResolveBySiteId = new Map<string, () => void>();
+const metadataSeedInflightBySiteId = new Set<string>();
 
 function resolveInventoryLeg(siteId: string): void {
   inventoryLegResolveBySiteId.get(siteId)?.();
@@ -222,6 +225,7 @@ async function commitPartialBundle(site: WordPressSite, bundle: EntitySiteWarmBu
   credentialsKeyBySiteId.set(site.id, siteWarmCredentialsKey(site));
   if (bundle.bulkInventoryRows?.length) {
     seedBulkGenerationWpInventoryFromBundle(site, hydrated);
+    seedOverviewSessionCachesFromWarm(site);
   }
   notifyEntitySiteWarmInflightChanged();
 }
@@ -231,6 +235,7 @@ async function commitBundle(site: WordPressSite, bundle: EntitySiteWarmBundle): 
   cacheBySiteId.set(site.id, hydrated);
   credentialsKeyBySiteId.set(site.id, siteWarmCredentialsKey(site));
   seedBulkGenerationWpInventoryFromBundle(site, hydrated);
+  seedOverviewSessionCachesFromWarm(site);
   await writeSitePrefetchPersist(hydrated);
   notifyEntitySiteWarmInflightChanged();
   return hydrated;
@@ -330,24 +335,30 @@ async function runWarmFetch(site: WordPressSite): Promise<EntitySiteWarmBundle> 
   });
 
   const inventoryPromise = hasWpCreds
-    ? loadBulkSitemapInventoryForSite(site).then(async (inv) => {
-        inventory = inv;
-        const bulkInventoryRows = getBulkGenerationWpInventoryIfReady(site.id) ?? [];
-        const queries = gscRes.ok
-          ? sortGscQueriesByStats(gscRes.queries.filter((q) => q.query?.trim()))
-          : [];
-        await commitPartialBundle(site, {
-          siteId: site.id,
-          credentialsKey: credKey,
-          fetchedAt: Date.now(),
-          inventory: inv,
-          gsc: { queries, dateRange: gscRes.dateRange ?? dateRange },
-          counts: countsFromInventory(inv, queries.length),
-          bulkInventoryRows,
-        });
-        resolveInventoryLeg(site.id);
-        return inv;
-      })
+    ? loadBulkSitemapInventoryForSite(site)
+        .then(async (inv) => {
+          inventory = inv;
+          const bulkInventoryRows = getBulkGenerationWpInventoryIfReady(site.id) ?? [];
+          const queries = gscRes.ok
+            ? sortGscQueriesByStats(gscRes.queries.filter((q) => q.query?.trim()))
+            : [];
+          await commitPartialBundle(site, {
+            siteId: site.id,
+            credentialsKey: credKey,
+            fetchedAt: Date.now(),
+            inventory: inv,
+            gsc: { queries, dateRange: gscRes.dateRange ?? dateRange },
+            counts: countsFromInventory(inv, queries.length),
+            bulkInventoryRows,
+          });
+          void seedWarmBulkInventoryMetadata(site).catch(() => {});
+          resolveInventoryLeg(site.id);
+          return inv;
+        })
+        .catch(() => {
+          resolveInventoryLeg(site.id);
+          return inventory;
+        })
     : Promise.resolve(emptyInventoryResult());
 
   await Promise.all([inventoryPromise, gscPromise, ensureMasterInstructionsInMemory(site.id)]);
@@ -430,27 +441,16 @@ export function getSitePrefetchUrlsForSource(
   }
 }
 
-function urlOnlyOverviewRows(
-  site: WordPressSite,
-  source: OverviewSitemapSource,
-  urls: string[],
-): OverviewInventoryRow[] {
-  const collection =
-    source === "posts"
-      ? "posts"
-      : source === "pages"
-        ? "pages"
-        : overviewEntityRestCollectionForSite(site) ?? source;
-  return urls.map((url) => ({
-    url,
-    collection,
-    id: 0,
-    slug: "",
-    fields: { title: "", meta: "", keyword: "" },
-  }));
+
+function bulkRowsHaveMetadata(rows: OverviewInventoryRow[]): boolean {
+  return rows.some(
+    (r) =>
+      Number(r.id) > 0 &&
+      ((r.fields?.title ?? "").trim() || (r.fields?.pageHeading ?? "").trim()),
+  );
 }
 
-/** Overview rows from site prefetch (bulk inventory or URL buckets). */
+/** Overview rows from site prefetch bulk inventory (ids + titles). */
 export function getSitePrefetchOverviewRowsForSource(
   site: WordPressSite,
   source: OverviewSitemapSource,
@@ -464,12 +464,35 @@ export function getSitePrefetchOverviewRowsForSource(
     const tagged = bulkRows.map((row) => ({ ...row, collection: row.collection })) as OverviewInventoryRow[];
     const bySource = splitOverviewInventoryRowsBySource(site, tagged);
     const rows = bySource[source];
-    // Prefer full URL buckets when bulk rows are a truncated subset (stale content walk).
-    if (rows?.length && !(urls && urls.length > rows.length)) return rows;
+    if (
+      rows?.length &&
+      bulkRowsHaveMetadata(rows) &&
+      !(urls && urls.length > rows.length)
+    ) {
+      return rows;
+    }
   }
 
-  if (!urls?.length) return null;
-  return urlOnlyOverviewRows(site, source, urls);
+  return null;
+}
+
+/** Write ready OverviewRow[] session cache for pages, posts, sap (once at warm time). */
+export function seedOverviewSessionCachesFromWarm(site: WordPressSite): void {
+  if (!canWarmEntitySite(site)) return;
+  const bulkRows = getBulkGenerationWpInventoryIfReady(site.id);
+  if (!bulkRows?.length) return;
+
+  const tagged = bulkRows.map((row) => ({ ...row, collection: row.collection })) as OverviewInventoryRow[];
+  const bySource = splitOverviewInventoryRowsBySource(site, tagged);
+
+  for (const source of ["pages", "posts", "sap"] as const) {
+    const prefetchRows = bySource[source] ?? [];
+    if (!prefetchRows.length || !bulkRowsHaveMetadata(prefetchRows)) continue;
+    const rows = buildOverviewSessionRowsFromWarmBulk(site, source, prefetchRows);
+    if (rows.length) {
+      setOverviewRowsSessionCache(site.id, source, rows);
+    }
+  }
 }
 
 export function gscQueriesFromWarmBundleForSapBudget(
@@ -492,6 +515,7 @@ async function hydrateSitePrefetchFromPersist(site: WordPressSite): Promise<Enti
   cacheBySiteId.set(site.id, hydrated);
   credentialsKeyBySiteId.set(site.id, credKey);
   seedBulkGenerationWpInventoryFromBundle(site, hydrated);
+  seedOverviewSessionCachesFromWarm(site);
   notifyEntitySiteWarmInflightChanged();
   return hydrated;
 }
@@ -651,7 +675,75 @@ export async function refreshSitePrefetch(site: WordPressSite): Promise<EntitySi
 /** Silent background warm with stale-while-revalidate. Empty inventory is never treated as ready. */
 export function warmEntitySiteCache(site: WordPressSite): void {
   if (!site.siteUrl?.trim()) return;
-  void ensureEntitySiteWarmCache(site);
+  void ensureEntitySiteWarmCache(site).catch(() => {
+    resolveInventoryLeg(site.id);
+  });
+}
+
+/**
+ * After URL inventory commits, seed title/keyword/date via metadata-only REST (no bodies).
+ */
+export async function seedWarmBulkInventoryMetadata(site: WordPressSite): Promise<void> {
+  if (!canWarmEntitySite(site)) return;
+  if (metadataSeedInflightBySiteId.has(site.id)) return;
+
+  const existing = getBulkGenerationWpInventoryIfReady(site.id) ?? [];
+  const hasMetadata = existing.some(
+    (r) => r.id && ((r.fields?.title ?? "").trim() || (r.fields?.keyword ?? "").trim()),
+  );
+  if (hasMetadata && existing.length > 0) return;
+
+  metadataSeedInflightBySiteId.add(site.id);
+  try {
+    const { fetchUnifiedOverviewSitemapInventory } = await import(
+      "@/lib/overview/overview-unified-sitemap-inventory"
+    );
+    const unified = await fetchUnifiedOverviewSitemapInventory(site, {
+      includeContent: false,
+      includePageHeading: true,
+    });
+    const rows = [
+      ...(unified.bySource.pages ?? []),
+      ...(unified.bySource.posts ?? []),
+      ...(unified.bySource.sap ?? []),
+    ] as SiteInventoryBulkRow[];
+    if (!rows.length) return;
+    mergeSitePrefetchBulkMetadataRows(site, rows);
+    setBulkGenerationWpInventoryEntry({ siteId: site.id, rows, fetchedAt: Date.now() });
+    seedOverviewSessionCachesFromWarm(site);
+  } finally {
+    metadataSeedInflightBySiteId.delete(site.id);
+  }
+}
+
+/**
+ * Merge metadata-only bulk rows into warm bundle (title/keyword/date; no post bodies required).
+ */
+export function mergeSitePrefetchBulkMetadataRows(
+  site: WordPressSite,
+  rows: SiteInventoryBulkRow[],
+): void {
+  if (!rows.length) return;
+  const existing = cacheBySiteId.get(site.id);
+  if (!existing || existing.error) return;
+  const withMetadata = rows.filter(
+    (r) => r.id && ((r.fields?.title ?? "").trim() || (r.fields?.keyword ?? "").trim()),
+  );
+  if (!withMetadata.length) return;
+  const next: EntitySiteWarmBundle = {
+    ...existing,
+    bulkInventoryRows: rows,
+    fetchedAt: Date.now(),
+    counts: {
+      ...existing.counts,
+      inventoryTotal: Math.max(existing.counts.inventoryTotal, rows.length),
+    },
+  };
+  cacheBySiteId.set(site.id, next);
+  seedBulkGenerationWpInventoryFromBundle(site, next);
+  void writeSitePrefetchPersist(next);
+  notifyEntitySiteWarmInflightChanged();
+  seedOverviewSessionCachesFromWarm(site);
 }
 
 /**
@@ -683,6 +775,7 @@ export function mergeSitePrefetchBulkInventoryRows(
   seedBulkGenerationWpInventoryFromBundle(site, next);
   void writeSitePrefetchPersist(next);
   notifyEntitySiteWarmInflightChanged();
+  seedOverviewSessionCachesFromWarm(site);
 }
 
 /** Alias for unified site prefetch API. */
@@ -692,6 +785,7 @@ export const warmSitePrefetch = warmEntitySiteCache;
 export function bootstrapSitePrefetchForSite(site: WordPressSite): void {
   void hydrateSitePrefetchFromPersist(site);
   warmEntitySiteCache(site);
+  void seedWarmBulkInventoryMetadata(site).catch(() => {});
 }
 
 /** First app load: hydrate active site from disk, then warm. */

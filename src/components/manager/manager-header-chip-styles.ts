@@ -93,6 +93,15 @@ export function managerDisplayResetSquareClass(): string {
   return cn(MANAGER_DISPLAY_SQUARE_BASE, MANAGER_DISPLAY_SQUARE_RESET, "[&_svg]:size-6");
 }
 
+export function managerDisplayErrorLogSquareClass(hasErrors: boolean): string {
+  return cn(
+    MANAGER_DISPLAY_SQUARE_BASE,
+    hasErrors
+      ? "bg-red-500/15 text-red-400 hover:bg-red-500/25 [&_svg]:size-5"
+      : "bg-zinc-900 text-muted-foreground hover:bg-zinc-800 [&_svg]:size-5",
+  );
+}
+
 export function managerDisplayNotifySquareButtonClass(variant: NotifyVariant | null): string {
   return cn(MANAGER_DISPLAY_SQUARE_BASE, managerDisplayNotifySquareClass(variant));
 }

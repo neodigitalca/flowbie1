@@ -16,7 +16,7 @@ export function buildBlogHarnessSummaryAgent(): AgentConfig {
     step: 1,
     title: BLOG_HARNESS_SUMMARY_TITLE,
     description:
-      "Google AI Overview opener: 1-2 SEO lead paragraphs, then contextual scroll-link <ul> (one in-context # link per body H2). Never boilerplate \"see below\".",
+      "Google AI Overview opener: 1-2 SEO lead paragraphs (second sentence announces the labeled real-world hypothetical when connected-site), then contextual scroll-link <ul> including mandatory **Real-World Example** bullet to the [ILLUSTRATIVE] body H2. Never boilerplate \"see below\".",
     features: [],
     headingLevel: 1,
   };
@@ -49,7 +49,7 @@ export function ensureBlogHarnessSummaryFirst(
 /**
  * Guarantee the AI Overview summary agent is the **last** harness generation step for blog content.
  * Body H2 sections generate first; Overview prose runs last with known body anchors.
- * Published HTML still places Overview first when stitching.
+ * Published HTML places Answer first, then Overview, when stitching.
  */
 export function ensureBlogHarnessSummaryLast(
   agents: AgentConfig[],

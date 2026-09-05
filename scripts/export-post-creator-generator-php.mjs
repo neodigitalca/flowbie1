@@ -81,7 +81,7 @@ const snapshot = {
   checklistSystemMarkers: [
     "Do NOT use ## markdown headings",
     "FOCUS KEYWORD DENSITY",
-    "WORDPRESS POSTS SOURCE",
+    "INTERNAL LINK TARGETS",
   ],
   blueprintSystemMarkers: [
     "Blueprint Architect",
@@ -96,7 +96,7 @@ const php = fs.readFileSync(generatorPhp, "utf8");
 const required = [
   "Do NOT use ## markdown headings",
   "FOCUS KEYWORD DENSITY",
-  "WORDPRESS POSTS SOURCE",
+  "INTERNAL LINK TARGETS",
   "Blueprint Architect",
 ];
 for (const marker of required) {

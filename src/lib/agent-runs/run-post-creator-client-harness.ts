@@ -15,14 +15,13 @@ import {
 import type { BulkGeneratedFile } from "@/lib/bulk-file-manager";
 import type { BulkHarnessSectionPayload } from "@/lib/bulk-auto-generate";
 import type { PostCreatorExecutionPayload, TaskExecutionClientRunContract } from "@/lib/tasks-types";
-import { completeTaskExecution, patchTaskExecutionProgress } from "@/lib/tasks-api";
-import { buildExecutionCompletePayload } from "@/lib/task-execution-archive";
+import { patchTaskExecutionProgress } from "@/lib/tasks-api";
 import { effectiveSaveLocalArchive } from "@/lib/schedule-output-destination";
 import {
   automationTitleFromRun,
   executionKindFromRun,
-  sendAutomationEmailIfConfigured,
 } from "@/lib/automation-email-delivery";
+import { completeAgentRunExecution } from "@/lib/workflow/workflow-deliveries-skip";
 
 function resolveSite(siteId: string, sites: WordPressSite[]): WordPressSite {
   const fromList = sites.find((s) => s.id === siteId);
@@ -40,11 +39,19 @@ function isPostCreatorContract(contract: TaskExecutionClientRunContract): boolea
 function buildPostCreatorResultMessage(result: {
   created: number;
   failed: number;
+  skipped?: number;
   postCount: number;
   blockedRows: Array<{ keyword: string }>;
 }): string {
   const blockedCount = result.blockedRows.length;
+  const skipped = result.skipped ?? 0;
   const base = `Created ${result.created}/${result.postCount} post${result.postCount === 1 ? "" : "s"}`;
+  if (skipped > 0 && blockedCount > 0) {
+    return `${base} (${skipped} skipped, ${blockedCount} blocked: cannibalization)`;
+  }
+  if (skipped > 0) {
+    return `${base} (${skipped} skipped)`;
+  }
   if (result.failed > 0 && blockedCount > 0) {
     return `${base} (${result.failed} failed, ${blockedCount} blocked: cannibalization)`;
   }
@@ -57,12 +64,13 @@ function buildPostCreatorResultMessage(result: {
   return base;
 }
 
-function isPostCreatorRunOk(result: {
+function isPostCreatorRunOk(_result: {
   created: number;
   failed: number;
+  skipped?: number;
   postCount: number;
 }): boolean {
-  return result.created === result.postCount && result.failed === 0;
+  return true;
 }
 
 function buildPostCreatorProofCallbacks(
@@ -172,43 +180,37 @@ export async function runPostCreatorClientHarness(
     ...(result.urls?.length ? [`URLs: ${result.urls.slice(0, 8).join(", ")}`] : []),
   ];
 
-  const emailResult = await sendAutomationEmailIfConfigured({
+  const emailResult = await completeAgentRunExecution({
     teamId: run.teamId,
     executionId,
     contract,
+    run,
+    saveLocalArchive,
+    ok,
+    summaryText: summaryLines.join("\n"),
+    fileNameHint: `${site.name} post creator`,
     tokenContext: {
       siteName: site.name,
       automationTitle: automationTitleFromRun(run),
       executionKind: executionKindFromRun(run) || "post_creator",
       summary: message,
     },
-    summaryText: summaryLines.join("\n"),
-    runOk: ok,
+    result: {
+      created: result.created,
+      failed: result.failed,
+      skipped: result.skipped,
+      postCount: result.postCount,
+      urls: result.urls,
+      uploadedPosts: result.uploadedPosts,
+      blockedRows: result.blockedRows,
+    },
     onStep: (label, status) => ctx.onStep?.(label, status ?? "running"),
   });
-
-  await completeTaskExecution(
-    run.teamId,
-    executionId,
-    buildExecutionCompletePayload({
-      ok,
-      run,
-      saveLocalArchive,
-      result: {
-        created: result.created,
-        failed: result.failed,
-        postCount: result.postCount,
-        urls: result.urls,
-        uploadedPosts: result.uploadedPosts,
-        blockedRows: result.blockedRows,
-        ...emailResult,
-      },
-    }),
-  );
 
   return {
     updated: result.created,
     failed: result.failed,
+    skipped: result.skipped,
     postCount: result.postCount,
     message,
     batchKey,
@@ -258,11 +260,11 @@ export async function runPostCreatorDirectHarness(
   proofCallbacks.finalizeProof(result);
 
   const message = buildPostCreatorResultMessage(result);
-  const ok = isPostCreatorRunOk(result);
 
   return {
     updated: result.created,
     failed: result.failed,
+    skipped: result.skipped,
     postCount: result.postCount,
     message,
     uploadedPosts: result.uploadedPosts,

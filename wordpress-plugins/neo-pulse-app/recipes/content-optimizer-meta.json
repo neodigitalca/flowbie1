@@ -1,0 +1,69 @@
+{
+  "keyword": "content-optimizer-meta",
+  "name": "Meta + extra text",
+  "description": "Update title, meta description, and SEO extra text only. Page body is not rewritten.",
+  "notes": [
+    "Run from a Forge workflow with Client as step 1.",
+    "Choose target bucket and meta aspects in the What tab.",
+    "Optional RAG context from upstream workflow steps."
+  ],
+  "category": "maintenance",
+  "verticals": [
+    "general",
+    "editorial"
+  ],
+  "tags": [
+    "optimize",
+    "aiseo",
+    "meta"
+  ],
+  "prerequisites": [
+    "wordpress"
+  ],
+  "filters": {
+    "executionKinds": [
+      "content_optimizer_meta"
+    ],
+    "buckets": [
+      "pages",
+      "posts",
+      "sap",
+      "all"
+    ],
+    "execution": [
+      "meta-only"
+    ],
+    "actionCount": 1
+  },
+  "defaultTasks": [
+    {
+      "keyword": "content-optimizer-meta-run",
+      "title": "Meta + extra text",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "content_optimizer_meta",
+      "executionPayload": {
+        "updateMode": "update"
+      },
+      "scheduleMode": "calendar",
+      "recurrenceRule": "none"
+    }
+  ],
+  "isAutomation": true,
+  "kind": "template",
+  "triggerBlock": {
+    "keyword": "schedule-once",
+    "kind": "calendar",
+    "frequency": "once",
+    "startDate": "2026-09-01",
+    "time": "09:00"
+  },
+  "actionBlock": {
+    "keyword": "content-optimizer-meta",
+    "executionKind": "content_optimizer_meta",
+    "executionPayload": {
+      "updateMode": "update"
+    },
+    "title": "Meta + extra text"
+  }
+}

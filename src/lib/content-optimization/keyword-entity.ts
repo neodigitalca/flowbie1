@@ -1,7 +1,7 @@
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { filterAndRankQueriesWithAI, isNonEnglishKeyword } from "@/lib/gsc-query-processor";
 import { stripBracketPlaceholders, stripLeadingP } from "@/lib/gsc-simple-keyword-recommendation";
-import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChat } from "@/lib/openrouter-app-api";
 
 /** One row for batched entity keyword generation (Bulk: up to 100 per OpenRouter call). */
 export type EntityKeywordBatchItem = { index: number; pageTitle: string; pageUrl: string };
@@ -76,16 +76,14 @@ export async function generateLocalKeywordsForEntityPagesBatch(
     .join("\n");
 
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: openRouterWebAppHeaders(apiKey),
-      body: JSON.stringify({
-        model: researchModel,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "user",
-            content: `You are given multiple entity or service-area pages. For EACH input row output exactly one localized search keyword in JSON only.
+    const { content: rawText } = await postOpenRouterAppChat({
+      apiKey,
+      model: researchModel,
+      responseFormat: { type: "json_object" },
+      messages: [
+        {
+          role: "user",
+          content: `You are given multiple entity or service-area pages. For EACH input row output exactly one localized search keyword in JSON only.
 
 Output shape: {"keywords":[{"index":number,"keyword":string},...]}
 Rules:
@@ -101,23 +99,11 @@ Rules:
 
 Input rows:
 ${lines}`,
-          },
-        ],
-        temperature: 0.35,
-        max_tokens: Math.min(16000, 400 + items.length * 48),
-      }),
+        },
+      ],
+      temperature: 0.35,
+      maxTokens: Math.min(16000, 400 + items.length * 48),
     });
-
-    if (!response.ok) {
-      console.warn("[Local Keyword Batch] OpenRouter HTTP:", response.status);
-      fillFallbacks();
-      return out;
-    }
-
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    const rawText = data.choices?.[0]?.message?.content?.trim() || "";
     const parsed = parseEntityBatchJson(rawText);
     const rows = parsed?.keywords;
     if (Array.isArray(rows)) {
@@ -174,15 +160,13 @@ export async function generateLocalKeywordForEntityPage(
 ): Promise<string> {
   const researchModel = model || getResearchModel();
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: openRouterWebAppHeaders(apiKey),
-      body: JSON.stringify({
-        model: researchModel,
-        messages: [
-          {
-            role: "user",
-            content: `Analyze this entity/service area page and generate a local-focused keyword:
+    const { content: aiKeywordRaw } = await postOpenRouterAppChat({
+      apiKey,
+      model: researchModel,
+      messages: [
+        {
+          role: "user",
+          content: `Analyze this entity/service area page and generate a local-focused keyword:
 
 Page Title: "${pageTitle}"
 Page URL: "${pageUrl}"
@@ -200,20 +184,15 @@ Generate a keyword that:
 - NEVER use placeholders like [city], [region], [city name], or [city/region] - use only real words.
 
 Return ONLY the keyword phrase, nothing else.`,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 50,
-      }),
+        },
+      ],
+      temperature: 0.7,
+      maxTokens: 50,
     });
-
-    if (response.ok) {
-      const data = await response.json();
-      const aiKeyword = data.choices?.[0]?.message?.content?.trim() || "";
-      if (aiKeyword && aiKeyword.length > 2) {
-        const cleaned = aiKeyword.replace(/^["']|["']$/g, "").trim();
-        return stripLeadingP(stripBracketPlaceholders(cleaned));
-      }
+    const aiKeyword = aiKeywordRaw.trim();
+    if (aiKeyword && aiKeyword.length > 2) {
+      const cleaned = aiKeyword.replace(/^["']|["']$/g, "").trim();
+      return stripLeadingP(stripBracketPlaceholders(cleaned));
     }
   } catch (error) {
     console.warn("[Local Keyword Generation] AI generation failed:", error);
@@ -263,15 +242,13 @@ export async function selectBestKeywordForEntityPage(
       )
       .join("\n");
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: openRouterWebAppHeaders(apiKey),
-      body: JSON.stringify({
-        model: researchModel,
-        messages: [
-          {
-            role: "user",
-            content: `Select the BEST keyword from these GSC queries for page "${pageTitle}".
+    const { content: selectedKeywordRaw } = await postOpenRouterAppChat({
+      apiKey,
+      model: researchModel,
+      messages: [
+        {
+          role: "user",
+          content: `Select the BEST keyword from these GSC queries for page "${pageTitle}".
 
 Queries:
 ${queriesList}
@@ -279,16 +256,12 @@ ${queriesList}
 Select the keyword that best matches the page content and has good traffic potential. Location+service keywords (e.g., "tooth crown edmonton ab") are valid if they describe a service, not a business name.
 
 Return the exact keyword phrase or 'NONE' if none are suitable.`,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 100,
-      }),
+        },
+      ],
+      temperature: 0.7,
+      maxTokens: 100,
     });
-
-    if (response.ok) {
-      const data = await response.json();
-      const selectedKeyword = (data.choices?.[0]?.message?.content?.trim() || "").trim();
+    const selectedKeyword = selectedKeywordRaw.trim();
       if (selectedKeyword.toUpperCase().includes("NONE") || selectedKeyword.length === 0) return null;
       const cleaned = selectedKeyword.replace(/^["']|["']$/g, "").trim();
       const normalizedCleaned = cleaned.toLowerCase().replace(/\s+/g, "");
@@ -302,7 +275,6 @@ Return the exact keyword phrase or 'NONE' if none are suitable.`,
       });
       if (matchingQuery) return matchingQuery;
       return null;
-    }
   } catch (error) {
     console.warn("[Entity Keyword Selection] AI selection failed:", error);
   }

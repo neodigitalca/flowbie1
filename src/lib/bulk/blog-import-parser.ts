@@ -11,6 +11,7 @@ import {
 } from "@/lib/bulk/blog-import-draft-links";
 
 export const BLOG_IMPORT_ACCEPT_EXT = new Set(["docx", "md", "markdown", "html", "htm", "txt"]);
+export const BLOG_IMPORT_FILE_ACCEPT = ".docx,.md,.markdown,.html,.htm,.txt";
 export const SECTION_BODY_MAX_CHARS = 800;
 export const MIN_IMPORTED_H2_SECTIONS = 2;
 
@@ -221,7 +222,18 @@ function splitMarkdownIntoHeadingSections(text: string): ImportedBlogSection[] {
 }
 
 function titleFromFilename(filename: string): string {
-  const base = filename.replace(/\.[^.]+$/, "").trim();
+  return humanTitleFromImportFileName(filename);
+}
+
+/** Human-readable title from upload filename; skips generated export stems with timestamps. */
+export function humanTitleFromImportFileName(filename: string): string {
+  const base = filename.replace(/\.[^.]+$/, "").trim().replace(/\s+\(\d+\)$/, "");
+  const exportMatch = base.match(
+    /^(?:content|blueprint|blog-checklist|keyword-research-dfs|sem_rush)-(.+?)-\d{10,}$/i,
+  );
+  if (exportMatch?.[1]) {
+    return exportMatch[1].replace(/-/g, " ").trim() || "Imported blog post";
+  }
   return base || "Imported blog post";
 }
 
@@ -295,7 +307,7 @@ export function validateImportedBlogDraft(draft: ImportedBlogDraft): void {
 
 export async function parseBlogImportFile(
   file: File,
-  options?: { titleOverride?: string },
+  options?: { titleOverride?: string; requireMinSections?: boolean },
 ): Promise<ImportedBlogDraft> {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
   if (!BLOG_IMPORT_ACCEPT_EXT.has(ext)) {
@@ -324,7 +336,9 @@ export async function parseBlogImportFile(
           })();
   }
 
-  validateImportedBlogDraft(draft);
+  if (options?.requireMinSections !== false) {
+    validateImportedBlogDraft(draft);
+  }
   return draft;
 }
 

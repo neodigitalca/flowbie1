@@ -18,6 +18,7 @@ import {
   runOverviewLinksHarnessBatch,
 } from "@/lib/overview/overview-blog-links-harness-run";
 import { loadBlogLinksLinkInventory } from "@/lib/overview/overview-blog-links-inventory";
+import { buildOverviewHarnessCatalogWithHtml } from "@/lib/overview/overview-harness-page-catalog";
 import type { OverviewInventoryUrlMatch } from "@/lib/overview/overview-row-scrape";
 import { setOptimizingState } from "@/hooks/content-optimization/optimization-helpers-a";
 import { getWordPressPostContent } from "@/lib/wordpress-api/posts";
@@ -42,11 +43,26 @@ async function fetchRowHtmlByIndex(
   indices: number[],
   rows: OverviewRow[],
   bindings: Record<string, OverviewBinding | undefined>,
+  sitemapSource: OverviewSitemapSource,
+  bulkScopeUrlKeys: Set<string>,
   getInventoryMatchForUrl?: (
     site: WordPressSite | null,
     url: string,
   ) => OverviewInventoryUrlMatch | undefined,
 ): Promise<Record<number, string>> {
+  if (sitemapSource === "sap") {
+    const { rowHtmlByIndex } = await buildOverviewHarnessCatalogWithHtml({
+      site,
+      rows,
+      indices,
+      sitemapSource,
+      bindings,
+      getInventoryMatchForUrl: getInventoryMatchForUrl ?? (() => undefined),
+      bulkScopeUrlKeys,
+    });
+    return rowHtmlByIndex;
+  }
+
   const idToIndices = new Map<number, number[]>();
 
   for (const index of indices) {
@@ -143,7 +159,15 @@ export function useOverviewTabBlogLinks({
 
         const [extraBindings, rowHtmlByIndex] = await Promise.all([
           resolveBindings(urls, site, undefined, { inventoryOnly: true }),
-          fetchRowHtmlByIndex(site, indices, rows, bindings, getInventoryMatchForUrl),
+          fetchRowHtmlByIndex(
+            site,
+            indices,
+            rows,
+            bindings,
+            sitemapSource,
+            bulkScopeUrlKeys,
+            getInventoryMatchForUrl,
+          ),
         ]);
         const mergedBindings: Record<string, OverviewBinding | undefined> = {
           ...bindings,

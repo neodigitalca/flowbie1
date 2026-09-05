@@ -2,7 +2,7 @@ import type { KeywordAIAnalysis } from "../keyword-types";
 import type { PromptBulkSitemapInventoryBuckets } from "../bulk/prompt-bulk-sitemap-inventory";
 import { GLOBAL_BLOCKED_TOPIC_PROMPT_BLOCK } from "../content-topic-blocklist";
 import { CRITICAL_LINK_RULE, NO_FAKE_TESTIMONIALS_RULE } from "./core";
-import { TITLE_ANTI_CLICKBAIT_RULE, TITLE_KEYWORD_WEAVING_RULE, TITLE_CASE_RULE, TITLE_WELL_KNOWN_ACRONYMS_RULE } from "./system-user";
+import { TITLE_ANTI_CLICKBAIT_RULE, TITLE_KEYWORD_WEAVING_RULE, TITLE_CASE_RULE, TITLE_WELL_KNOWN_ACRONYMS_RULE } from "./title-rules";
 
 /** Prompt-mode bulk ideation: informational blogs vs local geo entity (service-area) rows. */
 export type BulkBlogIdeasContentKind = "content_blog" | "service_area_sap";
@@ -230,27 +230,37 @@ ${INVENTORY_CANNIBALIZATION}
 export function buildGscKeywordsBlock(gscExactKeywords: string[], n: number, flowPurpose?: string): string {
   const list = gscExactKeywords.map((kw, i) => `${i + 1}. "${kw}"`).join("\n");
   const intentOverride = flowPurpose?.trim()
-    ? `\n**When content topic "${flowPurpose.trim()}" is set: use each GSC keyword ONLY if it fits this topic; if not, generate a topic-fitting keyword and idea for that slot.**\n`
+    ? `\n**When content topic "${flowPurpose.trim()}" is set: use each GSC keyword ONLY if it fits this topic and passes inventory exclusion; if not, pick another SITE_KW_JSON line that fits.**\n`
     : "";
   return `
 === GSC KEYWORDS ===
 ${list}
 ${intentOverride}
-Use in order when they fit the content topic. These may be selected low-hanging opportunities from site GSC and Semrush keyword JSON. ${n} ideas.
+These passed inventory review. Use only when they still do not overlap site inventory intent. Skip any that match existing post topics; pick a different line from SITE_KW_JSON instead. ${n} ideas.
 For the Keyword column: use each selected phrase as written only when it is already a clean short-tail commercial keyword. Distill longer commercial/question phrases into **complete 2–3 word intent keywords** and drop near-me / city / neighborhood proximity language. Examples: "how much do solar panels cost in alberta" -> "solar panels cost"; "how much does it cost to install solar panels" -> "solar panel installation cost". Never output broken fragments like "how much do solar panels" or "how much do solar energy". **Exception - government / policy / incentives / grants / rebates / regulations / tax credits:** keep jurisdiction (country and federal/provincial/state) already present in the selected keyword - do not strip it. The article body can still address the full query.
+Never copy an existing inventory title. Write original titles for every row.
 === END GSC KEYWORDS ===`;
 }
 
 function buildSiteKwJsonStepBlock(siteKwJsonText: string, selectedKeywords: string[] | undefined): string {
-  const selected = selectedKeywords?.length
-    ? selectedKeywords.map((kw, i) => `${i + 1}. "${kw}"`).join("\n")
-    : "(none selected)";
+  const hasSelected = Boolean(selectedKeywords?.length);
+  const selected = hasSelected
+    ? selectedKeywords!.map((kw, i) => `${i + 1}. "${kw}"`).join("\n")
+    : "(none — you must pick from SITE_KW_JSON below)";
+  const selectionRules = hasSelected
+    ? `Each idea's Keyword should use SELECTED_LOW_HANGING_KEYWORDS when they pass inventory review, but the displayed Keyword must be the cleaned short-tail form. Skip any selected keyword that still overlaps inventory intent; pick another line from SITE_KW_JSON instead.\n`
+    : `Before generating ideas, read SITE INVENTORY in this message. Then read SITE_KW_JSON below.\n` +
+      `For each idea, pick ONE gsc or semrush line whose search intent is NOT already covered in inventory.\n` +
+      `- SKIP lines that match existing topics (example: skip "national seo" when inventory has national-seo-canada).\n` +
+      `- SKIP lines that overlap any published post title or slug intent.\n` +
+      `- Distill each chosen line to a clean 2-3 word short-tail keyword.\n` +
+      `- Never copy an existing inventory title. Write original titles.\n`;
   return (
     `STEP 0 - READ SITE_KW_JSON (mandatory before ideas):\n` +
     `This JSON contains scraped Semrush and GSC keyword lists for the target site. Metrics were used to sort them locally, then removed to save tokens. Prioritize Semrush first, then GSC. Read it before generating ideas.\n` +
-    `Each idea's Keyword should use SELECTED_LOW_HANGING_KEYWORDS in order, but the displayed Keyword must be the cleaned short-tail form. Distill question/long-tail entries into complete noun/intent keywords, not broken fragments. Only invent a new short-tail keyword when the selected list runs out.\n` +
-    `Preserve selected government / policy / incentives / grants / rebates / regulations / tax credit keywords with jurisdiction. For normal commercial keywords, clean long-tail/question wording before using it.\n` +
-    `Invented keywords: informational or transactional intent only; 2-3 words for commercial keywords (no near-me / city proximity spam); government/policy inventions must include jurisdiction inferred from the connected site context already reflected in SITE_KW_JSON selection - never invent an unrelated market; no cannibalization with other ideas or the site inventory.\n\n` +
+    selectionRules +
+    `Distill question/long-tail entries into complete noun/intent keywords, not broken fragments. Preserve jurisdiction on government/policy/incentives/grants keywords.\n` +
+    `Invented keywords: informational or transactional intent only; 2-3 words for commercial keywords (no near-me / city proximity spam); government/policy inventions must include jurisdiction inferred from the connected site context; no cannibalization with other ideas or the site inventory.\n\n` +
     `=== SELECTED_LOW_HANGING_KEYWORDS ===\n${selected}\n=== END SELECTED_LOW_HANGING_KEYWORDS ===\n\n` +
     `=== SITE_KW_JSON ===\n${siteKwJsonText.trim()}\n=== END SITE_KW_JSON ===\n\n`
   );
@@ -416,8 +426,8 @@ export const buildBulkBlogIdeasSystemPrompt = (
       ? "One unique row per local geo landing: follow " + GEO_LANDING_KEYWORD_INTENT_RULES + " Distinct geography per row when possible."
       : keywordMode === "gsc-keywords" && gscExactKeywords?.length
         ? flowPurpose?.trim()
-          ? "Use GSC/selected phrases in order ONLY when they fit the content topic; otherwise use a topic-fitting 2–3 word keyword for that idea. Prefer selected keywords as written. Strip near-me / city proximity spam from commercial keywords. Preserve jurisdiction on government/policy/incentives/grants keywords."
-          : "Align posts with GSC/selected phrases in order; use Keyword as written when already short-tail. Strip near-me / city proximity spam from commercial keywords. Preserve jurisdiction on government/policy/incentives/grants keywords."
+          ? "Use GSC/selected phrases ONLY when they fit the content topic and pass inventory exclusion; otherwise pick another SITE_KW_JSON line. Prefer selected keywords as written. Strip near-me / city proximity spam from commercial keywords. Preserve jurisdiction on government/policy/incentives/grants keywords. Never copy inventory titles."
+          : "Align posts with GSC/selected phrases that pass inventory exclusion; skip any that overlap existing post topics and pick from SITE_KW_JSON instead. Use Keyword as written when already short-tail. Strip near-me / city proximity spam from commercial keywords. Preserve jurisdiction on government/policy/incentives/grants keywords. Never copy inventory titles."
         : keywordMode === "same"
           ? `Use one short-tail intent keyword for all (from "${keywordValue}" if already short; if longer, distill; strip near-me / city spam only; keep jurisdiction if it is a government/policy keyword).`
           : "One unique 2–3 word short-tail intent keyword per blog (different each), no near-me / city spam; government/policy inventions must include jurisdiction.";
@@ -575,8 +585,8 @@ export const buildBulkBlogIdeasUserPrompt = (
   if (gscExactKeywords && gscExactKeywords.length > 0) {
     parts.push(
       flowPurpose?.trim()
-        ? "\nUse GSC keywords from the system prompt in order ONLY when each fits the content topic."
-        : "\nUse GSC keywords from the system prompt in order.",
+        ? "\nUse GSC keywords from the system prompt ONLY when each fits the content topic and passes inventory exclusion."
+        : "\nUse GSC keywords from the system prompt only when they do not overlap site inventory intent.",
     );
   }
 

@@ -5,7 +5,7 @@
  */
 
 import { notify } from "@/lib/app-notifications";
-import { NOTIFY_CONTENT_OPTIMIZATION_DISABLED_PROCEEDING, NOTIFY_CONTENT_OPTIMIZED_BUT_IMPLEMENTATION_REP, NOTIFY_FAILED_TO_ENSURE_LINKS_IN_EXTRA_CONTENT_, NOTIFY_FAILED_TO_GENERATE_EXTRA_IMAGE_CONTINUIN, NOTIFY_FAILED_TO_GENERATE_EXTRA_TEXT_CONTINUING, NOTIFY_IMPLEMENTATION_REPORT_GENERATED, NOTIFY_POST_UPLOAD_COMPLETED_BUT_MAY_NOT_HAVE_B, notifyOptimizedXs, notifyViewPostX, notifyXPostInWordpress } from "@/lib/notify-messages";
+import { NOTIFY_CONTENT_OPTIMIZATION_DISABLED_PROCEEDING, NOTIFY_CONTENT_OPTIMIZED_BUT_IMPLEMENTATION_REP, NOTIFY_FAILED_TO_GENERATE_EXTRA_IMAGE_CONTINUIN, NOTIFY_FAILED_TO_GENERATE_EXTRA_TEXT_CONTINUING, NOTIFY_IMPLEMENTATION_REPORT_GENERATED, NOTIFY_POST_UPLOAD_COMPLETED_BUT_MAY_NOT_HAVE_B, notifyOptimizedXs, notifyViewPostX, notifyXPostInWordpress } from "@/lib/notify-messages";
 import { getMuteOptimizationToasts } from "@/hooks/content-optimization/optimization-toast-mute";
 import { loadApiKey } from "@/lib/api";
 import { htmlToMarkdown } from "@/lib/wordpress-converter";
@@ -28,13 +28,17 @@ import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { normalizeInternalUrl, extractInternalLinksFromContent } from "@/lib/wordpress-api/validate-internal-links";
 import { ensureWhatWeOfferTablePageLinks } from "@/lib/content-generation/what-we-offer-table-page-links";
 import { removeInvalidInternalLinks, deduplicateInternalLinksInHtml } from "@/lib/content-generation/content-sanitizer";
-import { integrateOrphanInternalLinksInHtml } from "@/lib/content-generation/integrate-orphan-internal-links";
-import {
-  countInternalLinksInHtmlContent,
-  MIN_LINKS_PER_POST,
-} from "@/lib/content-generation/ensure-links-per-section";
+import { resolveInternalLinkPlaceholdersInHtml } from "@/lib/content-generation/internal-link-placeholders";
 import { prepareHarnessContentForUpload } from "@/lib/content-generation/harness-upload-prep";
-import { parseExternalSemrushPairsFromAgents } from "@/lib/content-generation/external-link-placeholders";
+import {
+  applyOptimizeFaqToHarnessHtml,
+  type PrecomputedAcfSeoBundle,
+} from "@/lib/content-generation/bulk-acf-seo-bundle";
+import {
+  mergeExternalLinkPairs,
+  parseExternalSemrushPairsFromAgents,
+  parseLlmAuditAuthorityPairsFromAgents,
+} from "@/lib/content-generation/external-link-placeholders";
 import { ensureSemrushExternalLinksInHtml } from "@/lib/content-generation/ensure-semrush-external-links";
 import { reduceHarnessSectionList } from "@/lib/bulk/harness-sections-reducer";
 import {
@@ -44,6 +48,11 @@ import {
 } from "@/hooks/content-optimization/optimization-helpers";
 import type { RunProgressReporter, ContentOptimizerStepId } from "@/lib/content-optimization/content-optimizer-run-progress";
 import { harnessSubProgress } from "@/lib/content-optimization/content-optimizer-run-progress";
+import {
+  markContentPrepHarnessSection,
+  type ContentPrepHarnessBridge,
+  pipelineIndexForHarnessTitle,
+} from "@/lib/overview/overview-content-prep-harness-run";
 
 /** WordPress REST API can return content/excerpt as { raw, rendered }. Normalize to string. */
 function toStringContent(value: unknown): string {
@@ -125,6 +134,12 @@ export interface OptimizationContext {
   selectedPeopleAlsoAsk?: string[]; // PAA questions for FAQ schema generation
   /** From prefetch `getACFFieldsForPost` — lets upload skip a second ACF read when ids match. */
   acfFullPostSnapshot?: Record<string, unknown>;
+  /** Merged LLM audit facts for harness sections (from seo_research or live fetch). */
+  llmAuditSummary?: string;
+  firstPartyAuthorityBlock?: string;
+  /** LLM audit authority externals (gov/municipal/news) — harness allowlist. */
+  llmAuditAuthorityExternalPairs?: import("@/lib/content-generation/external-link-placeholders").ExternalLinkPair[];
+  linkTargetsPlan?: import("@/lib/bulk/bulk-generation-wp-inventory").LinkTargetsPlan;
 }
 
 /** Queries by impressions for meta AI (same shape as Overview GSC context). */
@@ -170,6 +185,8 @@ export async function generateAndUploadContent(
   acfContext?: AIDrivenACFContext,
   /** Raw optimization progress setter for harness section list merges (functional updates). */
   setOptimizationProgressRaw?: (fn: (prev: any) => any) => void,
+  /** Bulk Details: status-only updates on url harness — no legacy site harness markdown. */
+  contentPrepHarnessBridge?: ContentPrepHarnessBridge,
 ): Promise<{ result: any; markdownContent: string; excerpt: string; changes?: { titleChanged?: boolean; metaChanged?: boolean; contentChanged?: boolean; title?: string; meta?: string } }> {
   // Defaults when no options passed. Caller's optimizationOptions are respected so content can be updated.
   const DEFAULT_OPTIMIZATION_OPTIONS = {
@@ -276,13 +293,14 @@ export async function generateAndUploadContent(
 
     const blueprintAgents = Array.isArray(blueprintResult?.agents) ? blueprintResult.agents : [];
     const plannedContentSections = blueprintAgents.length;
-    const waitingContentHarness = Array.from({ length: plannedContentSections }, (_, sectionIndex) => ({
-      sectionIndex,
-      title: '',
-      status: 'waiting' as const,
-    }));
+    const usePrepHarnessBridge = Boolean(contentPrepHarnessBridge);
 
-    if (setOptimizationProgressRaw) {
+    if (setOptimizationProgressRaw && !usePrepHarnessBridge) {
+      const waitingContentHarness = Array.from({ length: plannedContentSections }, (_, sectionIndex) => ({
+        sectionIndex,
+        title: '',
+        status: 'waiting' as const,
+      }));
       setOptimizationProgressRaw((prev: any) =>
         mergeOptimizationProgress(prev, site.id, {
           stepId: "write",
@@ -312,6 +330,10 @@ export async function generateAndUploadContent(
         semrushScatterContext: context.semrushScatterContext,
         semrushExternalUrls: context.semrushExternalUrls,
         portfolioBlockedHosts: portfolioBlockedHostsForPrompts,
+        llmAuditSummary: context.llmAuditSummary,
+        firstPartyAuthorityBlock: context.firstPartyAuthorityBlock,
+        llmAuditAuthorityExternalPairs: context.llmAuditAuthorityExternalPairs,
+        linkTargetsPlan: context.linkTargetsPlan,
       },
       fileManager,
       setProgress: legacyProgress("write"),
@@ -319,27 +341,80 @@ export async function generateAndUploadContent(
       shouldOptimizeContent,
       hasEntityOverride: optimizationOptions?.hasEntity,
       skipMetaDescriptionGeneration: !shouldOptimizeMeta,
-      onHarnessSection: setOptimizationProgressRaw
+      onHarnessSection: usePrepHarnessBridge
         ? (payload) => {
-            setOptimizationProgressRaw((prev: any) => {
-              const entry = prev[site.id] || {};
-              const nextSections = reduceHarnessSectionList(entry.harnessSections || [], payload);
-              return mergeHarnessProgressSiteAndBatch(prev, site.id, {
-                stepId: "write",
-                subProgress: harnessSubProgress("write", payload.sectionIndex, payload.totalSections, payload.phase),
-                harnessSections: nextSections,
-                harnessPlannedSectionCount: payload.totalSections,
-                message: `Harness ${payload.sectionIndex + 1}/${payload.totalSections}: ${payload.title}${payload.phase === "start" ? "…" : ""}`,
-              });
-            });
+            const bridge = contentPrepHarnessBridge!;
+            const sectionIndex = pipelineIndexForHarnessTitle(payload.title, bridge.pipelineTitles);
+            if (sectionIndex < 0) return;
+            const phase =
+              payload.phase === "done"
+                ? "done"
+                : payload.phase === "start"
+                  ? "start"
+                  : "generating";
+            markContentPrepHarnessSection(
+              bridge.url,
+              sectionIndex,
+              phase,
+              bridge.setters,
+              0,
+              payload.phase === "done" ? payload.markdownSlice : undefined,
+              bridge.pipelineTitles,
+            );
+            if (payload.phase === "done") {
+              bridge.flushGeneratedFiles?.();
+            }
           }
-        : undefined,
+        : setOptimizationProgressRaw
+          ? (payload) => {
+              setOptimizationProgressRaw((prev: any) => {
+                const entry = prev[site.id] || {};
+                const nextSections = reduceHarnessSectionList(entry.harnessSections || [], payload);
+                return mergeHarnessProgressSiteAndBatch(prev, site.id, {
+                  stepId: "write",
+                  subProgress: harnessSubProgress("write", payload.sectionIndex, payload.totalSections, payload.phase),
+                  harnessSections: nextSections,
+                  harnessPlannedSectionCount: payload.totalSections,
+                  message: `Harness ${payload.sectionIndex + 1}/${payload.totalSections}: ${payload.title}${payload.phase === "start" ? "…" : ""}`,
+                });
+              });
+            }
+          : undefined,
     });
 
     markdownContent = contentResult.markdownContent;
     htmlContent = contentResult.htmlContent;
     excerpt = contentResult.excerpt ?? '';
     preservedMediaUrls = contentResult.preservedMediaUrls ?? [];
+
+    if (contentPrepHarnessBridge) {
+      const bridge = contentPrepHarnessBridge;
+      const contentHtmlIndex = pipelineIndexForHarnessTitle("Content HTML", bridge.pipelineTitles);
+      const contentMdIndex = pipelineIndexForHarnessTitle("Content Markdown", bridge.pipelineTitles);
+      if (contentHtmlIndex >= 0) {
+        markContentPrepHarnessSection(
+          bridge.url,
+          contentHtmlIndex,
+          "done",
+          bridge.setters,
+          0,
+          htmlContent,
+          bridge.pipelineTitles,
+        );
+      }
+      if (contentMdIndex >= 0) {
+        markContentPrepHarnessSection(
+          bridge.url,
+          contentMdIndex,
+          "done",
+          bridge.setters,
+          0,
+          markdownContent,
+          bridge.pipelineTitles,
+        );
+      }
+      bridge.flushGeneratedFiles?.();
+    }
 
     // CRITICAL: Never silently upload when user asked for content optimization but we got no generated content
     const generatedTrimmed = (markdownContent || '').trim();
@@ -353,7 +428,11 @@ export async function generateAndUploadContent(
 
   // Shared harness upload prep (Overview scroll links, anchor ids, placeholder resolve, HTML repair)
   setProgress("polish", 0.1, "Preparing content for upload…");
-  const externalUrlPairs = parseExternalSemrushPairsFromAgents(blueprintAgents);
+  const externalUrlPairs = mergeExternalLinkPairs(
+    parseExternalSemrushPairsFromAgents(blueprintAgents),
+    parseLlmAuditAuthorityPairsFromAgents(blueprintAgents),
+    context.llmAuditAuthorityExternalPairs ?? [],
+  );
   htmlContent = await prepareHarnessContentForUpload({
     markdownContent: markdownContent || htmlContent,
     blueprintAgents,
@@ -365,29 +444,17 @@ export async function generateAndUploadContent(
     apiKey: openRouterApiKey,
     keyword: primaryKeyword,
     articleTitle: blueprintResult?.title || existingTitle || primaryKeyword,
+    linkTargetsPlan: context.linkTargetsPlan,
+    onePassOptimize: context.resolved?.subtype !== "page",
   });
 
+  const isBlogOptimize = context.resolved?.subtype !== "page";
+
   if (context.wordPressPosts && context.wordPressPosts.length > 0) {
-    try {
-      htmlContent = deduplicateInternalLinksInHtml(htmlContent);
-      htmlContent = integrateOrphanInternalLinksInHtml(htmlContent, {
-        siteUrl: site.siteUrl,
-        currentPageUrl: context.url,
-        wordPressPosts: context.wordPressPosts,
-      });
-      const earlyLinks = countInternalLinksInHtmlContent(htmlContent, context.wordPressPosts, site.siteUrl);
-      if (earlyLinks > 0) {
-        console.log('[Content Generation Upload] Main content: ', earlyLinks, ' internal link(s) (min ', MIN_LINKS_PER_POST, ')');
-      }
-      if (earlyLinks < MIN_LINKS_PER_POST) {
-        console.warn('[Content Generation Upload] Internal link count below minimum after placeholder resolve:', earlyLinks);
-      }
-    } catch (err) {
-      console.error('[Content Generation Upload] Post-prep link integration failed:', err);
-    }
+    htmlContent = deduplicateInternalLinksInHtml(htmlContent);
   }
 
-  if (context.wordPressPagesForOfferTable?.length) {
+  if (context.wordPressPagesForOfferTable?.length && !isBlogOptimize) {
     htmlContent = ensureWhatWeOfferTablePageLinks(
       htmlContent,
       context.wordPressPagesForOfferTable,
@@ -396,7 +463,7 @@ export async function generateAndUploadContent(
     );
   }
 
-    if (shouldOptimizeContent && context.semrushExternalUrls?.length) {
+    if (shouldOptimizeContent && context.semrushExternalUrls?.length && !isBlogOptimize) {
     htmlContent = ensureSemrushExternalLinksInHtml(htmlContent, context.semrushExternalUrls);
   }
 
@@ -413,6 +480,39 @@ export async function generateAndUploadContent(
         entity: blueprintEntity || 'N/A'
       });
     }
+  }
+
+  let optimizeFaqBundle: PrecomputedAcfSeoBundle | null = null;
+  if (shouldOptimizeContent) {
+    setProgress("polish", 0.85, "Generating FAQ and appending table…");
+    const postTitleForFaq =
+      blueprintResult?.title?.trim() || cleanedExistingTitle || primaryKeyword;
+    let preBlogSkeleton: Record<string, unknown> | undefined;
+    const seoResearchRaw =
+      resolvedAcfContext?.seoResearch?.trim() ||
+      (typeof acfFields?.seo_research === "string" ? acfFields.seo_research.trim() : "");
+    if (seoResearchRaw) {
+      try {
+        preBlogSkeleton = JSON.parse(seoResearchRaw) as Record<string, unknown>;
+      } catch {
+        preBlogSkeleton = undefined;
+      }
+    }
+    const faqApplied = await applyOptimizeFaqToHarnessHtml({
+      htmlContent,
+      markdownContent: markdownContent || htmlContent,
+      site,
+      primaryKw: primaryKeyword,
+      postTitle: postTitleForFaq,
+      excerpt,
+      apiKey: openRouterApiKey,
+      postUrl: context.url?.trim() || site.siteUrl,
+      preBlogSkeleton,
+      entity,
+      onProgress: (message) => setProgress("polish", 0.88, message),
+    });
+    htmlContent = faqApplied.html;
+    optimizeFaqBundle = faqApplied.faqBundle;
   }
 
   let strippedHtml = removeInvalidInternalLinks(htmlContent, context.wordPressPosts, site.siteUrl);
@@ -470,6 +570,7 @@ export async function generateAndUploadContent(
       extraTextContent: undefined,
       extraImageBase64: undefined,
       seoExtraTextFieldOnly: false,
+      faqSchemaOverride: optimizeFaqBundle?.faqForAcf,
     });
   } else {
     const featuredImageType = opts.featuredImageType || "ai-generated";
@@ -576,30 +677,14 @@ export async function generateAndUploadContent(
 
     if (context.wordPressPosts && context.wordPressPosts.length > 0 && extraTextContent?.trim()) {
       setProgress("polish", 0.6, "Matching extra text link placeholders to sitemap…");
-      try {
-        extraTextContent = resolveInternalLinkPlaceholdersInHtml(extraTextContent, {
-          siteId: site.id,
-          siteUrl: site.siteUrl,
-          currentPageUrl: context.url,
-          wordPressPosts: context.wordPressPosts,
-        });
-        extraTextContent = deduplicateInternalLinksInHtml(extraTextContent);
-        extraTextContent = integrateOrphanInternalLinksInHtml(extraTextContent, {
-          siteUrl: site.siteUrl,
-          currentPageUrl: context.url,
-          wordPressPosts: context.wordPressPosts,
-        });
-        const mainLinks = countInternalLinksInHtmlContent(htmlContent, context.wordPressPosts, site.siteUrl);
-        const extraLinks = countInternalLinksInHtmlContent(extraTextContent, context.wordPressPosts, site.siteUrl);
-        const totalLinks = mainLinks + extraLinks;
-        console.log('[Content Generation Upload] Resolved links: total internal links', totalLinks, '(main:', mainLinks, ', extra:', extraLinks, ')');
-        if (totalLinks === 0) {
-          console.warn('[Content Generation Upload] No links in content after placeholder resolve – upload will continue; add [[LINK:...]] placeholders or more linkable posts.');
-        }
-      } catch (err) {
-        console.error('[Content Generation Upload] Resolve links in extra text failed:', err);
-        if (!getMuteOptimizationToasts()) notify.warning(NOTIFY_FAILED_TO_ENSURE_LINKS_IN_EXTRA_CONTENT_, { duration: 4000 });
-      }
+      extraTextContent = await resolveInternalLinkPlaceholdersInHtml(extraTextContent, {
+        siteId: site.id,
+        siteUrl: site.siteUrl,
+        currentPageUrl: context.url,
+        wordPressPosts: context.wordPressPosts,
+        apiKey: openRouterApiKey,
+      });
+      extraTextContent = deduplicateInternalLinksInHtml(extraTextContent);
     }
 
     if (extraTextContent?.trim()) {
@@ -643,6 +728,7 @@ export async function generateAndUploadContent(
       extraTextContent: strippedExtra ?? extraTextContent,
       extraImageBase64,
       seoExtraTextFieldOnly: false,
+      faqSchemaOverride: optimizeFaqBundle?.faqForAcf,
     });
   }
 

@@ -8,10 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useWordPressSites } from "@/hooks/use-wordpress-sites";
-import { syncActiveWordPressSiteToServer, syncWordPressSitesToServer, getStoredSites } from "@/components/integrations/storage";
-import {
-  warmEntitySiteCache,
-} from "@/lib/local-analysis/entity-site-warm-cache";
+import { syncActiveWordPressSiteToServer } from "@/components/integrations/storage";
 
 export const ACTIVE_WP_SITE_STORAGE_KEY = "neo-pulse-active-wp-site-id";
 
@@ -56,12 +53,6 @@ export function ActiveWordPressSiteProvider({ children }: { children: ReactNode 
   }, []);
 
   useEffect(() => {
-    const stored = getStoredSites();
-    if (stored.length === 0) return;
-    void syncWordPressSitesToServer(stored);
-  }, []);
-
-  useEffect(() => {
     if (enabledSites.length === 0) {
       setActiveWordPressSiteIdState(null);
       try {
@@ -84,19 +75,6 @@ export function ActiveWordPressSiteProvider({ children }: { children: ReactNode 
       return next;
     });
   }, [siteIdsKey]);
-
-  const activeSiteForWarm = useMemo(() => {
-    if (enabledSites.length === 0) return null;
-    if (activeWordPressSiteId && enabledSites.some((s) => s.id === activeWordPressSiteId)) {
-      return enabledSites.find((s) => s.id === activeWordPressSiteId) ?? null;
-    }
-    return enabledSites[0] ?? null;
-  }, [enabledSites, activeWordPressSiteId]);
-
-  useEffect(() => {
-    if (!activeSiteForWarm) return;
-    warmEntitySiteCache(activeSiteForWarm);
-  }, [activeSiteForWarm?.id, activeSiteForWarm?.siteUrl, activeSiteForWarm?.username, activeSiteForWarm?.appPassword]);
 
   const value = useMemo(
     () => ({ activeWordPressSiteId, setActiveWordPressSiteId }),

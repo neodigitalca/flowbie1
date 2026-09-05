@@ -9,6 +9,7 @@ import {
   containsCaseInsensitive,
   ensureExactKeywordInMetaDescription,
   ensureExactKeywordInSeoTitle,
+  focusKeywordRepresentedInSeoTitle,
 } from "@/lib/content-generation/rank-math-exact-keyword";
 import type { OptimizedMetaFields } from "@/lib/meta-field-optimizer";
 import type { WordPressSite } from "@/components/integrations/types";
@@ -46,7 +47,7 @@ export function buildOptimizedMetaFromKeywordResearch(
   const fullPostTitle = postTitle.trim();
   const titleSource = fullPostTitle || rawTitle;
   const title =
-    exactKw && !containsCaseInsensitive(titleSource, exactKw)
+    exactKw && !focusKeywordRepresentedInSeoTitle(titleSource, exactKw)
       ? ensureExactKeywordInSeoTitle(titleSource, exactKw, Math.max(titleSource.length + exactKw.length + 32, 500))
       : titleSource;
   const desc = ensureExactKeywordInMetaDescription(rawDesc, exactKw, 160);

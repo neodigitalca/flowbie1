@@ -14,6 +14,7 @@ import type {
   PostCreatorExecutionPayload,
 } from "@/lib/tasks-types";
 import { getPublicSiteUrl } from "@/lib/wordpress-site-public-url";
+import { formatUpstreamResearchFactsUserBlock } from "@/lib/workflow/upstream-research-facts";
 
 const DEFAULT_TEMPERATURE = 1.0;
 const DEFAULT_MAX_TOKENS = 4000;
@@ -46,6 +47,10 @@ export async function runPostCreatorBulkIdeasOnce(
 ): Promise<CSVRow[]> {
   const { site, inventory, payload, postCount, apiKey } = args;
   const optionalPrompt = payload.optionalPrompt?.trim() || "";
+  const upstreamFacts =
+    payload.useUpstreamContext === true
+      ? formatUpstreamResearchFactsUserBlock(payload.workflowContextBlock ?? "")
+      : "";
   const entityMode: PostCreatorEntityMode = payload.entityMode ?? "blank";
   const entityValue = payload.entityValue?.trim() || "";
   const keywordValue = payload.keywordValue?.trim() || "";
@@ -78,7 +83,7 @@ export async function runPostCreatorBulkIdeasOnce(
     buckets,
   );
 
-  const userLead = optionalPrompt || "Generate blog post ideas for this site.";
+  const userLead = [optionalPrompt, upstreamFacts].filter(Boolean).join("\n\n") || "Generate blog post ideas for this site.";
   const userPrompt = buildBulkBlogIdeasUserPrompt(
     userLead,
     postCount,

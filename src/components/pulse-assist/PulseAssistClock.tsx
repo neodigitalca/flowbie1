@@ -17,11 +17,11 @@ export function PulseAssistClock({ className }: PulseAssistClockProps) {
 
   return (
     <div
-      className={cn("flex shrink-0 items-center gap-2 text-base text-muted-foreground", className)}
+      className={cn("flex min-w-0 items-center gap-2 text-base text-muted-foreground", className)}
       aria-live="off"
     >
-      <span className="text-muted-foreground">Edmonton</span>
-      <span className="font-medium tabular-nums text-foreground">{label}</span>
+      <span className="pulse-assist-clock__city shrink-0 text-muted-foreground">Edmonton</span>
+      <span className="min-w-0 truncate font-medium tabular-nums text-foreground">{label}</span>
     </div>
   );
 }

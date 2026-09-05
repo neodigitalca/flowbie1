@@ -21,6 +21,7 @@ import {
   TaskFormInfieldSelect,
   TaskFormPanel,
 } from "@/components/manager/tasks/TaskFormLayout";
+import { ForgeWhatPublishScheduleFields } from "@/components/manager/tasks/ForgeWhatPublishScheduleFields";
 import { PulseForgePostSchedulePanel } from "@/components/manager/tasks/planner/PulseForgePostSchedulePanel";
 import { ensurePostCreatorPayload } from "@/lib/post-creator/post-creator-defaults";
 import type { TaskExecutionPayload } from "@/lib/tasks-types";
@@ -103,6 +104,15 @@ export function PostCreatorExecutionFields({
               </TaskFormInfield>
             ) : null}
           </TaskFormFieldGrid>
+          <label className="flex min-h-9 min-w-0 items-center gap-2">
+            <Checkbox
+              id="post-creator-upstream-what"
+              checked={payload.useUpstreamContext === true}
+              disabled={disabled}
+              onCheckedChange={(checked) => patch({ useUpstreamContext: checked === true })}
+            />
+            <span className="text-base text-white">Use previous agent data</span>
+          </label>
         </TaskFormPanel>
         <TaskFormPanel title="Featured image">
           <label className="flex min-w-0 items-center gap-2">
@@ -115,6 +125,11 @@ export function PostCreatorExecutionFields({
             <span className="text-base text-white">AI featured image</span>
           </label>
         </TaskFormPanel>
+        <ForgeWhatPublishScheduleFields
+          payload={payload}
+          disabled={disabled}
+          onChange={(next) => onChange(ensurePostCreatorPayload(next))}
+        />
       </div>
     );
   }
@@ -200,6 +215,15 @@ export function PostCreatorExecutionFields({
             onChange={(e) => patch({ optionalPrompt: e.target.value })}
           />
         </TaskFormCompactCell>
+        <label className="flex min-h-9 min-w-0 items-center gap-2 bg-black px-2">
+          <Checkbox
+            id="post-creator-upstream-inline"
+            checked={payload.useUpstreamContext === true}
+            disabled={disabled}
+            onCheckedChange={(checked) => patch({ useUpstreamContext: checked === true })}
+          />
+          <span className="text-base text-white">Use previous agent data</span>
+        </label>
       </div>
     );
   }
@@ -259,6 +283,17 @@ export function PostCreatorExecutionFields({
           />
         </TaskFormInfield>
       ) : null}
+      <div className="flex min-h-9 items-center gap-2">
+        <Checkbox
+          id="post-creator-upstream-stack"
+          checked={payload.useUpstreamContext === true}
+          disabled={disabled}
+          onCheckedChange={(checked) => patch({ useUpstreamContext: checked === true })}
+        />
+        <label htmlFor="post-creator-upstream-stack" className="text-base text-white">
+          Use previous agent data
+        </label>
+      </div>
       <div className="flex items-center gap-2">
         <Checkbox
           id="post-creator-featured-stack"

@@ -48,7 +48,8 @@ export interface PendingOptimization {
   existingTitle: string;
   existingContent: string;
   existingExcerpt: string;
-  wordPressPosts?: Array<{ id: number; slug: string; title: string; excerpt: string; link: string; date_gmt: string }>;
+  wordPressPosts?: Array<{ id: number; slug: string; title: string; excerpt: string; link: string; date_gmt: string; postType?: "post" | "page" }>;
+  linkTargetsPlan?: import("@/lib/bulk/bulk-generation-wp-inventory").LinkTargetsPlan;
   optimizationOptions?: {
     optimizeTitle?: boolean;
     optimizeMeta?: boolean;
@@ -130,7 +131,7 @@ export interface BulkOptimizationState {
   /** URLs that have completed the research phase and are ready for optimization. */
   researchedUrls?: string[];
   /** Overview AI All Meta harness bulk (no WordPress upload). */
-  runKind?: "content" | "extraText" | "aiAllMeta" | "aiFaq" | "aiHeaders" | "aiLinks" | "aiWikipediaLink" | "aiOverview" | "aiInContentImage" | "contentCleanup" | "research" | "wpUpload";
+  runKind?: "content" | "extraText" | "aiAllMeta" | "aiFaq" | "aiHeaders" | "aiLinks" | "aiWikipediaLink" | "aiAnswer" | "aiOverview" | "aiScenario" | "aiInContentImage" | "contentCleanup" | "research" | "wpUpload";
   /** Timestamp when this harness batch started (auto-open Details drawer). */
   harnessStartedAt?: number;
   /** Content Optimizer: page size when bulk run is paginated (>100 URLs). */

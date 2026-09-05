@@ -1,11 +1,14 @@
 import type { GscManualAiCluster, GscManualAiPayload } from "@/lib/gsc-manual-ai-aggregate";
+import type { GscClientSeasonContext } from "@/lib/gsc-reporting/gsc-reporting-client-season";
 import type { SapEntityGrounding } from "@/lib/gsc-reporting/gsc-reporting-sap-entity-context";
 
 /** Section kinds for the full organic SEO GSC report template (outline + writers). */
 export type GscReportingSectionKind =
   | "executive_summary"
+  | "generative_ai_impressions"
   | "search_performance_period"
   | "key_performance_insights"
+  | "seasonal_demand"
   | "sap_local_seo"
   | "content_performance"
   | "cluster";
@@ -34,7 +37,17 @@ export type GscReportingPipelineProgress = {
   step: number;
   total: number;
   label: string;
+  /** Zero-based section index when logging a completed section row. */
+  sectionIndex?: number;
 };
+
+/** Agent log + progress labels (server API only; no client-fetch wording). */
+export const GSC_REPORTING_PROGRESS_LABELS = {
+  bundleApi: "GSC reporting bundle API",
+  bundleReady: "GSC reporting bundle ready",
+  outlineGenerating: "Generating report outline…",
+  outlineComplete: "Outline complete",
+} as const;
 
 export type GscReportingSectionResult = {
   plan: GscReportingSectionPlan;
@@ -56,8 +69,10 @@ export type RunGscReportingPipelineArgs = {
   compareKind?: import("@/lib/gsc-reporting/gsc-reporting-compare-signals").GscCompareKind;
   /** Human-readable period A vs B label for compare signals derivation. */
   compareLabel?: string;
+  /** Profile city + vertical + report-period month for local demand-season reading. */
+  clientSeason?: GscClientSeasonContext | null;
   signal?: AbortSignal;
-  onProgress?: (p: GscReportingPipelineProgress) => void;
+  onProgress?: (p: GscReportingPipelineProgress) => void | Promise<void>;
   /** Fires after the outline OpenRouter call succeeds. */
   onOutlineReady?: (payload: {
     outline: GscReportingOutlineResult;

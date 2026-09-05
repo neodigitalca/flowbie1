@@ -2,15 +2,36 @@
  * Checklist parse/enforce (shared by Generator + server parity tests).
  */
 import {
-  isFaqStyleHeadingTitle,
+  prepareChecklistForPipeline,
   sanitizeForbiddenWordsInChecklistItem,
 } from "@/lib/content-word-blocklist";
+import { isGenericHarnessHeadingTitle } from "@/lib/content-optimization/harness-heading-titles";
+import {
+  extractChecklistItemTitle,
+  stripChecklistItemMarkdownHeading,
+} from "@/lib/checklist-item-title";
 
-export function stripChecklistItemMarkdownHeading(item: string): string {
-  let out = item.trim();
-  out = out.replace(/^#{1,6}\s+/, "");
-  out = out.replace(/^\*\*([^*]+)\*\*:\s*/, "$1: ");
-  return out.trim();
+export { extractChecklistItemTitle, stripChecklistItemMarkdownHeading } from "@/lib/checklist-item-title";
+export { isGenericHarnessHeadingTitle };
+
+/** Replace instruction boilerplate at the start of a checklist line with the real H2 title. */
+export function rewriteChecklistItemHeading(item: string): string {
+  const markerStart = item.indexOf("[");
+  const title = extractChecklistItemTitle(item);
+  if (markerStart >= 0) {
+    return `${title} ${item.slice(markerStart).trimStart()}`;
+  }
+  return title;
+}
+
+/** @deprecated Validation only — optimize path relies on prompts, not throws. */
+export function assertChecklistItemHasRealHeading(item: string, _index?: number): void {
+  // Prompt-level contract only; no runtime gate.
+}
+
+/** @deprecated Validation only — optimize path relies on prompts, not throws. */
+export function assertChecklistHasRealHeadings(_checklist: string[]): void {
+  // Prompt-level contract only; no runtime gate.
 }
 
 export function isBoldOnlyChecklistLine(item: string): boolean {
@@ -67,18 +88,7 @@ export function validateAndEnforceMandatoryElements(checklist: string[]): string
   return out;
 }
 
-export function prepareChecklistForPipeline(checklist: string[]): string[] {
-  return checklist
-    .map(sanitizeForbiddenWordsInChecklistItem)
-    .filter((item) => {
-      if (!item) return false;
-      for (const match of item.matchAll(/"([^"]+)"/g)) {
-        if (isFaqStyleHeadingTitle(match[1] ?? "")) return false;
-      }
-      if (/\[FAQ\]/i.test(item)) return false;
-      return true;
-    });
-}
+export { prepareChecklistForPipeline } from "@/lib/content-word-blocklist";
 
 export function formatChecklistNumberedLines(checklist: string[]): string[] {
   return checklist.map((item, index) => `${index + 1}. ${item}`);

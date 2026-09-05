@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { notify } from "@/lib/app-notifications";
 import { NOTIFY_ALL_BLOG_IDEAS_ARE_ALREADY_SELECTED_PLEA, NOTIFY_COULD_NOT_PARSE_BLOG_IDEAS_FROM_THE_RESP, NOTIFY_FAILED_TO_GENERATE_CHECKLIST_PLEASE_TRY_, NOTIFY_FETCHING_FULL_WORDPRESS_INVENTORY_POSTS_, NOTIFY_INVALID_TARGET_SITE_EXAMPLE_COM_IS_NOT_A, NOTIFY_KNOWLEDGE_BASE_IS_EMPTY_BLOG_IDEAS_WILL_, NOTIFY_PLEASE_DESELECT_AT_LEAST_ONE_BLOG_IDEA_T, NOTIFY_PLEASE_ENSURE_API_KEYS_ARE_SET, NOTIFY_READING_KNOWLEDGE_BASE, notifyGeneratedXBlogIdeax, notifyRegeneratedXBlogIdeaxKeptXSelected, notifyWordpressSiteNotFoundX } from "@/lib/notify-messages";
-import { loadApiKey, streamChatCompletion } from '@/lib/api';
+import { streamChatCompletion } from '@/lib/api';
+import { resolveOpenRouterApiKeyForHarness } from '@/lib/openrouter-api-key-resolve';
 import { buildBulkBlogIdeasSystemPrompt, buildBulkBlogIdeasUserPrompt } from '@/lib/prompt-builders';
 import { parseBlogIdeasChecklist, type CSVRow } from '@/lib/bulk-auto-generate';
 import { parseTitleTemplate } from '@/lib/title-template-parser';
@@ -23,6 +24,7 @@ import {
   selectPromptBulkLowHangingKeywords,
 } from '@/lib/bulk/prompt-bulk-kw-research-agent';
 import { aiRejectBrandOrBlockedTexts } from '@/lib/content-brand-ai-gate';
+import { mergePromptBulkIdeaSlots } from '@/lib/bulk/merge-prompt-bulk-idea-slots';
 
 export interface UsePromptBulkGenerateProps {
   apiKey?: string;
@@ -105,9 +107,11 @@ export function usePromptBulkGenerate({
    * @param keepIndices Optional array of indices to keep from existing generatedRows
    */
   const handleGenerateChecklist = useCallback(async (keepIndices?: number[]): Promise<CSVRow[] | undefined> => {
-    const effectiveOpenRouterKey = openRouterApiKey?.trim() || loadApiKey()?.trim() || "";
-    if (!effectiveOpenRouterKey) {
-      notify.error(NOTIFY_PLEASE_ENSURE_API_KEYS_ARE_SET);
+    let effectiveOpenRouterKey = "";
+    try {
+      effectiveOpenRouterKey = (await resolveOpenRouterApiKeyForHarness()).trim();
+    } catch (e) {
+      notify.error(e instanceof Error ? e.message : NOTIFY_PLEASE_ENSURE_API_KEYS_ARE_SET);
       return undefined;
     }
 
@@ -220,6 +224,7 @@ export function usePromptBulkGenerate({
             topic: flowPurpose,
             modifier: optionalPrompt,
             inventoryUrlCount: inventory.totalRows,
+            siteInventoryJson: inventory.buckets.posts.json || undefined,
             connectedSite: buildPromptBulkKwConnectedSiteContext(wordPressSite),
           });
         }
@@ -388,25 +393,12 @@ export function usePromptBulkGenerate({
 
       const cappedParsedRows = parsedRows.slice(0, blogsToGenerate);
 
-      cappedParsedRows.forEach((row, i) => {
-        const slotRow = generatedRows[i];
-        const userKw = slotKeywordsForGeneration[i]?.trim();
-        if (userKw) row.keyword = userKw;
-        const userMod = slotModifiersForGeneration[i]?.trim();
-        if (userMod) row.modifier = userMod;
-        if (slotRow) {
-          if (slotRow.title?.trim()) row.title = slotRow.title.trim();
-          if (slotRow.meta_description?.trim()) row.meta_description = slotRow.meta_description.trim();
-          if (slotRow.entity?.trim()) row.entity = slotRow.entity.trim();
-          if (slotRow.target_slug?.trim()) row.target_slug = slotRow.target_slug.trim();
-          if (slotRow.modifier_links_json?.trim()) {
-            row.modifier_links_json = slotRow.modifier_links_json.trim();
-          }
-          if (slotRow.publish_date_gmt?.trim()) row.publish_date_gmt = slotRow.publish_date_gmt.trim();
-          if (slotRow.featuredImage?.trim()) row.featuredImage = slotRow.featuredImage.trim();
-          if (slotRow.wikipedia_url?.trim()) row.wikipedia_url = slotRow.wikipedia_url.trim();
-          if (slotRow.wikipedia_title?.trim()) row.wikipedia_title = slotRow.wikipedia_title.trim();
-        }
+      mergePromptBulkIdeaSlots({
+        parsedRows: cappedParsedRows,
+        generatedRows,
+        slotKeywords: slotKeywordsForGeneration,
+        slotModifiers: slotModifiersForGeneration,
+        keepIndices,
       });
 
       // Helper function to parse list strings (split by newlines or commas)

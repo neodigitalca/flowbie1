@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { getAllApiDocSlugs, apiDocsManifest } from "@/lib/api-docs";
+import { getAllApiDocSlugs, loadAllApiDocArticles, apiDocsManifest } from "@/lib/api-docs";
 
 const DISPATCHER = readFileSync(
   resolve("wordpress-plugins/neo-pulse-app/includes/router/class-api-dispatcher.php"),
@@ -18,7 +18,8 @@ const DISPATCHER_MARKERS = [
 ];
 
 describe("api docs manifest", () => {
-  it("loads articles for every manifest slug", () => {
+  it("loads articles for every manifest slug", async () => {
+    await loadAllApiDocArticles();
     const slugs = new Set(getAllApiDocSlugs());
     for (const section of apiDocsManifest.sections) {
       for (const item of section.items) {

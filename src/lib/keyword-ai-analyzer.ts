@@ -7,6 +7,7 @@ import { isNonEnglishKeyword } from "./gsc-query-processor";
 import { readACFFieldsAgentically } from "./content-generation/ai-driven-acf-reader";
 import type { AIDrivenACFContext } from "./content-generation/ai-driven-acf-reader";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 /** Gemini 2.5 Flash Lite has a massive context window; use 1M max output so truncation is never an issue. */
 const RESEARCH_MODEL_MAX_TOKENS = 1_000_000;
@@ -188,7 +189,7 @@ ${keywordsList}
 
 Return JSON array of keyword numbers to KEEP: [1, 3, 5]`;
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await postOpenRouterAppChatFetch( {
       method: "POST",
       headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
@@ -227,7 +228,7 @@ async function checkIfServiceKeywordString(
   try {
     const prompt = `Is "${keyword}" a service/product keyword or competitor business name? Return "true" for service, "false" for competitor.`;
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await postOpenRouterAppChatFetch( {
       method: "POST",
       headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
@@ -378,6 +379,8 @@ CRITICAL REQUIREMENT: When SERP data is provided, extract available data. Empty 
    - Include 5-15 recommended links
 
 Both extractions are EQUALLY IMPORTANT. Do not return empty arrays unless you have thoroughly searched the ENTIRE JSON structure at ALL nested levels.
+
+keywordSuggestions.primary, variations, longTail, and semantic MUST be lowercase Google search queries (how people type). Do not output title-case article titles.
 
 EXACT JSON SCHEMA YOU MUST FOLLOW:
 {

@@ -1,4 +1,4 @@
-import { BACKEND_API_BASE } from './connection';
+import { backendApiUrl } from './connection';
 
 /** Raw MCP payloads: phrase_this (volume/CPC/competition) + phrase_kdi (difficulty). */
 export type SemrushKeywordOverviewPayload = {
@@ -38,7 +38,7 @@ export async function fetchSemrushBulkEnrichment(params: {
   /** Other managed client domains - never returned as Semrush-approved externals */
   portfolioBlockedHosts?: string[];
 }): Promise<SemrushBulkEnrichmentResult> {
-  const url = `${BACKEND_API_BASE}/api/semrush/bulk-enrichment`;
+  const url = backendApiUrl("/semrush/bulk-enrichment");
   const body: Record<string, unknown> = {
     pageUrl: params.pageUrl,
     seedKeyword: params.seedKeyword ?? '',
@@ -91,8 +91,7 @@ export async function fetchSemrushSiteAuditUrl(params: {
   pageUrl: string;
   projectId: string;
 }): Promise<SemrushSiteAuditUrlResult> {
-  const base = (BACKEND_API_BASE || "").replace(/\/$/, "");
-  const url = `${base}/api/semrush/site-audit-url`;
+  const url = backendApiUrl("/semrush/site-audit-url");
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -147,8 +146,7 @@ export type SemrushMatchProjectResult =
  * List Semrush projects (Management API) and match project_id to site hostname. Server uses SEMRUSH_API_KEY.
  */
 export async function matchSemrushProjectForSite(siteUrl: string): Promise<SemrushMatchProjectResult> {
-  const base = (BACKEND_API_BASE || "").replace(/\/$/, "");
-  const url = `${base}/api/semrush/match-project-for-site`;
+  const url = backendApiUrl("/semrush/match-project-for-site");
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -195,8 +193,7 @@ export async function fetchSemrushAuditAiContext(params: {
   filename: string;
   maxChars?: number;
 }): Promise<SemrushAuditAiContextResult> {
-  const base = (BACKEND_API_BASE || "").replace(/\/$/, "");
-  const url = `${base}/api/semrush/audit-ai-context`;
+  const url = backendApiUrl("/semrush/audit-ai-context");
   try {
     const response = await fetch(url, {
       method: "POST",

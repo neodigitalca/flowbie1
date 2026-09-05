@@ -291,9 +291,6 @@ class Neo_Pulse_Wp_Ai_Widget_Design {
 			$merged['logging_enabled'] = false;
 		}
 
-		$merged['show_popular_pages_overseer'] = false;
-		$merged['show_popular_pages_search']     = false;
-
 		return self::sanitize_search_insights_config( $merged );
 	}
 

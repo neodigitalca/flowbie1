@@ -1,5 +1,9 @@
 import { stepLabel } from "@/lib/content-optimization/content-optimizer-run-progress";
 
+import {
+  buildWaitingContentOptimizeHarnessSections,
+} from "@/lib/overview/overview-content-optimize-pipeline";
+
 export function updateBulkStateForPost(
   setBulkOptimizationState: (prev: any) => any,
   batchKey: string,
@@ -24,12 +28,22 @@ export function updateBulkStateForPost(
           ? current.currentStepProgress?.message?.trim() || undefined
           : status;
 
-    const shouldAdvance = status === "completed" && index + 1 < totalPosts;
-    const nextIndex = shouldAdvance ? index + 1 : index;
-    const nextUrl =
-      shouldAdvance && Array.isArray(current.urls) && current.urls[index + 1]
-        ? current.urls[index + 1]
-        : url;
+    const nextIndex = index;
+    const nextUrl = url;
+
+    const resetUrlArtifacts =
+      status === "optimizing"
+        ? {
+            urlHarnessSections: {
+              ...(current.urlHarnessSections || {}),
+              [url]: buildWaitingContentOptimizeHarnessSections(),
+            },
+            urlGeneratedFiles: {
+              ...(current.urlGeneratedFiles || {}),
+              [url]: [],
+            },
+          }
+        : {};
 
     return {
       ...prev,
@@ -48,6 +62,7 @@ export function updateBulkStateForPost(
           ...current.urlStatuses,
           [url]: status,
         },
+        ...resetUrlArtifacts,
       },
     };
   });

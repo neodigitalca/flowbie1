@@ -25,6 +25,10 @@ Reply with ONLY valid JSON: {"kept":["Title1","Title2",...]} - a **subset** of t
 - Sports **governing federations** (non-place), civic **federations** as organizations
 - Remote wilderness or **national-scale** natural systems as the only subject when a local community place exists in the list
 
+**When Client & site context indicates non-education B2B or professional services** (accounting, tax, legal, advisory, consulting):
+- **Drop** individual **schools**, **high schools**, **school districts**, and **school boards** (these are not service-area geography for those clients).
+- Prefer keeping business districts, commercial corridors, downtown cores, and business parks when present in the list.
+
 **Keep** only **geographic** articles: neighbourhoods, suburbs, districts, streets, corridors, parks, airports, stations (transit **facilities**), named squares, historic districts, **suburbs**, **hamlets**, **reserves** (geographic), **rivers/hills** when used as local place references.
 
 **Buildings and landmarks:** keep when the article describes a **real-world location** people use for directions or local identity (city hall, cathedral, stadium **as a landmark** is borderline - prefer **district/park/street** articles when the hint is geographic; **never** keep a team franchise page).
@@ -39,6 +43,8 @@ export type FilterWikipediaTitlesForCommunityEntityParams = {
   titles: string[];
   /** Optional lead snippet per title (same length as titles); improves accuracy. */
   introSnippets?: string[];
+  /** Compact client context for B2B vs education entity preference. */
+  clientAudienceContextMarkdown?: string;
 };
 
 /**
@@ -66,7 +72,11 @@ export async function filterWikipediaTitlesForCommunityEntity(
   const user = `Candidate Wikipedia article titles (in order - output kept subset in this same order):
 
 ${lines.join("\n\n")}
-
+${
+  params.clientAudienceContextMarkdown?.trim()
+    ? `\n--- Client & site context (use to decide school vs business-district suitability) ---\n${params.clientAudienceContextMarkdown.trim()}\n`
+    : ""
+}
 Return JSON only: {"kept":[...exact titles from above...]}`;
 
   const model = params.model?.trim() || getResearchModel(siteId);

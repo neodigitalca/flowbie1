@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   filterOutFaqStyleHeadingTitles,
   isFaqStyleHeadingTitle,
+  FAQ_CONVERSATIONAL_RULE,
 } from "@/lib/content-generation/faq-heading-policy";
 
 describe("isFaqStyleHeadingTitle", () => {
@@ -30,5 +31,15 @@ describe("isFaqStyleHeadingTitle", () => {
       "FAQ",
     ]);
     expect(out).toEqual(["Manual and Cordless Systems"]);
+  });
+});
+
+describe("FAQ_CONVERSATIONAL_RULE", () => {
+  it("requires leftover article decisions and forbids promo stems", () => {
+    expect(FAQ_CONVERSATIONAL_RULE).toContain("leftover buyer decisions from THIS article");
+    expect(FAQ_CONVERSATIONAL_RULE).toContain("same four stems");
+    expect(FAQ_CONVERSATIONAL_RULE).toContain("current promotions");
+    expect(FAQ_CONVERSATIONAL_RULE).toContain("If-X-then-Y");
+    expect(FAQ_CONVERSATIONAL_RULE).toContain("Do not ask a question the Answer H2 already answered");
   });
 });

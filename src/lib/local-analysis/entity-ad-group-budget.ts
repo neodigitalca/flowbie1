@@ -33,6 +33,23 @@ export function entitySapTotalFromParts(adGroupCount: number, adsPerGroup: numbe
   return groups * ads;
 }
 
+/** Row budget from pipeline Ad groups × Locations per ad group. */
+export function configuredEntityPageTotal(adGroupCount: number, adsPerGroup: number): number {
+  return entitySapTotalFromParts(adGroupCount, adsPerGroup);
+}
+
+export function assertConfiguredEntityRowCount(
+  rowCount: number,
+  configuredTotal: number,
+  phase: string,
+): void {
+  if (rowCount !== configuredTotal) {
+    throw new Error(
+      `${phase} produced ${rowCount} of ${configuredTotal} configured entity row${configuredTotal === 1 ? "" : "s"}.`,
+    );
+  }
+}
+
 export function stepEntityCountInput(raw: string, delta: 1 | -1): string {
   const current = entityCountFromInput(raw);
   return String(Math.max(LOCAL_ANALYSIS_SAP_MIN, current + delta));

@@ -4,20 +4,33 @@ import { GLOBAL_BLOCKED_TOPIC_PROMPT_BLOCK } from "@/lib/content-topic-blocklist
 import { parseJsonWithRepair } from "@/lib/json-repair-utility";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 
+const GSC_INVENTORY_EXCLUSION = `INVENTORY EXCLUSION (mandatory when SITE_INVENTORY_JSON is present):
+- Read every post title, slug, and URL in SITE_INVENTORY_JSON.posts (and pages/sap if present).
+- For each candidate GSC/Semrush line, ask: would a new post on this keyword compete with an existing post?
+- If yes (same topic/intent), SKIP that line entirely. Examples:
+  - GSC "national seo" + inventory slug "national-seo-canada" or title "National SEO Strategy..." → SKIP
+  - GSC "digital marketing for a blinds company" + existing blinds marketing posts → SKIP
+- Pick net-new opportunities only from uncovered GSC/Semrush lines.
+- Distill chosen lines into short-tail keywords that do NOT overlap inventory intent.
+- Return fewer keywords rather than cannibalizing existing posts.`;
+
 const SYSTEM = `You are a blog keyword research agent.
 
 You MUST read SITE_KW_JSON first. It contains Semrush and GSC keyword lists for the target site.
 Metrics were already used locally to sort the lists, then removed to save tokens.
 Prioritize Semrush first, then use GSC as secondary support.
 
+When SITE_INVENTORY_JSON is present, read it before selecting any keyword.
+${GSC_INVENTORY_EXCLUSION}
+
 Read CONNECTED_SITE. Infer market jurisdiction only from that data (name, URL, NAP city/state). Never invent an unrelated market. Never assume a hardcoded country.
 
-Goal: return exactly numberOfBlogs blog keywords when enough unique usable ones exist in the lists.
+Goal: return exactly numberOfBlogs blog keywords when enough unique usable ones exist in the lists that do NOT cannibalize inventory.
 
 ${GLOBAL_BLOCKED_TOPIC_PROMPT_BLOCK}
 
 Selection rules:
-- Source first: each keyword MUST be derived from an entry in the lists. Only invent a new keyword when the lists cannot supply enough unique usable ones.
+- Source first: each keyword MUST be derived from an entry in the lists that passes inventory exclusion. Only invent a new keyword when the lists cannot supply enough unique usable ones.
 - Prefer earlier Semrush entries first, then earlier GSC entries (already sorted by opportunity).
 - Keep only informational and transactional intent. Drop navigational and branded queries.
 - **NEVER return the CONNECTED_SITE trading / company name** (fuzzy / word-reorder — e.g. "Blind Magic" ↔ "Magic Blinds"). Keep product/service keywords and dealer product lines (Hunter Douglas, Alta, etc.).
@@ -27,6 +40,7 @@ Selection rules:
   1. Local / near-me / installer-in-city / service-proximity: trim city, neighborhood, "near me", and similar. Keep product/service + intent only. Short-tail: 2-3 words.
   2. Government / policy / incentives / grants / rebates / regulations / tax credits: ALWAYS include jurisdiction. Infer country (and federal vs provincial/state when the query clearly needs it) from CONNECTED_SITE only. Good: "federal solar incentives canada". Bad: "solar incentives" (missing jurisdiction). Allow 3-5 words when jurisdiction is required.
 - Unique only: no duplicates and no two keywords that target the same search intent (no cannibalization). Merge near-duplicates into one.
+- No keyword may overlap search intent with any SITE_INVENTORY_JSON post title or slug.
 - If topic is provided, every keyword must fit that topic; otherwise trim or replace it.
 - Return at most numberOfBlogs keywords. Return [] when the JSON has no useful data.
 
@@ -106,6 +120,7 @@ export async function selectPromptBulkLowHangingKeywords(args: {
   topic?: string;
   modifier?: string;
   inventoryUrlCount?: number | null;
+  siteInventoryJson?: string;
   connectedSite?: PromptBulkKwConnectedSiteContext | null;
 }): Promise<string[]> {
   const apiKey = args.apiKey.trim();
@@ -114,14 +129,20 @@ export async function selectPromptBulkLowHangingKeywords(args: {
   if (!apiKey || !jsonText) return [];
 
   try {
-    const user = JSON.stringify({
+    const inventoryJson = args.siteInventoryJson?.trim();
+    const userPayload: Record<string, unknown> = {
       numberOfBlogs: limit,
       topic: args.topic?.trim() || "",
       modifier: args.modifier?.trim() || "",
       inventoryUrlCount: args.inventoryUrlCount ?? null,
       CONNECTED_SITE: args.connectedSite ?? null,
       SITE_KW_JSON: JSON.parse(jsonText) as unknown,
-    });
+    };
+    if (inventoryJson) {
+      userPayload.SITE_INVENTORY_JSON = JSON.parse(inventoryJson) as unknown;
+    }
+
+    const user = JSON.stringify(userPayload);
 
     const { content } = await callOpenRouterChatCompletion({
       apiKey,

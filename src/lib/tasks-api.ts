@@ -1,3 +1,4 @@
+import { getSessionToken } from "@/lib/auth-device";
 import { backendApiUrl } from "@/lib/wordpress-api/connection";
 import type { TeamContextPulseTask } from "@/lib/pulse-assist/types";
 import type {
@@ -21,11 +22,24 @@ import type { TaskTriggerEvaluateResult, TaskTriggerPendingDispatch } from "@/li
 
 export function tasksApi(path: string, options?: RequestInit): Promise<Response> {
   const p = path.startsWith("/") ? path : `/${path}`;
-  return fetch(backendApiUrl(p), { ...options, credentials: "include", cache: "no-store" });
+  const headers = new Headers(options?.headers);
+  const token = getSessionToken();
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  return fetch(backendApiUrl(p), { ...options, headers, credentials: "include", cache: "no-store" });
 }
 
 function api(path: string, options?: RequestInit): Promise<Response> {
   return tasksApi(path, options);
+}
+
+async function readJson<T>(res: Response): Promise<T> {
+  try {
+    return (await res.json()) as T;
+  } catch {
+    return {} as T;
+  }
 }
 
 export async function fetchTaskProjects(
@@ -149,13 +163,13 @@ export async function fetchMyTasks(
 
 export async function fetchPulseAssignedTasks(teamId: number): Promise<TeamContextPulseTask[]> {
   const res = await api(`/teams/${teamId}/tasks/pulse-assigned`);
-  const data = (await res.json()) as { ok?: boolean; tasks?: TeamContextPulseTask[] };
+  const data = await readJson<{ ok?: boolean; tasks?: TeamContextPulseTask[] }>(res);
   return data.tasks ?? [];
 }
 
 export async function fetchCalendarAutomationTasks(teamId: number): Promise<TeamContextPulseTask[]> {
   const res = await api(`/teams/${teamId}/tasks/calendar-automations`);
-  const data = (await res.json()) as { ok?: boolean; tasks?: TeamContextPulseTask[] };
+  const data = await readJson<{ ok?: boolean; tasks?: TeamContextPulseTask[] }>(res);
   return data.tasks ?? [];
 }
 
@@ -579,11 +593,11 @@ export async function fetchPendingTaskTriggers(
   teamId: number,
 ): Promise<{ ok: boolean; pending?: TaskTriggerPendingDispatch[]; error?: string }> {
   const res = await api(`/teams/${teamId}/tasks/trigger-pending`);
-  const data = (await res.json()) as {
+  const data = await readJson<{
     ok?: boolean;
     pending?: TaskTriggerPendingDispatch[];
     error?: string;
-  };
+  }>(res);
   return { ok: Boolean(data.ok), pending: data.pending ?? [], error: data.error };
 }
 

@@ -1,3 +1,4 @@
+import { SAP_DEFAULT_COMBINED_OUTLINE } from "@/lib/prompt-builders/sap-page-template";
 import type { BlogDestinationPolicy } from "@/lib/sitemap-optimizer/blog-destination-policy";
 import { resolveEntityLockedDestination } from "@/lib/sitemap-optimizer/entity-locked-destination";
 import {
@@ -15,17 +16,10 @@ import type {
 } from "@/lib/sitemap-optimizer/types";
 
 function entityOutlineForMembers(
-  members: readonly SitemapOptimizerPostRow[],
-  keyword: string,
+  _members: readonly SitemapOptimizerPostRow[],
+  _keyword: string,
 ): string[] {
-  if (members.length <= 1) {
-    return ["Local service overview", "Products and options", "Service area coverage", "Next steps"];
-  }
-  const sections = members
-    .map((m) => displayPostTitle(m.title || m.url))
-    .filter(Boolean)
-    .slice(0, 5);
-  return [`${keyword} overview`, ...sections, "Contact and service area"].slice(0, 6);
+  return [...SAP_DEFAULT_COMBINED_OUTLINE];
 }
 
 /** Deterministic entity brief for service-area consolidation clusters. */

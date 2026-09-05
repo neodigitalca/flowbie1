@@ -44,7 +44,8 @@ import { parseFaqEntries, serializeFaqEntriesPlain } from "@/lib/faq-entries";
 import { extractH2TextsFromHtml } from "@/lib/overview/overview-blog-headers-extract";
 import { extractInternalLinksFromHtml } from "@/lib/overview/overview-blog-links-extract";
 import { isWikipediaHref, extractWikipediaLinksWithContext, wikipediaTitleFromHref } from "@/lib/overview/overview-blog-wikipedia-link-insert";
-import { extractOverviewSectionHtml } from "@/lib/overview/overview-blog-overview-prepend";
+import { extractOverviewSectionHtml, extractAnswerSectionHtml } from "@/lib/overview/overview-blog-overview-prepend";
+import { extractIllustrativeSectionHtml } from "@/lib/overview/overview-blog-scenario-section";
 import { overviewRowUrlPathLabel, overviewTitlePrimarySegment } from "@/lib/overview/overview-tab-display";
 import { overviewBindingForRow, overviewDateModifierTodayIso } from "@/lib/overview/overview-bulk-seo-payload";
 import { subtypeToEndpoint } from "@/hooks/content-optimization/optimization-helpers";
@@ -207,6 +208,53 @@ export function MetaAccordionStripeRow({
   );
 }
 
+const META_ACCORDION_TRIGGER_BTN =
+  "flex min-w-0 flex-1 items-center gap-2 border-0 bg-transparent p-0 text-left text-base font-semibold text-white";
+
+function MetaAccordionHeaderRow({
+  open,
+  icon,
+  label,
+  count,
+  countTitle,
+  action,
+}: {
+  open: boolean;
+  icon: React.ReactNode;
+  label: string;
+  count: string;
+  countTitle: string;
+  action: React.ReactNode;
+}) {
+  return (
+    <div className={cn(META_TRIGGER_FLAT, "w-full font-semibold")}>
+      <CollapsibleTrigger asChild>
+        <button type="button" className={META_ACCORDION_TRIGGER_BTN}>
+          {icon}
+          <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+          <ChevronDown
+            className={cn("h-4 w-4 shrink-0 transition-transform", open && "rotate-180")}
+            aria-hidden
+          />
+        </button>
+      </CollapsibleTrigger>
+      <div className={cn(META_FIELD_END_RAIL, "shrink-0")}>
+        <span
+          className={cn(
+            META_FIELD_COUNT,
+            META_FIELD_END_RAIL_CELL,
+            "min-w-[1.75rem] tabular-nums font-semibold",
+          )}
+          title={countTitle}
+        >
+          {count}
+        </span>
+        {action}
+      </div>
+    </div>
+  );
+}
+
 export interface MetaOptimizerPageRowDetailsProps {
   row: OverviewRow;
   rowIndex: number;
@@ -241,7 +289,9 @@ export interface MetaOptimizerPageRowDetailsProps {
   handleAiHeadersRow: (index: number) => void | Promise<void>;
   handleAiLinksRow: (index: number) => void | Promise<void>;
   handleAiWikipediaLinkRow: (index: number) => void | Promise<void>;
+  handleAiAnswerRow: (index: number) => void | Promise<void>;
   handleAiOverviewRow: (index: number) => void | Promise<void>;
+  handleAiScenarioRow: (index: number) => void | Promise<void>;
   handleAiInContentImageRow: (index: number) => void | Promise<void>;
   /** Shell-only tile: empty fields, actions disabled (no URLs loaded yet). */
   placeholder?: boolean;
@@ -282,7 +332,9 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
   handleAiHeadersRow,
   handleAiLinksRow,
   handleAiWikipediaLinkRow,
+  handleAiAnswerRow,
   handleAiOverviewRow,
+  handleAiScenarioRow,
   handleAiInContentImageRow,
   placeholder = false,
   accordionBody = false,
@@ -293,20 +345,25 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
   const faqPairCount = faqEntries.length;
   const bodyHtmlForUi =
     row.postContentOptimized?.trim() || row.postContent?.trim() || "";
-  const headerList =
-    row.blogH2List?.length
+  const headerList = bodyHtmlForUi
+    ? extractH2TextsFromHtml(bodyHtmlForUi)
+    : row.blogH2List?.length
       ? row.blogH2List
-      : bodyHtmlForUi
-        ? extractH2TextsFromHtml(bodyHtmlForUi)
-        : [];
+      : [];
   const overviewSectionHtml = extractOverviewSectionHtml(bodyHtmlForUi);
   const overviewReady = Boolean(overviewSectionHtml);
+  const answerSectionHtml = extractAnswerSectionHtml(bodyHtmlForUi);
+  const answerReady = Boolean(answerSectionHtml);
+  const scenarioSectionHtml = extractIllustrativeSectionHtml(bodyHtmlForUi);
+  const scenarioReady = Boolean(scenarioSectionHtml);
   const [headersOpen, setHeadersOpen] = React.useState(false);
   const [headersPlanOpen, setHeadersPlanOpen] = React.useState(false);
   const [linksOpen, setLinksOpen] = React.useState(false);
   const [linksPlanOpen, setLinksPlanOpen] = React.useState(false);
   const [wikiLinksOpen, setWikiLinksOpen] = React.useState(false);
+  const [answerOpen, setAnswerOpen] = React.useState(false);
   const [overviewOpen, setOverviewOpen] = React.useState(false);
+  const [scenarioOpen, setScenarioOpen] = React.useState(false);
   const [inContentImageOpen, setInContentImageOpen] = React.useState(false);
   const inContentImageReady = Boolean(row.blogInContentImageUrl?.trim());
   const rawLinkList =
@@ -958,45 +1015,34 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
       >
         <MetaAccordionStripeRow stripeIndex={1}>
         <Collapsible open={headersOpen} onOpenChange={setHeadersOpen}>
-          <CollapsibleTrigger asChild>
-            <button type="button" className={cn(META_TRIGGER_FLAT, "w-full font-semibold")}>
-              <Heading2 className="h-4 w-4 shrink-0" aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-left">Headers</span>
-              <div className={cn(META_FIELD_END_RAIL, "pointer-events-auto shrink-0")}>
-                <span
-                  className={cn(META_FIELD_COUNT, META_FIELD_END_RAIL_CELL, "min-w-[1.75rem] tabular-nums font-semibold")}
-                  title="H2 count"
-                >
-                  {headerList.length.toLocaleString()}
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={META_FIELD_END_RAIL_BTN}
-                  disabled={shellOnly}
-                  title="AI Headers (all H2s on this post)"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    void handleAiHeadersRow(index);
-                  }}
-                >
-                  {row.status === "ai-headers" ? (
-                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
-                  ) : (
-                    <Wand2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                  )}
-                </Button>
-              </div>
-              <ChevronDown
-                className={cn(
-                  "h-4 w-4 shrink-0 transition-transform",
-                  headersOpen && "rotate-180",
+          <MetaAccordionHeaderRow
+            open={headersOpen}
+            icon={<Heading2 className="h-4 w-4 shrink-0" aria-hidden />}
+            label="Headers"
+            count={headerList.length.toLocaleString()}
+            countTitle="H2 count"
+            action={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={META_FIELD_END_RAIL_BTN}
+                disabled={shellOnly}
+                title="AI Headers (all H2s on this post)"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void handleAiHeadersRow(index);
+                }}
+              >
+                {row.status === "ai-headers" ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
+                ) : (
+                  <Wand2 className="h-4 w-4 shrink-0 text-emerald-400" />
                 )}
-              />
-            </button>
-          </CollapsibleTrigger>
+              </Button>
+            }
+          />
           <CollapsibleContent className="space-y-3 pt-3">
             {headerList.length > 0 ? (
               <div className="space-y-2 text-base">
@@ -1044,45 +1090,34 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
 
         <MetaAccordionStripeRow stripeIndex={2}>
         <Collapsible open={linksOpen} onOpenChange={setLinksOpen}>
-          <CollapsibleTrigger asChild>
-            <button type="button" className={cn(META_TRIGGER_FLAT, "w-full font-semibold")}>
-              <Link2 className="h-4 w-4 shrink-0" aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-left">Links</span>
-              <div className={cn(META_FIELD_END_RAIL, "pointer-events-auto shrink-0")}>
-                <span
-                  className={cn(META_FIELD_COUNT, META_FIELD_END_RAIL_CELL, "min-w-[1.75rem] tabular-nums font-semibold")}
-                  title="Internal link count"
-                >
-                  {linkList.length.toLocaleString()}
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={META_FIELD_END_RAIL_BTN}
-                  disabled={shellOnly}
-                  title="AI Links (internal href optimization)"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    void handleAiLinksRow(index);
-                  }}
-                >
-                  {row.status === "ai-links" ? (
-                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
-                  ) : (
-                    <Wand2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                  )}
-                </Button>
-              </div>
-              <ChevronDown
-                className={cn(
-                  "h-4 w-4 shrink-0 transition-transform",
-                  linksOpen && "rotate-180",
+          <MetaAccordionHeaderRow
+            open={linksOpen}
+            icon={<Link2 className="h-4 w-4 shrink-0" aria-hidden />}
+            label="Links"
+            count={linkList.length.toLocaleString()}
+            countTitle="Internal link count"
+            action={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={META_FIELD_END_RAIL_BTN}
+                disabled={shellOnly}
+                title="AI Links (internal href optimization)"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void handleAiLinksRow(index);
+                }}
+              >
+                {row.status === "ai-links" ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
+                ) : (
+                  <Wand2 className="h-4 w-4 shrink-0 text-emerald-400" />
                 )}
-              />
-            </button>
-          </CollapsibleTrigger>
+              </Button>
+            }
+          />
           <CollapsibleContent className="space-y-3 pt-3">
             <div className="flex w-full min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5">
               <Button
@@ -1152,45 +1187,34 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
 
         <MetaAccordionStripeRow stripeIndex={3}>
         <Collapsible open={wikiLinksOpen} onOpenChange={setWikiLinksOpen}>
-          <CollapsibleTrigger asChild>
-            <button type="button" className={cn(META_TRIGGER_FLAT, "w-full font-semibold")}>
-              <MapPin className="h-4 w-4 shrink-0" aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-left">Wikipedia link</span>
-              <div className={cn(META_FIELD_END_RAIL, "pointer-events-auto shrink-0")}>
-                <span
-                  className={cn(META_FIELD_COUNT, META_FIELD_END_RAIL_CELL, "min-w-[1.75rem] tabular-nums font-semibold")}
-                  title="Wikipedia link in body"
-                >
-                  {wikiLinkCount > 0 ? "1" : "0"}
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={META_FIELD_END_RAIL_BTN}
-                  disabled={shellOnly}
-                  title="Find entity and insert Wikipedia link"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    void handleAiWikipediaLinkRow(index);
-                  }}
-                >
-                  {row.status === "ai-wikipedia-link" ? (
-                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
-                  ) : (
-                    <MapPin className="h-4 w-4 shrink-0 text-emerald-400" />
-                  )}
-                </Button>
-              </div>
-              <ChevronDown
-                className={cn(
-                  "h-4 w-4 shrink-0 transition-transform",
-                  wikiLinksOpen && "rotate-180",
+          <MetaAccordionHeaderRow
+            open={wikiLinksOpen}
+            icon={<MapPin className="h-4 w-4 shrink-0" aria-hidden />}
+            label="Wikipedia link"
+            count={wikiLinkCount > 0 ? "1" : "0"}
+            countTitle="Wikipedia link in body"
+            action={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={META_FIELD_END_RAIL_BTN}
+                disabled={shellOnly}
+                title="Find entity and insert Wikipedia link"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void handleAiWikipediaLinkRow(index);
+                }}
+              >
+                {row.status === "ai-wikipedia-link" ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
+                ) : (
+                  <MapPin className="h-4 w-4 shrink-0 text-emerald-400" />
                 )}
-              />
-            </button>
-          </CollapsibleTrigger>
+              </Button>
+            }
+          />
           <CollapsibleContent className="space-y-3 pt-3">
             {wikiLinkCount > 0 ? (
               <div className="space-y-3 text-base">
@@ -1250,46 +1274,79 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
         </MetaAccordionStripeRow>
 
         <MetaAccordionStripeRow stripeIndex={4}>
-        <Collapsible open={overviewOpen} onOpenChange={setOverviewOpen}>
-          <CollapsibleTrigger asChild>
-            <button type="button" className={cn(META_TRIGGER_FLAT, "w-full font-semibold")}>
-              <ListTree className="h-4 w-4 shrink-0" aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-left">Overview</span>
-              <div className={cn(META_FIELD_END_RAIL, "pointer-events-auto shrink-0")}>
-                <span
-                  className={cn(META_FIELD_COUNT, META_FIELD_END_RAIL_CELL, "min-w-[1.75rem] tabular-nums font-semibold")}
-                  title="Overview staged"
-                >
-                  {overviewReady ? "1" : "0"}
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={META_FIELD_END_RAIL_BTN}
-                  disabled={shellOnly}
-                  title="AI Overview (prepend to post body)"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    void handleAiOverviewRow(index);
-                  }}
-                >
-                  {row.status === "ai-overview" ? (
-                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
-                  ) : (
-                    <Wand2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                  )}
-                </Button>
-              </div>
-              <ChevronDown
-                className={cn(
-                  "h-4 w-4 shrink-0 transition-transform",
-                  overviewOpen && "rotate-180",
+        <Collapsible open={answerOpen} onOpenChange={setAnswerOpen}>
+          <MetaAccordionHeaderRow
+            open={answerOpen}
+            icon={<ListTree className="h-4 w-4 shrink-0" aria-hidden />}
+            label="Answer"
+            count={answerReady ? "1" : "0"}
+            countTitle="Answer staged"
+            action={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={META_FIELD_END_RAIL_BTN}
+                disabled={shellOnly}
+                title="AI Answer (prepend to post body)"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void handleAiAnswerRow(index);
+                }}
+              >
+                {row.status === "ai-answer" ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
+                ) : (
+                  <Wand2 className="h-4 w-4 shrink-0 text-emerald-400" />
                 )}
-              />
-            </button>
-          </CollapsibleTrigger>
+              </Button>
+            }
+          />
+          <CollapsibleContent className="space-y-3 pt-3">
+            {answerSectionHtml ? (
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-none bg-zinc-900/60 p-3 text-base text-zinc-200">
+                {answerSectionHtml}
+              </pre>
+            ) : (
+              <p className="text-base text-muted-foreground">
+                No Answer staged yet. Run the wand to prepend an Answer block.
+              </p>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+        </MetaAccordionStripeRow>
+
+        <MetaAccordionStripeRow stripeIndex={5}>
+        <Collapsible open={overviewOpen} onOpenChange={setOverviewOpen}>
+          <MetaAccordionHeaderRow
+            open={overviewOpen}
+            icon={<ListTree className="h-4 w-4 shrink-0" aria-hidden />}
+            label="Overview"
+            count={overviewReady ? "1" : "0"}
+            countTitle="Overview staged"
+            action={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={META_FIELD_END_RAIL_BTN}
+                disabled={shellOnly}
+                title="AI Overview (prepend to post body)"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void handleAiOverviewRow(index);
+                }}
+              >
+                {row.status === "ai-overview" ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
+                ) : (
+                  <Wand2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                )}
+              </Button>
+            }
+          />
           <CollapsibleContent className="space-y-3 pt-3">
             {overviewSectionHtml ? (
               <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-none bg-zinc-900/60 p-3 text-base text-zinc-200">
@@ -1304,47 +1361,80 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
         </Collapsible>
         </MetaAccordionStripeRow>
 
-        <MetaAccordionStripeRow stripeIndex={5}>
-        <Collapsible open={inContentImageOpen} onOpenChange={setInContentImageOpen}>
-          <CollapsibleTrigger asChild>
-            <button type="button" className={cn(META_TRIGGER_FLAT, "w-full font-semibold")}>
-              <ImageIcon className="h-4 w-4 shrink-0" aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-left">Images</span>
-              <div className={cn(META_FIELD_END_RAIL, "pointer-events-auto shrink-0")}>
-                <span
-                  className={cn(META_FIELD_COUNT, META_FIELD_END_RAIL_CELL, "min-w-[1.75rem] tabular-nums font-semibold")}
-                  title="In-content image staged"
-                >
-                  {inContentImageReady ? "1" : "0"}
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={META_FIELD_END_RAIL_BTN}
-                  disabled={shellOnly}
-                  title="AI In Content Image"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    void handleAiInContentImageRow(index);
-                  }}
-                >
-                  {row.status === "ai-in-content-image" ? (
-                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
-                  ) : (
-                    <Wand2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                  )}
-                </Button>
-              </div>
-              <ChevronDown
-                className={cn(
-                  "h-4 w-4 shrink-0 transition-transform",
-                  inContentImageOpen && "rotate-180",
+        <MetaAccordionStripeRow stripeIndex={6}>
+        <Collapsible open={scenarioOpen} onOpenChange={setScenarioOpen}>
+          <MetaAccordionHeaderRow
+            open={scenarioOpen}
+            icon={<ListTree className="h-4 w-4 shrink-0" aria-hidden />}
+            label="Scenario"
+            count={scenarioReady ? "1" : "0"}
+            countTitle="Illustrative scenario staged"
+            action={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={META_FIELD_END_RAIL_BTN}
+                disabled={shellOnly}
+                title="AI Scenario (regenerate illustrative H2)"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void handleAiScenarioRow(index);
+                }}
+              >
+                {row.status === "ai-scenario" ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
+                ) : (
+                  <Wand2 className="h-4 w-4 shrink-0 text-emerald-400" />
                 )}
-              />
-            </button>
-          </CollapsibleTrigger>
+              </Button>
+            }
+          />
+          <CollapsibleContent className="space-y-3 pt-3">
+            {scenarioSectionHtml ? (
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-none bg-zinc-900/60 p-3 text-base text-zinc-200">
+                {scenarioSectionHtml}
+              </pre>
+            ) : (
+              <p className="text-base text-muted-foreground">
+                No illustrative section staged yet. Run the wand on a page with the local-example H2.
+              </p>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+        </MetaAccordionStripeRow>
+
+        <MetaAccordionStripeRow stripeIndex={7}>
+        <Collapsible open={inContentImageOpen} onOpenChange={setInContentImageOpen}>
+          <MetaAccordionHeaderRow
+            open={inContentImageOpen}
+            icon={<ImageIcon className="h-4 w-4 shrink-0" aria-hidden />}
+            label="Images"
+            count={inContentImageReady ? "1" : "0"}
+            countTitle="In-content image staged"
+            action={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={META_FIELD_END_RAIL_BTN}
+                disabled={shellOnly}
+                title="AI In Content Image"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void handleAiInContentImageRow(index);
+                }}
+              >
+                {row.status === "ai-in-content-image" ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
+                ) : (
+                  <Wand2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                )}
+              </Button>
+            }
+          />
           <CollapsibleContent className="space-y-3 pt-3">
             {sitemapSource === "sap" ? (
               <div className="space-y-2">
@@ -1465,7 +1555,7 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
         </Collapsible>
         </MetaAccordionStripeRow>
 
-        <MetaAccordionStripeRow stripeIndex={6}>
+        <MetaAccordionStripeRow stripeIndex={8}>
         <Collapsible open={faqEditorOpen} onOpenChange={setFaqEditorOpen}>
           <CollapsibleTrigger asChild>
             <button type="button" className={cn(META_TRIGGER_FLAT, "w-full font-semibold")}>
@@ -1630,7 +1720,7 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
         </Collapsible>
         </MetaAccordionStripeRow>
 
-        <MetaAccordionStripeRow stripeIndex={7}>
+        <MetaAccordionStripeRow stripeIndex={9}>
         <Collapsible
           open={expandedContentUrl === row.url}
           onOpenChange={(next) => setExpandedContentUrl(next ? row.url : null)}
@@ -1673,6 +1763,7 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
                       content: sheetBody || undefined,
                       excerpt: row.metaDescription || undefined,
                       focusKeyword: row.focusKeyword?.trim() || undefined,
+                      seoResearch: row.seoResearch?.trim() || undefined,
                     }
                   : null;
               })()}

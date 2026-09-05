@@ -7,6 +7,8 @@
 import { stripPlaceholderDomainLinks } from "../placeholder-link-domains";
 import { isMediaAssetUrl } from "@/lib/content-optimization/images-extract";
 import { contentAlreadyHasBlockHtml } from "@/lib/content-generation/content-format";
+import { isServiceAreaUrl } from "@/lib/bulk/bulk-generation-wp-inventory";
+import { repairHarnessLinkLeaks } from "@/lib/content-generation/harness-link-leak-repair";
 
 // Placeholder patterns to strip - these break live pages if they slip through
 const PLACEHOLDER_PATTERNS = [
@@ -1036,6 +1038,22 @@ export function fixOrphanedListItems(content: string): string {
 }
 
 /**
+ * Keep list markers on the same line as the item text.
+ * Nested p or br inside li puts the number on its own line in WordPress.
+ */
+export function flattenListItemBlockWrappers(html: string): string {
+  if (!html) return html;
+  return html.replace(/<li(\b[^>]*)>([\s\S]*?)<\/li>/gi, (_match, attrs: string, inner: string) => {
+    let t = inner.replace(/^\s*(?:<br\s*\/?>\s*)+/gi, "");
+    t = t.replace(/^\s*\d{1,2}\.\s+/, "");
+    t = t.replace(/<\/?p\b[^>]*>/gi, " ");
+    t = t.replace(/<br\s*\/?>/gi, " ");
+    t = t.replace(/\s+/g, " ").trim();
+    return `<li${attrs}>${t}</li>`;
+  });
+}
+
+/**
  * Remove link columns from tables
  * Detects tables with dedicated link columns (like "Relevant Internal Links", "Links", etc.)
  * and removes those columns entirely
@@ -1342,8 +1360,8 @@ export function deduplicateInternalLinksInHtml(content: string): string {
 }
 
 /**
- * Ensure no internal link ends in a period: (1) move trailing period from anchor text to after </a>;
- * (2) where </a> is immediately followed by a period (link at end of sentence), insert a short phrase so the link is wrapped in words. Never use "here" - use "for more" to avoid the disallowed "link → here" pattern.
+ * Ensure no internal link ends in a period: move trailing period from anchor text to after </a>.
+ * Mid-sentence link placement is enforced in harness prompts; do not inject SEO stub phrases.
  */
 export function ensureNoLinkEndsInPeriod(html: string): string {
   if (!html) return html;
@@ -1354,17 +1372,17 @@ export function ensureNoLinkEndsInPeriod(html: string): string {
     if (isHashHref(attrs)) return match;
     return `<a${attrs}>${text}</a>.`;
   });
-  // If link is immediately followed by period (no word after), add wording so link doesn't end in period. Do NOT use "here".
-  // Skip same-page # scroll citations (Overview harness).
-  out = out.replace(/<a([^>]*)>([^<]*?)<\/a>\s*\./gi, (match, attrs: string, text: string) => {
-    if (isHashHref(attrs)) return match;
-    return `<a${attrs}>${text}</a> for more.`;
-  });
   return out;
 }
 
+/** Remove orphan " for more." tails left after link strip or bad model output. Keeps "for more information". */
+export function stripDanglingForMoreTail(html: string): string {
+  if (!html) return html;
+  return html.replace(/\s+for more\.(?!\s*(?:information|details|context|guidance|resources|help|on|about)\b)/gi, ".");
+}
+
 /**
- * Remove internal links that are NOT in the WordPress posts list.
+ * Remove internal links that are NOT in the page-sitemap / blog catalog.
  * When wordPressPosts is provided: only allow links from the list.
  * When wordPressPosts is empty: leave content unchanged (cannot validate; ensureLinks adds from API).
  */
@@ -1384,7 +1402,7 @@ export function removeInvalidInternalLinks(content: string, wordPressPosts?: Arr
     }
   }
 
-  // No WordPress posts list: leave content unchanged (removeNonWikipediaExternalLinks still strips example.com etc.)
+  // No page-sitemap / blog catalog: leave content unchanged (removeNonWikipediaExternalLinks still strips example.com etc.)
   if (!wordPressPosts || wordPressPosts.length === 0) {
     return content;
   }
@@ -1410,10 +1428,19 @@ export function removeInvalidInternalLinks(content: string, wordPressPosts?: Arr
     } catch {}
   };
   wordPressPosts.forEach(post => {
-    if (post.link?.trim()) addUrlVariants(post.link);
+    if (post.link?.trim() && !isServiceAreaUrl(post.link)) addUrlVariants(post.link);
   });
 
-  console.log(`[Link Sanitizer] Valid internal links: from WordPress API only (${validInternalLinks.size} variants from ${wordPressPosts.length} posts)`);
+  const pageCount = wordPressPosts.filter(
+    (p) =>
+      (p as { postType?: string }).postType === "page" ||
+      (!(p as { postType?: string }).postType &&
+        !(String(p.link ?? "").toLowerCase().includes("/blog/"))),
+  ).length;
+  const postCount = wordPressPosts.length - pageCount;
+  console.log(
+    `[Link Sanitizer] Valid internal links: from WordPress API only (${validInternalLinks.size} variants from ${wordPressPosts.length} catalog items, ${pageCount} pages, ${postCount} posts)`,
+  );
 
   // Pattern: markdown [text](url), HTML absolute href, HTML relative href="/path"
   const linkPattern = /(\[([^\]]+)\]\((https?:\/\/[^\)]+)\)|<a[^>]*href=["'](https?:\/\/[^"']+)["'][^>]*>([^<]*)<\/a>|<a[^>]*href=["'](\/[^"']*)["'][^>]*>([^<]*)<\/a>)/gi;
@@ -1456,6 +1483,10 @@ export function removeInvalidInternalLinks(content: string, wordPressPosts?: Arr
       // Same-site media assets (uploads / image / video files) are not post URLs — keep them.
       if (isMediaAssetUrl(url)) {
         return match;
+      }
+      if (isServiceAreaUrl(url)) {
+        removedCount++;
+        return anchorText;
       }
       // For internal links, allow only if URL matches one from WordPress API (www/non-www, trailing slash variants)
       const urlTrimmed = url.trim();
@@ -1739,6 +1770,7 @@ export function sanitizeContentForUpload(
   
   // Step 1.48: Fix orphaned <li> elements (bare <li> without <ul>/<ol> wrapper, stray closers)
   sanitized = fixOrphanedListItems(sanitized);
+  sanitized = flattenListItemBlockWrappers(sanitized);
 
   // Step 1.49: Entity pages - link blockquotes to the entity Wikipedia URL (first entity mention or leading link)
   if (allowedWikipediaUrl && wikipediaEntityLabel?.trim()) {
@@ -1768,7 +1800,14 @@ export function sanitizeContentForUpload(
   sanitized = sanitized.trim();
   
   // Step 8: Final link pass - ensure ZERO markdown links survive (entity/Wikipedia etc.)
+  sanitized = repairHarnessLinkLeaks(sanitized);
   sanitized = forceConvertMarkdownLinks(sanitized);
+
+  // Step 9: After external link allowlist — normalize sentence-ending link punctuation
+  sanitized = ensureNoLinkEndsInPeriod(sanitized);
+
+  // Step 10: Remove orphan " for more." tails (never reintroduce SEO stubs)
+  sanitized = stripDanglingForMoreTail(sanitized);
   
   return sanitized;
 }

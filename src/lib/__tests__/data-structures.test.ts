@@ -16,24 +16,23 @@ describe('data-structures: site cache titleIndex', () => {
 
   afterEach(() => clearSiteCache(SITE_ID));
 
-  it('indexes posts by words in title', () => {
+  it('returns cached posts without query scoring', () => {
     const posts: CachedPost[] = [
       { id: 1, slug: 'a', title: 'Plumber Near Me', excerpt: '', link: 'https://example.com/a', date_gmt: '' },
       { id: 2, slug: 'b', title: 'Local Plumber', excerpt: '', link: 'https://example.com/b', date_gmt: '' },
     ];
     setSiteCacheForTest(SITE_ID, 'https://example.com', posts);
     const results = searchSiteCache(SITE_ID, 'Plumber', 10);
-    expect(results.length).toBeGreaterThanOrEqual(1);
-    expect(results.every((p) => p.title.toLowerCase().includes('plumber'))).toBe(true);
+    expect(results.map((p) => p.id)).toEqual([1, 2]);
   });
 
-  it('returns empty for word not in any title', () => {
+  it('returns the full cache when the query is unused', () => {
     const posts: CachedPost[] = [
       { id: 1, slug: 'a', title: 'Only This', excerpt: '', link: 'https://example.com/a', date_gmt: '' },
     ];
     setSiteCacheForTest(SITE_ID, 'https://example.com', posts);
     const results = searchSiteCache(SITE_ID, 'nonexistentword', 10);
-    expect(results).toEqual([]);
+    expect(results.map((p) => p.id)).toEqual([1]);
   });
 });
 

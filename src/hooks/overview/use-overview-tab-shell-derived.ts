@@ -14,6 +14,7 @@ import {
   buildOverviewBulkMicroSnapshot,
   isOverviewBulkDetailsRun,
 } from "@/lib/overview/overview-bulk-details-bindings";
+import { isOverviewResearchBatchInFlight } from "@/components/overview/overview-tab/overview-bulk-run-helpers";
 import type { OverviewTabController } from "@/hooks/overview/use-overview-tab-controller";
 
 export function useOverviewTabShellDerived(ctrl: OverviewTabController) {
@@ -66,7 +67,9 @@ export function useOverviewTabShellDerived(ctrl: OverviewTabController) {
       p.aiUrl ||
       p.aiHeaders ||
       p.aiLinks ||
+      p.aiAnswer ||
       p.aiOverview ||
+      p.aiScenario ||
       p.aiInContentImage ||
       p.contentCleanup ||
       p.research ||
@@ -76,8 +79,15 @@ export function useOverviewTabShellDerived(ctrl: OverviewTabController) {
   }, [ctrl.bulkActionProgress, ctrl.overviewSitemapLoadBusy]);
 
   const defaultBulkBatchKey = ctrl.site ? `${ctrl.site.id}-batch` : "";
-  const bulkBatchKey =
+  const scopedBatchKey =
     scope && ctrl.site && scope.siteId === ctrl.site.id ? scope.batchKey : defaultBulkBatchKey;
+  const siteResearchBatch = defaultBulkBatchKey
+    ? ctrl.opt.bulkOptimizationState[defaultBulkBatchKey]
+    : undefined;
+  const bulkBatchKey =
+    siteResearchBatch?.runKind === "research" && siteResearchBatch.urls?.length
+      ? defaultBulkBatchKey
+      : scopedBatchKey;
   const batchBulkState = bulkBatchKey ? ctrl.opt.bulkOptimizationState[bulkBatchKey] : undefined;
   const siteId = ctrl.site?.id;
 
@@ -104,7 +114,8 @@ export function useOverviewTabShellDerived(ctrl: OverviewTabController) {
       : undefined;
   const isBatchContentRunning =
     bulkBatchKey && !suppressMainOptAgentBleed
-      ? Boolean(ctrl.opt.isOptimizingContent[bulkBatchKey])
+      ? Boolean(ctrl.opt.isOptimizingContent[bulkBatchKey]) ||
+        isOverviewResearchBatchInFlight(batchBulkState)
       : false;
   const siteProgress = siteId ? ctrl.opt.optimizationProgress[siteId] : undefined;
   const batchProgress = bulkBatchKey ? ctrl.opt.optimizationProgress[bulkBatchKey] : undefined;
@@ -207,7 +218,9 @@ export function useOverviewTabShellDerived(ctrl: OverviewTabController) {
       p.aiUrl ||
       p.aiHeaders ||
       p.aiLinks ||
+      p.aiAnswer ||
       p.aiOverview ||
+      p.aiScenario ||
       p.aiInContentImage ||
       p.contentCleanup ||
       p.research ||

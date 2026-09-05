@@ -2,7 +2,7 @@
  * Build WordPress bulk posting options only from explicit UI state - no default site pickers.
  */
 
-import { getStoredSites } from '@/components/IntegrationsTab';
+import { getStoredSites } from '@/components/integrations/storage';
 import type { CSVRow, WordPressPostingOptions, WordPressPostDestination } from '@/lib/bulk-auto-generate';
 import type { ScheduleOccupancy } from '@/lib/bulk-schedule-gap';
 import { gapScheduleStartDate } from '@/lib/bulk-schedule-gap';
@@ -31,7 +31,7 @@ export function resolveDefaultWordPressSiteSelection(): {
   return {
     selectedSiteIds: new Set([enabled.id]),
     siteConfigs: {
-      [enabled.id]: { sitemapType: enabled.entitySitemapUrl ? 'entity' : 'post' },
+      [enabled.id]: { sitemapType: 'post' },
     },
   };
 }
@@ -52,6 +52,7 @@ export function buildWordPressPostingFromSelection(params: {
   scheduleOccupancy?: ScheduleOccupancy | null;
   useGapScheduling?: boolean;
   draftOnly?: boolean;
+  publishDays?: number[];
 }): WordPressPostingOptions | undefined {
   const {
     selectedSiteIds,
@@ -68,6 +69,7 @@ export function buildWordPressPostingFromSelection(params: {
     scheduleOccupancy = null,
     useGapScheduling = false,
     draftOnly = false,
+    publishDays,
   } = params;
 
   if (postDestination === 'local') return undefined;
@@ -119,6 +121,7 @@ export function buildWordPressPostingFromSelection(params: {
     scheduleOccupancy: gapActive ? scheduleOccupancy : undefined,
     useGapScheduling: gapActive,
     draftOnly: draftOnly || undefined,
+    publishDays: scheduleFrequency === 'custom' ? publishDays : undefined,
   };
 }
 
@@ -145,6 +148,7 @@ export function precomputeGapDatesBySlot(
       useGapScheduling: true,
       scheduleOccupancy: posting.scheduleOccupancy,
       priorInBatchDates: [...priorDates],
+      publishDays: posting.publishDays,
     };
     const { date } = resolveBulkWordPressPublishDate({
       rowPublishDateGmt: rows[i]?.publish_date_gmt,

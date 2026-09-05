@@ -97,14 +97,29 @@ if ($dockerPhp) {
     Write-Host "`nCopying plugins into Docker webroot ($dockerPhp)..." -ForegroundColor Cyan
     foreach ($entry in $pluginMap.GetEnumerator()) {
         $dest = "/var/www/wp-content/plugins/$($entry.Key)"
-        docker exec $dockerPhp rm -rf $dest 2>$null
-        docker exec $dockerPhp mkdir -p $dest 2>$null
+        docker exec -u root $dockerPhp rm -rf $dest 2>$null
+        docker exec -u root $dockerPhp mkdir -p $dest 2>$null
         docker cp "$($entry.Value)/." "${dockerPhp}:$dest/" 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) {
             Write-Host "  $($entry.Key) docker cp failed (exit $LASTEXITCODE)" -ForegroundColor Yellow
         } else {
             Write-Host "  $($entry.Key) copied to container" -ForegroundColor Green
         }
+        $bootstrapName = if ($entry.Key -eq "neo-pulse-app") { "neo-pulse-app.php" } else { "neo-pulse-wp.php" }
+        $bootstrapSrc = Join-Path $entry.Value $bootstrapName
+        if (Test-Path $bootstrapSrc) {
+            docker cp $bootstrapSrc "${dockerPhp}:$dest/$bootstrapName" 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                throw "$bootstrapName docker cp failed for $($entry.Key) (exit $LASTEXITCODE)"
+            }
+        } else {
+            throw "Missing plugin bootstrap: $bootstrapSrc"
+        }
+        $bootstrapCheck = docker exec $dockerPhp test -f "$dest/$bootstrapName" 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Plugin bootstrap missing in container after sync: $dest/$bootstrapName"
+        }
+        docker exec -u root $dockerPhp chown -R www-data:www-data $dest 2>$null
     }
     docker exec $dockerPhp kill -USR2 1 2>$null
     Write-Host "PHP opcache reload signaled." -ForegroundColor Green

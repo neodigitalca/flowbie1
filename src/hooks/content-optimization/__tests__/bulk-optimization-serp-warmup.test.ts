@@ -87,7 +87,29 @@ describe("createBulkSerpWarmupController", () => {
     expect(fetchBrief).not.toHaveBeenCalled();
   });
 
-  it("skips DataForSEO when cache already has substantive seo_research", async () => {
+  it("propagates SERP brief fetch failures", async () => {
+    fetchBrief.mockRejectedValue(new Error("DataForSEO unavailable"));
+
+    const urls = ["https://example.com/missing-brief/"];
+    const acf = new Map<number, Record<string, unknown>>([[0, { keyword_focus: "kw" }]]);
+    const pending = new Map<number, { pending: Record<string, unknown>; primaryKeyword: string }>();
+    const skipUrlSet = new Set<string>();
+
+    const controller = createBulkSerpWarmupController({
+      urls,
+      batchKey: "site-batch",
+      skipUrlSet,
+      muteToasts: true,
+      prefetchedAcfFieldsCache: acf,
+      prefetchedPendingCache: pending,
+      setBulkOptimizationState: (updater) => updater({ "site-batch": {} }),
+    });
+
+    await expect(controller.ensureReady(0)).rejects.toThrow("DataForSEO unavailable");
+    expect(hasSubstantiveSeoResearch(acf.get(0))).toBe(false);
+  });
+
+  it("skips DataForSEO when cache already has seo_research", async () => {
     const urls = ["https://example.com/already-researched/"];
     const acf = new Map<number, Record<string, unknown>>([
       [0, { keyword_focus: "kw", seo_research: '{"primary_keyword":"kw"}' }],

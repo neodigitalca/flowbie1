@@ -1,4 +1,4 @@
-import { callOpenRouterChatCompletion } from "@/lib/competitor-research/competitor-report-openrouter";
+import { callGscReportingOpenRouterChatCompletion } from "@/lib/gsc-reporting/gsc-reporting-openrouter";
 import {
   buildOpenRouterChatPostBodyJson,
   getCompetitorReportMaxOutputTokens,
@@ -16,6 +16,7 @@ import {
   buildSapFilteredPagesChunkText,
   isPagesMomReportingFile,
 } from "@/lib/gsc-reporting/gsc-reporting-sap-entity-context";
+import { isGenerativeAiReportingFile } from "@/lib/gsc-reporting/gsc-reporting-generative-ai";
 import {
   buildCompareSignalsPinChunk,
   COMPARE_SIGNALS_SECTION_KINDS,
@@ -33,6 +34,8 @@ import type {
   GscReportingSectionResult,
   RunGscReportingPipelineArgs,
 } from "@/lib/gsc-reporting/gsc-reporting-types";
+import * as gscProgressLog from "@/lib/gsc-reporting/gsc-reporting-progress-log";
+import { buildGscReportDocumentHeading } from "@/lib/gsc-reporting/gsc-reporting-document-title";
 
 const RETRIEVAL_MAX_TOTAL_CHARS = 28_000;
 const RETRIEVAL_MAX_CHUNKS = 12;
@@ -61,6 +64,7 @@ export async function runGscReportingPipeline(args: RunGscReportingPipelineArgs)
     sapEntityGrounding,
     compareKind = "mom",
     compareLabel = "",
+    clientSeason = null,
     signal,
     onProgress,
     onOutlineReady,
@@ -95,6 +99,8 @@ export async function runGscReportingPipeline(args: RunGscReportingPipelineArgs)
         siteUrl,
         files: bundledFiles,
         compareKind,
+        compareLabel,
+        clientSeason,
         signal,
       });
 
@@ -103,7 +109,11 @@ export async function runGscReportingPipeline(args: RunGscReportingPipelineArgs)
   }
 
   const totalSteps = 1 + outline.sections.length;
-  onProgress?.({ step: 1, total: totalSteps, label: "Outline complete" });
+  await onProgress?.({
+    step: 1,
+    total: totalSteps,
+        label: gscProgressLog.formatGscOutlineCompleteLabel(outline.sections),
+  });
   const chunks = splitGscFilesIntoChunks(bundledFiles);
   const compareSignalsPin = buildCompareSignalsPinChunk(bundledFiles);
   const priorByIndex = new Map(priorSectionResults.map((row) => [row.index, row]));
@@ -115,10 +125,11 @@ export async function runGscReportingPipeline(args: RunGscReportingPipelineArgs)
     const prior = priorByIndex.get(i);
     if (prior) {
       onSectionStart?.(i, prior.plan);
-      onProgress?.({
+      await onProgress?.({
         step: 2 + i,
         total: totalSteps,
-        label: `Section ${i + 1}/${sectionTotal}: ${prior.plan.h2Title.slice(0, 48)}…`,
+        label: gscProgressLog.formatGscSectionCompleteLabel(i, sectionTotal, prior.plan.h2Title),
+        sectionIndex: i,
       });
       onSectionReady?.(prior);
       continue;
@@ -126,15 +137,12 @@ export async function runGscReportingPipeline(args: RunGscReportingPipelineArgs)
 
     const plan = plans[i]!;
     onSectionStart?.(i, plan);
-    onProgress?.({
-      step: 2 + i,
-      total: totalSteps,
-      label: `Section ${i + 1}/${sectionTotal}: ${plan.h2Title.slice(0, 48)}…`,
-    });
 
     const pinnedBase = pickFirstChunkPerSourceFile(chunks);
     let pinned: GscReportingChunk[] = pinnedBase;
-    if (plan.kind === "sap_local_seo" && sapEntityGrounding) {
+    if (plan.kind === "generative_ai_impressions") {
+      pinned = pinnedBase.filter((c) => isGenerativeAiReportingFile(c.sourceFile));
+    } else if (plan.kind === "sap_local_seo" && sapEntityGrounding) {
       pinned = pinnedBase.filter((c) => !isPagesMomReportingFile(c.sourceFile));
     }
 
@@ -168,9 +176,11 @@ export async function runGscReportingPipeline(args: RunGscReportingPipelineArgs)
     const pinnedMerged = [...compareSignalPins, ...sapPins, ...pinned];
 
     const chunksForRag =
-      plan.kind === "sap_local_seo" && sapEntityGrounding
-        ? chunks.filter((c) => !isPagesMomReportingFile(c.sourceFile))
-        : chunks;
+      plan.kind === "generative_ai_impressions"
+        ? chunks.filter((c) => isGenerativeAiReportingFile(c.sourceFile))
+        : plan.kind === "sap_local_seo" && sapEntityGrounding
+          ? chunks.filter((c) => !isPagesMomReportingFile(c.sourceFile))
+          : chunks;
 
     const scoredPool = retrieveTopChunks({
       chunks: chunksForRag,
@@ -195,6 +205,8 @@ export async function runGscReportingPipeline(args: RunGscReportingPipelineArgs)
       outline,
       plan,
       retrievedContext,
+      clientSeason,
+      compareLabel,
     });
 
     const system = getGscReportingSectionSystemPrompt(plan.kind, compareKind);
@@ -207,7 +219,7 @@ export async function runGscReportingPipeline(args: RunGscReportingPipelineArgs)
       userMessage: user,
     });
 
-    const { content } = await callOpenRouterChatCompletion({
+    const { content } = await callGscReportingOpenRouterChatCompletion({
       apiKey,
       model,
       system,
@@ -227,11 +239,17 @@ export async function runGscReportingPipeline(args: RunGscReportingPipelineArgs)
       requestBodyJson,
     };
     sectionResults.push(row);
+    await onProgress?.({
+      step: 2 + i,
+      total: totalSteps,
+      label: gscProgressLog.formatGscSectionCompleteLabel(i, sectionTotal, plan.h2Title),
+      sectionIndex: i,
+    });
     onSectionReady?.(row);
   }
 
   const title = [
-    "# Organic Search Performance Report",
+    `# ${buildGscReportDocumentHeading(compareLabel)}`,
     "",
     AGENCY_NAME,
     `Prepared for: ${siteName}`,
@@ -239,8 +257,6 @@ export async function runGscReportingPipeline(args: RunGscReportingPipelineArgs)
   ].join("\n");
   const orderedSections = [...sectionResults].sort((a, b) => a.index - b.index);
   const markdown = [title, ...orderedSections.map((s) => s.markdownBlock)].join("\n");
-
-  onProgress?.({ step: totalSteps, total: totalSteps, label: "Done" });
 
   return {
     markdown,

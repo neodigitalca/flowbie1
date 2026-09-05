@@ -5,7 +5,9 @@ import { notify } from "@/lib/app-notifications";
 import { NOTIFY_ADD_A_FOCUS_KEYWORD_BEFORE_RUNNING_AI_AL, NOTIFY_ADD_FOCUS_KEYWORDS_BEFORE_RUNNING_AI_ALL, NOTIFY_A_BULK_CONTENT_RUN_IS_ALREADY_IN_PROGRES, NOTIFY_A_BULK_RUN_IS_ALREADY_IN_PROGRESS, NOTIFY_BACKEND_API_URL_IS_NOT_CONFIGURED_FOR_PR, NOTIFY_CONNECT_A_WORDPRESS_SITE_FIRST_IN_THE_IN, NOTIFY_NO_ROWS_HAVE_A_FOCUS_KEYWORD_RUN_KEYWORD, NOTIFY_NO_ROWS_HAVE_A_POST_ID_FROM_LOADED_INVEN, notifyFinishedResearchForXRowSDataforseo, notifyOptimizeAllSerpFinishedX, notifyResearchFailedForAllXRowSBriefJs, notifyResearchFinishedXXBriefJsonUpdated, notifyResearchRanOnXRowSButBriefJsonW, notifyStartingAiExtraTextForXUrlSUseT, notifyStartingBulkContentOptimizationForX } from "@/lib/notify-messages";
 import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
 import { isProductionBackendMisconfigured } from "@/lib/mcp-tools";
-import { runOverviewResearchBatch, type OverviewResearchRowResult } from "@/lib/overview/overview-research-batch";
+import { runOverviewResearchBatch, resolveResearchBatchEligibleRows, type OverviewResearchRowResult } from "@/lib/overview/overview-research-batch";
+import { overviewDateModifierTodayIso } from "@/lib/overview/overview-bulk-seo-payload";
+import { uploadOverviewResearchedRowToWordPress } from "@/lib/overview/overview-research-row-wp-upload";
 import { initBulkSliceWithStatus, patchActiveBulkSlice } from "@/lib/overview/overview-bulk-inline-status";
 import { needsOverviewResearchRefresh } from "@/lib/overview/overview-ensure-focus-keyword";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
@@ -20,12 +22,14 @@ import {
   runOverviewAiAllMetaHarness,
 } from "@/lib/overview/overview-ai-all-meta-harness-run";
 import {
+  failResearchRowHarness,
   finalizeOverviewResearchHarnessBatch,
   initOverviewResearchHarnessBatchState,
   makeResearchHarnessCallback,
+  makeResearchArtifactCallback,
   finishResearchRowHarness,
+  setResearchActiveRow,
   setResearchBatchPrepMessage,
-  setResearchUrlStatus,
   type ResearchHarnessSetters,
 } from "@/lib/overview/overview-research-harness-run";
 import { isOverviewBatchRunning } from "@/lib/overview/overview-batch-slot";
@@ -35,11 +39,7 @@ import {
   setContentPrepBatchMessage,
   type ContentPrepHarnessSetters,
 } from "@/lib/overview/overview-content-prep-harness-run";
-import { snapshotHasInventoryEntries } from "@/lib/wordpress-api/inventory-match";
-import {
-  getAnyBulkInventorySessionSnapshot,
-  getBulkInventorySessionSnapshot,
-} from "@/lib/wordpress-bulk-inventory-session-cache";
+import { seedBulkInventorySessionFromSiteWarmCache } from "@/lib/bulk/seed-bulk-session-from-site-warm-cache";
 import { overviewBulkPageRanges } from "@/lib/overview/overview-bulk-page-size";
 import { setOverviewBulkHarnessPageState } from "@/lib/overview/overview-bulk-page-state";
 import {
@@ -81,6 +81,8 @@ type Args = Pick<
     progressKey?: "research" | "contentKw" | "entityKw";
     silent?: boolean;
     singleBatch?: boolean;
+    preserveRowStatus?: boolean;
+    skipProgressSlice?: boolean;
   }) => Promise<{ ensured: number; failed: number; keywordsByIndex: Map<number, string> }>;
   handleAiTitleRow: (
     index: number,
@@ -175,10 +177,16 @@ export function useOverviewTabResearchPipelines({
         return;
       }
 
-      try {
-        // Never skip research: write missing keywords first, then research every scoped row.
-        await ensureOverviewKeywordsForMissingRows({ silent: true, progressKey: "research" });
+      let harnessInitialized = false;
+      let briefUpdated = 0;
+      let serpOnly = 0;
+      let failed = 0;
+      let researchTotal = 0;
+      let wpUploaded = 0;
+      let wpFailed = 0;
+      let wpSkipped = 0;
 
+      try {
         const currentRows = rowsRef.current;
         const eligible = overviewBulkRowEntries(currentRows, scopeKeys).map(({ row, index }) => {
           const kw = row.focusKeyword?.trim() || "";
@@ -190,14 +198,11 @@ export function useOverviewTabResearchPipelines({
           return;
         }
 
-        const researchTotal = eligible.length;
-        let briefUpdated = 0;
-        let serpOnly = 0;
-        let failed = 0;
+        researchTotal = eligible.length;
 
         const batchDeps = {
           site,
-          gscQuickWinsFile,
+          gscQuickWinsFile: null,
           serpDumpUrl,
           portfolioBlockedHostsForSemrush,
           skipGsc: false,
@@ -205,9 +210,12 @@ export function useOverviewTabResearchPipelines({
         };
 
         const indexToUrl = new Map<number, string>();
+        const indexToKeyword = new Map<number, string>();
         for (const { index, row } of eligible) {
           const url = row.url?.trim();
           if (url) indexToUrl.set(index, url);
+          const kw = row.focusKeyword?.trim();
+          if (kw) indexToKeyword.set(index, kw);
         }
 
         const harnessSetters: ResearchHarnessSetters = {
@@ -216,7 +224,13 @@ export function useOverviewTabResearchPipelines({
           setBulkOptimizationState: opt.setBulkOptimizationState,
           setOptimizationProgress: opt.setOptimizationProgress,
         };
-        const onHarnessSection = makeResearchHarnessCallback(indexToUrl, harnessSetters);
+        const onHarnessSection = makeResearchHarnessCallback(
+          indexToUrl,
+          indexToKeyword,
+          researchTotal,
+          harnessSetters,
+        );
+        const onResearchArtifact = makeResearchArtifactCallback(indexToUrl, harnessSetters);
 
         const prepMessage = `Researching ${researchTotal} page(s)…`;
 
@@ -227,12 +241,61 @@ export function useOverviewTabResearchPipelines({
             setBulkOptimizationState: opt.setBulkOptimizationState,
             setOptimizationProgress: opt.setOptimizationProgress,
             setIsOptimizingContent: opt.setIsOptimizingContent,
+            setOptimizationFileManagers: opt.setOptimizationFileManagers,
             prepMessage,
           });
+          setBulkActionProgress((p) => ({
+            ...p,
+            research: initBulkSliceWithStatus("research", researchTotal, 0, prepMessage),
+          }));
           for (const { index } of eligible) {
-            updateRow(index, { status: "research-faq" });
+            updateRow(index, {
+              status: "research-faq",
+              seoResearch: "",
+              briefFileName: null,
+              researchFileName: null,
+            });
+          }
+          const first = eligible[0];
+          const firstUrl = first?.row.url?.trim();
+          if (firstUrl) {
+            setResearchActiveRow(
+              batchKey,
+              firstUrl,
+              opt.setBulkOptimizationState,
+              researchTotal,
+            );
           }
         });
+        harnessInitialized = true;
+
+        setResearchBatchPrepMessage(
+          batchKey,
+          site.id,
+          "Ensuring focus keywords…",
+          harnessSetters,
+        );
+        const keywordPrep = await ensureOverviewKeywordsForMissingRows({
+          silent: true,
+          preserveRowStatus: true,
+          skipProgressSlice: true,
+          singleBatch: true,
+        });
+
+        const researchEligible = resolveResearchBatchEligibleRows(
+          eligible,
+          (index) => rowsRef.current[index],
+          keywordPrep.keywordsByIndex,
+        );
+
+        indexToKeyword.clear();
+        indexToUrl.clear();
+        for (const { index, row } of researchEligible) {
+          const url = row.url?.trim();
+          if (url) indexToUrl.set(index, url);
+          const kw = row.focusKeyword?.trim();
+          if (kw) indexToKeyword.set(index, kw);
+        }
 
         const batchCallbacks = {
           onBatchGscExportStart: (urlCount: number) => {
@@ -257,35 +320,105 @@ export function useOverviewTabResearchPipelines({
             const url = row.url?.trim();
             if (!url) return;
             flushSync(() => {
-              setResearchUrlStatus(batchKey, url, "optimizing", opt.setBulkOptimizationState);
+              updateRow(index, { status: "research-faq" });
+              setResearchActiveRow(
+                batchKey,
+                url,
+                opt.setBulkOptimizationState,
+                researchTotal,
+              );
             });
           },
           onHarnessSection,
-          onPageComplete: (r: OverviewResearchRowResult) => {
+          onResearchArtifact,
+          onPageComplete: async (r: OverviewResearchRowResult) => {
             const url = indexToUrl.get(r.index)?.trim();
+            const brief = String(r.patch?.seoResearch ?? "").trim();
+            const willUpload = Boolean(r.patch) && !r.failed && Boolean(brief);
             flushSync(() => {
               if (r.patch) {
-                updateRow(r.index, { status: "idle", ...r.patch });
+                updateRow(r.index, { status: willUpload ? "uploading" : "idle", ...r.patch });
               } else {
                 updateRow(r.index, { status: "error" });
               }
               if (url) {
-                finishResearchRowHarness(
-                  url,
-                  r.index,
-                  r.harnessSummaries,
-                  harnessSetters,
-                  Boolean(r.patch) && !r.failed,
-                );
+                if (r.failed && !r.patch) {
+                  if (r.harnessSummaries) {
+                    finishResearchRowHarness(
+                      url,
+                      r.index,
+                      r.harnessSummaries,
+                      harnessSetters,
+                      false,
+                      undefined,
+                      researchEligible.find((e) => e.index === r.index)?.row.focusKeyword,
+                    );
+                  } else {
+                    failResearchRowHarness(
+                      url,
+                      r.errorMessage ?? "Research failed",
+                      harnessSetters,
+                      r.index,
+                      researchTotal,
+                    );
+                  }
+                } else {
+                  finishResearchRowHarness(
+                    url,
+                    r.index,
+                    r.harnessSummaries,
+                    harnessSetters,
+                    Boolean(r.patch) && !r.failed,
+                    r.patch?.seoResearch,
+                    researchEligible.find((e) => e.index === r.index)?.row.focusKeyword,
+                  );
+                }
               }
             });
+            if (!willUpload) return;
+            const live = rowsRef.current[r.index];
+            const baseRow =
+              live ?? researchEligible.find((e) => e.index === r.index)?.row;
+            if (!baseRow) {
+              wpSkipped += 1;
+              updateRow(r.index, { status: "idle" });
+              return;
+            }
+            const merged: OverviewRow = { ...baseRow, ...r.patch };
+            try {
+              const wp = await uploadOverviewResearchedRowToWordPress({
+                site,
+                row: merged,
+                bindings,
+                getInventoryMatchForUrl,
+              });
+              if (wp.skipped) {
+                wpSkipped += 1;
+                updateRow(r.index, { status: "idle" });
+                return;
+              }
+              if (wp.ok) {
+                wpUploaded += 1;
+                updateRow(r.index, {
+                  status: "idle",
+                  dateModifier: overviewDateModifierTodayIso(),
+                  ...(wp.postId != null ? { postId: wp.postId } : {}),
+                });
+                return;
+              }
+              wpFailed += 1;
+              updateRow(r.index, { status: "error" });
+            } catch {
+              wpFailed += 1;
+              updateRow(r.index, { status: "error" });
+            }
           },
         };
 
-        const pageRanges = overviewBulkPageRanges(eligible.length);
+        const pageRanges = overviewBulkPageRanges(researchEligible.length);
         let completedOffset = 0;
         for (const { start, end, page, pageCount } of pageRanges) {
-          const slice = eligible.slice(start, end);
+          const slice = researchEligible.slice(start, end);
           setOverviewBulkHarnessPageState({
             batchKey,
             siteId: site.id,
@@ -321,6 +454,16 @@ export function useOverviewTabResearchPipelines({
           opt.setOptimizationProgress,
           opt.setIsOptimizingContent,
         );
+        let researchStatusMessage = `Research finished: ${briefUpdated}/${researchTotal} updated`;
+        if (wpUploaded > 0 || wpFailed > 0 || wpSkipped > 0) {
+          researchStatusMessage += `, ${wpUploaded} uploaded to WordPress`;
+          if (wpFailed > 0) researchStatusMessage += `, ${wpFailed} WP failed`;
+          if (wpSkipped > 0) researchStatusMessage += `, ${wpSkipped} skipped`;
+        }
+        patchActiveBulkSlice(setBulkActionProgress, "research", {
+          completed: researchTotal,
+          statusMessage: researchStatusMessage,
+        });
 
         if (site.siteUrl && BACKEND_API_BASE && !gscQuickWinsFile) {
           try {
@@ -361,16 +504,20 @@ export function useOverviewTabResearchPipelines({
             ? String((err as { message: unknown }).message)
             : "Research batch failed.";
         notify.error(msg, { duration: 12000 });
-        if (site) {
+        if (harnessInitialized && site) {
           finalizeOverviewResearchHarnessBatch(
-            `${site.id}-batch`,
+            batchKey,
             site.id,
-            0,
-            rows.length,
+            briefUpdated,
+            researchTotal || rowsRef.current.length,
             opt.setBulkOptimizationState,
             opt.setOptimizationProgress,
             opt.setIsOptimizingContent,
           );
+          patchActiveBulkSlice(setBulkActionProgress, "research", {
+            completed: researchTotal || rowsRef.current.length,
+            statusMessage: msg,
+          });
         }
       }
     },
@@ -383,11 +530,14 @@ export function useOverviewTabResearchPipelines({
       portfolioBlockedHostsForSemrush,
       setGscQuickWinsFile,
       updateRow,
+      bindings,
+      getInventoryMatchForUrl,
       bulkScopeUrlKeysRef,
       ensureOverviewKeywordsForMissingRows,
       opt.setBulkOptimizationState,
       opt.setOptimizationProgress,
       opt.setIsOptimizingContent,
+      setBulkActionProgress,
     ],
   );
 
@@ -399,7 +549,10 @@ export function useOverviewTabResearchPipelines({
       return;
     }
     const scopeKeys = bulkScopeUrlKeysRef.current;
-    if (scopeKeys.size === 0) return;
+    if (scopeKeys.size === 0) {
+      notify.error("No posts in the current grid to optimize. Clear filters or load the sitemap.");
+      return;
+    }
     const scopedIndices = overviewBulkRowIndices(rowsRef.current, scopeKeys);
     const urls = scopedIndices.map((index) => rowsRef.current[index]!.url);
     const batchKey = `${site.id}-batch`;
@@ -430,20 +583,14 @@ export function useOverviewTabResearchPipelines({
         0,
         "start",
         prepHarnessSetters,
-        "Using WordPress inventory from session…",
+        "Using WordPress inventory from site cache…",
       );
       patchActiveBulkSlice(setBulkActionProgress, "optimizeAll", {
-        statusMessage: "Using WordPress inventory from session…",
+        statusMessage: "Using WordPress inventory from site cache…",
       });
-      const sessionSnapshot =
-        getBulkInventorySessionSnapshot(site.id, sitemapSource) ??
-        getAnyBulkInventorySessionSnapshot(site.id);
-      if (!sessionSnapshot || !snapshotHasInventoryEntries(sessionSnapshot)) {
-        notify.error("Load the sitemap first so WordPress inventory is in session.");
-        return;
-      }
+      seedBulkInventorySessionFromSiteWarmCache(site);
       setContentPrepBatchMessage(
-        "Using WordPress inventory from this session (no re-fetch).",
+        "Using WordPress inventory from site cache (no re-fetch).",
         "WordPress inventory",
         prepHarnessSetters,
       );
@@ -486,6 +633,7 @@ export function useOverviewTabResearchPipelines({
           inventorySitemapSource: sitemapSource,
           prefilledOverviewTargets,
           prefilledUrlKeywords,
+          useSiteWarmCacheOnly: true,
         },
       );
     } finally {

@@ -36,7 +36,8 @@ class Neo_Pulse_Wp_Chekkit_Rest {
 	 * @return WP_REST_Response
 	 */
 	public static function handle_contact( WP_REST_Request $request ): WP_REST_Response {
-		if ( ! Neo_Pulse_Wp_Chekkit::is_configured() ) {
+		$settings = Neo_Pulse_Wp_Chat::get_settings();
+		if ( ! Neo_Pulse_Wp_Chat_Lead::is_chekkit_available( $settings ) ) {
 			return new WP_REST_Response(
 				array(
 					'success' => false,
@@ -93,7 +94,6 @@ class Neo_Pulse_Wp_Chekkit_Rest {
 			);
 		}
 
-		$settings   = Neo_Pulse_Wp_Chat::get_settings();
 		$event_type = isset( $settings['chekkit_event_type'] ) ? (string) $settings['chekkit_event_type'] : 'contact_request';
 		$payload    = Neo_Pulse_Wp_Chekkit::build_payload( $input, $event_type );
 

@@ -656,10 +656,14 @@ function pick(row: Record<string, string>, ...keys: string[]): string {
 /**
  * Parse a Local Dominator (or compatible) CSV into typed rows.
  */
-export function parseLocalDominatorCsv(text: string): {
+export function parseLocalDominatorCsv(
+  text: string,
+  options?: { defaultKeyword?: string },
+): {
   rows: LocalDominatorRow[];
   error?: string;
 } {
+  const defaultKeyword = options?.defaultKeyword?.trim() ?? "";
   const parsed = Papa.parse<Record<string, string>>(text, {
     header: true,
     skipEmptyLines: true,
@@ -680,8 +684,10 @@ export function parseLocalDominatorCsv(text: string): {
 
   const rows: LocalDominatorRow[] = [];
   for (const raw of data) {
-    const keyword = pick(raw, "Keyword", "keyword");
-    const rank = num(pick(raw, "Rank", "rank"));
+    const keyword = pick(raw, "Keyword", "keyword") || defaultKeyword;
+    const rank = num(
+      pick(raw, "Rank", "rank", "Average Rank", "average rank", "Position", "position"),
+    );
     const lat = num(pick(raw, "Latitude", "latitude"));
     const lng = num(pick(raw, "Longitude", "longitude"));
     const dist = num(pick(raw, "Distance", "distance"));
@@ -694,7 +700,7 @@ export function parseLocalDominatorCsv(text: string): {
       latitude: Number.isFinite(lat) ? lat : 0,
       longitude: Number.isFinite(lng) ? lng : 0,
       keyword,
-      business: pick(raw, "Business", "business"),
+      business: pick(raw, "Business", "business", "Business Name", "business name"),
       address: pick(raw, "Address", "address"),
       placeId: pick(raw, "Place ID", "Place Id", "place id"),
       websiteUrl: pick(raw, "Website URL", "Website Url", "website url"),

@@ -1254,38 +1254,44 @@ class Neo_Pulse_Wp_Search_Elementor_Widget extends Widget_Base {
 		if ( isset( $settings['sidebar_width'] ) && $settings['sidebar_width'] !== '' ) {
 			$instance['sidebar_width'] = (int) $settings['sidebar_width'];
 		}
-		if ( array_key_exists( 'sidebar_heading', $settings ) ) {
+
+		$use_global = ! isset( $settings['use_global_settings'] ) || $settings['use_global_settings'] === 'yes';
+
+		if ( ! $use_global && array_key_exists( 'sidebar_heading', $settings ) ) {
 			$instance['sidebar_heading'] = (string) $settings['sidebar_heading'];
 		}
-		foreach ( array(
-			'show_popular_terms',
-			'show_popular_pages_overseer',
-			'show_popular_pages_search',
-		) as $insight_key ) {
-			if ( array_key_exists( $insight_key, $settings ) && $settings[ $insight_key ] !== '' ) {
-				$instance[ $insight_key ] = ! empty( $settings[ $insight_key ] ) ? 'yes' : 'no';
-			}
-		}
 
-		$uses_panel_layout = isset( $settings['display_mode'] )
-			&& in_array( (string) $settings['display_mode'], array( 'sidebar', 'icon_only' ), true );
+		if ( ! $use_global ) {
+			foreach ( array(
+				'show_popular_terms',
+				'show_popular_pages_overseer',
+				'show_popular_pages_search',
+			) as $insight_key ) {
+				if ( array_key_exists( $insight_key, $settings ) && $settings[ $insight_key ] !== '' ) {
+					$instance[ $insight_key ] = ! empty( $settings[ $insight_key ] ) ? 'yes' : 'no';
+				}
+			}
 
-		if ( $uses_panel_layout ) {
-			$layout = array();
-			if ( ! empty( $settings['sidebar_layout_heading'] ) ) {
-				$layout[] = 'heading';
+			$uses_panel_layout = isset( $settings['display_mode'] )
+				&& in_array( (string) $settings['display_mode'], array( 'sidebar', 'icon_only' ), true );
+
+			if ( $uses_panel_layout ) {
+				$layout = array();
+				if ( ! empty( $settings['sidebar_layout_heading'] ) ) {
+					$layout[] = 'heading';
+				}
+				if ( ! isset( $settings['sidebar_layout_search'] ) || ! empty( $settings['sidebar_layout_search'] ) ) {
+					$layout[] = 'search';
+				}
+				$layout[] = 'results';
+				if ( ! empty( $settings['sidebar_layout_popular_terms'] ) ) {
+					$layout[] = 'popular_terms';
+				}
+				if ( ! empty( $settings['sidebar_layout_popular_topics'] ) ) {
+					$layout[] = 'popular_topics';
+				}
+				$instance['sidebar_layout'] = $layout;
 			}
-			if ( ! isset( $settings['sidebar_layout_search'] ) || ! empty( $settings['sidebar_layout_search'] ) ) {
-				$layout[] = 'search';
-			}
-			$layout[] = 'results';
-			if ( ! empty( $settings['sidebar_layout_popular_terms'] ) ) {
-				$layout[] = 'popular_terms';
-			}
-			if ( ! empty( $settings['sidebar_layout_popular_topics'] ) ) {
-				$layout[] = 'popular_topics';
-			}
-			$instance['sidebar_layout'] = $layout;
 		}
 
 		return $instance;

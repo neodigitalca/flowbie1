@@ -8,6 +8,7 @@ import { streamChatCompletion } from "@/lib/api";
 import { appendUniversalContentRulesToSystemPrompt } from "@/lib/content-word-blocklist";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { parseFaqEntries, type FaqEntry } from "@/lib/faq-entries";
+import { FAQ_CONVERSATIONAL_RULE } from "@/lib/content-generation/faq-heading-policy";
 
 const BODY_MAX = 12000;
 const BRIEF_MAX = 24000;
@@ -113,7 +114,9 @@ Output format (strict - the app parses lines starting with Q: and A:)
 - Each question must be meaningfully different (no duplicate angles).
 - Do NOT start more than one question with the same first 3 words.
 - Vary question openings (what, how, why, can, do I need, etc.).
-- Answers must be helpful and grounded in the article body above; tie specifics to that content where possible.
+- Prefer leftover decisions from this article (this vs that, which option for which job, when not) over definitional "What is X" restatements.
+- ${FAQ_CONVERSATIONAL_RULE}
+- Answers must be helpful and grounded in later article sections (mitigation, measurement, local response, process); do not paraphrase the Answer H2.
 - Use NAP/service area only to localize; do NOT broaden geography beyond the business area.
 - Do NOT mention brand or site name in answers unless the article or brief already does.
 - Avoid generic "contact our team" filler unless the article discusses contact or support.
@@ -123,8 +126,8 @@ ${sharedContext}
 Return only Q:/A: blocks as specified - no numbering, no markdown headings, no JSON.`;
 
   const systemPrompt = hasBrief
-    ? "You are an SEO specialist who writes FAQ question-and-answer pairs for schema. Follow the Q:/A: format exactly. Use the JSON SEO content brief as the main signal; localize to the NAP service area without broadening geography."
-    : "You are an SEO specialist who writes FAQ question-and-answer pairs for schema. Follow the Q:/A: format exactly. Ground answers in the article body; match searcher intent and the site's local service area.";
+    ? "You are an SEO specialist who writes FAQ question-and-answer pairs for schema. Follow the Q:/A: format exactly. Use the JSON SEO content brief as the main signal; localize to the NAP service area without broadening geography. Ask leftover decisions from this article, not the same four stems and not promotions unless the topic is offers. Do not ask a question the Answer H2 already answered. Ground answers in supplied sources. Do not invent specs."
+    : "You are an SEO specialist who writes FAQ question-and-answer pairs for schema. Follow the Q:/A: format exactly. Ground answers in the article body; match searcher intent and the site's local service area. Ask leftover decisions from this article, not the same four stems and not promotions unless the topic is offers. Do not ask a question the Answer H2 already answered. Do not invent specs.";
 
   let aiResponse = "";
   try {

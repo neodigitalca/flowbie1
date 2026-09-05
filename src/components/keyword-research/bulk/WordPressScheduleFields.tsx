@@ -19,12 +19,14 @@ import {
 } from "@/lib/bulk/bulk-schedule-summary";
 import {
   applyBulkScheduleStartPreset,
+  bulkPresetValuesToScheduleFields,
   formatPresetLabelFromValues,
   listBulkSchedulePresets,
   loadUserBulkSchedulePresets,
   saveUserBulkSchedulePresets,
   type BulkNamedSchedulePreset,
   type BulkNamedSchedulePresetValues,
+  type BulkSchedulePresetFields,
 } from "@/lib/bulk/bulk-schedule-presets";
 import {
   clampEveryNDays,
@@ -37,9 +39,9 @@ import {
 } from "@/lib/wordpress-scheduler";
 import { cn } from "@/lib/utils";
 
-const fieldTrigger =
+const BULK_FIELD_TRIGGER =
   "h-9 w-full min-w-0 border-0 bg-muted/55 text-foreground text-base font-medium shadow-none ring-0 outline-none focus:ring-2 focus:ring-primary/45 focus:ring-offset-0 [&>span]:text-foreground";
-const fieldInput =
+const BULK_FIELD_INPUT =
   "h-9 w-full min-w-0 border-0 bg-muted/55 text-foreground text-base font-medium shadow-none ring-0 outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-0";
 
 const FORGE_FIELD_TRIGGER =
@@ -50,6 +52,36 @@ const FORGE_PRESET_BTN =
   "h-auto min-h-9 whitespace-normal border-0 bg-primary/20 px-2 py-2 text-base font-medium text-white shadow-none hover:bg-primary/30";
 const FORGE_SECONDARY_BTN =
   "h-9 shrink-0 border-0 bg-zinc-900 px-3 text-base font-medium text-white shadow-none hover:bg-zinc-800";
+
+function useIntervalDraft(
+  value: number,
+  onCommit: (value: number) => void,
+  clamp: (value: number) => number,
+): {
+  draft: string;
+  onChange: (raw: string) => void;
+  onBlur: () => void;
+} {
+  const [draft, setDraft] = useState(() => String(value));
+  useEffect(() => {
+    setDraft(String(value));
+  }, [value]);
+  return {
+    draft,
+    onChange: (raw: string) => {
+      setDraft(raw);
+      if (raw.trim() === "") return;
+      const parsed = parseInt(raw, 10);
+      if (!Number.isNaN(parsed)) onCommit(clamp(parsed));
+    },
+    onBlur: () => {
+      const parsed = parseInt(draft, 10);
+      const next = clamp(Number.isNaN(parsed) ? 1 : parsed);
+      setDraft(String(next));
+      if (next !== value) onCommit(next);
+    },
+  };
+}
 
 export type WordPressScheduleFieldsProps = {
   scheduleFrequency: ScheduleFrequency;
@@ -76,17 +108,20 @@ export type WordPressScheduleFieldsProps = {
   scheduleOccupancyLoading?: boolean;
   layout?: "grid" | "stack";
   variant?: "bulk" | "forge";
-  destinationModes?: ("scheduled" | "draft" | "local" | "email")[];
+  destinationModes?: ("scheduled" | "draft" | "local" | "email" | "google_drive")[];
   /** @deprecated Use emailDeliveryEnabled */
   emailPlaceholder?: boolean;
   emailDeliveryEnabled?: boolean;
   automationEmailDelivery?: boolean;
   setAutomationEmailDelivery?: (value: boolean) => void;
+  googleDriveDelivery?: boolean;
   scheduledDestinationLabel?: string;
   /** When set, destination changes apply in one update (avoids flicker between modes). */
-  setOutputDestinationMode?: (mode: "scheduled" | "draft" | "local" | "email") => void;
+  setOutputDestinationMode?: (mode: "scheduled" | "draft" | "local" | "email" | "google_drive") => void;
   /** When set, overrides inferred destination for the select value. */
-  outputDestinationMode?: "scheduled" | "draft" | "local" | "email";
+  outputDestinationMode?: "scheduled" | "draft" | "local" | "email" | "google_drive";
+  /** When set, preset buttons apply all schedule fields in one update. */
+  onApplySchedulePreset?: (next: BulkSchedulePresetFields) => void;
 };
 
 export function WordPressScheduleFields({
@@ -119,12 +154,14 @@ export function WordPressScheduleFields({
   emailDeliveryEnabled = false,
   automationEmailDelivery = false,
   setAutomationEmailDelivery,
+  googleDriveDelivery = false,
   scheduledDestinationLabel = "Scheduled publish",
   setOutputDestinationMode,
   outputDestinationMode,
+  onApplySchedulePreset,
 }: WordPressScheduleFieldsProps) {
-  const fieldTrigger = variant === "forge" ? FORGE_FIELD_TRIGGER : fieldTrigger;
-  const fieldInput = variant === "forge" ? FORGE_FIELD_INPUT : fieldInput;
+  const fieldTrigger = variant === "forge" ? FORGE_FIELD_TRIGGER : BULK_FIELD_TRIGGER;
+  const fieldInput = variant === "forge" ? FORGE_FIELD_INPUT : BULK_FIELD_INPUT;
   const presetBtnClass =
     variant === "forge"
       ? FORGE_PRESET_BTN
@@ -150,6 +187,8 @@ export function WordPressScheduleFields({
     () => computeBulkScheduleStartPreset(startDateOption, customStartDate, startTime),
     [startDateOption, customStartDate, startTime],
   );
+  const everyNDaysDraft = useIntervalDraft(customInterval, setCustomInterval, clampEveryNDays);
+  const timesPerMonthDraft = useIntervalDraft(customInterval, setCustomInterval, clampTimesPerMonth);
 
   useEffect(() => {
     if (startDateOption !== "custom") return;
@@ -196,6 +235,13 @@ export function WordPressScheduleFields({
 
   const applyNamedPreset = (preset: BulkNamedSchedulePreset) => {
     const values = preset.values;
+    if (onApplySchedulePreset) {
+      onApplySchedulePreset(bulkPresetValuesToScheduleFields(values, customStartDate));
+      if (values.scheduleFrequency === "immediately") {
+        setUseCsvPublishDates(false);
+      }
+      return;
+    }
     setScheduleFrequency(values.scheduleFrequency);
     setCustomInterval(
       values.scheduleFrequency === "custom"
@@ -248,12 +294,17 @@ export function WordPressScheduleFields({
     outputDestinationMode ??
     (automationEmailDelivery
       ? "email"
-      : localArchive
-        ? "local"
-        : wordpressDraftOnly
-          ? "draft"
-          : "scheduled");
-  const showPlatformSchedule = !automationEmailDelivery && !localArchive && !wordpressDraftOnly;
+      : googleDriveDelivery
+        ? "google_drive"
+        : localArchive
+          ? "local"
+          : wordpressDraftOnly
+            ? "draft"
+            : "scheduled");
+  const showPlatformSchedule =
+    outputDestinationMode === "scheduled"
+      ? true
+      : !automationEmailDelivery && !googleDriveDelivery && !localArchive && !wordpressDraftOnly;
 
   return (
     <div className={gridClass}>
@@ -261,7 +312,7 @@ export function WordPressScheduleFields({
         <Select
           value={outputMode}
           onValueChange={(value) => {
-            const mode = value as "scheduled" | "draft" | "local" | "email";
+            const mode = value as "scheduled" | "draft" | "local" | "email" | "google_drive";
             if (setOutputDestinationMode) {
               setOutputDestinationMode(mode);
               return;
@@ -273,6 +324,11 @@ export function WordPressScheduleFields({
               return;
             }
             setAutomationEmailDelivery?.(false);
+            if (mode === "google_drive") {
+              setLocalArchive?.(true);
+              setWordpressDraftOnly(false);
+              return;
+            }
             if (mode === "local") {
               setLocalArchive?.(true);
               setWordpressDraftOnly(false);
@@ -308,6 +364,11 @@ export function WordPressScheduleFields({
             {emailEnabled && modes.includes("email") ? (
               <SelectItem value="email" className={selectItemClass}>
                 Email
+              </SelectItem>
+            ) : null}
+            {modes.includes("google_drive") ? (
+              <SelectItem value="google_drive" className={selectItemClass}>
+                Google Drive
               </SelectItem>
             ) : null}
           </SelectContent>
@@ -396,11 +457,9 @@ export function WordPressScheduleFields({
             type="number"
             min={1}
             max={365}
-            value={customInterval}
-            onChange={(e) => {
-              const value = parseInt(e.target.value, 10);
-              setCustomInterval(clampEveryNDays(Number.isNaN(value) ? 1 : value));
-            }}
+            value={everyNDaysDraft.draft}
+            onChange={(e) => everyNDaysDraft.onChange(e.target.value)}
+            onBlur={everyNDaysDraft.onBlur}
             disabled={isDisabled}
             className={fieldInput}
             aria-label="Every N days"
@@ -437,11 +496,9 @@ export function WordPressScheduleFields({
             type="number"
             min="1"
             max="31"
-            value={customInterval}
-            onChange={(e) => {
-              const value = parseInt(e.target.value, 10);
-              setCustomInterval(clampTimesPerMonth(Number.isNaN(value) ? 1 : value));
-            }}
+            value={timesPerMonthDraft.draft}
+            onChange={(e) => timesPerMonthDraft.onChange(e.target.value)}
+            onBlur={timesPerMonthDraft.onBlur}
             disabled={isDisabled}
             className={fieldInput}
             aria-label="Times per month"

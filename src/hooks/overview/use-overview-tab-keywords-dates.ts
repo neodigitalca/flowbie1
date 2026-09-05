@@ -136,11 +136,17 @@ export function useOverviewTabKeywordsDates({
   const handleContentAiKeywordRow = useCallback(
     async (
       index: number,
-      options?: { skipFocusKeywordLoading?: boolean; suppressNoBodyToast?: boolean },
+      options?: {
+        skipFocusKeywordLoading?: boolean;
+        suppressNoBodyToast?: boolean;
+        preserveRowStatus?: boolean;
+      },
     ): Promise<string | null> => {
       const row = rows[index];
       if (!row) return null;
-      updateRow(index, { status: "ai-focus-kw" });
+      if (!options?.preserveRowStatus) {
+        updateRow(index, { status: "ai-focus-kw" });
+      }
       const body = await fetchPlainTextBodyForRow(row);
       if (site && !body && !options?.suppressNoBodyToast) {
         notify.info(
@@ -162,7 +168,10 @@ export function useOverviewTabKeywordsDates({
         updateRow(index, { status: "error" });
         return null;
       }
-      updateRow(index, { focusKeyword: result, status: "idle" });
+      updateRow(index, {
+        focusKeyword: result,
+        status: options?.preserveRowStatus && row.status === "research-faq" ? "research-faq" : "idle",
+      });
       return result;
     },
     [rows, updateRow, fetchPlainTextBodyForRow, deriveFocusKeywordFromPageContext, site],
@@ -176,6 +185,8 @@ export function useOverviewTabKeywordsDates({
       silent?: boolean;
       successMessage?: string;
       singleBatch?: boolean;
+      preserveRowStatus?: boolean;
+      skipProgressSlice?: boolean;
     }) => {
       const {
         indices: indicesOverride,
@@ -184,6 +195,8 @@ export function useOverviewTabKeywordsDates({
         silent = false,
         successMessage,
         singleBatch = false,
+        preserveRowStatus = false,
+        skipProgressSlice = false,
       } = opts;
       const indices =
         indicesOverride && indicesOverride.length > 0
@@ -208,19 +221,22 @@ export function useOverviewTabKeywordsDates({
       );
       let failed = 0;
 
-      setBulkActionProgress((p) => ({
-        ...p,
-        [progressKey]: {
-          ...initBulkSliceWithStatus(progressKey, total, 0),
-          totalRows: batchCount,
-          pipelineSteps,
-        },
-      }));
+      if (!skipProgressSlice) {
+        setBulkActionProgress((p) => ({
+          ...p,
+          [progressKey]: {
+            ...initBulkSliceWithStatus(progressKey, total, 0),
+            totalRows: batchCount,
+            pipelineSteps,
+          },
+        }));
+      }
 
       let completed = 0;
       const bumpBy = (n: number, batchIndex: number) => {
         completed = Math.min(total, completed + n);
         pipelineSteps = setBatchStepStatus(pipelineSteps, batchIndex, "done");
+        if (skipProgressSlice) return;
         flushSync(() => {
           setBulkActionProgress((p) => ({
             ...p,
@@ -240,20 +256,24 @@ export function useOverviewTabKeywordsDates({
           const chunkIndices = indices.slice(start, start + batchSize);
 
           pipelineSteps = setBatchStepStatus(pipelineSteps, batchIndex, "running");
-          flushSync(() => {
-            setBulkActionProgress((p) => ({
-              ...p,
-              [progressKey]: {
-                ...initBulkSliceWithStatus(progressKey, total, start),
-                completed: start,
-                totalRows: batchCount,
-                pipelineSteps,
-              },
-            }));
-          });
+          if (!skipProgressSlice) {
+            flushSync(() => {
+              setBulkActionProgress((p) => ({
+                ...p,
+                [progressKey]: {
+                  ...initBulkSliceWithStatus(progressKey, total, start),
+                  completed: start,
+                  totalRows: batchCount,
+                  pipelineSteps,
+                },
+              }));
+            });
+          }
 
-          for (const i of chunkIndices) {
-            updateRow(i, { status: "ai-focus-kw" });
+          if (!preserveRowStatus) {
+            for (const i of chunkIndices) {
+              updateRow(i, { status: "ai-focus-kw" });
+            }
           }
 
           let bodyByUrl = new Map<string, string | undefined>();
@@ -308,7 +328,9 @@ export function useOverviewTabKeywordsDates({
               const kw = keywordMap.get(normalizeOverviewKeywordUrlKey(row.url));
               if (kw) {
                 keywordsByIndex.set(i, kw);
-                return { ...row, focusKeyword: kw, status: "idle" as const };
+                const nextStatus =
+                  preserveRowStatus && row.status === "research-faq" ? "research-faq" : "idle";
+                return { ...row, focusKeyword: kw, status: nextStatus as typeof row.status };
               }
               return { ...row, status: "error" as const };
             }),
@@ -321,6 +343,7 @@ export function useOverviewTabKeywordsDates({
                 fallbackKw = await handleContentAiKeywordRow(i, {
                   skipFocusKeywordLoading: true,
                   suppressNoBodyToast: true,
+                  preserveRowStatus,
                 });
               } else {
                 fallbackKw = await handleEntityKeywordRow(i, { skipFocusKeywordLoading: true });
@@ -344,11 +367,13 @@ export function useOverviewTabKeywordsDates({
         }
         return { ensured, failed, keywordsByIndex };
       } finally {
-        setBulkActionProgress((p) => {
-          const next = { ...p };
-          delete next[progressKey];
-          return next;
-        });
+        if (!skipProgressSlice) {
+          setBulkActionProgress((p) => {
+            const next = { ...p };
+            delete next[progressKey];
+            return next;
+          });
+        }
       }
     },
     [
@@ -370,6 +395,8 @@ export function useOverviewTabKeywordsDates({
       progressKey?: MetaBulkActionKey;
       silent?: boolean;
       singleBatch?: boolean;
+      preserveRowStatus?: boolean;
+      skipProgressSlice?: boolean;
     }) => {
       const missingIndices = overviewBulkRowIndices(rows, bulkScopeUrlKeys).filter(
         (index) => !rows[index]?.focusKeyword?.trim(),
@@ -381,9 +408,11 @@ export function useOverviewTabKeywordsDates({
       return runKeywordBulkInBatches({
         indices: missingIndices,
         mode,
-        progressKey: options?.progressKey ?? "research",
+        progressKey: options?.skipProgressSlice ? undefined : (options?.progressKey ?? "research"),
         silent: options?.silent ?? true,
         singleBatch: options?.singleBatch,
+        preserveRowStatus: options?.preserveRowStatus,
+        skipProgressSlice: options?.skipProgressSlice,
       });
     },
     [rows, sitemapSource, runKeywordBulkInBatches, bulkScopeUrlKeys],

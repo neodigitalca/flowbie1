@@ -1,4 +1,6 @@
 import {
+  clampEveryNDays,
+  clampTimesPerMonth,
   getFirstOfThisMonthDate,
   getNextFirstOfMonthDate,
   type ScheduleFrequency,
@@ -168,6 +170,35 @@ export function matchBulkSchedulePresetId(args: {
     return preset.id;
   }
   return null;
+}
+
+export type BulkSchedulePresetFields = {
+  scheduleFrequency: ScheduleFrequency;
+  customInterval: number;
+  dayOfWeek: number;
+  startDateOption: "immediate" | "custom";
+  customStartDate: Date;
+  startTime: string;
+};
+
+export function bulkPresetValuesToScheduleFields(
+  values: BulkNamedSchedulePresetValues,
+  fallbackStartDate: Date,
+): BulkSchedulePresetFields {
+  const start = applyBulkScheduleStartPreset(values.startPreset, values.startTime);
+  return {
+    scheduleFrequency: values.scheduleFrequency,
+    customInterval:
+      values.scheduleFrequency === "custom"
+        ? clampTimesPerMonth(values.customInterval)
+        : values.scheduleFrequency === "everyNDays"
+          ? clampEveryNDays(values.customInterval)
+          : values.customInterval,
+    dayOfWeek: values.dayOfWeek,
+    startTime: values.startTime,
+    startDateOption: start.startDateOption,
+    customStartDate: start.customStartDate ?? fallbackStartDate,
+  };
 }
 
 export function applyBulkScheduleStartPreset(

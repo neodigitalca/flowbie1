@@ -42,7 +42,7 @@ trait Neo_Pulse_Wp_Admin_Trait_Handlers_Super_Migrate {
 			);
 			wp_localize_script(
 				'neo-pulse-wp-super-migrate',
-				'neo-pulseSuperMigrate',
+				'neoPulseSuperMigrate',
 				array(
 					'restBase'    => esc_url_raw( rest_url( 'neo-pulse/v1/super-migrate' ) ),
 					'nonce'       => wp_create_nonce( 'wp_rest' ),

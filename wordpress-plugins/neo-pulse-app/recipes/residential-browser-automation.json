@@ -1,0 +1,62 @@
+{
+  "keyword": "residential-browser-automation",
+  "name": "Residential browser automation",
+  "description": "Browse a URL through Oxylabs residential proxy. Describe the goal in plain language; the agent drives the browser from screenshots. Watch a live preview during the run.",
+  "notes": [
+    "Requires Oxylabs residential proxy credentials in Api Keys.",
+    "Enter the target URL and WYSIWYG instructions before starting the agent run.",
+    "Screenshots and session output are saved to Archive when enabled."
+  ],
+  "category": "browser",
+  "verticals": [
+    "general",
+    "local-seo",
+    "agency"
+  ],
+  "tags": [
+    "browser",
+    "proxy",
+    "oxylabs",
+    "automation"
+  ],
+  "prerequisites": [],
+  "filters": {
+    "executionKinds": [
+      "browser_automation"
+    ],
+    "actionCount": 1
+  },
+  "defaultTasks": [
+    {
+      "keyword": "residential-browser-automation-run",
+      "title": "Residential browser automation",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "browser_automation",
+      "executionPayload": {
+        "saveLocalArchive": true,
+        "saveToDisk": true
+      },
+      "scheduleMode": "calendar",
+      "recurrenceRule": "none"
+    }
+  ],
+  "isAutomation": true,
+  "kind": "template",
+  "triggerBlock": {
+    "keyword": "schedule-once",
+    "kind": "calendar",
+    "frequency": "once",
+    "startDate": "2026-09-01",
+    "time": "09:00"
+  },
+  "actionBlock": {
+    "keyword": "residential-browser-automation",
+    "executionKind": "browser_automation",
+    "executionPayload": {
+      "saveLocalArchive": true,
+      "saveToDisk": true
+    },
+    "title": "Residential browser automation"
+  }
+}

@@ -1,6 +1,8 @@
 import { useCallback, useState } from "react";
 import { streamChatCompletion, type Message } from "@/lib/api";
-import { META_DESCRIPTION_ANTI_CLICKBAIT_RULE, TITLE_ANTI_CLICKBAIT_RULE, TITLE_KEYWORD_WEAVING_RULE, TITLE_CASE_RULE, TITLE_WELL_KNOWN_ACRONYMS_RULE } from "@/lib/prompt-builders";
+import { enforceExactFocusKeyword } from "@/lib/overview/enforce-exact-focus-keyword";
+export { enforceExactFocusKeyword } from "@/lib/overview/enforce-exact-focus-keyword";
+import { META_DESCRIPTION_ANTI_CLICKBAIT_RULE, TITLE_ANTI_CLICKBAIT_RULE, TITLE_KEYWORD_WEAVING_RULE, TITLE_CASE_RULE, TITLE_WELL_KNOWN_ACRONYMS_RULE } from "@/lib/prompt-builders/title-rules";
 import { appendMasterInstructionsToSystemPrompt, ensureMasterInstructionsInMemory } from "@/lib/master-instructions-storage";
 import { normalizeFocusKeywordPhrase } from "@/lib/seo-redirect-csv";
 import { pathSlugToFocusHint } from "@/lib/overview/focus-keyword-path-hint";
@@ -12,6 +14,13 @@ import {
 import { runAiAllMetaBatch } from "@/lib/overview/overview-ai-all-meta-batch-agent";
 import type { AiAllMetaCatalogRow } from "@/lib/overview/overview-ai-all-meta-batch-catalog";
 import type { AiAllMetaRowPatch } from "@/lib/overview/overview-ai-all-meta-batch-parse";
+import type { WordPressSite } from "@/components/integrations/types";
+import {
+  formatPageLocalContextPromptBlock,
+  resolvePageLocalContext,
+} from "@/lib/content-optimization/page-local-context";
+import { PRIMARY_CITY_CONSISTENCY_RULE } from "@/lib/content-optimization/first-party-authority-prompt";
+import { FAQ_CONVERSATIONAL_RULE } from "@/lib/content-generation/faq-heading-policy";
 
 interface UseOverviewAiOptions {
   apiKey: string;
@@ -22,6 +31,8 @@ interface UseOverviewAiOptions {
   napSummary?: string;
   /** When set, client master instructions for this WordPress site are appended to every system prompt. */
   wordPressSiteId?: string | null;
+  /** Full site record for primary city in FAQ/Answer prompts (Edmonton from Integrations profile). */
+  wordPressSite?: WordPressSite | null;
 }
 
 interface UseOverviewAiResult {
@@ -112,31 +123,17 @@ interface UseOverviewAiResult {
   buildSemrushAuditFixChecklist: (pageUrl: string, auditContext: string) => Promise<string | null>;
 }
 
-/** Replaces focus keyword variants in text with the given replacement (used for meta exact match). */
-function replaceFocusKeywordVariants(text: string, focusKeyword: string | undefined, replacement: string): string {
-  if (!text || !focusKeyword?.trim()) return text;
-  const exact = focusKeyword.trim();
-  let result = text;
-  const slugified = exact.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-  if (slugified && slugified.length >= 2) {
-    const slugRegex = new RegExp(slugified.replace(/-/g, "[-]"), "gi");
-    result = result.replace(slugRegex, replacement);
-  }
-  const words = exact.split(/\s+/).filter(Boolean);
-  if (words.length >= 1) {
-    const parts = words.map((w) => {
-      const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      return w.endsWith(".") && escaped.length >= 2 ? `${escaped.slice(0, -2)}\\.?` : escaped;
-    });
-    const phraseRegex = new RegExp(`\\b${parts.join("\\s+")}\\b`, "gi");
-    result = result.replace(phraseRegex, replacement);
-  }
-  return result;
-}
-
-/** Ensures the focus keyword appears exactly as provided in the text (replaces slugified or differently-cased variants). Preserves user's exact case. Exported for use when focus keyword changes. */
-export function enforceExactFocusKeyword(text: string, focusKeyword: string | undefined): string {
-  return replaceFocusKeywordVariants(text, focusKeyword, focusKeyword?.trim() ?? "");
+function faqPrimaryLocalPromptBlock(
+  site: WordPressSite | null | undefined,
+  focusKeyword: string | undefined,
+): string {
+  if (!site) return "";
+  const ctx = resolvePageLocalContext({
+    keyword: focusKeyword?.trim() ?? "",
+    site,
+  });
+  if (!ctx.primaryCity) return "";
+  return `${formatPageLocalContextPromptBlock(ctx)}\n\n${PRIMARY_CITY_CONSISTENCY_RULE}`;
 }
 
 /**
@@ -144,7 +141,7 @@ export function enforceExactFocusKeyword(text: string, focusKeyword: string | un
  * titles and meta descriptions for URLs in the Overview grid.
  */
 export function useOverviewAiOptimize(options: UseOverviewAiOptions): UseOverviewAiResult {
-  const { apiKey, model, temperature, maxTokens, topP, napSummary, wordPressSiteId } = options;
+  const { apiKey, model, temperature, maxTokens, topP, napSummary, wordPressSiteId, wordPressSite } = options;
   const [loading, setLoading] = useState(false);
   const [focusKeywordLoading, setFocusKeywordLoading] = useState(false);
   const [auditChecklistLoading, setAuditChecklistLoading] = useState(false);
@@ -312,7 +309,7 @@ Return only the title text with no quotes. Every word must be Title Case.`;
 Rules
 - 130-150 characters
 - ${META_DESCRIPTION_ANTI_CLICKBAIT_RULE}
-- Include the full focus keyword phrase below with the same spelling, words, and spacing/hyphens. Use natural sentence casing for the phrase - do NOT force Title Case on every word. Typical pattern: lowercase when the phrase follows a short lead-in; capitalize only at the start of the meta or for true proper nouns. Match the casing spirit of the focus keyword line below. Do NOT add words to the phrase, do NOT slugify, or rephrase it.
+- Include the full focus keyword phrase below as the WRITING KEYWORD string — same spelling, words, spacing, hyphens, and **full Title Case on every word**. Do NOT paste the raw lowercase slug. Do NOT add words to the phrase, do NOT slugify, or rephrase it.
 - Natural placement: When you use a buffer before the keyword, choose a plain, factual lead-in - vary the angle (what the page covers, who it helps, or a concrete detail). Do NOT default to the same word every time, and do not use promotional openers. One or two words before the keyword is enough; only start with the raw keyword when nothing else fits cleanly in the character limit.
 - If the focus keyword does not fit grammatically into a natural sentence (e.g. "Blinds Bushnell FL"), front-load it at the start, then continue in the same sentence - use a comma, colon, or em dash if needed; do NOT use a pipe (|) and do NOT start with a business name, site name, or distributor name. Examples:
   "Blinds Bushnell FL – Window treatment options, materials, and installation details."
@@ -414,8 +411,10 @@ Return only the optimized meta description with no quotes.`;
           ? "(none - use JSON SEO content brief below)"
           : dfsSerpContext || "(none)";
 
+        const localContextBlock = faqPrimaryLocalPromptBlock(wordPressSite, focusKeyword);
+
         const sharedContext = `
-Location & NAP context (use to localize questions and answers, but do NOT restate it verbatim or change its meaning)
+${localContextBlock ? `${localContextBlock}\n\n` : ""}Location & NAP context (use to localize questions and answers, but do NOT restate it verbatim or change its meaning)
 ${napSummary || "(none)"}
 
 Page intent (derive topic and searcher needs from this; FAQs MUST stay aligned with this intent)
@@ -453,8 +452,10 @@ Output format (strict - the app parses lines starting with Q: and A:)
   A: <answer: 2-4 concise sentences. You may continue the answer on following lines until the next "Q:" line - do not start continuation lines with "Q:" or "A:" unless they are a new pair.>
 - Each question must be meaningfully different (no duplicate angles).
 - Do NOT start more than one question with the same first 3 words.
-- Vary question openings (what, how, why, can, do I need, etc.).
+- Vary question openings (what, how, why, can, do I need, which, should, etc.).
+- ${FAQ_CONVERSATIONAL_RULE}
 - Answers must be helpful, on-topic, and localized to the business service area from NAP; do NOT broaden geography beyond that area.
+- Cost and install FAQ answers must name the primary service city from PRIMARY LOCAL CONTEXT only; do not cite other cities from SERP or brief snippets.
 - Do NOT mention brand or site name in answers unless the page context already does.
 ${
   hasBrief
@@ -476,7 +477,8 @@ ${countRule}
 - Do not number them with bullets; just plain sentences.
 - Each question must be meaningfully different in topic and wording (no repeats, no near-duplicates, no simple rephrases).
 - Do NOT start more than one question with the same first 3 words (e.g. avoid repeating patterns like "Where can I find", "How do I", etc.).
-- Vary the structure and angle of questions (mix \"what\", \"how\", \"why\", \"can\", \"do I need\", etc.).
+- Vary the structure and angle of questions (mix \"what\", \"how\", \"why\", \"can\", \"do I need\", \"which\", \"should\", etc.).
+- ${FAQ_CONVERSATIONAL_RULE}
 - Questions should read naturally and elegantly, as if written by a senior copywriter.
 - Focus questions on what a serious searcher for this topic would actually ask before contacting the business.
 - Use the business's primary service area from NAP as the geographic scope.
@@ -494,11 +496,11 @@ Return only the questions, one per line, no extra text.`;
 
         const systemPrompt = includeAnswers
           ? hasBrief
-            ? "You are an SEO specialist who writes FAQ question-and-answer pairs for schema. Follow the Q:/A: format exactly. Use the JSON SEO content brief as the main signal; localize to the NAP service area without broadening geography."
-            : "You are an SEO specialist who writes FAQ question-and-answer pairs for schema. Follow the Q:/A: format exactly. Match searcher intent and the site's local service area."
+            ? `You are an SEO specialist who writes FAQ question-and-answer pairs for schema. Follow the Q:/A: format exactly. Use the JSON SEO content brief as the main signal; localize to the NAP service area without broadening geography. ${FAQ_CONVERSATIONAL_RULE} ${PRIMARY_CITY_CONSISTENCY_RULE}`
+            : `You are an SEO specialist who writes FAQ question-and-answer pairs for schema. Follow the Q:/A: format exactly. Match searcher intent and the site's local service area. ${FAQ_CONVERSATIONAL_RULE} ${PRIMARY_CITY_CONSISTENCY_RULE}`
           : hasBrief
-            ? "You are an SEO specialist who writes high-quality FAQ questions. A structured JSON SEO content brief is provided - use it as the main signal for searcher intent and question ideas. Align with the business's service area and NAP without broadening geography; preserve sentiment."
-            : "You are an SEO specialist who writes high-quality FAQ questions that match searcher intent and align with the business's service area and NAP (city/state, phone, etc.). You must localize questions to that area without broadening it and you must preserve the original sentiment of each question.";
+            ? `You are an SEO specialist who writes high-quality FAQ questions. A structured JSON SEO content brief is provided - use it as the main signal for searcher intent and question ideas. Align with the business's service area and NAP without broadening geography; preserve sentiment. ${FAQ_CONVERSATIONAL_RULE} ${PRIMARY_CITY_CONSISTENCY_RULE}`
+            : `You are an SEO specialist who writes high-quality FAQ questions that match searcher intent and align with the business's service area and NAP (city/state, phone, etc.). You must localize questions to that area without broadening it and you must preserve the original sentiment of each question. ${FAQ_CONVERSATIONAL_RULE} ${PRIMARY_CITY_CONSISTENCY_RULE}`;
         const text = await runCompletion(systemPrompt, prompt);
         return text || existingFaq || "";
       } catch (err: any) {
@@ -512,7 +514,7 @@ Return only the questions, one per line, no extra text.`;
         }
       }
     },
-    [runCompletion, napSummary],
+    [runCompletion, napSummary, wordPressSite],
   );
 
   const optimizeFaqQuestion = useCallback(
@@ -540,7 +542,9 @@ Return only the questions, one per line, no extra text.`;
           ? "(none - use JSON SEO content brief below)"
           : dfsSerpContext || "(none)";
 
-        const prompt = `You are acting as a senior SEO strategist refining FAQ schema.
+        const localContextBlock = faqPrimaryLocalPromptBlock(wordPressSite, focusKeyword);
+
+        const prompt = `${localContextBlock ? `${localContextBlock}\n\n` : ""}You are acting as a senior SEO strategist refining FAQ schema.
 
 Improve this FAQ question so it is clearer, more elegant, and more helpful for searchers, but keep the same intent and page/topic.
 
@@ -591,8 +595,8 @@ ${currentQuestion}
 Return only the improved question, no quotes or bullets.`;
 
         const systemPrompt = hasBrief
-          ? "You are an SEO specialist who rewrites FAQ questions to be clearer and better aligned with search intent. A structured JSON SEO content brief is provided - use it as the main signal. Preserve sentiment; localize geography to the NAP/service area without broadening it."
-          : "You are an SEO specialist who rewrites FAQ questions to be clearer and better aligned with search intent and the site's local service area. Preserve original sentiment and only adjust geography to match the NAP/service area (never broaden it).";
+          ? `You are an SEO specialist who rewrites FAQ questions to be clearer and better aligned with search intent. A structured JSON SEO content brief is provided - use it as the main signal. Preserve sentiment; localize geography to the NAP/service area without broadening it. ${PRIMARY_CITY_CONSISTENCY_RULE}`
+          : `You are an SEO specialist who rewrites FAQ questions to be clearer and better aligned with search intent and the site's local service area. Preserve original sentiment and only adjust geography to match the NAP/service area (never broaden it). ${PRIMARY_CITY_CONSISTENCY_RULE}`;
         const text = await runCompletion(systemPrompt, prompt);
         return text || currentQuestion;
       } catch (err: any) {
@@ -606,7 +610,7 @@ Return only the improved question, no quotes or bullets.`;
         }
       }
     },
-    [runCompletion, napSummary],
+    [runCompletion, napSummary, wordPressSite],
   );
 
   const optimizeFaqAnswer = useCallback(
@@ -636,7 +640,9 @@ Return only the improved question, no quotes or bullets.`;
           : dfsSerpContext || "(none)";
 
         const hasExistingAnswer = String(currentAnswer ?? "").trim().length > 0;
-        const prompt = `You are acting as a senior SEO strategist writing FAQ answers for schema.
+        const localContextBlock = faqPrimaryLocalPromptBlock(wordPressSite, focusKeyword);
+
+        const prompt = `${localContextBlock ? `${localContextBlock}\n\n` : ""}You are acting as a senior SEO strategist writing FAQ answers for schema.
 
 ${hasExistingAnswer ? "Improve this FAQ answer in the context of the page and its search intent." : "There is no existing answer - write a new, helpful FAQ answer from scratch using the page context, NAP/service area, and the question below."}
 
@@ -647,6 +653,7 @@ Rules
 - Use the page context and NAP/location to add missing but obviously helpful local details.
 - Keep the sentiment (positive/neutral/negative) the same; do not over-hype or downplay compared to the original.
 - Localize geography to the business's primary service area; do NOT broaden it beyond that region.
+- Cost and install FAQ answers must name the primary service city from PRIMARY LOCAL CONTEXT only; do not cite other cities from SERP or brief snippets.
 ${
   hasBrief
     ? `- A structured **JSON SEO content brief** is below. Use it as the primary signal for what searchers care about. Do NOT paste JSON into your answer.
@@ -688,8 +695,8 @@ ${currentAnswer}
 Return only the improved answer text, no quotes or bullets.`;
 
         const systemPrompt = hasBrief
-          ? "You are an SEO specialist who writes clear, concise FAQ answers. A structured JSON SEO content brief is provided - use it as the main signal for searcher intent while staying on-topic for the question."
-          : "You are an SEO specialist who writes clear, concise FAQ answers that directly address the question using the page context.";
+          ? `You are an SEO specialist who writes clear, concise FAQ answers. A structured JSON SEO content brief is provided - use it as the main signal for searcher intent while staying on-topic for the question. ${PRIMARY_CITY_CONSISTENCY_RULE}`
+          : `You are an SEO specialist who writes clear, concise FAQ answers that directly address the question using the page context. ${PRIMARY_CITY_CONSISTENCY_RULE}`;
         const text = await runCompletion(systemPrompt, prompt);
         return text || currentAnswer;
       } catch (err: any) {
@@ -703,7 +710,7 @@ Return only the improved answer text, no quotes or bullets.`;
         }
       }
     },
-    [runCompletion, napSummary],
+    [runCompletion, napSummary, wordPressSite],
   );
 
   const enhanceFocusKeywordFromGsc = useCallback(

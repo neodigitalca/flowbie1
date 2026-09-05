@@ -1,0 +1,16 @@
+{
+  "keyword": "chatgpt-website-audit",
+  "name": "ChatGPT website audit",
+  "executionKind": "chatgpt_website_audit",
+  "description": "Interactive ChatGPT session for client website audits with AgentMail login and archived JSON replies.",
+  "filters": {
+    "categories": ["research"],
+    "verticals": ["general", "local-seo", "agency"]
+  },
+  "defaults": {
+    "executionPayload": {
+      "saveLocalArchive": true,
+      "saveToDisk": true
+    }
+  }
+}

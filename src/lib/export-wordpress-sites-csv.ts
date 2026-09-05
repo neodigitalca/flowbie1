@@ -1,4 +1,9 @@
 import type { WordPressSite } from "@/components/integrations/types";
+import {
+  readSiteServiceCity,
+  readSiteServiceCountry,
+  readSiteServiceState,
+} from "@/lib/wordpress-api/site-service-area";
 
 function csvEscape(value: string): string {
   const s = String(value ?? "");
@@ -11,6 +16,9 @@ function csvEscape(value: string): string {
 const HEADERS = [
   "name",
   "siteUrl",
+  "serviceCity",
+  "serviceCountry",
+  "serviceState",
   "productionSiteUrl",
   "username",
   "appPassword",
@@ -31,7 +39,7 @@ const HEADERS = [
 ] as const;
 
 /**
- * All WordPress sites as CSV. First four columns match Bulk Import (name, siteUrl, username, appPassword).
+ * All WordPress sites as CSV. Bulk Import still reads name, siteUrl, username, appPassword by header.
  */
 export function buildWordPressSitesCsv(sites: WordPressSite[]): string {
   const lines: string[] = [HEADERS.join(",")];
@@ -39,6 +47,9 @@ export function buildWordPressSitesCsv(sites: WordPressSite[]): string {
     const row = [
       csvEscape(s.name),
       csvEscape(s.siteUrl),
+      csvEscape(readSiteServiceCity(s)),
+      csvEscape(readSiteServiceCountry(s)),
+      csvEscape(readSiteServiceState(s)),
       csvEscape(s.productionSiteUrl ?? ""),
       csvEscape(s.username),
       csvEscape(s.appPassword),

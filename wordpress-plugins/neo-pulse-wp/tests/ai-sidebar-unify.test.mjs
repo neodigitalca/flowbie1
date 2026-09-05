@@ -42,10 +42,35 @@ describe('ai-sidebar-unify assets', () => {
     expect(src).toContain('neo-pulse-chat--standalone-launcher');
   });
 
-  it('search widget defers to unified shell for sidebar open', () => {
+  it('search widget binds insights after unify and fills topics without discovery layout', () => {
     const src = readAsset('assets/search/neo-pulse-search.js');
-    expect(src).toContain('NeoPulseAiSidebarUnify.tryMerge');
-    expect(src).toContain("openTab('search')");
+    expect(src).toContain('resolveSearchScope');
+    expect(src).toContain('neo-pulse-ai-sidebar-merged');
+    expect(src).toContain("data-fai-tab=\"search\"");
+    expect(src).toContain('renderTopicsGrid(overseerPages.slice(0, topicsLimit), topicsBlock)');
+    expect(src).not.toContain('isDiscovery && showOverseer && overseerPages.length');
+  });
+
+  it('search php renders results under the search bar, then popular searches only', () => {
+    const src = readAsset('includes/class-neo-pulse-wp-search.php');
+    const fnAt = src.indexOf('private static function render_sidebar_layout_sections');
+    const fn = src.slice(fnAt, src.indexOf('private static function normalize_sidebar_panel_layout'));
+    const searchAt = fn.indexOf('fbs__sidebar-search');
+    const resultsAt = fn.indexOf('fbs__sidebar-query-scroll');
+    const insightsAt = fn.indexOf('fbs__sidebar-insights');
+    expect(fn).toContain("$insight_sections = array( 'popular_terms' )");
+    expect(fn).not.toContain('popular_topics');
+    expect(searchAt).toBeGreaterThan(0);
+    expect(resultsAt).toBeGreaterThan(searchAt);
+    expect(insightsAt).toBeGreaterThan(resultsAt);
+    expect(src).toContain("$show_heading = in_array( 'heading', $layout, true )");
+  });
+
+  it('elementor global settings do not replace sidebar suggestion layout', () => {
+    const src = readAsset('includes/search/integrations/class-neo-pulse-wp-search-elementor-widget.php');
+    expect(src).toContain("$use_global = ! isset( $settings['use_global_settings'] ) || $settings['use_global_settings'] === 'yes'");
+    expect(src).toContain("if ( ! $use_global )");
+    expect(src).toContain("$instance['sidebar_layout'] = $layout;");
   });
 
   it('search php registers unify assets', () => {
@@ -56,5 +81,12 @@ describe('ai-sidebar-unify assets', () => {
   it('chat php enqueues unify assets when enabled', () => {
     const src = readAsset('includes/class-neo-pulse-wp-chat.php');
     expect(src).toContain('neo-pulse-ai-sidebar-unify');
+  });
+
+  it('chat config is a valid JS identifier so the launcher can boot', () => {
+    const src = readAsset('includes/class-neo-pulse-wp-chat.php');
+    expect(src).toContain("'neoPulseChatConfig'");
+    expect(src).toContain('window.neoPulseChatConfig');
+    expect(src).not.toContain('neo-pulseChatConfig');
   });
 });

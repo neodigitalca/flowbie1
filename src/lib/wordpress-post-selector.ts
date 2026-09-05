@@ -6,7 +6,7 @@
 import { streamChatCompletion } from './api';
 import { getResearchModel } from './optimization-settings-storage';
 import type { PublishedPostsResult } from './wordpress-api';
-import { searchSiteCache, getSiteCache } from './wordpress-site-cache';
+import { getSiteCache } from './wordpress-site-cache';
 
 export interface SelectedPost {
   id: number;
@@ -62,8 +62,7 @@ export async function selectRelevantPostsForBlog(
     try {
       const cache = getSiteCache(siteId);
       if (cache) {
-        // Search cache for relevant posts based on blog keyword
-        const searchResults = searchSiteCache(siteId, blogKeyword, 100); // Get more results for AI to choose from
+        const searchResults = cache.posts;
         postsToUse = searchResults.map(p => ({
           id: p.id,
           slug: p.slug,

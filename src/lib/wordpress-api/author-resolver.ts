@@ -4,7 +4,7 @@
  * with neodigital.ca exclusion when the target site is not neodigital.ca.
  */
 
-import { BACKEND_API_BASE } from './connection';
+import { backendApiUrl } from './connection';
 import { streamChatCompletion } from '@/lib/api';
 import { getResearchModel } from '@/lib/optimization-settings-storage';
 
@@ -66,7 +66,7 @@ export async function getAuthorUsage(
     return pending;
   }
 
-  const url = `${BACKEND_API_BASE}/api/wordpress/get-author-usage`;
+  const url = backendApiUrl('/wordpress/get-author-usage');
 
   const promise = (async (): Promise<GetAuthorUsageResult> => {
     try {

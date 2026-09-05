@@ -1,24 +1,23 @@
 import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
-import { parseCompactInventoryUrls } from "@/lib/bulk/inventory-json-slim";
+import {
+  parseCompactInventoryUrls,
+  parseContentBucketRichRows,
+} from "@/lib/bulk/inventory-json-slim";
 import type { LoadBulkSitemapInventoryResult } from "@/lib/bulk/bulk-sitemap-inventory-session";
 import type { PromptBulkSitemapInventoryBuckets } from "@/lib/bulk/prompt-bulk-sitemap-inventory";
-import {
-  buildInventoryKeywordSet,
-  conflictsWithInventoryKeyword,
-} from "@/lib/vertical-benchmark/vertical-benchmark-inventory-cannibal";
+import type { PostCreatorBlockedRow } from "@/lib/post-creator/post-creator-cannibalization-agent";
 import {
   buildPostCreatorInventoryCatalog,
   deriveSlugFromText,
   lookupInventoryByUrl,
   type PostCreatorInventoryCatalog,
 } from "@/lib/post-creator/post-creator-cannibalization-tools";
+import { normalizeDedupeKey } from "@/lib/vertical-benchmark/vertical-benchmark-bulk-dedupe";
 
-export type PostCreatorRowGateStatus = "ok" | "blocked";
-
-export type PostCreatorRowGateResult = {
+export type PostCreatorRowReviewEntry = {
   rowIndex: number;
   row: CSVRow;
-  status: PostCreatorRowGateStatus;
+  status: "ok" | "blocked";
   reason: string;
   conflictingUrl?: string;
 };
@@ -44,6 +43,16 @@ function collectInventoryUrls(buckets: PromptBulkSitemapInventoryBuckets): strin
   return out;
 }
 
+function collectRichRows(
+  buckets: PromptBulkSitemapInventoryBuckets,
+): Array<{ url?: string; fields?: { keyword?: string; title?: string } }> {
+  const out: Array<{ url?: string; fields?: { keyword?: string; title?: string } }> = [];
+  for (const source of ["posts", "pages", "sap"] as const) {
+    out.push(...parseContentBucketRichRows(buckets[source]?.json ?? ""));
+  }
+  return out;
+}
+
 function inventoryJsonFromCatalog(catalog: PostCreatorInventoryCatalog): string {
   return JSON.stringify({
     site: { url: "" },
@@ -59,7 +68,8 @@ export function buildPostCreatorInventoryContext(
   inventory: LoadBulkSitemapInventoryResult,
 ): PostCreatorInventoryContext {
   const inventoryUrls = collectInventoryUrls(inventory.buckets);
-  const catalog = buildPostCreatorInventoryCatalog(inventoryUrls);
+  const richRows = collectRichRows(inventory.buckets);
+  const catalog = buildPostCreatorInventoryCatalog(inventoryUrls, richRows);
   return {
     catalog,
     inventoryUrls,
@@ -67,87 +77,74 @@ export function buildPostCreatorInventoryContext(
   };
 }
 
-function slugConflict(
+export function buildRowReviewEntries(rows: CSVRow[]): PostCreatorRowReviewEntry[] {
+  return rows.map((row, rowIndex) => ({
+    rowIndex,
+    row,
+    status: "ok",
+    reason: "",
+  }));
+}
+
+function rowConflictsWithInventory(
   catalog: PostCreatorInventoryCatalog,
-  row: CSVRow,
-): { blocked: true; reason: string; conflictingUrl: string } | { blocked: false } {
-  const keyword = row.keyword?.trim() || row.keyword_focus?.trim() || "";
-  const title = row.title?.trim() || "";
-  const slugCandidates = [deriveSlugFromText(keyword), deriveSlugFromText(title)].filter(Boolean);
-  for (const slug of slugCandidates) {
-    if (catalog.slugKeys.has(slug)) {
-      const match = lookupInventoryByUrl(catalog, slug, 1)[0];
-      if (match) {
-        return {
-          blocked: true,
-          reason: `Slug "${slug}" already exists in site inventory`,
-          conflictingUrl: match.url,
-        };
-      }
+  keyword: string,
+  title: string,
+): { url: string } | null {
+  for (const candidate of [keyword, title]) {
+    const text = candidate.trim();
+    if (!text) continue;
+    const slug = deriveSlugFromText(text);
+    if (slug && catalog.slugKeys.has(slug)) {
+      const hit = lookupInventoryByUrl(catalog, slug)[0];
+      return { url: hit?.url ?? "" };
     }
   }
-  return { blocked: false };
+  return null;
 }
 
-export function runDeterministicPostCreatorGate(
-  rows: CSVRow[],
-  context: PostCreatorInventoryContext,
-): PostCreatorRowGateResult[] {
-  const keywordSet = buildInventoryKeywordSet(context.keywordInventoryJson);
+export function filterPostCreatorChecklistRows(args: {
+  rows: CSVRow[];
+  inventory: LoadBulkSitemapInventoryResult;
+  postCount: number;
+}): { rows: CSVRow[]; blockedRows: PostCreatorBlockedRow[] } {
+  const context = buildPostCreatorInventoryContext(args.inventory);
+  const catalog = context.catalog;
+  const blockedRows: PostCreatorBlockedRow[] = [];
+  const accepted: CSVRow[] = [];
+  const seenKeywords = new Set<string>();
+  const seenTitles = new Set<string>();
 
-  return rows.map((row, rowIndex) => {
-    const keyword = row.keyword?.trim() || row.keyword_focus?.trim() || "";
-    const title = row.title?.trim() || "";
+  for (const row of args.rows) {
+    const keyword = row.keyword?.trim() ?? "";
+    const title = row.title?.trim() ?? "";
+    const keywordKey = keyword ? normalizeDedupeKey(keyword) : "";
+    const titleKey = title ? normalizeDedupeKey(title) : "";
 
-    const slugHit = slugConflict(context.catalog, row);
-    if (slugHit.blocked) {
-      return {
-        rowIndex,
-        row,
-        status: "blocked",
-        reason: slugHit.reason,
-        conflictingUrl: slugHit.conflictingUrl,
-      };
+    if (keywordKey && seenKeywords.has(keywordKey)) {
+      blockedRows.push({ keyword: keyword || title, reason: "Duplicate keyword in checklist" });
+      continue;
+    }
+    if (titleKey && seenTitles.has(titleKey)) {
+      blockedRows.push({ keyword: keyword || title, reason: "Duplicate title in checklist" });
+      continue;
     }
 
-    if (keyword) {
-      const kwHit = conflictsWithInventoryKeyword(keyword, keywordSet);
-      if (kwHit.conflicts) {
-        const urlMatch = lookupInventoryByUrl(context.catalog, keyword, 1)[0];
-        return {
-          rowIndex,
-          row,
-          status: "blocked",
-          reason: `Keyword "${keyword}" conflicts with inventory phrase "${kwHit.matched}"`,
-          conflictingUrl: urlMatch?.url,
-        };
-      }
+    const conflict = rowConflictsWithInventory(catalog, keyword, title);
+    if (conflict) {
+      blockedRows.push({
+        keyword: keyword || title,
+        reason: "Already covered in site inventory",
+        conflictingUrl: conflict.url || undefined,
+      });
+      continue;
     }
 
-    if (title) {
-      const titleHit = conflictsWithInventoryKeyword(title, keywordSet);
-      if (titleHit.conflicts) {
-        const urlMatch = lookupInventoryByUrl(context.catalog, title, 1)[0];
-        return {
-          rowIndex,
-          row,
-          status: "blocked",
-          reason: `Title "${title}" conflicts with inventory phrase "${titleHit.matched}"`,
-          conflictingUrl: urlMatch?.url,
-        };
-      }
-    }
-
-    return { rowIndex, row, status: "ok", reason: "" };
-  });
-}
-
-export function assertRowPassedGate(
-  row: CSVRow,
-  context: PostCreatorInventoryContext,
-): void {
-  const [result] = runDeterministicPostCreatorGate([row], context);
-  if (result?.status === "blocked") {
-    throw new Error(result.reason + (result.conflictingUrl ? ` (${result.conflictingUrl})` : ""));
+    if (keywordKey) seenKeywords.add(keywordKey);
+    if (titleKey) seenTitles.add(titleKey);
+    accepted.push(row);
+    if (accepted.length >= args.postCount) break;
   }
+
+  return { rows: accepted, blockedRows };
 }

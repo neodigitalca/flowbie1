@@ -17,6 +17,9 @@ export interface WordPressSiteFormDialogsProps {
   formEditorialCountsPeriodStartYmd: string;
   formOptimizationPackage: string;
   formBenchmarkCustomTag: string;
+  formServiceCity: string;
+  formServiceState: string;
+  formServiceCountry: string;
   onFormNameChange: (name: string) => void;
   onFormSiteUrlChange: (url: string) => void;
   onFormProductionSiteUrlChange: (url: string) => void;
@@ -28,6 +31,9 @@ export interface WordPressSiteFormDialogsProps {
   onFormEditorialCountsPeriodStartYmdChange: (value: string) => void;
   onFormOptimizationPackageChange: (value: string) => void;
   onFormBenchmarkCustomTagChange: (value: string) => void;
+  onFormServiceCityChange: (value: string) => void;
+  onFormServiceStateChange: (value: string) => void;
+  onFormServiceCountryChange: (value: string) => void;
   onSaveSite: () => void;
   onPatchSite?: (siteId: string, patch: Partial<WordPressSite>) => void;
 }
@@ -48,6 +54,9 @@ export const WordPressDialogs: React.FC<WordPressSiteFormDialogsProps> = ({
   formEditorialCountsPeriodStartYmd,
   formOptimizationPackage,
   formBenchmarkCustomTag,
+  formServiceCity,
+  formServiceState,
+  formServiceCountry,
   onFormNameChange,
   onFormSiteUrlChange,
   onFormProductionSiteUrlChange,
@@ -59,6 +68,9 @@ export const WordPressDialogs: React.FC<WordPressSiteFormDialogsProps> = ({
   onFormEditorialCountsPeriodStartYmdChange,
   onFormOptimizationPackageChange,
   onFormBenchmarkCustomTagChange,
+  onFormServiceCityChange,
+  onFormServiceStateChange,
+  onFormServiceCountryChange,
   onSaveSite,
   onPatchSite,
 }) => {
@@ -78,6 +90,9 @@ export const WordPressDialogs: React.FC<WordPressSiteFormDialogsProps> = ({
       formEditorialCountsPeriodStartYmd={formEditorialCountsPeriodStartYmd}
       formOptimizationPackage={formOptimizationPackage}
       formBenchmarkCustomTag={formBenchmarkCustomTag}
+      formServiceCity={formServiceCity}
+      formServiceState={formServiceState}
+      formServiceCountry={formServiceCountry}
       onFormNameChange={onFormNameChange}
       onFormSiteUrlChange={onFormSiteUrlChange}
       onFormProductionSiteUrlChange={onFormProductionSiteUrlChange}
@@ -89,6 +104,9 @@ export const WordPressDialogs: React.FC<WordPressSiteFormDialogsProps> = ({
       onFormEditorialCountsPeriodStartYmdChange={onFormEditorialCountsPeriodStartYmdChange}
       onFormOptimizationPackageChange={onFormOptimizationPackageChange}
       onFormBenchmarkCustomTagChange={onFormBenchmarkCustomTagChange}
+      onFormServiceCityChange={onFormServiceCityChange}
+      onFormServiceStateChange={onFormServiceStateChange}
+      onFormServiceCountryChange={onFormServiceCountryChange}
       onSave={onSaveSite}
       onPatchSite={onPatchSite}
     />

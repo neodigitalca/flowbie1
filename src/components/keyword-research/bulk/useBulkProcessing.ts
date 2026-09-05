@@ -2,11 +2,14 @@ import type { WordPressPostingOptions, WordPressPostDestination } from '@/lib/bu
 import type { CSVRow } from '@/lib/bulk-auto-generate';
 import { applyRowOrder, buildBulkBaseRows } from '@/lib/bulk-processing-order';
 import type { BuildBulkBaseRowsFailureReason } from '@/lib/bulk-processing-order';
-import { loadApiKey } from '@/lib/api';
-import { notify } from '@/lib/app-notifications';
-import { NOTIFY_API_KEYS_ARE_REQUIRED, NOTIFY_LOCAL_EXPORT_GENERATING_FILES_ONLY_NO_WO, NOTIFY_SELECT_A_WORDPRESS_SITE_AND_SITEMAP_IN_T, notifyPostingToXWordpressSiteSNames } from "@/lib/notify-messages";
+import { notify, notifyHeaderError } from '@/lib/app-notifications';
+import { NOTIFY_LOCAL_EXPORT_GENERATING_FILES_ONLY_NO_WO, NOTIFY_SELECT_A_WORDPRESS_SITE_AND_SITEMAP_IN_T, notifyPostingToXWordpressSiteSNames } from "@/lib/notify-messages";
+import { resolveOpenRouterApiKeyForHarness } from "@/lib/openrouter-api-key-resolve";
 import type { ScheduleOccupancy } from '@/lib/bulk-schedule-gap';
 import { buildWordPressPostingFromSelection, precomputeGapDatesBySlot, resolveDefaultWordPressSiteSelection } from '@/lib/build-wordpress-bulk-posting';
+import {
+  batchNeedsWordPressUpload,
+} from '@/lib/bulk-post-destination-normalize';
 import type { ScheduleFrequency } from '@/lib/wordpress-scheduler';
 import type { BulkSitemapMode } from '@/lib/bulk/bulk-sitemap-mode';
 
@@ -87,6 +90,7 @@ export function useBulkProcessing({
     const effectiveGeneratedRows = promptRowsOverride ?? generatedRows;
     const built = buildBulkBaseRows(inputMode, rows, effectiveGeneratedRows, selectedBlogIndices);
     if (!built.ok) {
+      notifyHeaderError("Play failed", FAILURE_MESSAGES[built.reason]);
       notify.error(FAILURE_MESSAGES[built.reason]);
       return;
     }
@@ -100,13 +104,13 @@ export function useBulkProcessing({
       rowOrder
     );
 
-    const effectiveOpenRouterKey = openRouterApiKey?.trim() || loadApiKey()?.trim() || "";
-    if (!effectiveOpenRouterKey) {
-      notify.error(NOTIFY_API_KEYS_ARE_REQUIRED);
-      return;
-    }
-    if (!skipDataForSeoApiKey && !apiKey?.trim()) {
-      notify.error(NOTIFY_API_KEYS_ARE_REQUIRED);
+    const needsWordPress = batchNeedsWordPressUpload(orderedRows, bulkPostDestination);
+
+    try {
+      await resolveOpenRouterApiKeyForHarness();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Add an OpenRouter API key in Settings.";
+      notifyHeaderError("Play failed", msg);
       return;
     }
 
@@ -123,6 +127,12 @@ export function useBulkProcessing({
     const effectiveSiteIds = defaultSelection?.selectedSiteIds ?? selectedWordPressSites;
     const effectiveSiteConfigs = defaultSelection?.siteConfigs ?? siteConfigs;
 
+    const postingDest = needsWordPress
+      ? bulkPostDestination === "local"
+        ? "wordpress"
+        : bulkPostDestination
+      : "local";
+
     const wordPressPosting = buildWordPressPostingFromSelection({
       selectedSiteIds: effectiveSiteIds,
       siteConfigs: effectiveSiteConfigs,
@@ -134,7 +144,7 @@ export function useBulkProcessing({
       startTime,
       totalRows: orderedRows.length,
       useCsvPublishDates: false,
-      postDestination: bulkPostDestination,
+      postDestination: postingDest,
       scheduleOccupancy: occupancyForRun,
       useGapScheduling: useGapScheduling && Boolean(occupancyForRun),
       draftOnly: wordpressDraftOnly,
@@ -148,7 +158,7 @@ export function useBulkProcessing({
       }
     }
 
-    if (bulkPostDestination === 'local') {
+    if (!needsWordPress) {
       notify.info(NOTIFY_LOCAL_EXPORT_GENERATING_FILES_ONLY_NO_WO);
       await processAllRows(orderedRows, undefined, orderedDisplayIndices);
       return;
@@ -156,12 +166,13 @@ export function useBulkProcessing({
 
     if (!wordPressPosting?.enabled) {
       setIsProcessing(false);
+      notifyHeaderError("Play failed", NOTIFY_SELECT_A_WORDPRESS_SITE_AND_SITEMAP_IN_T);
       notify.error(NOTIFY_SELECT_A_WORDPRESS_SITE_AND_SITEMAP_IN_T);
       return;
     }
 
     const names = (postingForRun?.sites ?? []).map((x) => x.site.name).join(", ");
-    if (bulkPostDestination !== 'local') {
+    if (needsWordPress) {
       notify.info(
         notifyPostingToXWordpressSiteSNames(postingForRun?.sites?.length ?? 0, names || undefined)
       );

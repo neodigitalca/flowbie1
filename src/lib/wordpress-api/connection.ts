@@ -4,6 +4,7 @@
  */
 
 import { NEO_PULSE_CA_DEPLOY } from '@/lib/neo-pulse-deploy';
+import { isViteDev, readViteEnv } from '@/lib/vite-env';
 import type {
   WordPressConnectionResult,
   SitemapDetectionResult,
@@ -11,17 +12,22 @@ import type {
 } from './types';
 
 /** Empty string = same-origin `/api/*` (neodigital.ca WP plugin). */
+let postCreatorWorkerApiBase = "";
+
+export function setPostCreatorWorkerApiBase(base: string): void {
+  postCreatorWorkerApiBase = base.trim().replace(/\/+$/, "");
+}
+
 export function resolveBackendApiBase(): string {
+  if (postCreatorWorkerApiBase) return postCreatorWorkerApiBase;
   if (NEO_PULSE_CA_DEPLOY) return '';
-  const rawMcp = (import.meta.env.VITE_MCP_API_BASE ?? '').trim();
+  const rawMcp = readViteEnv("VITE_MCP_API_BASE");
   if (rawMcp !== '') {
     return rawMcp.replace(/\/api\/mcp\/?$/, '').replace(/\/+$/, '');
   }
-  const fromEnv = (import.meta.env.VITE_BACKEND_API_BASE ?? '')
-    .trim()
-    .replace(/\/+$/, '');
+  const fromEnv = readViteEnv("VITE_BACKEND_API_BASE").replace(/\/+$/, '');
   if (fromEnv) return fromEnv;
-  if (import.meta.env.DEV) return '';
+  if (isViteDev()) return '';
   return '';
 }
 
@@ -31,13 +37,13 @@ export const BACKEND_API_BASE = resolveBackendApiBase();
 export function backendApiUrl(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
   const apiPath = p.startsWith("/api/") || p === "/api" ? p : `/api${p}`;
-  const base = BACKEND_API_BASE.replace(/\/+$/, "");
+  const base = resolveBackendApiBase().replace(/\/+$/, "");
   const qIndex = apiPath.indexOf("?");
   const pathname = qIndex >= 0 ? apiPath.slice(0, qIndex) : apiPath;
   const search = qIndex >= 0 ? apiPath.slice(qIndex) : "";
   let url = `${base}${pathname}${search}`;
-  if (import.meta.env.DEV && !base && !search && !pathname.endsWith("/")) {
-    url = `${url}/`;
+  if (isViteDev() && !search && pathname.startsWith("/api") && !pathname.endsWith("/")) {
+    url += "/";
   }
   return url;
 }

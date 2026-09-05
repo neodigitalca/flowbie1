@@ -304,8 +304,8 @@ class Neo_Pulse_App_Wp_Posts_Inventory {
 				$row['collection'] = $coll;
 				$rows[]            = $row;
 			}
-			if ( ! empty( $body['includeScheduled'] ) && $rest === 'posts' && ! $large_site && ! $include_ids ) {
-				$future = Neo_Pulse_App_Wp_Inventory_Collector::collect( $normalized, (string) $body['username'], (string) $body['appPassword'], 'posts', ! empty( $body['includeContent'] ), ! empty( $body['includeRawAcf'] ), ! empty( $body['includePageHeading'] ), 'future', null, null );
+			if ( ! empty( $body['includeScheduled'] ) && ! $include_ids ) {
+				$future = Neo_Pulse_App_Wp_Inventory_Collector::collect( $normalized, (string) $body['username'], (string) $body['appPassword'], $rest, ! empty( $body['includeContent'] ), ! empty( $body['includeRawAcf'] ), ! empty( $body['includePageHeading'] ), 'future', null, null );
 				if ( empty( $future['ok'] ) ) {
 					$errors[ $coll . '_future' ] = $future['error'];
 				} else {

@@ -8,22 +8,30 @@ import { splitBlogHarnessBodyAndOverview } from "@/lib/bulk/blog-harness-summary
 import { stitchHarnessSections } from "@/lib/bulk/bulk-harness-outline";
 import {
   extractOverviewSectionHtml,
+  extractAnswerSectionHtml,
+  enforceHarnessAnswerBeforeOverview,
   injectHarnessH2AnchorIdsForStitchedBlog,
   stripLeadingOverviewSection,
+  stripLeadingAnswerSection,
 } from "@/lib/overview/overview-blog-overview-prepend";
 import { completeOverviewScrollLinks } from "@/lib/prompt-builders/overview-link-rules";
-import { expandOverviewScrollLinkPlaceholdersInMarkdown } from "@/lib/prompt-builders/overview-link-rules";
+import {
+  expandOverviewScrollLinkPlaceholders,
+  expandOverviewScrollLinkPlaceholdersInMarkdown,
+} from "@/lib/prompt-builders/overview-link-rules";
+import { ensureOverviewBulletBoldLabels } from "@/lib/overview/overview-bullet-bold-labels";
 import { isGeneratedContentHtml } from "@/lib/content-generation/content-format";
 import {
   resolveInternalLinkPlaceholdersInHtml,
   resolveInternalLinkPlaceholdersInMarkdown,
 } from "@/lib/content-generation/internal-link-placeholders";
 import {
-  resolveExternalLinkPlaceholdersInHtml,
+  finalizeExternalLinksInHtml,
   type ExternalLinkPair,
 } from "@/lib/content-generation/external-link-placeholders";
 import { repairHarnessHtmlForUpload } from "@/lib/content-generation/repair-harness-html";
-import { ensureNoLinkEndsInPeriod } from "@/lib/content-generation/content-sanitizer";
+import { labelMapFromAnchorTargets } from "@/lib/content-generation/harness-link-leak-repair";
+import { applyLinkTargetsPlanToHtml } from "@/lib/content-generation/ensure-links-per-section";
 
 export type HarnessUploadPrepWordPressPost = {
   id: number;
@@ -32,12 +40,15 @@ export type HarnessUploadPrepWordPressPost = {
   excerpt: string;
   link: string;
   date_gmt: string;
+  collection?: string;
+  postType?: string;
 };
 
 export type PrepareHarnessContentForUploadArgs = {
   markdownContent: string;
   blueprintAgents: AgentConfig[];
   wordPressPosts?: HarnessUploadPrepWordPressPost[];
+  postsForInternalLinks?: HarnessUploadPrepWordPressPost[];
   siteId?: string;
   siteUrl?: string;
   currentPageUrl?: string;
@@ -47,6 +58,9 @@ export type PrepareHarnessContentForUploadArgs = {
   articleTitle?: string;
   model?: string;
   signal?: AbortSignal;
+  linkTargetsPlan?: import("@/lib/bulk/bulk-generation-wp-inventory").LinkTargetsPlan;
+  /** Blog optimize: one [[LINK]] resolve pass, no overview body re-stitch. */
+  onePassOptimize?: boolean;
 };
 
 /**
@@ -60,61 +74,103 @@ export async function prepareHarnessContentForUpload(
     markdownContent,
     blueprintAgents,
     wordPressPosts,
+    postsForInternalLinks,
     siteId,
     siteUrl,
     currentPageUrl,
     externalUrlPairs = [],
+    apiKey,
+    model,
+    signal,
+    linkTargetsPlan,
+    onePassOptimize = false,
   } = args;
+  const linkCatalog = wordPressPosts ?? postsForInternalLinks;
 
   if (!markdownContent?.trim()) return markdownContent;
 
   const { bodyAgents } = splitBlogHarnessBodyAndOverview(blueprintAgents);
   const bodyAnchors = buildHarnessSectionAnchorMap(buildBulkHarnessOutlineFromAgents(bodyAgents));
+  const scrollLabelById = labelMapFromAnchorTargets(
+    bodyAnchors.map((entry) => ({ id: entry.anchorId, label: entry.displayTitle })),
+  );
+  const linkLeakOpts = scrollLabelById.size ? { labelById: scrollLabelById } : undefined;
 
   let mdForUpload = markdownContent;
-  if (wordPressPosts?.length && siteId && siteUrl) {
-    try {
-      mdForUpload = resolveInternalLinkPlaceholdersInMarkdown(mdForUpload, {
-        siteId,
-        siteUrl,
-        currentPageUrl,
-        wordPressPosts,
-      });
-    } catch (err) {
-      console.warn("[Harness upload prep] Internal link markdown resolve failed:", err);
-    }
+  const canResolveLinks = Boolean(siteUrl && (siteId || linkCatalog?.length));
+  const inputIsHtml = isGeneratedContentHtml(markdownContent);
+  if (canResolveLinks && siteUrl && !inputIsHtml) {
+    mdForUpload = await resolveInternalLinkPlaceholdersInMarkdown(mdForUpload, {
+      siteId,
+      siteUrl,
+      currentPageUrl,
+      wordPressPosts: linkCatalog,
+      apiKey,
+      model,
+      signal,
+      linkTargetsPlan,
+    });
   }
 
   mdForUpload = expandOverviewScrollLinkPlaceholdersInMarkdown(mdForUpload);
 
-  let htmlContent = isGeneratedContentHtml(mdForUpload)
-    ? mdForUpload
+  let htmlContent = inputIsHtml
+    ? expandOverviewScrollLinkPlaceholders(mdForUpload)
     : await markdownToHtml(mdForUpload);
 
   htmlContent = injectHarnessH2AnchorIdsForStitchedBlog(htmlContent, bodyAnchors);
 
-  const overviewSection = extractOverviewSectionHtml(htmlContent);
-  if (bodyAnchors.length > 0 && overviewSection) {
-    const fixedOverview = completeOverviewScrollLinks(overviewSection, bodyAnchors);
-    htmlContent = stitchHarnessSections([fixedOverview, stripLeadingOverviewSection(htmlContent)]);
+  if (canResolveLinks && siteUrl && (inputIsHtml || htmlContent.includes("[[LINK:"))) {
+    htmlContent = await resolveInternalLinkPlaceholdersInHtml(htmlContent, {
+      siteId,
+      siteUrl,
+      currentPageUrl,
+      wordPressPosts: linkCatalog,
+      apiKey,
+      model,
+      signal,
+      linkTargetsPlan,
+    });
   }
 
-  if (wordPressPosts?.length && siteId && siteUrl) {
-    try {
-      htmlContent = resolveInternalLinkPlaceholdersInHtml(htmlContent, {
-        siteId,
-        siteUrl,
-        currentPageUrl,
-        wordPressPosts,
-      });
-    } catch (err) {
-      console.warn("[Harness upload prep] Internal link HTML resolve failed:", err);
+  htmlContent = finalizeExternalLinksInHtml(htmlContent, externalUrlPairs);
+  htmlContent = repairHarnessHtmlForUpload(htmlContent, linkLeakOpts);
+
+  if (linkTargetsPlan && canResolveLinks && siteUrl && linkCatalog?.length && apiKey?.trim()) {
+    htmlContent = await applyLinkTargetsPlanToHtml({
+      htmlContent,
+      linkTargetsPlan,
+      wordPressPosts: linkCatalog,
+      currentPageUrl,
+      siteUrl,
+      apiKey,
+      model,
+      signal,
+      siteId,
+    });
+  }
+
+  if (bodyAnchors.length > 0) {
+    const overviewSection = extractOverviewSectionHtml(htmlContent);
+    if (overviewSection) {
+      let fixedOverview = completeOverviewScrollLinks(overviewSection, bodyAnchors);
+      fixedOverview = ensureOverviewBulletBoldLabels(fixedOverview);
+      fixedOverview = repairHarnessHtmlForUpload(fixedOverview, linkLeakOpts);
+      const answerSection = extractAnswerSectionHtml(htmlContent);
+      const bodyOnly = stripLeadingOverviewSection(stripLeadingAnswerSection(htmlContent));
+      const pieces: string[] = [];
+      if (answerSection?.trim()) pieces.push(answerSection);
+      pieces.push(fixedOverview);
+      if (bodyOnly?.trim()) pieces.push(bodyOnly);
+      htmlContent = stitchHarnessSections(pieces);
+      htmlContent = injectHarnessH2AnchorIdsForStitchedBlog(htmlContent, bodyAnchors);
     }
   }
 
-  htmlContent = resolveExternalLinkPlaceholdersInHtml(htmlContent, externalUrlPairs);
-  htmlContent = repairHarnessHtmlForUpload(htmlContent);
-  htmlContent = ensureNoLinkEndsInPeriod(htmlContent);
+  htmlContent = enforceHarnessAnswerBeforeOverview(htmlContent);
+  if (bodyAnchors.length > 0) {
+    htmlContent = injectHarnessH2AnchorIdsForStitchedBlog(htmlContent, bodyAnchors);
+  }
 
-  return htmlContent;
+  return repairHarnessHtmlForUpload(htmlContent, linkLeakOpts);
 }

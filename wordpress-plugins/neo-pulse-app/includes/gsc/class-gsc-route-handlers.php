@@ -26,6 +26,7 @@ class Neo_Pulse_App_Gsc_Route_Handlers {
 			array( 'POST', '/fetch-historical-stats', 'fetch_historical_stats' ),
 			array( 'POST', '/fetch-entity-pages-performance', 'fetch_entity_pages_performance' ),
 			array( 'POST', '/fetch-reporting-bundle', 'fetch_reporting_bundle' ),
+			array( 'POST', '/reporting-chat-completion', 'reporting_chat_completion' ),
 			array( 'POST', '/top-pages', 'top_pages' ),
 			array( 'POST', '/url-inventory', 'url_inventory' ),
 			array( 'POST', '/export-overview-quick-wins', 'export_overview_quick_wins' ),
@@ -105,6 +106,128 @@ class Neo_Pulse_App_Gsc_Route_Handlers {
 
 	public static function fetch_reporting_bundle( WP_REST_Request $request ) {
 		return self::from_result( Neo_Pulse_App_Gsc_Reporting_Bundle::fetch_reporting_bundle( (array) $request->get_json_params() ) );
+	}
+
+	public static function reporting_chat_completion( WP_REST_Request $request ) {
+		return self::reporting_chat_completion_body( (array) $request->get_json_params() );
+	}
+
+	/**
+	 * @param array<string,mixed> $body
+	 */
+	public static function reporting_chat_completion_body( array $body ): WP_REST_Response {
+		$system = isset( $body['system'] ) ? trim( (string) $body['system'] ) : '';
+		$user   = isset( $body['user'] ) ? trim( (string) $body['user'] ) : '';
+		if ( $system === '' || $user === '' ) {
+			return new WP_REST_Response(
+				array(
+					'ok'    => false,
+					'error' => 'system and user are required',
+				),
+				400
+			);
+		}
+
+		try {
+			$messages = array(
+				array(
+					'role'    => 'system',
+					'content' => $system,
+				),
+				array(
+					'role'    => 'user',
+					'content' => $user,
+				),
+			);
+			$opts     = array(
+				'model'       => isset( $body['model'] ) ? trim( (string) $body['model'] ) : '',
+				'temperature' => isset( $body['temperature'] ) ? (float) $body['temperature'] : 0.5,
+				'maxTokens'   => isset( $body['maxTokens'] ) ? (int) $body['maxTokens'] : 8192,
+			);
+
+			$response_format = isset( $body['responseFormat'] ) && is_array( $body['responseFormat'] )
+				? $body['responseFormat']
+				: null;
+			$raw_response = self::reporting_chat_completion_request( $messages, $opts, $response_format );
+
+			return rest_ensure_response(
+				array(
+					'ok'                 => true,
+					'content'            => $raw_response['content'],
+					'finishReason'       => $raw_response['finishReason'],
+					'nativeFinishReason' => $raw_response['nativeFinishReason'],
+					'raw'                => $raw_response['raw'],
+				)
+			);
+		} catch ( Exception $e ) {
+			return new WP_REST_Response(
+				array(
+					'ok'    => false,
+					'error' => $e->getMessage(),
+				),
+				500
+			);
+		}
+	}
+
+	/**
+	 * @param array<int,array{role:string,content:string}> $messages
+	 * @param array{model?:string,temperature?:float,maxTokens?:int} $opts
+	 * @param array<string,mixed>|null $response_format
+	 * @return array{content:string,finishReason:?string,nativeFinishReason:?string,raw:array<string,mixed>|null}
+	 */
+	private static function reporting_chat_completion_request( array $messages, array $opts, ?array $response_format ): array {
+		$api_key = Neo_Pulse_App_Chat_Openrouter::resolve_api_key();
+		if ( $api_key === '' ) {
+			throw new Exception( 'OpenRouter API key is missing. Add it in Dashboard → API Keys.' );
+		}
+
+		$model = isset( $opts['model'] ) && is_string( $opts['model'] ) && trim( $opts['model'] ) !== ''
+			? trim( $opts['model'] )
+			: Neo_Pulse_App_Chat_Openrouter::DEFAULT_MODEL;
+
+		$payload = array(
+			'model'       => $model,
+			'messages'    => $messages,
+			'temperature' => isset( $opts['temperature'] ) ? (float) $opts['temperature'] : 0.5,
+			'max_tokens'  => isset( $opts['maxTokens'] ) ? (int) $opts['maxTokens'] : 8192,
+			'stream'      => false,
+		);
+		if ( is_array( $response_format ) && $response_format !== array() ) {
+			$payload['response_format'] = $response_format;
+		}
+
+		$response = wp_remote_post(
+			Neo_Pulse_App_Chat_Openrouter::CHAT_URL,
+			array(
+				'timeout' => 180,
+				'headers' => Neo_Pulse_App_Openrouter_Attribution::request_headers( $api_key ),
+				'body'    => wp_json_encode( $payload ),
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			throw new Exception( $response->get_error_message() );
+		}
+
+		$code = (int) wp_remote_retrieve_response_code( $response );
+		$raw  = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( $code < 200 || $code >= 300 ) {
+			$msg = is_array( $raw ) ? ( $raw['error']['message'] ?? $raw['message'] ?? 'OpenRouter error' ) : 'OpenRouter error';
+			throw new Exception( 'OpenRouter ' . $code . ': ' . $msg );
+		}
+
+		$content = trim( (string) ( $raw['choices'][0]['message']['content'] ?? '' ) );
+		if ( $content === '' ) {
+			throw new Exception( 'OpenRouter returned empty content' );
+		}
+
+		return array(
+			'content'            => $content,
+			'finishReason'       => isset( $raw['choices'][0]['finish_reason'] ) ? (string) $raw['choices'][0]['finish_reason'] : null,
+			'nativeFinishReason' => isset( $raw['choices'][0]['native_finish_reason'] ) ? (string) $raw['choices'][0]['native_finish_reason'] : null,
+			'raw'                => is_array( $raw ) ? $raw : null,
+		);
 	}
 
 	public static function top_pages( WP_REST_Request $request ) {
@@ -217,6 +340,11 @@ class Neo_Pulse_App_Gsc_Route_Handlers {
 		if ( $subpath === 'fetch-reporting-bundle' && $method === 'POST' ) {
 			$r = Neo_Pulse_App_Gsc_Reporting_Bundle::fetch_reporting_bundle( $body );
 			Neo_Pulse_App_Api_Dispatcher::send_json( $r['body'], $r['statusCode'] );
+			return;
+		}
+		if ( $subpath === 'reporting-chat-completion' && $method === 'POST' ) {
+			$response = self::reporting_chat_completion_body( $body );
+			Neo_Pulse_App_Api_Dispatcher::send_json( $response->get_data(), $response->get_status() );
 			return;
 		}
 		if ( $subpath === 'top-pages' && $method === 'POST' ) {

@@ -1,6 +1,6 @@
 import { callOpenRouterChatCompletion } from "@/lib/competitor-research/competitor-report-openrouter";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
-import { BULK_WORDPRESS_POST_TITLE_RULE } from "@/lib/prompt-builders/system-user";
+import { BULK_WORDPRESS_POST_TITLE_RULE } from "@/lib/prompt-builders/title-rules";
 import {
   GRID_BRIEF_TECHNICAL_APPEND,
   TECHNICAL_SEO_STRATEGIST_ROLE,

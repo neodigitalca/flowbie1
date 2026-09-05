@@ -7,8 +7,16 @@ import {
 } from "@/lib/overview/overview-bulk-details-bindings";
 import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
-import { RESEARCH_HARNESS_SECTION_TITLES } from "@/lib/overview/overview-research-harness-sections";
+import {
+  RESEARCH_HARNESS_PIPELINE_TITLES,
+  RESEARCH_HARNESS_SECTION_TITLES,
+} from "@/lib/overview/overview-research-harness-sections";
 import { HEADERS_HARNESS_SECTION_TITLES } from "@/lib/overview/overview-blog-headers-harness-sections";
+import { CONTENT_OPTIMIZE_PIPELINE_TITLES, buildContentOptimizePipelineTitles, buildPredeterminedBlogBodyHarnessTitles } from "@/lib/overview/overview-content-optimize-pipeline";
+
+const INIT_OPTIMIZE_PIPELINE_TITLES = buildContentOptimizePipelineTitles(
+  buildPredeterminedBlogBodyHarnessTitles(""),
+);
 import { overviewBulkScopeUrlKeysFromRows } from "@/lib/overview/overview-bulk-row-scope";
 import { initBulkSliceBatchHarness } from "@/lib/overview/overview-batch-pipeline-progress";
 
@@ -42,9 +50,9 @@ describe("isOverviewBulkDetailsRun", () => {
 });
 
 describe("resolveOverviewBulkPipelineTitles", () => {
-  it("maps research run kind", () => {
+  it("maps research run kind to 8 harness steps", () => {
     expect(resolveOverviewBulkPipelineTitles("research")).toEqual([
-      ...RESEARCH_HARNESS_SECTION_TITLES,
+      ...RESEARCH_HARNESS_PIPELINE_TITLES,
     ]);
   });
 
@@ -54,8 +62,53 @@ describe("resolveOverviewBulkPipelineTitles", () => {
     ]);
   });
 
-  it("returns undefined for dynamic aiAllMeta rows", () => {
-    expect(resolveOverviewBulkPipelineTitles("aiAllMeta")).toBeUndefined();
+  it("returns 8 research titles when runKind is missing but batch has research signals", () => {
+    const url = "https://example.com/page";
+    expect(
+      resolveOverviewBulkPipelineTitles(undefined, {
+        urls: [url],
+        currentIndex: 0,
+        urlStatuses: { [url]: "optimizing" },
+        currentStep: "Researching…",
+        currentStepProgress: {
+          harnessPlannedSectionCount: 8,
+          message: "Researching 1 page(s)…",
+        },
+        urlHarnessSections: {
+          [url]: RESEARCH_HARNESS_SECTION_TITLES.map((title, sectionIndex) => ({
+            sectionIndex,
+            title,
+            status: "waiting" as const,
+          })),
+        },
+      }),
+    ).toEqual([...RESEARCH_HARNESS_PIPELINE_TITLES]);
+  });
+
+  it("returns content optimize titles when grid rows are research-faq without runKind", () => {
+    const url = "https://example.com/a";
+    expect(
+      resolveOverviewBulkPipelineTitles(
+        undefined,
+        {
+          urls: [url],
+          currentIndex: 0,
+          urlStatuses: {},
+          currentStep: "prepInventory",
+          currentStepProgress: { message: "Initializing batch…" },
+        },
+        [
+          {
+            url,
+            title: "Solar",
+            metaDescription: "",
+            aiTitle: "",
+            aiMeta: "",
+            status: "research-faq",
+          },
+        ],
+      ),
+    ).toEqual([...INIT_OPTIMIZE_PIPELINE_TITLES]);
   });
 });
 
@@ -82,6 +135,256 @@ describe("buildOverviewBulkGeneratorDetailsProps", () => {
     expect(props?.entitySapRowDisplay).toBe(true);
     expect(props?.pipelineSectionTitles).toEqual([...HEADERS_HARNESS_SECTION_TITLES]);
     expect(props?.batchPrepHarnessSections).toEqual([]);
+  });
+
+  it("keeps isProcessing true for in-flight research when optimizing flags drop", () => {
+    const url = "https://example.com/page";
+    const props = buildOverviewBulkGeneratorDetailsProps(
+      {
+        siteId: "site-1",
+        batchKey: "site-1-batch",
+        bulkState: {
+          urls: [url],
+          currentIndex: 0,
+          currentUrl: url,
+          urlStatuses: { [url]: "optimizing" },
+          currentStep: "Researching…",
+          runKind: "research",
+        },
+        overviewRows: [makeOverviewRow(url, "research-faq")],
+        isOptimizingContent: {},
+        optimizationFileManagers: {},
+      },
+      true,
+    );
+    expect(props?.isProcessing).toBe(true);
+  });
+
+  it("keeps content optimize drawer when bulk state has content prep harness and research-faq rows", () => {
+    const url = "https://ridgelinesolar.ca/solar-panel-efficiency/";
+    const contentPrepHarness = [
+      { sectionIndex: 0, title: "SERP research brief", status: "waiting" as const },
+      { sectionIndex: 1, title: "Checklist", status: "waiting" as const },
+      { sectionIndex: 2, title: "Blueprint", status: "waiting" as const },
+    ];
+    const props = buildOverviewBulkGeneratorDetailsProps(
+      {
+        siteId: "site-1",
+        batchKey: "site-1-batch",
+        bulkState: {
+          urls: [url],
+          currentIndex: 0,
+          currentUrl: url,
+          urlStatuses: { [url]: "pending" },
+          currentStep: "prepInventory",
+          urlHarnessSections: { [url]: contentPrepHarness },
+          batchPrepHarnessSections: [
+            { sectionIndex: 0, title: "Posts sitemap", status: "waiting" as const },
+          ],
+          currentStepProgress: {
+            step: "prepInventory",
+            progress: 0,
+            message: "Initializing batch…",
+            harnessPlannedSectionCount: 2,
+          },
+        },
+        overviewRows: [
+          {
+            url,
+            title: "Solar Panel Efficiency: What It Means",
+            metaDescription: "",
+            aiTitle: "",
+            aiMeta: "",
+            status: "research-faq",
+            focusKeyword: "solar panel efficiency",
+          },
+        ],
+        isOptimizingContent: { "site-1-batch": true },
+        optimizationFileManagers: {},
+        bulkActionProgress: {
+          research: { total: 25, completed: 0, statusMessage: "Researching 25 page(s)…" },
+        },
+        sitemapInventoryLinks: [
+          { label: "Pages", href: "blob:1", filename: "pages.txt", rowCount: 16, source: "pages" },
+        ],
+      },
+      true,
+    );
+    expect(props?.runKind).not.toBe("research");
+    expect(props?.pipelineSectionTitles?.length).toBe(INIT_OPTIMIZE_PIPELINE_TITLES.length);
+    expect(props?.harnessByRow?.get(0)).toHaveLength(INIT_OPTIMIZE_PIPELINE_TITLES.length);
+    expect(props?.harnessByRow?.get(0)?.[0]?.title).toBe("Keyword research");
+    expect(props?.harnessByRow?.get(0)?.[2]?.title).toBe("SERP research brief");
+    expect(props?.researchRowIndices?.has(0)).toBe(true);
+  });
+
+  it("does not attach a cached brief while research is still running", () => {
+    const url = "https://example.com/solar-panel-efficiency";
+    const props = buildOverviewBulkGeneratorDetailsProps(
+      {
+        siteId: "site-1",
+        batchKey: "site-1-batch",
+        bulkState: {
+          urls: [url],
+          currentIndex: 0,
+          urlStatuses: { [url]: "optimizing" },
+          currentStep: "Researching…",
+          runKind: "research",
+        },
+        overviewRows: [
+          {
+            ...makeOverviewRow(url, "research-faq"),
+            seoResearch: '{"version":1,"focusKeyword":"solar panel efficiency"}',
+            focusKeyword: "solar panel efficiency",
+          },
+        ],
+        isOptimizingContent: { "site-1-batch": true },
+        optimizationFileManagers: {},
+      },
+      true,
+    );
+    expect(props?.pipelineSectionTitles).toEqual([...RESEARCH_HARNESS_PIPELINE_TITLES]);
+    expect(props?.runKind).toBe("research");
+    expect(props?.filesByRow?.get(0) ?? []).toEqual([]);
+  });
+
+  it("prefers research harness over active micro slice routing", () => {
+    const url = "https://example.com/page";
+    const props = buildOverviewBulkGeneratorDetailsProps(
+      {
+        siteId: "site-1",
+        batchKey: "site-1-batch",
+        bulkState: {
+          urls: [url],
+          currentIndex: 0,
+          currentUrl: url,
+          urlStatuses: { [url]: "optimizing" },
+          currentStep: "Researching…",
+          runKind: "research",
+        },
+        overviewRows: [makeOverviewRow(url, "research-faq")],
+        isOptimizingContent: {},
+        optimizationFileManagers: {},
+        bulkActionProgress: {
+          research: { total: 5, completed: 1 },
+        },
+      },
+      true,
+    );
+    expect(props?.runKind).toBe("research");
+    expect(props?.pipelineSectionTitles).toEqual([...RESEARCH_HARNESS_PIPELINE_TITLES]);
+  });
+
+  it("shows 8-step harness for research runs without collapsing", () => {
+    const url = "https://example.com/page";
+    const harnessSections = RESEARCH_HARNESS_SECTION_TITLES.map((title, sectionIndex) => ({
+      sectionIndex,
+      title,
+      status: sectionIndex === 0 ? ("generating" as const) : ("waiting" as const),
+    }));
+    const props = buildOverviewBulkGeneratorDetailsProps(
+      {
+        siteId: "site-1",
+        batchKey: "site-1-batch",
+        bulkState: {
+          urls: [url],
+          currentIndex: 0,
+          currentUrl: url,
+          urlStatuses: { [url]: "optimizing" },
+          currentStep: "Researching…",
+          runKind: "research",
+          urlHarnessSections: { [url]: harnessSections },
+        },
+        overviewRows: [makeOverviewRow(url, "research-faq")],
+        isOptimizingContent: { "site-1-batch": true },
+        optimizationFileManagers: {},
+      },
+      true,
+    );
+    const rowHarness = props?.harnessByRow?.get(0) ?? [];
+    expect(rowHarness).toHaveLength(8);
+    expect(rowHarness[0]?.title).toBe("DataForSEO SERP");
+  });
+
+  it("exposes persisted harness on completed research rows and the active row", () => {
+    const urlA = "https://example.com/a";
+    const urlB = "https://example.com/b";
+    const urlC = "https://example.com/c";
+    const doneSections = RESEARCH_HARNESS_SECTION_TITLES.map((title, sectionIndex) => ({
+      sectionIndex,
+      title,
+      status: "done" as const,
+    }));
+    const activeSections = RESEARCH_HARNESS_SECTION_TITLES.map((title, sectionIndex) => ({
+      sectionIndex,
+      title,
+      status: sectionIndex === 0 ? ("generating" as const) : ("waiting" as const),
+    }));
+    const props = buildOverviewBulkGeneratorDetailsProps(
+      {
+        siteId: "site-1",
+        batchKey: "site-1-batch",
+        bulkState: {
+          urls: [urlA, urlB, urlC],
+          currentIndex: 1,
+          currentUrl: urlB,
+          urlStatuses: {
+            [urlA]: "completed",
+            [urlB]: "optimizing",
+            [urlC]: "pending",
+          },
+          currentStep: "Researching…",
+          runKind: "research",
+          urlHarnessSections: { [urlA]: doneSections, [urlB]: activeSections },
+        },
+        overviewRows: [
+          makeOverviewRow(urlA, "research-faq"),
+          makeOverviewRow(urlB, "research-faq"),
+          makeOverviewRow(urlC, "research-faq"),
+        ],
+        isOptimizingContent: { "site-1-batch": true },
+        optimizationFileManagers: {},
+      },
+      true,
+    );
+    expect(props?.harnessByRow?.get(0)).toHaveLength(8);
+    expect(props?.harnessByRow?.get(0)?.every((section) => section.status === "done")).toBe(true);
+    expect(props?.harnessByRow?.get(1)).toHaveLength(8);
+    expect(props?.harnessByRow?.get(2)).toHaveLength(8);
+    expect(props?.harnessByRow?.get(2)?.every((section) => section.status === "waiting")).toBe(true);
+  });
+
+  it("seeds 8 waiting harness rows when research batch has stale content-prep harness", () => {
+    const url = "https://example.com/page";
+    const props = buildOverviewBulkGeneratorDetailsProps(
+      {
+        siteId: "site-1",
+        batchKey: "site-1-batch",
+        bulkState: {
+          urls: [url],
+          currentIndex: 0,
+          currentUrl: url,
+          urlStatuses: { [url]: "optimizing" },
+          currentStep: "Researching…",
+          runKind: "research",
+          urlHarnessSections: {
+            [url]: [
+              { sectionIndex: 0, title: "SERP research brief", status: "waiting" },
+              { sectionIndex: 1, title: "Checklist", status: "waiting" },
+              { sectionIndex: 2, title: "Blueprint", status: "waiting" },
+            ],
+          },
+        },
+        overviewRows: [makeOverviewRow(url, "research-faq")],
+        isOptimizingContent: { "site-1-batch": true },
+        optimizationFileManagers: {},
+      },
+      true,
+    );
+    const rowHarness = props?.harnessByRow?.get(0) ?? [];
+    expect(rowHarness).toHaveLength(8);
+    expect(rowHarness.map((section) => section.title)).toEqual([...RESEARCH_HARNESS_SECTION_TITLES]);
+    expect(props?.pipelineSectionTitles).toHaveLength(8);
   });
 });
 

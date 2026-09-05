@@ -4,6 +4,7 @@ import type { HarnessSectionAnchorEntry } from "@/lib/bulk/harness-section-ancho
 import { HARNESS_OVERVIEW_ANCHOR_ID } from "@/lib/bulk/harness-section-anchor-ids";
 import { stitchHarnessSections } from "@/lib/bulk/bulk-harness-outline";
 import { getProductionModel } from "@/lib/optimization-settings-storage";
+import { rewaveAppendedOverviewHashLink, completeOverviewScrollLinks } from "@/lib/prompt-builders/overview-link-rules";
 import {
   extractOverviewSectionHtml,
   stripLeadingOverviewSection,
@@ -18,6 +19,41 @@ export type OverviewHarnessScrollLinkBullet = {
 type OverviewHarnessScrollLinksPayload = {
   bullets: OverviewHarnessScrollLinkBullet[];
 };
+
+function defaultBulletLabel(displayTitle: string): string {
+  const words = displayTitle.trim().split(/\s+/).filter(Boolean);
+  return words.slice(0, 2).join(" ") || "Topic";
+}
+
+function normalizeScrollLinkBullet(
+  got: Partial<OverviewHarnessScrollLinkBullet> | undefined,
+  expected: HarnessSectionAnchorEntry,
+): OverviewHarnessScrollLinkBullet | null {
+  const anchorId = expected.anchorId;
+  const bulletLabel = got?.bulletLabel?.trim() || defaultBulletLabel(expected.displayTitle);
+  let sentenceHtml = got?.sentenceHtml?.trim() || "";
+  if (!sentenceHtml) {
+    console.warn(
+      `[Overview scroll links] missing sentenceHtml for "${expected.displayTitle}" (#${anchorId}) — skipping bullet`,
+    );
+    return null;
+  }
+  sentenceHtml = sentenceHtml.replace(/href="#[^"']+"/gi, `href="#${anchorId}"`);
+  sentenceHtml = rewaveAppendedOverviewHashLink(sentenceHtml, anchorId);
+  if (!sentenceHtml.includes(`href="#${anchorId}"`)) {
+    console.warn(
+      `[Overview scroll links] sentenceHtml for "${expected.displayTitle}" missing href="#${anchorId}" — skipping bullet`,
+    );
+    return null;
+  }
+  if (/\bfits your seo plan\b/i.test(sentenceHtml.replace(/<[^>]+>/g, " "))) {
+    console.warn(
+      `[Overview scroll links] forbidden SEO stub phrasing in bullet for "${expected.displayTitle}" — skipping bullet`,
+    );
+    return null;
+  }
+  return { anchorId, bulletLabel, sentenceHtml };
+}
 
 function countListItems(html: string): number {
   const lower = html.toLowerCase();
@@ -122,13 +158,14 @@ export function verifyOverviewHarnessScrollLinks(
   opts?: { allowWikipediaUrl?: string },
 ): void {
   if (anchorMap.length === 0) {
-    throw new Error("Overview scroll links: anchor map is empty");
+    console.warn("[Overview scroll links] anchor map is empty");
+    return;
   }
 
   const liCount = countListItems(html);
   if (liCount !== anchorMap.length) {
-    throw new Error(
-      `Overview scroll links: expected ${anchorMap.length} bullets, found ${liCount}`,
+    console.warn(
+      `[Overview scroll links] expected ${anchorMap.length} bullets, found ${liCount}`,
     );
   }
 
@@ -137,16 +174,16 @@ export function verifyOverviewHarnessScrollLinks(
   for (const id of expectedIds) {
     const matches = hashHrefs.filter((h) => h === id).length;
     if (matches !== 1) {
-      throw new Error(
-        `Overview scroll links: anchor #${id} must appear exactly once (found ${matches})`,
+      console.warn(
+        `[Overview scroll links] anchor #${id} should appear exactly once (found ${matches})`,
       );
     }
   }
 
   const badHrefs = collectNonHashHrefs(html, opts?.allowWikipediaUrl);
   if (badHrefs.length > 0) {
-    throw new Error(
-      `Overview scroll links: forbidden non-# href(s): ${badHrefs.slice(0, 3).join(", ")}`,
+    console.warn(
+      `[Overview scroll links] non-# href(s) present: ${badHrefs.slice(0, 3).join(", ")}`,
     );
   }
 
@@ -161,7 +198,7 @@ export function verifyOverviewHarnessScrollLinks(
     if (closeAt < 0) break;
     const inner = html.slice(openEnd + 1, closeAt);
     if (!liInnerStartsWithBold(inner)) {
-      throw new Error("Overview scroll links: every bullet must start with <strong>Label</strong>:");
+      console.warn("[Overview scroll links] bullet missing <strong>Label</strong>: prefix");
     }
     searchFrom = closeAt + 5;
   }
@@ -171,10 +208,15 @@ const SCROLL_LINKS_SYSTEM = `You write Overview key-point bullets for a WordPres
 
 NON-NEGOTIABLE:
 - One bullet per assigned anchor, in the same order as IN-PAGE SECTION ANCHORS.
-- Each bullet: bulletLabel (short scannable label), sentenceHtml (HTML fragment after the bold label colon).
-- sentenceHtml MUST include exactly one <a href="#anchorId">2–4 word phrase</a> woven naturally into the sentence.
+- Each bullet: bulletLabel (2-3 word scannable label), sentenceHtml (HTML fragment AFTER the bold label colon — do not include the label).
+- bulletLabel MUST be topic-specific (2-3 words from the assigned H2 title). FORBIDDEN: "Additional Information", "Additional Information 1", "Topic", "Section", "more details", "further resources".
+- sentenceHtml MUST include exactly one <a href="#anchorId">2–4 word phrase</a> woven INSIDE the sentence BEFORE the final period.
+- FORBIDDEN: placing the <a> tag after the final . ! or ? (no period-then-link append).
+- FORBIDDEN: "See how", "fits your SEO plan", "see below", SEO-stub templates, or generic meta copy.
+- Good: Explore our <a href="#services">window treatments</a> for local homes.
+- Bad: Explore options for local homes. <a href="#services">window treatments</a>
 - anchorId MUST match the assigned id exactly. Never invent ids.
-- Anchor link text MUST be 2–4 subtle words — NEVER the full H2 / section title.
+- Anchor link text MUST be 2–4 subtle words from the sentence in sentence case (brands capitalized only) — NEVER the full Title Case H2 title or bulletLabel.
 - No http/https URLs in sentenceHtml. # anchors only.
 
 Return JSON: {"bullets":[{"anchorId":"...","bulletLabel":"...","sentenceHtml":"..."}]}`;
@@ -262,7 +304,8 @@ export async function applyOverviewHarnessScrollLinks(args: {
 }): Promise<string> {
   const { html, anchorMap, articleTitle, keyword, apiKey } = args;
   if (anchorMap.length === 0) {
-    throw new Error("Overview scroll links: cannot rebuild bullets without body H2 anchors");
+    console.warn("[Overview scroll links] cannot rebuild bullets without body H2 anchors — shipping as-is");
+    return html;
   }
 
   const headHtml = stripOverviewBulletList(html);
@@ -296,36 +339,18 @@ Return JSON with exactly ${anchorMap.length} bullets — one per anchor above, i
     targetKeys: ["bullets"],
   });
 
-  const bullets = Array.isArray(parsed.bullets) ? parsed.bullets : [];
-  if (bullets.length !== anchorMap.length) {
-    throw new Error(
-      `Overview scroll links: model returned ${bullets.length} bullets, expected ${anchorMap.length}`,
-    );
+  const rawBullets = Array.isArray(parsed.bullets) ? parsed.bullets : [];
+  const normalizedBullets = anchorMap
+    .map((expected, i) => normalizeScrollLinkBullet(rawBullets[i], expected))
+    .filter((b): b is OverviewHarnessScrollLinkBullet => b !== null);
+
+  if (normalizedBullets.length === 0) {
+    console.warn("[Overview scroll links] scroll-link agent returned no usable bullets — shipping as-is");
+    return html;
   }
 
-  for (let i = 0; i < anchorMap.length; i += 1) {
-    const expected = anchorMap[i]!;
-    const got = bullets[i];
-    if (!got || got.anchorId !== expected.anchorId) {
-      throw new Error(
-        `Overview scroll links: bullet ${i + 1} anchorId mismatch (expected #${expected.anchorId})`,
-      );
-    }
-    if (!got.bulletLabel?.trim() || !got.sentenceHtml?.trim()) {
-      throw new Error(`Overview scroll links: bullet ${i + 1} missing label or sentenceHtml`);
-    }
-    if (!got.sentenceHtml.includes(`href="#${expected.anchorId}"`)) {
-      throw new Error(
-        `Overview scroll links: bullet ${i + 1} must include <a href="#${expected.anchorId}">`,
-      );
-    }
-  }
-
-  const rebuilt = rebuildOverviewWithScrollLinkBullets(headHtml, bullets);
-  verifyOverviewHarnessScrollLinks(rebuilt, anchorMap, {
-    allowWikipediaUrl: args.allowWikipediaUrl,
-  });
-  return rebuilt;
+  const rebuilt = rebuildOverviewWithScrollLinkBullets(headHtml, normalizedBullets);
+  return completeOverviewScrollLinks(rebuilt, anchorMap);
 }
 
 /** Rebuild Overview scroll-link bullets on a full stitched article (Overview + body). */

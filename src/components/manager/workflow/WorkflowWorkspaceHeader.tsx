@@ -15,38 +15,33 @@ import { cn } from "@/lib/utils";
 export type WorkflowWorkspaceHeaderProps = {
   route: PulseForgeRoute;
   workflowName?: string | null;
-  statusMessage?: string | null;
   name: string;
   saving: boolean;
-  running: boolean;
+  testingRun?: boolean;
   onNameChange: (name: string) => void;
   onSave: () => void;
   onPublish: () => void;
   onTestRun: () => void;
   publishDisabled?: boolean;
-  testDisabled?: boolean;
 };
 
 export function WorkflowWorkspaceHeader({
   route,
   workflowName,
-  statusMessage,
   name,
   saving,
-  running,
+  testingRun = false,
   onNameChange,
   onSave,
   onPublish,
   onTestRun,
   publishDisabled = false,
-  testDisabled = false,
 }: WorkflowWorkspaceHeaderProps): React.ReactElement {
   return (
     <div className={WORKFLOW_HEADER_BAND_CLASS}>
       <PulseForgeBreadcrumbs
         route={route}
         workflowName={workflowName}
-        statusMessage={null}
         hideLeaf
         className="shrink-0"
       />
@@ -85,18 +80,12 @@ export function WorkflowWorkspaceHeader({
           variant="ghost"
           size="sm"
           className={cn(WORKFLOW_HEADER_RUN_BTN, "gap-1.5")}
-          disabled={running || testDisabled}
           onClick={onTestRun}
         >
           <Play className="h-4 w-4 shrink-0" />
-          Test
+          {testingRun ? "Testing…" : "Test"}
         </Button>
       </div>
-      {statusMessage ? (
-        <p className="max-w-[12rem] shrink-0 truncate text-base text-red-400" role="status">
-          {statusMessage}
-        </p>
-      ) : null}
     </div>
   );
 }

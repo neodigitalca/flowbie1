@@ -1,3 +1,4 @@
+import type { WordPressSite } from "@/components/integrations/types";
 import type { AgentRun, AgentRunRecipeKey, AgentRunResult, AgentRunResumePoint } from "@/lib/agent-runs-types";
 
 export type AgentRunHarnessContext = {
@@ -10,6 +11,8 @@ export type AgentRunHarnessContext = {
   isCancelled?: () => Promise<boolean>;
   resumePoint?: AgentRunResumePoint | null;
   isResume?: boolean;
+  /** All connected WordPress sites. Agent client lookup uses this, not the header active site. */
+  sites?: WordPressSite[];
 };
 
 export type AgentRunHarnessHandler = (

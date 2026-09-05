@@ -1,6 +1,7 @@
 import { DEFAULT_IMAGE_MODEL } from "@/lib/image-model-defaults";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 import { readOpenRouterResponseJson } from "@/lib/openrouter-response-body";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 export type AspectRatio = '1:1' | '16:9' | '9:16' | '4:3' | '3:4' | '21:9' | '9:19';
 
@@ -65,7 +66,7 @@ export const generateImage = async ({
     contentParts.push({ type: 'image_url', image_url: { url: ref } });
   }
   try {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const response = await postOpenRouterAppChatFetch( {
       method: 'POST',
       headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  collectImportedDraftLinksFromSource,
   dedupeImportedDraftLinks,
   extractImportedDraftLinksFromHtml,
   extractImportedDraftLinksFromMarkdown,
   htmlFragmentToBodyWithMarkdownLinks,
+  importedDraftLinkUrls,
   injectImportedLinksIntoChecklist,
   normalizeImportedDraftUrl,
 } from "../blog-import-draft-links";
@@ -37,6 +39,18 @@ describe("blog-import-draft-links", () => {
     );
     expect(links[0]?.anchorText).toBe("Tax credit FAQ");
     expect(links[0]?.url).toBe("https://example.org/faq");
+  });
+
+  it("collects unique hrefs from one piece of markdown and html", () => {
+    const links = collectImportedDraftLinksFromSource({
+      markdown:
+        "See [HR Resource](https://hr-resource.ca/) and [here](https://kwbllp.com/consultation/).",
+    });
+    expect(importedDraftLinkUrls(links)).toEqual([
+      "https://hr-resource.ca/",
+      "https://kwbllp.com/consultation/",
+    ]);
+    expect(collectImportedDraftLinksFromSource({ markdown: "No links here." })).toEqual([]);
   });
 
   it("dedupes identical url+anchor pairs", () => {

@@ -16,6 +16,7 @@ import {
 } from "@/lib/overview/overview-local-image-dfs-normalize";
 import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 export const IMAGE_REF_CANDIDATE_LIMIT = 10;
 export const IMAGE_REF_FIT_MIN = 0.4;
@@ -638,7 +639,7 @@ export async function fanOutPlaceSpatialTargets(params: {
     "Do not invent new businesses. Do not use Avenue-by-StoreName phrasing.",
   ].join(" ");
 
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const res = await postOpenRouterAppChatFetch( {
     method: "POST",
     headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
@@ -711,7 +712,7 @@ export async function fanOutSubjectTargets(params: {
     "Do not turn the subject into a place query.",
   ].join(" ");
 
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const res = await postOpenRouterAppChatFetch( {
     method: "POST",
     headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
@@ -914,7 +915,7 @@ export async function classifyImageGroundingTargets(params: {
     "If abstract, return mode abstract and empty targets.",
   ].join(" ");
 
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const res = await postOpenRouterAppChatFetch( {
     method: "POST",
     headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({
@@ -993,7 +994,7 @@ export async function planImageEvidenceNeeds(params: {
     '{"mode":"grounded","needs":[{"kind":"product","layer":"foreground","query":"Tesla Cybertruck","role":"vehicle identity","location_name":"United States","acceptanceBrief":"Must show the named vehicle clearly. Details not implied by the keyword are out of scope.","pickCount":1},{"kind":"place","layer":"background","query":"Safeway Jasper Avenue Edmonton exterior","role":"storefront place","location_name":"Canada","acceptanceBrief":"Must show the named store at the named street/city.","pickCount":2}]}',
   ].join(" ");
 
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const res = await postOpenRouterAppChatFetch( {
     method: "POST",
     headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({

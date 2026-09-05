@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  importRowLinkEditorUrls,
   modifierLinksFromJson,
   parseModifierLinksJson,
   serializeModifierLinksJson,
@@ -60,5 +61,33 @@ describe("serializeModifierLinksJson", () => {
 describe("modifierLinksFromJson", () => {
   it("returns one empty row when json is missing", () => {
     expect(modifierLinksFromJson(undefined)).toEqual([""]);
+  });
+});
+
+describe("importRowLinkEditorUrls", () => {
+  it("uses stored Links when present", () => {
+    expect(
+      importRowLinkEditorUrls({
+        modifier_links_json: JSON.stringify(["https://example.com/stored"]),
+        imported_markdown: "See [other](https://example.com/source).",
+      }),
+    ).toEqual(["https://example.com/stored"]);
+  });
+
+  it("parses hrefs from that piece when Links is empty", () => {
+    expect(
+      importRowLinkEditorUrls({
+        imported_markdown:
+          "Reach [HR Resource](https://hr-resource.ca/) or click [here](https://kwbllp.com/consultation/).",
+      }),
+    ).toEqual(["https://hr-resource.ca/", "https://kwbllp.com/consultation/"]);
+  });
+
+  it("keeps an empty slot when the piece has no hrefs", () => {
+    expect(
+      importRowLinkEditorUrls({
+        imported_markdown: "| Value Driver | Why Buyers Care |\n| Profitability | Earnings |",
+      }),
+    ).toEqual([""]);
   });
 });

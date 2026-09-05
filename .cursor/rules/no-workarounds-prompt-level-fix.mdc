@@ -1,0 +1,68 @@
+---
+description: Mandatory no workarounds, no extra conditions - fix at prompt level when LLM/agent behavior is wrong
+alwaysApply: true
+---
+
+# No workarounds, prompt-level fix
+
+**Priority: highest (mandatory).** Pairs with apex rules and `harness-and-context-engineering.mdc`. Do **not** paste this rule into user-facing replies.
+
+When output is wrong, fix the **contract** (prompt, schema, context, tools), not a downstream patch that hides the failure.
+
+## Principle
+
+- **No workarounds:** do not paper over bugs with brittle code, regex cleanup, silent retries, or "if model did X, force Y" branches.
+- **No extra conditions:** do not add feature flags, guards, env toggles, or branching the user did not ask for to dodge the real fix.
+- **Prompt-level fix:** when LLM or agent behavior is the problem, plan and ship a **separate, explicit prompt/harness change** (system/user blocks, schema, examples, retrieval, tool wiring).
+
+## Mandatory self-check (every turn)
+
+**Am I working around bad output instead of fixing why the model or agent produced it?**
+
+If yes, stop. Design the prompt-level fix first; code validates and executes, it does not compensate.
+
+## Forbidden (workarounds)
+
+- Post-processing model JSON with regex or string hacks to "fix" shape or content the prompt should produce.
+- Client or server branches like "if empty, use hardcoded default" or "if invalid, guess" unless the user explicitly requested that contract.
+- Duplicate rules in code that belong in the prompt (or vice versa) to patch inconsistent completions.
+- Extra `if` conditions, flags, or guards added only to handle bad model output without changing the prompt.
+- Retry loops that change inputs silently until something passes validation, without surfacing failure.
+- Swapping to a different code path when the agent/LLM path fails (silent fallback).
+
+## Prompt-level fix (required when LLM/agents involved)
+
+Every plan that touches model behavior must include a **Prompt-level strategy** subsection (separate from code tasks):
+
+```markdown
+### Prompt-level strategy
+
+- **Failure mode:** what the model/agent does wrong today
+- **Root cause:** missing constraint, weak schema, wrong context order, tool gap, etc.
+- **Fix (prompt/harness):** exact changes to system/user prompt, JSON schema, zod, examples, retrieval, or tools
+- **Code role:** parse/validate/execute only; no workaround branch
+```
+
+- Fix **system** for stable rules and format; **user** for task, inputs, and must-follow constraints (recency when the stack rewards it).
+- Prefer **structured output** (JSON schema, zod) over prose instructions alone.
+- One clear contract: validate once; on failure, structured error visible to user or operator (same as no-fallbacks harness).
+
+## When code changes are allowed
+
+- Validation and parsing of model output (typed, schema-shaped).
+- Fail-fast errors when output does not match contract.
+- Tool implementations the prompt is allowed to call.
+- Not allowed: code that rewrites or replaces model output to mimic a fix the prompt should have caused.
+
+## Plans
+
+Include in **Must-have strategies** table per `plans-must-have-strategies.mdc`:
+
+| **No workarounds / prompt-level fix** | No downstream patches or extra conditions; separate prompt-level strategy subsection when LLM/agents involved |
+
+If no LLM in scope, state **N/A** and confirm no workaround branches in code either.
+
+## Do not skip
+
+- Applies to agents, OpenRouter calls, browser automation prompts, and any prompt-shaped strings.
+- "Quick fix in code" is a workaround unless the user explicitly asked for that behavior in code.

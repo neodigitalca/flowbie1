@@ -18,6 +18,8 @@ export type BulkGeneratorSitemapMenuProps = {
   ) => void;
   onSwitchToCustom?: (defaultRowType: BulkRowSitemapType) => void;
   isDisabled?: boolean;
+  /** Keep pills visible when export destination is local (blog import). */
+  showWhenLocal?: boolean;
 };
 
 function resolveTargetSite(connectedSite?: ConnectedSiteSummary | null): WordPressSite | null {
@@ -37,8 +39,9 @@ export function BulkGeneratorSitemapMenu({
   setSiteConfigs,
   onSwitchToCustom,
   isDisabled = false,
+  showWhenLocal = false,
 }: BulkGeneratorSitemapMenuProps) {
-  if (postDestination === "local") {
+  if (postDestination === "local" && !showWhenLocal) {
     return null;
   }
 
@@ -50,7 +53,8 @@ export function BulkGeneratorSitemapMenu({
   const selectedId = Array.from(selectedWordPressSites)[0] ?? targetSite.id;
   const entityAvailable = Boolean(targetSite.entitySitemapUrl?.trim());
   const sitemapType =
-    siteConfigs[selectedId]?.sitemapType ?? (entityAvailable ? "entity" : "post");
+    siteConfigs[selectedId]?.sitemapType ??
+    "post";
 
   const setSitemapType = (value: BulkSitemapMode) => {
     if (isDisabled || value === sitemapType) return;

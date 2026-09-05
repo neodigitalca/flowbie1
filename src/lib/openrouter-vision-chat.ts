@@ -1,5 +1,6 @@
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 import { readOpenRouterResponseJson } from "@/lib/openrouter-response-body";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 /**
  * One-shot OpenRouter multimodal chat (vision) with JSON-shaped replies.
  */
@@ -23,7 +24,7 @@ export async function openRouterVisionChatCompletion(params: {
   const apiKey = params.apiKey.trim();
   if (!apiKey) throw new Error("OpenRouter API key not found");
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await postOpenRouterAppChatFetch( {
     method: "POST",
     headers: openRouterWebAppHeaders(apiKey),
     body: JSON.stringify({

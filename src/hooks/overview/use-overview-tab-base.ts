@@ -237,7 +237,7 @@ export function useOverviewTabBase({
     const cached = (getOverviewRowsSessionCache(site.id, sitemapSource) ?? []).filter((row) =>
       Boolean(row.url?.trim()),
     );
-    setRows(cached);
+    if (cached.length) setRows(cached);
     activateInventoryCacheForSource(site.id, sitemapSource);
   }, [site?.id, sitemapSource, activateInventoryCacheForSource]);
 
@@ -334,6 +334,7 @@ export function useOverviewTabBase({
     topP,
     napSummary,
     wordPressSiteId: site?.id ?? null,
+    wordPressSite: site ?? null,
   });
 
   const serpDumpUrl = useCallback((filename: string) => {

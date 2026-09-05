@@ -22,6 +22,20 @@ export function isNeoPulseBotMember(
 /** @deprecated Use isNeoPulseBotMember */
 export const isFloMember = isNeoPulseBotMember;
 
+export function pulseMemberUserId(
+  members: Pick<TeamMember, "email" | "isBot" | "displayName" | "userId">[],
+): number | null {
+  const pulse = members.find((member) => isNeoPulseBotMember(member));
+  return pulse?.userId ?? null;
+}
+
+export function pulseAssigneeIds(
+  members: Pick<TeamMember, "email" | "isBot" | "displayName" | "userId">[],
+): number[] | undefined {
+  const pulseUserId = pulseMemberUserId(members);
+  return pulseUserId != null ? [pulseUserId] : undefined;
+}
+
 export function sortMembersWithNeoPulseBotFirst(members: TeamMember[]): TeamMember[] {
   const bot = members.filter(isNeoPulseBotMember);
   const rest = members.filter((m) => !isNeoPulseBotMember(m));

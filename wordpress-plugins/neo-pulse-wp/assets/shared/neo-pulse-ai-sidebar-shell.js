@@ -164,6 +164,9 @@
   NeoPulseAiSidebarShell.prototype.open = function () {
     if (this.isOpen) return;
     this.isOpen = true;
+    this.root.hidden = false;
+    this.root.removeAttribute('hidden');
+    this.root.removeAttribute('aria-hidden');
     if (isMobileViewport()) {
       revealChatMobileRoot(this.root);
     }

@@ -13,9 +13,12 @@ class Neo_Pulse_App_Agent_Run_Exported_Prompts {
 	public static function harness_section_length_rule_markdown(): string {
 		return <<<'PROMPT'
 **HARNESS LENGTH (mandatory)**:
-- Body prose in this section: at most **2** paragraphs after the ## line (use **3** only when this block explicitly requires list/table-heavy content).
-- Each paragraph: at most **3** sentences.
-- Forbidden: wire-style repetition of other blocks, full-release previews, or restating the whole thesis.
+- Unmarked body sections: at most **2** paragraphs after the ## line.
+- Marked [LIST], [TABLE], [DECISION], [TRADEOFF], [NUMBERS]: **3** paragraphs plus the required table or list.
+- [ILLUSTRATIVE]: **3** paragraphs (do not invent a table).
+- [RECOMMENDATION]: **3** paragraphs (do not invent a table) unless SAP PAGE TEMPLATE is in this prompt: then **1-2** paragraphs plus the four-column Product | Best for | Budget | Reason table.
+- Each paragraph: at most **3** sentences (use **4** when this block has [NUMBERS]).
+- Forbidden: wire-style repetition of other blocks, full-release previews, restating the Answer definition, restating the whole thesis, or filler padding toward the article cap.
 PROMPT;
 	}
 

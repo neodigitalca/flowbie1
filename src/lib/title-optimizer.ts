@@ -5,6 +5,7 @@ import { TITLE_ANTI_CLICKBAIT_RULE, TITLE_KEYWORD_WEAVING_RULE, TITLE_CASE_RULE,
 import { truncateTitleForSEO } from "./content-generation/content-sanitizer";
 import { cleanTitleForNonEntity } from "./content-optimization-helpers";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 /**
  * Generate an optimized SEO title from existing title and primary keyword.
@@ -48,7 +49,7 @@ ${TITLE_KEYWORD_WEAVING_RULE}`
       siteId
     );
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await postOpenRouterAppChatFetch( {
       method: "POST",
       headers: openRouterWebAppHeaders(openRouterApiKey),
       body: JSON.stringify({

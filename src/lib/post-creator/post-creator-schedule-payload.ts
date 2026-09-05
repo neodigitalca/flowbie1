@@ -1,5 +1,6 @@
 import type { PostCreatorExecutionPayload, TaskExecutionPayload } from "@/lib/tasks-types";
 import { postCreatorRunStartDate } from "@/lib/post-creator/post-creator-run-start-date";
+import { resolvePostCreatorPostCount } from "@/lib/post-creator/post-creator-post-count";
 import {
   clampEveryNDays,
   clampTimesPerMonth,
@@ -16,6 +17,7 @@ export type PostCreatorScheduleUiState = {
   wordpressDraftOnly: boolean;
   localArchive: boolean;
   automationEmailDelivery: boolean;
+  googleDriveDelivery: boolean;
 };
 
 function toIsoDateLocal(date: Date): string {
@@ -70,17 +72,22 @@ export function ensureExecutionSchedulePayload(
 export function postCreatorPayloadToScheduleState(
   payload: TaskExecutionPayload | PostCreatorExecutionPayload,
 ): PostCreatorScheduleUiState {
-  const postCount = Math.max(1, Math.min(31, Math.floor(Number(payload.postCount ?? 1) || 1)));
+  const postCount = resolvePostCreatorPostCount(payload);
   const startTime = payload.scheduleStartTime?.trim() || "09:00";
   const startDay = Math.max(1, Math.min(28, Math.floor(Number(payload.scheduleStartDay ?? 1) || 1)));
   const anchor = postCreatorRunStartDate(startDay, startTime);
 
-  const localArchive = payload.saveLocalArchive === true || payload.sendAutomationEmail === true;
+  const localArchive =
+    payload.saveLocalArchive === true ||
+    payload.sendAutomationEmail === true ||
+    payload.saveToGoogleDrive === true;
   const automationEmailDelivery =
     payload.sendAutomationEmail === true || Boolean(String(payload.automationEmailTo ?? "").trim());
+  const googleDriveDelivery = payload.saveToGoogleDrive === true;
   const draftOnly =
     !localArchive &&
     !automationEmailDelivery &&
+    !googleDriveDelivery &&
     (payload.scheduleDraftOnly === true ||
       (payload.postDestination != null && payload.postDestination === "draft"));
 
@@ -101,6 +108,7 @@ export function postCreatorPayloadToScheduleState(
       wordpressDraftOnly: draftOnly,
       localArchive,
       automationEmailDelivery,
+      googleDriveDelivery,
     };
   }
 
@@ -115,6 +123,7 @@ export function postCreatorPayloadToScheduleState(
     wordpressDraftOnly: draftOnly,
     localArchive,
     automationEmailDelivery,
+    googleDriveDelivery,
   };
 }
 
@@ -142,6 +151,10 @@ export function mergeExecutionPayloadForSave(
     if (emailTo) merged.automationEmailTo = emailTo;
   }
 
+  if (merged.saveToGoogleDrive === true) {
+    merged.saveLocalArchive = true;
+  }
+
   return merged;
 }
 
@@ -167,7 +180,7 @@ export function scheduleStateToPostCreatorPayload(
   state: PostCreatorScheduleUiState,
   base: PostCreatorExecutionPayload,
 ): PostCreatorExecutionPayload {
-  const postCount = Math.max(1, Math.min(31, Math.floor(Number(base.postCount ?? 1) || 1)));
+  const postCount = resolvePostCreatorPostCount(base);
   const startTime = state.startTime?.trim() || "09:00";
   const startDayFallback = Math.max(
     1,
@@ -186,7 +199,7 @@ export function scheduleStateToPostCreatorPayload(
 
   const postDestination =
     base.postDestination != null
-      ? state.automationEmailDelivery || state.localArchive
+      ? state.automationEmailDelivery || state.localArchive || state.googleDriveDelivery
         ? base.postDestination
         : state.wordpressDraftOnly
           ? "draft"
@@ -198,7 +211,8 @@ export function scheduleStateToPostCreatorPayload(
   return {
     ...base,
     postDestination,
-    saveLocalArchive: state.automationEmailDelivery || state.localArchive,
+    saveLocalArchive: state.automationEmailDelivery || state.localArchive || state.googleDriveDelivery,
+    saveToGoogleDrive: state.googleDriveDelivery || base.saveToGoogleDrive === true,
     sendAutomationEmail:
       state.automationEmailDelivery ||
       Boolean(String(base.automationEmailTo ?? "").trim()) ||

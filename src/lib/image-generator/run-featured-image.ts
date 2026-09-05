@@ -16,6 +16,7 @@ import {
   detectMatureImageRequest,
   MATURE_CHECKLIST_OVERRIDE,
 } from "@/lib/image-generator/image-content-policy";
+import { fetchImageDataUrlViaApi } from "@/lib/proxy-fetch-text";
 import {
   manualReferencesToProvenance,
   stripManualReferenceIds,
@@ -58,13 +59,7 @@ function applyImageUrl(imageUrl: string): ImageGenerationResult {
 }
 
 async function resolvePreviewUrl(imageUrl: string): Promise<string> {
-  try {
-    const res = await fetch(imageUrl);
-    const blob = await res.blob();
-    return URL.createObjectURL(blob);
-  } catch {
-    return imageUrl;
-  }
+  return fetchImageDataUrlViaApi(imageUrl);
 }
 
 async function packageGenerationResult(

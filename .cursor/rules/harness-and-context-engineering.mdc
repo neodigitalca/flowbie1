@@ -27,3 +27,6 @@ Use this when adding or changing LLM calls, agents, tools, RAG, or prompt-shaped
 
 - Match existing project patterns (OpenRouter, schemas, agent contracts in other rules).
 - If you add a new tool or external call, state what the model is allowed to assume about its output.
+- **AI first** for pattern matching tasks; see `ai-first-pattern-matching.mdc`.
+- **No workarounds:** wrong model output is fixed in prompt, schema, context, or tools—not downstream code patches. See `no-workarounds-prompt-level-fix.mdc`.
+- Plans that change LLM behavior must include a separate **Prompt-level strategy** subsection.

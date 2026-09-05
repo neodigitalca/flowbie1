@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { SavePropertyButton } from "./SavePropertyButton";
 import type { WordPressSite } from "../types";
 import { fetchWordPressSitesMirror } from "../storage";
 import { wordPressSiteHostKey } from "@/lib/wordpress-site-host-key";
@@ -120,14 +120,7 @@ export const SitePropertyEditPanel: React.FC<SitePropertyEditPanelProps> = ({
           />
           {!hideSave ? (
             <div className="shrink-0 border-t border-border/60 pt-3">
-              <Button
-                type="button"
-                variant="default"
-                onClick={onSave}
-                className="h-10 min-h-10 px-4 text-base font-semibold shadow-none"
-              >
-                Save Property
-              </Button>
+              <SavePropertyButton onClick={onSave} />
             </div>
           ) : null}
         </div>

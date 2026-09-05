@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WordPressSite } from "@/components/integrations/types";
 
 vi.mock("@/lib/wordpress-api/connection", () => ({
-  BACKEND_API_BASE: "",
+  backendApiUrl: (path: string) => path,
 }));
 
 vi.mock("@/lib/overview/sap-peer-featured-image-search", () => ({

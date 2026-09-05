@@ -76,6 +76,11 @@ class Neo_Pulse_App_Agent_Runs_Route_Handlers {
 			}
 		}
 
+		if ( preg_match( '#^(\d+)/deliverables$#', $subpath, $m ) && $method === 'GET' ) {
+			self::list_deliverables( (int) $m[1], $body, $user_id );
+			return;
+		}
+
 		if ( preg_match( '#^(\d+)/process$#', $subpath, $m ) && $method === 'POST' ) {
 			self::process_run( (int) $m[1], $body, $user_id );
 			return;
@@ -159,6 +164,18 @@ class Neo_Pulse_App_Agent_Runs_Route_Handlers {
 			return;
 		}
 
+		$recipe_key = sanitize_key( (string) ( $body['recipeKey'] ?? $body['recipe_key'] ?? '' ) );
+		if ( ! Neo_Pulse_App_Agent_Runs_Recipe_Registry::is_valid( $recipe_key ) ) {
+			Neo_Pulse_App_Api_Dispatcher::send_json(
+				array(
+					'ok'    => false,
+					'error' => 'Invalid agent recipe key: ' . $recipe_key,
+				),
+				400
+			);
+			return;
+		}
+
 		$run = Neo_Pulse_App_Agent_Runs_Store::create_run( $resolved['team_id'], $user_id, $body );
 		if ( ! $run ) {
 			Neo_Pulse_App_Api_Dispatcher::send_json(
@@ -169,8 +186,15 @@ class Neo_Pulse_App_Agent_Runs_Route_Handlers {
 		}
 
 		if ( Neo_Pulse_App_Agent_Runs_Store::run_uses_server_execution( $run ) ) {
+			if ( class_exists( 'Neo_Pulse_App_Agent_Run_Worker' ) ) {
+				Neo_Pulse_App_Agent_Run_Worker::process_run_tick( $run, true );
+			}
 			if ( class_exists( 'Neo_Pulse_App_Agent_Run_Worker_Cron' ) ) {
 				Neo_Pulse_App_Agent_Run_Worker_Cron::kick();
+			}
+			$refreshed = Neo_Pulse_App_Agent_Runs_Store::get_run( $resolved['team_id'], (int) $run['id'], true );
+			if ( is_array( $refreshed ) ) {
+				$run = $refreshed;
 			}
 		}
 
@@ -339,6 +363,30 @@ class Neo_Pulse_App_Agent_Runs_Route_Handlers {
 	/**
 	 * @param array<string,mixed> $body
 	 */
+	private static function list_deliverables( int $run_id, array $body, int $user_id ): void {
+		$resolved = self::resolve_team( $body, $user_id );
+		if ( ! $resolved ) {
+			Neo_Pulse_App_Api_Dispatcher::send_json( array( 'ok' => false, 'error' => 'Forbidden' ), 403 );
+			return;
+		}
+
+		$run = Neo_Pulse_App_Agent_Runs_Store::get_run( $resolved['team_id'], $run_id, false );
+		if ( ! $run ) {
+			Neo_Pulse_App_Api_Dispatcher::send_json( array( 'ok' => false, 'error' => 'Not found' ), 404 );
+			return;
+		}
+
+		Neo_Pulse_App_Api_Dispatcher::send_json(
+			array(
+				'ok'    => true,
+				'files' => Neo_Pulse_App_Agent_Runs_Artifacts::list_deliverable_contents( $run_id ),
+			)
+		);
+	}
+
+	/**
+	 * @param array<string,mixed> $body
+	 */
 	private static function save_artifact( int $run_id, array $body, int $user_id ): void {
 		$resolved = self::resolve_team( $body, $user_id );
 		if ( ! $resolved ) {
@@ -435,7 +483,16 @@ class Neo_Pulse_App_Agent_Runs_Route_Handlers {
 		}
 
 		if ( in_array( (string) ( $run['status'] ?? '' ), array( 'queued', 'running' ), true ) ) {
-			Neo_Pulse_App_Agent_Run_Worker::process_run_tick( $run, true );
+			for ( $i = 0; $i < 24; $i++ ) {
+				$current = Neo_Pulse_App_Agent_Runs_Store::get_run( $team_id, $run_id, true );
+				if ( ! $current ) {
+					break;
+				}
+				if ( ! in_array( (string) ( $current['status'] ?? '' ), array( 'queued', 'running' ), true ) ) {
+					break;
+				}
+				Neo_Pulse_App_Agent_Run_Worker::process_run_tick( $current, false );
+			}
 		}
 
 		return Neo_Pulse_App_Agent_Runs_Store::get_run( $team_id, $run_id, true );
@@ -464,12 +521,12 @@ class Neo_Pulse_App_Agent_Runs_Route_Handlers {
 			return;
 		}
 
-		if ( ! class_exists( 'Neo_Pulse_App_Agent_Run_Post_Creator_Row' ) ) {
-			Neo_Pulse_App_Api_Dispatcher::send_json( array( 'ok' => false, 'error' => 'Post creator row handler unavailable' ), 500 );
+		if ( ! class_exists( 'Neo_Pulse_App_Agent_Run_Post_Creator_Upload_Complete' ) ) {
+			Neo_Pulse_App_Api_Dispatcher::send_json( array( 'ok' => false, 'error' => 'Post creator upload handler unavailable' ), 500 );
 			return;
 		}
 
-		$updated = Neo_Pulse_App_Agent_Run_Post_Creator_Row::complete_client_upload(
+		$updated = Neo_Pulse_App_Agent_Run_Post_Creator_Upload_Complete::complete_client_upload(
 			$resolved['team_id'],
 			$run_id,
 			$row_index,

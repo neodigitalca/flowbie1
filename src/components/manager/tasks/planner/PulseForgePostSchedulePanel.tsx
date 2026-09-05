@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { CalendarClock } from "lucide-react";
 import { WordPressScheduleFields } from "@/components/keyword-research/bulk/WordPressScheduleFields";
 import { AutomationEmailDeliveryFields } from "@/components/manager/tasks/planner/AutomationEmailDeliveryFields";
+import { AutomationGoogleDriveFields } from "@/components/manager/tasks/planner/AutomationGoogleDriveFields";
 import { formatBulkScheduleSummary } from "@/lib/bulk/bulk-schedule-summary";
 import {
   ensureExecutionSchedulePayload,
@@ -15,6 +16,8 @@ import {
   scheduledDestinationLabelForKind,
   type ScheduleDestinationMode,
 } from "@/lib/schedule-output-destination";
+import { suggestPresetForSiteName } from "@/lib/google-drive/google-drive-folder-presets";
+import { googleDriveFolderIsConfigured } from "@/lib/google-drive/resolve-google-drive-folder";
 import type { TaskExecutionKind, TaskExecutionPayload } from "@/lib/tasks-types";
 
 export type PulseForgePostSchedulePanelProps = {
@@ -22,12 +25,14 @@ export type PulseForgePostSchedulePanelProps = {
   disabled?: boolean;
   heading?: string;
   executionKind?: TaskExecutionKind;
+  siteName?: string;
   onChange: (payload: TaskExecutionPayload) => void;
 };
 
 function destinationModeFromState(state: PostCreatorScheduleUiState): ScheduleDestinationMode {
   if (state.wordpressDraftOnly) return "draft";
   if (state.automationEmailDelivery) return "email";
+  if (state.googleDriveDelivery) return "google_drive";
   if (state.localArchive) return "local";
   return "scheduled";
 }
@@ -37,6 +42,7 @@ function destinationModeFromPayload(
   state: PostCreatorScheduleUiState,
 ): ScheduleDestinationMode {
   if (payload.sendAutomationEmail === true) return "email";
+  if (payload.saveToGoogleDrive === true) return "google_drive";
   return destinationModeFromState(state);
 }
 
@@ -45,15 +51,48 @@ function applyDestinationFlags(
   state: PostCreatorScheduleUiState,
 ): PostCreatorScheduleUiState {
   if (mode === "email") {
-    return { ...state, automationEmailDelivery: true, localArchive: true, wordpressDraftOnly: false };
+    return {
+      ...state,
+      automationEmailDelivery: true,
+      googleDriveDelivery: false,
+      localArchive: true,
+      wordpressDraftOnly: false,
+    };
+  }
+  if (mode === "google_drive") {
+    return {
+      ...state,
+      automationEmailDelivery: false,
+      googleDriveDelivery: true,
+      localArchive: true,
+      wordpressDraftOnly: false,
+    };
   }
   if (mode === "local") {
-    return { ...state, automationEmailDelivery: false, localArchive: true, wordpressDraftOnly: false };
+    return {
+      ...state,
+      automationEmailDelivery: false,
+      googleDriveDelivery: false,
+      localArchive: true,
+      wordpressDraftOnly: false,
+    };
   }
   if (mode === "draft") {
-    return { ...state, automationEmailDelivery: false, localArchive: false, wordpressDraftOnly: true };
+    return {
+      ...state,
+      automationEmailDelivery: false,
+      googleDriveDelivery: false,
+      localArchive: false,
+      wordpressDraftOnly: true,
+    };
   }
-  return { ...state, automationEmailDelivery: false, localArchive: false, wordpressDraftOnly: false };
+  return {
+    ...state,
+    automationEmailDelivery: false,
+    googleDriveDelivery: false,
+    localArchive: false,
+    wordpressDraftOnly: false,
+  };
 }
 
 function resolveEmailState(
@@ -67,11 +106,47 @@ function resolveEmailState(
   return emailActive ? applyDestinationFlags("email", state) : state;
 }
 
+function applyDestinationPayloadFlags(
+  mode: ScheduleDestinationMode,
+  payload: TaskExecutionPayload,
+): TaskExecutionPayload {
+  const next = { ...payload };
+  if (mode === "email") {
+    next.sendAutomationEmail = true;
+    next.saveToGoogleDrive = false;
+    next.saveLocalArchive = true;
+    return next;
+  }
+  if (mode === "google_drive") {
+    next.sendAutomationEmail = false;
+    next.saveToGoogleDrive = true;
+    next.saveLocalArchive = true;
+    return next;
+  }
+  if (mode === "local") {
+    next.sendAutomationEmail = false;
+    next.saveToGoogleDrive = false;
+    next.saveLocalArchive = true;
+    return next;
+  }
+  if (mode === "draft") {
+    next.sendAutomationEmail = false;
+    next.saveToGoogleDrive = false;
+    next.saveLocalArchive = false;
+    return next;
+  }
+  next.sendAutomationEmail = false;
+  next.saveToGoogleDrive = false;
+  next.saveLocalArchive = false;
+  return next;
+}
+
 export function PulseForgePostSchedulePanel({
   executionPayload,
   disabled = false,
   heading = "Schedule",
   executionKind,
+  siteName = "",
   onChange,
 }: PulseForgePostSchedulePanelProps): React.ReactElement {
   const kindDefaults = useMemo(
@@ -80,11 +155,17 @@ export function PulseForgePostSchedulePanel({
   );
   const payload = useMemo(() => ensureExecutionSchedulePayload(kindDefaults), [kindDefaults]);
   const state = useMemo(() => postCreatorPayloadToScheduleState(payload), [payload]);
+  const payloadRef = useRef(payload);
+  const stateRef = useRef(state);
+  payloadRef.current = payload;
+  stateRef.current = state;
   const destinationMode = useMemo(() => destinationModeFromPayload(payload, state), [payload, state]);
   const showEmailFields =
+    destinationMode === "email" ||
     payload.sendAutomationEmail === true ||
     state.automationEmailDelivery ||
     Boolean(String(payload.automationEmailTo ?? "").trim());
+  const showGoogleDriveFields = destinationMode === "google_drive" || payload.saveToGoogleDrive === true;
 
   const destinationModes = useMemo(
     () => scheduleDestinationModesForKind(executionKind),
@@ -92,14 +173,22 @@ export function PulseForgePostSchedulePanel({
   );
 
   useEffect(() => {
-    if (executionKind !== "gsc_reporting" && executionKind !== "local_dominator_export") return;
+    if (
+      executionKind !== "gsc_reporting" &&
+      executionKind !== "local_dominator_export" &&
+      executionKind !== "chatgpt_website_audit" &&
+      executionKind !== "browser_automation"
+    ) {
+      return;
+    }
     if (executionPayload?.saveLocalArchive !== undefined) return;
     onChange(defaultSchedulePayloadForKind(executionKind, ensureExecutionSchedulePayload(executionPayload)));
   }, [executionKind, executionPayload, onChange]);
 
   const pushPayload = useCallback(
     (nextState: PostCreatorScheduleUiState, patch: Partial<TaskExecutionPayload> = {}) => {
-      const mergedBase = { ...payload, ...patch };
+      stateRef.current = nextState;
+      const mergedBase = { ...payloadRef.current, ...patch };
       const stateForPayload = resolveEmailState(nextState, mergedBase);
       const nextPayload = scheduleStateToExecutionPayload(stateForPayload, mergedBase);
       if (
@@ -110,38 +199,44 @@ export function PulseForgePostSchedulePanel({
         nextPayload.sendAutomationEmail = true;
         nextPayload.saveLocalArchive = true;
       }
+      if (mergedBase.saveToGoogleDrive === true || stateForPayload.googleDriveDelivery) {
+        nextPayload.saveToGoogleDrive = true;
+        nextPayload.saveLocalArchive = true;
+      }
+      payloadRef.current = nextPayload;
       onChange(nextPayload);
     },
-    [onChange, payload],
+    [onChange],
   );
 
   const commit = useCallback(
     (updater: (prev: PostCreatorScheduleUiState) => PostCreatorScheduleUiState) => {
-      pushPayload(updater(state));
+      pushPayload(updater(stateRef.current));
     },
-    [pushPayload, state],
+    [pushPayload],
   );
 
   const setOutputDestinationMode = useCallback(
     (mode: ScheduleDestinationMode) => {
       const nextState = applyDestinationFlags(mode, state);
-      const nextPayload = scheduleStateToExecutionPayload(nextState, payload);
-      if (mode === "email") {
-        nextPayload.sendAutomationEmail = true;
-        nextPayload.saveLocalArchive = true;
-      } else if (mode === "local") {
-        nextPayload.sendAutomationEmail = false;
-        nextPayload.saveLocalArchive = true;
-      } else if (mode === "draft") {
-        nextPayload.sendAutomationEmail = false;
-        nextPayload.saveLocalArchive = false;
-      } else {
-        nextPayload.sendAutomationEmail = false;
-        nextPayload.saveLocalArchive = false;
+      let nextPayload = applyDestinationPayloadFlags(
+        mode,
+        scheduleStateToExecutionPayload(nextState, payload),
+      );
+      if (mode === "google_drive" && siteName.trim()) {
+        const suggested = suggestPresetForSiteName(siteName);
+        if (suggested && !String(nextPayload.googleDriveFolderId ?? "").trim()) {
+          nextPayload = {
+            ...nextPayload,
+            googleDrivePresetKey: suggested.id,
+            googleDriveFolderId: suggested.folderId,
+            googleDriveFolderLabel: suggested.label,
+          };
+        }
       }
       onChange(nextPayload);
     },
-    [onChange, payload, state],
+    [onChange, payload, siteName, state],
   );
 
   const commitEmailFields = useCallback(
@@ -154,10 +249,25 @@ export function PulseForgePostSchedulePanel({
       const nextState = wantsEmail ? applyDestinationFlags("email", state) : state;
       pushPayload(nextState, {
         ...patch,
-        ...(wantsEmail ? { sendAutomationEmail: true, saveLocalArchive: true } : {}),
+        ...(wantsEmail ? { sendAutomationEmail: true, saveLocalArchive: true, saveToGoogleDrive: false } : {}),
       });
     },
     [destinationMode, payload, pushPayload, state],
+  );
+
+  const commitGoogleDriveFields = useCallback(
+    (patch: Partial<TaskExecutionPayload>) => {
+      const nextState = applyDestinationFlags("google_drive", state);
+      const merged = { ...payloadRef.current, ...patch };
+      pushPayload(nextState, {
+        ...patch,
+        saveToGoogleDrive:
+          patch.saveToGoogleDrive ?? googleDriveFolderIsConfigured(merged, siteName),
+        saveLocalArchive: true,
+        sendAutomationEmail: false,
+      });
+    },
+    [pushPayload, siteName, state],
   );
 
   const summary = formatBulkScheduleSummary({
@@ -169,7 +279,7 @@ export function PulseForgePostSchedulePanel({
     startTime: state.startTime,
     draftOnly: state.wordpressDraftOnly,
     emailDelivery: payload.sendAutomationEmail === true || state.automationEmailDelivery,
-    localArchive: state.localArchive || state.automationEmailDelivery,
+    localArchive: state.localArchive || state.automationEmailDelivery || state.googleDriveDelivery,
   });
 
   return (
@@ -202,6 +312,7 @@ export function PulseForgePostSchedulePanel({
         }
         startTime={state.startTime}
         setStartTime={(startTime) => commit((prev) => ({ ...prev, startTime }))}
+        onApplySchedulePreset={(next) => pushPayload({ ...stateRef.current, ...next })}
         useCsvPublishDates={false}
         setUseCsvPublishDates={() => {}}
         wordpressDraftOnly={state.wordpressDraftOnly}
@@ -214,6 +325,7 @@ export function PulseForgePostSchedulePanel({
         setAutomationEmailDelivery={(automationEmailDelivery) =>
           commit((prev) => ({ ...prev, automationEmailDelivery }))
         }
+        googleDriveDelivery={state.googleDriveDelivery}
         destinationModes={destinationModes}
         emailDeliveryEnabled
         scheduledDestinationLabel={scheduledDestinationLabelForKind(executionKind)}
@@ -221,6 +333,14 @@ export function PulseForgePostSchedulePanel({
         outputDestinationMode={destinationMode}
         isDisabled={disabled}
       />
+      {showGoogleDriveFields ? (
+        <AutomationGoogleDriveFields
+          payload={payload}
+          disabled={disabled}
+          siteName={siteName}
+          onChange={commitGoogleDriveFields}
+        />
+      ) : null}
       {showEmailFields ? (
         <AutomationEmailDeliveryFields
           payload={payload}

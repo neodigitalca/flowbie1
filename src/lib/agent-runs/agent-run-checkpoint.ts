@@ -1,6 +1,24 @@
 import { fetchAgentRun, patchAgentRun } from "@/lib/agent-runs-api";
 import type { AgentRun, AgentRunCheckpoint, AgentRunResult } from "@/lib/agent-runs-types";
 
+/** CSV bodies and prompt dumps do not belong on the persisted run. */
+export function stripHeavyAgentRunStepPayload(
+  payload: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!payload || typeof payload !== "object") return {};
+  const out: Record<string, unknown> = { ...payload };
+  if (Array.isArray(out.cachedFiles)) {
+    const files = out.cachedFiles as Array<{ name?: string }>;
+    out.cachedFileCount = files.length;
+    out.cachedFileNames = files
+      .map((file) => String(file?.name ?? "").trim())
+      .filter(Boolean);
+    delete out.cachedFiles;
+  }
+  delete out.outlineRequestBodyJson;
+  return out;
+}
+
 export function readAgentRunCheckpoint(run: AgentRun | null | undefined): AgentRunCheckpoint {
   const checkpoint = run?.result?.checkpoint;
   return {
@@ -16,7 +34,9 @@ export function readAgentRunCheckpoint(run: AgentRun | null | undefined): AgentR
       : [],
     lastStepLabel: checkpoint?.lastStepLabel,
     lastStepAt: checkpoint?.lastStepAt,
-    lastStepPayload: checkpoint?.lastStepPayload ? { ...checkpoint.lastStepPayload } : undefined,
+    lastStepPayload: checkpoint?.lastStepPayload
+      ? stripHeavyAgentRunStepPayload({ ...checkpoint.lastStepPayload })
+      : undefined,
   };
 }
 
@@ -64,8 +84,18 @@ export function isAgentRunResumable(run: AgentRun): boolean {
   if (run.status !== "failed" && run.status !== "cancelled") return false;
   const checkpoint = readAgentRunCheckpoint(run);
   const payload = checkpoint.lastStepPayload ?? {};
-  if (payload.phase === "bulk" && typeof payload.rowIndex === "number" && typeof payload.postCount === "number") {
-    return payload.rowIndex < payload.postCount;
+  if (payload.phase === "bulk" && typeof payload.rowIndex === "number") {
+    const postCount =
+      typeof payload.postCount === "number"
+        ? payload.postCount
+        : Array.isArray(payload.bulkRows)
+          ? payload.bulkRows.length
+          : Array.isArray(payload.checklistRows)
+            ? payload.checklistRows.length
+            : 0;
+    if (postCount > 0 && payload.rowIndex < postCount) {
+      return true;
+    }
   }
   if (payload.phase === "gsc_sections" && Array.isArray(payload.sectionResults) && payload.outline) {
     const outline = payload.outline as { sections?: unknown[] };

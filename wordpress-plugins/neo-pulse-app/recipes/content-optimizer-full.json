@@ -1,0 +1,71 @@
+{
+  "keyword": "content-optimizer-full",
+  "name": "Full AISEO",
+  "description": "Rewrite title, meta, headings, and body for target pages or posts.",
+  "notes": [
+    "Run from a Forge workflow with Client as step 1.",
+    "Choose target bucket and which SEO aspects to optimize in the What tab.",
+    "Optional RAG context from upstream workflow steps."
+  ],
+  "category": "maintenance",
+  "verticals": [
+    "general",
+    "editorial",
+    "local-seo",
+    "home-services"
+  ],
+  "tags": [
+    "optimize",
+    "aiseo",
+    "content"
+  ],
+  "prerequisites": [
+    "wordpress"
+  ],
+  "filters": {
+    "executionKinds": [
+      "content_optimizer"
+    ],
+    "buckets": [
+      "pages",
+      "posts",
+      "sap",
+      "all"
+    ],
+    "execution": [
+      "full-aiseo"
+    ],
+    "actionCount": 1
+  },
+  "defaultTasks": [
+    {
+      "keyword": "content-optimizer-full-run",
+      "title": "Full AISEO",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "content_optimizer",
+      "executionPayload": {
+        "updateMode": "update"
+      },
+      "scheduleMode": "calendar",
+      "recurrenceRule": "none"
+    }
+  ],
+  "isAutomation": true,
+  "kind": "template",
+  "triggerBlock": {
+    "keyword": "schedule-once",
+    "kind": "calendar",
+    "frequency": "once",
+    "startDate": "2026-09-01",
+    "time": "09:00"
+  },
+  "actionBlock": {
+    "keyword": "content-optimizer-full",
+    "executionKind": "content_optimizer",
+    "executionPayload": {
+      "updateMode": "update"
+    },
+    "title": "Full AISEO"
+  }
+}

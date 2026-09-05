@@ -3,7 +3,7 @@
  * Functions for uploading media to WordPress
  */
 
-import { BACKEND_API_BASE, BACKEND_CONNECTION_ERROR } from './connection';
+import { BACKEND_CONNECTION_ERROR, backendApiUrl } from './connection';
 import type { WordPressMediaUploadResult } from './types';
 
 /**
@@ -30,7 +30,7 @@ export async function uploadWordPressMedia(
   title?: string,
   alt?: string
 ): Promise<WordPressMediaUploadResult> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/upload-media`;
+  const url = backendApiUrl('/wordpress/upload-media');
   
   try {
     const response = await fetch(url, {
@@ -89,7 +89,7 @@ export async function listWordPressMedia(
   appPassword: string,
   maxItems = 200,
 ): Promise<{ media: WordPressMediaCatalogItem[]; count: number }> {
-  const url = `${BACKEND_API_BASE}/api/wordpress/list-media`;
+  const url = backendApiUrl('/wordpress/list-media');
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

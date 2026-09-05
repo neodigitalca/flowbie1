@@ -1,5 +1,5 @@
-import { openRouterWebAppHeaders, resolveOpenRouterWebReferer } from "@/lib/openrouter-attribution";
-import { clampOpenRouterMaxTokens, streamOpenRouterChatCompletionCore } from "@/lib/openrouter-stream-chat-core";
+import { resolveOpenRouterWebReferer } from "@/lib/openrouter-attribution";
+import { streamOpenRouterChatCompletionCore } from "@/lib/openrouter-stream-chat-core";
 
 interface GenerationResult {
   plan: string;
@@ -29,6 +29,14 @@ const SLACK_BOT_TOKEN_STORAGE_KEY = "slack-bot-token";
 const SLACK_GLOBAL_SETTINGS_STORAGE_KEY = "slack-global-settings";
 
 export const loadApiKey = () => {
+    const envKey =
+      typeof process !== "undefined"
+        ? (process.env.OPENROUTER_API_KEY ?? process.env.VITE_OPENROUTER_API_KEY)?.trim() ?? ""
+        : "";
+    if (envKey) return envKey;
+    if (typeof localStorage === "undefined") {
+      return (import.meta.env.VITE_OPENROUTER_API_KEY as string | undefined)?.trim() ?? "";
+    }
     const stored = localStorage.getItem(OPENROUTER_API_KEY_STORAGE_KEY) || "";
     if (stored.trim()) return stored;
     const baked = (import.meta.env.VITE_OPENROUTER_API_KEY as string | undefined)?.trim() ?? "";
@@ -44,6 +52,12 @@ export const saveApiKey = (key: string) => {
 };
 
 export const loadDataForSEOApiKey = () => {
+    const envKey =
+      typeof process !== "undefined"
+        ? (process.env.DATAFORSEO_API_KEY ?? process.env.DATAFORSEO_LOGIN)?.trim() ?? ""
+        : "";
+    if (envKey) return envKey;
+    if (typeof localStorage === "undefined") return "";
     return localStorage.getItem(DATAFORSEO_API_KEY_STORAGE_KEY) || "";
 };
 
@@ -173,117 +187,20 @@ export const streamGeneration = async ({
   onContentChunk,
   signal,
 }: ChatCompletionRequest & { onContentChunk: (chunk: string) => void }): Promise<{ content: string; isGenerating: boolean }> => {
-  // Temporary variable to collect the full response content
-  let fullContent = "";
-  let lastFinishReason: string | null = null;
-
-  const safeMaxTokens = clampOpenRouterMaxTokens(maxTokens);
-
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: openRouterWebAppHeaders(apiKey),
-    body: JSON.stringify({
-      model: model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: temperature,
-      max_tokens: safeMaxTokens,
-      top_p: topP,
-      stream: true,
-    }),
+  return streamOpenRouterChatCompletionCore({
+    apiKey,
+    model,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    temperature,
+    maxTokens,
+    topP,
+    httpReferer: resolveOpenRouterWebReferer(),
     signal,
+    onContentChunk,
   });
-
-  if (!response.ok) {
-    // Attempt to read the error body if it's not a generic network error
-    try {
-      let errorText = '';
-      let errorJson: any = null;
-      
-      // Try to parse as JSON first (OpenRouter returns JSON errors)
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        try {
-          errorJson = await response.json();
-          errorText = JSON.stringify(errorJson, null, 2);
-        } catch {
-          errorText = await response.text();
-        }
-      } else {
-        errorText = await response.text();
-      }
-      
-      // Extract meaningful error message
-      let errorMessage = `API Error: ${response.statusText} (${response.status})`;
-      if (errorJson) {
-        if (errorJson.error?.message) {
-          errorMessage += `\n\n${errorJson.error.message}`;
-        }
-        if (errorJson.error?.code) {
-          errorMessage += `\nError Code: ${errorJson.error.code}`;
-        }
-        if (errorJson.error?.type) {
-          errorMessage += `\nError Type: ${errorJson.error.type}`;
-        }
-      } else if (errorText) {
-        errorMessage += `\n\n${errorText}`;
-      }
-      
-      throw new Error(errorMessage);
-    } catch (err) {
-      if (err instanceof Error && err.message.includes('API Error')) {
-        throw err;
-      }
-      throw new Error(`API Error: ${response.statusText} (${response.status})`);
-    }
-  }
-
-  const reader = response.body?.getReader();
-  if (!reader) {
-    throw new Error("Failed to get response reader for streaming.");
-  }
-
-  const decoder = new TextDecoder("utf-8");
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    const chunk = decoder.decode(value);
-
-    // OpenRouter streams data as server-sent events (SSE)
-    for (const line of chunk.split("\n")) {
-      if (line.startsWith("data: ")) {
-        const data = line.substring(6).trim();
-        if (data === "[DONE]") {
-          continue;
-        }
-
-        try {
-          const json = JSON.parse(data);
-          const contentChunk = json.choices[0]?.delta?.content;
-          const finishReason = json.choices[0]?.finish_reason;
-
-          if (contentChunk) {
-            fullContent += contentChunk;
-            onContentChunk(contentChunk);
-          }
-          if (finishReason) {
-            lastFinishReason = finishReason;
-          }
-        } catch (e) {
-          console.error("Error parsing streaming chunk:", e);
-        }
-      }
-    }
-  }
-
-  return {
-    content: fullContent.trim(),
-    isGenerating: false,
-  };
 };
 
 export interface Message {

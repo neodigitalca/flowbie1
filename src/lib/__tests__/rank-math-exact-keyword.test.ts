@@ -4,6 +4,7 @@ import {
   formatKeywordForDisplay,
   ensureExactKeywordInSeoTitle,
   ensureExactKeywordInMetaDescription,
+  focusKeywordRepresentedInSeoTitle,
 } from '../content-generation/rank-math-exact-keyword';
 
 describe('truncatePreservingMandatorySubstring', () => {
@@ -70,6 +71,13 @@ describe('ensureExactKeywordInSeoTitle', () => {
     const long = 'Word '.repeat(30).trim();
     const out = ensureExactKeywordInSeoTitle(long, '', 50);
     expect(out.length).toBeLessThanOrEqual(50);
+  });
+
+  it('does not colon-merge SAP near titles when keyword embeds place tokens', () => {
+    const title = 'Advanced Window Coverings Near Plum Coulee, MB';
+    const kw = 'advanced window coverings plum coulee';
+    expect(focusKeywordRepresentedInSeoTitle(title, kw)).toBe(true);
+    expect(ensureExactKeywordInSeoTitle(title, kw, 120)).toBe(title);
   });
 });
 

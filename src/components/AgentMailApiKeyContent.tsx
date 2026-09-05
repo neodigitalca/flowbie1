@@ -85,7 +85,7 @@ export function AgentMailApiKeyContent() {
           onChange={(e) => setLocalInbox(e.target.value)}
           aria-label="AgentMail inbox email"
           autoComplete="off"
-          placeholder="communication@agentmail.to"
+          placeholder="neo-pulse@agentmail.to"
           className={INPUT_CLASS}
         />
         <ApiKeyCopyButton

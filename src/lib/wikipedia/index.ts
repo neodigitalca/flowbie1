@@ -55,3 +55,13 @@ export { filterWikipediaTitlesForCommunityEntity } from "./filter-wikipedia-titl
 export { fetchWikipediaContent } from "./wiki-fetch-content";
 export { extractStructuredDataFromWikipedia } from "./wiki-structured-extract";
 export { generateWikipediaCSV } from "./wiki-csv";
+export {
+  harvestWikiPlacesForCity,
+  pickWikiEntriesFromPool,
+  entityLabelFromWikiTitle,
+  wikiEntryToGridClusterWiki,
+  harvestWikiPoolTitlesFromGridRows,
+  type WikiGeoEntry,
+  type WikiGeoTier,
+  type HarvestWikiPlacesResult,
+} from "./wiki-entity-pool";

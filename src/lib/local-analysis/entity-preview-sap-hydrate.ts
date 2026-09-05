@@ -3,6 +3,7 @@ import { applySapOriginFromTitleToRows } from "@/lib/sap-origin-from-title";
 import { applySapTargetSlugsFromKeywordEntity } from "@/lib/sap-slug-from-keyword-entity";
 import { fillSapRowMetaFromOpenRouter } from "@/lib/local-analysis/entity-sap-meta-agent";
 import { fillSapRowTitlesFromOpenRouter } from "@/lib/local-analysis/entity-sap-title-agent";
+import type { EntitySapOccupancy } from "@/lib/local-analysis/entity-sap-inventory-collision";
 
 export type HydrateEntityPreviewSapRowsOptions = {
   apiKey: string;
@@ -11,6 +12,9 @@ export type HydrateEntityPreviewSapRowsOptions = {
   siteName: string;
   gridLocations: string[];
   entityTypeFocus?: string[];
+  titleTemplate?: string;
+  forceRewriteTitles?: boolean;
+  sapOccupancy?: EntitySapOccupancy;
   rows: CSVRow[];
   onTitleProgress?: (done: number, total: number) => void;
   onMetaProgress?: (done: number, total: number) => void;
@@ -34,7 +38,7 @@ export function applyPublishAndMetaToSapRows(rows: CSVRow[]): CSVRow[] {
 export async function hydrateEntityClusterSapRows(
   options: HydrateEntityPreviewSapRowsOptions,
 ): Promise<CSVRow[]> {
-  const { apiKey, model, siteId, siteName, gridLocations, entityTypeFocus, rows, onTitleProgress, onMetaProgress, onRowsUpdate } =
+  const { apiKey, model, siteId, siteName, gridLocations, entityTypeFocus, titleTemplate, forceRewriteTitles, sapOccupancy, rows, onTitleProgress, onMetaProgress, onRowsUpdate } =
     options;
   if (rows.length === 0) return rows;
 
@@ -48,6 +52,9 @@ export async function hydrateEntityClusterSapRows(
     siteName,
     gridLocations,
     entityTypeFocus,
+    titleTemplate,
+    forceRewrite: forceRewriteTitles,
+    sapOccupancy,
     onProgress: onTitleProgress,
     onRowsUpdate,
   });
@@ -68,7 +75,7 @@ export async function hydrateEntityClusterSapRows(
 export async function hydrateEntityPreviewSapRows(
   options: HydrateEntityPreviewSapRowsOptions,
 ): Promise<CSVRow[]> {
-  const { apiKey, model, siteId, siteName, gridLocations, entityTypeFocus, rows, onTitleProgress, onMetaProgress, onRowsUpdate } =
+  const { apiKey, model, siteId, siteName, gridLocations, entityTypeFocus, titleTemplate, forceRewriteTitles, sapOccupancy, rows, onTitleProgress, onMetaProgress, onRowsUpdate } =
     options;
   if (rows.length === 0) return rows;
 
@@ -80,6 +87,9 @@ export async function hydrateEntityPreviewSapRows(
     siteName,
     gridLocations,
     entityTypeFocus,
+    titleTemplate,
+    forceRewrite: forceRewriteTitles,
+    sapOccupancy,
     onProgress: onTitleProgress,
     onRowsUpdate,
   });

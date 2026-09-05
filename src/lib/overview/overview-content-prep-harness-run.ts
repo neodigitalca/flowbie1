@@ -8,15 +8,18 @@ import {
 import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
 import {
   applyBatchPrepHarnessPayload,
-  applyPostPrepHarnessPayload,
   buildBatchPrepHarnessPayload,
-  buildPostPrepHarnessPayload,
   buildWaitingBatchPrepHarnessSections,
-  buildWaitingPostHarnessSections,
   CONTENT_PREP_BATCH_HARNESS_TOTAL_SECTIONS,
-  CONTENT_PREP_HARNESS_TOTAL_SECTIONS,
-  CONTENT_PREP_POST_HARNESS_TOTAL_SECTIONS,
 } from "./overview-content-prep-harness-sections";
+import {
+  buildContentOptimizeHarnessPayload,
+  buildPredeterminedBlogBodyHarnessTitles,
+  buildWaitingContentOptimizeHarnessSections,
+  CONTENT_OPTIMIZE_PIPELINE_TOTAL,
+  expandContentOptimizeHarnessWithBodySections,
+} from "./overview-content-optimize-pipeline";
+import { reduceHarnessSectionList } from "@/lib/bulk/harness-sections-reducer";
 
 type SetBulkState = Dispatch<SetStateAction<Record<string, BulkOptimizationState>>>;
 type SetOptProgress = Dispatch<SetStateAction<Record<string, unknown>>>;
@@ -30,12 +33,22 @@ export type ContentPrepHarnessSetters = {
 
 export { buildWaitingEntitySapBatchPrepHarnessSections } from "./overview-content-prep-harness-sections";
 
-export function buildContentPrepUrlHarnessMap(urls: string[]): Record<string, HarnessSectionListItem[]> {
+export function buildContentPrepUrlHarnessMap(
+  urls: string[],
+  articleTitleByUrl?: Record<string, string | undefined>,
+  keywordByUrl?: Record<string, string | undefined>,
+): Record<string, HarnessSectionListItem[]> {
   const map: Record<string, HarnessSectionListItem[]> = {};
   for (const raw of urls) {
     const url = raw?.trim();
     if (!url) continue;
-    map[url] = buildWaitingPostHarnessSections();
+    const articleTitle = articleTitleByUrl?.[url]?.trim() ?? "";
+    map[url] = buildWaitingContentOptimizeHarnessSections(
+      buildPredeterminedBlogBodyHarnessTitles(articleTitle, undefined, {
+        pageUrl: url,
+        keyword: keywordByUrl?.[url],
+      }),
+    );
   }
   return map;
 }
@@ -53,14 +66,14 @@ export function computeContentPrepBatchProgress(batch: BulkOptimizationState): n
   for (const url of urls) {
     const status = batch.urlStatuses?.[url];
     if (status === "completed") {
-      postDone += CONTENT_PREP_POST_HARNESS_TOTAL_SECTIONS;
+      postDone += CONTENT_OPTIMIZE_PIPELINE_TOTAL;
       continue;
     }
     postDone += countDoneSections(batch.urlHarnessSections?.[url]);
   }
 
   const slotTotal =
-    CONTENT_PREP_BATCH_HARNESS_TOTAL_SECTIONS + urls.length * CONTENT_PREP_POST_HARNESS_TOTAL_SECTIONS;
+    CONTENT_PREP_BATCH_HARNESS_TOTAL_SECTIONS + urls.length * CONTENT_OPTIMIZE_PIPELINE_TOTAL;
   const doneSlots = batchPrepDone + postDone;
   return Math.min(99, Math.round((doneSlots / Math.max(slotTotal, 1)) * 100));
 }
@@ -126,7 +139,6 @@ export function markContentPrepBatchHarnessSection(
         currentProgress: latestProgress,
         currentStepProgress: {
           ...(current.currentStepProgress || {}),
-          step: current.currentStep || "Preparing…",
           progress: latestProgress,
           message: displayMessage,
           harnessSections: nextBatchSections,
@@ -138,7 +150,6 @@ export function markContentPrepBatchHarnessSection(
 
   setOptimizationProgress((prev) =>
     mergeHarnessProgressSiteAndBatch(prev as Record<string, unknown>, siteId, {
-      step: "Preparing…",
       progress: latestProgress,
       message: displayMessage,
       harnessPlannedSectionCount: CONTENT_PREP_BATCH_HARNESS_TOTAL_SECTIONS,
@@ -146,10 +157,11 @@ export function markContentPrepBatchHarnessSection(
   );
 }
 
-export function applyContentPrepHarnessToUrl(
+function applyContentOptimizeHarnessToUrl(
   url: string,
   payload: BulkHarnessSectionPayload,
   setters: ContentPrepHarnessSetters,
+  pipelineTitles?: readonly string[],
 ): void {
   const { siteId, batchKey, setBulkOptimizationState, setOptimizationProgress } = setters;
   const message = `${payload.title}${payload.phase === "start" ? "…" : payload.phase === "done" ? " complete" : ""}`;
@@ -158,8 +170,9 @@ export function applyContentPrepHarnessToUrl(
   setBulkOptimizationState((prev) => {
     const current = prev[batchKey];
     if (!current) return prev;
-    const prevSections = current.urlHarnessSections?.[url] ?? buildWaitingPostHarnessSections();
-    const nextUrlSections = applyPostPrepHarnessPayload(prevSections, payload);
+    const prevSections =
+      current.urlHarnessSections?.[url] ?? buildWaitingContentOptimizeHarnessSections();
+    const nextUrlSections = reduceHarnessSectionList(prevSections, payload);
     const nextBatch: BulkOptimizationState = {
       ...current,
       urlHarnessSections: {
@@ -168,6 +181,7 @@ export function applyContentPrepHarnessToUrl(
       },
     };
     latestProgress = computeContentPrepBatchProgress(nextBatch);
+    const plannedCount = pipelineTitles?.length ?? CONTENT_OPTIMIZE_PIPELINE_TOTAL;
     return {
       ...prev,
       [batchKey]: {
@@ -176,11 +190,10 @@ export function applyContentPrepHarnessToUrl(
         currentProgress: latestProgress,
         currentStepProgress: {
           ...(current.currentStepProgress || {}),
-          step: current.currentStep || "Preparing…",
           progress: latestProgress,
           message,
           harnessSections: nextUrlSections,
-          harnessPlannedSectionCount: CONTENT_PREP_POST_HARNESS_TOTAL_SECTIONS,
+          harnessPlannedSectionCount: plannedCount,
         },
       },
     };
@@ -188,12 +201,53 @@ export function applyContentPrepHarnessToUrl(
 
   setOptimizationProgress((prev) =>
     mergeHarnessProgressSiteAndBatch(prev as Record<string, unknown>, siteId, {
-      step: "Preparing…",
       progress: latestProgress,
       message,
-      harnessPlannedSectionCount: CONTENT_PREP_POST_HARNESS_TOTAL_SECTIONS,
+      harnessPlannedSectionCount: pipelineTitles?.length ?? CONTENT_OPTIMIZE_PIPELINE_TOTAL,
     }),
   );
+}
+
+export function syncContentOptimizeHarnessBodySections(
+  url: string,
+  bodyHarnessTitles: readonly string[],
+  setters: ContentPrepHarnessSetters,
+): void {
+  const { batchKey, setBulkOptimizationState } = setters;
+  setBulkOptimizationState((prev) => {
+    const current = prev[batchKey];
+    if (!current) return prev;
+    const expanded = expandContentOptimizeHarnessWithBodySections(
+      current.urlHarnessSections?.[url],
+      bodyHarnessTitles,
+    );
+    return {
+      ...prev,
+      [batchKey]: {
+        ...current,
+        urlHarnessSections: {
+          ...(current.urlHarnessSections || {}),
+          [url]: expanded,
+        },
+      },
+    };
+  });
+}
+
+export type ContentPrepHarnessBridge = {
+  url: string;
+  pipelineTitles: readonly string[];
+  setters: ContentPrepHarnessSetters;
+  flushGeneratedFiles?: () => void;
+};
+
+export function pipelineIndexForHarnessTitle(
+  title: string,
+  pipelineTitles: readonly string[],
+): number {
+  const trimmed = title.trim();
+  if (!trimmed) return -1;
+  return pipelineTitles.indexOf(trimmed);
 }
 
 export function markContentPrepHarnessSection(
@@ -203,11 +257,13 @@ export function markContentPrepHarnessSection(
   setters: ContentPrepHarnessSetters,
   rowIndex = 0,
   markdownSlice?: string,
+  pipelineTitles?: readonly string[],
 ): void {
-  applyContentPrepHarnessToUrl(
+  applyContentOptimizeHarnessToUrl(
     url,
-    buildPostPrepHarnessPayload(rowIndex, sectionIndex, phase, markdownSlice),
+    buildContentOptimizeHarnessPayload(rowIndex, sectionIndex, phase, markdownSlice, pipelineTitles),
     setters,
+    pipelineTitles,
   );
 }
 

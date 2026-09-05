@@ -11,8 +11,10 @@ import { buildFocusedArticlePurpose } from "@/lib/content-generation/article-len
 import {
   generateChecklistFromSelections,
   generateBlueprintFromTemplate,
+  buildBlueprintFromChecklistRows,
   type BlogTemplateContext,
 } from "@/lib/blog-template-builder";
+import { prepareChecklistForPipeline } from "@/lib/content-word-blocklist";
 import { generateTitleOptions } from "@/lib/title-generator";
 import { TitleSelector } from "./TitleSelector";
 import { getStoredSites } from "@/components/IntegrationsTab";
@@ -192,13 +194,17 @@ export const BlogTemplateCreator: React.FC<BlogTemplateCreatorProps> = ({
         }
       );
 
-      if (generatedChecklist.length === 0) {
+      const pipelineChecklist = prepareChecklistForPipeline(generatedChecklist.items, {
+        sapEntity: entity?.trim() || undefined,
+      });
+
+      if (pipelineChecklist.length === 0) {
         notify.error(NOTIFY_FAILED_TO_GENERATE_CHECKLIST);
         setIsGeneratingChecklist(false);
         return;
       }
 
-      setChecklist(generatedChecklist);
+      setChecklist(pipelineChecklist);
       setIsGeneratingChecklist(false);
       setShowChecklistReview(true);
       notify.success(NOTIFY_CHECKLIST_GENERATED_PLEASE_REVIEW_AND_AP);
@@ -294,14 +300,18 @@ export const BlogTemplateCreator: React.FC<BlogTemplateCreatorProps> = ({
         userPrompt: lastUserPrompt?.trim() || undefined,
       };
 
-      const result = await generateBlueprintFromTemplate(checklist, context, {
-        apiKey,
-        model: selectedModel,
-        temperature,
-        maxTokens,
-        topP,
-        connectedSite: connectedSite || undefined,
-      });
+      const sapEntity = entity?.trim() || undefined;
+      const result = sapEntity
+        ? buildBlueprintFromChecklistRows(checklist, context, sapEntity)
+        : await generateBlueprintFromTemplate(checklist, context, {
+            apiKey,
+            model: selectedModel,
+            temperature,
+            maxTokens,
+            topP,
+            connectedSite: connectedSite || undefined,
+            entity: sapEntity,
+          });
 
       if (result.agents.length === 0) {
         notify.error(NOTIFY_NO_AGENTS_GENERATED_FROM_TEMPLATE);
@@ -334,6 +344,7 @@ export const BlogTemplateCreator: React.FC<BlogTemplateCreatorProps> = ({
     maxTokens,
     topP,
     connectedSite,
+    entity,
   ]);
 
   const handleAcceptAgent = useCallback((agent: AgentConfig) => {

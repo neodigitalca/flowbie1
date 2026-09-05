@@ -1,6 +1,8 @@
 <?php
 /**
  * POST /api/local-dominator/export-grid
+ * POST /api/local-dominator/export-grid/jobs
+ * GET  /api/local-dominator/export-grid/jobs/{jobId}
  *
  * @package Neo_Pulse_App
  */
@@ -20,6 +22,16 @@ class Neo_Pulse_App_Local_Dominator_Route_Handlers {
 
 		if ( $subpath === 'export-grid' && $method === 'POST' ) {
 			Neo_Pulse_App_Api_Dispatcher::send_json( Neo_Pulse_App_Local_Dominator_Export::export_grid( $body ) );
+			return;
+		}
+
+		if ( $subpath === 'export-grid/jobs' && $method === 'POST' ) {
+			Neo_Pulse_App_Api_Dispatcher::send_json( Neo_Pulse_App_Local_Dominator_Export::start_export_job_from_body( $body ) );
+			return;
+		}
+
+		if ( preg_match( '#^export-grid/jobs/([a-f0-9-]{8,64})$#', $subpath, $matches ) && $method === 'GET' ) {
+			Neo_Pulse_App_Api_Dispatcher::send_json( Neo_Pulse_App_Local_Dominator_Export::read_job_progress( $matches[1] ) );
 			return;
 		}
 

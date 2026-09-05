@@ -44,11 +44,13 @@ class Neo_Pulse_App_Task_Execution_Runner_Gsc_Reporting {
 
 		$payload         = is_array( $context['payload'] ?? null ) ? $context['payload'] : array();
 		$sanitized       = Neo_Pulse_App_Tasks_Store::sanitize_execution_payload( $payload );
-		$compare_preset  = self::sanitize_compare_preset( $payload['comparePreset'] ?? 'mom' );
+		$preset_id       = sanitize_key( (string) ( $sanitized['gscComparePresetId'] ?? $sanitized['comparePreset'] ?? 'mom' ) );
+		$compare_preset  = self::sanitize_compare_preset( $sanitized['comparePreset'] ?? $preset_id );
 		$save_to_disk    = ! array_key_exists( 'saveToDisk', $payload ) || ! empty( $payload['saveToDisk'] );
 		$save_local      = ! empty( $sanitized['saveLocalArchive'] )
 			|| ! array_key_exists( 'saveLocalArchive', $payload )
-			|| ! empty( $payload['saveLocalArchive'] );
+			|| ! empty( $payload['saveLocalArchive'] )
+			|| ! empty( $sanitized['saveToGoogleDrive'] );
 		$execution_id    = (int) ( $execution['id'] ?? 0 );
 
 		$contract = array_merge(
@@ -61,6 +63,17 @@ class Neo_Pulse_App_Task_Execution_Runner_Gsc_Reporting {
 			),
 			Neo_Pulse_App_Tasks_Store::automation_email_contract_fields( $payload )
 		);
+		$contract = array_merge( $contract, Neo_Pulse_App_Tasks_Store::google_drive_contract_fields( $payload ) );
+		if ( in_array( $preset_id, Neo_Pulse_App_Tasks_Store::gsc_compare_preset_ids(), true ) ) {
+			$contract['gscComparePresetId'] = $preset_id;
+		}
+		$trailing_count = Neo_Pulse_App_Tasks_Store::sanitize_gsc_trailing_month_count( $sanitized['gscTrailingMonthCount'] ?? $payload['gscTrailingMonthCount'] ?? null );
+		if ( $trailing_count !== null ) {
+			$contract['gscTrailingMonthCount'] = $trailing_count;
+		}
+		if ( ! empty( $sanitized['gscCompareRanges'] ) && is_array( $sanitized['gscCompareRanges'] ) ) {
+			$contract['gscCompareRanges'] = $sanitized['gscCompareRanges'];
+		}
 
 		return array(
 			'ok'      => true,

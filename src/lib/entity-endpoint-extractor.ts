@@ -63,18 +63,4 @@ export function restCollectionMatchesEntitySitemap(
   const ep = String(postTypeEndpoint ?? "").toLowerCase().trim();
   if (!ep) return false;
   return ep === entityEp;
-}/**
- * Maps user "has entity" / auto to a value safe for this URL's post type.
- * Non-entity CPT URLs always get false so location/entity prompts are not applied site-wide in bulk.
- */
-export function effectiveHasEntityForContentOptimizer(
-  site: { entitySitemapUrl?: string } | null | undefined,
-  postTypeEndpoint: string | undefined | null,
-  userPreference: boolean | undefined,
-): boolean | undefined {
-  const matches = restCollectionMatchesEntitySitemap(site, postTypeEndpoint);
-  if (userPreference === false) return false;
-  if (!matches) return false;
-  if (userPreference === true) return true;
-  return undefined;
 }

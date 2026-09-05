@@ -1,7 +1,14 @@
+import { Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { PromptBulkSitemapInventoryLink } from "@/lib/bulk/prompt-bulk-sitemap-inventory";
 import type { BulkGscKeywordsHostedLink } from "@/lib/bulk/bulk-gsc-keywords-hosted-link";
 import type { PromptBulkSiteKwHostedLink } from "@/lib/bulk/prompt-bulk-site-kw-scrape";
-import { SitemapInventoryLinksList } from "@/components/keyword-research/bulk/SitemapInventoryLinksList";
+import {
+  SitemapInventoryLinksList,
+  downloadAllHostedInventoryFiles,
+  hostedInventoryDownloads,
+} from "@/components/keyword-research/bulk/SitemapInventoryLinksList";
+import { META_FIELD_END_RAIL_BTN } from "@/components/overview/MetaOptimizerPageRowDetails";
 
 const INVENTORY_BUCKET_LABELS = ["Pages", "Posts", "SAP"] as const;
 
@@ -21,9 +28,24 @@ export function BulkSitemapInventoryRunDetail({
   if (!loading && !hasLinks) return null;
 
   if (hasLinks) {
+    const downloadCount = hostedInventoryDownloads(links, gscHostedLink).length;
     return (
       <>
-        <p className="px-2.5 py-1 text-base font-medium text-white sm:px-3">Sitemap inventory</p>
+        <div className="flex items-center gap-2 px-2.5 py-1 sm:px-3">
+          <p className="min-w-0 flex-1 text-base font-medium text-white">Sitemap inventory</p>
+          {downloadCount > 0 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={META_FIELD_END_RAIL_BTN}
+              title="Download all"
+              onClick={() => downloadAllHostedInventoryFiles(links, gscHostedLink)}
+            >
+              <Download className="h-4 w-4 shrink-0" />
+            </Button>
+          ) : null}
+        </div>
         <SitemapInventoryLinksList links={links} gscLink={gscHostedLink} />
       </>
     );

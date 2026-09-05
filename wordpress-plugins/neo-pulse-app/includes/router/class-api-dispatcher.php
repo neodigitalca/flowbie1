@@ -114,6 +114,10 @@ class Neo_Pulse_App_Api_Dispatcher {
 			@set_time_limit( 300 );
 		}
 
+		if ( preg_match( '#^mcp/DataForSEO_#', $route ) && $method === 'POST' ) {
+			@set_time_limit( 300 );
+		}
+
 		if ( preg_match( '#^wordpress/([a-z0-9-]+)$#i', $route, $m ) ) {
 			self::send_handler_result( Neo_Pulse_App_Wp_Route_Handlers::handle( $m[1], $method, $body ) );
 			return;
@@ -131,6 +135,11 @@ class Neo_Pulse_App_Api_Dispatcher {
 
 		if ( 0 === strpos( $route, 'gmb/' ) ) {
 			Neo_Pulse_App_Gmb_Route_Handlers::dispatch_http( substr( $route, 4 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'google-mcp/' ) ) {
+			Neo_Pulse_App_Google_Mcp_Route_Handlers::dispatch_http( substr( $route, 11 ), $method, $body );
 			return;
 		}
 
@@ -215,6 +224,10 @@ class Neo_Pulse_App_Api_Dispatcher {
 			return;
 		}
 
+		if ( preg_match( '#^agent-runs/\d+/process$#', $route ) && $method === 'POST' ) {
+			@set_time_limit( 900 );
+		}
+
 		if ( 0 === strpos( $route, 'agent-runs/' ) || $route === 'agent-runs' ) {
 			$agent_runs_route = $route === 'agent-runs' ? '' : substr( $route, 11 );
 			Neo_Pulse_App_Agent_Runs_Route_Handlers::dispatch_http( $agent_runs_route, $method, $body );
@@ -263,6 +276,17 @@ class Neo_Pulse_App_Api_Dispatcher {
 			return;
 		}
 
+		if ( 0 === strpos( $route, 'openrouter/' ) ) {
+			@set_time_limit( 300 );
+			Neo_Pulse_App_Openrouter_Chat_Completion_Route::dispatch_http( substr( $route, 11 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'proxy/' ) ) {
+			Neo_Pulse_App_Url_Text_Proxy::dispatch_http( substr( $route, 6 ), $method, $body );
+			return;
+		}
+
 		if ( $route === 'entity-maps-image/generate' && $method === 'POST' ) {
 			self::send_json( Neo_Pulse_App_Entity_Maps_Image::generate( $body ) );
 			return;
@@ -270,6 +294,21 @@ class Neo_Pulse_App_Api_Dispatcher {
 
 		if ( 0 === strpos( $route, 'local-dominator/' ) ) {
 			Neo_Pulse_App_Local_Dominator_Route_Handlers::dispatch_http( substr( $route, 16 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'chatgpt-audit/' ) ) {
+			Neo_Pulse_App_ChatGpt_Audit_Route_Handlers::dispatch_http( substr( $route, 14 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'browser-automation/' ) ) {
+			Neo_Pulse_App_Browser_Automation_Route_Handlers::dispatch_http( substr( $route, 19 ), $method, $body );
+			return;
+		}
+
+		if ( $route === 'residential-proxy/status' && $method === 'GET' ) {
+			Neo_Pulse_App_Browser_Automation_Route_Handlers::dispatch_proxy_status( $method );
 			return;
 		}
 

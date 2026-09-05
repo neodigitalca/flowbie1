@@ -117,6 +117,8 @@ export function buildOverviewBulkActionClusters(
   const wikipediaLinkHarnessRunning =
     batchBulkState?.runKind === "aiWikipediaLink" && optimizingBatch;
   const overviewHarnessRunning = batchBulkState?.runKind === "aiOverview" && optimizingBatch;
+  const answerHarnessRunning = batchBulkState?.runKind === "aiAnswer" && optimizingBatch;
+  const scenarioHarnessRunning = batchBulkState?.runKind === "aiScenario" && optimizingBatch;
   const inContentImageHarnessRunning =
     batchBulkState?.runKind === "aiInContentImage" && optimizingBatch;
 
@@ -254,11 +256,27 @@ export function buildOverviewBulkActionClusters(
       },
       {
         kind: "action",
+        id: "ai-answer",
+        label: "Answer",
+        icon: Wand2,
+        disabled: noRows(c) || answerHarnessRunning || ctx.bulkWorkspaceBusy,
+        onSelect: () => void c.handleAiAnswerAll(),
+      },
+      {
+        kind: "action",
         id: "ai-overview",
         label: "Overview",
         icon: Wand2,
         disabled: noRows(c) || overviewHarnessRunning || ctx.bulkWorkspaceBusy,
         onSelect: () => void c.handleAiOverviewAll(),
+      },
+      {
+        kind: "action",
+        id: "ai-scenario",
+        label: "Scenario",
+        icon: Wand2,
+        disabled: noRows(c) || scenarioHarnessRunning || ctx.bulkWorkspaceBusy,
+        onSelect: () => void c.handleAiScenarioAll(),
       },
       {
         kind: "action",

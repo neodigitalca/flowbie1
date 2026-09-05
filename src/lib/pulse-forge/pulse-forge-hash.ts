@@ -7,7 +7,7 @@ const VALID_SECTIONS = new Set<PulseForgeNavMode>(["forge", "recipes", "workflow
 export type PulseForgeRoute =
   | { section: "forge" }
   | { section: "recipes" }
-  | { section: "recipes"; view: "builder"; recipeKeyword: string }
+  | { section: "recipes"; view: "builder"; recipeKeyword: string; workflowId?: number; workflowNodeId?: string }
   | { section: "workflows" }
   | { section: "workflows"; view: "new" }
   | { section: "workflows"; view: "edit"; workflowId: number };
@@ -26,6 +26,16 @@ export function isPulseForgeHash(rawHash?: string): boolean {
 
 export function pulseForgeNavModeFromRoute(route: PulseForgeRoute): PulseForgeNavMode {
   return route.section;
+}
+
+/** Workflow canvas + right rail (Setup/RAG), not recipe builder. */
+export function isPulseForgeWorkflowRailOpen(route: PulseForgeRoute): boolean {
+  return route.section === "workflows" && "view" in route;
+}
+
+export function isPulseForgeWorkflowEditorOpen(route: PulseForgeRoute): boolean {
+  if (route.section === "recipes" && "view" in route && route.view === "builder") return true;
+  return isPulseForgeWorkflowRailOpen(route);
 }
 
 function normalizeLegacySection(sectionRaw: string): PulseForgeNavMode {
@@ -49,7 +59,15 @@ export function parsePulseForgeRouteFromHash(rawHash?: string): PulseForgeRoute 
 
   if (section === "recipes") {
     if (!parts[2]) return { section: "recipes" };
-    return { section: "recipes", view: "builder", recipeKeyword: decodeURIComponent(parts[2]) };
+    const recipeKeyword = decodeURIComponent(parts[2]);
+    if (parts[3] === "w" && parts[4] && parts[5]) {
+      const workflowId = Number(parts[4]);
+      const workflowNodeId = decodeURIComponent(parts[5]);
+      if (Number.isFinite(workflowId) && workflowId > 0 && workflowNodeId.trim() !== "") {
+        return { section: "recipes", view: "builder", recipeKeyword, workflowId, workflowNodeId };
+      }
+    }
+    return { section: "recipes", view: "builder", recipeKeyword };
   }
 
   if (section === "workflows") {
@@ -69,6 +87,9 @@ export function buildPulseForgeHash(route: PulseForgeRoute): string {
   if (route.section === "forge") return "pulse-forge/forge";
   if (route.section === "recipes") {
     if ("view" in route && route.view === "builder") {
+      if (route.workflowId && route.workflowNodeId) {
+        return `pulse-forge/recipes/${encodeURIComponent(route.recipeKeyword)}/w/${route.workflowId}/${encodeURIComponent(route.workflowNodeId)}`;
+      }
       return `pulse-forge/recipes/${encodeURIComponent(route.recipeKeyword)}`;
     }
     return "pulse-forge/recipes";

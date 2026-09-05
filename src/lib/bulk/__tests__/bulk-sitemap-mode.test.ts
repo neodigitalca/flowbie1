@@ -7,6 +7,8 @@ import {
   parseBulkRowSitemapCell,
   pickSitemapTypeFromRow,
   resolveRowSitemapType,
+  resolveSiteSitemapMode,
+  resolveUploadSitemapType,
   seedCustomRowSitemaps,
 } from "@/lib/bulk/bulk-sitemap-mode";
 
@@ -27,15 +29,41 @@ describe("pickSitemapTypeFromRow", () => {
   });
 });
 
-describe("resolveRowSitemapType", () => {
-  it("uses site mode when not custom", () => {
-    expect(resolveRowSitemapType("post", { sitemap_type: "entity" }, "entity")).toBe("post");
-    expect(resolveRowSitemapType("entity", { sitemap_type: "post" }, "post")).toBe("entity");
+describe("resolveUploadSitemapType", () => {
+  it("sends empty entity rows to posts even when Entity is selected", () => {
+    expect(resolveUploadSitemapType("entity", "")).toBe("post");
+    expect(resolveUploadSitemapType("entity", "  ")).toBe("post");
+    expect(resolveUploadSitemapType("entity", "N/A")).toBe("post");
+    expect(resolveUploadSitemapType("entity", undefined)).toBe("post");
   });
 
-  it("uses row value in custom mode with fallback", () => {
-    expect(resolveRowSitemapType("custom", { sitemap_type: "entity" }, "post")).toBe("entity");
+  it("keeps entity destination when the row has an entity", () => {
+    expect(resolveUploadSitemapType("entity", "Plum Coulee")).toBe("entity");
+    expect(resolveUploadSitemapType("post", "Plum Coulee")).toBe("post");
+  });
+});
+
+describe("resolveRowSitemapType", () => {
+  it("uses site mode when not custom and the row has an entity", () => {
+    expect(resolveRowSitemapType("post", { sitemap_type: "entity", entity: "Winkler" }, "entity")).toBe("post");
+    expect(resolveRowSitemapType("entity", { sitemap_type: "post", entity: "Winkler" }, "post")).toBe("entity");
+  });
+
+  it("never uses the entity sitemap when the entity cell is empty", () => {
+    expect(resolveRowSitemapType("entity", { sitemap_type: "entity" }, "entity")).toBe("post");
+    expect(resolveRowSitemapType("entity", { entity: "" }, "entity")).toBe("post");
+    expect(resolveRowSitemapType("custom", { sitemap_type: "entity" }, "entity")).toBe("post");
+  });
+
+  it("uses row value in custom mode with fallback when the row has an entity", () => {
+    expect(resolveRowSitemapType("custom", { sitemap_type: "entity", entity: "Winkler" }, "post")).toBe("entity");
     expect(resolveRowSitemapType("custom", {}, "post")).toBe("post");
+  });
+});
+
+describe("resolveSiteSitemapMode", () => {
+  it("defaults to posts when sitemap type is unset", () => {
+    expect(resolveSiteSitemapMode({}, new Set(["s1"]), true)).toBe("post");
   });
 });
 

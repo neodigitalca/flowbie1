@@ -16,6 +16,7 @@ android/local.properties
 .env.local
 .env.*.local
 .env.localdominator
+.env.residential-proxy
 .localdominator-session.json
 
 # WP Engine deploy config (contains credentials)
@@ -45,6 +46,26 @@ scripts/local-wp-staging.config.json
 
 # Report date range (AI agents read this; per-user local state)
 REPORT_DATE_RANGE.md
+
+# Local agent temp dumps, audits, and one-off probes (never commit)
+.cursor-tmp*
+.cursor-tmp-*
+.cursor-chrome-audit/
+.cursor-kwb-patch/
+.cursor-chrome-console-audit.json
+.chatgpt-audit-session.json
+.cursor/chrome-console-audit.json
+scripts/.cursor-tmp*
+test-output/
+vite.config.ts.timestamp-*.mjs
+marketing/**/*.zip
+
+# Deploy one-off dumps and tokens (scripts may be committed; dumps stay local)
+wordpress-plugins/.deploy/**/flush-token*.txt
+wordpress-plugins/.deploy/*.generated.php
+wordpress-plugins/.deploy/neodigital-toc-pull/
+wordpress-plugins/.deploy/neodigital-faq-head/
+wordpress-plugins/.deploy/neodigital-title-sync/
 
 # Windows reserved-name junk file sometimes created in repo root
 NUL

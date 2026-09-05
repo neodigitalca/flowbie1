@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   gscCompactPeriodLabelFromIsoRange,
+  gscIndexedPageUrlsFromCsv,
   gscIndexedUrlsCsvFromPages,
   gscPagesToCsv,
   gscQueriesMomComparisonCsv,
@@ -31,7 +32,7 @@ describe("gsc-reporting CSV builders", () => {
     ]);
     expect(csv).toContain("Page,Clicks,Impressions,CTR,Position");
     expect(csv).toContain("https://example.com/a");
-    expect(csv).toContain("10.00%");
+    expect(csv).toContain("10%");
   });
 
   it("gscIndexedUrlsCsvFromPages dedupes and sorts URLs", () => {
@@ -48,6 +49,7 @@ describe("gsc-reporting CSV builders", () => {
     expect(csv).toContain("URL");
     const lines = csv.split("\n").filter((l) => l.startsWith("http"));
     expect(lines).toEqual(["https://example.com/a", "https://example.com/b"]);
+    expect(gscIndexedPageUrlsFromCsv(csv)).toEqual(["https://example.com/a", "https://example.com/b"]);
   });
 
   it("gscSitemapsToCsv flattens web contents", () => {
@@ -92,7 +94,7 @@ describe("gsc-reporting CSV builders", () => {
       /Clicks \(Mar 2026\),Clicks \(Feb 2026\),Clicks Δ%,Impressions \(Mar 2026\),Impressions \(Feb 2026\),Impr Δ%,CTR \(Mar 2026\),CTR \(Feb 2026\),CTR Δ%,Position \(Mar 2026\),Position \(Feb 2026\),Pos Δ%$/,
     );
     expect(csv).toContain(
-      "a,100,80,+25.0%,1000,800,+25.0%,10.00%,10.00%,+0.0%,5.00,6.00,-16.7%",
+      'a,100,80,+25.0%,"1,000",800,+25.0%,10%,10%,+0.0%,5,6,-16.7%',
     );
   });
 });

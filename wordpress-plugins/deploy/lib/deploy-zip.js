@@ -45,7 +45,16 @@ async function connect(siteRow) {
     port: siteRow.port,
     username: siteRow.username,
     password: siteRow.password,
-    readyTimeout: 30000,
+    readyTimeout: 45000,
+    algorithms: {
+      serverHostKey: ["ssh-rsa", "rsa-sha2-512", "rsa-sha2-256", "ecdsa-sha2-nistp256", "ssh-ed25519"],
+      kex: [
+        "curve25519-sha256",
+        "ecdh-sha2-nistp256",
+        "diffie-hellman-group14-sha256",
+        "diffie-hellman-group-exchange-sha256",
+      ],
+    },
   });
   return sftp;
 }

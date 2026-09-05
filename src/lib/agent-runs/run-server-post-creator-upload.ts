@@ -1,27 +1,30 @@
 import type { WordPressSite } from "@/components/integrations/types";
+import { getStoredSites } from "@/components/integrations/storage";
 import type { AgentConfig } from "@/types/agent-config";
 import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
 import {
   ensureBulkGenerationWpInventory,
-  inventoryRowsToWordPressLinkables,
+  loadBlogPlayLinkablesForSite,
 } from "@/lib/bulk/bulk-generation-wp-inventory";
 import {
   completeServerPostCreatorRowUpload,
   fetchAgentRun,
   fetchAgentRunArtifacts,
+  fetchAgentRunDeliverableFiles,
   patchAgentRun,
   processAgentRun,
   uploadAgentRunArtifact,
 } from "@/lib/agent-runs-api";
 import { agentRunIsServerExecution } from "@/lib/agent-runs/agent-run-display";
 import { resolveAgentRunRecipeKey } from "@/lib/agent-runs/agent-run-navigation";
-import type { AgentRun, AgentRunArtifactRecord } from "@/lib/agent-runs-types";
+import type { AgentRun, AgentRunArtifactRecord, AgentRunStep } from "@/lib/agent-runs-types";
 import { uploadPostCreatorRowToWordPress } from "@/lib/post-creator/post-creator-wordpress-upload";
 import { postCreatorRowStepKey } from "@/lib/agent-runs/agent-run-step-keys";
 import {
   resolveInternalLinkPlaceholdersInMarkdown,
 } from "@/lib/content-generation/internal-link-placeholders";
 import { generateServerPostCreatorFeaturedImage } from "@/lib/agent-runs/server-post-creator-featured-image";
+import { resolveOpenRouterApiKeyForHarness } from "@/lib/openrouter-api-key-resolve";
 
 const uploadsInFlight = new Set<string>();
 
@@ -44,6 +47,13 @@ function parseRowIndexFromStepKey(stepKey?: string): number | null {
   return null;
 }
 
+function stepIsRowUploadDone(step: AgentRunStep, rowIndex: number): boolean {
+  if (step.status !== "done") return false;
+  const key = step.stepKey?.trim() ?? "";
+  if (parseRowIndexFromStepKey(key) !== rowIndex) return false;
+  return key.includes("upload");
+}
+
 export function serverPostCreatorRowIndexFromStepKey(stepKey?: string): number | null {
   return parseRowIndexFromStepKey(stepKey);
 }
@@ -55,18 +65,38 @@ function artifactsForRow(
   return artifacts.filter((a) => parseRowIndexFromStepKey(a.stepKey) === rowIndex);
 }
 
-function findArtifact(
+function findLatestArtifact(
   rowArtifacts: readonly AgentRunArtifactRecord[],
   pattern: RegExp,
 ): AgentRunArtifactRecord | undefined {
-  return rowArtifacts.find((a) => pattern.test(a.name ?? ""));
+  const matches = rowArtifacts.filter((a) => pattern.test(a.name ?? ""));
+  if (matches.length === 0) return undefined;
+  return [...matches].sort((a, b) => (b.name ?? "").localeCompare(a.name ?? ""))[0];
 }
 
-async function fetchArtifactText(artifact: AgentRunArtifactRecord): Promise<string> {
-  if (!artifact.url) return "";
-  const res = await fetch(artifact.url);
-  if (!res.ok) throw new Error(`Failed to fetch artifact ${artifact.name}`);
-  return res.text();
+function deliverableContentByName(
+  deliverables: ReadonlyArray<{ fileName: string; content: string }>,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const file of deliverables) {
+    const name = file.fileName.trim();
+    const content = file.content;
+    if (name && content) {
+      map.set(name, content);
+    }
+  }
+  return map;
+}
+
+function readArtifactText(
+  deliverablesByName: Map<string, string>,
+  artifact: AgentRunArtifactRecord,
+): string {
+  const name = artifact.name?.trim() ?? "";
+  if (!name) return "";
+  const content = deliverablesByName.get(name);
+  if (content !== undefined) return content;
+  throw new Error(`Artifact content missing for ${name}`);
 }
 
 function serverCheckpoint(run: AgentRun): Record<string, unknown> {
@@ -106,6 +136,70 @@ function serverRunAwaitingClientUpload(run: AgentRun): boolean {
   return phase === "awaiting_client_upload";
 }
 
+export function postCreatorRowUploadAlreadyComplete(run: AgentRun, rowIndex: number): boolean {
+  const uploads = run.result?.uploadedPosts ?? [];
+  for (const entry of uploads) {
+    if (typeof entry.rowIndex === "number" && entry.rowIndex === rowIndex) {
+      return true;
+    }
+  }
+  if (uploads[rowIndex]?.url) {
+    return true;
+  }
+  return (run.steps ?? []).some((step) => stepIsRowUploadDone(step, rowIndex));
+}
+
+export function resolvePostCreatorRunSiteId(run: AgentRun): string {
+  const payload = run.plan?.executionPayload as
+    | { wordpressSiteId?: string; siteId?: string }
+    | undefined;
+  return String(
+    run.plan?.clientRunContract?.siteId ??
+      run.context?.siteId ??
+      payload?.wordpressSiteId ??
+      payload?.siteId ??
+      "",
+  ).trim();
+}
+
+function resolvePostCreatorRunSite(
+  run: AgentRun,
+  sites: WordPressSite[],
+): WordPressSite | null {
+  const siteId = resolvePostCreatorRunSiteId(run);
+  if (!siteId) return null;
+  return sites.find((s) => s.id === siteId) ?? getStoredSites().find((s) => s.id === siteId) ?? null;
+}
+
+export async function advanceServerAgentRun(
+  teamId: number,
+  run: AgentRun,
+  sites: WordPressSite[],
+): Promise<AgentRun> {
+  if (!agentRunIsServerExecution(run)) {
+    throw new Error("Run is not server-executed.");
+  }
+  if (run.status !== "running" && run.status !== "queued") {
+    return run;
+  }
+
+  if (serverRunAwaitingClientUpload(run)) {
+    const uploaded = await maybeUploadServerPostCreatorRows(teamId, run, sites);
+    if (uploaded) return uploaded;
+    const refreshed = await fetchAgentRun(teamId, run.id);
+    if (!refreshed) {
+      throw new Error("Agent run missing after client upload tick.");
+    }
+    return refreshed;
+  }
+
+  const processed = await processAgentRun(teamId, run.id);
+  if (!processed.ok || !processed.run) {
+    throw new Error(processed.error ?? "Server agent run process failed.");
+  }
+  return processed.run;
+}
+
 export async function tickServerPostCreatorRun(
   teamId: number,
   run: AgentRun,
@@ -115,23 +209,11 @@ export async function tickServerPostCreatorRun(
   if (resolveAgentRunRecipeKey(run) !== "post_creator") return null;
   if (run.status !== "running" && run.status !== "queued") return null;
 
-  let latest = run;
-  if (!serverRunAwaitingClientUpload(run)) {
-    const result = await processAgentRun(teamId, run.id);
-    latest = result.ok && result.run ? result.run : run;
-    if (!result.ok) {
-      const detail = await fetchAgentRun(teamId, run.id);
-      if (detail) latest = detail;
-    }
+  try {
+    return await advanceServerAgentRun(teamId, run, sites);
+  } catch {
+    return null;
   }
-
-  const uploaded = await maybeUploadServerPostCreatorRows(teamId, latest, sites);
-  if (uploaded) {
-    const afterUpload = await processAgentRun(teamId, run.id);
-    return afterUpload.ok && afterUpload.run ? afterUpload.run : uploaded;
-  }
-
-  return latest !== run ? latest : null;
 }
 
 export async function maybeUploadServerPostCreatorRows(
@@ -142,41 +224,58 @@ export async function maybeUploadServerPostCreatorRows(
   if (!agentRunIsServerExecution(run)) return null;
   if (resolveAgentRunRecipeKey(run) !== "post_creator") return null;
   if (run.status !== "running" && run.status !== "queued") return null;
-
   if (!serverRunAwaitingClientUpload(run)) return null;
 
   const server = serverCheckpoint(run);
   const rowIndex = typeof server.rowIndex === "number" ? server.rowIndex : 0;
   const key = flightKey(run.id, rowIndex);
   if (uploadsInFlight.has(key)) return null;
-
-  const siteId = String(run.plan?.clientRunContract?.siteId ?? run.context?.siteId ?? "").trim();
-  const site = sites.find((s) => s.id === siteId);
-  if (!site) return null;
-
-  const artifacts = await fetchAgentRunArtifacts(teamId, run.id);
-  const rowArtifacts = artifactsForRow(artifacts, rowIndex);
-  const contentArtifact = findArtifact(rowArtifacts, /^content-.*\.md$/i);
-  const blueprintArtifact = findArtifact(rowArtifacts, /^blueprint-/i);
-  const wpArtifact = findArtifact(rowArtifacts, /^wordpress-post-/i);
-  if (!contentArtifact || !blueprintArtifact || wpArtifact) return null;
+  if (postCreatorRowUploadAlreadyComplete(run, rowIndex)) return null;
 
   uploadsInFlight.add(key);
-  try {
-    const inventory = await ensureBulkGenerationWpInventory(site);
-    const wordPressPosts = inventory?.rows?.length
-      ? inventoryRowsToWordPressLinkables(inventory.rows)
-      : [];
 
-    const markdownContent = await fetchArtifactText(contentArtifact);
-    const blueprintRaw = await fetchArtifactText(blueprintArtifact);
+  try {
+    const site = resolvePostCreatorRunSite(run, sites);
+    if (!site) return null;
+
+    const artifacts = await fetchAgentRunArtifacts(teamId, run.id);
+    const rowArtifacts = artifactsForRow(artifacts, rowIndex);
+
+    if (rowArtifacts.some((a) => /^wordpress-post-/i.test(a.name ?? ""))) {
+      return null;
+    }
+    if (rowArtifacts.some((a) => /^upload-claim-row-/i.test(a.name ?? ""))) {
+      return null;
+    }
+
+    const contentArtifact = findLatestArtifact(rowArtifacts, /^content-.*\.md$/i);
+    const blueprintArtifact = findLatestArtifact(rowArtifacts, /^blueprint-/i);
+    if (!contentArtifact || !blueprintArtifact) return null;
+
+    await uploadAgentRunArtifact(teamId, run.id, {
+      stepKey: postCreatorRowStepKey(rowIndex, "upload"),
+      name: `upload-claim-row-${rowIndex}.json`,
+      mime: "application/json",
+      content: JSON.stringify({ rowIndex, claimedAt: new Date().toISOString() }),
+    });
+
+    const deliverablesByName = deliverableContentByName(
+      await fetchAgentRunDeliverableFiles(teamId, run.id),
+    );
+
+    const inventory = await ensureBulkGenerationWpInventory(site);
+    const wordPressPosts = await loadBlogPlayLinkablesForSite(site, inventory.rows ?? []);
+
+    const markdownContent = readArtifactText(deliverablesByName, contentArtifact);
+    const blueprintRaw = readArtifactText(deliverablesByName, blueprintArtifact);
     const blueprint = JSON.parse(blueprintRaw) as { agents?: AgentConfig[]; purpose?: string };
     const blueprintAgents = Array.isArray(blueprint.agents) ? blueprint.agents : [];
 
-    const resolvedMarkdown = resolveInternalLinkPlaceholdersInMarkdown(markdownContent, {
+    const resolvedMarkdown = await resolveInternalLinkPlaceholdersInMarkdown(markdownContent, {
       siteId: site.id,
       siteUrl: site.siteUrl,
       wordPressPosts,
+      apiKey: await resolveOpenRouterApiKeyForHarness(),
     });
     if (resolvedMarkdown !== markdownContent) {
       await uploadAgentRunArtifact(teamId, run.id, {
@@ -189,11 +288,11 @@ export async function maybeUploadServerPostCreatorRows(
 
     const markdownForUpload = resolvedMarkdown;
 
-    const keywordArtifact = findArtifact(rowArtifacts, /^keyword-research-/i);
+    const keywordArtifact = findLatestArtifact(rowArtifacts, /^keyword-research-/i);
     let keywordResearch: Record<string, unknown> | null = null;
     if (keywordArtifact) {
       try {
-        keywordResearch = JSON.parse(await fetchArtifactText(keywordArtifact)) as Record<
+        keywordResearch = JSON.parse(readArtifactText(deliverablesByName, keywordArtifact)) as Record<
           string,
           unknown
         >;
@@ -205,7 +304,7 @@ export async function maybeUploadServerPostCreatorRows(
     const row = rowData(run, rowIndex);
     const featuredImageEnabled = run.plan?.clientRunContract?.featuredImage !== false;
     let featuredImageId: number | undefined;
-    const existingImageArtifact = findArtifact(rowArtifacts, /\.(png|jpe?g|webp)$/i);
+    const existingImageArtifact = findLatestArtifact(rowArtifacts, /\.(png|jpe?g|webp)$/i);
 
     if (featuredImageEnabled && !existingImageArtifact) {
       const title = row.title?.trim() || row.keyword?.trim() || "post";
@@ -238,15 +337,17 @@ export async function maybeUploadServerPostCreatorRows(
         content: featured.checklistJson,
       });
     } else if (featuredImageEnabled && existingImageArtifact) {
-      const checklistArtifact = findArtifact(rowArtifacts, /^featured-image-checklist-/i);
+      const checklistArtifact = findLatestArtifact(rowArtifacts, /^featured-image-checklist-/i);
       if (checklistArtifact) {
         try {
-          const doc = JSON.parse(await fetchArtifactText(checklistArtifact)) as { mediaId?: number };
+          const doc = JSON.parse(readArtifactText(deliverablesByName, checklistArtifact)) as {
+            mediaId?: number;
+          };
           if (typeof doc.mediaId === "number" && doc.mediaId > 0) {
             featuredImageId = doc.mediaId;
           }
         } catch {
-          // generate fresh on next attempt if checklist missing mediaId
+          // no image reuse without mediaId
         }
       }
     }
@@ -308,8 +409,7 @@ export async function warmInventoryForServerPostCreatorRun(
 ): Promise<void> {
   if (!agentRunIsServerExecution(run)) return;
   if (resolveAgentRunRecipeKey(run) !== "post_creator") return;
-  const siteId = String(run.plan?.clientRunContract?.siteId ?? run.context?.siteId ?? "").trim();
-  const site = sites.find((s) => s.id === siteId);
+  const site = resolvePostCreatorRunSite(run, sites);
   if (!site) return;
   await ensureBulkGenerationWpInventory(site);
 }

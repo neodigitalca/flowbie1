@@ -1,6 +1,7 @@
 import type { KeywordData } from "./keyword-types";
 import { isNonEnglishKeyword } from "./gsc-query-processor";
 import type { AIDrivenACFContext } from "./content-generation/ai-driven-acf-reader";
+import { ARTICLE_MAX_WORDS } from "@/lib/content-generation/article-length-policy";
 
 /**
  * Builds a prompt for comprehensive keyword analysis
@@ -243,6 +244,8 @@ Analyze this keyword and provide:
    - Primary keyword variations (plural, singular, different word orders)
    - Long-tail keyword variations (3-5 word phrases)
    - Semantic keywords (related terms with similar meaning)
+   - Each suggestion MUST be a lowercase Google search query (how people type), not a title-case article title
+   - Example: "hunter douglas vs alta" not "Hunter Douglas Vs Alta Window Fashions Price Comparison"
    ${isLocalOptimized ? '- **LOCAL KEYWORDS REQUIRED**: Include "near me", location-specific, and local business/service variations' : ''}
 
 2. **H2 Section Suggestions** (USE SERP DATA IF PROVIDED):
@@ -389,7 +392,7 @@ export const buildH2SuggestionPrompt = (
   intent: string,
   competitors?: undefined
 ): string => {
-  return `Based on the keyword "${keywordData.keyword}" with ${intent} intent, suggest 4-5 H2 section headings for a focused blog article (max 2000 words total).
+  return `Based on the keyword "${keywordData.keyword}" with ${intent} intent, suggest 4-5 H2 section headings for a focused blog article (max ${ARTICLE_MAX_WORDS} words total).
 
 Keyword Context:
 - Search Volume: ${keywordData.searchVolume?.toLocaleString() || "N/A"}
@@ -398,7 +401,7 @@ Keyword Context:
 
 Provide H2 headings that:
 1. Cover the main topic in fewer, tighter sections
-2. Address user search intent
+2. Address user search intent (prefer how to choose / vs / cost factors / process / when not worth it)
 3. Include semantic variations naturally
 4. Follow a logical content flow
 
@@ -438,7 +441,7 @@ ${keywordContext}${flowContextStr}
 ${userInput}
 
 --- Your Task ---
-Create a focused checklist (5-6 items) that will guide the generation of a blog blueprint template (max 2000 words total). Each checklist item should specify:
+Create a focused checklist (5-6 items) that will guide the generation of a blog blueprint template (max ${ARTICLE_MAX_WORDS} words total). Each checklist item should specify:
 - What section/agent should be included
 - What content each section should cover
 - How sections should be structured

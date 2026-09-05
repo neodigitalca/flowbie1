@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { getDefaultApiDocSlug } from "@/lib/api-docs";
+import { getDefaultApiDocSlug } from "@/lib/api-docs/api-docs-constants";
 
 /** Legacy /docs/* bookmarks → in-app #api/slug hash. */
 export function DocsHashRedirect() {

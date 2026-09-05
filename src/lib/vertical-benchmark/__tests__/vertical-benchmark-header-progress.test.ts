@@ -41,6 +41,22 @@ describe("buildVerticalBenchmarkMicroSnapshot", () => {
     expect(snap?.statusMessage).toBe("Fetching GSC top 10…");
   });
 
+  it("keeps last bulk progress after generate ends", () => {
+    const snap = buildVerticalBenchmarkMicroSnapshot({
+      exporting: false,
+      generatingBulkTemplate: false,
+      exportProgress: null,
+      bulkTemplateProgress: baseProgress({
+        phase: "inventory",
+        message: "Site inventory 2 / 7 complete",
+        percent: 20,
+        busy: false,
+      }),
+    });
+    expect(snap?.label).toBe("Bulk CSV");
+    expect(snap?.statusMessage).toBe("Site inventory 2 / 7 complete");
+  });
+
   it("prefers bulk CSV when both flags set", () => {
     const snap = buildVerticalBenchmarkMicroSnapshot({
       exporting: true,

@@ -6,7 +6,7 @@ import {
 } from "@/lib/notify-messages";
 import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { CloudUpload, Plus, Upload, Download, RotateCcw } from "lucide-react";
+import { Plus, Upload, Download, RotateCcw } from "lucide-react";
 import { notify } from "@/lib/app-notifications";
 import { useAuth } from "@/contexts/AuthContext";
 import { PROPERTIES_SHELL } from "./wordpress/wordpress-properties-surfaces";
@@ -77,7 +77,6 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
   } = useWordPressSites();
 
   const { user } = useAuth();
-  const [savingProperties, setSavingProperties] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -141,6 +140,7 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
   const sitesRef = useRef(sites);
   sitesRef.current = sites;
   const saveInFlightRef = useRef(false);
+  const sitesListFingerprintRef = useRef<string | null>(null);
 
   const { registerIntegrationSites } = useWordPressOptimization();
 
@@ -165,6 +165,9 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
   const [formEditorialCountsPeriodStartYmd, setFormEditorialCountsPeriodStartYmd] = useState("");
   const [formOptimizationPackage, setFormOptimizationPackage] = useState("basic");
   const [formBenchmarkCustomTag, setFormBenchmarkCustomTag] = useState("");
+  const [formServiceCity, setFormServiceCity] = useState("");
+  const [formServiceState, setFormServiceState] = useState("");
+  const [formServiceCountry, setFormServiceCountry] = useState("");
 
   // NAP + Link graph extraction state
   const [isExtractingNAPAndGraph, setIsExtractingNAPAndGraph] = useState<Record<string, boolean>>({});
@@ -227,6 +230,9 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
       setFormEditorialCountsPeriodStartYmd(formData.editorialCountsPeriodStartYmd ?? "");
       setFormOptimizationPackage(formData.optimizationPackage ?? "");
       setFormBenchmarkCustomTag(formData.benchmarkCustomTag ?? "");
+      setFormServiceCity(formData.serviceCity ?? "");
+      setFormServiceState(formData.serviceState ?? "");
+      setFormServiceCountry(formData.serviceCountry ?? "");
     },
     [handleEditSiteInit],
   );
@@ -302,6 +308,9 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
     setFormEditorialCountsPeriodStartYmd(formData.editorialCountsPeriodStartYmd ?? "");
     setFormOptimizationPackage(formData.optimizationPackage ?? "");
     setFormBenchmarkCustomTag(formData.benchmarkCustomTag ?? "");
+    setFormServiceCity("");
+    setFormServiceState("");
+    setFormServiceCountry("");
     setIsDialogOpen(true);
   }, [handleAddSiteInit]);
 
@@ -339,6 +348,9 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
       formEditorialCountsPeriodStartYmd,
       formOptimizationPackage,
       formBenchmarkCustomTag,
+      formServiceCity,
+      formServiceState,
+      formServiceCountry,
     );
     if (saved) {
       setIsDialogOpen(false);
@@ -371,6 +383,9 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
     formEditorialCountsPeriodStartYmd,
     formOptimizationPackage,
     formBenchmarkCustomTag,
+    formServiceCity,
+    formServiceState,
+    formServiceCountry,
     editingSite,
     profileSiteId,
     sites,
@@ -395,6 +410,9 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
       formEditorialCountsPeriodStartYmd={formEditorialCountsPeriodStartYmd}
       formOptimizationPackage={formOptimizationPackage}
       formBenchmarkCustomTag={formBenchmarkCustomTag}
+      formServiceCity={formServiceCity}
+      formServiceState={formServiceState}
+      formServiceCountry={formServiceCountry}
       onFormNameChange={setFormName}
       onFormSiteUrlChange={setFormSiteUrl}
       onFormProductionSiteUrlChange={setFormProductionSiteUrl}
@@ -406,6 +424,10 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
       onFormEditorialCountsPeriodStartYmdChange={setFormEditorialCountsPeriodStartYmd}
       onFormOptimizationPackageChange={setFormOptimizationPackage}
       onFormBenchmarkCustomTagChange={setFormBenchmarkCustomTag}
+      onFormServiceCityChange={setFormServiceCity}
+      onFormServiceStateChange={setFormServiceState}
+      onFormServiceCountryChange={setFormServiceCountry}
+      serviceAreaSite={profileSite}
       onPatchSite={handlePatchSite}
       patchSiteId={profileSite.id}
       semrushActionsDisabled={profileSite.enabled === false}
@@ -424,7 +446,6 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
         return false;
       }
       saveInFlightRef.current = true;
-      setSavingProperties(true);
       try {
         const sortedSites = sortWordPressSitesByName(sitesRef.current);
         const r = await saveWordPressProperties(sortedSites);
@@ -443,15 +464,30 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
         return true;
       } finally {
         saveInFlightRef.current = false;
-        setSavingProperties(false);
       }
     },
     [user],
   );
 
-  const handleSaveProperties = useCallback(() => {
-    void performSaveProperties({ silent: false });
-  }, [performSaveProperties]);
+  const sitesListFingerprint = useMemo(
+    () => sites.map((s) => s.id).sort().join("|"),
+    [sites],
+  );
+
+  useEffect(() => {
+    if (!user) return;
+    if (sitesListFingerprintRef.current === null) {
+      sitesListFingerprintRef.current = sitesListFingerprint;
+      return;
+    }
+    if (sitesListFingerprintRef.current === sitesListFingerprint) return;
+    sitesListFingerprintRef.current = sitesListFingerprint;
+
+    const t = window.setTimeout(() => {
+      void performSaveProperties({ silent: true });
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, [sitesListFingerprint, user, performSaveProperties]);
 
   useEffect(() => {
     if (!user) return;
@@ -544,19 +580,6 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
           type="button"
           variant="ghost"
           size="sm"
-          disabled={!user || savingProperties}
-          onClick={() => void handleSaveProperties()}
-          className={cn(BULK_HEADER_TOOL_BTN, "gap-1.5")}
-          title="Writes one row per property to workspace storage. Also runs automatically ~2.5s after quarter editorial counts finish loading or change."
-          aria-busy={savingProperties}
-        >
-          <CloudUpload className="h-4 w-4 shrink-0" aria-hidden />
-          {savingProperties ? "Saving…" : "Save properties"}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
           disabled={
             credentialedSiteCount === 0 ||
             isRefreshingAllQuarterCounts ||
@@ -630,9 +653,6 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
       </>
     ),
     [
-      user,
-      savingProperties,
-      handleSaveProperties,
       credentialedSiteCount,
       isRefreshingAllQuarterCounts,
       isRefreshingAllOptimizationCounts,
@@ -796,6 +816,9 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
         formEditorialCountsPeriodStartYmd={formEditorialCountsPeriodStartYmd}
         formOptimizationPackage={formOptimizationPackage}
         formBenchmarkCustomTag={formBenchmarkCustomTag}
+        formServiceCity={formServiceCity}
+        formServiceState={formServiceState}
+        formServiceCountry={formServiceCountry}
         onFormNameChange={setFormName}
         onFormSiteUrlChange={setFormSiteUrl}
         onFormProductionSiteUrlChange={setFormProductionSiteUrl}
@@ -807,6 +830,9 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
         onFormEditorialCountsPeriodStartYmdChange={setFormEditorialCountsPeriodStartYmd}
         onFormOptimizationPackageChange={setFormOptimizationPackage}
         onFormBenchmarkCustomTagChange={setFormBenchmarkCustomTag}
+        onFormServiceCityChange={setFormServiceCity}
+        onFormServiceStateChange={setFormServiceState}
+        onFormServiceCountryChange={setFormServiceCountry}
         onSaveSite={handleSaveSiteClick}
         onPatchSite={handlePatchSite}
       />

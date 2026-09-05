@@ -44,8 +44,11 @@ function mockFetchResponse(
     })),
   });
   return {
+    ok: true,
     json: async () => ({
-      choices: [{ message: { content: body } }],
+      ok: true,
+      content: body,
+      raw: { choices: [{ message: { content: body } }] },
     }),
   };
 }

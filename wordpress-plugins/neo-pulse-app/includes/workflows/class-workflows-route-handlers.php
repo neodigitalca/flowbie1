@@ -48,6 +48,27 @@ class Neo_Pulse_App_Workflows_Route_Handlers {
 			return;
 		}
 
+		if ( $sub === 'summarize' && $method === 'POST' ) {
+			$result = Neo_Pulse_App_Workflow_Summarize::summarize( $body );
+			if ( empty( $result['ok'] ) ) {
+				// Handled miss: keep HTTP 200 so Chrome does not paint a red 400 on tile-blurb failure.
+				Neo_Pulse_App_Api_Dispatcher::send_json(
+					array(
+						'ok'    => false,
+						'error' => (string) ( $result['error'] ?? 'Could not summarize workflow' ),
+					)
+				);
+				return;
+			}
+			Neo_Pulse_App_Api_Dispatcher::send_json(
+				array(
+					'ok'          => true,
+					'description' => (string) ( $result['description'] ?? '' ),
+				)
+			);
+			return;
+		}
+
 		if ( $sub === 'library' && $method === 'GET' ) {
 			Neo_Pulse_App_Api_Dispatcher::send_json(
 				array(
@@ -88,6 +109,23 @@ class Neo_Pulse_App_Workflows_Route_Handlers {
 			return;
 		}
 
+		if ( $sub === 'cron/tick' && $method === 'POST' ) {
+			$started = 0;
+			if ( class_exists( 'Neo_Pulse_App_Workflow_Trigger_Evaluator' ) ) {
+				$started = Neo_Pulse_App_Workflow_Trigger_Evaluator::evaluate_team( $team_id );
+			}
+			if ( class_exists( 'Neo_Pulse_App_Workflow_Server_Dispatch' ) ) {
+				Neo_Pulse_App_Workflow_Server_Dispatch::drain_pending( $team_id );
+			}
+			Neo_Pulse_App_Api_Dispatcher::send_json(
+				array(
+					'ok'      => true,
+					'started' => $started,
+				)
+			);
+			return;
+		}
+
 		if ( $sub === 'trigger-pending' && $method === 'GET' ) {
 			Neo_Pulse_App_Api_Dispatcher::send_json(
 				array(
@@ -102,6 +140,19 @@ class Neo_Pulse_App_Workflows_Route_Handlers {
 			$workflow_id = (int) ( $m[1] ?? 0 );
 			Neo_Pulse_App_Workflow_Trigger_Pending_Store::dequeue( $team_id, $workflow_id );
 			Neo_Pulse_App_Api_Dispatcher::send_json( array( 'ok' => true ) );
+			return;
+		}
+
+		if ( preg_match( '#^trigger-pending/(\d+)/claim$#', $sub, $m ) && $method === 'POST' ) {
+			$workflow_id = (int) ( $m[1] ?? 0 );
+			$run_id      = (int) ( $body['runId'] ?? $body['run_id'] ?? 0 );
+			$claimed     = Neo_Pulse_App_Workflow_Trigger_Pending_Store::claim( $team_id, $workflow_id, $run_id );
+			Neo_Pulse_App_Api_Dispatcher::send_json(
+				array(
+					'ok'      => true,
+					'claimed' => $claimed,
+				)
+			);
 			return;
 		}
 
@@ -206,6 +257,23 @@ class Neo_Pulse_App_Workflows_Route_Handlers {
 			}
 			$simulated = ! empty( $body['simulated'] );
 			$payload   = isset( $body['triggerPayload'] ) && is_array( $body['triggerPayload'] ) ? $body['triggerPayload'] : array();
+			if ( $simulated ) {
+				$run = Neo_Pulse_App_Workflows_Store::create_run(
+					$team_id,
+					$workflow_id,
+					array(
+						'triggerKind'    => 'trigger_manual',
+						'triggerPayload' => $payload,
+						'simulated'      => true,
+					)
+				);
+				if ( ! $run ) {
+					Neo_Pulse_App_Api_Dispatcher::send_json( array( 'ok' => false, 'error' => 'Could not start run' ), 500 );
+					return;
+				}
+				Neo_Pulse_App_Api_Dispatcher::send_json( array( 'ok' => true, 'run' => $run ) );
+				return;
+			}
 			$enqueued  = Neo_Pulse_App_Workflow_Trigger_Evaluator::enqueue(
 				$team_id,
 				$workflow_id,

@@ -7,7 +7,7 @@ import { notify } from "@/lib/app-notifications";
 import { NOTIFY_BLOG_IDEA_UPDATED, NOTIFY_TITLE_AND_KEYWORD_ARE_REQUIRED } from "@/lib/notify-messages";
 import type { CSVRow } from '@/lib/bulk-auto-generate';
 import {
-  modifierLinksFromJson,
+  importRowLinkEditorUrls,
   serializeModifierLinksJson,
 } from "@/lib/bulk/bulk-csv-parser";
 import { BlogIdeaModifierLinksEditor } from "@/components/keyword-research/bulk/BlogIdeaModifierLinksEditor";
@@ -123,7 +123,7 @@ export function EditBlogIdeaDialog({
             </div>
             <BlogIdeaModifierLinksEditor
               idPrefix="edit-blog-idea"
-              links={modifierLinksFromJson(editFormData.modifier_links_json)}
+              links={importRowLinkEditorUrls(editFormData)}
               onChange={(urls) =>
                 setEditFormData({
                   ...editFormData,

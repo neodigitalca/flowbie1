@@ -14,9 +14,15 @@ import {
   fillEntitySapRowKeywordsFromInventoryAndGsc,
   type EntitySapKeywordSources,
 } from "@/lib/local-analysis/entity-sap-row-keyword-fill";
+import { ensureBulkGenerationWpInventory } from "@/lib/bulk/bulk-generation-wp-inventory";
+import {
+  buildEntitySapOccupancy,
+  type EntitySapOccupancy,
+} from "@/lib/local-analysis/entity-sap-inventory-collision";
+import { applySapTargetSlugsFromKeywordEntity } from "@/lib/sap-slug-from-keyword-entity";
 import {
   ensureEntitySiteWarmCache,
-  gscQueriesFromWarmBundleForSapBudget,
+  gscAllQueriesFromWarmBundle,
 } from "@/lib/local-analysis/entity-site-warm-cache";
 import {
   buildEntityAdGroupSections,
@@ -64,6 +70,55 @@ export function countBlankEntityKeywordRows(rows: readonly CSVRow[]): number {
   return rows.filter((r) => r.entity?.trim() && !r.keyword?.trim()).length;
 }
 
+const DEFAULT_ENTITY_TITLE_TEMPLATE = "{keyword} Near {entity}";
+
+async function fillAndResolveEntitySapKeywords(args: {
+  site: WordPressSite;
+  apiKey: string;
+  model: string;
+  siteName: string;
+  siteUrl: string;
+  rows: CSVRow[];
+  seedKeywords: string[];
+  buckets: EntitySapKeywordSources["buckets"];
+  gscQueries: GscSiteQueryRow[];
+  gridLocations: string[];
+  entityTypeFocus?: readonly string[];
+  clientAudienceContextMarkdown?: string;
+  titleTemplate?: string;
+  onGroupComplete?: (rows: CSVRow[], doneGroups: number, totalGroups: number) => void;
+}): Promise<CSVRow[]> {
+  const bulkInventory = await ensureBulkGenerationWpInventory(args.site, undefined, { force: true });
+  const sapOccupancy = buildEntitySapOccupancy(bulkInventory.rows);
+  const reservedSlugsInRun = new Set<string>();
+  const titleTemplate = args.titleTemplate?.trim() || DEFAULT_ENTITY_TITLE_TEMPLATE;
+
+  const withKeywords = await fillEntitySapRowKeywordsFromInventoryAndGsc({
+    apiKey: args.apiKey,
+    model: args.model,
+    siteId: args.site.id,
+    siteName: args.siteName,
+    siteUrl: args.siteUrl,
+    rows: args.rows,
+    seedKeywords: args.seedKeywords,
+    buckets: args.buckets,
+    gscQueries: args.gscQueries,
+    gridLocations: args.gridLocations,
+    sapOccupancy,
+    reservedSlugsInRun,
+    titleTemplate,
+    ...(args.entityTypeFocus && args.entityTypeFocus.length > 0
+      ? { entityTypeFocus: [...args.entityTypeFocus] }
+      : {}),
+    ...(args.clientAudienceContextMarkdown?.trim()
+      ? { clientAudienceContextMarkdown: args.clientAudienceContextMarkdown.trim() }
+      : {}),
+    onGroupComplete: args.onGroupComplete,
+  });
+
+  return applySapTargetSlugsFromKeywordEntity(withKeywords);
+}
+
 export type FillEntitySlotKeywordsFromGscArgs = {
   site: WordPressSite;
   apiKey: string;
@@ -73,6 +128,7 @@ export type FillEntitySlotKeywordsFromGscArgs = {
   rows: CSVRow[];
   gridLocations: string[];
   entityTypeFocus?: readonly string[];
+  clientAudienceContextMarkdown?: string;
   onPhase?: (phase: string, completed?: number) => void;
   onRowsUpdate?: (rows: CSVRow[]) => void;
 };
@@ -105,7 +161,7 @@ export async function fillEntitySlotKeywordsFromGsc(
       "WordPress sitemap inventory is empty. Connect the site and ensure Pages, Posts, and SAP sitemaps return URLs.",
     );
   }
-  const gscQueries = gscQueriesFromWarmBundleForSapBudget(warm, args.rows.length);
+  const gscQueries = gscAllQueriesFromWarmBundle(warm);
   if (gscQueries.length === 0) {
     throw new Error(
       warm.error ||
@@ -123,10 +179,10 @@ export async function fillEntitySlotKeywordsFromGsc(
   const grouped = finalizeEntitySapRowsForAdGroups(args.rows.map((row) => ({ ...row })));
   args.onPhase?.("Assigning unique keywords from GSC", 0);
   const seedKeywords = new Array<string>(grouped.length).fill("");
-  const withKeywords = await fillEntitySapRowKeywordsFromInventoryAndGsc({
+  const withKeywords = await fillAndResolveEntitySapKeywords({
+    site: args.site,
     apiKey,
     model: args.model,
-    siteId: args.site.id,
     siteName: args.siteName,
     siteUrl,
     rows: grouped,
@@ -135,7 +191,10 @@ export async function fillEntitySlotKeywordsFromGsc(
     gscQueries: keywordSources.gscQueries as GscSiteQueryRow[],
     gridLocations: args.gridLocations,
     ...(args.entityTypeFocus && args.entityTypeFocus.length > 0
-      ? { entityTypeFocus: [...args.entityTypeFocus] }
+      ? { entityTypeFocus: args.entityTypeFocus }
+      : {}),
+    ...(args.clientAudienceContextMarkdown?.trim()
+      ? { clientAudienceContextMarkdown: args.clientAudienceContextMarkdown.trim() }
       : {}),
     onGroupComplete: (partialRows, doneGroups, totalGroups) => {
       args.onRowsUpdate?.(partialRows);
@@ -161,6 +220,7 @@ export type HydratePreloadedEntitySapRowsArgs = {
   apiKey: string;
   model: string;
   siteId?: string;
+  site?: WordPressSite;
   siteName: string;
   siteUrl: string;
   rows: CSVRow[];
@@ -168,8 +228,10 @@ export type HydratePreloadedEntitySapRowsArgs = {
   keywordSources: Pick<EntitySapKeywordSources, "buckets" | "gscQueries">;
   gridLocations: string[];
   entityTypeFocus?: readonly string[];
+  clientAudienceContextMarkdown?: string;
   clusterWikipedia?: GridClusterWikipedia[];
   skipKeywordFill?: boolean;
+  titleTemplate?: string;
   onPhase?: (phase: string, completed?: number) => void;
   onRowsUpdate?: (rows: CSVRow[]) => void;
 };
@@ -183,7 +245,11 @@ export async function hydratePreloadedEntitySapRows(
   }
 
   let withKeywords = groupedSapRows;
+  let sapOccupancy: EntitySapOccupancy | undefined;
   if (!args.skipKeywordFill) {
+    if (!args.site) {
+      throw new Error("WordPress site is required for inventory-aware keyword fill.");
+    }
     args.onPhase?.("Assigning unique keywords from GSC", 0);
     const titleTargets = preloadTargetsToTitleTargets(args.targets);
     const seedKeywords = new Array<string>(groupedSapRows.length).fill("");
@@ -194,10 +260,13 @@ export async function hydratePreloadedEntitySapRows(
       }
     }
 
-    withKeywords = await fillEntitySapRowKeywordsFromInventoryAndGsc({
+    const bulkInventory = await ensureBulkGenerationWpInventory(args.site, undefined, { force: true });
+    sapOccupancy = buildEntitySapOccupancy(bulkInventory.rows);
+
+    withKeywords = await fillAndResolveEntitySapKeywords({
+      site: args.site,
       apiKey: args.apiKey,
       model: args.model,
-      siteId: args.siteId,
       siteName: args.siteName,
       siteUrl: args.siteUrl,
       rows: groupedSapRows,
@@ -205,8 +274,12 @@ export async function hydratePreloadedEntitySapRows(
       buckets: args.keywordSources.buckets,
       gscQueries: args.keywordSources.gscQueries as GscSiteQueryRow[],
       gridLocations: args.gridLocations,
+      titleTemplate: args.titleTemplate,
       ...(args.entityTypeFocus && args.entityTypeFocus.length > 0
         ? { entityTypeFocus: args.entityTypeFocus }
+        : {}),
+      ...(args.clientAudienceContextMarkdown?.trim()
+        ? { clientAudienceContextMarkdown: args.clientAudienceContextMarkdown.trim() }
         : {}),
       onGroupComplete: (partialRows, doneGroups, totalGroups) => {
         args.onRowsUpdate?.(partialRows);
@@ -235,6 +308,9 @@ export async function hydratePreloadedEntitySapRows(
       siteName: args.siteName,
       gridLocations: args.gridLocations,
       rows: withKeywords,
+      titleTemplate: args.titleTemplate,
+      forceRewriteTitles: Boolean(args.titleTemplate?.trim()),
+      sapOccupancy,
       ...(args.entityTypeFocus && args.entityTypeFocus.length > 0
         ? { entityTypeFocus: args.entityTypeFocus }
         : {}),

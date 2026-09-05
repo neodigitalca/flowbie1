@@ -5,7 +5,9 @@ import {
   buildAllowedExternalPairs,
   buildRowExplicitExternalAllowlist,
   ensureAllLinkAnchorsInHtml,
+  EXTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK,
   externalUrlsFromPairs,
+  finalizeExternalLinksInHtml,
   parseExternalSemrushPairsFromAgents,
   resolveExternalLinkPlaceholdersInHtml,
   wrapBareExternalUrlsInHtml,
@@ -27,13 +29,14 @@ describe("buildRowExplicitExternalAllowlist", () => {
     expect(externalUrlsFromPairs([])).toEqual([]);
   });
 
-  it("merges modifier and imported draft links only", () => {
+  it("merges modifier, imported draft, and llm audit authority links", () => {
     const pairs = buildRowExplicitExternalAllowlist({
       modifierExternalLinks: [{ url: WFNC_PAIR.url, anchorText: WFNC_PAIR.anchor }],
       importedDraftLinks: [{ url: "https://example.com/x", anchorText: "Example resource" }],
+      llmAuditAuthorityLinks: [{ url: "https://www.edmonton.ca/", anchorText: "City of Edmonton" }],
     });
-    expect(pairs).toHaveLength(2);
-    expect(pairs.map((pair) => pair.url)).toContain(WFNC_PAIR.url);
+    expect(pairs).toHaveLength(3);
+    expect(pairs.map((pair) => pair.url)).toContain("https://www.edmonton.ca/");
   });
 });
 
@@ -44,6 +47,25 @@ describe("wrapBareExternalUrlsInHtml", () => {
     const out = wrapBareExternalUrlsInHtml(html, [WFNC_PAIR]);
     expect(out).toContain(`<a href="${WFNC_PAIR.url}">${WFNC_PAIR.anchor}</a>.`);
     expect(out).not.toMatch(/warranty details: https:\/\//);
+  });
+
+  it("wraps bare hostname and City. hostname patterns with keyword anchor", () => {
+    const pair = { url: "https://www.edmonton.ca/", anchor: "City of Edmonton" };
+    const html =
+      "<p>Shading from nearby trees in areas like Edmonton. edmonton.ca affects output.</p>";
+    const out = wrapBareExternalUrlsInHtml(html, [pair]);
+    expect(out).toContain('<a href="https://www.edmonton.ca/">Edmonton</a>');
+    expect(out).not.toMatch(/>\s*edmonton\.ca\s*</i);
+  });
+});
+
+describe("finalizeExternalLinksInHtml", () => {
+  it("fixes bare hostname leaks after placeholder resolve", () => {
+    const pair = { url: "https://www.edmonton.ca/", anchor: "City of Edmonton" };
+    const html = "<p>Permits in Edmonton. edmonton.ca require review.</p>";
+    const out = finalizeExternalLinksInHtml(html, [pair]);
+    expect(out).toContain('<a href="https://www.edmonton.ca/">Edmonton</a>');
+    expect(out).not.toMatch(/areas like Edmonton\. edmonton\.ca/i);
   });
 });
 
@@ -146,5 +168,13 @@ describe("buildAllowedExternalPairs", () => {
       [{ url: "https://example.com/x", anchorText: "Example resource" }],
     );
     expect(pairs).toEqual([{ url: "https://example.com/x", anchor: "Example resource" }]);
+  });
+});
+
+describe("EXTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK", () => {
+  it("requires mid-sentence weave like internal links", () => {
+    expect(EXTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK).toContain("weave like internal links");
+    expect(EXTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK).toContain("FORBIDDEN: bare hostname");
+    expect(EXTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK).toContain('"for more"');
   });
 });

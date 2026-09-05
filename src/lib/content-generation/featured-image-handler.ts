@@ -16,6 +16,7 @@ import {
   researchGoogleImageReferences,
 } from "@/lib/image-reference-research";
 import { generateSEOImageFilename } from "@/lib/image-filename-generator";
+import { dataUrlToBase64, fetchImageDataUrlViaApi } from "@/lib/proxy-fetch-text";
 import { buildImageChecklistSystemPrompt, buildImageChecklistUserPrompt, parseImageChecklist, type ImageChecklistItem } from "@/lib/image-checklist-builder";
 import { OptimizationFileManager } from "@/lib/optimization-file-manager";
 import type { WordPressSite } from "@/components/integrations/types";
@@ -132,12 +133,11 @@ export async function handleFeaturedImage(
       } catch (error) {
         console.error('[Optimize Content] Error generating/uploading Google Maps featured image:', error);
         if (!getMuteOptimizationToasts()) notify.error(notifyGoogleMapsFeaturedImageGenerationFa(error instanceof Error ? error.message : 'Unknown error'), { duration: 5000 });
-        throw error;
       }
     }
     
-    // Use AI-generated image if Google Maps wasn't used (only when featuredImageType is ai-generated)
-    if (!featuredImageId) {
+    // Use AI-generated image only when google-maps was not requested
+    if (!featuredImageId && !useGoogleMaps) {
       // Generate new featured image using AI
       const contentForImage = markdownContent || existingContent || '';
       try {
@@ -265,20 +265,8 @@ export async function handleFeaturedImage(
       if (imageResult.imageBase64) {
         imageBase64 = imageResult.imageBase64;
       } else if (imageResult.imageUrl) {
-        // Fetch image and convert to base64
-        const imageResponse = await fetch(imageResult.imageUrl);
-        const imageBlob = await imageResponse.blob();
-        const reader = new FileReader();
-        imageBase64 = await new Promise<string>((resolve, reject) => {
-          reader.onloadend = () => {
-            const base64String = reader.result as string;
-            // Remove data URL prefix if present
-            const base64 = base64String.includes(',') ? base64String.split(',')[1] : base64String;
-            resolve(base64);
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(imageBlob);
-        });
+        const dataUrl = await fetchImageDataUrlViaApi(imageResult.imageUrl);
+        imageBase64 = dataUrlToBase64(dataUrl);
       } else {
         throw new Error('No image data available');
       }

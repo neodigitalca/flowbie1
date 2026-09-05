@@ -9,7 +9,12 @@ import {
 } from "@/lib/task-execution-bucket";
 import { isTaskExecutionTargetAll } from "@/lib/task-execution-target";
 
-export type AgentRunRecipeBucketKey = "reporting" | "editorial" | "meta" | "research";
+export type AgentRunRecipeBucketKey =
+  | "reporting"
+  | "editorial"
+  | "meta"
+  | "research"
+  | "dfs_llm_article_audit";
 
 export type AgentRunBucketKey = TaskExecutionTargetBucket | AgentRunRecipeBucketKey | "other";
 
@@ -35,6 +40,7 @@ export const AGENT_RUN_BUCKET_ORDER: AgentRunBucketKey[] = [
   "all",
   "reporting",
   "research",
+  "dfs_llm_article_audit",
   "editorial",
   "meta",
   "other",
@@ -53,6 +59,7 @@ function bucketLabel(key: AgentRunBucketKey): string {
   if (key === "other") return "Other";
   if (key === "reporting") return "Reporting";
   if (key === "research") return "Research";
+  if (key === "dfs_llm_article_audit") return "Article audit";
   if (key === "editorial") return "Editorial";
   if (key === "meta") return "Meta";
   return TASK_EXECUTION_TARGET_BUCKET_LABELS[key];
@@ -62,8 +69,16 @@ function recipeBucketKey(run: AgentRun): AgentRunRecipeBucketKey | null {
   const recipe = resolveAgentRunRecipeKey(run);
   if (recipe === "gsc_reporting") return "reporting";
   if (recipe === "local_dominator_export") return "research";
+  if (recipe === "chatgpt_website_audit") return "research";
+  if (recipe === "browser_automation") return "research";
+  if (recipe === "dfs_llm_article_audit") return "dfs_llm_article_audit";
+  if (recipe === "content_gap_check") return "editorial";
   if (recipe === "post_creator") return "editorial";
+  if (recipe === "entity_page_creator" || recipe === "entity_generator" || recipe === "sap_generator") {
+    return "editorial";
+  }
   if (recipe === "overview_pages_meta_batch") return "meta";
+  if (recipe === "content_optimizer_bulk") return "meta";
   return null;
 }
 
@@ -95,8 +110,8 @@ export function agentRunClientId(run: AgentRun): string {
 }
 
 export function agentRunBucketKey(run: AgentRun): AgentRunBucketKey {
-  const recipeBucket = recipeBucketKey(run);
-  if (recipeBucket) return recipeBucket;
+  const recipe = resolveAgentRunRecipeKey(run);
+  if (recipe === "dfs_llm_article_audit") return "dfs_llm_article_audit";
 
   const contract = run.plan?.clientRunContract;
   const bucket = contract?.targetBucket?.trim();
@@ -108,6 +123,9 @@ export function agentRunBucketKey(run: AgentRun): AgentRunBucketKey {
 
   const sitemapBucket = resolveSitemapSourceBucket(run);
   if (sitemapBucket) return sitemapBucket;
+
+  const recipeBucket = recipeBucketKey(run);
+  if (recipeBucket) return recipeBucket;
 
   return "other";
 }
@@ -194,6 +212,32 @@ export function buildAgentRunGroups(
   return groups;
 }
 
+/** One drawer per enabled site, merged with run groups so empty clients still appear. */
+export function mergeEnabledSiteClientGroups(
+  enabledSiteIds: string[],
+  runGroups: AgentRunClientGroup[],
+  siteNameById: ReadonlyMap<string, string>,
+): AgentRunClientGroup[] {
+  const bySiteId = new Map(runGroups.map((group) => [group.siteId, group]));
+  const merged = enabledSiteIds.map((siteId) => {
+    const existing = bySiteId.get(siteId);
+    if (existing) return existing;
+    return {
+      siteId,
+      label: resolveAgentRunClientLabel(siteId, siteNameById),
+      buckets: [],
+      runCount: 0,
+      activeCount: 0,
+    };
+  });
+
+  const unassigned = bySiteId.get(AGENT_RUN_UNASSIGNED_CLIENT_ID);
+  if (unassigned) merged.push(unassigned);
+
+  merged.sort(compareClientGroups);
+  return merged;
+}
+
 export function agentRunClientFolderKey(siteId: string): string {
   return `client:${siteId}`;
 }
@@ -218,4 +262,41 @@ export function buildAutoExpandedAgentRunFolderKeys(
   }
 
   return keys;
+}
+
+export function buildAutoExpandedAgentRunClientKeys(
+  runs: AgentRun[],
+  selectedRunId: number | null,
+): Set<string> {
+  const keys = new Set<string>();
+  for (const run of runs) {
+    const shouldExpand = isActiveRun(run) || (selectedRunId != null && run.id === selectedRunId);
+    if (!shouldExpand) continue;
+    keys.add(agentRunClientFolderKey(agentRunClientId(run)));
+  }
+  return keys;
+}
+
+/** Per-client bucket tab: keep the user's pick; otherwise prefer active runs. */
+export function resolveAgentRunBucketTabSelections(
+  clientGroups: AgentRunClientGroup[],
+  currentSelections: Readonly<Record<string, AgentRunBucketKey>> = {},
+): Record<string, AgentRunBucketKey> {
+  const result: Record<string, AgentRunBucketKey> = {};
+
+  for (const client of clientGroups) {
+    const buckets = client.buckets;
+    const userPick = currentSelections[client.siteId];
+
+    if (userPick) {
+      result[client.siteId] = userPick;
+      continue;
+    }
+
+    const activeBucket = buckets.find((bucket) => bucket.activeCount > 0);
+    const bucketWithRuns = activeBucket ?? buckets.find((bucket) => bucket.runs.length > 0);
+    result[client.siteId] = bucketWithRuns?.key ?? buckets[0]?.key ?? "reporting";
+  }
+
+  return result;
 }

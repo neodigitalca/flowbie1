@@ -19,7 +19,10 @@
   var SIDEBAR_TRANSITION = cfg.sidebarTransition || 'slide';
   var SIDEBAR_LAYOUT = Array.isArray(cfg.sidebarLayout) ? cfg.sidebarLayout : ['chat'];
   var SHOW_SIDEBAR_HEADING = SIDEBAR_LAYOUT.indexOf('heading') !== -1 && cfg.sidebarHeading;
-  var SHOW_CONTACT_HUMAN = cfg.chekkitEnabled !== false && !!cfg.chekkitSubmitUrl;
+  function cfgFlagOn(value) {
+    return value === true || value === 1 || value === '1' || value === 'true';
+  }
+  var SHOW_CONTACT_HUMAN = cfgFlagOn(cfg.chekkitEnabled) && !!cfg.chekkitSubmitUrl;
   var CAN_COPY_LOG = cfg.canCopyLog === true;
   var CAN_BACKEND_MODE = cfg.canBackendMode === true;
   var SITE_INVENTORY_URL = cfg.siteInventoryUrl || '';
@@ -782,7 +785,7 @@
           phone: phoneInput.value.trim(),
           email: emailInput.value.trim(),
           message: messageInput.value.trim(),
-          neo-pulse_hp: honeypot.value,
+          'neo-pulse_hp': honeypot.value,
           source_url: window.location.href || ''
         })
       })
@@ -2018,7 +2021,7 @@
   }
 
   function ensureStandaloneLauncher() {
-    var existing = root.querySelector('.fai-sidebar-launcher, .fbs__icon-launcher');
+    var existing = root.querySelector('.fai-sidebar-launcher.fcw-launcher');
     if (existing) {
       return existing;
     }
@@ -2180,13 +2183,29 @@
     }
     var shell = getUnifiedShell();
     if (shell) {
-      removeStandaloneLauncher();
       bindShellCallbacks(shell);
       sidebarShell = shell;
       var mobileLauncher = document.getElementById('neo-pulse-chat-mobile-launcher');
       if (mobileLauncher && typeof shell.registerLauncher === 'function' && !mobileLauncher._fcwUnifiedBound) {
         mobileLauncher._fcwUnifiedBound = true;
-        shell.registerLauncher(mobileLauncher);
+        shell.registerLauncher(mobileLauncher, {
+          onBeforeOpen: function () {
+            if (window.NeoPulseAiSidebarUnify && typeof window.NeoPulseAiSidebarUnify.setActiveTab === 'function') {
+              window.NeoPulseAiSidebarUnify.setActiveTab('chat');
+            }
+          }
+        });
+      }
+      var chatLauncher = ensureStandaloneLauncher();
+      if (chatLauncher && chatLauncher !== mobileLauncher && typeof shell.registerLauncher === 'function' && !chatLauncher._fcwUnifiedBound) {
+        chatLauncher._fcwUnifiedBound = true;
+        shell.registerLauncher(chatLauncher, {
+          onBeforeOpen: function () {
+            if (window.NeoPulseAiSidebarUnify && typeof window.NeoPulseAiSidebarUnify.setActiveTab === 'function') {
+              window.NeoPulseAiSidebarUnify.setActiveTab('chat');
+            }
+          }
+        });
       }
       return;
     }
@@ -2198,7 +2217,7 @@
   }
 
   function applyChekkitLauncherChrome() {
-    if (!SHOW_CONTACT_HUMAN || cfg.chekkitTeaserEnabled === false) return;
+    if (!SHOW_CONTACT_HUMAN || !cfgFlagOn(cfg.chekkitTeaserEnabled)) return;
     var launcher = getStandaloneLauncher();
     if (!launcher) return;
     launcher.classList.add('fcw-launcher--chekkit');
@@ -2209,7 +2228,7 @@
   }
 
   function initChekkitTeaser() {
-    if (!SHOW_CONTACT_HUMAN || cfg.chekkitTeaserEnabled === false) return null;
+    if (!SHOW_CONTACT_HUMAN || !cfgFlagOn(cfg.chekkitTeaserEnabled)) return null;
     if (typeof Element === 'undefined' || !Element.prototype.attachShadow) return null;
 
     var SESSION_KEY = 'neo-pulse_chekkit_teaser_dismissed';

@@ -38,6 +38,13 @@ class Neo_Pulse_App_Wp_Post_Crud {
 		$slug = self::normalize_slug( $slug );
 		if ( $slug !== '' ) {
 			$post_data['slug'] = $slug;
+			$existing = self::find_post_by_slug( $normalized, $username, $app_password, $post_slug_ep, $slug );
+			if ( $existing ) {
+				$body['postId']            = (int) $existing['id'];
+				$body['postTypeEndpoint']  = $post_slug_ep;
+				$body['slug']              = $slug;
+				return self::update_post( $body );
+			}
 		}
 
 		if ( ! empty( $body['excerpt'] ) ) {
@@ -155,12 +162,22 @@ class Neo_Pulse_App_Wp_Post_Crud {
 		$status = (int) $resp['status'];
 		if ( $status === 200 && is_array( $resp['body'] ) ) {
 			$post = $resp['body'];
+			$link = (string) ( $post['link'] ?? '' );
+			$got  = isset( $post['slug'] ) ? self::normalize_slug( (string) $post['slug'] ) : '';
+			if ( $got === '' && $link !== '' ) {
+				$got = self::normalize_slug( Neo_Pulse_App_Wp_Url_Normalize::extract_slug( $link ) );
+			}
+			$wanted = isset( $body['slug'] ) ? self::normalize_slug( (string) $body['slug'] ) : '';
+			$clone  = self::numbered_slug_clone_error( $wanted, $got, $link, isset( $post['id'] ) ? (int) $post['id'] : $post_id );
+			if ( $clone ) {
+				return $clone;
+			}
 			return array(
 				200,
 				array(
 					'success' => true,
 					'postId'  => (int) ( $post['id'] ?? $post_id ),
-					'link'    => (string) ( $post['link'] ?? '' ),
+					'link'    => $link,
 					'status'  => (string) ( $post['status'] ?? '' ),
 					'date'    => (string) ( $post['date_gmt'] ?? $post['date'] ?? '' ),
 					'title'   => Neo_Pulse_App_Wp_Url_Normalize::rendered_text( $post['title'] ?? $title ),
@@ -253,6 +270,85 @@ class Neo_Pulse_App_Wp_Post_Crud {
 		}
 
 		return array( 200, array( 'success' => false, 'error' => 'WordPress API error: HTTP ' . $status ) );
+	}
+
+	/**
+	 * Existing post that already owns this slug, including trash.
+	 * WordPress still reserves trashed slugs and appends -2 on create.
+	 *
+	 * @param string $site_url Normalized site URL.
+	 * @param string $username User.
+	 * @param string $app_password App password.
+	 * @param string $endpoint REST collection.
+	 * @param string $slug Normalized slug.
+	 * @return array<string,mixed>|null
+	 */
+	private static function find_post_by_slug( $site_url, $username, $app_password, $endpoint, $slug ) {
+		$url  = $site_url . '/wp-json/wp/v2/' . rawurlencode( $endpoint )
+			. '?slug=' . rawurlencode( $slug )
+			. '&status=publish,future,draft,pending,private,trash'
+			. '&per_page=20'
+			. '&context=edit';
+		$resp = Neo_Pulse_App_Wp_Rest_Client::request(
+			'GET',
+			$url,
+			$username,
+			$app_password,
+			array( 'timeout' => 30 )
+		);
+		if ( $resp['is_wp_error'] || ! is_array( $resp['body'] ) ) {
+			return null;
+		}
+		foreach ( $resp['body'] as $post ) {
+			if ( ! is_array( $post ) ) {
+				continue;
+			}
+			$post_slug = isset( $post['slug'] ) ? self::normalize_slug( (string) $post['slug'] ) : '';
+			$id        = isset( $post['id'] ) ? (int) $post['id'] : 0;
+			if ( $id > 0 && $post_slug === $slug ) {
+				return $post;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * @param string $requested Requested slug.
+	 * @param string $got Returned slug.
+	 * @return bool
+	 */
+	private static function is_numbered_slug_clone( $requested, $got ) {
+		if ( $requested === '' || $got === '' || $got === $requested ) {
+			return false;
+		}
+		$prefix = $requested . '-';
+		if ( strpos( $got, $prefix ) !== 0 ) {
+			return false;
+		}
+		$suffix = substr( $got, strlen( $prefix ) );
+		return $suffix !== '' && ctype_digit( $suffix );
+	}
+
+	/**
+	 * @param string $requested Requested slug.
+	 * @param string $got Returned slug.
+	 * @param string $link Permalink.
+	 * @param int    $post_id Post ID.
+	 * @return array{0:int,1:array<string,mixed>}|null
+	 */
+	private static function numbered_slug_clone_error( $requested, $got, $link, $post_id ) {
+		if ( ! self::is_numbered_slug_clone( $requested, $got ) ) {
+			return null;
+		}
+		return array(
+			200,
+			array(
+				'success' => false,
+				'error'   => 'WordPress assigned numbered slug /' . $got . ' instead of /' . $requested . '. Restore or permanently delete the original (including trash), then Play again.',
+				'postId'  => $post_id,
+				'link'    => $link,
+			),
+		);
 	}
 
 	/**
@@ -351,12 +447,21 @@ class Neo_Pulse_App_Wp_Post_Crud {
 		$status = (int) $resp['status'];
 		if ( ( $status === 201 || $status === 200 ) && is_array( $resp['body'] ) ) {
 			$post = $resp['body'];
+			$link = (string) ( $post['link'] ?? '' );
+			$got  = isset( $post['slug'] ) ? self::normalize_slug( (string) $post['slug'] ) : '';
+			if ( $got === '' && $link !== '' ) {
+				$got = self::normalize_slug( Neo_Pulse_App_Wp_Url_Normalize::extract_slug( $link ) );
+			}
+			$clone = self::numbered_slug_clone_error( $slug, $got, $link, isset( $post['id'] ) ? (int) $post['id'] : 0 );
+			if ( $clone ) {
+				return $clone;
+			}
 			return array(
 				200,
 				array(
 					'success' => true,
 					'postId'  => (int) ( $post['id'] ?? 0 ),
-					'link'    => (string) ( $post['link'] ?? '' ),
+					'link'    => $link,
 					'status'  => (string) ( $post['status'] ?? '' ),
 					'date'    => (string) ( $post['date_gmt'] ?? $post['date'] ?? '' ),
 					'title'   => Neo_Pulse_App_Wp_Url_Normalize::rendered_text( $post['title'] ?? $title ),

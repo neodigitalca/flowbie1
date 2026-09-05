@@ -102,7 +102,7 @@ class Neo_Pulse_Wp_Chat_Agents {
 
 		$greeting_style = isset( $training['greeting_style'] ) ? (string) $training['greeting_style'] : 'friendly';
 		$tone_map       = array(
-			'professional' => 'Warm but polished, like a receptionist at a design showroom.',
+			'professional' => 'Warm but polished, like a receptionist at a professional office.',
 			'friendly'     => 'Casual and approachable, like a helpful teammate in chat.',
 			'casual'       => 'Relaxed and conversational, like texting a knowledgeable friend.',
 		);
@@ -145,7 +145,7 @@ Tone: {$tone}
 
 Use "deny" ONLY for illegal, harmful, violent, explicit, or bad-faith troll messages with no genuine question.
 
-Use "continue" for everything else. Be permissive: if the message could relate to {$site_name}, its products, services, blog, locations, operating systems, motorization, solar/PowerView accessories, repairs, booking, pricing, or any topic listed in SITE SUBJECTS, choose "continue".
+Use "continue" for everything else. Be permissive: questions about {$site_name}, this website's published pages and posts, the current page (including summarize-this-page requests), services, blog, locations, booking, pricing, or any topic listed in SITE SUBJECTS must "continue". Do not assume a product vertical. Do not deny a message because it is unrelated to a brand or industry.
 
 When the visitor clicks a suggestion chip or asks about a blog post title from this site, always "continue" even if the wording sounds broad or unrelated at first glance.
 
@@ -183,7 +183,7 @@ PROMPT;
 	 */
 	public static function build_denial_card( string $ack_text, string $user_message, string $site_name, array $site_index, array $history = array() ): array {
 		$title = trim( $ack_text ) !== '' ? trim( $ack_text ) : 'I cannot help with that.';
-		$body  = 'I can only help with questions about ' . $site_name . '. Ask me about our products or services.';
+		$body  = 'I cannot help with that request.';
 
 		$card = array(
 			'type'       => 'answer',
@@ -395,7 +395,7 @@ Rules:
 - Ground every fact in PAGE OUTLINE only.
 - "title" is a blog-style headline summarizing what the page covers. Do not echo command phrases like "summarize this page" or restate the visitor message verbatim.
 - "body" uses clear markdown: short intro, then bullet lists or ### sections where helpful. Mention specific services, products, and page topics from the outline.
-- Do not include markdown links in body. Use plain labels before a colon (e.g. `- Shades: description`). Links are added automatically from the page outline.
+- Do not include markdown links in body. Use plain labels before a colon (e.g. `- Service: description`). Links are added automatically from the page outline.
 - Do not wrap list labels in **bold**.
 - Do not open "body" with a secretary-style acknowledgment. Start with substantive content.
 - Do not include relatedTopics or links in JSON.
@@ -523,6 +523,7 @@ RULE;
 		if ( $custom_prompt !== '' ) {
 			$identity .= "\n\nCUSTOM INSTRUCTIONS FROM SITE OWNER:\n{$custom_prompt}";
 		}
+		$identity .= "\n\nSCOPE: Answer from this website's published pages, posts, and knowledge base. Do not assume a product vertical. Do not refuse a topic that appears in SITE CONTENT, CURRENT PAGE, LINKS AVAILABLE, or SITE SUBJECTS. Custom instructions may set name and tone; they must not blacklist topics that exist on this site.";
 
 		$page_rule = $page_block !== ''
 			? "- When CURRENT PAGE or VISITOR URL is provided, treat it as the page the visitor is viewing now.\n- When the user refers to \"this page\", \"this blog\", \"this product\", \"here\", or similar, use CURRENT PAGE as the primary source.\n- For general site questions, use CURRENT PAGE as supporting context unless it clearly does not apply.\n"
@@ -545,7 +546,7 @@ RULES:
 - Knowledge base entries marked HIGH PRIORITY should be used verbatim when they match the question.
 - Weave inline markdown links [natural phrase](url) from LINKS AVAILABLE into prose paragraphs naturally. Never add a bare URL or "click here" style link.
 - In bullet lists use plain `- Label: description` on one line. Do not add markdown links inside bullets; list labels are linked automatically after formatting.
-- In the opening paragraph, link every brand name on first mention (e.g. `[Hunter Douglas](url)` and `[ALTA Window Fashions](url)`).
+- In the opening paragraph, link every brand or product name from SITE CONTENT on first mention when LINKS AVAILABLE has a matching URL.
 - Match each link to the most specific slug-matched page for that product or topic, not a generic homepage or broad blog post.
 - When LINKS AVAILABLE has no page for a mention, still explain it but do not invent URLs.
 - Do not use bracket citation numbers such as [1] or [2] in the answer.
@@ -609,9 +610,9 @@ Return ONLY valid JSON:
 }
 
 Rules:
-- REQUIRED: For every `-`, `*`, or numbered list line, include a link entry for the list label. The label is the text before the first `:` when present (e.g. phrase "Duette® Cellular Shades" for `- Duette® Cellular Shades: description`).
+- REQUIRED: For every `-`, `*`, or numbered list line, include a link entry for the list label. The label is the text before the first `:` when present (e.g. phrase "Service name" for `- Service name: description`).
 - Link the first unlinked occurrence of each brand, product, service, or page topic when PAGES AVAILABLE has a match. If a later mention is already linked, still link the earlier plain-text mention.
-- Link the brand name in the first sentence under each `###` section heading when it appears plain (e.g. `[ALTA Window Fashions](url) provide premium designs...`). Never link text inside the `###` heading line itself.
+- Link the brand or topic name in the first sentence under each `###` section heading when it appears plain (e.g. `[Service name](url) help clients with...`). Never link text inside the `###` heading line itself.
 - On list lines, link only the label before the first `:`. Never link any text after the colon on the same line, even if it repeats the label word.
 - Skip only text already inside markdown [text](url).
 - Bullet labels always get linked even when they share a URL. The same URL may appear again in a different section paragraph.
@@ -695,7 +696,7 @@ Convert the following assistant answer into ONLY valid JSON matching this exact 
 }
 
 Rules:
-- "title" is a blog-style headline for the answer content (e.g. "Hunter Douglas Products We Carry", "Booking a Consultation"). Summarize what the response covers, not how the user asked.
+- "title" is a blog-style headline for the answer content (e.g. "Services we offer", "Booking a consultation"). Summarize what the response covers, not how the user asked.
 - "title" must not echo, paraphrase, or restate the user's question wording.
 - "title" must not repeat or copy the first sentence or opening phrase of "body".
 - "body" must contain the direct answer from the draft. Do not rewrite into a refusal or a links-only response.
@@ -851,7 +852,7 @@ FORMATTING (markdown body):
 - Every bullet must be one line: `- Label: description`. Never split the label and description across separate bullets.
 - Do not add markdown links inside bullet lists. Use plain `Label: description`; links are added to labels automatically.
 - Never use `**Label:**` list formatting. Use plain `Label:` only.
-- In the opening paragraph, link every brand name on first mention (e.g. Hunter Douglas and ALTA Window Fashions).
+- In the opening paragraph, link every brand or product name from SITE CONTENT on first mention when a matching URL is available.
 - Under each `###` section heading, link the brand name in the first sentence of that section. Never put links inside the `###` heading line.
 
 RULE;
@@ -939,7 +940,7 @@ RULE;
 		$system = <<<'PROMPT'
 Write ONE short blog-style headline (4-10 words) that summarizes what this assistant answer covers.
 The headline describes the response content, NOT the user's question.
-Use sentence case: capitalize only the first word and proper nouns or acronyms (e.g. Hunter Douglas, ALTA). Do not capitalize every word.
+Use sentence case: capitalize only the first word and proper nouns or acronyms from the site. Do not capitalize every word.
 Never use filler openers (Certainly, Sure, Of course, Absolutely, Happy to help).
 Never echo or paraphrase the user's question wording.
 Output ONLY the headline text with no quotes, markdown, or explanation.
@@ -1331,7 +1332,7 @@ Rules:
 - Each chip must map to a distinct page_id from SITE PAGES.
 - Do not suggest pages already covered in RECENT CONVERSATION or EXCLUDED URLS.
 - Do not repeat chip text from PRIOR CHIPS or re-ask what the user just asked.
-- For blog posts, ask about the article topic (e.g. "How does PowerView automation work?"), never generic hub labels like "Blog".
+- For blog posts, ask about the article topic (e.g. "What should I know before I get started?"), never generic hub labels like "Blog".
 - For service pages, suggest a logical adjacent service or FAQ (e.g. after repairs, suggest warranty or booking).
 - Return exactly 2 chips when at least 2 distinct eligible pages exist.
 PROMPT;

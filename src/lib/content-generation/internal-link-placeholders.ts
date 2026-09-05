@@ -1,13 +1,43 @@
 /**
- * Internal link placeholders: harness writes [[LINK:query|anchor]], resolver greps sitemap.
+ * Internal link placeholders: harness writes [[LINK:query|anchor]], resolver
+ * matches query intent to page-sitemap / blog URLs via OpenRouter.
  */
 
-import { searchSiteCache } from "@/lib/wordpress-site-cache";
-import { scorePostForLinkQuery } from "@/lib/content-generation/link-query-scoring";
-
-export { scorePostForLinkQuery } from "@/lib/content-generation/link-query-scoring";
+import { stitchHarnessSections } from "@/lib/bulk/bulk-harness-outline";
+import {
+  extractOverviewSectionHtml,
+  stripLeadingOverviewSection,
+} from "@/lib/overview/overview-blog-overview-prepend";
+import { getSiteCache } from "@/lib/wordpress-site-cache";
+import {
+  keepBlogPlayLinkTargets,
+} from "@/lib/bulk/bulk-generation-wp-inventory";
+import { INTERNAL_LINK_INTENT_ROUTING_RULE } from "@/lib/content-generation/internal-link-routing-rules";
+import {
+  matchInternalLinkQueriesToCatalog,
+  normalizeInternalLinkUrl,
+  type InternalLinkQuery,
+} from "@/lib/content-generation/internal-link-intent-match";
+import { matchInternalLinkQueriesFromPlan } from "@/lib/content-generation/link-targets-plan-resolve";
+import type { LinkTargetsPlan } from "@/lib/bulk/bulk-generation-wp-inventory";
+import {
+  INTERNAL_LINKS_PER_SECTION_RULE,
+  MIN_INTERNAL_LINKS_PER_BODY_H2,
+  TARGET_INTERNAL_LINKS_PER_BODY_H2,
+} from "@/lib/content-generation/link-anchor-text-case";
 
 export const INTERNAL_LINK_PLACEHOLDER_RE = /\[\[LINK:([^|\]]+)\|([^\]]+)\]\]/g;
+
+const MALFORMED_INTERNAL_LINK_RE = /\{\{LINK:([^|\}]+)\|([^\}]+)\}\}/g;
+const MALFORMED_EXTERNAL_LINK_RE = /\{\{EXTERNAL:([^|\}]+)\|([^\}]+)\}\}/g;
+
+/** Normalize common model typo {{LINK:...}} → [[LINK:...]] before resolve. */
+export function normalizeMalformedHarnessLinkPlaceholders(content: string): string {
+  if (!content?.trim()) return content;
+  return content
+    .replace(MALFORMED_INTERNAL_LINK_RE, "[[LINK:$1|$2]]")
+    .replace(MALFORMED_EXTERNAL_LINK_RE, "[[EXTERNAL:$1|$2]]");
+}
 
 export type LinkablePost = {
   id: number;
@@ -16,6 +46,8 @@ export type LinkablePost = {
   excerpt: string;
   link: string;
   date_gmt: string;
+  collection?: string;
+  postType?: string;
 };
 
 export type ResolveInternalLinkPlaceholdersOptions = {
@@ -23,6 +55,15 @@ export type ResolveInternalLinkPlaceholdersOptions = {
   siteUrl: string;
   currentPageUrl?: string;
   wordPressPosts?: LinkablePost[];
+  apiKey?: string;
+  model?: string;
+  signal?: AbortSignal;
+  /** When set, resolve [[LINK:query|anchor]] from plan queries only (no catalog re-match). */
+  linkTargetsPlan?: LinkTargetsPlan;
+  matchQueriesToUrls?: (
+    queries: InternalLinkQuery[],
+    catalog: LinkablePost[],
+  ) => Promise<Map<string, string>>;
 };
 
 function escapeHtml(text: string): string {
@@ -33,187 +74,227 @@ function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function normalizeUrlForMatch(url: string): string {
-  return url.trim().toLowerCase().replace(/\/+$/, "");
-}
-
 function isSelfLink(link: string, currentPageUrl: string | undefined, siteUrl: string): boolean {
   if (!currentPageUrl?.trim()) return false;
   try {
     const base = siteUrl.startsWith("http") ? siteUrl : `https://${siteUrl}`;
-    const normCurrent = normalizeUrlForMatch(
+    const normCurrent = normalizeInternalLinkUrl(
       new URL(currentPageUrl.startsWith("http") ? currentPageUrl : `${new URL(base).origin}${currentPageUrl}`, base).href,
     );
-    const normLink = normalizeUrlForMatch(
+    const normLink = normalizeInternalLinkUrl(
       new URL(link.startsWith("http") ? link : `${new URL(base).origin}${link.startsWith("/") ? link : `/${link}`}`, base).href,
     );
-    return normLink === normCurrent || normLink === `${normCurrent}/` || `${normLink}/` === normCurrent;
+    return normLink === normCurrent;
   } catch {
-    return normalizeUrlForMatch(link) === normalizeUrlForMatch(currentPageUrl);
+    return normalizeInternalLinkUrl(link) === normalizeInternalLinkUrl(currentPageUrl);
   }
 }
 
-function rankPostsForQuery(
-  query: string,
-  posts: LinkablePost[],
-): Array<{ post: LinkablePost; score: number }> {
-  return posts
-    .map((post) => ({ post, score: scorePostForLinkQuery(post, query) }))
-    .filter((r) => r.score > 0)
-    .sort((a, b) => b.score - a.score);
-}
-
-function buildCandidatesForQuery(
-  query: string,
-  opts: ResolveInternalLinkPlaceholdersOptions,
-): LinkablePost[] {
-  const candidates: LinkablePost[] = [];
-  const seen = new Set<string>();
-
-  const addUnique = (post: LinkablePost) => {
-    const norm = normalizeUrlForMatch(post.link);
-    if (!norm || seen.has(norm)) return;
-    seen.add(norm);
-    candidates.push(post);
-  };
-
+function catalogFromOpts(opts: ResolveInternalLinkPlaceholdersOptions): LinkablePost[] {
+  if (opts.wordPressPosts?.length) {
+    return keepBlogPlayLinkTargets(opts.wordPressPosts);
+  }
   if (opts.siteId) {
-    for (const post of searchSiteCache(opts.siteId, query, 10)) {
-      addUnique(post);
+    const cache = getSiteCache(opts.siteId);
+    return keepBlogPlayLinkTargets(cache?.posts ?? []);
+  }
+  return [];
+}
+
+function collectPlaceholderQueries(content: string): InternalLinkQuery[] {
+  const re = new RegExp(INTERNAL_LINK_PLACEHOLDER_RE.source, "g");
+  const queries: InternalLinkQuery[] = [];
+  let index = 0;
+  for (const match of content.matchAll(re)) {
+    const query = (match[1] ?? "").trim();
+    const anchor = (match[2] ?? "").trim();
+    if (!query || !anchor) continue;
+    index += 1;
+    queries.push({ id: String(index), query, anchor });
+  }
+  return queries;
+}
+
+function linkCatalogCollection(post: LinkablePost): string | undefined {
+  if (post.collection?.trim()) return post.collection.trim();
+  const postType = post.postType?.trim().toLowerCase();
+  if (postType === "post") return "posts";
+  if (postType === "page") return "pages";
+  return undefined;
+}
+
+function linkCatalogFromPosts(catalog: LinkablePost[]): Array<{
+  title: string;
+  url: string;
+  slug: string;
+  collection?: string;
+  postType?: string;
+  excerpt: string;
+}> {
+  return catalog.map((post) => ({
+    title: post.title,
+    url: post.link,
+    slug: post.slug,
+    collection: linkCatalogCollection(post),
+    postType: post.postType,
+    excerpt: post.excerpt,
+  }));
+}
+
+async function resolveQueryUrls(
+  queries: InternalLinkQuery[],
+  catalog: LinkablePost[],
+  opts: ResolveInternalLinkPlaceholdersOptions,
+): Promise<Map<string, string>> {
+  if (!queries.length) return new Map();
+  if (opts.linkTargetsPlan) {
+    return matchInternalLinkQueriesFromPlan(queries, opts.linkTargetsPlan);
+  }
+  if (!catalog.length) return new Map();
+  if (opts.matchQueriesToUrls) {
+    return opts.matchQueriesToUrls(queries, catalog);
+  }
+  return matchInternalLinkQueriesToCatalog({
+    queries,
+    catalog: linkCatalogFromPosts(catalog),
+    apiKey: opts.apiKey?.trim() ?? "",
+    model: opts.model,
+    siteId: opts.siteId,
+    signal: opts.signal,
+  });
+}
+
+function postByUrl(catalog: LinkablePost[], url: string): LinkablePost | null {
+  const key = normalizeInternalLinkUrl(url);
+  return catalog.find((post) => normalizeInternalLinkUrl(post.link) === key) ?? null;
+}
+
+function splitMarkdownOverviewSection(markdown: string): { overview: string; body: string } | null {
+  const lines = markdown.split("\n");
+  let overviewStart = -1;
+  let bodyStart = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!.trim();
+    if (/^##\s+overview\s*$/i.test(line)) {
+      overviewStart = i;
+      continue;
+    }
+    if (overviewStart >= 0 && /^##\s+/.test(line) && !/^##\s+overview\s*$/i.test(line)) {
+      bodyStart = i;
+      break;
     }
   }
-
-  if (opts.wordPressPosts?.length) {
-    for (const r of rankPostsForQuery(query, opts.wordPressPosts)) {
-      addUnique(r.post);
-    }
-  }
-
-  return candidates;
+  if (overviewStart < 0) return null;
+  const prefix = lines.slice(0, overviewStart).join("\n");
+  const overviewLines =
+    bodyStart >= 0 ? lines.slice(overviewStart, bodyStart) : lines.slice(overviewStart);
+  const overview = [prefix, overviewLines.join("\n")].filter(Boolean).join("\n");
+  const body = bodyStart >= 0 ? lines.slice(bodyStart).join("\n") : "";
+  return { overview, body };
 }
 
-function pickFirstUsablePost(
-  candidates: LinkablePost[],
-  opts: ResolveInternalLinkPlaceholdersOptions,
-  usedUrls: Set<string>,
-): LinkablePost | null {
-  for (const post of candidates) {
-    if (!post.link?.trim()) continue;
-    if (isSelfLink(post.link, opts.currentPageUrl, opts.siteUrl)) continue;
-    const norm = normalizeUrlForMatch(post.link);
-    if (usedUrls.has(norm)) continue;
-    return post;
-  }
-  return null;
-}
-
-function pickPostForSingleQuery(
-  query: string,
-  opts: ResolveInternalLinkPlaceholdersOptions,
-  usedUrls: Set<string>,
-): LinkablePost | null {
-  const fromCandidates = pickFirstUsablePost(buildCandidatesForQuery(query, opts), opts, usedUrls);
-  if (fromCandidates) return fromCandidates;
-
-  if (opts.wordPressPosts?.length) {
-    return pickFirstUsablePost(
-      rankPostsForQuery(query, opts.wordPressPosts).map((r) => r.post),
-      opts,
-      usedUrls,
-    );
-  }
-
-  return null;
-}
-
-function pickPostForQuery(
-  query: string,
-  anchor: string,
-  opts: ResolveInternalLinkPlaceholdersOptions,
-  usedUrls: Set<string>,
-): LinkablePost | null {
-  const queries = [query.trim()];
-  const anchorTrim = anchor.trim();
-  if (anchorTrim && anchorTrim !== query.trim()) {
-    queries.push(anchorTrim);
-  }
-
-  for (const q of queries) {
-    if (!q) continue;
-    const post = pickPostForSingleQuery(q, opts, usedUrls);
-    if (post) return post;
-  }
-
-  return null;
-}
-
-export function resolveInternalLinkPlaceholdersInHtml(
+async function resolvePreservingOverviewSection(
   html: string,
   opts: ResolveInternalLinkPlaceholdersOptions,
-): string {
-  if (!html?.trim()) return html;
+  resolveFragment: (fragment: string) => Promise<string>,
+): Promise<string> {
+  const overview = extractOverviewSectionHtml(html);
+  if (!overview?.trim()) return resolveFragment(html);
+  const body = stripLeadingOverviewSection(html);
+  return stitchHarnessSections([overview, await resolveFragment(body)]);
+}
 
-  const usedUrls = new Set<string>();
+async function resolveInternalLinkPlaceholdersCore(
+  content: string,
+  opts: ResolveInternalLinkPlaceholdersOptions,
+  formatLink: (post: LinkablePost, anchor: string) => string,
+): Promise<string> {
+  if (!content?.trim()) return content;
+
+  const normalized = normalizeMalformedHarnessLinkPlaceholders(content);
+  const queries = collectPlaceholderQueries(normalized);
+  if (!queries.length) return normalized;
+
+  const catalog = catalogFromOpts(opts).filter(
+    (post) => !isSelfLink(post.link, opts.currentPageUrl, opts.siteUrl),
+  );
+  const urlBySlot = await resolveQueryUrls(queries, catalog, opts);
   const re = new RegExp(INTERNAL_LINK_PLACEHOLDER_RE.source, "g");
+  let slot = 0;
 
-  return html.replace(re, (full, rawQuery: string, rawAnchor: string) => {
-    const query = rawQuery.trim();
+  return normalized.replace(re, (_full, _rawQuery: string, rawAnchor: string) => {
     const anchor = rawAnchor.trim();
-    if (!query || !anchor) {
-      console.warn("[Internal link placeholders] Empty query or anchor; stripping token:", full);
-      return escapeHtml(anchor || query);
-    }
+    if (!anchor) return _full;
 
-    const post = pickPostForQuery(query, anchor, opts, usedUrls);
-    if (!post?.link?.trim()) {
-      console.warn("[Internal link placeholders] No sitemap match for query:", query);
-      return escapeHtml(anchor);
-    }
+    slot += 1;
+    const url = urlBySlot.get(String(slot))?.trim();
+    if (!url) return anchor;
 
-    usedUrls.add(normalizeUrlForMatch(post.link));
-    return `<a href="${post.link.trim()}">${escapeHtml(anchor)}</a>`;
+    const post = postByUrl(catalog, url) ?? ({ link: url } as LinkablePost);
+    return formatLink(post, anchor);
   });
 }
 
-export function resolveInternalLinkPlaceholdersInMarkdown(
+function htmlLinkFormatter(post: LinkablePost, anchor: string): string {
+  return `<a href="${post.link.trim()}">${escapeHtml(anchor)}</a>`;
+}
+
+function markdownLinkFormatter(post: LinkablePost, anchor: string): string {
+  const safeAnchor = anchor.replace(/[\[\]()]/g, "");
+  return `[${safeAnchor}](${post.link.trim()})`;
+}
+
+export async function resolveInternalLinkPlaceholdersInHtml(
+  html: string,
+  opts: ResolveInternalLinkPlaceholdersOptions,
+): Promise<string> {
+  return resolvePreservingOverviewSection(html, opts, (fragment) =>
+    resolveInternalLinkPlaceholdersCore(fragment, opts, htmlLinkFormatter),
+  );
+}
+
+export async function resolveInternalLinkPlaceholdersInMarkdown(
   markdown: string,
   opts: ResolveInternalLinkPlaceholdersOptions,
-): string {
-  if (!markdown?.trim()) return markdown;
-
-  const usedUrls = new Set<string>();
-  const re = new RegExp(INTERNAL_LINK_PLACEHOLDER_RE.source, "g");
-
-  return markdown.replace(re, (full, rawQuery: string, rawAnchor: string) => {
-    const query = rawQuery.trim();
-    const anchor = rawAnchor.trim();
-    if (!query || !anchor) {
-      console.warn("[Internal link placeholders] Empty query or anchor; stripping token:", full);
-      return anchor || query;
-    }
-
-    const post = pickPostForQuery(query, anchor, opts, usedUrls);
-    if (!post?.link?.trim()) {
-      console.warn("[Internal link placeholders] No sitemap match for query:", query);
-      return anchor;
-    }
-
-    usedUrls.add(normalizeUrlForMatch(post.link));
-    const safeAnchor = anchor.replace(/[\[\]()]/g, "");
-    return `[${safeAnchor}](${post.link.trim()})`;
-  });
+): Promise<string> {
+  const split = splitMarkdownOverviewSection(markdown);
+  if (!split) {
+    return resolveInternalLinkPlaceholdersCore(markdown, opts, markdownLinkFormatter);
+  }
+  const resolvedBody = await resolveInternalLinkPlaceholdersCore(
+    split.body,
+    opts,
+    markdownLinkFormatter,
+  );
+  return stitchHarnessSections([split.overview, resolvedBody]);
 }
+
+/** Minimum [[LINK]] placeholders required in each body H2 section (Overview/FAQ excluded). */
+export {
+  MIN_INTERNAL_LINKS_PER_BODY_H2,
+  TARGET_INTERNAL_LINKS_PER_BODY_H2,
+  INTERNAL_LINKS_PER_SECTION_RULE,
+} from "@/lib/content-generation/link-anchor-text-case";
 
 /** Harness / checklist copy for placeholder-based internal links. */
 export const INTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK = `=== INTERNAL LINK PLACEHOLDERS (body sections — NOT Overview) ===
-Use 3–5 internal link slots per non-Overview section, woven into sentences.
-Format (exact): [[LINK:sitemap search phrase|anchor text]]
-- sitemap search phrase = topic words to match a site page (e.g. "employment expenses checklist", "BC PST registration")
-- anchor text = 2–4 word natural phrase (not the full page title)
-Examples: [[LINK:employment expenses checklist|employment expense rules]], [[LINK:Alberta productivity grant|productivity grant program]]
-FORBIDDEN in body sections: raw https:// internal URLs (Overview uses # anchors only; Semrush uses approved externals only).
-URLs are resolved from the site sitemap after generation — do not invent URLs.
+${INTERNAL_LINKS_PER_SECTION_RULE}
+Format (exact): [[LINK:intent phrase|anchor text]]
+When LINK TARGETS PLAN is in the system prompt: copy each intent phrase EXACTLY from the plan query string. Use the plan suggested anchor or a 2-4 word variant that shares title tokens in **sentence case** (brands capitalized only — e.g. rechargeable battery wands, PowerView motorization).
+${INTERNAL_LINK_INTENT_ROUTING_RULE}
+- intent phrase = exact query from LINK TARGETS PLAN when present; otherwise title words from PAGES or BLOG POSTS list
+- weave links into <p> prose and <td> table cells within the same H2 section
+- informational [[LINK]] slots may use BLOG POSTS title words in addition to PAGES
+- anchor text must share at least one distinctive word from the destination page title
+- place each token in the middle of a sentence that already has words before and after it
+FORBIDDEN: raw same-site <a href="https://..."> in body sections — emit [[LINK:plan-query|anchor]] only
+FORBIDDEN: linking bold copy (**markdown**, <strong>, <b>)
+FORBIDDEN: a lone linked page title tacked on at the end of a paragraph
+Format example: [[LINK:PAGES title words|short anchor]]
+FORBIDDEN: service-area pages, city landings, /service-area/ URLs.
+FORBIDDEN: {{LINK:...}}, {{EXTERNAL:...}}, {LINK:...}, template braces, or any syntax other than [[LINK:query|anchor]] and [[EXTERNAL:url|anchor]].
+FORBIDDEN in body sections: pasted https:// internal URLs (Overview uses # anchors only; Semrush uses approved externals only).
 === END INTERNAL LINK PLACEHOLDERS ===`;
 
 export const INTERNAL_LINK_PLACEHOLDER_FEATURE_SUFFIX =
-  "3–5 [[LINK:query|anchor]] placeholders per section (no raw https:// internal URLs)";
+  `${MIN_INTERNAL_LINKS_PER_BODY_H2}-${TARGET_INTERNAL_LINKS_PER_BODY_H2} [[LINK:query|anchor]] per body H2 (prose + table cells; no raw https:// internal URLs)`;

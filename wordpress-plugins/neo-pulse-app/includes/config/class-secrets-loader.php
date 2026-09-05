@@ -314,6 +314,18 @@ class Neo_Pulse_App_Secrets {
 		return 'neo-pulse@agentmail.to';
 	}
 
+	public static function agentmail_webhook_secret(): string {
+		$keys_path = Neo_Pulse_App_Data_Paths::root() . '/email-worker-keys.json';
+		$keys      = Neo_Pulse_App_Json_File_Store::read( $keys_path );
+		if ( is_array( $keys ) && ! empty( $keys['agentmailWebhookSecret'] ) ) {
+			return trim( (string) $keys['agentmailWebhookSecret'] );
+		}
+		if ( defined( 'NEO_PULSE_APP_AGENTMAIL_WEBHOOK_SECRET' ) && NEO_PULSE_APP_AGENTMAIL_WEBHOOK_SECRET !== '' ) {
+			return trim( (string) NEO_PULSE_APP_AGENTMAIL_WEBHOOK_SECRET );
+		}
+		return '';
+	}
+
 	/**
 	 * @return array{host:string,port:int,user:string,password:string,fromEmail:string,fromName:string,secure:string}
 	 */

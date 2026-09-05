@@ -43,13 +43,12 @@
       "title": "Meta optimize SAP pages on quick win slip",
       "status": "todo",
       "assignPulse": true,
+      "scheduleMode": "trigger",
       "executionKind": "content_optimizer_meta",
       "executionPayload": {
         "targetBucket": "sap",
         "updateMode": "update"
       },
-      "scheduleMode": "trigger",
-      "recurrenceRule": "none",
       "triggerConfig": {
         "sources": [
           "gsc"
@@ -71,8 +70,6 @@
       }
     }
   ],
-  "isAutomation": true,
-  "kind": "template",
   "triggerBlock": {
     "keyword": "gsc-quick-win-slipped",
     "kind": "gsc",
@@ -106,5 +103,7 @@
       "updateMode": "update"
     },
     "title": "Meta optimize SAP pages on quick win slip"
-  }
+  },
+  "isAutomation": true,
+  "kind": "template"
 }

@@ -1,0 +1,31 @@
+{
+  "keyword": "sap-generator-monthly",
+  "name": "SAP generator",
+  "executionKind": "sap_generator",
+  "description": "Hydrate entity CSV rows with GSC keywords and schedule SAP pages to WordPress.",
+  "filters": {
+    "categories": ["local-seo"],
+    "buckets": ["sap"],
+    "verticals": ["local-seo", "general"]
+  },
+  "defaults": {
+    "executionPayload": {
+      "entityAdGroupCount": 3,
+      "entityAdsPerGroup": 5,
+      "entityPageCount": 15,
+      "postCount": 15,
+      "entityCsvInputSource": "upload",
+      "sitemapType": "entity",
+      "featuredImage": false,
+      "postDestination": "wordpress",
+      "targetBucket": "sap",
+      "scheduleFrequency": "custom",
+      "scheduleCustomInterval": 15,
+      "scheduleTimesPerMonth": 15,
+      "scheduleStartDay": 1,
+      "scheduleStartTime": "09:00",
+      "scheduleStaggerOptimized": true,
+      "saveLocalArchive": true
+    }
+  }
+}

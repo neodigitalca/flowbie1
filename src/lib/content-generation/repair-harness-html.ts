@@ -1,4 +1,8 @@
 import { stripHtmlTagsForSentenceCheck } from "@/lib/bulk/harness-section-complete-sentences";
+import {
+  repairHarnessLinkLeaks,
+  type RepairHarnessLinkLeaksOptions,
+} from "@/lib/content-generation/harness-link-leak-repair";
 
 function plainParagraphText(innerHtml: string): string {
   return stripHtmlTagsForSentenceCheck(innerHtml).replace(/\s+/g, " ").trim();
@@ -81,13 +85,27 @@ export function repairUnclosedTrailingParagraph(html: string): string {
   return s.slice(0, lastOpenP).trimEnd();
 }
 
-export function repairHarnessHtmlForUpload(html: string): string {
+/** Unwrap nested <a><a>...</a></a> (duplicate wiki / scroll wraps). */
+export function unwrapNestedAnchorTags(html: string): string {
+  return html.replace(
+    /<a\b([^>]*)>\s*<a\b([^>]*)>([\s\S]*?)<\/a>\s*<\/a>/gi,
+    "<a$2>$3</a>",
+  );
+}
+
+export function repairHarnessHtmlForUpload(
+  html: string,
+  linkLeakOpts?: RepairHarnessLinkLeaksOptions,
+): string {
   if (!html?.trim()) return html;
   let s = html;
+  s = repairHarnessLinkLeaks(s, linkLeakOpts);
+  s = unwrapNestedAnchorTags(s);
   s = repairMalformedImgTags(s);
   s = stripOrphanBracketArtifacts(s);
   s = removeBrPrefixedDuplicateParagraphs(s);
   s = removeDuplicateParagraphBlocks(s);
   s = repairUnclosedTrailingParagraph(s);
+  s = repairHarnessLinkLeaks(s, linkLeakOpts);
   return s;
 }

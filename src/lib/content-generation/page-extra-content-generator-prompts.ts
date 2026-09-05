@@ -3,23 +3,23 @@
  */
 
 import { resolveWritingKeyword } from "@/lib/prompt-builders/keyword-canonical-punctuation";
+import { INTERNAL_LINK_INTENT_ROUTING_RULE } from "@/lib/content-generation/internal-link-routing-rules";
 
 export const EXTRA_TEXT_HARNESS_TOTAL_SECTIONS = 2;
 
 export const EXTRA_TEXT_LINK_RULES = `LINK RULES (critical):
 - NO external links. Never use third-party domains (Wikipedia, .gov, manufacturers, competitors, dictionaries, legal sites, etc.).
-- Internal links ONLY: every <a href> must copy an exact URL from the AVAILABLE INTERNAL LINKS block in the user message.
-- Never invent, guess, or construct URLs. If a URL is not listed there, do not link it.
-- If AVAILABLE INTERNAL LINKS says none, do not include any <a> tags.`;
+- Same-site internals: [[LINK:query|anchor]] only. Never raw <a href>, [text](url), or pasted hrefs.
+- ${INTERNAL_LINK_INTENT_ROUTING_RULE}
+- If INTERNAL LINK TARGETS is empty, do not emit [[LINK]] or <a> tags.`;
 
 function extraTextLinkSectionRules(hasLinkInventory: boolean): string {
   if (!hasLinkInventory) {
     return `THIS SECTION ONLY (links):
-- Do NOT include any <a> tags (no internal link inventory was loaded)`;
+- Do NOT emit [[LINK]] or <a> tags (no internal link inventory was loaded)`;
   }
   return `THIS SECTION ONLY (links):
-- Include 2-5 internal links as <a href="exact URL">contextual anchor</a>
-- Copy href values character-for-character from AVAILABLE INTERNAL LINKS only
+- Include 2-5 [[LINK:query|anchor]] slots from INTERNAL LINK TARGETS titles
 - ${EXTRA_TEXT_LINK_RULES}`;
 }
 
@@ -140,7 +140,7 @@ export function buildExtraTextH3UserPrompt(
   hasLinkInventory: boolean,
 ): string {
   const linkLine = hasLinkInventory
-    ? "then body copy with 2-5 internal links from AVAILABLE INTERNAL LINKS only (no external URLs)"
+    ? "then body copy with 2-5 [[LINK:query|anchor]] slots from INTERNAL LINK TARGETS titles only (no external URLs)"
     : "then body copy with paragraphs and optional list or table (no <a> tags)";
   const writing = resolveWritingKeyword(ctx.primaryKeyword.trim());
   return `Write section 2 now: one <h3> that includes "${writing}" exactly, ${linkLine}.
@@ -167,7 +167,7 @@ ${sharedContextBlock(ctx)}
 
 Must start with <h2> and include exactly one <h3>. HTML only.${
     hasLinkInventory
-      ? " Use internal links only from AVAILABLE INTERNAL LINKS."
+      ? " Use [[LINK:query|anchor]] from INTERNAL LINK TARGETS titles only."
       : " Do not include any <a> tags."
   }`;
 }

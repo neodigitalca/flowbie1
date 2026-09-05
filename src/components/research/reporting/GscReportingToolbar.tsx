@@ -13,6 +13,10 @@ export type GscReportingToolbarProps = {
   onGscFetchPresetChange: (preset: GscReportingComparePresetId) => void;
   compareRangeDraft: GscCompareRanges;
   onCompareRangeDraftChange: (updater: (prev: GscCompareRanges) => GscCompareRanges) => void;
+  trailingMonthCount: number | null;
+  trailingMonthCountDraft: string;
+  onTrailingMonthCountDraftChange: (value: string) => void;
+  onApplyTrailingMonths: (monthCount: number) => void;
   todayYmdMax: string;
   hasReport: boolean;
   onGenerate: () => void;
@@ -28,6 +32,10 @@ export function GscReportingToolbar({
   onGscFetchPresetChange,
   compareRangeDraft,
   onCompareRangeDraftChange,
+  trailingMonthCount,
+  trailingMonthCountDraft,
+  onTrailingMonthCountDraftChange,
+  onApplyTrailingMonths,
   todayYmdMax,
   hasReport,
   onGenerate,
@@ -45,6 +53,10 @@ export function GscReportingToolbar({
           onGscFetchPresetChange={onGscFetchPresetChange}
           compareRangeDraft={compareRangeDraft}
           onCompareRangeDraftChange={onCompareRangeDraftChange}
+          trailingMonthCount={trailingMonthCount}
+          trailingMonthCountDraft={trailingMonthCountDraft}
+          onTrailingMonthCountDraftChange={onTrailingMonthCountDraftChange}
+          onApplyTrailingMonths={onApplyTrailingMonths}
           todayYmdMax={todayYmdMax}
         />
       }

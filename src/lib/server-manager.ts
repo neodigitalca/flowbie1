@@ -137,22 +137,10 @@ export async function stopServer(): Promise<{
   success: boolean;
   message: string;
 }> {
-try {
-    const response = await fetch(`${SERVER_MANAGER_URL}/stop`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      signal: AbortSignal.timeout(5000)
-    });
-const data = await response.json();
-return data;
-  } catch (error) {
-return {
-      success: false,
-      message: error instanceof Error ? error.message : 'Unknown error stopping server'
-    };
-  }
+  return {
+    success: true,
+    message: "Keyword research uses /api/mcp DataForSEO. No local keyword server to stop.",
+  };
 }
 
 /**

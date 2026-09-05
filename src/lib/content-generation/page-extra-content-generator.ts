@@ -13,6 +13,7 @@ import {
   researchGoogleImageReferences,
 } from "@/lib/image-reference-research";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
+import { dataUrlToBase64, fetchImageDataUrlViaApi } from "@/lib/proxy-fetch-text";
 import { DEFAULT_IMAGE_MODEL } from "@/lib/image-model-defaults";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { BulkHarnessSectionPayload } from "@/lib/bulk-auto-generate";
@@ -37,6 +38,7 @@ import {
   EXTRA_TEXT_HARNESS_TOTAL_SECTIONS,
   type ExtraTextPromptContext,
 } from "@/lib/content-generation/page-extra-content-generator-prompts";
+import { formatBlogPlayLinkTargetsPrompt } from "@/lib/bulk/bulk-generation-wp-inventory";
 
 const EXTRA_TEXT_KEYWORD_HEADING_RETRY = `REJECTED: <h2> or <h3> did not include the focus keyword phrase exactly.
 Both headings must contain the full focus keyword (verbatim). Stay on the page topic from PAGE SOURCE.`;
@@ -63,7 +65,16 @@ export interface GenerateExtraTextOptions {
   pageUrl?: string;
   pageTitle?: string;
   wordPressRAGContext?: string;
-  wordPressPosts?: Array<{ id: number; slug: string; title: string; excerpt: string; link: string; date_gmt: string }>;
+  wordPressPosts?: Array<{
+    id: number;
+    slug: string;
+    title: string;
+    excerpt: string;
+    link: string;
+    date_gmt: string;
+    collection?: string;
+    postType?: string;
+  }>;
   site: WordPressSite;
   apiKey: string;
   siteId?: string;
@@ -130,8 +141,8 @@ export async function generateExtraTextForPage(
 
     const hasLinkInventory = wordPressPosts.length > 0;
     const wordPressPostsContext = hasLinkInventory
-      ? `\n\n=== AVAILABLE INTERNAL LINKS (ONLY these hrefs allowed — copy exact URL in <a>) ===\n${wordPressPosts.map((p) => `<a href="${p.link}">${p.title}</a>`).join("\n")}\n=== END INTERNAL LINKS ===\n`
-      : `\n\n=== AVAILABLE INTERNAL LINKS ===\n(none loaded — do not include any <a> tags)\n=== END INTERNAL LINKS ===\n`;
+      ? formatBlogPlayLinkTargetsPrompt(wordPressPosts)
+      : `\n=== INTERNAL LINK TARGETS ===\n(none loaded — do not emit [[LINK]] or <a> tags)\n=== END INTERNAL LINK TARGETS ===\n`;
 
     const ragContext = wordPressRAGContext
       ? wordPressRAGContext.substring(0, 5000).trim()
@@ -377,12 +388,8 @@ export async function generateExtraImageForPage(
         imageBase64 = imageResult.imageBase64;
       }
     } else if (imageResult.imageUrl) {
-      const response = await fetch(imageResult.imageUrl);
-      const blob = await response.blob();
-      const arrayBuffer = await blob.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
-      const binary = bytes.reduce((acc, byte) => acc + String.fromCharCode(byte), '');
-      imageBase64 = btoa(binary);
+      const dataUrl = await fetchImageDataUrlViaApi(imageResult.imageUrl);
+      imageBase64 = dataUrlToBase64(dataUrl);
     } else {
       throw new Error('No image data available');
     }

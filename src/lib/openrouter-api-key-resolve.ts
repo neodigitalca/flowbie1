@@ -1,5 +1,5 @@
-import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
-import { loadApiKey } from "@/lib/api";
+import { backendApiUrl } from "@/lib/wordpress-api/connection";
+import { loadApiKey, saveApiKey } from "@/lib/api";
 
 type ResolvedOpenRouterKeyResponse = {
   ok?: boolean;
@@ -12,13 +12,16 @@ export async function resolveOpenRouterApiKeyForHarness(): Promise<string> {
   if (clientKey) return clientKey;
 
   try {
-    const base = BACKEND_API_BASE.replace(/\/+$/, "");
-    const url = base ? `${base}/api/integrations/resolved-openrouter-key` : "/api/integrations/resolved-openrouter-key";
-    const res = await fetch(url, { credentials: "include" });
+    const res = await fetch(backendApiUrl("/integrations/resolved-openrouter-key"), {
+      credentials: "include",
+    });
     if (res.ok) {
       const data = (await res.json()) as ResolvedOpenRouterKeyResponse;
       const serverKey = typeof data.key === "string" ? data.key.trim() : "";
-      if (serverKey) return serverKey;
+      if (serverKey) {
+        saveApiKey(serverKey);
+        return serverKey;
+      }
     }
   } catch {
     /* ignore */

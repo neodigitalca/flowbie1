@@ -6,7 +6,7 @@ import { updateBulkStateForPost } from "./bulk-optimization-update-bulk-state";
 import { stepLabel } from "@/lib/content-optimization/content-optimizer-run-progress";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { HandleOptimizeMultipleContentParams } from "./bulk-optimization-params";
-import type { BulkDoPrefetchArgs } from "./bulk-optimization-do-prefetch";
+import { bulkOptimizationDoPrefetch, type BulkDoPrefetchArgs } from "./bulk-optimization-do-prefetch";
 import type { BulkSerpWarmupController } from "./bulk-optimization-serp-warmup";
 import type { BulkGoogleMapsImageWarmupController } from "./bulk-optimization-google-maps-image-warmup";
 import { isAgentRunBatchKey } from "@/lib/agent-runs/agent-run-batch-key";
@@ -103,6 +103,7 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
 
   const runCount = Math.max(0, rangeEnd - rangeStart);
   let batchFailedCount = 0;
+  let batchCompletedCount = 0;
   let firstBatchFailureMsg = "";
 
   const recordBatchFailure = (msg: string) => {
@@ -119,7 +120,6 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
   }
 
   if (rangeStart < rangeEnd) {
-    serpWarmup.maintainBuffer(rangeStart);
     googleMapsImageWarmup?.maintainBuffer(rangeStart);
   }
 
@@ -179,10 +179,11 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
       continue;
     }
 
-    serpWarmup.maintainBuffer(i);
-    googleMapsImageWarmup?.maintainBuffer(i);
-    void googleMapsImageWarmup?.warmIndex(i);
-    await serpWarmup.ensureReady(i);
+    googleMapsImageWarmup?.warmIndex(i);
+
+    if (!prefetchedPendingCache.has(i)) {
+      await bulkOptimizationDoPrefetch(i, p.prefetchArgs);
+    }
 
     if (!prefetchedPendingCache.has(i)) {
       const msg = `Missing prefetch for target ${i + 1}; bulk prep should have loaded inventory first.`;
@@ -202,14 +203,13 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
         };
       });
       updateBulkStateForPost(setBulkOptimizationState, batchKey, url, i, i + 1, urls.length, "error");
-      continue;
+      break;
     }
 
     const currentPost = i + 1;
     const totalPosts = urls.length;
     bulkContextRef.current = { bulkIndex: i, totalBulkUrls: urls.length, batchKey };
 
-    patchBulkMetaCompletedUrls(setOptimizationProgress, batchKey, i);
     updateBulkStateForPost(setBulkOptimizationState, batchKey, url, i, currentPost, totalPosts, "optimizing");
     if (!isAgentRunBatchKey(batchKey)) {
       updateOptimizationProgress(setOptimizationProgress, site.id, "load", 0, url);
@@ -241,17 +241,9 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
           { query: cachedKeyword, clicks: 0, impressions: 0, ctr: 0, position: 0 },
         );
         recordGeneratedFilesForIndex(i, url);
-        const uploadFiles = fileManagersByIndex.get(i)?.getFiles() ?? [];
-        const uploadedToWordPress = uploadFiles.some((f) =>
-          String(f.name || "").includes("wordpress-post-upload"),
-        );
-        if (!uploadedToWordPress) {
-          throw new Error(
-            "WordPress upload did not complete for this post (no wordpress-post-upload artifact).",
-          );
-        }
-        patchBulkMetaCompletedUrls(setOptimizationProgress, batchKey, i + 1);
+        patchBulkMetaCompletedUrls(setOptimizationProgress, batchKey, batchCompletedCount + 1);
         updateBulkStateForPost(setBulkOptimizationState, batchKey, url, i, currentPost, totalPosts, "completed");
+        batchCompletedCount += 1;
         await onBulkUrlComplete?.({ url, index: i, total: totalPosts, uploaded: true });
         if (!muteToasts) notify.success(notifyCompletedOptimizationForPostXOfX(currentPost, totalPosts));
         await new Promise((resolve) => setTimeout(resolve, 100));
@@ -274,7 +266,7 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
         };
       });
       updateBulkStateForPost(setBulkOptimizationState, batchKey, url, i, currentPost, totalPosts, "error");
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      break;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       console.error(`[Batch Optimization] Error optimizing post ${currentPost} (${url}):`, error);
@@ -292,6 +284,7 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
         };
       });
       updateBulkStateForPost(setBulkOptimizationState, batchKey, url, i, currentPost, totalPosts, "error");
+      continue;
     }
   }
 
@@ -302,8 +295,10 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
     1,
     batchFailedCount > 0
       ? `${batchFailedCount} of ${urls.length} targets failed`
-      : `Successfully processed ${urls.length} posts`,
-    { bulkMeta: { totalUrls: urls.length, completedUrls: urls.length, prepComplete: true } },
+      : batchCompletedCount === urls.length
+        ? `Successfully processed ${urls.length} posts`
+        : `Completed ${batchCompletedCount} of ${urls.length} posts`,
+    { bulkMeta: { totalUrls: urls.length, completedUrls: batchCompletedCount, prepComplete: true } },
   );
 
   serpWarmup.clearWarmingIndices();

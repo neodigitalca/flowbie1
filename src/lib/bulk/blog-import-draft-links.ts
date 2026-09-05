@@ -91,6 +91,29 @@ export function htmlFragmentToBodyWithMarkdownLinks(html: string, maxChars = 800
   return `${s.slice(0, maxChars).trim()}…`;
 }
 
+export function collectImportedDraftLinksFromSource(args: {
+  markdown?: string;
+  html?: string;
+}): ImportedDraftLink[] {
+  return dedupeImportedDraftLinks([
+    ...(args.markdown?.trim() ? extractImportedDraftLinksFromMarkdown(args.markdown) : []),
+    ...(args.html?.trim() ? extractImportedDraftLinksFromHtml(args.html) : []),
+  ]);
+}
+
+/** Unique hrefs for the row Links editor (one URL per piece). */
+export function importedDraftLinkUrls(links: ImportedDraftLink[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const link of links) {
+    const key = link.url.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(link.url);
+  }
+  return out;
+}
+
 export function collectImportedDraftLinksFromSections(
   sections: ImportedBlogSection[],
 ): ImportedDraftLink[] {

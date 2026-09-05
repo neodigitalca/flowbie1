@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTeam } from "@/contexts/TeamContext";
 import { usePulseAssistContext } from "@/contexts/pulse-assist-context";
 import { useAgentRunsContext } from "@/contexts/agent-runs-context";
-import { taskCanExecuteWithAgent, resolveTaskExecuteSiteId } from "@/lib/agent-runs-types";
+import { taskCanExecuteWithAgent, resolveTaskExecuteSiteId, isClientAgnosticExecutionKind } from "@/lib/agent-runs-types";
 import { automationUsesTriggerUi, resolveEffectiveExecutionKind, taskSupportsManualAutomationExecute } from "@/lib/task-automation-ui";
 import { ensurePostCreatorPayload } from "@/lib/post-creator/post-creator-defaults";
 import { TasksNavSidebar } from "@/components/manager/tasks/TasksNavSidebar";
@@ -898,7 +898,11 @@ export function TasksShell({ onOpenPulseForge }: TasksShellProps = {}): React.Re
         executeWithAgentDisabledReason={
           selectedTaskForExecute && taskHasPulseAssignee(selectedTaskForExecute, members)
             ? !taskCanExecuteWithAgent(selectedTaskForExecute, members, activeWordPressSiteId)
-              ? !resolveTaskExecuteSiteId(selectedTaskForExecute, activeWordPressSiteId)
+              ? !isClientAgnosticExecutionKind(
+                  selectedTaskForExecute.executionKind,
+                  selectedTaskForExecute.executionPayload,
+                )
+                  && !resolveTaskExecuteSiteId(selectedTaskForExecute, activeWordPressSiteId)
                 ? "Set a client on the project."
                 : "Complete execution settings."
               : null

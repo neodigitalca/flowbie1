@@ -11,6 +11,7 @@ import type { BulkGeneratorDetailsPanelProps } from "@/components/keyword-resear
 import {
   BulkDetailsDrawerStack,
   BulkDetailsTileSections,
+  resolveSerpBriefDownloadable,
   resolveDetailsPipelineSections,
   type BulkDetailsDownloadable,
 } from "@/components/shared/bulk-details-tile-sections";
@@ -19,6 +20,14 @@ import {
   contentOptimizerRowStripeClass,
 } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import type { BulkHarnessSectionUi } from "@/hooks/use-bulk-auto-generate";
+import {
+  resolveBulkRowPipelineTitles,
+} from "@/lib/overview/overview-bulk-pipeline-titles";
+import {
+  RESEARCH_HARNESS_PIPELINE_TITLES,
+  isResearchHarnessPipelineTitles,
+} from "@/lib/overview/overview-research-harness-sections";
+import { resolveContentOptimizePipelineTitlesForRow } from "@/lib/overview/overview-content-optimize-pipeline";
 import { publishedLinkFromRowFiles } from "@/lib/sitemap-optimizer/sitemap-merge-bulk-state";
 import { notify } from "@/lib/app-notifications";
 import { NOTIFY_CSV_DOWNLOADED } from "@/lib/notify-messages";
@@ -55,8 +64,12 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
     draftOnly,
     prepAccordionTitle,
     pipelineSectionTitles,
+    runKind,
+    researchBatchSignals,
+    researchRowIndices,
     liveMessage,
     entitySapRowDisplay = false,
+    urlStatuses,
   } = props;
 
   const [expandedRows, setExpandedRows] = useState<Set<number>>(() => new Set());
@@ -99,6 +112,21 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
 
   const rows = displayRows.length > 0 ? displayRows : [];
 
+  const isResearchBatch =
+    runKind === "research" ||
+    researchBatchSignals?.runKind === "research" ||
+    isResearchHarnessPipelineTitles(pipelineSectionTitles) ||
+    (researchRowIndices?.size ?? 0) > 0;
+
+  const researchBatchInFlight =
+    isResearchBatch && researchBatchSignals?.currentStep !== "Batch complete";
+
+  const showInventory =
+    !isResearchBatch &&
+    (sitemapInventoryLoading ||
+      (sitemapInventoryLinks?.length ?? 0) > 0 ||
+      Boolean(siteKwHostedLink));
+
   const entityRowExpandSignature = useMemo(() => {
     if (!entitySapRowDisplay) return "";
     return displayRows
@@ -119,10 +147,16 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
       return;
     }
 
+    if (researchBatchInFlight && currentRow >= 0 && currentRow < displayRows.length) {
+      commitAutoExpandedRows(new Set([currentRow]));
+      return;
+    }
+
     if (!isProcessing) {
       commitAutoExpandedRows(new Set());
       return;
     }
+
     const next = new Set<number>();
     if (currentRow >= 0 && currentRow < displayRows.length) {
       next.add(currentRow);
@@ -135,9 +169,10 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
     entityRowExpandSignature,
     isProcessing,
     entitySapRowDisplay,
+    researchBatchInFlight,
   ]);
 
-  const handleDownloadFile = (file: BulkDetailsDownloadable) => {
+  const saveDownloadable = (file: BulkDetailsDownloadable) => {
     if (downloadFile) {
       const match = [...(filesByRow?.values() ?? [])]
         .flat()
@@ -148,17 +183,18 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
       }
     }
     downloadBlob(file);
+  };
+
+  const handleDownloadFile = (file: BulkDetailsDownloadable) => {
+    saveDownloadable(file);
     notify.success(NOTIFY_CSV_DOWNLOADED);
   };
 
   const handleDownloadAll = (files: BulkDetailsDownloadable[]) => {
-    files.forEach((file) => handleDownloadFile(file));
+    files.forEach((file, index) => {
+      setTimeout(() => saveDownloadable(file), index * 300);
+    });
   };
-
-  const showInventory =
-    sitemapInventoryLoading ||
-    (sitemapInventoryLinks?.length ?? 0) > 0 ||
-    Boolean(siteKwHostedLink);
 
   return (
     <BulkDetailsDrawerStack
@@ -199,27 +235,48 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
                 draftOnly,
               );
               const persistedHarness = harnessByRow?.get(index);
-              const liveHarness: BulkHarnessSectionUi[] | undefined =
-                isActive && isProcessing ? harnessSections : undefined;
-              const hasGeneratingHarness = persistedHarness?.some(
+              const liveHarnessForRow = isActive ? harnessSections : undefined;
+              const hasGeneratingHarness = (liveHarnessForRow ?? persistedHarness)?.some(
                 (section) => section.status === "generating",
               );
-              const rowPipelineTitles =
-                pipelineSectionTitles?.length
-                  ? pipelineSectionTitles
-                  : persistedHarness?.length
-                    ? persistedHarness.map((section) => section.title)
-                    : undefined;
+              const rowIsResearch = runKind === "research";
+              const rowPipelineTitles = rowIsResearch
+                ? [...RESEARCH_HARNESS_PIPELINE_TITLES]
+                : resolveContentOptimizePipelineTitlesForRow(
+                    persistedHarness,
+                    rowFiles.map((file) => ({
+                      name: file.fileName,
+                      fileName: file.fileName,
+                      content: file.content,
+                    })),
+                    row.title?.trim() || row.keyword?.trim() || "",
+                  );
+              const tilePipelineTitles = rowPipelineTitles;
+              const displayFiles = rowFilesToDownloadables(rowFiles);
               const rowHarnessSectionsList = resolveDetailsPipelineSections(
                 persistedHarness,
-                liveHarness,
-                rowPipelineTitles,
+                liveHarnessForRow,
+                tilePipelineTitles,
+                displayFiles,
+              );
+              const serpBriefDownload = resolveSerpBriefDownloadable(
+                row.keyword?.trim() || row.url?.trim() || "brief",
+                displayFiles,
+                row.seo_research,
               );
               const panelId = `bulk-generator-details-row-${index}`;
               const toggleRow = () => setRowExpanded(index, !isExpanded);
-              const activeStatus = isActive && livePhase ? livePhase : "";
               const activeProgressLabel =
                 isActive && rows.length > 0 ? `${index + 1}/${rows.length}` : "";
+              const rowStepProgress =
+                isActive && rowHarnessSectionsList.length > 0
+                  ? `${rowHarnessSectionsList.filter((section) => section.status === "done").length}/${rowHarnessSectionsList.length}`
+                  : "";
+              const showGeneratedFiles =
+                isExpanded ||
+                Boolean(activeProgressLabel) ||
+                hasGeneratingHarness ||
+                isActive;
               const useRowShell =
                 isExpanded ||
                 isActive ||
@@ -245,16 +302,18 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
                         dateLabelOverride={dateLabelOverride}
                         onToggle={toggleRow}
                       />
-                      {isExpanded || activeStatus || activeProgressLabel ? (
+                      {showGeneratedFiles ? (
                         <BulkDetailsTileSections
                           harnessSections={rowHarnessSectionsList}
-                          pipelineSectionTitles={rowPipelineTitles}
-                          files={rowFilesToDownloadables(rowFiles)}
+                          pipelineSectionTitles={tilePipelineTitles}
+                          files={displayFiles}
                           onDownloadFile={handleDownloadFile}
                           onDownloadAll={handleDownloadAll}
                           stripeBaseIndex={stripeIndex + 1}
-                          statusMessage={activeStatus || undefined}
-                          progressLabel={activeProgressLabel || undefined}
+                          serpBriefDownload={serpBriefDownload}
+                          statusMessage={isActive ? livePhase || undefined : undefined}
+                          progressLabel={rowStepProgress || activeProgressLabel || undefined}
+                          defaultFilesOpen={false}
                         />
                       ) : null}
                     </div>

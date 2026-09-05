@@ -1,11 +1,14 @@
 import type { WordPressSite } from "@/components/integrations/types";
 import { resolveOpenRouterApiKeyForHarness } from "@/lib/openrouter-api-key-resolve";
-import { listSiteUrlsForMode } from "@/lib/local-analysis-site-context";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { getPublicSiteUrl } from "@/lib/wordpress-site-public-url";
+import { findConnectedWordPressSite } from "@/lib/agent-runs/resolve-agent-run-site";
+import { fetchGscQueriesRawForReporting, gscIndexedPageUrlsFromCsv } from "@/lib/gsc-reporting/gsc-reporting-fetch";
 import {
   computeCompareRangesForPreset,
   formatGscComparePeriodLabel,
+  formatGscReportFullDateRange,
+  parseGscYmd,
   validateGscCompareFetchRanges,
   type GscCompareRanges,
   type GscReportingComparePresetId,
@@ -14,17 +17,22 @@ import {
   ensureCompareSignalsFile,
   type GscCompareKind,
 } from "@/lib/gsc-reporting/gsc-reporting-compare-signals";
-import { fetchGscQueriesRawForReporting } from "@/lib/gsc-reporting/gsc-reporting-fetch";
 import { runGscReportingPipeline } from "@/lib/gsc-reporting/gsc-reporting-pipeline";
 import { buildSapEntityGrounding } from "@/lib/gsc-reporting/gsc-reporting-sap-entity-context";
+import { resolveGscClientSeasonContext } from "@/lib/gsc-reporting/gsc-reporting-client-season";
 import { pickClusterMarkdownForPipeline } from "@/lib/gsc-reporting/gsc-query-cluster-ai";
 import type { AgentRunResumePoint } from "@/lib/agent-runs-types";
-import type {
-  GscReportingOutlineResult,
-  GscReportingPipelineProgress,
-  GscReportingPipelineResult,
-  GscReportingSectionResult,
+import {
+  GSC_REPORTING_PROGRESS_LABELS,
+  type GscReportingOutlineResult,
+  type GscReportingPipelineProgress,
+  type GscReportingPipelineResult,
+  type GscReportingSectionResult,
 } from "@/lib/gsc-reporting/gsc-reporting-types";
+import {
+  formatGscBundleApiLabel,
+  formatGscBundleReadyLabel,
+} from "@/lib/gsc-reporting/gsc-reporting-progress-log";
 
 export type GscReportingAutomationComparePreset = "mom" | "yoy";
 
@@ -36,7 +44,7 @@ export type RunGscReportingAgentHarnessArgs = {
   resumePoint?: AgentRunResumePoint | null;
   signal?: AbortSignal;
   isCancelled?: () => Promise<boolean>;
-  onProgress?: (p: GscReportingPipelineProgress, resumePayload?: Record<string, unknown>) => void;
+  onProgress?: (p: GscReportingPipelineProgress, resumePayload?: Record<string, unknown>) => void | Promise<void>;
   onOutlineReady?: (payload: {
     outline: GscReportingOutlineResult;
     outlineRequestBodyJson: string;
@@ -80,9 +88,10 @@ export async function runGscReportingAgentHarness(
     throw new Error("Add an OpenRouter API key in Settings.");
   }
 
-  const publicSiteUrl = getPublicSiteUrl(args.site).trim();
-  if (!publicSiteUrl) {
-    throw new Error("Set a public site URL for this property.");
+  let publicSiteUrl = getPublicSiteUrl(args.site).trim();
+  if (!publicSiteUrl && args.site.id) {
+    const connected = findConnectedWordPressSite(args.site.id);
+    if (connected) publicSiteUrl = getPublicSiteUrl(connected).trim();
   }
 
   const compareRangeDraft = resolveCompareRanges(comparePreset, args.compareRanges);
@@ -103,7 +112,7 @@ export async function runGscReportingAgentHarness(
   };
 
   const resolvedCompareKind = resolveCompareKind(comparePreset, args.compareRanges);
-  const compareLabelDraft = `${formatGscComparePeriodLabel(compareRangeDraft.primary.startDate, compareRangeDraft.primary.endDate)} vs ${formatGscComparePeriodLabel(compareRangeDraft.compare.startDate, compareRangeDraft.compare.endDate)}`;
+  const compareLabelDraft = `${formatGscReportFullDateRange(compareRangeDraft.primary.startDate, compareRangeDraft.primary.endDate)} vs ${formatGscComparePeriodLabel(compareRangeDraft.compare.startDate, compareRangeDraft.compare.endDate)}`;
 
   const resumePayload = args.resumePoint?.payload ?? {};
   const resumeCachedFiles = Array.isArray(resumePayload.cachedFiles)
@@ -120,6 +129,13 @@ export async function runGscReportingAgentHarness(
   let outlineRef = savedOutline;
   let outlineRequestRef = savedOutlineRequestBodyJson;
 
+  const emitProgress = async (
+    progress: GscReportingPipelineProgress,
+    resumePayload?: Record<string, unknown>,
+  ) => {
+    await args.onProgress?.(progress, resumePayload);
+  };
+
   if (resumeCachedFiles?.length) {
     pipelineFiles = ensureCompareSignalsFile(
       resumeCachedFiles.map((f) => ({ ...f })),
@@ -128,9 +144,19 @@ export async function runGscReportingAgentHarness(
     );
     const md = pickClusterMarkdownForPipeline(pipelineFiles, {});
     if (md) pipelineFiles.push({ name: "Queries-AI-clusters.md", content: md });
+    const cachedForResume = pipelineFiles.filter((f) => f.name !== "Queries-AI-clusters.md");
+    await emitProgress(
+      { step: 0, total: 1, label: formatGscBundleReadyLabel(cachedForResume, compareLabelDraft) },
+      {
+        phase: "gsc_outline",
+        comparePreset,
+        bundleFileNames: cachedForResume.map((file) => file.name),
+        bundleFileCount: cachedForResume.length,
+      },
+    );
   } else {
-    args.onProgress?.(
-      { step: 0, total: 1, label: "Fetching GSC bundle…" },
+    await emitProgress(
+      { step: 0, total: 1, label: formatGscBundleApiLabel(compareLabelDraft) },
       { phase: "gsc_fetch", comparePreset },
     );
     const res = await fetchGscQueriesRawForReporting(publicSiteUrl, compareRangeDraft, {
@@ -142,9 +168,16 @@ export async function runGscReportingAgentHarness(
     pipelineFiles = res.files.map((f) => ({ ...f }));
     const md = pickClusterMarkdownForPipeline(res.files, {});
     if (md) pipelineFiles.push({ name: "Queries-AI-clusters.md", content: md });
-    args.onProgress?.(
-      { step: 0, total: 1, label: "GSC bundle ready" },
-      { phase: "gsc_outline", comparePreset, cachedFiles: pipelineFiles.filter((f) => f.name !== "Queries-AI-clusters.md") },
+    const cachedForResume = pipelineFiles.filter((f) => f.name !== "Queries-AI-clusters.md");
+    await emitProgress(
+      { step: 0, total: 1, label: formatGscBundleReadyLabel(cachedForResume, compareLabelDraft) },
+      {
+        phase: "gsc_outline",
+        comparePreset,
+        bundleFileNames: cachedForResume.map((file) => file.name),
+        bundleFileCount: cachedForResume.length,
+        compareLabel: compareLabelDraft,
+      },
     );
   }
 
@@ -152,18 +185,19 @@ export async function runGscReportingAgentHarness(
     throw new Error("Cancelled");
   }
 
-  const allowlistUrls = (await listSiteUrlsForMode(args.site, "entity")) ?? [];
-  const entityTail = args.site.entitySitemapUrl?.trim().split("/").pop();
+  await emitProgress(
+    { step: 0, total: 1, label: GSC_REPORTING_PROGRESS_LABELS.outlineGenerating },
+    { phase: "gsc_outline_generating", comparePreset },
+  );
+
+  const indexedPagesFile = pipelineFiles.find((file) => file.name === "Indexed-pages-urls-current.csv");
+  const allowlistUrls = indexedPagesFile ? gscIndexedPageUrlsFromCsv(indexedPagesFile.content) : [];
   const sapEntityGrounding = buildSapEntityGrounding({
     files: pipelineFiles,
     allowlistUrls,
-    sourceLabel: entityTail
-      ? `Entity sitemap (${entityTail})`
-      : "Entity URLs from WordPress sitemap",
+    sourceLabel: "GSC indexed pages",
     publicSiteUrl,
   });
-
-  const cachedForResume = pipelineFiles.filter((f) => f.name !== "Queries-AI-clusters.md");
 
   const result = await runGscReportingPipeline({
     apiKey,
@@ -174,34 +208,26 @@ export async function runGscReportingAgentHarness(
     sapEntityGrounding,
     compareKind: resolvedCompareKind,
     compareLabel: compareLabelDraft,
+    clientSeason: resolveGscClientSeasonContext(
+      args.site,
+      parseGscYmd(compareRangeDraft.primary.startDate) ?? new Date(),
+    ),
     signal: args.signal,
     priorSectionResults,
     savedOutline,
     savedOutlineRequestBodyJson,
-    onProgress: (p) => {
-      args.onProgress?.(p, {
+    onProgress: async (p) => {
+      await args.onProgress?.(p, {
         phase: "gsc_sections",
+        sectionIndex: p.sectionIndex,
         comparePreset,
-        cachedFiles: cachedForResume,
         outline: outlineRef,
-        outlineRequestBodyJson: outlineRequestRef,
         sectionResults: sectionResultsAcc,
       });
     },
     onOutlineReady: (payload) => {
       outlineRef = payload.outline;
       outlineRequestRef = payload.outlineRequestBodyJson;
-      args.onProgress?.(
-        { step: 1, total: 1 + payload.outline.sections.length, label: "Outline complete" },
-        {
-          phase: "gsc_sections",
-          comparePreset,
-          cachedFiles: cachedForResume,
-          outline: payload.outline,
-          outlineRequestBodyJson: payload.outlineRequestBodyJson,
-          sectionResults: sectionResultsAcc,
-        },
-      );
       args.onOutlineReady?.(payload);
     },
     onSectionStart: (index) => args.onSectionStart?.(index),
@@ -210,26 +236,11 @@ export async function runGscReportingAgentHarness(
         ...sectionResultsAcc.filter((entry) => entry.index !== row.index),
         row,
       ].sort((a, b) => a.index - b.index);
-      args.onProgress?.(
-        {
-          step: 2 + row.index,
-          total: 1 + (outlineRef?.sections.length ?? row.index + 1),
-          label: `Section ${row.index + 1}: ${row.plan.h2Title.slice(0, 48)}…`,
-        },
-        {
-          phase: "gsc_sections",
-          comparePreset,
-          cachedFiles: cachedForResume,
-          outline: outlineRef,
-          outlineRequestBodyJson: outlineRequestRef,
-          sectionResults: sectionResultsAcc,
-        },
-      );
       args.onSectionReady?.(row);
     },
   });
 
-  const compareLabel = `${formatGscComparePeriodLabel(fetchRange.startDate, fetchRange.endDate)} vs ${formatGscComparePeriodLabel(compareFetchRange.startDate, compareFetchRange.endDate)}`;
+  const compareLabel = `${formatGscReportFullDateRange(fetchRange.startDate, fetchRange.endDate)} vs ${formatGscComparePeriodLabel(compareFetchRange.startDate, compareFetchRange.endDate)}`;
 
   return {
     ...result,

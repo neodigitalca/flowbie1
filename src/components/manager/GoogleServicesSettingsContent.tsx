@@ -1,6 +1,7 @@
 import { GoogleAnalyticsSettingsContent } from "@/components/GoogleAnalyticsSettingsContent";
 import { GSCSettingsConnectionSection } from "@/components/integrations/GSCFeature";
 import { GMBSettingsContent } from "@/components/GMBSettingsContent";
+import { GoogleDriveSettingsContent } from "@/components/GoogleDriveSettingsContent";
 import {
   DASHBOARD_SETTINGS_GROUP_CLASS,
   DASHBOARD_SETTINGS_PANEL_CLASS,
@@ -22,7 +23,7 @@ export function GoogleServicesSettingsContent() {
 
       <div className={DASHBOARD_SETTINGS_GROUP_CLASS}>
         <p className="font-semibold text-white">Start here</p>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <a href="#gsc" className={jumpLink}>
             <span className="font-semibold">Search Console</span>
             <p className="mt-1 text-white">Service account JSON. Copy the API email, then test.</p>
@@ -35,6 +36,10 @@ export function GoogleServicesSettingsContent() {
             <span className="font-semibold">Business Profile</span>
             <p className="mt-1 text-white">OAuth only. Connect here, then test connection.</p>
           </a>
+          <a href="#drive" className={jumpLink}>
+            <span className="font-semibold">Google Drive</span>
+            <p className="mt-1 text-white">Connect Google Drive for Doc exports and share links.</p>
+          </a>
         </div>
       </div>
 
@@ -46,6 +51,9 @@ export function GoogleServicesSettingsContent() {
       </section>
       <section id="gbp" aria-labelledby="gbp-heading" className={`${DASHBOARD_SETTINGS_GROUP_CLASS} scroll-mt-4`}>
         <GMBSettingsContent />
+      </section>
+      <section id="drive" aria-labelledby="drive-heading" className={`${DASHBOARD_SETTINGS_GROUP_CLASS} scroll-mt-4`}>
+        <GoogleDriveSettingsContent />
       </section>
     </div>
   );

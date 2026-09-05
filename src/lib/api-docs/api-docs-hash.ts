@@ -1,4 +1,4 @@
-import { getDefaultApiDocSlug } from "@/lib/api-docs/index";
+import { getDefaultApiDocSlug } from "@/lib/api-docs/api-docs-constants";
 import { useEffect, useState } from "react";
 
 export function isApiTabHash(rawHash?: string): boolean {

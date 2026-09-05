@@ -1,5 +1,6 @@
 import { MANAGER_SETTINGS_CLUSTER_KEY } from "@/components/manager/manager-settings-cluster";
 import { WORDPRESS_SITES_STORAGE_KEY, KB_FILES_STORAGE_KEY } from "@/components/integrations/types";
+import { WORDPRESS_BENCHMARK_CATEGORY_TAGS_KEY } from "@/lib/benchmark-category-tags";
 
 /** Persisted so cloud restore + reload can hydrate Index LLM state. */
 export const NEO_PULSE_LLM_MODEL_KEY = "neo-pulse-llm-selected-model";
@@ -18,6 +19,7 @@ const EXACT_LOCAL_KEYS = [
   "slack-bot-token",
   "slack-global-settings",
   WORDPRESS_SITES_STORAGE_KEY,
+  WORDPRESS_BENCHMARK_CATEGORY_TAGS_KEY,
   KB_FILES_STORAGE_KEY,
   "kb_profiles",
   MANAGER_SETTINGS_CLUSTER_KEY,

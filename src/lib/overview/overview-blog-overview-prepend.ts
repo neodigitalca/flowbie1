@@ -9,8 +9,18 @@ import {
   buildBlogHarnessSummaryAgent,
   isBlogHarnessSummaryAgent,
 } from "@/lib/bulk/blog-harness-summary-agent";
+import {
+  BLOG_HARNESS_ANSWER_TITLE,
+  buildBlogHarnessAnswerAgent,
+  HARNESS_ANSWER_ANCHOR_ID,
+  isBlogHarnessAnswerAgent,
+} from "@/lib/bulk/blog-harness-answer-agent";
 import { ensureOverviewBulletBoldLabels } from "@/lib/overview/overview-bullet-bold-labels";
 import { applyOverviewHarnessScrollLinks } from "@/lib/overview/overview-harness-scroll-links";
+import {
+  completeOverviewScrollLinks,
+  overviewBulletsHaveRequiredScrollLinks,
+} from "@/lib/prompt-builders/overview-link-rules";
 import {
   FLO_OVERVIEW_CLASS,
   wrapOverviewSectionHtml,
@@ -28,11 +38,75 @@ import {
   type HarnessSectionAnchorEntry,
 } from "@/lib/bulk/harness-section-anchor-ids";
 import { ensureHarnessSectionLengthCompliance } from "@/lib/bulk/harness-section-length-agent";
+import {
+  HARNESS_SECTION_MAX_ATTEMPTS,
+  harnessSectionPreparedValid,
+  prepareHarnessSectionHtml,
+} from "@/lib/bulk/harness-section-validate";
 import { callOpenRouterChatCompletion } from "@/lib/competitor-research/competitor-report-openrouter";
 import { getProductionModel } from "@/lib/optimization-settings-storage";
 import { extractH2TextsFromHtml } from "@/lib/overview/overview-blog-headers-extract";
 import { generateSingleSectionPrompt } from "@/lib/prompt-builders/core";
 import { buildBulkHarnessSectionUserPrompt } from "@/lib/prompt-builders/system-user";
+import {
+  llmAuditSummaryFromSeoResearchBrief,
+  parseSeoResearchBrief,
+} from "@/lib/content-optimization/seo-research-brief-for-optimize";
+import { firstPartyAuthorityBlockFromBrief, PRIMARY_CITY_CONSISTENCY_RULE } from "@/lib/content-optimization/first-party-authority-prompt";
+import { formatAnswerGroundingForIllustrativePromptBlock } from "@/lib/content-optimization/defensible-specificity-prompt";
+import {
+  formatPageLocalContextPromptBlock,
+  resolvePageLocalContext,
+} from "@/lib/content-optimization/page-local-context";
+import type { WordPressSite } from "@/components/integrations/types";
+import { formatEntityReferencePromptBlock } from "@/lib/entity-place-reference";
+import { normalizeEntityHintCommaLabel } from "@/lib/comma-place-label";
+
+export type OverviewHarnessPageKind = "post" | "entity";
+
+function harnessPageKindLabel(pageKind: OverviewHarnessPageKind | undefined): string {
+  return pageKind === "entity" ? "service-area entity page" : "page";
+}
+
+function appendHarnessBriefGroundingToPrompt(userPrompt: string, seoResearchBrief?: string): string {
+  const raw = seoResearchBrief?.trim();
+  if (!raw) return userPrompt;
+  const brief = parseSeoResearchBrief(raw);
+  if (!brief) return userPrompt;
+  const llmAuditSummary = llmAuditSummaryFromSeoResearchBrief(raw);
+  const firstPartyAuthorityBlock = firstPartyAuthorityBlockFromBrief(brief, "");
+  const parts = [userPrompt];
+  if (llmAuditSummary) {
+    parts.push(`\n\n--- SEO RESEARCH (LLM audit facts) ---\n${llmAuditSummary}`);
+  }
+  if (firstPartyAuthorityBlock?.trim()) {
+    parts.push(`\n\n${firstPartyAuthorityBlock.trim()}`);
+  }
+  return parts.join("");
+}
+
+function entityHarnessPromptAddendum(
+  entity: string | undefined,
+  connectedSite: { name: string; siteUrl: string } | undefined,
+  keyword?: string,
+): string {
+  const place = entity?.trim();
+  const company = connectedSite?.name?.trim();
+  if (!place && !company) return "";
+  const canonical = place ? normalizeEntityHintCommaLabel(place) : "";
+  const referenceBlock = canonical
+    ? formatEntityReferencePromptBlock({
+        entity: canonical,
+        keyword: keyword?.trim() || undefined,
+      })
+    : "";
+  const lines = ["*** ENTITY PAGE (SAP) ***"];
+  if (canonical) lines.push(`Place entity: ${canonical}`);
+  if (company) lines.push(`Connected business: ${company}`);
+  lines.push("Write for a near-me local entity landing page; name the place with comma grammar from the entity block above.");
+  const body = [lines.join("\n"), referenceBlock].filter(Boolean).join("\n\n");
+  return `\n\n${body}`;
+}
 
 function isTagBoundaryChar(ch: string | undefined): boolean {
   if (!ch || ch.length === 0) return true;
@@ -117,6 +191,57 @@ function normalizeOverviewTitleKey(title: string): string {
     .trim()
     .toLowerCase()
     .replace(/\s+/g, " ");
+}
+
+function isAnswerHeadingTitle(title: string): boolean {
+  const key = normalizeOverviewTitleKey(title);
+  if (!key) return false;
+  if (isBlogHarnessAnswerAgent({ id: "", title: key })) return true;
+  return key === "direct answer";
+}
+
+function headingOpenHasAnswerId(html: string, openAt: number): boolean {
+  const gt = html.indexOf(">", openAt);
+  if (gt < 0) return false;
+  const openTag = html.slice(openAt, gt).toLowerCase();
+  const needle = `id="${HARNESS_ANSWER_ANCHOR_ID}"`;
+  const needle2 = `id='${HARNESS_ANSWER_ANCHOR_ID}'`;
+  return openTag.includes(needle) || openTag.includes(needle2);
+}
+
+function isAnswerHeadingAt(html: string, openAt: number): boolean {
+  if (headingOpenHasAnswerId(html, openAt)) return true;
+  return isAnswerHeadingTitle(plainInnerFromHeadingOpen(html, openAt));
+}
+
+function answerSectionEndAt(html: string, openAt: number): number {
+  const positions = findH2OpenPositions(html);
+  for (let i = 0; i < positions.length; i += 1) {
+    if (positions[i]! <= openAt) continue;
+    return positions[i]!;
+  }
+  return html.length;
+}
+
+/** Remove leading Answer H2 blocks (through the next H2) before Overview re-runs. */
+export function stripLeadingAnswerSection(html: string): string {
+  let src = (html ?? "").trim();
+  if (!src) return src;
+
+  for (let guard = 0; guard < 20; guard += 1) {
+    const positions = findH2OpenPositions(src);
+    let removed = false;
+    for (let i = 0; i < positions.length; i += 1) {
+      const openAt = positions[i]!;
+      if (!isAnswerHeadingAt(src, openAt)) continue;
+      const end = answerSectionEndAt(src, openAt);
+      src = `${src.slice(0, openAt)}${src.slice(end)}`.trim();
+      removed = true;
+      break;
+    }
+    if (!removed) break;
+  }
+  return src;
 }
 
 function isOverviewHeadingTitle(title: string): boolean {
@@ -280,30 +405,43 @@ export function injectBodyH2AnchorIds(
 }
 
 /**
- * Bulk harness stitch: first `<h2>` is Overview; following `<h2>` tags get body anchor ids.
+ * Bulk harness stitch: first `<h2>` is Answer (when present), then Overview, then body anchor ids.
  */
 export function injectHarnessH2AnchorIdsForStitchedBlog(
   html: string,
   bodyAnchors: HarnessSectionAnchorEntry[],
 ): string {
-  const positions = findH2OpenPositions(html);
-  if (!positions.length) return html;
-
   let result = html;
-  const overviewOpen = positions[0]!;
-  result =
-    result.slice(0, overviewOpen) +
-    injectHarnessSectionH2AnchorId(result.slice(overviewOpen), HARNESS_OVERVIEW_ANCHOR_ID);
+  let bodyAnchorIndex = 0;
+  let i = 0;
 
-  for (let i = bodyAnchors.length - 1; i >= 0; i--) {
-    const posIdx = i + 1;
-    if (posIdx >= positions.length) continue;
-    const openAt = positions[posIdx]!;
-    const anchorId = bodyAnchors[i]?.anchorId;
-    if (!anchorId) continue;
-    result =
-      result.slice(0, openAt) +
-      injectHarnessSectionH2AnchorId(result.slice(openAt), anchorId);
+  while (i < 64) {
+    const positions = findH2OpenPositions(result);
+    const openAt = positions[i];
+    if (openAt == null) break;
+
+    if (isAnswerHeadingAt(result, openAt)) {
+      result =
+        result.slice(0, openAt) +
+        injectHarnessSectionH2AnchorId(result.slice(openAt), HARNESS_ANSWER_ANCHOR_ID);
+      i += 1;
+      continue;
+    }
+    if (isOverviewHeadingAt(result, openAt)) {
+      result =
+        result.slice(0, openAt) +
+        injectHarnessSectionH2AnchorId(result.slice(openAt), HARNESS_OVERVIEW_ANCHOR_ID);
+      i += 1;
+      continue;
+    }
+    const anchorId = bodyAnchors[bodyAnchorIndex]?.anchorId;
+    bodyAnchorIndex += 1;
+    if (anchorId) {
+      result =
+        result.slice(0, openAt) +
+        injectHarnessSectionH2AnchorId(result.slice(openAt), anchorId);
+    }
+    i += 1;
   }
   return result;
 }
@@ -332,6 +470,20 @@ export function looksLikeBlockedHostHtml(html: string): boolean {
   return false;
 }
 
+/** Slice the Answer H2 block (through the next H2) for row preview. */
+export function extractAnswerSectionHtml(html: string): string {
+  const src = (html ?? "").trim();
+  if (!src) return "";
+  const positions = findH2OpenPositions(src);
+  for (let i = 0; i < positions.length; i++) {
+    const openAt = positions[i]!;
+    if (!isAnswerHeadingAt(src, openAt)) continue;
+    const end = answerSectionEndAt(src, openAt);
+    return src.slice(openAt, end).trim();
+  }
+  return "";
+}
+
 /** Slice the Overview H2/H3 block (through the next heading) for row preview. */
 export function extractOverviewSectionHtml(html: string): string {
   const src = (html ?? "").trim();
@@ -346,6 +498,41 @@ export function extractOverviewSectionHtml(html: string): string {
   return "";
 }
 
+function firstAnswerH2OpenAt(html: string): number {
+  for (const openAt of findH2OpenPositions(html)) {
+    if (isAnswerHeadingAt(html, openAt)) return openAt;
+  }
+  return -1;
+}
+
+function firstOverviewBlockStartAt(html: string): number {
+  for (const openAt of findHeadingOpenPositions(html, [2, 3])) {
+    if (isOverviewHeadingAt(html, openAt)) return overviewBlockStartAt(html, openAt);
+  }
+  return -1;
+}
+
+/**
+ * Answer must always precede Overview in published harness HTML.
+ * Re-stitches when document order is reversed (no-op when already correct).
+ */
+export function enforceHarnessAnswerBeforeOverview(html: string): string {
+  const src = (html ?? "").trim();
+  if (!src) return src;
+
+  const answerSection = extractAnswerSectionHtml(src);
+  const overviewSection = extractOverviewSectionHtml(src);
+  if (!answerSection.trim() || !overviewSection.trim()) return src;
+
+  const answerAt = firstAnswerH2OpenAt(src);
+  const overviewAt = firstOverviewBlockStartAt(src);
+  if (answerAt < 0 || overviewAt < 0 || answerAt < overviewAt) return src;
+
+  const bodyOnly = stripLeadingOverviewSection(stripLeadingAnswerSection(src));
+  const pieces = [answerSection, overviewSection, bodyOnly].filter((part) => part.trim());
+  return stitchHarnessSections(pieces);
+}
+
 export type PrependOverviewResult = {
   html: string;
   bodyH2Titles: string[];
@@ -358,10 +545,11 @@ export type PrependOverviewResult = {
 export function stitchOverviewOntoBody(args: {
   sourceHtml: string;
   overviewHtml: string;
+  answerHtml?: string;
 }): PrependOverviewResult {
-  const stripped = stripLeadingOverviewSection(args.sourceHtml);
+  const stripped = stripLeadingOverviewSection(stripLeadingAnswerSection(args.sourceHtml));
   const bodyH2Titles = extractH2TextsFromHtml(stripped).filter(
-    (t) => !isOverviewHeadingTitle(t),
+    (t) => !isOverviewHeadingTitle(t) && !isAnswerHeadingTitle(t),
   );
   const outline = outlineFromBodyH2Titles(bodyH2Titles);
   const anchorMap = buildHarnessSectionAnchorMap(outline);
@@ -372,10 +560,201 @@ export function stitchOverviewOntoBody(args: {
       HARNESS_OVERVIEW_ANCHOR_ID,
     ),
   );
+  const pieces: string[] = [];
+  if (args.answerHtml?.trim()) {
+    pieces.push(
+      injectHarnessSectionH2AnchorId(args.answerHtml.trim(), HARNESS_ANSWER_ANCHOR_ID),
+    );
+  }
+  pieces.push(overviewWithId, bodyWithIds);
   return {
-    html: stitchHarnessSections([overviewWithId, bodyWithIds]),
+    html: stitchHarnessSections(pieces),
     bodyH2Titles,
     anchorMap,
+  };
+}
+
+export type GenerateAnswerSectionArgs = {
+  articleTitle: string;
+  focusKeyword: string;
+  bodyH2Titles: string[];
+  includeOverviewInOutline?: boolean;
+  pageUrl?: string;
+  connectedSite?: { name: string; siteUrl: string };
+  site?: WordPressSite;
+  entity?: string;
+  pageKind?: OverviewHarnessPageKind;
+  seoResearchBrief?: string;
+  apiKey: string;
+  model?: string;
+  signal?: AbortSignal;
+};
+
+/** Generate the direct-answer harness section HTML (H2 Answer + one paragraph). */
+export async function generateAnswerSectionHtml(args: GenerateAnswerSectionArgs): Promise<string> {
+  const keyword = args.focusKeyword.trim() || args.articleTitle.trim() || "this topic";
+  const bodyH2Titles = args.bodyH2Titles.filter(Boolean);
+  const outline = outlineFromBodyH2Titles(bodyH2Titles);
+  const outlineBlock = formatOutlineTitlesForHarnessPrompt(outline);
+  const siblingTitles = args.includeOverviewInOutline
+    ? ["Overview", ...bodyH2Titles]
+    : bodyH2Titles;
+  const publishedTitles = args.includeOverviewInOutline
+    ? ["Answer", "Overview", ...bodyH2Titles]
+    : ["Answer", ...bodyH2Titles];
+  const totalSections = bodyH2Titles.length + (args.includeOverviewInOutline ? 2 : 1);
+  const pageLabel = harnessPageKindLabel(args.pageKind);
+  const purpose =
+    args.pageKind === "entity" && args.entity?.trim()
+      ? `Direct answer for "${keyword}" at the top of an existing ${pageLabel} near ${args.entity.trim()}.`
+      : `Direct answer for "${keyword}" at the top of an existing ${pageLabel}.`;
+
+  const answerAgent = buildBlogHarnessAnswerAgent();
+  const answerPrompt = generateSingleSectionPrompt(answerAgent, "html");
+  let answerUserPrompt = buildBulkHarnessSectionUserPrompt(
+    args.articleTitle.trim() || keyword,
+    purpose,
+    answerPrompt,
+    outlineBlock,
+    siblingTitles,
+    0,
+    totalSections,
+    args.connectedSite,
+    args.pageKind === "entity" ? args.entity?.trim() : undefined,
+    { keywordFocus: keyword },
+    true,
+    args.pageUrl,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    keyword,
+    publishedTitles,
+  );
+  answerUserPrompt = appendHarnessBriefGroundingToPrompt(answerUserPrompt, args.seoResearchBrief);
+  if (args.pageKind === "entity") {
+    answerUserPrompt += entityHarnessPromptAddendum(args.entity, args.connectedSite, keyword);
+  }
+  const pageCtx = resolvePageLocalContext({
+    keyword,
+    site: args.site,
+    entity: args.pageKind === "entity" ? args.entity : undefined,
+  });
+  if (pageCtx.primaryCity) {
+    answerUserPrompt += `\n\n${formatPageLocalContextPromptBlock(pageCtx)}`;
+  }
+
+  const entityCanonical =
+    args.pageKind === "entity" && args.entity?.trim()
+      ? normalizeEntityHintCommaLabel(args.entity.trim())
+      : "";
+  const answerSystem =
+    entityCanonical
+      ? `You write the Answer harness section for an existing service-area entity page. Output HTML only. Exactly <h2>Answer</h2> and one <p> with two sentences. Primary keyword: ${keyword}. Place entity (comma label): ${entityCanonical}. Refer to the place with comma grammar (e.g. "Lacombe Park, St. Albert"), never slug-style "Lacombe Park St. Albert".\n${PRIMARY_CITY_CONSISTENCY_RULE}`
+      : `You write the Answer harness section for an existing page. Output HTML only. Exactly <h2>Answer</h2> and one <p> with two sentences. Primary keyword: ${keyword}.\n${PRIMARY_CITY_CONSISTENCY_RULE}`;
+
+  const model = args.model?.trim() || getProductionModel();
+  let lastPrepared = "";
+
+  for (let attempt = 1; attempt <= HARNESS_SECTION_MAX_ATTEMPTS; attempt++) {
+    const attemptMaxTokens = Math.round(384 * (1 + (attempt - 1) * 0.15));
+    const answerResult = await callOpenRouterChatCompletion({
+      apiKey: args.apiKey,
+      model,
+      system: answerSystem,
+      user: answerUserPrompt,
+      maxTokens: attemptMaxTokens,
+      temperature: 0.35,
+      signal: args.signal,
+    });
+
+    const rawAnswer = (answerResult.content || "").trim();
+    if (!rawAnswer) {
+      continue;
+    }
+
+    const prepared = prepareHarnessSectionHtml(rawAnswer, {
+      title: BLOG_HARNESS_ANSWER_TITLE,
+      isOverview: false,
+      isAnswer: true,
+    });
+    lastPrepared = prepared;
+    if (harnessSectionPreparedValid(prepared, {})) {
+      return prepared;
+    }
+  }
+
+  if (lastPrepared.trim()) {
+    return lastPrepared;
+  }
+  throw new Error(`Answer section could not be generated after ${HARNESS_SECTION_MAX_ATTEMPTS} attempts`);
+}
+
+export type PrependAnswerResult = {
+  html: string;
+  answerHtml: string;
+};
+
+/** Generate Answer only and prepend onto existing page HTML (preserves Overview + body). */
+export async function generateAndPrependAnswerHtml(args: {
+  sourceHtml: string;
+  articleTitle: string;
+  focusKeyword: string;
+  pageUrl?: string;
+  connectedSite?: { name: string; siteUrl: string };
+  site?: WordPressSite;
+  entity?: string;
+  pageKind?: OverviewHarnessPageKind;
+  seoResearchBrief?: string;
+  apiKey: string;
+  model?: string;
+  signal?: AbortSignal;
+}): Promise<PrependAnswerResult | null> {
+  const stripped = stripLeadingAnswerSection(args.sourceHtml);
+  if (!stripped.trim()) {
+    return null;
+  }
+  if (looksLikeBlockedHostHtml(stripped)) {
+    throw new Error(
+      "Page body looks like a Cloudflare block page, not WordPress content. Re-scrape or reload inventory, then retry Answer.",
+    );
+  }
+
+  const bodyH2Titles = extractH2TextsFromHtml(stripped).filter(
+    (t) => !isOverviewHeadingTitle(t) && !isAnswerHeadingTitle(t),
+  );
+  const hasOverview = Boolean(extractOverviewSectionHtml(stripped).trim());
+
+  const answerHtml = await generateAnswerSectionHtml({
+    articleTitle: args.articleTitle,
+    focusKeyword: args.focusKeyword,
+    bodyH2Titles,
+    includeOverviewInOutline: hasOverview,
+    pageUrl: args.pageUrl,
+    connectedSite: args.connectedSite,
+    site: args.site,
+    entity: args.entity,
+    pageKind: args.pageKind,
+    seoResearchBrief: args.seoResearchBrief,
+    apiKey: args.apiKey,
+    model: args.model,
+    signal: args.signal,
+  });
+
+  if (!answerHtml.trim()) {
+    throw new Error(`Answer section could not be generated after ${HARNESS_SECTION_MAX_ATTEMPTS} attempts`);
+  }
+
+  const answerWithId = injectHarnessSectionH2AnchorId(answerHtml.trim(), HARNESS_ANSWER_ANCHOR_ID);
+  return {
+    html: stitchHarnessSections([answerWithId, stripped]),
+    answerHtml: answerWithId,
   };
 }
 
@@ -385,46 +764,78 @@ export async function generateAndPrependOverviewHtml(args: {
   focusKeyword: string;
   pageUrl?: string;
   connectedSite?: { name: string; siteUrl: string };
+  site?: WordPressSite;
+  entity?: string;
+  pageKind?: OverviewHarnessPageKind;
+  seoResearchBrief?: string;
   apiKey: string;
   model?: string;
   signal?: AbortSignal;
-}): Promise<PrependOverviewResult> {
-  const stripped = stripLeadingOverviewSection(args.sourceHtml);
+}): Promise<PrependOverviewResult | null> {
+  const stripped = stripLeadingOverviewSection(stripLeadingAnswerSection(args.sourceHtml));
   if (!stripped.trim()) {
-    throw new Error("No HTML body to prepend Overview onto");
+    return null;
   }
   if (looksLikeBlockedHostHtml(stripped)) {
     throw new Error(
-      "Post body looks like a Cloudflare block page, not WordPress content. Re-scrape or reload inventory, then retry Overview.",
+      "Page body looks like a Cloudflare block page, not WordPress content. Re-scrape or reload inventory, then retry Overview.",
     );
   }
 
   const bodyH2Titles = extractH2TextsFromHtml(stripped).filter(
-    (t) => !isOverviewHeadingTitle(t),
+    (t) => !isOverviewHeadingTitle(t) && !isAnswerHeadingTitle(t),
   );
   if (!bodyH2Titles.length) {
     throw new Error("No H2 headings to cite from Overview");
   }
 
+  const keyword = args.focusKeyword.trim() || args.articleTitle.trim() || "this topic";
+  const pageLabel = harnessPageKindLabel(args.pageKind);
+  const purpose =
+    args.pageKind === "entity" && args.entity?.trim()
+      ? `AI Overview opener for "${keyword}" on an existing ${pageLabel} near ${args.entity.trim()} that cites body sections via same-page #anchors.`
+      : `AI Overview opener for "${keyword}" that maps remaining body sections via same-page #anchors.`;
   const outline = outlineFromBodyH2Titles(bodyH2Titles);
+  const outlineBlock = formatOutlineTitlesForHarnessPrompt(outline);
   const anchorMap = buildHarnessSectionAnchorMap(outline);
   const bodyWithIds = injectBodyH2AnchorIds(stripped, anchorMap);
   const anchorBlock = formatHarnessInPageAnchorBlock(anchorMap);
+  const totalSections = outline.length + 2;
+  const publishedTitles = ["Answer", "Overview", ...bodyH2Titles];
+
+  const model = args.model?.trim() || getProductionModel();
+  let answerHtml = await generateAnswerSectionHtml({
+    articleTitle: args.articleTitle,
+    focusKeyword: args.focusKeyword,
+    bodyH2Titles,
+    includeOverviewInOutline: true,
+    pageUrl: args.pageUrl,
+    connectedSite: args.connectedSite,
+    site: args.site,
+    entity: args.entity,
+    pageKind: args.pageKind,
+    seoResearchBrief: args.seoResearchBrief,
+    apiKey: args.apiKey,
+    model: args.model,
+    signal: args.signal,
+  });
+  if (!answerHtml.trim()) {
+    throw new Error(`Answer section could not be generated after ${HARNESS_SECTION_MAX_ATTEMPTS} attempts`);
+  }
+  answerHtml = injectHarnessSectionH2AnchorId(answerHtml, HARNESS_ANSWER_ANCHOR_ID);
+
   const overviewAgent = buildBlogHarnessSummaryAgent();
   const sectionPrompt = generateSingleSectionPrompt(overviewAgent, "html");
-  const keyword = args.focusKeyword.trim() || args.articleTitle.trim() || "this topic";
-  const purpose = `AI Overview opener for "${keyword}" that answers the primary keyword and cites body sections via same-page #anchors.`;
-  const outlineBlock = formatOutlineTitlesForHarnessPrompt(outline);
-  const userPrompt = buildBulkHarnessSectionUserPrompt(
+  let userPrompt = buildBulkHarnessSectionUserPrompt(
     args.articleTitle.trim() || keyword,
     purpose,
     sectionPrompt,
     outlineBlock,
     bodyH2Titles,
-    0,
-    outline.length + 1,
+    1,
+    totalSections,
     args.connectedSite,
-    undefined,
+    args.pageKind === "entity" ? args.entity?.trim() : undefined,
     { keywordFocus: keyword },
     true,
     args.pageUrl,
@@ -439,16 +850,43 @@ export async function generateAndPrependOverviewHtml(args: {
     undefined,
     undefined,
     keyword,
-    ["Overview", ...bodyH2Titles],
+    publishedTitles,
+    undefined,
+    undefined,
+    undefined,
+    formatAnswerGroundingForIllustrativePromptBlock(answerHtml),
   );
+  userPrompt = appendHarnessBriefGroundingToPrompt(userPrompt, args.seoResearchBrief);
+  if (args.pageKind === "entity") {
+    userPrompt += entityHarnessPromptAddendum(args.entity, args.connectedSite, keyword);
+  }
+  const pageCtx = resolvePageLocalContext({
+    keyword,
+    site: args.site,
+    entity: args.pageKind === "entity" ? args.entity : undefined,
+  });
+  if (pageCtx.primaryCity) {
+    userPrompt += `\n\n${formatPageLocalContextPromptBlock(pageCtx)}`;
+  }
 
-  const system = `You write the Overview (AI Overview) harness section for an existing blog post. Output HTML only for this section. Follow the section contract exactly. Primary keyword: ${keyword}.
+  const entityCanonicalOverview =
+    args.pageKind === "entity" && args.entity?.trim()
+      ? normalizeEntityHintCommaLabel(args.entity.trim())
+      : "";
+  const system =
+    entityCanonicalOverview
+      ? `You write the Overview (AI Overview) harness section for an existing service-area entity page near ${entityCanonicalOverview}. Output HTML only for this section. Follow the section contract exactly. Primary keyword: ${keyword}. Refer to the place with comma grammar from the entity label, not slug-style concatenation. Do not recap the published Answer.
 
-BOLD LABELS (NON-NEGOTIABLE): Every key-point <li> MUST start with a bold label tag, then a colon: <li><strong>Label</strong>: description…</li>. Example: <li><strong>Cost Breakdown</strong>: discover average costs and what influences them.</li>. Never put a comma after </strong>. Plain text without <strong> is INVALID. Do not skip <strong>.`;
+BOLD LABELS (NON-NEGOTIABLE): Every key-point <li> MUST start with a bold label tag, then a colon: <li><strong>Label</strong>: description…</li>. Example: <li><strong>Cost Breakdown</strong>: discover average costs and what influences them.</li>. Never put a comma after </strong>. Plain text without <strong> is INVALID. Do not skip <strong>.
+${pageCtx.primaryCity ? `\n${PRIMARY_CITY_CONSISTENCY_RULE}` : ""}`
+      : `You write the Overview (AI Overview) harness section for an existing page. Output HTML only for this section. Follow the section contract exactly. Primary keyword: ${keyword}. Do not recap the published Answer.
 
-  const { content } = await callOpenRouterChatCompletion({
+BOLD LABELS (NON-NEGOTIABLE): Every key-point <li> MUST start with a bold label tag, then a colon: <li><strong>Label</strong>: description…</li>. Example: <li><strong>Cost Breakdown</strong>: discover average costs and what influences them.</li>. Never put a comma after </strong>. Plain text without <strong> is INVALID. Do not skip <strong>.
+${pageCtx.primaryCity ? `\n${PRIMARY_CITY_CONSISTENCY_RULE}` : ""}`;
+
+  const overviewResult = await callOpenRouterChatCompletion({
     apiKey: args.apiKey,
-    model: args.model?.trim() || getProductionModel(),
+    model,
     system,
     user: userPrompt,
     maxTokens: 768,
@@ -456,11 +894,10 @@ BOLD LABELS (NON-NEGOTIABLE): Every key-point <li> MUST start with a bold label 
     signal: args.signal,
   });
 
-  let overviewHtml = (content || "").trim();
+  let overviewHtml = (overviewResult.content || "").trim();
   if (!overviewHtml) {
     throw new Error("Overview agent returned empty HTML");
   }
-
   overviewHtml = await ensureHarnessSectionLengthCompliance({
     sectionHtml: overviewHtml,
     sectionTitle: BLOG_HARNESS_SUMMARY_TITLE,
@@ -476,23 +913,27 @@ BOLD LABELS (NON-NEGOTIABLE): Every key-point <li> MUST start with a bold label 
 
   overviewHtml = ensureOverviewBulletBoldLabels(overviewHtml);
   if (anchorMap.length === 0) {
-    throw new Error("Overview scroll links: no body H2 anchors to cite");
+    throw new Error("No body H2 anchors to cite from Overview");
   }
-  overviewHtml = await applyOverviewHarnessScrollLinks({
-    html: overviewHtml,
-    anchorMap,
-    articleTitle: args.articleTitle.trim() || keyword,
-    keyword,
-    apiKey: args.apiKey,
-    model: args.model,
-    signal: args.signal,
-    inPageAnchorBlock: anchorBlock,
-  });
+  if (!overviewBulletsHaveRequiredScrollLinks(overviewHtml, anchorMap)) {
+    overviewHtml = await applyOverviewHarnessScrollLinks({
+      html: overviewHtml,
+      anchorMap,
+      articleTitle: args.articleTitle.trim() || keyword,
+      keyword,
+      apiKey: args.apiKey,
+      model: args.model,
+      signal: args.signal,
+      inPageAnchorBlock: anchorBlock,
+    });
+  }
+  overviewHtml = completeOverviewScrollLinks(overviewHtml, anchorMap);
+  overviewHtml = ensureOverviewBulletBoldLabels(overviewHtml);
   overviewHtml = injectHarnessSectionH2AnchorId(overviewHtml, HARNESS_OVERVIEW_ANCHOR_ID);
   overviewHtml = wrapOverviewSectionHtml(overviewHtml);
 
   return {
-    html: stitchHarnessSections([overviewHtml, bodyWithIds]),
+    html: stitchHarnessSections([answerHtml, overviewHtml, bodyWithIds]),
     bodyH2Titles,
     anchorMap,
   };

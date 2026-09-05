@@ -6,12 +6,14 @@ import type { AutomationActionBlock } from "@/lib/automation-planner-types";
 export type AutomationThenPanelProps = {
   action: AutomationActionBlock;
   disabled?: boolean;
+  siteName?: string;
   onChange: (patch: Partial<AutomationActionBlock>) => void;
 };
 
 export function AutomationThenPanel({
   action,
   disabled = false,
+  siteName = "",
   onChange,
 }: AutomationThenPanelProps): React.ReactElement {
   return (
@@ -21,6 +23,7 @@ export function AutomationThenPanel({
         executionKind={action.executionKind}
         executionPayload={ensureExecutionSchedulePayload(action.executionPayload)}
         disabled={disabled}
+        siteName={siteName}
         onChange={(executionPayload) => onChange({ executionPayload })}
       />
     </div>

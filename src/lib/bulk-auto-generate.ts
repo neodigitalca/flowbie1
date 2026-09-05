@@ -1,5 +1,5 @@
 import { buildFocusedArticlePurpose } from "@/lib/content-generation/article-length-policy";
-import { parseImportedSectionsJson, parseImportedLinksJson, parseKeywordQuestionsJson, parseModifierLinksJson } from './bulk/bulk-csv-parser';
+import { parseImportedLinksJson, parseImportedSectionsJson, parseModifierLinksJson } from './bulk/bulk-csv-parser';
 import {
   injectImportedLinksIntoBlueprintAgents,
   injectImportedLinksIntoChecklist,
@@ -12,6 +12,8 @@ import {
 import {
   injectModifierExternalLinksIntoBlueprintAgents,
   injectModifierExternalLinksIntoChecklist,
+  injectLlmAuditAuthorityLinksIntoBlueprintAgents,
+  injectLlmAuditAuthorityLinksIntoChecklist,
   researchModifierExternalLinks,
   type ModifierExternalLink,
 } from './bulk/modifier-external-links';
@@ -25,14 +27,10 @@ import {
 import {
   formatPrefilledBulkRowContractFromCsvRow,
   hasCsvFilledMeta,
-  hasCsvFilledTitle,
   hasCsvFilledWikipediaUrl,
 } from './bulk/prefilled-bulk-row-contract';
-import {
-  formatImportedToneForHarnessPrompt,
-  resolveImportedBlogToneForRow,
-} from './bulk/blog-import-tone';
-import { generateChecklistFromSelections, generateBlueprintFromTemplate, type BlogTemplateContext } from './blog-template-builder';
+import { generateChecklistFromSelections, generateBlueprintFromTemplate, buildBlueprintFromChecklistRows, type BlogTemplateContext } from './blog-template-builder';
+import { sapSelectedH2OutlineTitles } from '@/lib/prompt-builders/sap-page-template';
 import { getResearchModel } from './optimization-settings-storage';
 import { buildImagePrompt } from './image-prompt-builder';
 import type { ImageChecklistItem } from './image-checklist-builder';
@@ -73,9 +71,16 @@ import {
 } from './wordpress-scheduler';
 import { sanitizeWordPressSlugSegment } from './rank-math-redirect-csv';
 import { buildSapSlugFromKeywordEntity } from '@/lib/sap-slug-from-keyword-entity';
+import {
+  assertWordPressCreateKeptSlug,
+  findUploadSlugConflict,
+  reserveUploadSlug,
+} from '@/lib/bulk/bulk-upload-inventory-slug-guard';
+import { getBulkGenerationWpInventoryIfReady } from '@/lib/bulk/bulk-generation-wp-inventory';
 import { extractEndpointFromEntitySitemapUrl } from './entity-endpoint-extractor';
+import { resolveUploadSitemapType } from '@/lib/bulk/bulk-sitemap-mode';
 import { updateACFFields } from './wordpress-acf-origin';
-import { getACFFieldsForPost } from '@/lib/wordpress-api/acf-discovery';
+import { getACFFieldsForPost, resolveAcfFieldsForMapping } from '@/lib/wordpress-api/acf-discovery';
 import { discoverACFFieldMapping, fallbackFieldMapping } from '@/lib/content-generation/acf-field-mapper';
 import { mergeSeoResearchWithMeta, buildAcfPayload } from '@/lib/content-generation/apply-meta-acf-payload';
 import type { OptimizedMetaFields } from '@/lib/meta-field-optimizer';
@@ -99,10 +104,12 @@ import {
 } from '@/lib/content-generation/bulk-acf-seo-bundle';
 import { generateMetaDescription } from '@/lib/content-generation/content-generator';
 import { resolveBulkWordPressPostTitle } from '@/lib/bulk/bulk-post-title-agent';
+import { resolveEntitySapPostTitle } from '@/lib/local-analysis/entity-sap-title-agent';
 import {
   sanitizeContentForUpload,
 } from './content-generation/content-sanitizer';
 import { prepareHarnessContentForUpload } from './content-generation/harness-upload-prep';
+import { ensureWhatWeOfferTablePageLinks } from './content-generation/what-we-offer-table-page-links';
 import {
   buildRowExplicitExternalAllowlist,
   externalUrlsFromPairs,
@@ -117,6 +124,24 @@ import type { IntelligentKeywordResearchMergeResult } from './bulk/intelligent-k
 import { buildSemrushKeywordsRagJson } from './semrush-keywords-rag';
 import { buildSemrushClusterScatterPlan, buildSemrushScatterContextJson } from './semrush-cluster-scatter';
 import { resolveRecommendedAuthor } from './wordpress-api/author-resolver';
+import { fetchSeoContentBriefWave } from '@/lib/llm-audit/fetch-seo-content-brief-wave';
+import { mergeSeoBriefIntoBulkSkeleton } from '@/lib/llm-audit/fetch-merged-seo-content-brief';
+import { llmAuditGuidanceFromBrief } from '@/lib/llm-audit/llm-audit-dataforseo';
+import { resolveSiteLocationLabel } from '@/lib/llm-audit/resolve-site-location-label';
+import type { SeoContentBriefV1 } from '@/lib/overview-seo-content-brief';
+import { runTopicResearchFanout } from '@/lib/content-optimization/topic-research-fanout';
+import {
+  firstPartyAuthorityBlockFromBrief,
+  swotTextFromResearchFields,
+} from '@/lib/content-optimization/first-party-authority-prompt';
+import { resolveLlmAuditAuthorityLinksForChecklist } from '@/lib/llm-audit/llm-audit-authority-links';
+import {
+  loadWorkflowSerpResearchBrief,
+  parseSeoContentBriefFromRow,
+} from '@/lib/workflow/workflow-serp-research-cache';
+import { loadWorkflowDfsArticleAudit } from '@/lib/workflow/workflow-dfs-article-audit-cache';
+import { formatDfsArticleAuditHarnessPromptBlock } from '@/lib/dfs-article-audit/format-dfs-article-audit-harness';
+import type { WorkflowStepOutput } from '@/lib/workflow/workflow-types';
 
 // Import from new feature-based modules
 import type { CSVRow } from './bulk/bulk-csv-parser';
@@ -125,13 +150,12 @@ import { buildBlogImportKeywordResearchStub } from './bulk/blog-import-parse';
 import { parseCSV, parseBlogIdeasChecklist } from './bulk/bulk-csv-parser';
 import { 
   autoSelectKeywords, 
-  autoSelectH2Sections, 
   autoSelectPeopleAlsoAsk,
 } from './bulk/bulk-blueprint-generator';
 import { 
-  generateMarkdownContent, 
   generateMarkdownContentHarnessed,
   addEntityLinksToContent,
+  type HarnessPromptEnv,
 } from './bulk/bulk-content-generator';
 import { 
   generateImageChecklist, 
@@ -141,6 +165,7 @@ import { generateEntityTitleFromSitemap } from './bulk/bulk-entity-handler';
 import type { RunHistoryEntry } from '@/hooks/content-optimization/use-optimization-state';
 import { validateAndStripInvalidLinksFromContent, normalizeInternalUrl } from './wordpress-api/validate-internal-links';
 import { getValidatedPosts } from './cached-link-validation';
+import { keepBlogPlayLinkTargets } from './bulk/bulk-generation-wp-inventory';
 import { createSiteCache, seedSiteCacheFromBulkInventory } from './wordpress-site-cache';
 import { clearValidationCache } from './cached-link-validation';
 import { extractOriginFromSapTitle } from '@/lib/sap-origin-from-title';
@@ -170,7 +195,7 @@ export function buildSitesToPostFromPosting(
 /**
  * Prefetch HTTP-200 link validation for all distinct posting sites in parallel (Promise.all).
  * Run without awaiting at bulk start so it overlaps keyword research / checklist / content.
- * Callers await `linkPrefetchPromise` at WordPress upload time.
+ * Background only. Upload does not wait. Article links are checked on the HTML.
  */
 export function prefetchBulkWordPressLinkValidationForRun(
   sitesToPost: Array<{ site: WordPressSite; sitemapType: 'post' | 'entity' }>,
@@ -201,7 +226,7 @@ export function prefetchBulkWordPressLinkValidationForRun(
         const validatedPosts = await getValidatedPosts(
           site.id,
           site.siteUrl,
-          cache.posts,
+          keepBlogPlayLinkTargets(cache.posts),
           (msg) => onProgress?.(msg)
         );
         const set = new Set(
@@ -249,7 +274,7 @@ export type { CSVRow } from './bulk/bulk-csv-parser';
 export { parseCSV, parseCsvStatic, parseBlogIdeasChecklist } from './bulk/bulk-csv-parser';
 export { generateEntityTitleFromSitemap } from './bulk/bulk-entity-handler';
 
-export type WordPressPostDestination = 'wordpress' | 'local';
+export type WordPressPostDestination = 'wordpress' | 'local' | 'direct';
 
 /** Default export destinations shown in bulk WordPress posting UI. */
 export const BULK_POST_DESTINATION_CHOICES: WordPressPostDestination[] = [
@@ -257,11 +282,24 @@ export const BULK_POST_DESTINATION_CHOICES: WordPressPostDestination[] = [
   'local',
 ];
 
-/** Blog import tab: WordPress or local files only. */
+/** Blog import tab: Direct (as-is), WordPress rewrite, or local files. */
 export const BLOG_IMPORT_POST_DESTINATION_CHOICES: WordPressPostDestination[] = [
+  'direct',
   'wordpress',
   'local',
 ];
+
+export const WORDPRESS_POST_DESTINATION_SHORT: Record<WordPressPostDestination, string> = {
+  wordpress: 'WordPress',
+  local: 'Local files',
+  direct: 'Direct',
+};
+
+export const WORDPRESS_POST_DESTINATION_LONG: Record<WordPressPostDestination, string> = {
+  wordpress: 'Post to WordPress',
+  local: 'Local only (files)',
+  direct: 'Direct',
+};
 
 export interface WordPressPostingOptions {
   enabled: boolean;
@@ -283,10 +321,15 @@ export interface WordPressPostingOptions {
   /** When false, ignore per-row CSV `publish_date_gmt` and use frequency schedule only (default true). */
   useCsvPublishDates?: boolean;
   /**
-   * `wordpress`: create scheduled posts on the site(s).
+   * `wordpress`: harness rewrite then create posts on the site(s).
+   * `direct`: format source as-is then create posts (Import only).
    * `local`: generate files only (JSON, harness HTML, run CSV) — no WordPress upload.
    */
   postDestination?: WordPressPostDestination;
+  /**
+   * Header destination for the run. Per-row `CSVRow.post_destination` overrides when set.
+   */
+  headerPostDestination?: WordPressPostDestination;
   /** Inventory occupancy for Next available slot gap scheduling. */
   scheduleOccupancy?: import('@/lib/bulk-schedule-gap').ScheduleOccupancy;
   useGapScheduling?: boolean;
@@ -294,6 +337,8 @@ export interface WordPressPostingOptions {
   gapDatesBySlot?: Date[];
   /** When true, save as WordPress draft instead of publish or future. */
   draftOnly?: boolean;
+  /** Explicit day-of-month slots for times-per-month. */
+  publishDays?: number[];
 }
 
 export type BulkHarnessSectionPayload = {
@@ -329,20 +374,24 @@ export interface BulkProcessingOptions {
   flowPurpose?: string;
   featuredImageType?: 'ai-generated' | 'google-maps';
   wordPressPosting?: WordPressPostingOptions;
+  /** Header destination for the run. Per-row `CSVRow.post_destination` overrides when set. */
+  headerPostDestination?: WordPressPostDestination;
   /**
-   * When true, checklist/blueprint use the entity (service-area) template: "near [entity]", We Care About, etc.
+   * When true, checklist/blueprint use the entity (service-area) template: near [entity], Local Recommendation table, etc.
    * Set only when posting is enabled and every target site uses entity sitemap (not post/blog sitemap).
    */
   useEntitySitemapTemplate?: boolean;
   /** Started at bulk run start (tandem with research); await at WordPress upload only */
   linkPrefetchPromise?: Promise<void>;
-  wordPressPostsByKeyword?: Map<string, Array<{ id: number; slug: string; title: string; excerpt: string; link: string; date_gmt: string }>>;
+  wordPressPostsByKeyword?: Map<string, Array<{ id: number; slug: string; title: string; excerpt: string; link: string; date_gmt: string; collection?: string; postType?: string }>>;
   onProgress?: (rowIndex: number, totalRows: number, status: string) => void;
   onRowComplete?: (rowIndex: number, files: BulkGeneratedFile[]) => void;
   onError?: (rowIndex: number, error: Error) => void;
   onAppendHistory?: (entry: RunHistoryEntry) => void;
   /** Per-section harness progress (parallel workers may emit overlapping start/done events). */
   onHarnessSection?: (payload: BulkHarnessSectionPayload) => void;
+  /** Post creator: one OpenRouter harness call at a time (1/7, 2/7, … in order). */
+  sequentialHarnessSections?: boolean;
   /** AI summary of site (posts sitemap scraped + summarized) for aligning service-area content */
   siteSummary?: string;
   /** Other managed client domains - Semrush bulk enrichment must not surface these as approved externals */
@@ -365,6 +414,43 @@ export interface BulkProcessingOptions {
   peerFeaturedReport?: PeerFeaturedImageReportCollector;
   /** Fired when a searched peer featured library CSV is ready (added to run files). */
   onPeerFeaturedCsv?: (file: PeerFeaturedLibraryCsvFile) => void;
+  /** Pages bucket inventory for entity What We Offer table links at upload. */
+  wordPressPagesForOfferTable?: Array<{
+    id: number;
+    slug: string;
+    title: string;
+    excerpt: string;
+    link: string;
+    date_gmt: string;
+  }>;
+  /** Slugs reserved during this bulk run so back-to-back rows cannot duplicate. */
+  reservedUploadSlugsBySite?: Map<string, Set<string>>;
+  /** Workflow RAG: reuse SERP briefs from prior steps; commit new briefs for downstream agents. */
+  workflowSerpResearch?: {
+    outputs?: WorkflowStepOutput[];
+    getOutputs?: () => WorkflowStepOutput[] | undefined;
+    commitBrief?: (
+      keyword: string,
+      brief: SeoContentBriefV1,
+      storedFile: string | null,
+    ) => Promise<void>;
+  };
+  workflowDfsArticleAudit?: {
+    outputs?: WorkflowStepOutput[];
+    getOutputs?: () => WorkflowStepOutput[] | undefined;
+  };
+  /** Post creator and other local-only runs: do not fetch or inject Wikipedia. */
+  skipWikipediaLookup?: boolean;
+  /** Content optimizer: update this existing post instead of creating a new one. */
+  updateTargetPostId?: number;
+  /** Content optimizer: keep the live post title on upload (no title rewrite). */
+  optimizePreserveTitle?: string;
+  /** Content optimizer: keep the live post slug on upload. */
+  optimizePreserveSlug?: string;
+  /** Content optimizer: re-run topic fan-out and illustrative extract (never reuse brief.queryFanout). */
+  forceFreshTopicFanout?: boolean;
+  /** Content optimizer: live post H2 titles forbidden in SERP outline. */
+  forbiddenLiveH2s?: string[];
 }
 
 export interface BulkProcessingResult {
@@ -426,7 +512,12 @@ export async function generateRowOutputs(
 
   try {
     // Step 1: Fetch Wikipedia content only when entity is set and CSV did not already provide wikipedia_url
-    if (row.entity && row.entity.trim() && !hasCsvFilledWikipediaUrl(row)) {
+    if (
+      !options.skipWikipediaLookup
+      && row.entity
+      && row.entity.trim()
+      && !hasCsvFilledWikipediaUrl(row)
+    ) {
       options.onProgress?.(rowIndex, 0, `Fetching Wikipedia content for "${row.entity}"...`);
 
       try {
@@ -760,21 +851,26 @@ export async function generateBlueprintAndContent(
   };
 
   const sitesToPostForTemplate = buildSitesToPostFromPosting(options.wordPressPosting);
+  const rowEntity = enrichedRow.entity?.trim() ?? "";
+  const hasRowEntity = Boolean(rowEntity && rowEntity !== "N/A");
   const useEntitySitemapTemplate =
-    Boolean(options.wordPressPosting?.enabled) &&
-    sitesToPostForTemplate.length > 0 &&
-    sitesToPostForTemplate.every(
-      (s) => s.sitemapType === 'entity' && Boolean(s.site.entitySitemapUrl?.trim())
-    );
-  const entityForLocalTemplate =
-    useEntitySitemapTemplate &&
-    enrichedRow.entity?.trim() &&
-    enrichedRow.entity.trim() !== 'N/A'
-      ? enrichedRow.entity.trim()
-      : undefined;
-  const entityWikiUrl = enrichedRow.wikipedia_url?.trim() || undefined;
-  const entityWikiTitle = enrichedRow.wikipedia_title?.trim() || undefined;
-  const bulkOptions: BulkProcessingOptions = { ...options, useEntitySitemapTemplate };
+    hasRowEntity &&
+    (enrichedRow.sitemap_type === "entity" ||
+      sitesToPostForTemplate.some((s) => s.sitemapType === "entity") ||
+      options.useEntitySitemapTemplate === true);
+  const entityForLocalTemplate = hasRowEntity ? rowEntity : undefined;
+  const entityWikiUrl = options.skipWikipediaLookup
+    ? undefined
+    : enrichedRow.wikipedia_url?.trim() || undefined;
+  const entityWikiTitle = options.skipWikipediaLookup
+    ? undefined
+    : enrichedRow.wikipedia_title?.trim() || undefined;
+  const bulkOptions: BulkProcessingOptions = {
+    ...options,
+    useEntitySitemapTemplate,
+    ...(entityForLocalTemplate ? { sequentialHarnessSections: true } : {}),
+  };
+  const postsForInternalLinks = keepBlogPlayLinkTargets(wordPressPosts ?? []);
 
 try {
     // CRITICAL FIX: Merge PAA questions from paaRawResponse into aiAnalysis
@@ -876,58 +972,16 @@ try {
       console.warn('[Bulk Auto-Generate] Semrush enrichment failed (non-fatal):', e);
     }
     
-    // Auto-select items using blueprint generator module (Local Analysis CSV / blog import may supply verbatim H2s)
-    const importedSections = parseImportedSectionsJson(
-      enrichedRow.imported_sections_json ?? row.imported_sections_json
-    );
-    const useVerbatimImportedH2 = importedSections != null && importedSections.length > 0;
-
-    let importedToneProfile: Awaited<
-      ReturnType<typeof resolveImportedBlogToneForRow>
-    >['profile'] = null;
-    if (useVerbatimImportedH2) {
-      options.onProgress?.(rowIndex, 0, 'Analyzing imported draft tone & voice...');
-      const toneResolved = await resolveImportedBlogToneForRow({
-        row: enrichedRow,
-        apiKey: options.openRouterApiKey,
-        model: options.selectedModel,
-      });
-      importedToneProfile = toneResolved.profile;
-      if (toneResolved.toneJson) {
-        enrichedRow = { ...enrichedRow, imported_tone_json: toneResolved.toneJson };
-      }
-      if (importedToneProfile) {
-        const toneFileName = BulkFileManager.generateFileName(enrichedRow, 'import_tone', timestamp);
-        const toneFile: BulkGeneratedFile = {
-          id: BulkFileManager.createFileId(rowIndex, 'import-tone', timestamp),
-          rowIndex,
-          fileName: toneFileName,
-          content: JSON.stringify(importedToneProfile, null, 2),
-          mimeType: 'application/json',
-          status: 'completed',
-          timestamp,
-          rowData: enrichedRow,
-        };
-        fileManager.addFile(toneFile);
-        generatedFiles.push(toneFile);
-      }
-    }
-    const verbatimFromRow = parseKeywordQuestionsJson(
-      enrichedRow.keyword_questions_json ?? row.keyword_questions_json
-    );
-    const useVerbatimQuestionH2 =
-      !useVerbatimImportedH2 && verbatimFromRow != null && verbatimFromRow.length > 0;
-
     const selectedKeywords = autoSelectKeywords(aiAnalysis, keywordsWithVolumeData);
-    const selectedH2Sections =
-      useVerbatimQuestionH2 || useVerbatimImportedH2 ? [] : autoSelectH2Sections(aiAnalysis);
-    const selectedPeopleAlsoAsk = useVerbatimImportedH2
-      ? importedSections!.map((s) => s.h2)
-      : useVerbatimQuestionH2 && verbatimFromRow
-        ? verbatimFromRow
-        : autoSelectPeopleAlsoAsk(aiAnalysis);
+    const selectedH2Sections = entityForLocalTemplate
+      ? sapSelectedH2OutlineTitles(entityForLocalTemplate)
+      : [];
+    const selectedPeopleAlsoAsk = autoSelectPeopleAlsoAsk(aiAnalysis);
     const importedDraftLinks: ImportedDraftLink[] =
       parseImportedLinksJson(enrichedRow.imported_links_json ?? row.imported_links_json) ?? [];
+    const importedSections = options.updateTargetPostId != null
+      ? undefined
+      : parseImportedSectionsJson(enrichedRow.imported_sections_json ?? row.imported_sections_json);
 
     const modifierUrls =
       parseModifierLinksJson(enrichedRow.modifier_links_json ?? row.modifier_links_json)?.map(
@@ -960,9 +1014,134 @@ try {
       generatedFiles.push(modifierLinksFile);
     }
 
-    const rowExplicitExternalPairs = buildRowExplicitExternalAllowlist({
+    let rowExplicitExternalPairs = buildRowExplicitExternalAllowlist({
       modifierExternalLinks,
       importedDraftLinks,
+    });
+    rowExternalUrlsForSanitize = externalUrlsFromPairs(rowExplicitExternalPairs);
+
+    const prefilledRowContract = formatPrefilledBulkRowContractFromCsvRow(enrichedRow);
+
+    const serpKeywordBase =
+      enrichedRow.keyword?.trim() ||
+      row.keyword?.trim() ||
+      keywordData.keyword?.trim() ||
+      '';
+    const cachedRowBriefEarly = parseSeoContentBriefFromRow(enrichedRow);
+    const serpKeyword =
+      options.updateTargetPostId != null && cachedRowBriefEarly?.focusKeyword?.trim()
+        ? cachedRowBriefEarly.focusKeyword.trim()
+        : serpKeywordBase;
+    const serpSite = sitesToPostForTemplate[0]?.site;
+    const serpBaseUrl =
+      serpSite?.siteUrl?.replace(/\/+$/, '') ||
+      connectedSite?.siteUrl?.replace(/\/+$/, '') ||
+      '';
+    const serpSlug = serpKeyword ? generateSEOSlug(serpKeyword) : '';
+    const destinationPageUrl = enrichedRow.destination_url?.trim() || row.destination_url?.trim() || "";
+    const serpPageUrl =
+      destinationPageUrl ||
+      (serpBaseUrl && serpSlug ? `${serpBaseUrl}/${serpSlug}` : serpBaseUrl);
+    const cityLabel = resolveSiteLocationLabel(serpSite, serpKeyword) || "";
+    const entityPlace = entityForLocalTemplate?.trim() || "";
+    const cityToken = cityLabel.split(",")[0]?.trim().toLowerCase() || "";
+    const serpLocation = entityPlace
+      ? cityLabel && cityToken && !entityPlace.toLowerCase().includes(cityToken)
+        ? `${entityPlace}, ${cityLabel}`
+        : entityPlace
+      : cityLabel;
+
+    if (!serpKeyword) {
+      throw new Error('SERP + LLM audit requires a row keyword');
+    }
+    if (!serpPageUrl) {
+      throw new Error('SERP + LLM audit requires a site URL for the target page');
+    }
+
+    options.onProgress?.(rowIndex, 0, 'Running SERP + LLM audit (before checklist)...');
+    const serpKeywordNorm = serpKeyword.trim().toLowerCase();
+    const workflowSerpOutputs =
+      options.workflowSerpResearch?.getOutputs?.()
+      ?? options.workflowSerpResearch?.outputs;
+    const cachedRowBrief = parseSeoContentBriefFromRow(enrichedRow);
+    const cachedWorkflowBrief = workflowSerpOutputs?.length
+      ? await loadWorkflowSerpResearchBrief(workflowSerpOutputs, serpKeyword)
+      : null;
+
+    let serpLlmBrief: SeoContentBriefV1;
+    let serpStoredFile: string | null = null;
+
+    if (
+      cachedRowBrief
+      && (
+        cachedRowBrief.focusKeyword.trim().toLowerCase() === serpKeywordNorm
+        || options.updateTargetPostId != null
+      )
+    ) {
+      serpLlmBrief = cachedRowBrief;
+      options.onProgress?.(rowIndex, 0, 'SERP brief loaded from row');
+    } else if (
+      cachedWorkflowBrief
+      && cachedWorkflowBrief.brief.focusKeyword.trim().toLowerCase() === serpKeywordNorm
+    ) {
+      serpLlmBrief = cachedWorkflowBrief.brief;
+      serpStoredFile = cachedWorkflowBrief.storedFile;
+      options.onProgress?.(rowIndex, 0, 'SERP brief loaded from workflow RAG');
+    } else {
+      const wave = await fetchSeoContentBriefWave({
+        keyword: serpKeyword,
+        pageUrl: serpPageUrl,
+        site: serpSite,
+        location: serpLocation || undefined,
+        callbacks: {
+          onProgress: (message) => options.onProgress?.(rowIndex, 0, message),
+        },
+      });
+      serpLlmBrief = wave.brief;
+      serpStoredFile = wave.storedFile;
+    }
+
+    const llmOkCount = serpLlmBrief.llmAudit?.platforms.filter((p) => p.status === "ok").length ?? 0;
+    options.onProgress?.(rowIndex, 0, `Brief merged (${llmOkCount}/4 LLM platforms)`);
+
+    const swotText = swotTextFromResearchFields({
+      promptModifier: enrichedRow.prompt_modifier,
+      seoResearch: enrichedRow.seo_research,
+    });
+    const companyName = (serpSite?.name || connectedSite?.name || "").trim();
+    if (!companyName) {
+      throw new Error("Topic fan-out requires a connected site name");
+    }
+    const pageExcerptFromImport = importedSections
+      ?.map((s) => `${s.h2}\n${s.body}`)
+      .join("\n\n")
+      .slice(0, 1200);
+    serpLlmBrief = await runTopicResearchFanout({
+      brief: serpLlmBrief,
+      keyword: serpKeyword,
+      title: enrichedRow.title,
+      companyName,
+      location: serpLocation || undefined,
+      site: serpSite,
+      swotText,
+      pageExcerpt: pageExcerptFromImport || enrichedRow.imported_preamble_html?.trim()?.slice(0, 1200),
+      onProgress: (message) => options.onProgress?.(rowIndex, 0, message),
+      forceRefresh: options.forceFreshTopicFanout === true,
+    });
+    const firstPartyAuthorityBlock = firstPartyAuthorityBlockFromBrief(serpLlmBrief, swotText);
+
+    options.onProgress?.(rowIndex, 0, 'Classifying LLM audit authority links…');
+    const llmAuditAuthorityLinks = await resolveLlmAuditAuthorityLinksForChecklist({
+      brief: serpLlmBrief,
+      siteUrl: serpSite?.siteUrl ?? connectedSite?.siteUrl,
+      companyName,
+      location: serpLocation || undefined,
+      siteId: serpSite?.id ?? connectedSite?.id,
+    });
+    rowExplicitExternalPairs = buildRowExplicitExternalAllowlist({
+      modifierExternalLinks,
+      importedDraftLinks,
+      llmAuditAuthorityLinks,
     });
     rowExternalUrlsForSanitize = externalUrlsFromPairs(rowExplicitExternalPairs);
 
@@ -971,15 +1150,46 @@ try {
         ...(entityWikiUrl ? [entityWikiUrl] : []),
         ...importedDraftLinks.map((link) => link.url),
         ...modifierExternalLinks.map((link) => link.url),
+        ...llmAuditAuthorityLinks.map((link) => link.url),
       ]),
     ];
 
-    const prefilledRowContract = formatPrefilledBulkRowContractFromCsvRow(enrichedRow);
+    if (options.workflowSerpResearch?.commitBrief) {
+      const commitKeyword = serpLlmBrief.focusKeyword.trim() || serpKeyword;
+      await options.workflowSerpResearch.commitBrief(commitKeyword, serpLlmBrief, serpStoredFile);
+    }
 
-    // Generate checklist
+    const llmAuditSummaryPrompt = llmAuditGuidanceFromBrief(serpLlmBrief);
+    const workflowDfsOutputs =
+      options.workflowDfsArticleAudit?.getOutputs?.()
+      ?? options.workflowDfsArticleAudit?.outputs;
+    const cachedWorkflowArticleAudit = workflowDfsOutputs?.length
+      ? await loadWorkflowDfsArticleAudit(workflowDfsOutputs, serpPageUrl)
+      : null;
+    const dfsArticleAuditBlock = cachedWorkflowArticleAudit?.audit
+      ? formatDfsArticleAuditHarnessPromptBlock(cachedWorkflowArticleAudit.audit)
+      : "";
+    const serpLlmBriefJson = JSON.stringify(serpLlmBrief, null, 2);
+    enrichedRow = { ...enrichedRow, seo_research: serpLlmBriefJson };
+
+    const seoBriefFileName = BulkFileManager.generateFileName(enrichedRow, 'seo_research_brief', timestamp);
+    const seoBriefFile: BulkGeneratedFile = {
+      id: BulkFileManager.createFileId(rowIndex, 'seo-research-brief', timestamp),
+      rowIndex,
+      fileName: seoBriefFileName,
+      content: serpLlmBriefJson,
+      mimeType: 'application/json',
+      status: 'completed',
+      timestamp,
+      rowData: enrichedRow,
+    };
+    fileManager.addFile(seoBriefFile);
+    generatedFiles.push(seoBriefFile);
+
+    // Generate checklist (after SERP + LLM brief)
     options.onProgress?.(rowIndex, 0, 'Reading blacklist...');
     options.onProgress?.(rowIndex, 0, 'Generating checklist...');
-    let checklist = await generateChecklistFromSelections(
+    let checklistResult = await generateChecklistFromSelections(
       selectedKeywords,
       selectedH2Sections,
       enrichedRow.title,
@@ -996,24 +1206,30 @@ try {
         selectedPeopleAlsoAsk,
         selectedResearchLinks,
         connectedSite,
-        wordPressPosts,
+        postsForInternalLinks,
         runExternalResearch: rowExplicitExternalPairs.length > 0,
         locationName: "United States",
         languageCode: "en",
-        verbatimQuestionH2Outline: useVerbatimQuestionH2,
-        verbatimImportedH2Outline: useVerbatimImportedH2,
-        importedSectionBriefs: useVerbatimImportedH2 ? importedSections! : undefined,
-        importedToneProfile: importedToneProfile ?? undefined,
         importedDraftLinks: importedDraftLinks.length ? importedDraftLinks : undefined,
         modifierExternalLinks: modifierExternalLinks.length ? modifierExternalLinks : undefined,
         userExternalLinks: rowExplicitExternalPairs.length ? rowExplicitExternalPairs : undefined,
         wikipediaUrl: entityWikiUrl,
         wikipediaTitle: entityWikiTitle,
         prefilledRowContract: prefilledRowContract || undefined,
+        llmAuditSummary: llmAuditSummaryPrompt || undefined,
+        dfsArticleAuditBlock: dfsArticleAuditBlock || undefined,
+        firstPartyAuthorityBlock: firstPartyAuthorityBlock || undefined,
+        siteId: serpSite?.id ?? connectedSite?.id,
+        primaryKeyword: keywordData.keyword,
+        currentPageUrl: destinationPageUrl || undefined,
+        ...(llmAuditAuthorityLinks.length ? { llmAuditAuthorityLinks } : {}),
+        ...(!entityForLocalTemplate ? { serpResearchBriefJson: serpLlmBriefJson } : {}),
+        ...(options.forbiddenLiveH2s?.length ? { forbiddenLiveH2s: options.forbiddenLiveH2s } : {}),
       }
     );
-    checklist = injectImportedLinksIntoChecklist(checklist, importedDraftLinks);
+    let checklist = injectImportedLinksIntoChecklist(checklistResult.items, importedDraftLinks);
     checklist = injectModifierExternalLinksIntoChecklist(checklist, modifierExternalLinks);
+    checklist = injectLlmAuditAuthorityLinksIntoChecklist(checklist, llmAuditAuthorityLinks);
     if (entityForLocalTemplate && entityWikiUrl) {
       checklist = injectEntityWikipediaIntoChecklist(checklist, {
         entity: entityForLocalTemplate,
@@ -1021,7 +1237,10 @@ try {
         wikipediaTitle: entityWikiTitle,
       });
     }
-    const pipelineChecklist = prepareChecklistForPipeline(checklist);
+    const pipelineChecklistOpts = {
+      sapEntity: entityForLocalTemplate || undefined,
+    };
+    const pipelineChecklist = prepareChecklistForPipeline(checklist, pipelineChecklistOpts);
 
     if (pipelineChecklist.length === 0) {
       throw new Error('Failed to generate checklist');
@@ -1038,7 +1257,9 @@ try {
           forbiddenWordsPolicy: GLOBAL_FORBIDDEN_WORDS_PROMPT_BLOCK,
           generatedAt: new Date().toISOString(),
           title: enrichedRow.title,
-          lines: prepareChecklistForPipeline(checklist),
+          serpStoredFile,
+          llmAuditPlatformCount: llmOkCount,
+          lines: pipelineChecklist,
           downloadText: formatChecklistFileContent(checklist),
         },
         null,
@@ -1082,20 +1303,14 @@ try {
       topP: options.topP || 0.9,
     };
 
-    // Parallel: blueprint LLM + image checklist LLM + SEO research skeleton (outline-based; image checklist skipped when no AI image)
-    options.onProgress?.(rowIndex, 0, 'Blueprint + image outline + SEO draft (parallel)...');
+    // Parallel: blueprint + image checklist + SEO skeleton (LLM audit already merged above)
+    options.onProgress?.(rowIndex, 0, 'Blueprint + SEO draft (parallel)...');
     const baseUserPrompt = enrichedRow.prompt_modifier || enrichedRow.modifier;
-    const tonePromptAppend =
-      importedToneProfile != null
-        ? `\n\n${formatImportedToneForHarnessPrompt(importedToneProfile)}`
-        : "";
     const context: BlogTemplateContext = {
       flowTitle: enrichedRow.title,
       flowPurpose: flowPurposeStr,
       keywordData,
-      userPrompt: baseUserPrompt
-        ? `${baseUserPrompt.trim()}${tonePromptAppend}`
-        : tonePromptAppend.trim() || undefined,
+      userPrompt: baseUserPrompt?.trim() || undefined,
       prefilledRowContract: prefilledRowContract || undefined,
     };
 
@@ -1106,20 +1321,32 @@ try {
       : "";
 
     const [blueprintResultRaw, precomputedImageChecklist, preBlogSeoSkeleton, precomputedMetaDescription] = await Promise.all([
-      generateBlueprintFromTemplate(checklist, context, {
-        apiKey: options.openRouterApiKey,
-        model: options.selectedModel || getResearchModel(),
-        temperature: options.temperature || 1.0,
-        maxTokens: options.maxTokens || 8000,
-        topP: options.topP || 0.9,
-        connectedSite,
-        entity: entityForLocalTemplate,
-        importedDraftLinks: importedDraftLinks.length ? importedDraftLinks : undefined,
-        modifierExternalLinks: modifierExternalLinks.length ? modifierExternalLinks : undefined,
-        userExternalLinks: rowExplicitExternalPairs.length ? rowExplicitExternalPairs : undefined,
-        wikipediaUrl: entityWikiUrl,
-        wikipediaTitle: entityWikiTitle,
-      }),
+      entityForLocalTemplate
+        ? Promise.resolve(
+            buildBlueprintFromChecklistRows(
+              pipelineChecklist,
+              context,
+              entityForLocalTemplate,
+            ),
+          )
+        : generateBlueprintFromTemplate(pipelineChecklist, context, {
+            apiKey: options.openRouterApiKey,
+            model: options.selectedModel || getResearchModel(),
+            temperature: options.temperature || 1.0,
+            maxTokens: options.maxTokens || 8000,
+            topP: options.topP || 0.9,
+            connectedSite,
+            entity: entityForLocalTemplate,
+            importedDraftLinks: importedDraftLinks.length ? importedDraftLinks : undefined,
+            modifierExternalLinks: modifierExternalLinks.length ? modifierExternalLinks : undefined,
+            userExternalLinks: rowExplicitExternalPairs.length ? rowExplicitExternalPairs : undefined,
+            wikipediaUrl: entityWikiUrl,
+            wikipediaTitle: entityWikiTitle,
+            llmAuditSummary: llmAuditSummaryPrompt || undefined,
+            dfsArticleAuditBlock: dfsArticleAuditBlock || undefined,
+            firstPartyAuthorityBlock: firstPartyAuthorityBlock || undefined,
+            ...(llmAuditAuthorityLinks.length ? { llmAuditAuthorityLinks } : {}),
+          }),
       useAiImagePath
         ? generateImageChecklist(enrichedRow.title, flowPurposeStr, outlineTextForImage, imageChecklistLlmOptions)
         : Promise.resolve([] as ImageChecklistItem[]),
@@ -1151,24 +1378,57 @@ try {
       blueprintAgentsWithImports,
       modifierExternalLinks,
     );
-    const blueprintResult = enforceForbiddenWordsOnBlueprint({
-      ...blueprintResultRaw,
-      agents:
-        entityForLocalTemplate && entityWikiUrl
-          ? injectEntityWikipediaIntoBlueprintAgents(blueprintAgentsWithModifierLinks, {
-              entity: entityForLocalTemplate,
-              wikipediaUrl: entityWikiUrl,
-              wikipediaTitle: entityWikiTitle,
-            })
-          : blueprintAgentsWithModifierLinks,
-    });
+    const blueprintAgentsWithAuthorityLinks = injectLlmAuditAuthorityLinksIntoBlueprintAgents(
+      blueprintAgentsWithModifierLinks,
+      llmAuditAuthorityLinks,
+    );
+    const blueprintAgentsLinked =
+      entityForLocalTemplate && entityWikiUrl
+        ? injectEntityWikipediaIntoBlueprintAgents(blueprintAgentsWithAuthorityLinks, {
+            entity: entityForLocalTemplate,
+            wikipediaUrl: entityWikiUrl,
+            wikipediaTitle: entityWikiTitle,
+          })
+        : blueprintAgentsWithAuthorityLinks;
+    const blueprintResult = entityForLocalTemplate
+      ? {
+          ...blueprintResultRaw,
+          agents: blueprintAgentsLinked,
+        }
+      : enforceForbiddenWordsOnBlueprint(
+          {
+            ...blueprintResultRaw,
+            agents: blueprintAgentsLinked,
+          },
+          { sapEntity: undefined },
+        );
+    if (checklistResult.h2Outline?.length) {
+      (blueprintResult as { h2Outline?: string[] }).h2Outline = checklistResult.h2Outline;
+    }
+
+    const isEntitySapRow =
+      Boolean(enrichedRow.entity?.trim() && enrichedRow.entity.trim() !== 'N/A') &&
+      (options.useEntitySitemapTemplate === true || enrichedRow.sitemap_type === 'entity');
+    if (isEntitySapRow) {
+      const lockedTitle = resolveEntitySapPostTitle(
+        enrichedRow.keyword ?? keywordData.keyword,
+        enrichedRow.entity ?? '',
+        enrichedRow.title,
+      );
+      blueprintResult.title = lockedTitle;
+      if (!enrichedRow.title?.trim()) {
+        enrichedRow = { ...enrichedRow, title: lockedTitle };
+      }
+    }
+
     mergeBlueprintIntoPreBlogSkeleton(preBlogSeoSkeleton, blueprintResult.title, blueprintResult.purpose);
+    mergeSeoBriefIntoBulkSkeleton(preBlogSeoSkeleton, serpLlmBrief);
 
     if (blueprintResult.agents.length === 0) {
       throw new Error('No agents generated from template');
     }
 
-    // Final validation: Ensure all agents have [LINK] feature with 3-5 links specification
+    // Final validation: every agent must carry a [LINK] feature
     const agentsWithoutLinks = blueprintResult.agents.filter((agent) => {
       const features = Array.isArray(agent.features) ? agent.features : [];
       const hasLinkFeature = features.some(
@@ -1227,11 +1487,21 @@ try {
     );
     const rankMetaForTitle = resolveRankMathFromKeywordResearch(keywordData);
     let bulkResolvedPostTitle: string;
-    if (hasCsvFilledTitle(enrichedRow)) {
-      options.onProgress?.(rowIndex, 0, 'Using CSV title; skipping title rewrite');
-      bulkResolvedPostTitle = enrichedRow.title.trim();
+    if (options.optimizePreserveTitle?.trim()) {
+      bulkResolvedPostTitle = options.optimizePreserveTitle.trim();
+      options.onProgress?.(rowIndex, 0, 'Using existing post title for optimize upload');
+    } else if (isEntitySapRow) {
+      bulkResolvedPostTitle = resolveEntitySapPostTitle(
+        enrichedRow.keyword ?? bulkPrimaryKwResolved,
+        enrichedRow.entity ?? '',
+        enrichedRow.title,
+      );
+      if (!enrichedRow.title?.trim()) {
+        enrichedRow = { ...enrichedRow, title: bulkResolvedPostTitle };
+      }
+      options.onProgress?.(rowIndex, 0, 'Using entity SAP title');
     } else {
-      options.onProgress?.(rowIndex, 0, 'Finalizing post title...');
+      options.onProgress?.(rowIndex, 0, 'Writing post title...');
       bulkResolvedPostTitle = await resolveBulkWordPressPostTitle({
         apiKey: options.openRouterApiKey || loadApiKey(),
         focusKeyword: bulkPrimaryKwResolved,
@@ -1241,6 +1511,7 @@ try {
           blueprintTitle: blueprintResult.title,
         },
       });
+      enrichedRow = { ...enrichedRow, title: bulkResolvedPostTitle };
     }
 
     const siteBundleList = buildSitesToPostFromPosting(options.wordPressPosting);
@@ -1249,46 +1520,44 @@ try {
     let markdownContent: string;
     let precomputedAcfSeoBundle: PrecomputedAcfSeoBundle | null = null;
 
-    const useLegacyMonolithic =
-      typeof import.meta !== 'undefined' &&
-      import.meta.env?.VITE_BULK_LEGACY_BULK_MARKDOWN === 'true';
+    const harnessPromptEnv: HarnessPromptEnv = {
+      acfContextOverride: {
+        promptModifier: enrichedRow.prompt_modifier?.trim() || undefined,
+        keywordFocus: enrichedRow.keyword_focus?.trim() || undefined,
+        serviceArea: enrichedRow.service_area_fields?.trim() || undefined,
+        seoResearch: serpLlmBriefJson,
+      },
+      primaryKeyword: bulkPrimaryKwResolved,
+      siteId: serpSite?.id ?? connectedSite?.id,
+      wordpressSite: serpSite,
+      llmAuditSummary: llmAuditSummaryPrompt || undefined,
+      dfsArticleAuditBlock: dfsArticleAuditBlock || undefined,
+      firstPartyAuthorityBlock: firstPartyAuthorityBlock || undefined,
+      llmAuditAuthorityExternalPairs: llmAuditAuthorityLinks.map((link) => ({
+        url: link.url,
+        anchor: link.anchorText,
+      })),
+      ...(checklistResult.h2Outline?.length ? { h2Outline: checklistResult.h2Outline } : {}),
+    };
 
     const runMarkdownPipeline = async (): Promise<string> => {
-      let md: string;
-      if (useLegacyMonolithic) {
-        options.onProgress?.(rowIndex, 0, 'Generating blog content...');
-        md = await generateMarkdownContent(
-          blueprintResult,
-          enrichedRow,
-          keywordData,
-          knowledgeFiles,
-          activeKnowledgeBaseText,
-          bulkOptions,
-          connectedSite,
-          wordPressPosts,
-          options.siteSummary,
-          semrushKeywordsContext,
-          semrushScatterContext,
-          rowExternalUrlsForSanitize
-        );
-      } else {
-        options.onProgress?.(rowIndex, 0, 'Generating blog content (harness: one section at a time)...');
-        md = await generateMarkdownContentHarnessed(
-          blueprintResult,
-          enrichedRow,
-          keywordData,
-          knowledgeFiles,
-          activeKnowledgeBaseText,
-          bulkOptions,
-          rowIndex,
-          connectedSite,
-          wordPressPosts,
-          options.siteSummary,
-          semrushKeywordsContext,
-          semrushScatterContext,
-          rowExternalUrlsForSanitize
-        );
-      }
+      options.onProgress?.(rowIndex, 0, 'Generating blog content (harness: one section at a time)...');
+      let md = await generateMarkdownContentHarnessed(
+        blueprintResult,
+        enrichedRow,
+        keywordData,
+        knowledgeFiles,
+        activeKnowledgeBaseText,
+        bulkOptions,
+        rowIndex,
+        connectedSite,
+        postsForInternalLinks,
+        options.siteSummary,
+        semrushKeywordsContext,
+        semrushScatterContext,
+        rowExternalUrlsForSanitize,
+        harnessPromptEnv,
+      );
 
       if (!md || md.trim().length === 0) {
         throw new Error('Markdown content generation returned empty result');
@@ -1520,6 +1789,55 @@ try {
         : 'Generating blog content...',
     );
 
+    const persistGoogleMapsEntityImage = async (): Promise<void> => {
+      if (!entityForImage) return;
+      const entityKey = entityAdGroupKey(entityForImage);
+      const sharedPageCount = options.sapMapsEntityRowCounts?.get(entityKey);
+      const alreadyCached = peekGoogleMapsImageCache(entityForImage) != null;
+      options.onProgress?.(
+        rowIndex,
+        0,
+        sapMapsReuseProgressLabel(entityForImage, sharedPageCount, alreadyCached),
+      );
+
+      const mapsPayload = await fetchGoogleMapsImageForEntity(entityForImage);
+      if (!mapsPayload?.imageBase64) {
+        options.onProgress?.(
+          rowIndex,
+          0,
+          `Google Maps image unavailable for ${entityForImage}; continuing without featured image`,
+        );
+        return;
+      }
+
+      const imageBase64 = mapsPayload.imageBase64;
+      const mimeType = mapsPayload.mimeType || 'image/jpeg';
+      const extension = mimeType === 'image/jpeg' ? 'jpg' : 'png';
+      const finalImageFileName = sapMapsImageFileName(entityForImage, extension);
+
+      const imageFileId = BulkFileManager.createFileId(rowIndex, 'image', timestamp);
+      const imageFile: BulkGeneratedFile = {
+        id: imageFileId,
+        rowIndex,
+        fileName: finalImageFileName,
+        content: `data:${mimeType};base64,${imageBase64}`,
+        mimeType,
+        status: 'completed',
+        timestamp,
+        rowData: row,
+      };
+
+      fileManager.addFile(imageFile);
+      generatedFiles.push(imageFile);
+      options.onProgress?.(
+        rowIndex,
+        0,
+        alreadyCached
+          ? `Featured image ready (Google Maps reused; ${sharedPageCount ?? 1} SAP pages share this location)`
+          : 'Featured image generated (Google Maps - no checklist needed)',
+      );
+    };
+
     const markdownPromise = runMarkdownPipeline();
     const peerPromise = canPeerSearch
       ? findPeerFeaturedImageForRow({
@@ -1563,6 +1881,21 @@ try {
         });
       }
 
+      if (useGoogleMaps && entityForImage) {
+        try {
+          await persistGoogleMapsEntityImage();
+        } catch (error: unknown) {
+          console.error('Error generating featured image:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          options.onProgress?.(
+            rowIndex,
+            0,
+            `Google Maps featured image failed (${errorMessage}); continuing without featured image`,
+          );
+        }
+        return;
+      }
+
       if (useAiImagePath) {
         const imageResult = await generateFeaturedImage(
           flowTitleForBlueprint,
@@ -1601,66 +1934,7 @@ try {
       throw new Error(`Failed to generate markdown content: ${errorMessage}`);
     }
 
-    if (
-      row.featuredImage !== 'n' &&
-      markdownContent &&
-      useGoogleMaps &&
-      entityForImage &&
-      !peerFeaturedImage
-    ) {
-      const mapsImagePromise = (async () => {
-        const entityKey = entityAdGroupKey(entityForImage);
-        const sharedPageCount = options.sapMapsEntityRowCounts?.get(entityKey);
-        const alreadyCached = peekGoogleMapsImageCache(entityForImage) != null;
-        options.onProgress?.(
-          rowIndex,
-          0,
-          sapMapsReuseProgressLabel(entityForImage, sharedPageCount, alreadyCached),
-        );
-
-        const mapsPayload = await fetchGoogleMapsImageForEntity(entityForImage);
-        if (!mapsPayload?.imageBase64) {
-          throw new Error('No image data returned from Google Maps API');
-        }
-
-        const imageBase64 = mapsPayload.imageBase64;
-        const mimeType = mapsPayload.mimeType || 'image/jpeg';
-        const extension = mimeType === 'image/jpeg' ? 'jpg' : 'png';
-        const finalImageFileName = sapMapsImageFileName(entityForImage, extension);
-
-        const imageFileId = BulkFileManager.createFileId(rowIndex, 'image', timestamp);
-        const imageFile: BulkGeneratedFile = {
-          id: imageFileId,
-          rowIndex,
-          fileName: finalImageFileName,
-          content: `data:${mimeType};base64,${imageBase64}`,
-          mimeType,
-          status: 'completed',
-          timestamp,
-          rowData: row,
-        };
-
-        fileManager.addFile(imageFile);
-        generatedFiles.push(imageFile);
-        options.onProgress?.(
-          rowIndex,
-          0,
-          alreadyCached
-            ? `Featured image ready (Google Maps reused; ${sharedPageCount ?? 1} SAP pages share this location)`
-            : 'Featured image generated (Google Maps - no checklist needed)',
-        );
-      })().catch((error: unknown) => {
-        console.error('Error generating featured image:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        options.onError?.(rowIndex, new Error(`Google Maps featured image failed: ${errorMessage}`));
-        throw error instanceof Error ? error : new Error(errorMessage);
-      });
-
-      const [, faqBundle] = await Promise.all([mapsImagePromise, scheduleFaqBundlePromise()]);
-      precomputedAcfSeoBundle = faqBundle;
-    } else {
-      precomputedAcfSeoBundle = await scheduleFaqBundlePromise();
-    }
+    precomputedAcfSeoBundle = await scheduleFaqBundlePromise();
 
     // WordPress upload (if enabled)
     if (options.wordPressPosting?.enabled && markdownContent) {
@@ -1668,13 +1942,19 @@ try {
       const sitesToPost: Array<{ site: WordPressSite; sitemapType: 'post' | 'entity' }> = [];
       
       if (options.wordPressPosting.sites && options.wordPressPosting.sites.length > 0) {
-        // Use multiple sites if provided
-        sitesToPost.push(...options.wordPressPosting.sites);
+        sitesToPost.push(
+          ...options.wordPressPosting.sites.map((s) => ({
+            site: s.site,
+            sitemapType: resolveUploadSitemapType(s.sitemapType, enrichedRow.entity),
+          })),
+        );
       } else if (options.wordPressPosting.site) {
-        // Fall back to single site for backward compatibility
         sitesToPost.push({
           site: options.wordPressPosting.site,
-          sitemapType: options.wordPressPosting.sitemapType,
+          sitemapType: resolveUploadSitemapType(
+            options.wordPressPosting.sitemapType,
+            enrichedRow.entity,
+          ),
         });
       }
 
@@ -1699,6 +1979,7 @@ try {
         totalRows: options.wordPressPosting.totalRows,
         useGapScheduling: options.wordPressPosting.useGapScheduling,
         scheduleOccupancy: options.wordPressPosting.scheduleOccupancy,
+        publishDays: options.wordPressPosting.publishDays,
       };
       const gapSlotDate = options.wordPressPosting.gapDatesBySlot?.[scheduleSlotIndex];
       const useCsvPublishDates = options.wordPressPosting.useCsvPublishDates !== false;
@@ -1735,20 +2016,40 @@ try {
         bulkPublishDateSource = resolved.source;
       }
       const firstSite = sitesToPost[0]?.site;
+      const uploadBaseUrl = firstSite?.siteUrl?.replace(/\/+$/, "") ?? "";
+      let uploadPageUrl = enrichedRow.destination_url?.trim() ?? "";
+      if (!uploadPageUrl && uploadBaseUrl && options.useEntitySitemapTemplate) {
+        const kw = (bulkPrimaryKwResolved || enrichedRow.keyword || "").trim();
+        const ent =
+          enrichedRow.entity?.trim() && enrichedRow.entity.trim() !== "N/A"
+            ? enrichedRow.entity.trim()
+            : "";
+        const slugEarly = buildSapSlugFromKeywordEntity(kw, ent);
+        if (slugEarly) uploadPageUrl = `${uploadBaseUrl}/${slugEarly}`;
+      }
       options.onProgress?.(rowIndex, 0, 'Preparing harness content for upload...');
       let htmlContent = await prepareHarnessContentForUpload({
         markdownContent,
         blueprintAgents: blueprintResult.agents,
-        wordPressPosts,
+        wordPressPosts: postsForInternalLinks,
+        postsForInternalLinks,
         siteId: firstSite?.id,
         siteUrl: firstSite?.siteUrl,
-        currentPageUrl: undefined,
+        currentPageUrl: uploadPageUrl || undefined,
         externalUrlPairs: rowExplicitExternalPairs,
         apiKey: options.openRouterApiKey || loadApiKey(),
         keyword: bulkPrimaryKwResolved,
         articleTitle: bulkResolvedPostTitle,
         model: options.selectedModel,
       });
+      if (options.wordPressPagesForOfferTable?.length && firstSite?.siteUrl) {
+        htmlContent = ensureWhatWeOfferTablePageLinks(
+          htmlContent,
+          options.wordPressPagesForOfferTable,
+          uploadPageUrl || firstSite.siteUrl,
+          firstSite.siteUrl,
+        );
+      }
       const rankMeta = resolveRankMathFromKeywordResearch(keywordData);
       // Prefer CSV meta when filled; then generator meta; then research / body
       const csvMeta = enrichedRow.meta_description?.trim() || "";
@@ -1764,8 +2065,10 @@ try {
       let featuredImageId: number | undefined;
       const imageFile = generatedFiles.find(f => f.fileName.endsWith('.png') || f.fileName.endsWith('.jpg') || f.fileName.endsWith('.jpeg'));
       if (useGoogleMaps && entityForImage && !imageFile) {
-        throw new Error(
-          `Google Maps featured image missing for entity "${entityForImage}". Check OpenRouter API key in Settings and retry this row.`
+        options.onProgress?.(
+          rowIndex,
+          0,
+          `No Google Maps featured image for ${entityForImage}; publishing without featured image`,
         );
       }
       if (imageFile && imageFile.content) {
@@ -1817,8 +2120,6 @@ try {
         }
       }
 
-      await options.linkPrefetchPromise?.catch(() => {});
-
       const needsEntityWiki = sitesToPost.some((s) => s.sitemapType === 'entity');
       let entityWikiForSanitize: { url: string; label: string } | undefined;
       if (
@@ -1829,27 +2130,6 @@ try {
         const url = enrichedRow.wikipedia_url?.trim();
         if (url) {
           entityWikiForSanitize = { url, label: enrichedRow.entity.trim() };
-        }
-      }
-
-      // Fallback: prefetch missed or failed for a site
-      for (let siteIndex = 0; siteIndex < sitesToPost.length; siteIndex++) {
-        const { site } = sitesToPost[siteIndex];
-        if (!preValidatedUrlsBySite.has(site.id) && site.username && site.appPassword) {
-          options.onProgress?.(rowIndex, 0, `Validating links for ${site.name} (fallback)...`);
-          try {
-            const cache = await createSiteCache(site, undefined, (msg) => options.onProgress?.(rowIndex, 0, msg));
-            const validatedPosts = await getValidatedPosts(
-              site.id,
-              site.siteUrl,
-              cache.posts,
-              (msg) => options.onProgress?.(rowIndex, 0, msg)
-            );
-            const set = new Set(validatedPosts.map((p) => normalizeInternalUrl(site.siteUrl, p.link)).filter(Boolean));
-            preValidatedUrlsBySite.set(site.id, set);
-          } catch (err) {
-            console.warn('[Bulk Upload] Link validation fallback failed, proceeding without preValidatedUrls:', err);
-          }
         }
       }
 
@@ -1916,6 +2196,10 @@ try {
           const postTitle = bulkResolvedPostTitle;
 
           let slug: string | undefined;
+          const optimizeSlug = sanitizeWordPressSlugSegment(options.optimizePreserveSlug ?? "");
+          if (optimizeSlug.length >= 2) {
+            slug = optimizeSlug;
+          } else {
           const lockedSlug = sanitizeWordPressSlugSegment(enrichedRow.target_slug ?? "");
           if (lockedSlug.length >= 2) {
             slug = lockedSlug;
@@ -1945,6 +2229,43 @@ try {
               slug = undefined;
             }
           }
+          }
+
+          if (slug && !options.updateTargetPostId) {
+            if (!options.reservedUploadSlugsBySite) {
+              options.reservedUploadSlugsBySite = new Map();
+            }
+            const siteInventoryRows = getBulkGenerationWpInventoryIfReady(site.id) ?? [];
+            const reservedOnly = findUploadSlugConflict({
+              site,
+              slug,
+              inventoryRows: [],
+              reservedSlugs: options.reservedUploadSlugsBySite.get(site.id),
+            });
+            if (reservedOnly) {
+              const msg = `${reservedOnly.reason}: /${reservedOnly.slug}`;
+              if (sitemapType === "entity" || options.useEntitySitemapTemplate === true) {
+                throw new Error(`Entity page slug collision at upload: ${msg}`);
+              }
+              options.onError?.(rowIndex, new Error(msg));
+              continue;
+            }
+            if (sitemapType === "entity" || options.useEntitySitemapTemplate === true) {
+              const slugConflict = findUploadSlugConflict({
+                site,
+                slug,
+                inventoryRows: siteInventoryRows,
+                reservedSlugs: options.reservedUploadSlugsBySite.get(site.id),
+              });
+              if (slugConflict) {
+                const msg = slugConflict.existingUrl
+                  ? `${slugConflict.reason}: /${slugConflict.slug} (${slugConflict.existingUrl})`
+                  : `${slugConflict.reason}: /${slugConflict.slug}`;
+                throw new Error(`Entity page slug collision at upload: ${msg}`);
+              }
+            }
+            reserveUploadSlug(options.reservedUploadSlugsBySite, site.id, slug);
+          }
 
           const wpPostStatus = options.wordPressPosting.draftOnly
             ? ('draft' as const)
@@ -1968,7 +2289,7 @@ try {
           const sanitizedHtmlContent = sanitizeContentForUpload(
             htmlContent,
             site.siteUrl,
-            wordPressPosts,
+            postsForInternalLinks,
             isEntityUpload && entityWikiForSanitize ? entityWikiForSanitize.url : undefined,
             rowExternalUrlsForSanitize,
             isEntityUpload && entityWikiForSanitize ? entityWikiForSanitize.label : undefined,
@@ -1998,23 +2319,47 @@ try {
               !contentForUpload.toLowerCase().includes(`class="${FLO_FAQ_CLASS}"`)
             ) {
               options.onProgress?.(rowIndex, 0, 'Appending FAQ table to post body...');
-              const appended = await appendVisibleFaqTableWithIntro({
+              const appendedEarly = await appendVisibleFaqTableWithIntro({
                 sourceHtml: contentForUpload,
                 entries: earlyEntries,
                 apiKey: openRouterApiKeyEarly,
                 focusKeyword: bulkPrimaryKw || keywordData.keyword,
                 pageTitle: postTitle,
               });
-              if (appended?.html) {
-                contentForUpload = appended.html;
+              if (appendedEarly?.html) {
+                contentForUpload = appendedEarly.html;
               }
             }
           }
 
-          // Create WordPress post with sanitized + validated content (bad links stripped, never blocked)
-          // Always send date_gmt. Past slots (e.g. "1st this month" mid-month) must backdate;
-          // omitting date_gmt made WordPress stamp "now" and look like the batch started today.
-          const postResult = await createWordPressPost(
+          // Update existing post (optimize) or create new post
+          const isOptimizeUpdate =
+            options.updateTargetPostId != null && options.updateTargetPostId > 0;
+          const postResult = isOptimizeUpdate
+            ? await (async () => {
+                const updateResult = await updateWordPressPost(
+                  site.siteUrl,
+                  site.username,
+                  site.appPassword,
+                  options.updateTargetPostId!,
+                  postTitle,
+                  contentForUpload,
+                  excerpt,
+                  wpPostStatus,
+                  sitemapType === 'entity' ? entityEndpoint : 'post',
+                  siteFeaturedImageId,
+                  undefined,
+                  undefined,
+                  slug,
+                  entityEndpoint,
+                );
+                return {
+                  success: updateResult.success,
+                  postId: updateResult.postId ?? options.updateTargetPostId,
+                  link: updateResult.link,
+                };
+              })()
+            : await createWordPressPost(
             site.siteUrl,
             site.username,
             site.appPassword,
@@ -2035,6 +2380,9 @@ try {
           );
 
           if (postResult.success && postResult.postId) {
+            if (slug) {
+              assertWordPressCreateKeptSlug(slug, postResult.link);
+            }
             // Update ACF fields after successful post creation (discover field names like wordpress-uploader)
             const entity = enrichedRow.entity && enrichedRow.entity.trim() && enrichedRow.entity.trim() !== 'N/A'
               ? enrichedRow.entity.trim()
@@ -2068,10 +2416,14 @@ try {
                 entityEndpoint
               );
               const existingAcfFields = acfResult.success && acfResult.fields ? acfResult.fields : {};
+              const fieldsForMapping = await resolveAcfFieldsForMapping(
+                site,
+                existingAcfFields as Record<string, unknown>,
+              );
               const openRouterApiKey = options.openRouterApiKey || loadApiKey();
-              const fbMapping = fallbackFieldMapping(existingAcfFields as Record<string, unknown>);
+              const fbMapping = fallbackFieldMapping(fieldsForMapping);
               const discoveredMapping = await discoverACFFieldMapping(
-                existingAcfFields,
+                fieldsForMapping,
                 postTypeForAcf,
                 openRouterApiKey || '',
                 site.siteUrl
@@ -2463,7 +2815,7 @@ try {
     }
 return generatedFiles;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`Failed to generate blueprint: ${errorMessage}`);
+    if (error instanceof Error) throw error;
+    throw new Error(String(error));
   }
 }

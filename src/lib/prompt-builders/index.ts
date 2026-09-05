@@ -1,18 +1,23 @@
 // Core constants and section generation
-export { SYSTEM_PROMPT_CORE, CRITICAL_LINK_RULE, NO_FAKE_TESTIMONIALS_RULE, generateSectionsPrompt, generateSingleSectionPrompt } from "./core";
+export { SYSTEM_PROMPT_CORE, CRITICAL_LINK_RULE, NO_FAKE_TESTIMONIALS_RULE, AUTHENTICITY_WRITER_RULE, AUTHENTICITY_CHECKLIST_RULE, SECTION_OPENING_VARIETY_RULE, sectionAllowsThreeParagraphs, generateSectionsPrompt, generateSingleSectionPrompt } from "./core";
 
 // System and user prompts (main flow)
 export {
   buildSystemPrompt,
   buildUserPrompt,
   buildBulkHarnessSectionUserPrompt,
+} from "./system-user";
+
+export {
   BULK_WORDPRESS_POST_TITLE_RULE,
   META_DESCRIPTION_ANTI_CLICKBAIT_RULE,
   TITLE_ANTI_CLICKBAIT_RULE,
   TITLE_CASE_RULE,
   TITLE_KEYWORD_WEAVING_RULE,
   TITLE_WELL_KNOWN_ACRONYMS_RULE,
-} from "./system-user";
+  UNIFIED_COPY_FORMATTING_RULE,
+  HARNESS_HEADING_TITLE_CASE_RULE,
+} from "./title-rules";
 
 export { buildOverviewLinkRulesBlock } from "./overview-link-rules";
 

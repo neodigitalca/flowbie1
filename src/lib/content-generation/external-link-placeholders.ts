@@ -12,6 +12,9 @@ export const EXTERNAL_LINK_BARE_PLACEHOLDER_RE = /\[\[EXTERNAL\]\]/g;
 const EXTERNAL_SEMRUSH_FEATURE_RE =
   /\[EXTERNAL_SEMRUSH\]:\s*href=(https?:\/\/[^\s|]+)\s*\|\s*anchor=([^\]]+)/i;
 
+const LLM_AUDIT_AUTHORITY_FEATURE_RE =
+  /\[LLM_AUDIT_AUTHORITY_LINK\]:\s*\[([^\]]+)\]\((https?:\/\/[^)]+)\)/i;
+
 const BAD_LINK_ANCHOR_RE =
   /^(?:here|click here|read more|learn more|this page|this link|link|more info|more information)$/i;
 
@@ -56,10 +59,46 @@ export function parseExternalSemrushPairsFromAgents(
   return out;
 }
 
-/** Row-only allowlist: modifier_links_json + imported_links_json. No Semrush, no blueprint pairs. */
+export function parseLlmAuditAuthorityPairsFromAgents(
+  agents: Array<{ features?: string[] }>,
+): ExternalLinkPair[] {
+  const out: ExternalLinkPair[] = [];
+  const seen = new Set<string>();
+  for (const agent of agents) {
+    for (const feature of agent.features ?? []) {
+      const m = feature.match(LLM_AUDIT_AUTHORITY_FEATURE_RE);
+      if (!m) continue;
+      const anchor = m[1]!.trim();
+      const url = m[2]!.trim();
+      if (!url || !anchor) continue;
+      const key = pairKey(url, anchor);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ url, anchor });
+    }
+  }
+  return out;
+}
+
+export function mergeExternalLinkPairs(...groups: ExternalLinkPair[][]): ExternalLinkPair[] {
+  const seen = new Set<string>();
+  const out: ExternalLinkPair[] = [];
+  for (const group of groups) {
+    for (const pair of group) {
+      const key = pairKey(pair.url, pair.anchor);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(pair);
+    }
+  }
+  return out;
+}
+
+/** Row-only allowlist: modifier_links_json + imported_links_json + LLM audit authority links. */
 export function buildRowExplicitExternalAllowlist(opts: {
   modifierExternalLinks?: Array<{ url: string; anchorText: string }>;
   importedDraftLinks?: Array<{ url: string; anchorText: string }>;
+  llmAuditAuthorityLinks?: Array<{ url: string; anchorText: string }>;
 }): ExternalLinkPair[] {
   const seen = new Set<string>();
   const out: ExternalLinkPair[] = [];
@@ -76,6 +115,9 @@ export function buildRowExplicitExternalAllowlist(opts: {
     add(link.url, link.anchorText);
   }
   for (const link of opts.importedDraftLinks ?? []) {
+    add(link.url, link.anchorText);
+  }
+  for (const link of opts.llmAuditAuthorityLinks ?? []) {
     add(link.url, link.anchorText);
   }
   return out;
@@ -156,6 +198,85 @@ function isBadLinkAnchorLabel(label: string, href: string): boolean {
   return false;
 }
 
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function hostnameFromUrl(url: string): string {
+  try {
+    return new URL(url.trim().replace(/&amp;/gi, "&")).hostname.replace(/^www\./i, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function externalLinkTag(pair: ExternalLinkPair, anchorOverride?: string): string {
+  const href = pair.url.replace(/"/g, "&quot;").replace(/&/g, "&amp;");
+  const anchor = (anchorOverride ?? pair.anchor).trim() || deriveAnchorFromExternalUrl(pair.url);
+  return `<a href="${href}">${escapeHtml(anchor)}</a>`;
+}
+
+/** "Edmonton. edmonton.ca" → linked city keyword (not bare domain prose). */
+function fixCityPeriodBareHostnameInTextSegment(text: string, allowedPairs: ExternalLinkPair[]): string {
+  if (!text || !allowedPairs.length) return text;
+  let out = text;
+  for (const pair of allowedPairs) {
+    const host = hostnameFromUrl(pair.url);
+    if (!host) continue;
+    const re = new RegExp(
+      `\\b([A-Z][a-z]+(?:,\\s*[A-Z][a-z]+)?)\\.\\s*${escapeRegExp(host)}\\b`,
+      "g",
+    );
+    out = out.replace(re, (_match, cityPart: string) => {
+      const anchor = cityPart.trim().split(",")[0]?.trim();
+      if (!anchor || BAD_LINK_ANCHOR_RE.test(anchor)) {
+        return externalLinkTag(pair);
+      }
+      return externalLinkTag(pair, anchor);
+    });
+  }
+  return out;
+}
+
+function wrapBareHostnamesInTextSegment(text: string, allowedPairs: ExternalLinkPair[]): string {
+  if (!text || !allowedPairs.length) return text;
+  let out = text;
+  for (const pair of allowedPairs) {
+    const host = hostnameFromUrl(pair.url);
+    if (!host) continue;
+    const re = new RegExp(`(?<![./:@])\\b${escapeRegExp(host)}\\b`, "gi");
+    out = out.replace(re, () => externalLinkTag(pair));
+  }
+  return out;
+}
+
+function processPlainExternalLinkText(text: string, allowedPairs: ExternalLinkPair[]): string {
+  let out = fixCityPeriodBareHostnameInTextSegment(text, allowedPairs);
+  if (/<[^>]+>/.test(out)) {
+    return out.replace(/(<[^>]+>)|([^<]+)/g, (_m, tag: string | undefined, plain: string | undefined) => {
+      if (tag) return tag;
+      if (!plain) return "";
+      let chunk = wrapBareUrlsInTextSegment(plain, allowedPairs);
+      chunk = wrapBareHostnamesInTextSegment(chunk, allowedPairs);
+      return chunk;
+    });
+  }
+  out = wrapBareUrlsInTextSegment(out, allowedPairs);
+  out = wrapBareHostnamesInTextSegment(out, allowedPairs);
+  return out;
+}
+
+function processExternalLinkTextSegment(text: string, allowedPairs: ExternalLinkPair[]): string {
+  if (!text || !allowedPairs.length) return text;
+  if (/<[^>]+>/.test(text)) {
+    return text.replace(/(<[^>]+>)|([^<]+)/g, (_m, tag: string | undefined, plain: string | undefined) => {
+      if (tag) return tag;
+      return plain ? processPlainExternalLinkText(plain, allowedPairs) : "";
+    });
+  }
+  return processPlainExternalLinkText(text, allowedPairs);
+}
+
 function wrapBareUrlsInTextSegment(text: string, allowedPairs: ExternalLinkPair[]): string {
   if (!text || !allowedPairs.length) return text;
   const bareUrlRe = /https?:\/\/[^\s<>"']+/gi;
@@ -165,13 +286,11 @@ function wrapBareUrlsInTextSegment(text: string, allowedPairs: ExternalLinkPair[
     if (!pair) {
       return trailing ? trailing : "";
     }
-    const href = pair.url.replace(/"/g, "&quot;").replace(/&/g, "&amp;");
-    const anchor = pair.anchor.trim() || deriveAnchorFromExternalUrl(url);
-    return `<a href="${href}">${escapeHtml(anchor)}</a>${trailing}`;
+    return `${externalLinkTag(pair)}${trailing}`;
   });
 }
 
-/** Convert bare https:// URLs in HTML text nodes to anchor tags using approved Semrush/modifier pairs. */
+/** Convert bare https:// URLs and bare hostnames in HTML text nodes to anchor tags. */
 export function wrapBareExternalUrlsInHtml(
   html: string,
   allowedPairs: ExternalLinkPair[] = [],
@@ -180,8 +299,20 @@ export function wrapBareExternalUrlsInHtml(
   return html.replace(/(<[^>]+>)|([^<]+)/g, (_match, tag: string | undefined, text: string | undefined) => {
     if (tag) return tag;
     if (!text) return text ?? "";
-    return wrapBareUrlsInTextSegment(text, allowedPairs);
+    return processExternalLinkTextSegment(text, allowedPairs);
   });
+}
+
+/** Resolve placeholders, wrap bare URLs/hostnames, and fix raw URL anchor labels. */
+export function finalizeExternalLinksInHtml(
+  html: string,
+  allowedPairs: ExternalLinkPair[] = [],
+): string {
+  if (!html?.trim()) return html;
+  let out = resolveExternalLinkPlaceholdersInHtml(html, allowedPairs);
+  out = wrapBareExternalUrlsInHtml(out, allowedPairs);
+  out = ensureAllLinkAnchorsInHtml(out, allowedPairs);
+  return out;
 }
 
 /** Every <a> must have visible anchor text; external links use approved Semrush anchor when URL matches. */
@@ -199,8 +330,15 @@ export function ensureAllLinkAnchorsInHtml(
       if (/^https?:\/\//i.test(href)) {
         const pair = findPairByUrl(href, allowedPairs);
         if (pair) {
-          const anchor = pair.anchor.trim() || deriveAnchorFromExternalUrl(pair.url);
-          return `<a${before}href="${safeHref}"${after}>${escapeHtml(anchor)}</a>`;
+          const approved = pair.anchor.trim() || deriveAnchorFromExternalUrl(pair.url);
+          if (
+            plain
+            && !isBadLinkAnchorLabel(plain, href)
+            && plain.replace(/\/+$/, "").toLowerCase() !== href.replace(/\/+$/, "").toLowerCase()
+          ) {
+            return match;
+          }
+          return `<a${before}href="${safeHref}"${after}>${escapeHtml(approved)}</a>`;
         }
         if (isBadLinkAnchorLabel(plain, href)) {
           const anchor = deriveAnchorFromExternalUrl(href);
@@ -280,6 +418,16 @@ export function assertHarnessExternalLinksValid(
       `Harness: section "${opts.title}" contains bare https URL in prose — use [[EXTERNAL:url|anchor]] placeholder only`,
     );
   }
+  for (const pair of allowedPairs) {
+    const host = hostnameFromUrl(pair.url);
+    if (!host) continue;
+    const hostRe = new RegExp(`\\b${escapeRegExp(host)}\\b`, "i");
+    if (hostRe.test(proseCheck)) {
+      throw new Error(
+        `Harness: section "${opts.title}" contains bare hostname ${host} in prose — use [[EXTERNAL:${pair.url}|${pair.anchor}]] woven mid-sentence`,
+      );
+    }
+  }
 
   const externalAnchorRe = /<a\b[^>]*href\s*=\s*["'](https?:\/\/[^"']+)["'][^>]*>/gi;
   let m: RegExpExecArray | null;
@@ -348,3 +496,13 @@ export function resolveExternalLinkPlaceholdersInHtml(
 
   return out;
 }
+
+/** Harness / system prompt copy for placeholder-based external authority links. */
+export const EXTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK = `=== EXTERNAL LINK PLACEHOLDERS (body sections — weave like internal links) ===
+Format (exact): [[EXTERNAL:exact-url|exact-anchor]]
+- Copy exact URL and anchor from APPROVED EXTERNAL URLs (SEMRUSH or LLM AUDIT AUTHORITY) blocks only.
+- Weave **mid-sentence inside a paragraph**, same placement rules as [[LINK:query|anchor]] internal links.
+- anchor = approved phrase from the list (2-6 words). Never invent anchors.
+FORBIDDEN: bare hostname or domain as plain text or anchor (edmonton.ca, energy.gov); writing "City. domain.ca" instead of [[EXTERNAL:url|City]]; "for more", "here", "learn more", or "read more" as anchor; appending the link after the final period; a standalone link-only sentence.
+Example: "Homeowners in [[EXTERNAL:https://www.edmonton.ca/residential/solar|Edmonton]] should review solar guidelines before applying for permits."
+=== END EXTERNAL LINK PLACEHOLDERS ===`;

@@ -2,7 +2,6 @@ import type { Dispatch, SetStateAction } from "react";
 import { handleOptimizeContent } from "@/hooks/content-optimization/handle-optimize-content";
 import { handleOptimizeMultipleContent } from "@/hooks/content-optimization/bulk-optimization";
 import { humanizeSlugFromUrl } from "@/hooks/content-optimization/bulk-optimization-constants";
-import { getStoredSites } from "@/components/integrations/storage";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { AgentRunHarnessContext } from "@/lib/agent-runs/harness-registry";
 import {
@@ -14,16 +13,42 @@ import {
 } from "@/lib/agent-runs/agent-run-checkpoint";
 import { patchAgentRunInList } from "@/lib/agent-runs/agent-runs-local-patch";
 import { resolveAgentRunBatchKey } from "@/lib/agent-runs/agent-run-batch-key";
+import {
+  resolveAgentRunWordPressSite,
+  resolveGscReportingSite,
+} from "@/lib/agent-runs/resolve-agent-run-site";
 import { resolveAgentRunRecipeKey } from "@/lib/agent-runs/agent-run-navigation";
 import { getAgentRunOptimizationBridge } from "@/lib/agent-runs/agent-run-optimization-bridge";
+import { resolveGscReportingRunConfig } from "@/lib/gsc-reporting/resolve-gsc-reporting-run-config";
 import { runGscReportingClientHarness } from "@/lib/agent-runs/run-gsc-reporting-client-harness";
 import { runLocalDominatorExportClientHarness } from "@/lib/agent-runs/run-local-dominator-export-client-harness";
+import { runDfsArticleAuditClientHarness } from "@/lib/agent-runs/run-dfs-article-audit-client-harness";
+import { runChatGptAuditClientHarness } from "@/lib/agent-runs/run-chatgpt-audit-client-harness";
+import { browserAutomationRequiresClient } from "@/lib/browser-automation/resolve-browser-target-url";
+import {
+  runBrowserAutomationClientHarness,
+  runBrowserAutomationDirectHarness,
+} from "@/lib/agent-runs/run-browser-automation-client-harness";
+import { runContentGapCheckClientHarness } from "@/lib/agent-runs/run-content-gap-check-client-harness";
 import {
   runPostCreatorClientHarness,
   shouldRunPostCreatorHarness,
 } from "@/lib/agent-runs/run-post-creator-client-harness";
+import {
+  runEntityPageCreatorClientHarness,
+  shouldRunEntityPageCreatorHarness,
+} from "@/lib/agent-runs/run-entity-page-creator-client-harness";
+import {
+  runEntityGeneratorClientHarness,
+} from "@/lib/agent-runs/run-entity-generator-client-harness";
+import {
+  runSapGeneratorClientHarness,
+  shouldRunSapGeneratorHarness,
+} from "@/lib/agent-runs/run-sap-generator-client-harness";
 import { fetchAgentRun } from "@/lib/agent-runs-api";
 import type { AgentRun, AgentRunCheckpointUrlSummary, AgentRunResult } from "@/lib/agent-runs-types";
+import type { TaskExecutionClientRunContract, TaskExecutionPayload } from "@/lib/tasks-types";
+import type { PrefilledOverviewTarget } from "@/hooks/content-optimization/bulk-optimization-params";
 import { resolveTaskExecutionBucketInventory } from "@/lib/task-execution-resolve-bucket-urls";
 import { getEntitySiteWarmCacheIfReady } from "@/lib/local-analysis/entity-site-warm-cache";
 import { isTaskExecutionTargetAll } from "@/lib/task-execution-target";
@@ -33,20 +58,79 @@ import {
   patchTaskExecutionProgress,
   reopenTaskExecutionForResume,
 } from "@/lib/tasks-api";
-import { buildExecutionCompletePayload } from "@/lib/task-execution-archive";
 import { agentRunHasResumeProgress } from "@/lib/agent-runs/agent-run-resume";
 import { effectiveSaveLocalArchive } from "@/lib/schedule-output-destination";
 import {
   automationTitleFromRun,
   executionKindFromRun,
-  sendAutomationEmailIfConfigured,
-  type AutomationEmailDeliveryResult,
 } from "@/lib/automation-email-delivery";
+import {
+  completeAgentRunExecution,
+  completeExecutionArchiveOnly,
+  shouldSkipInlineDeliveries,
+} from "@/lib/workflow/workflow-deliveries-skip";
+import { resolveDfsArticleAuditBlockForUrl } from "@/lib/dfs-article-audit/resolve-dfs-article-audit-block";
+import { fetchWorkflowStepOutputs } from "@/lib/workflow/workflow-api";
 import type { OptimizationProgressState } from "@/hooks/content-optimization/use-optimization-state";
 import type { OptimizationFileManager } from "@/lib/optimization-file-manager";
 
 function noopSetState<T>(_value: SetStateAction<T>): void {
   /* agent run harness uses API steps only */
+}
+
+async function optimizationOptionsWithDfsArticleAudit(
+  run: AgentRun,
+  contract: TaskExecutionClientRunContract & object,
+  url: string,
+): Promise<NonNullable<TaskExecutionClientRunContract["optimizationOptions"]>> {
+  const base = { ...(contract.optimizationOptions ?? {}) };
+  const workflowId = Number(run.context?.workflowId ?? run.plan?.workflowId ?? 0);
+  const workflowRunId = Number(run.context?.workflowRunId ?? run.plan?.workflowRunId ?? 0);
+  let workflowOutputs: Awaited<ReturnType<typeof fetchWorkflowStepOutputs>> | undefined;
+  if (workflowId > 0 && workflowRunId > 0) {
+    workflowOutputs = await fetchWorkflowStepOutputs(run.teamId, workflowId, workflowRunId);
+  }
+
+  const workflowContextBlock = String(contract.workflowContextBlock ?? base.workflowContextBlock ?? "");
+  const block = base.dfsArticleAuditBlock?.trim()
+    ? base.dfsArticleAuditBlock
+    : await resolveDfsArticleAuditBlockForUrl({
+        articleUrl: url,
+        workflowOutputs,
+        workflowContextBlock,
+      });
+
+  return {
+    ...base,
+    ...(workflowContextBlock ? { workflowContextBlock } : {}),
+    ...(workflowOutputs?.length ? { workflowAuditOutputs: workflowOutputs } : {}),
+    ...(block.trim() ? { dfsArticleAuditBlock: block } : {}),
+  };
+}
+
+function resolveRunContract(run: AgentRun): TaskExecutionClientRunContract & object {
+  const plan = run.plan ?? {};
+  const client = plan.clientRunContract ?? {};
+  const payload = plan.executionPayload ?? {};
+  const siteId =
+    String(
+      run.context?.siteId ??
+        (payload as { siteId?: string }).siteId ??
+        (client as { siteId?: string }).siteId ??
+        "",
+    ).trim() || undefined;
+  const merged = {
+    ...payload,
+    ...client,
+    ...(siteId ? { siteId } : {}),
+  } as TaskExecutionClientRunContract & object;
+  if (
+    run.recipeKey === "local_dominator_export"
+    && (payload as TaskExecutionPayload).keyword !== undefined
+  ) {
+    merged.keyword = (payload as TaskExecutionPayload).keyword;
+  }
+  return merged;
 }
 
 async function completeOptimizerWithOptionalEmail(args: {
@@ -60,42 +144,38 @@ async function completeOptimizerWithOptionalEmail(args: {
   summaryText: string;
   summary?: string;
   onStep?: AgentRunHarnessContext["onStep"];
-}): Promise<AutomationEmailDeliveryResult> {
+}) {
   const executionKind = executionKindFromRun(args.run) || "content_optimizer";
-  const emailResult = await sendAutomationEmailIfConfigured({
+  if (shouldSkipInlineDeliveries(args.run)) {
+    await completeExecutionArchiveOnly({
+      teamId: args.run.teamId,
+      executionId: args.executionId,
+      run: args.run,
+      saveLocalArchive: args.saveLocalArchive,
+      ok: args.ok,
+      result: args.result,
+      error: args.ok ? undefined : String(args.result.error ?? "Run failed"),
+    });
+    return {};
+  }
+  return completeAgentRunExecution({
+    run: args.run,
     teamId: args.run.teamId,
     executionId: args.executionId,
     contract: args.contract,
+    saveLocalArchive: args.saveLocalArchive,
+    ok: args.ok,
+    result: args.result,
+    summaryText: args.summaryText,
+    fileNameHint: `${args.site.name} ${executionKind.replace(/_/g, " ")}`,
     tokenContext: {
       siteName: args.site.name,
       automationTitle: automationTitleFromRun(args.run),
       executionKind,
       summary: args.summary,
     },
-    summaryText: args.summaryText,
-    runOk: args.ok,
     onStep: (label, status) => args.onStep?.(label, status ?? "running"),
   });
-  await completeTaskExecution(
-    args.run.teamId,
-    args.executionId,
-    buildExecutionCompletePayload({
-      ok: args.ok,
-      run: args.run,
-      saveLocalArchive: args.saveLocalArchive,
-      result: { ...args.result, ...emailResult },
-    }),
-  );
-  return emailResult;
-}
-
-function resolveHarnessSite(siteId: string, sites: WordPressSite[]): WordPressSite {
-  const id = siteId.trim();
-  const fromHook = sites.find((s) => s.id === id);
-  if (fromHook) return fromHook;
-  const fromStorage = getStoredSites().find((s) => s.id === id);
-  if (fromStorage) return fromStorage;
-  throw new Error("WordPress site not found for this task.");
 }
 
 async function resolveTaskExecutionTerminalState(
@@ -201,36 +281,85 @@ export async function runTaskExecutionClientHarness(
   sites: WordPressSite[],
   ctx: AgentRunHarnessContext,
 ): Promise<AgentRunResult> {
-  const contract = run.plan?.clientRunContract;
   const executionId = run.plan?.taskExecutionId;
-  if (!contract || !executionId) {
+  if (!run.plan?.clientRunContract || !executionId) {
     throw new Error("Task execution contract missing from agent run plan.");
   }
 
   const terminalResult = await resolveTaskExecutionTerminalState(run, ctx);
   if (terminalResult) {
-    await ctx.onStep?.("Complete", "done");
     return terminalResult;
   }
 
-  const site = resolveHarnessSite(contract.siteId, sites);
-
-  const batchKey = resolveAgentRunBatchKey(run, site.id);
+  const preliminaryContract = resolveRunContract(run);
   const effectiveRecipe = resolveAgentRunRecipeKey(run);
 
+  if (effectiveRecipe === "browser_automation" && !preliminaryContract.siteId?.trim()) {
+    if (browserAutomationRequiresClient(preliminaryContract as TaskExecutionPayload)) {
+      throw new Error("Set a client before running browser automation.");
+    }
+    return runBrowserAutomationDirectHarness(run, ctx);
+  }
+
   if (effectiveRecipe === "gsc_reporting") {
+    const site = resolveGscReportingSite(run, sites);
+    const contract = resolveRunContract(run);
+    const gscConfig = resolveGscReportingRunConfig(contract);
     const reportingContract = {
       ...contract,
-      comparePreset:
-        contract.comparePreset === "yoy" || contract.comparePreset === "mom"
-          ? contract.comparePreset
-          : "mom",
+      comparePreset: gscConfig.comparePreset,
+      gscComparePresetId: gscConfig.presetId,
+      gscCompareRanges: gscConfig.compareRanges,
     };
-    return runGscReportingClientHarness(run, site, reportingContract, executionId, ctx, batchKey);
+    return runGscReportingClientHarness(
+      run,
+      site,
+      reportingContract,
+      executionId,
+      ctx,
+      resolveAgentRunBatchKey(run, site.id),
+    );
   }
+
+  const site = resolveAgentRunWordPressSite(
+    run,
+    sites,
+    "WordPress site not found for this task.",
+  );
+  const contract = resolveRunContract(run);
+
+  const batchKey = resolveAgentRunBatchKey(run, site.id);
 
   if (effectiveRecipe === "local_dominator_export") {
     return runLocalDominatorExportClientHarness(run, site, contract, executionId, ctx, batchKey);
+  }
+
+  if (effectiveRecipe === "chatgpt_website_audit") {
+    return runChatGptAuditClientHarness(run, site, contract, executionId, ctx, batchKey);
+  }
+
+  if (effectiveRecipe === "dfs_llm_article_audit") {
+    return runDfsArticleAuditClientHarness(run, site, contract, executionId, ctx, batchKey);
+  }
+
+  if (effectiveRecipe === "browser_automation") {
+    return runBrowserAutomationClientHarness(run, site, contract, executionId, ctx, batchKey);
+  }
+
+  if (effectiveRecipe === "content_gap_check") {
+    return runContentGapCheckClientHarness(run, site, contract, executionId, ctx, batchKey);
+  }
+
+  if (effectiveRecipe === "entity_generator") {
+    return runEntityGeneratorClientHarness(run, site, contract, executionId, ctx, batchKey);
+  }
+
+  if (effectiveRecipe === "sap_generator" || shouldRunSapGeneratorHarness(contract)) {
+    return runSapGeneratorClientHarness(run, site, contract, executionId, ctx, batchKey);
+  }
+
+  if (effectiveRecipe === "entity_page_creator" || shouldRunEntityPageCreatorHarness(contract)) {
+    return runEntityPageCreatorClientHarness(run, site, contract, executionId, ctx, batchKey);
   }
 
   if (effectiveRecipe === "post_creator" || shouldRunPostCreatorHarness(contract)) {
@@ -265,7 +394,6 @@ export async function runTaskExecutionClientHarness(
       summary: `Optimized ${resumePayload.url}`,
       onStep: ctx.onStep,
     });
-    await ctx.onStep?.("Complete", "done", resumePayload);
     return {
       updated: 1,
       message: `Optimized ${resumePayload.url}`,
@@ -309,6 +437,7 @@ export async function runTaskExecutionClientHarness(
   };
 
   const bridge = getAgentRunOptimizationBridge();
+  const optimizationOptions = await optimizationOptionsWithDfsArticleAudit(run, contract, contract.url);
 
   await handleOptimizeContent({
     site,
@@ -319,7 +448,7 @@ export async function runTaskExecutionClientHarness(
     setGscClusterAnalysis: noopSetState,
     setIsAnalyzingClusters: noopSetState,
     skipOnNoGSC: true,
-    optimizationOptions: contract.optimizationOptions,
+    optimizationOptions,
     resolvedPost,
     testMode: Boolean(contract.optimizationOptions?.testMode),
     setIsOptimizingContent:
@@ -376,6 +505,20 @@ export async function runTaskExecutionClientHarness(
     batchKey,
     ...emailResult,
   };
+}
+
+function prefilledOverviewTargetsFromContract(
+  research: Record<string, string> | undefined,
+): Record<string, PrefilledOverviewTarget> | undefined {
+  if (!research || typeof research !== "object") return undefined;
+  const out: Record<string, PrefilledOverviewTarget> = {};
+  for (const [url, seo] of Object.entries(research)) {
+    const trimmedUrl = url.trim();
+    const seoResearch = String(seo ?? "").trim();
+    if (!trimmedUrl || !seoResearch) continue;
+    out[trimmedUrl] = { postId: 0, seoResearch };
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 async function runTaskExecutionBulkClientHarness(
@@ -512,6 +655,12 @@ async function runTaskExecutionBulkClientHarness(
     }
   };
 
+  const sharedOptimizationOptions = await optimizationOptionsWithDfsArticleAudit(
+    run,
+    contract,
+    workUrls[0] ?? contract.url ?? "",
+  );
+
   const bulkResult = await handleOptimizeMultipleContent({
     site,
     urls: workUrls,
@@ -521,7 +670,7 @@ async function runTaskExecutionBulkClientHarness(
     setGscClusterAnalysis: noopSetState,
     setIsAnalyzingClusters: noopSetState,
     optimizationOptions: {
-      ...contract.optimizationOptions,
+      ...sharedOptimizationOptions,
       inventorySitemapSource,
     },
     setIsOptimizingContent:
@@ -542,6 +691,9 @@ async function runTaskExecutionBulkClientHarness(
     useSiteWarmCacheOnly: true,
     onBulkUrlComplete,
     batchKey,
+    prefilledOverviewTargets: prefilledOverviewTargetsFromContract(
+      (contract as TaskExecutionClientRunContract).prefilledUrlResearch,
+    ),
   });
 
   await flushAgentRunCheckpointPatch(run.teamId, run.id);
@@ -569,7 +721,6 @@ async function runTaskExecutionBulkClientHarness(
     summary: bulkMessage,
     onStep: ctx.onStep,
   });
-  await ctx.onStep?.("Complete", "done");
 
   return {
     updated: uploadedUrls.length,

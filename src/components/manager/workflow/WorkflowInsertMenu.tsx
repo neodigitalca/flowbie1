@@ -4,17 +4,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AutomationRecipeLibrary } from "@/components/manager/tasks/recipes/AutomationRecipeLibrary";
 import { FORGE_RECIPE_CARD_TILE_CLASS } from "@/components/manager/pulse-forge/forge-recipe-styles";
 import { defaultNodeLabel } from "@/lib/workflow/workflow-graph-utils";
+import { WORKFLOW_ACTION_AGENT_PRESETS } from "@/lib/workflow/workflow-action-agent-presets";
 import type { AutomationRecipeCatalogItem } from "@/lib/automation-recipes-types";
 import type { WorkflowNodeKind } from "@/lib/workflow/workflow-types";
+import { WORKFLOW_THEN_KINDS } from "@/lib/workflow/workflow-types";
 import { cn } from "@/lib/utils";
 
-const STEP_KINDS: WorkflowNodeKind[] = [
+const TRIGGER_AGENT_KINDS: WorkflowNodeKind[] = [
   "trigger_manual",
   "trigger_calendar",
   "trigger_gsc",
   "trigger_document",
+  "trigger_agentmail",
   "trigger_agent_done",
   "action_agent",
+  "csv_rows",
   "path_rules",
   "rag_archive",
 ];
@@ -22,22 +26,82 @@ const STEP_KINDS: WorkflowNodeKind[] = [
 export type WorkflowInsertMenuProps = {
   teamId: number;
   open: boolean;
+  insertAnchorNodeId: string | null;
   onOpenChange: (open: boolean) => void;
-  onAddStep: (kind: WorkflowNodeKind) => void;
-  onAddRecipe: (recipe: AutomationRecipeCatalogItem) => void;
+  onAddStep: (kind: WorkflowNodeKind, afterNodeId: string | null) => void;
+  onAddActionAgentPreset: (presetId: string, afterNodeId: string | null) => void;
+  onAddRecipe: (recipe: AutomationRecipeCatalogItem, afterNodeId: string | null) => void;
 };
+
+function PresetStepCard({
+  label,
+  description,
+  onPick,
+}: {
+  label: string;
+  description: string;
+  onPick: () => void;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      className={cn(
+        FORGE_RECIPE_CARD_TILE_CLASS,
+        "border-l-[length:var(--tile-accent-width)] border-l-primary p-4 text-left hover:shadow-tile-pop",
+      )}
+      onClick={onPick}
+    >
+      <p className="text-base font-semibold text-white">{label}</p>
+      <p className="mt-1 text-base text-muted-foreground">{description}</p>
+    </button>
+  );
+}
+
+function StepCard({
+  kind,
+  onPick,
+}: {
+  kind: WorkflowNodeKind;
+  onPick: () => void;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      className={cn(
+        FORGE_RECIPE_CARD_TILE_CLASS,
+        "border-l-[length:var(--tile-accent-width)] border-l-primary p-4 text-left hover:shadow-tile-pop",
+      )}
+      onClick={onPick}
+    >
+      <p className="text-base font-semibold text-white">{defaultNodeLabel(kind)}</p>
+      <p className="mt-1 text-base text-muted-foreground">{kind.replace(/_/g, " ")}</p>
+    </button>
+  );
+}
 
 export function WorkflowInsertMenu({
   teamId,
   open,
+  insertAnchorNodeId,
   onOpenChange,
   onAddStep,
+  onAddActionAgentPreset,
   onAddRecipe,
 }: WorkflowInsertMenuProps): React.ReactElement {
   const close = () => onOpenChange(false);
 
   const pickRecipe = (recipe: AutomationRecipeCatalogItem) => {
-    onAddRecipe(recipe);
+    onAddRecipe(recipe, insertAnchorNodeId);
+    close();
+  };
+
+  const pickStep = (kind: WorkflowNodeKind) => {
+    onAddStep(kind, insertAnchorNodeId);
+    close();
+  };
+
+  const pickActionAgentPreset = (presetId: string) => {
+    onAddActionAgentPreset(presetId, insertAnchorNodeId);
     close();
   };
 
@@ -76,24 +140,31 @@ export function WorkflowInsertMenu({
             />
           </TabsContent>
           <TabsContent value="steps" className="mt-0 min-h-0 flex-1 overflow-y-auto p-6 data-[state=inactive]:hidden">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {STEP_KINDS.map((kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  className={cn(
-                    FORGE_RECIPE_CARD_TILE_CLASS,
-                    "border-l-[length:var(--tile-accent-width)] border-l-primary p-4 text-left hover:shadow-tile-pop",
-                  )}
-                  onClick={() => {
-                    onAddStep(kind);
-                    close();
-                  }}
-                >
-                  <p className="text-base font-semibold text-white">{defaultNodeLabel(kind)}</p>
-                  <p className="mt-1 text-base text-muted-foreground">{kind.replace(/_/g, " ")}</p>
-                </button>
-              ))}
+            <div className="flex flex-col gap-8">
+              <section>
+                <h3 className="mb-3 text-base font-semibold text-white">Triggers and agents</h3>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {TRIGGER_AGENT_KINDS.map((kind) => (
+                    <StepCard key={kind} kind={kind} onPick={() => pickStep(kind)} />
+                  ))}
+                  {WORKFLOW_ACTION_AGENT_PRESETS.map((preset) => (
+                    <PresetStepCard
+                      key={preset.id}
+                      label={preset.label}
+                      description={preset.description}
+                      onPick={() => pickActionAgentPreset(preset.id)}
+                    />
+                  ))}
+                </div>
+              </section>
+              <section>
+                <h3 className="mb-3 text-base font-semibold text-white">Then</h3>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {WORKFLOW_THEN_KINDS.map((kind) => (
+                    <StepCard key={kind} kind={kind} onPick={() => pickStep(kind)} />
+                  ))}
+                </div>
+              </section>
             </div>
           </TabsContent>
         </Tabs>

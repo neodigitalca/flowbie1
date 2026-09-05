@@ -11,8 +11,8 @@ import {
 } from "@/lib/master-instructions-storage";
 import type { SitePostInventoryRow } from "@/lib/wordpress-api/types";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
-const OR = "https://openrouter.ai/api/v1/chat/completions";
 const MAX_POSTS_IN_PROMPT = 120;
 
 const SYSTEM = `You fill empty Local Analysis **target keyword** cells from a WordPress post library.
@@ -133,7 +133,7 @@ async function postOpenRouter(args: {
   temperature: number;
   topP: number;
 }): Promise<string> {
-  const res = await fetch(OR, {
+  const res = await postOpenRouterAppChatFetch( {
     method: "POST",
     headers: openRouterWebAppHeaders(args.apiKey),
     body: JSON.stringify({

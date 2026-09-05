@@ -1,0 +1,61 @@
+---
+description: Mandatory AI-first for pattern matching - OpenRouter over regex and brittle manual parsing
+alwaysApply: true
+---
+
+# AI first (pattern matching)
+
+**Priority: highest (mandatory).** When work involves **matching, classifying, extracting, or comparing** text or semi-structured data, default to **AI (OpenRouter)** with a clear contract—not complicated hand-written pattern logic.
+
+AI handles more situations with **less code**. Prefer that tradeoff unless a narrow exception applies.
+
+## Principle
+
+- **AI first:** one prompt + schema-shaped output beats long regex chains, keyword lists, and nested string rules.
+- **Code stays thin:** validate, parse, and branch on typed results; do not re-implement semantic judgment in code.
+- **OpenRouter only** per `agent-contract-openrouter.mdc`.
+
+## Mandatory self-check
+
+**Am I writing complicated matching logic when OpenRouter + JSON/zod would be smaller and more robust?**
+
+If yes, redesign around AI first. Pair with **Prompt-level strategy** in plans (`no-workarounds-prompt-level-fix.mdc`).
+
+## Use AI (OpenRouter) for
+
+- Classification and intent (topic, sentiment, spam, category, bucket)
+- Extraction from prose or messy HTML (entities, fields, citations, summaries)
+- Semantic comparison ("same meaning?", "duplicate?", "on-topic?")
+- Normalization that depends on context (titles, addresses, business names)
+- Fuzzy or variable-format user content
+
+## Prefer small deterministic code only when
+
+- **Numeric-only** or fixed-format IDs (digits, UUID shape, ISO dates) where regex is trivial.
+- The user **explicitly** requests regex or a non-LLM path.
+- A **documented API or typed parser** already exists and is the source of truth (use the API, not regex on strings).
+- Hot path has a **proven** project pattern that already uses structured data without LLM (do not replace with AI without cause).
+
+## Forbidden patterns
+
+- Large regex modules as the main "smart" layer.
+- Growing `if/else` keyword lists to approximate understanding.
+- Multiple parallel extractors (regex + heuristics + OR) when one OR call with schema would suffice.
+- Regex **workarounds** for bad model output (fix the prompt instead).
+
+## Implementation shape
+
+1. **Prompt** (system rules + user payload + constraints).
+2. **Structured output** (JSON schema, `json_object`, zod validate).
+3. **Thin executor** (call OpenRouter, parse, fail fast on invalid shape).
+
+See `harness-and-context-engineering.mdc` for context packing and contract design.
+
+## Plans
+
+Include in **Must-have strategies** per `plans-must-have-strategies.mdc`. When matching is in scope, state **AI-first** in the row and in **Prompt-level strategy** if an LLM call is added or changed.
+
+## Do not skip
+
+- Applies to production app code, scripts, agents, and research tooling unless a listed exception fits.
+- Fits **Occam's razor**: fewer assumptions, less matching code, broader coverage.

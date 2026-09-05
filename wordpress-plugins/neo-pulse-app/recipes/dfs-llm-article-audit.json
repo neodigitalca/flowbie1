@@ -1,0 +1,64 @@
+{
+  "keyword": "dfs-llm-article-audit",
+  "name": "DFS LLM article audit",
+  "description": "Grade an existing article on a 10-point scorecard via DataForSEO LLM (ChatGPT, Gemini, Perplexity) and archive optimization guidance for downstream steps.",
+  "notes": [
+    "Run from a Forge workflow with Client as step 1.",
+    "Requires a single target article URL and focus keyword from ACF.",
+    "Audit uses web search to grade based on what each LLM can verify on the live page."
+  ],
+  "category": "research",
+  "verticals": [
+    "general",
+    "local-seo",
+    "agency",
+    "editorial"
+  ],
+  "tags": [
+    "research",
+    "audit",
+    "dataforseo"
+  ],
+  "prerequisites": [
+    "wordpress"
+  ],
+  "filters": {
+    "executionKinds": [
+      "dfs_llm_article_audit"
+    ],
+    "actionCount": 1
+  },
+  "defaultTasks": [
+    {
+      "keyword": "dfs-llm-article-audit-run",
+      "title": "DFS LLM article audit",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "dfs_llm_article_audit",
+      "executionPayload": {
+        "saveLocalArchive": true,
+        "saveToDisk": true
+      },
+      "scheduleMode": "calendar",
+      "recurrenceRule": "none"
+    }
+  ],
+  "isAutomation": true,
+  "kind": "template",
+  "triggerBlock": {
+    "keyword": "schedule-once",
+    "kind": "calendar",
+    "frequency": "once",
+    "startDate": "2026-09-01",
+    "time": "09:00"
+  },
+  "actionBlock": {
+    "keyword": "dfs-llm-article-audit",
+    "executionKind": "dfs_llm_article_audit",
+    "executionPayload": {
+      "saveLocalArchive": true,
+      "saveToDisk": true
+    },
+    "title": "DFS LLM article audit"
+  }
+}

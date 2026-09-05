@@ -33,15 +33,30 @@ import {
   TaskFormPlaceholderCell,
   TaskFormSideSection,
 } from "@/components/manager/tasks/TaskFormLayout";
+import { type PropertySettingsSubSectionId } from "./property-settings-types";
+import { buildSiteLocationsPatch } from "@/lib/wordpress-api/site-service-area";
+import { BenchmarkCategoryTagField } from "./BenchmarkCategoryTagField";
 import {
-  PROPERTY_SETTINGS_SUB_SECTIONS,
-  type PropertySettingsSubSectionId,
-} from "./property-settings-types";
+  nextStateForCountry,
+  ProfileLocationSelect,
+  regionPlaceholder,
+  SERVICE_COUNTRY_OPTIONS,
+  serviceRegionOptions,
+} from "./ProfileServiceAreaFields";
 
 export type SitePropertyFormChrome = "dark" | "light";
 
 /** Lato + 1rem floor; copy wraps instead of truncating. */
 const SITE_PROPERTY_COPY = "font-sans text-base leading-normal whitespace-normal break-words";
+
+/** Keep Chrome / password managers off property profile fields. */
+const IGNORE_CREDENTIAL_MANAGER = {
+  autoComplete: "new-password" as const,
+  "data-1p-ignore": true,
+  "data-lpignore": "true" as const,
+  "data-bwignore": "true" as const,
+  "data-form-type": "other" as const,
+};
 
 function fieldClassName(chrome: SitePropertyFormChrome): string {
   return cn(
@@ -177,6 +192,9 @@ export interface SitePropertyFormFieldsProps {
   /** Empty string = no package (unlimited). */
   formOptimizationPackage: string;
   formBenchmarkCustomTag: string;
+  formServiceCity: string;
+  formServiceState: string;
+  formServiceCountry: string;
   onFormNameChange: (value: string) => void;
   onFormSiteUrlChange: (value: string) => void;
   onFormProductionSiteUrlChange: (value: string) => void;
@@ -188,6 +206,11 @@ export interface SitePropertyFormFieldsProps {
   onFormEditorialCountsPeriodStartYmdChange: (value: string) => void;
   onFormOptimizationPackageChange: (value: string) => void;
   onFormBenchmarkCustomTagChange: (value: string) => void;
+  onFormServiceCityChange: (value: string) => void;
+  onFormServiceStateChange: (value: string) => void;
+  onFormServiceCountryChange: (value: string) => void;
+  /** Site row used when persisting service city on blur. */
+  serviceAreaSite?: WordPressSite | null;
   /**
    * When set with `patchSiteId`, "Match project from Semrush" / "Save project ID now" persist immediately
    * (embedded Site Settings or edit dialog). Otherwise Match only fills the field until you save the property.
@@ -217,6 +240,9 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
   formEditorialCountsPeriodStartYmd,
   formOptimizationPackage,
   formBenchmarkCustomTag,
+  formServiceCity,
+  formServiceState,
+  formServiceCountry,
   onFormNameChange,
   onFormSiteUrlChange,
   onFormProductionSiteUrlChange,
@@ -228,6 +254,10 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
   onFormEditorialCountsPeriodStartYmdChange,
   onFormOptimizationPackageChange,
   onFormBenchmarkCustomTagChange,
+  onFormServiceCityChange,
+  onFormServiceStateChange,
+  onFormServiceCountryChange,
+  serviceAreaSite,
   onPatchSite,
   patchSiteId,
   semrushActionsDisabled = false,
@@ -307,6 +337,38 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
     }
   }, [patchSiteId]);
 
+  const persistServiceArea = useCallback(
+    (city = formServiceCity, state = formServiceState, country = formServiceCountry) => {
+      if (!onPatchSite || !patchSiteId || !serviceAreaSite) return;
+      onPatchSite(patchSiteId, buildSiteLocationsPatch(serviceAreaSite, city, state, country));
+    },
+    [formServiceCity, formServiceState, formServiceCountry, onPatchSite, patchSiteId, serviceAreaSite],
+  );
+
+  const applyServiceCountry = useCallback(
+    (country: string) => {
+      const nextState = nextStateForCountry(formServiceState, country);
+      onFormServiceCountryChange(country);
+      if (nextState !== formServiceState) onFormServiceStateChange(nextState);
+      persistServiceArea(formServiceCity, nextState, country);
+    },
+    [
+      formServiceCity,
+      formServiceState,
+      onFormServiceCountryChange,
+      onFormServiceStateChange,
+      persistServiceArea,
+    ],
+  );
+
+  const applyServiceState = useCallback(
+    (state: string) => {
+      onFormServiceStateChange(state);
+      persistServiceArea(formServiceCity, state, formServiceCountry);
+    },
+    [formServiceCity, formServiceCountry, onFormServiceStateChange, persistServiceArea],
+  );
+
   if (layout === "modalFlat") {
     const flatInputClass = TASK_FORM_FLAT_CONTROL_CLASS;
 
@@ -324,21 +386,55 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
             />
           </TaskFormPlaceholderCell>
           <TaskFormPlaceholderCell>
-            <Input
+            <BenchmarkCategoryTagField
               value={formBenchmarkCustomTag}
-              onChange={(e) => onFormBenchmarkCustomTagChange(e.target.value)}
-              onBlur={() => {
+              onChange={onFormBenchmarkCustomTagChange}
+              onCommit={(tag) => {
                 if (onPatchSite && patchSiteId) {
-                  onPatchSite(patchSiteId, {
-                    benchmarkCustomTag: formBenchmarkCustomTag.trim() || undefined,
-                  });
+                  onPatchSite(patchSiteId, { benchmarkCustomTag: tag });
                 }
               }}
-              placeholder="Benchmark category tag"
-              aria-label="Benchmark category tag"
-              maxLength={80}
+              chrome="dark"
               className={flatInputClass}
             />
+          </TaskFormPlaceholderCell>
+        </TaskFormFlatGrid>
+        <TaskFormFlatGrid className="grid-cols-2">
+          <TaskFormPlaceholderCell>
+            <Input
+              value={formServiceCity}
+              onChange={(e) => onFormServiceCityChange(e.target.value)}
+              onBlur={persistServiceArea}
+              placeholder="Service city"
+              aria-label="Service city"
+              name="neo-pulse_service_city"
+              autoComplete="address-level2"
+              className={flatInputClass}
+            />
+          </TaskFormPlaceholderCell>
+          <TaskFormPlaceholderCell>
+            <ProfileLocationSelect
+              chrome="dark"
+              placeholder="Country"
+              value={formServiceCountry}
+              options={SERVICE_COUNTRY_OPTIONS}
+              onChange={applyServiceCountry}
+            />
+          </TaskFormPlaceholderCell>
+        </TaskFormFlatGrid>
+        <TaskFormFlatGrid className="grid-cols-2">
+          <TaskFormPlaceholderCell>
+            <ProfileLocationSelect
+              chrome="dark"
+              placeholder={regionPlaceholder(formServiceCountry)}
+              value={formServiceState}
+              options={serviceRegionOptions(formServiceCountry)}
+              onChange={applyServiceState}
+              disabled={!formServiceCountry}
+            />
+          </TaskFormPlaceholderCell>
+          <TaskFormPlaceholderCell>
+            <div className="h-9 min-h-9" aria-hidden />
           </TaskFormPlaceholderCell>
         </TaskFormFlatGrid>
       </TaskFormSideSection>
@@ -373,6 +469,7 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
               onChange={(e) => onFormUsernameChange(e.target.value)}
               placeholder="Username"
               aria-label="Username"
+              name="neo_pulse_wp_api_username"
               autoComplete="off"
               className={flatInputClass}
             />
@@ -384,9 +481,8 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
               onChange={(e) => onFormAppPasswordChange(e.target.value)}
               placeholder="Application password"
               aria-label="Application password"
-              autoComplete="off"
-              data-1p-ignore
-              data-lpignore="true"
+              name="neo_pulse_wp_api_application_token"
+              {...IGNORE_CREDENTIAL_MANAGER}
               className={flatInputClass}
             />
           </TaskFormPlaceholderCell>
@@ -605,55 +701,84 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
         autoComplete="off"
         onSubmit={(e) => e.preventDefault()}
       >
-        <div className="grid min-h-0 w-full min-w-0">
-          {PROPERTY_SETTINGS_SUB_SECTIONS.map(({ id }) => (
-            <div
-              key={id}
-              className={cn(
-                "col-start-1 row-start-1 min-w-0",
-                settingsSubSectionId === id ? "visible" : "invisible pointer-events-none",
-              )}
-              aria-hidden={settingsSubSectionId !== id}
-            >
-              {modalSections[id]}
-            </div>
-          ))}
-        </div>
+        {modalSections[settingsSubSectionId]}
       </form>
     );
   }
 
   return (
-    <form
-      className={cn("flex flex-col gap-0 py-1 font-sans text-base", className)}
-      autoComplete="off"
-      onSubmit={(e) => e.preventDefault()}
-    >
+    <div className={cn("flex flex-col gap-0 py-1 font-sans text-base", className)}>
+      <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
       <FieldBlock
         chrome={chrome}
         label="Benchmark category tag"
         htmlFor="benchmarkCustomTag"
         span="full"
         field={
-          <SitePropertyInput
-            chrome={chrome}
-            id="benchmarkCustomTag"
-            name="neo-pulse_benchmark_custom_tag"
+          <BenchmarkCategoryTagField
             value={formBenchmarkCustomTag}
-            onChange={(e) => onFormBenchmarkCustomTagChange(e.target.value)}
-            onBlur={() => {
+            onChange={onFormBenchmarkCustomTagChange}
+            onCommit={(tag) => {
               if (onPatchSite && patchSiteId) {
-                onPatchSite(patchSiteId, {
-                  benchmarkCustomTag: formBenchmarkCustomTag.trim() || undefined,
-                });
+                onPatchSite(patchSiteId, { benchmarkCustomTag: tag });
               }
             }}
-            placeholder="e.g. Interior design"
-            maxLength={80}
+            chrome={chrome}
           />
         }
       />
 
+      <FieldBlock
+        chrome={chrome}
+        label="Service city"
+        htmlFor="serviceCity"
+        field={
+          <SitePropertyInput
+            chrome={chrome}
+            id="serviceCity"
+            name="neo-pulse_service_city"
+            value={formServiceCity}
+            onChange={(e) => onFormServiceCityChange(e.target.value)}
+            onBlur={persistServiceArea}
+            placeholder="Edmonton"
+            autoComplete="address-level2"
+          />
+        }
+      />
+
+      <FieldBlock
+        chrome={chrome}
+        label="Country"
+        htmlFor="serviceCountry"
+        field={
+          <ProfileLocationSelect
+            chrome={chrome}
+            placeholder="Country"
+            value={formServiceCountry}
+            options={SERVICE_COUNTRY_OPTIONS}
+            onChange={applyServiceCountry}
+          />
+        }
+      />
+
+      <FieldBlock
+        chrome={chrome}
+        label={regionPlaceholder(formServiceCountry)}
+        htmlFor="serviceState"
+        field={
+          <ProfileLocationSelect
+            chrome={chrome}
+            placeholder={regionPlaceholder(formServiceCountry)}
+            value={formServiceState}
+            options={serviceRegionOptions(formServiceCountry)}
+            onChange={applyServiceState}
+            disabled={!formServiceCountry}
+          />
+        }
+      />
+      </form>
+
+      <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
       <Accordion type="multiple" defaultValue={[]} className={cn("w-full", chrome === "light" && WP_PANEL_LIST_GAP)}>
         <AccordionItem value="wordpress" className={accordionItemClass(chrome)}>
           <AccordionTrigger className={accordionTriggerClass(chrome)}>WordPress & Credentials</AccordionTrigger>
@@ -681,11 +806,11 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
             <FieldBlock
               chrome={chrome}
               label="Username"
-              htmlFor="username"
+              htmlFor="wpApiUsername"
               field={
                 <SitePropertyInput
                   chrome={chrome}
-                  id="username"
+                  id="wpApiUsername"
                   name="neo_pulse_wp_api_username"
                   value={formUsername}
                   onChange={(e) => onFormUsernameChange(e.target.value)}
@@ -753,9 +878,7 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
                   value={formAppPassword}
                   onChange={(e) => onFormAppPasswordChange(e.target.value)}
                   placeholder="xxxx xxxx xxxx xxxx xxxx xxxx"
-                  autoComplete="off"
-                  data-1p-ignore
-                  data-lpignore="true"
+                  {...IGNORE_CREDENTIAL_MANAGER}
                 />
               }
               help={
@@ -1072,6 +1195,7 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
           </AccordionContent>
         </AccordionItem>
       </Accordion>
-    </form>
+      </form>
+    </div>
   );
 };

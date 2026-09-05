@@ -2,11 +2,9 @@ import { useCallback } from "react";
 import { flushSync } from "react-dom";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
 import type { WordPressSite } from "@/components/integrations/types";
+import type { OverviewBinding } from "@/hooks/overview/use-overview-wordpress-binding";
 import type { OverviewTabBase } from "@/hooks/overview/use-overview-tab-base";
-import {
-  overviewBulkRowIndices,
-  overviewRowInBulkScope,
-} from "@/lib/overview/overview-bulk-row-scope";
+import { overviewBulkRowIndices, overviewRowInBulkScope } from "@/lib/overview/overview-bulk-row-scope";
 import type { OverviewHarnessSetters } from "@/lib/overview/overview-blog-overview-harness-mutations";
 import {
   finalizeOverviewBlogOverviewHarnessBatch,
@@ -14,12 +12,11 @@ import {
   runOverviewBlogOverviewHarnessBatch,
   type BlogOverviewCatalogRow,
 } from "@/lib/overview/overview-blog-overview-harness-run";
-import { resolveOverviewSourceHtml } from "@/lib/overview/overview-blog-overview-prepend";
 import { extractH2TextsFromHtml } from "@/lib/overview/overview-blog-headers-extract";
 import {
-  postBodyHtmlFromInventoryRow,
-  sentimentHtmlFromInventoryRow,
-} from "@/lib/overview/overview-inventory-seo-fields";
+  buildOverviewHarnessCatalogWithHtml,
+  enrichHarnessCatalogWithEntities,
+} from "@/lib/overview/overview-harness-page-catalog";
 import type { OverviewInventoryUrlMatch } from "@/lib/overview/overview-row-scrape";
 import type { OverviewSitemapSource } from "@/lib/overview/overview-sitemap-source";
 import { setOptimizingState } from "@/hooks/content-optimization/optimization-helpers-a";
@@ -48,58 +45,6 @@ function htmlHasOverviewCiteH2s(html: string): boolean {
   return extractH2TextsFromHtml(html).length > 0;
 }
 
-/** Prefer bodies that have H2s Overview can cite. Never invent synthetic stubs. */
-function resolveCachedOverviewHtml(
-  site: WordPressSite | undefined,
-  row: OverviewRow,
-  getInventoryMatchForUrl: Args["getInventoryMatchForUrl"],
-): string {
-  const fromGrid = resolveOverviewSourceHtml(row).trim();
-  if (fromGrid && htmlHasOverviewCiteH2s(fromGrid)) return fromGrid;
-
-  const url = row.url?.trim();
-  if (url && site) {
-    const inv = getInventoryMatchForUrl(site, url)?.row;
-    if (inv) {
-      const body =
-        postBodyHtmlFromInventoryRow(inv)?.trim() ||
-        sentimentHtmlFromInventoryRow(inv)?.trim() ||
-        "";
-      if (body && htmlHasOverviewCiteH2s(body)) return body;
-    }
-  }
-
-  return "";
-}
-
-function buildOverviewCatalogFromCache(
-  site: WordPressSite | undefined,
-  indices: number[],
-  rows: OverviewRow[],
-  bulkScopeUrlKeys: Set<string>,
-  getInventoryMatchForUrl: Args["getInventoryMatchForUrl"],
-): BlogOverviewCatalogRow[] {
-  const catalog: BlogOverviewCatalogRow[] = [];
-  for (const index of indices) {
-    const row = rows[index];
-    if (!row) continue;
-    const url = row.url?.trim();
-    if (!url) continue;
-    if (!overviewRowInBulkScope(url, bulkScopeUrlKeys)) continue;
-    const html = resolveCachedOverviewHtml(site, row, getInventoryMatchForUrl);
-    if (!html) continue;
-    catalog.push({
-      index,
-      url,
-      title: row.title ?? "",
-      focusKeyword: row.focusKeyword ?? "",
-      html,
-    });
-  }
-  return catalog;
-}
-
-/** After Overview succeeds, write prepended HTML into site-cache CSV content column. */
 function mergeOverviewHtmlIntoSiteCache(
   site: WordPressSite,
   results: Array<{ url: string; html: string }>,
@@ -126,6 +71,7 @@ export function useOverviewTabBlogOverview({
   site,
   sitemapSource,
   rows,
+  bindings,
   resolveBindings,
   updateRow,
   opt,
@@ -179,12 +125,11 @@ export function useOverviewTabBlogOverview({
           setBulkOptimizationState: opt.setBulkOptimizationState,
           setOptimizationProgress: opt.setOptimizationProgress,
           setIsOptimizingContent: opt.setIsOptimizingContent,
-          prepMessage: `Loading post HTML for Overview (${scoped.length})…`,
+          prepMessage: `Loading page HTML for Overview (${scoped.length})…`,
         });
       });
 
       try {
-        // Join in-flight includeContent fetch; do not race AIO against excerpt-only warm seed.
         await prefetchOverviewInventory(site, {
           includeContent: true,
           includePageHeading: true,
@@ -192,13 +137,66 @@ export function useOverviewTabBlogOverview({
           silent: true,
         });
 
-        const catalog = buildOverviewCatalogFromCache(
+        const mergedBindings: Record<string, OverviewBinding | undefined> = {
+          ...bindings,
+          ...(await resolveBindings(
+            scoped.map((i) => rows[i]?.url?.trim() ?? "").filter(Boolean),
+            site,
+            undefined,
+            { inventoryOnly: true },
+          )),
+        };
+
+        const { catalog: loadedCatalog } = await buildOverviewHarnessCatalogWithHtml({
           site,
-          scoped,
           rows,
-          bulkScopeUrlKeys,
+          indices: scoped,
+          sitemapSource,
+          bindings: mergedBindings,
           getInventoryMatchForUrl,
-        );
+          bulkScopeUrlKeys,
+          onProgress: (message) => {
+            opt.setBulkOptimizationState((prev) => {
+              const current = prev[batchKey];
+              if (!current) return prev;
+              return {
+                ...prev,
+                [batchKey]: {
+                  ...current,
+                  currentStepProgress: {
+                    ...(current.currentStepProgress || {}),
+                    step: "Overview",
+                    progress: 5,
+                    message,
+                  },
+                },
+              };
+            });
+          },
+        });
+
+        const enriched = await enrichHarnessCatalogWithEntities({
+          catalog: loadedCatalog,
+          rows,
+          site,
+          sitemapSource,
+          apiKey,
+          setBulkOptimizationState: opt.setBulkOptimizationState,
+          batchKey,
+        });
+
+        const catalog: BlogOverviewCatalogRow[] = enriched
+          .filter((entry) => htmlHasOverviewCiteH2s(entry.html))
+          .map((entry) => ({
+            index: entry.index,
+            url: entry.url,
+            title: entry.title,
+            focusKeyword: entry.focusKeyword,
+            html: entry.html,
+            entity: entry.entity,
+            pageKind: entry.pageKind,
+            seoResearchBrief: entry.seoResearchBrief,
+          }));
 
         if (!catalog.length) {
           finalizeOverviewBlogOverviewHarnessBatch(
@@ -220,13 +218,6 @@ export function useOverviewTabBlogOverview({
             prepMessage: `Overview (${catalog.length} rows)…`,
           });
         });
-
-        await resolveBindings(
-          catalog.map((c) => c.url),
-          site,
-          undefined,
-          { inventoryOnly: true },
-        );
 
         const writtenForCsv: Array<{ url: string; html: string }> = [];
         await runOverviewBlogOverviewHarnessBatch({
@@ -259,6 +250,7 @@ export function useOverviewTabBlogOverview({
       apiKey,
       selectedModel,
       rows,
+      bindings,
       bulkScopeUrlKeys,
       resolveBindings,
       getInventoryMatchForUrl,

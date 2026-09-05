@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   hasOverviewContentDetailsActivity,
   hasSinglePageOptimizationDetailsActivity,
+  isOverviewResearchWorkerActive,
   overviewContentDetailsCanOpen,
 } from "@/components/overview/overview-tab/OverviewContentDetailsPanel";
 import { buildSinglePageOptimizationSnapshot } from "@/components/overview/OverviewBulkMicroProgress";
@@ -107,6 +108,49 @@ describe("hasSinglePageOptimizationDetailsActivity", () => {
         optimizationFileManagers: { "1": fileManager },
       }),
     ).toBe(true);
+  });
+});
+
+describe("isOverviewResearchWorkerActive", () => {
+  it("returns true when site optimizing flag is set", () => {
+    expect(
+      isOverviewResearchWorkerActive(undefined, "site1-batch", "site1", {
+        "site1-batch": false,
+        site1: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("returns true for in-flight research batch state", () => {
+    expect(
+      isOverviewResearchWorkerActive(
+        {
+          runKind: "research",
+          urls: ["https://example.com/a"],
+          urlStatuses: { "https://example.com/a": "optimizing" },
+          currentStep: "Researching…",
+        } as never,
+        "site1-batch",
+        "site1",
+        {},
+      ),
+    ).toBe(true);
+  });
+
+  it("returns false when research batch is complete", () => {
+    expect(
+      isOverviewResearchWorkerActive(
+        {
+          runKind: "research",
+          urls: ["https://example.com/a"],
+          urlStatuses: { "https://example.com/a": "completed" },
+          currentStep: "Batch complete",
+        } as never,
+        "site1-batch",
+        "site1",
+        {},
+      ),
+    ).toBe(false);
   });
 });
 

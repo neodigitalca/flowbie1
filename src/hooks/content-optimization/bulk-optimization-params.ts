@@ -8,7 +8,7 @@ export type PrefilledOverviewTarget = {
   postTypeEndpoint?: string;
   keyword?: string;
   content?: string;
-  /** Cached Overview grid / ACF seo_research — never re-fetch SERP when set. */
+  /** Overview grid seo_research snapshot. Not a live SERP skip. */
   seoResearch?: string;
 };
 
@@ -52,6 +52,7 @@ export interface HandleOptimizeMultipleContentParams {
   setOptimizationProgress: (prev: any) => any;
   setBulkOptimizationState: (prev: any) => any;
   optimizationFileManagers: Record<string, OptimizationFileManager>;
+  setOptimizationFileManagers?: (prev: any) => any;
   continueOptimizationRef: React.MutableRefObject<
     | ((
         siteId: string,

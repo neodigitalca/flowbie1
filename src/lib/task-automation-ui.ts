@@ -3,6 +3,7 @@ import { resolveTaskExecuteSiteId } from "@/lib/agent-runs-types";
 import type { TaskExecutionKind, TaskScheduleMode, TaskProject, TeamTask } from "@/lib/tasks-types";
 import type { TeamMember } from "@/lib/teams-types";
 import { ensurePostCreatorPayload, defaultPostCreatorExecutionPayloadForRecipe } from "@/lib/post-creator/post-creator-defaults";
+import { normalizeLocalDominatorGridKeywordStored } from "@/lib/local-dominator/local-dominator-export-keyword";
 
 export const EDITORIAL_POST_CREATOR_RECIPE_KEYWORDS = [
   "monthly-post-creator",
@@ -27,7 +28,17 @@ export const RESEARCH_LOCAL_DOMINATOR_RECIPE_KEYWORDS = [
 
 export const RESEARCH_LOCAL_DOMINATOR_TASK_KEYWORDS = ["research-local-dominator-export"] as const;
 
-const CALENDAR_AUTOMATION_KINDS = new Set<TaskExecutionKind>(["post_creator", "gsc_reporting"]);
+export const RESEARCH_CHATGPT_AUDIT_RECIPE_KEYWORDS = ["chatgpt-website-audit"] as const;
+
+export const RESEARCH_CHATGPT_AUDIT_TASK_KEYWORDS = ["chatgpt-website-audit-run"] as const;
+
+const CALENDAR_AUTOMATION_KINDS = new Set<TaskExecutionKind>([
+  "post_creator",
+  "entity_page_creator",
+  "entity_generator",
+  "sap_generator",
+  "gsc_reporting",
+]);
 
 export function isEditorialPostCreatorProject(
   project?: Pick<TaskProject, "keyword" | "sourceTemplateKeyword"> | null,
@@ -72,9 +83,10 @@ export function resolveEffectiveExecutionKind(
   project?: Pick<TaskProject, "keyword" | "sourceTemplateKeyword"> | null,
 ): TaskExecutionKind {
   const kind = (task?.executionKind ?? "").trim();
-  if (kind === "post_creator" || kind === "gsc_reporting" || kind === "local_dominator_export") return kind;
+  if (kind === "post_creator" || kind === "gsc_reporting" || kind === "entity_page_creator" || kind === "entity_generator" || kind === "sap_generator" || kind === "local_dominator_export" || kind === "chatgpt_website_audit" || kind === "browser_automation" || kind === "content_gap_check") return kind;
   if (isEditorialPostCreatorTask(task, project)) return "post_creator";
   if (isGscReportingTask(task, project)) return "gsc_reporting";
+  if (isResearchChatGptAuditTask(task, project)) return "chatgpt_website_audit";
   if (isResearchLocalDominatorTask(task, project)) return "local_dominator_export";
   return (kind || "content_optimizer") as TaskExecutionKind;
 }
@@ -169,6 +181,33 @@ export function isResearchLocalDominatorTask(
   );
 }
 
+export function isResearchChatGptAuditProject(
+  project?: Pick<TaskProject, "keyword" | "sourceTemplateKeyword"> | null,
+): boolean {
+  const recipeKw = (project?.sourceTemplateKeyword ?? "").trim();
+  const projectKw = (project?.keyword ?? "").trim();
+  return (
+    RESEARCH_CHATGPT_AUDIT_RECIPE_KEYWORDS.includes(
+      recipeKw as (typeof RESEARCH_CHATGPT_AUDIT_RECIPE_KEYWORDS)[number],
+    ) ||
+    RESEARCH_CHATGPT_AUDIT_RECIPE_KEYWORDS.includes(
+      projectKw as (typeof RESEARCH_CHATGPT_AUDIT_RECIPE_KEYWORDS)[number],
+    )
+  );
+}
+
+export function isResearchChatGptAuditTask(
+  task?: Pick<TeamTask, "keyword" | "executionKind"> | null,
+  project?: Pick<TaskProject, "keyword" | "sourceTemplateKeyword"> | null,
+): boolean {
+  if ((task?.executionKind ?? "").trim() === "chatgpt_website_audit") return true;
+  if (isResearchChatGptAuditProject(project)) return true;
+  const taskKw = (task?.keyword ?? "").trim();
+  return RESEARCH_CHATGPT_AUDIT_TASK_KEYWORDS.includes(
+    taskKw as (typeof RESEARCH_CHATGPT_AUDIT_TASK_KEYWORDS)[number],
+  );
+}
+
 export function gscReportingRecipeKeyword(
   project?: Pick<TaskProject, "keyword" | "sourceTemplateKeyword"> | null,
   task?: Pick<TeamTask, "keyword"> | null,
@@ -222,19 +261,60 @@ export function resolveResearchLocalDominatorTask(
     scheduleMode: "calendar",
     recurrenceRule: task.recurrenceRule ?? "none",
     executionPayload: {
-      businessName: task.executionPayload?.businessName ?? "Advance Blinds & Drapery",
-      keyword: task.executionPayload?.keyword ?? "blinds near me",
+      businessName: task.executionPayload?.businessName ?? "",
+      keyword: normalizeLocalDominatorGridKeywordStored(task.executionPayload?.keyword),
       saveLocalArchive: task.executionPayload?.saveLocalArchive ?? true,
+      saveToDisk: task.executionPayload?.saveToDisk !== false,
+      ...task.executionPayload,
+      keyword: normalizeLocalDominatorGridKeywordStored(task.executionPayload?.keyword),
+    },
+  };
+}
+
+export function resolveResearchChatGptAuditTask(
+  task: TeamTask,
+  project?: Pick<TaskProject, "keyword" | "sourceTemplateKeyword"> | null,
+): {
+  executionKind: TaskExecutionKind;
+  scheduleMode: TaskScheduleMode;
+  recurrenceRule: TeamTask["recurrenceRule"];
+  executionPayload: TeamTask["executionPayload"];
+} | null {
+  if (!isResearchChatGptAuditTask(task, project)) return null;
+
+  return {
+    executionKind: "chatgpt_website_audit",
+    scheduleMode: "calendar",
+    recurrenceRule: task.recurrenceRule ?? "none",
+    executionPayload: {
+      saveLocalArchive: true,
       saveToDisk: task.executionPayload?.saveToDisk !== false,
       ...task.executionPayload,
     },
   };
 }
 
+export function isWorkflowRuntimeTask(
+  task?: Pick<TeamTask, "keyword"> | null,
+): boolean {
+  return (task?.keyword ?? "").trim().startsWith("workflow_");
+}
+
 export function resolveTaskForAutomationExecute(
   task: TeamTask,
   project?: Pick<TaskProject, "keyword" | "sourceTemplateKeyword"> | null,
 ): TeamTask {
+  if (isWorkflowRuntimeTask(task)) {
+    const kind =
+      (task.executionKind ?? "").trim() || resolveEffectiveExecutionKind(task, project);
+    return {
+      ...task,
+      executionKind: kind,
+      scheduleMode:
+        isCalendarAutomationKind(kind) || task.scheduleMode === "calendar" ? "calendar" : task.scheduleMode,
+    };
+  }
+
   const gscResolved = resolveGscReportingTask(task, project);
   if (gscResolved) {
     return { ...task, ...gscResolved };
@@ -242,6 +322,10 @@ export function resolveTaskForAutomationExecute(
   const researchResolved = resolveResearchLocalDominatorTask(task, project);
   if (researchResolved) {
     return { ...task, ...researchResolved };
+  }
+  const chatgptResolved = resolveResearchChatGptAuditTask(task, project);
+  if (chatgptResolved) {
+    return { ...task, ...chatgptResolved };
   }
   const editorial = resolveEditorialPostCreatorTask(task, project);
   if (editorial) {
@@ -277,6 +361,7 @@ export function taskSupportsManualAutomationExecute(
   if (isEditorialPostCreatorTask(task, project)) return true;
   if (isGscReportingTask(task, project)) return true;
   if (isResearchLocalDominatorTask(task, project)) return true;
+  if (isResearchChatGptAuditTask(task, project)) return true;
   if (project && isAutomationProject(project, projectTasks, members)) return true;
   return false;
 }

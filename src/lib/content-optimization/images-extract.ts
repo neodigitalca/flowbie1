@@ -1,5 +1,6 @@
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
+import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
 /**
  * Validates that an image URL is valid and points to an actual image.
@@ -120,6 +121,49 @@ function mediaLinkLabel(item: {
   return item.kind === "video" ? "Watch video" : "View image";
 }
 
+/** Parse img/iframe/video src from HTML without LLM (optimize path). */
+export function extractMediaFromHtmlTags(htmlContent: string): ExtractedMediaItem[] {
+  if (!htmlContent?.trim()) return [];
+  const valid: ExtractedMediaItem[] = [];
+  const seen = new Set<string>();
+
+  const pushUrl = (url: string, kind: "image" | "video", altTag = "") => {
+    const trimmed = url.trim();
+    if (!trimmed || !isValidMediaUrl(trimmed) || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    const linkLabel = altTag.trim() || (kind === "video" ? "Watch video" : "View image");
+    valid.push({
+      url: trimmed,
+      altTag: altTag.trim(),
+      title: altTag.trim(),
+      linkLabel,
+      kind,
+      context: "",
+    });
+  };
+
+  for (const match of htmlContent.matchAll(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi)) {
+    const tag = match[0] ?? "";
+    const url = match[1] ?? "";
+    const alt = tag.match(/alt=["']([^"']*)["']/i)?.[1] ?? "";
+    pushUrl(url, "image", alt);
+  }
+
+  for (const match of htmlContent.matchAll(/<iframe[^>]+src=["']([^"']+)["'][^>]*>/gi)) {
+    pushUrl(match[1] ?? "", "video");
+  }
+
+  for (const match of htmlContent.matchAll(/<video[^>]+src=["']([^"']+)["'][^>]*>/gi)) {
+    pushUrl(match[1] ?? "", "video");
+  }
+
+  for (const match of htmlContent.matchAll(/<source[^>]+src=["']([^"']+)["'][^>]*>/gi)) {
+    pushUrl(match[1] ?? "", "video");
+  }
+
+  return valid;
+}
+
 /**
  * Extracts images and videos from existing HTML via OpenRouter (metadata only).
  */
@@ -141,7 +185,7 @@ export async function extractMediaFromContent(
   if (!hasMedia) return [];
 
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await postOpenRouterAppChatFetch( {
       method: "POST",
       headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
@@ -268,7 +312,7 @@ export async function matchMediaToSections(
       .join("\n\n");
     const sectionsDescription = availableSections.map((s, idx) => `${idx + 1}. "${s}"`).join("\n");
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await postOpenRouterAppChatFetch( {
       method: "POST",
       headers: openRouterWebAppHeaders(apiKey),
       body: JSON.stringify({
