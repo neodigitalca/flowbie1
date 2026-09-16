@@ -34,8 +34,26 @@ function MobileAssistCircle({ onOpen }: { onOpen: () => void }): ReactElement | 
       onClick={onOpen}
       aria-label={`Open ${NEO_PULSE_ASSIST_LABEL}`}
       aria-controls="neo-pulse-sidebar-panel"
+      style={{
+        position: "fixed",
+        right: "16px",
+        bottom: "24px",
+        zIndex: 2147483000,
+        width: "56px",
+        height: "56px",
+        margin: 0,
+        padding: 0,
+        border: "none",
+        borderRadius: "50%",
+        background: "#000",
+        color: "#4ade80",
+        boxShadow: "0 4px 24px rgba(0,0,0,0.45)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
     >
-      <Sparkles className="pulse-assist-mobile-circle__icon" aria-hidden />
+      <Sparkles className="pulse-assist-mobile-circle__icon" aria-hidden width={26} height={26} />
     </button>,
     document.body,
   );
@@ -145,7 +163,7 @@ export function PulseAssistSidebarShell({
       style={{ "--fai-sidebar-width": `${width}px` } as CSSProperties}
       aria-hidden={useDockedChrome ? false : !open}
     >
-      {!open && isMobile ? <MobileAssistCircle onOpen={() => openPanel("assist")} /> : null}
+      {!open ? <MobileAssistCircle onOpen={() => openPanel("assist")} /> : null}
       {!open && !isMobile ? (
         <ShortcutLaunchers
           docked={useDockedChrome}
