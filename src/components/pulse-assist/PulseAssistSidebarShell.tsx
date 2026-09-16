@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
-import { ChevronRight, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ChevronRight, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAgentRunsContext } from "@/contexts/agent-runs-context";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,22 @@ type PulseAssistSidebarShellProps = {
   onPanelChange: (panel: SidebarPanel) => void;
   children: ReactNode;
 };
+
+function MobileAssistCircle({ onOpen }: { onOpen: () => void }): ReactElement | null {
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <button
+      type="button"
+      className="pulse-assist-mobile-circle"
+      onClick={onOpen}
+      aria-label={`Open ${NEO_PULSE_ASSIST_LABEL}`}
+      aria-controls="neo-pulse-sidebar-panel"
+    >
+      <Sparkles className="pulse-assist-mobile-circle__icon" aria-hidden />
+    </button>,
+    document.body,
+  );
+}
 
 function ShortcutLaunchers({
   docked,
@@ -128,7 +145,8 @@ export function PulseAssistSidebarShell({
       style={{ "--fai-sidebar-width": `${width}px` } as CSSProperties}
       aria-hidden={useDockedChrome ? false : !open}
     >
-      {!open ? (
+      {!open && isMobile ? <MobileAssistCircle onOpen={() => openPanel("assist")} /> : null}
+      {!open && !isMobile ? (
         <ShortcutLaunchers
           docked={useDockedChrome}
           onOpenAgents={() => openPanel("agents")}

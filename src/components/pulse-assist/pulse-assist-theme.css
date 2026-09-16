@@ -1034,19 +1034,48 @@
   text-align: center;
 }
 
+.pulse-assist-mobile-circle {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  z-index: 2147483000;
+  width: 56px;
+  height: 56px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #000;
+  color: hsl(var(--primary));
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.pulse-assist-mobile-circle__icon {
+  width: 26px;
+  height: 26px;
+}
+
+@media (min-width: 768px) {
+  .pulse-assist-mobile-circle {
+    display: none;
+  }
+}
+
 @media (max-width: 767px) {
   .pulse-assist-root.fai-sidebar-root {
     width: 0;
     min-width: 0;
   }
 
-  .pulse-assist-root button.pulse-assist-launcher {
-    right: max(0px, env(safe-area-inset-right, 0px));
-    z-index: 80;
-    min-width: 48px;
-    max-width: 56px;
-    min-height: 72px;
-    padding: 10px 8px 12px;
+  .pulse-assist-root button.pulse-assist-launcher,
+  .pulse-assist-shortcut-rail {
+    display: none;
   }
 
   .pulse-assist-panel.fai-sidebar-panel--open {
