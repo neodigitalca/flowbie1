@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAgentRunsContext } from "@/contexts/agent-runs-context";
 import { cn } from "@/lib/utils";
@@ -93,6 +93,7 @@ export function PulseAssistSidebarShell({
   const [clearingHistory, setClearingHistory] = useState(false);
   const [cancellingRuns, setCancellingRuns] = useState(false);
   const docked = layout === "docked";
+  const useDockedChrome = docked && !isMobile;
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -120,16 +121,16 @@ export function PulseAssistSidebarShell({
     <div
       className={cn(
         "fai-sidebar-root fai-sidebar-root--right pulse-assist-root",
-        docked && "pulse-assist-root--docked",
+        useDockedChrome && "pulse-assist-root--docked",
         open && "fai-sidebar-root--open pulse-assist-root--open",
         isResizing && "pulse-assist-root--resizing",
       )}
       style={{ "--fai-sidebar-width": `${width}px` } as CSSProperties}
-      aria-hidden={docked ? false : !open}
+      aria-hidden={useDockedChrome ? false : !open}
     >
       {!open ? (
         <ShortcutLaunchers
-          docked={docked}
+          docked={useDockedChrome}
           onOpenAgents={() => openPanel("agents")}
           onOpenAssist={() => openPanel("assist")}
         />
@@ -151,7 +152,7 @@ export function PulseAssistSidebarShell({
         aria-modal="true"
         aria-label={panelLabel}
       >
-        {open ? (
+        {open && !isMobile ? (
           <button
             type="button"
             className="pulse-assist-panel-close-tab"
@@ -183,6 +184,16 @@ export function PulseAssistSidebarShell({
               className="h-8 min-w-[4.5rem] shrink-0"
             />
             <div className="ml-auto flex min-w-0 items-center justify-end gap-1">
+              {isMobile ? (
+                <button
+                  type="button"
+                  className="pulse-assist-panel-header__icon-btn"
+                  onClick={() => onOpenChange(false)}
+                  aria-label="Close sidebar"
+                >
+                  <X className="h-5 w-5" aria-hidden />
+                </button>
+              ) : null}
               <PulseAssistClock className="min-w-0" />
               {panel === "agents" ? (
                 <>

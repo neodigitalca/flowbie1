@@ -955,6 +955,24 @@
   flex-shrink: 0;
 }
 
+.fcw-composer-pills {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: 7.5rem;
+}
+
+.fcw-page-content-pill {
+  background: hsl(240 4% 22%);
+  color: hsl(var(--foreground));
+}
+
+.fcw-page-content-pill--elementor {
+  background: hsl(142 45% 32%);
+  color: #0a0a0a;
+}
+
 .fcw-submode-pill {
   flex-shrink: 0;
   padding: 8px 12px;
@@ -1017,8 +1035,29 @@
 }
 
 @media (max-width: 767px) {
-  .pulse-assist-panel.fai-sidebar-panel {
-    width: 100vw;
+  .pulse-assist-root.fai-sidebar-root {
+    width: 0;
+    min-width: 0;
+  }
+
+  .pulse-assist-root button.pulse-assist-launcher {
+    right: max(0px, env(safe-area-inset-right, 0px));
+    z-index: 80;
+    min-width: 48px;
+    max-width: 56px;
+    min-height: 72px;
+    padding: 10px 8px 12px;
+  }
+
+  .pulse-assist-panel.fai-sidebar-panel--open {
+    width: 100%;
+    max-width: 100%;
+    left: 0;
+    right: 0;
+  }
+
+  .pulse-assist-panel-close-tab {
+    display: none;
   }
 
   .pulse-assist-panel-resize-handle {
