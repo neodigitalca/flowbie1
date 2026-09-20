@@ -9,6 +9,7 @@ export default defineConfig({
       'src/**/*.test.ts',
       'wordpress-plugins/neo-pulse-app/tests/**/*.test.mjs',
       'wordpress-plugins/neo-pulse-wp/tests/**/*.test.mjs',
+      'scripts/__tests__/**/*.test.mjs',
       'scripts/research/browser-automation/__tests__/**/*.test.mjs',
       'scripts/template-client-migrate/__tests__/**/*.test.ts',
       'scripts/edmonton-internal-links/__tests__/**/*.test.ts',

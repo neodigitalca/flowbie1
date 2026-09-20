@@ -44,6 +44,7 @@
     "verify:workflow-insert": "node scripts/verify-workflow-insert-agent.mjs",
     "test:neo-pulse-app": "vitest run wordpress-plugins/neo-pulse-app/tests",
     "docs:api:generate": "node scripts/generate-api-docs.mjs",
+    "changelog:publish": "node scripts/publish-repo-changelog.mjs",
     "check:no-secrets": "node scripts/check-no-secrets.mjs",
     "check:circular": "node scripts/check-circular-imports.mjs",
     "build:neo-pulse-wp-zip": "node scripts/build-neo-pulse-wp-zip.mjs",

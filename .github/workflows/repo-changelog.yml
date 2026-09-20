@@ -1,0 +1,28 @@
+name: Neo Pulse One weekly changelog
+
+on:
+  schedule:
+    - cron: "0 15 * * 1"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Publish weekly changelog
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          NEO_PULSE_USERNAME: ${{ secrets.NEO_PULSE_USERNAME }}
+          NEO_PULSE_PASSWORD: ${{ secrets.NEO_PULSE_PASSWORD }}
+          NEO_PULSE_API_BASE: ${{ secrets.NEO_PULSE_API_BASE }}
+        run: node scripts/publish-repo-changelog.mjs

@@ -1,9 +1,11 @@
+const EDMONTON_TZ = "America/Edmonton";
+
 export function formatDriveYearSegment(date = new Date()) {
-  return String(date.getFullYear());
+  return new Intl.DateTimeFormat("en-US", { timeZone: EDMONTON_TZ, year: "numeric" }).format(date);
 }
 
 export function formatDriveMonthSegment(date = new Date()) {
-  return date.toLocaleString("en-US", { month: "long" });
+  return new Intl.DateTimeFormat("en-US", { timeZone: EDMONTON_TZ, month: "long" }).format(date);
 }
 
 export function driveDateSegments(date = new Date()) {
