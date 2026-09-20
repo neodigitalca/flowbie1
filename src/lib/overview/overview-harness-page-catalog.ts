@@ -3,18 +3,13 @@ import type { WordPressSite } from "@/components/integrations/types";
 import type { OverviewBinding } from "@/hooks/overview/use-overview-wordpress-binding";
 import { overviewRowInBulkScope } from "@/lib/overview/overview-bulk-row-scope";
 import { lookupOverviewInventoryHitForUrl } from "@/hooks/content-optimization/bulk-seo-extra-text-fast-path";
-import {
-  fetchOverviewPageContentBatch,
-  sliceOverviewRowsByPage,
-} from "@/lib/overview/overview-page-content-batch";
-import { resolveOverviewSourceHtml } from "@/lib/overview/overview-blog-overview-prepend";
+import { resolveHarnessPrependSourceHtml } from "@/lib/overview/overview-blog-overview-prepend";
 import {
   postBodyHtmlFromInventoryRow,
   sentimentHtmlFromInventoryRow,
 } from "@/lib/overview/overview-inventory-seo-fields";
 import type { OverviewInventoryUrlMatch } from "@/lib/overview/overview-row-scrape";
 import type { OverviewSitemapSource } from "@/lib/overview/overview-sitemap-source";
-import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
 import { resolveOverviewPlaceEntityForRow } from "@/lib/overview/resolve-overview-place-entity";
 import { updateBulkStateWithEntity } from "@/hooks/content-optimization/continue-optimization-entity-helpers";
 import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
@@ -63,12 +58,11 @@ export function resolveHarnessRowHtmlFromSources(args: {
         : undefined;
 
   const inventoryHtml = snapshotHit?.row?.fields?.content?.trim() ?? "";
+  const gridHtml = resolveHarnessPrependSourceHtml(row).trim();
   return (
     rowHtmlByIndex?.[index]?.trim() ||
-    row.postContentOptimized?.trim() ||
+    gridHtml ||
     inventoryHtml ||
-    row.postContent?.trim() ||
-    resolveOverviewSourceHtml(row).trim() ||
     (invMatch?.row ? postBodyHtmlFromInventoryRow(invMatch.row)?.trim() : "") ||
     (invMatch?.row ? sentimentHtmlFromInventoryRow(invMatch.row)?.trim() : "") ||
     ""
@@ -108,41 +102,10 @@ export async function buildOverviewHarnessCatalogWithHtml(args: {
     return url && overviewRowInBulkScope(url, bulkScopeUrlKeys);
   });
 
-  const subset = scopedIndices.map((i) => rows[i]).filter(Boolean) as OverviewRow[];
-  const urls = subset.map((r) => r.url.trim()).filter(Boolean);
   const mergedBindings: Record<string, OverviewBinding | undefined> = { ...bindings };
-
   const rowHtmlByIndex: Record<number, string> = {};
   const pageKind: "post" | "entity" = sitemapSource === "sap" ? "entity" : "post";
-
-  if (urls.length && site.username?.trim() && site.appPassword?.trim()) {
-    const pageSlices = sliceOverviewRowsByPage(subset);
-    for (let pageNum = 0; pageNum < pageSlices.length; pageNum += 1) {
-      const pageRows = pageSlices[pageNum]!;
-      onProgress?.(`Loading page HTML ${pageNum + 1}/${pageSlices.length}…`);
-      const batch = await fetchOverviewPageContentBatch({
-        site,
-        sitemapSource,
-        pageRows,
-        bindings: mergedBindings,
-        getInventoryMatchForUrl,
-      });
-      if (batch.ok) {
-        for (const row of pageRows) {
-          const url = row.url?.trim();
-          if (!url) continue;
-          const patch = batch.patches.get(normalizePageUrlKey(url));
-          if (patch?.postContentOptimized?.trim()) {
-            const idx = scopedIndices.find((i) => rows[i]?.url?.trim() === url);
-            if (idx != null) rowHtmlByIndex[idx] = patch.postContentOptimized.trim();
-          } else if (patch?.postContent?.trim()) {
-            const idx = scopedIndices.find((i) => rows[i]?.url?.trim() === url);
-            if (idx != null) rowHtmlByIndex[idx] = patch.postContent.trim();
-          }
-        }
-      }
-    }
-  }
+  onProgress?.("Using cached page HTML…");
 
   const catalog: OverviewHarnessCatalogRow[] = [];
   for (const index of scopedIndices) {
@@ -159,7 +122,7 @@ export async function buildOverviewHarnessCatalogWithHtml(args: {
       rowHtmlByIndex,
       index,
     });
-    if (!html) continue;
+    if (html) rowHtmlByIndex[index] = html;
 
     catalog.push({
       index,
@@ -173,6 +136,70 @@ export async function buildOverviewHarnessCatalogWithHtml(args: {
   }
 
   return { catalog, rowHtmlByIndex, mergedBindings };
+}
+
+/** Answer catalog from inventory/row cache only. Never fetches WordPress. Skips rows with no body at run time. */
+export function buildOverviewAnswerCatalogFromCache(args: {
+  site: WordPressSite;
+  rows: OverviewRow[];
+  indices: number[];
+  sitemapSource: OverviewSitemapSource;
+  getInventoryMatchForUrl: (
+    site: WordPressSite | null,
+    url: string,
+  ) => OverviewInventoryUrlMatch | undefined;
+  bulkScopeUrlKeys: Set<string>;
+}): OverviewHarnessCatalogRow[] {
+  const pageKind: "post" | "entity" = args.sitemapSource === "sap" ? "entity" : "post";
+  const catalog: OverviewHarnessCatalogRow[] = [];
+  for (const index of args.indices) {
+    const row = args.rows[index];
+    if (!row) continue;
+    const url = row.url?.trim();
+    if (!url || !overviewRowInBulkScope(url, args.bulkScopeUrlKeys)) continue;
+    catalog.push({
+      index,
+      url,
+      title: (row.title || "").trim(),
+      focusKeyword: (row.focusKeyword || "").trim(),
+      html: resolveHarnessRowHtmlFromSources({
+        row,
+        site: args.site,
+        sitemapSource: args.sitemapSource,
+        getInventoryMatchForUrl: args.getInventoryMatchForUrl,
+        index,
+      }),
+      seoResearchBrief: row.seoResearch?.trim() || undefined,
+      pageKind,
+    });
+  }
+  return catalog;
+}
+
+export function cacheRowHtmlByIndex(args: {
+  site: WordPressSite;
+  rows: OverviewRow[];
+  indices: number[];
+  sitemapSource: OverviewSitemapSource;
+  getInventoryMatchForUrl: (
+    site: WordPressSite | null,
+    url: string,
+  ) => OverviewInventoryUrlMatch | undefined;
+}): Record<number, string> {
+  const out: Record<number, string> = {};
+  for (const index of args.indices) {
+    const row = args.rows[index];
+    if (!row) continue;
+    const html = resolveHarnessRowHtmlFromSources({
+      row,
+      site: args.site,
+      sitemapSource: args.sitemapSource,
+      getInventoryMatchForUrl: args.getInventoryMatchForUrl,
+      index,
+    });
+    if (html) out[index] = html;
+  }
+  return out;
 }
 
 export async function enrichHarnessCatalogWithEntities(args: {
@@ -240,7 +267,7 @@ export async function loadOverviewHarnessRowHtmlPatches(args: {
     url: string,
   ) => OverviewInventoryUrlMatch | undefined;
   bulkScopeUrlKeys: Set<string>;
-  prefetchOverviewInventory: (
+  prefetchOverviewInventory?: (
     site: WordPressSite,
     options: {
       includeContent: boolean;
@@ -251,13 +278,6 @@ export async function loadOverviewHarnessRowHtmlPatches(args: {
   ) => Promise<void>;
   onProgress?: (message: string) => void;
 }): Promise<Record<number, string>> {
-  await args.prefetchOverviewInventory(args.site, {
-    includeContent: true,
-    includePageHeading: true,
-    source: args.sitemapSource,
-    silent: true,
-  });
-
   const { rowHtmlByIndex } = await buildOverviewHarnessCatalogWithHtml({
     site: args.site,
     rows: args.rows,

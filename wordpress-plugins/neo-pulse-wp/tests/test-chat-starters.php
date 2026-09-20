@@ -25,6 +25,7 @@ starters_assert(
 	'cache key is v2'
 );
 starters_assert( str_contains( $starters, 'DAY_IN_SECONDS' ), 'cache TTL is one day' );
+starters_assert( str_contains( $starters, 'function generate( array $site_index, string $site_name, array $settings = array() ): array|WP_Error' ), 'generate may return WP_Error without TypeError' );
 starters_assert( str_contains( $starters, 'neo_pulse_wp_refresh_chat_starters' ), 'daily cron hook is registered' );
 starters_assert( str_contains( $starters, 'RECENCY_DAYS    = 45' ) || str_contains( $starters, 'RECENCY_DAYS = 45' ), 'recency window is 45 days' );
 starters_assert( str_contains( $starters, 'build_recency_block' ), 'recency block is built for the prompt' );

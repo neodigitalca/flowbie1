@@ -58,7 +58,7 @@ interface UseOverviewAiResult {
     /** When set, used as primary research context; raw GSC JSON is omitted from the prompt to save tokens. */
     seoResearchBrief?: string,
     /** Parallel bulk: do not toggle shared `loading` / global error (single-row UI still uses loading). */
-    options?: { skipLoadingState?: boolean },
+    options?: { skipLoadingState?: boolean; signal?: AbortSignal },
   ) => Promise<string | null>;
   optimizeFaq: (
     url: string,
@@ -148,7 +148,7 @@ export function useOverviewAiOptimize(options: UseOverviewAiOptions): UseOvervie
   const [error, setError] = useState<string | null>(null);
 
   const runCompletion = useCallback(
-    async (systemPrompt: string, userPrompt: string): Promise<string> => {
+    async (systemPrompt: string, userPrompt: string, signal?: AbortSignal): Promise<string> => {
       if (!apiKey || !apiKey.trim()) {
         throw new Error("OpenRouter API key is missing. Set it in Settings first.");
       }
@@ -171,6 +171,7 @@ export function useOverviewAiOptimize(options: UseOverviewAiOptions): UseOvervie
         temperature,
         maxTokens,
         topP,
+        signal,
         onContentChunk: (chunk) => {
           result += chunk;
         },
@@ -189,7 +190,7 @@ export function useOverviewAiOptimize(options: UseOverviewAiOptions): UseOvervie
       faq?: string,
       sentimentSource?: string,
       seoResearchBrief?: string,
-      options?: { skipLoadingState?: boolean; titleMode?: "default" | "sap" },
+      options?: { skipLoadingState?: boolean; titleMode?: "default" | "sap"; signal?: AbortSignal },
     ): Promise<string | null> => {
       const skipLoadingState = options?.skipLoadingState === true;
       const titleMode = options?.titleMode === "sap" ? "sap" : "default";
@@ -263,7 +264,7 @@ Return only the title text with no quotes. Every word must be Title Case.`;
         const systemPrompt = hasBrief
           ? `You are a senior SEO content title specialist. Write accurate, neutral titles in full Title Case (every word capitalized), even when the focus keyword input is lowercase. A structured JSON SEO content brief is provided - use it as the main signal for searcher intent and angles while following all title rules. ${TITLE_CASE_RULE}`
           : `You are a senior SEO content title specialist. Write accurate, neutral titles in full Title Case (every word capitalized), even when the focus keyword input is lowercase. ${TITLE_CASE_RULE}`;
-        const raw = await runCompletion(systemPrompt, prompt);
+        const raw = await runCompletion(systemPrompt, prompt, options?.signal);
         return raw || existingTitle;
       } catch (err: any) {
         if (!skipLoadingState) {
@@ -288,7 +289,7 @@ Return only the title text with no quotes. Every word must be Title Case.`;
       sentimentSource?: string,
       gscQuickWinsContext?: string,
       seoResearchBrief?: string,
-      options?: { skipLoadingState?: boolean },
+      options?: { skipLoadingState?: boolean; signal?: AbortSignal },
     ): Promise<string | null> => {
       const skipLoadingState = options?.skipLoadingState === true;
       if (!skipLoadingState) {
@@ -362,7 +363,7 @@ Return only the optimized meta description with no quotes.`;
           : hasGsc
             ? "You are a senior SEO content specialist who writes neutral, factual meta descriptions. When Search Console query data is provided, treat it as primary inspiration for searcher intent and phrasing while producing original, natural copy that follows all user rules. When you use a short lead-in before the keyword, pick a different clear angle each time - never rely on one default opener. Avoid opening every meta with the focus keyword alone unless the rules say otherwise."
             : "You are a senior SEO content specialist who writes neutral, factual meta descriptions. When you use a short lead-in before the keyword, pick a different clear angle each time - never rely on one default opener. Avoid opening every meta with the focus keyword alone unless the rules say otherwise.";
-        const raw = await runCompletion(systemPrompt, prompt);
+        const raw = await runCompletion(systemPrompt, prompt, options?.signal);
         const text = raw ? enforceExactFocusKeyword(raw, focusKeyword) : null;
         return text || existingMeta;
       } catch (err: any) {

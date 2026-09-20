@@ -30,7 +30,7 @@ export function scheduleDestinationModesForKind(
 
 ): ScheduleDestinationMode[] {
 
-  if (kind === "gsc_reporting") {
+  if (kind === "gsc_reporting" || kind === "ads_reporting") {
 
     return ["local", "google_drive", "scheduled", "email"];
 
@@ -74,7 +74,7 @@ export function scheduleDestinationModesForKind(
 
 export function scheduledDestinationLabelForKind(kind: TaskExecutionKind | undefined): string {
 
-  if (kind === "gsc_reporting") return "WordPress";
+  if (kind === "gsc_reporting" || kind === "ads_reporting") return "WordPress";
 
   return "Scheduled publish";
 
@@ -136,7 +136,7 @@ export function defaultSchedulePayloadForKind(
 
 
 
-  if (kind === "gsc_reporting") {
+  if (kind === "gsc_reporting" || kind === "ads_reporting") {
 
     return {
 

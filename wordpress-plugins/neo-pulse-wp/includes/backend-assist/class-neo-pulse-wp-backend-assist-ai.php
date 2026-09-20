@@ -9,7 +9,7 @@ defined( 'ABSPATH' ) || exit;
 
 class Neo_Pulse_Wp_Backend_Assist_Ai {
 
-	public static function call_openrouter( string $model, string $system_prompt, string $user_prompt, int $max_tokens = 1024, float $temperature = 0.3 ) {
+	public static function call_openrouter( string $model, string $system_prompt, string $user_prompt, int $max_tokens = 1024, float $temperature = 0.3, array $extra = array() ) {
 		$key = Neo_Pulse_Wp_OpenRouter::get_api_key();
 		if ( $key === '' ) {
 			return new WP_Error( 'neo-pulse_openrouter_key', __( 'OpenRouter API key not configured.', 'neo-pulse-wp' ) );
@@ -22,14 +22,17 @@ class Neo_Pulse_Wp_Backend_Assist_Ai {
 			array(
 				'timeout' => Neo_Pulse_Wp_OpenRouter::get_timeout(),
 				'headers' => Neo_Pulse_Wp_OpenRouter::request_headers( $key ),
-				'body'    => wp_json_encode( array(
-					'model'       => $model,
-					'messages'    => array(
-						array( 'role' => 'system', 'content' => $system_prompt ),
-						array( 'role' => 'user', 'content' => $user_prompt ),
+				'body'    => wp_json_encode( array_merge(
+					array(
+						'model'       => $model,
+						'messages'    => array(
+							array( 'role' => 'system', 'content' => $system_prompt ),
+							array( 'role' => 'user', 'content' => $user_prompt ),
+						),
+						'temperature' => $temperature,
+						'max_tokens'  => $max_tokens,
 					),
-					'temperature' => $temperature,
-					'max_tokens'  => $max_tokens,
+					$extra
 				) ),
 			)
 		);

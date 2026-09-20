@@ -19,14 +19,29 @@ class Neo_Pulse_Wp_Backend_Assist_Build_Harness {
 	 */
 	public static function run_build( string $message, array $history ): array {
 		$card = Neo_Pulse_Wp_Backend_Assist_Pipeline::run_pipeline( $message, $history );
+		if (
+			( $card['type'] ?? '' ) === 'workflow'
+			&& ! empty( $card['action_result']['success'] )
+			&& ! empty( $card['action_result']['post_id'] )
+		) {
+			$card['type'] = 'action';
+		}
 		if ( ( $card['type'] ?? '' ) === 'action' ) {
 			$wrapped = self::wrap_card( $card, $message );
-			if ( empty( $wrapped['details_drawer'] ) ) {
-				return Neo_Pulse_Wp_Backend_Assist_Cards::error_card(
-					__( 'Build did not execute. Re-plan in Plan mode, then switch to Build again.', 'neo-pulse-wp' )
-				);
+			if ( ! empty( $wrapped['details_drawer'] ) ) {
+				return $wrapped;
 			}
-			return $wrapped;
+			$exec = isset( $card['action_result'] ) && is_array( $card['action_result'] ) ? $card['action_result'] : array();
+			if ( ! empty( $exec['success'] ) && ! empty( $exec['post_id'] ) ) {
+				return $card;
+			}
+			$err = isset( $exec['error'] ) ? trim( (string) $exec['error'] ) : '';
+			if ( $err !== '' ) {
+				return Neo_Pulse_Wp_Backend_Assist_Cards::error_card( $err );
+			}
+			return Neo_Pulse_Wp_Backend_Assist_Cards::error_card(
+				__( 'Build did not execute. Re-plan in Plan mode, then switch to Build again.', 'neo-pulse-wp' )
+			);
 		}
 		return $card;
 	}

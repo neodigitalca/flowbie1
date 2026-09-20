@@ -8,6 +8,7 @@ import {
 } from "@/hooks/content-optimization/optimization-helpers-a";
 import { mergeOptimizationProgress } from "@/hooks/content-optimization/optimization-helpers";
 import { initOverviewBulkHarnessPagination, setOverviewBulkHarnessPageState } from "@/lib/overview/overview-bulk-page-state";
+import { mapOverviewAiCopyWithConcurrency } from "@/lib/overview/overview-ai-copy-concurrency";
 import { overviewBulkPageRanges } from "@/lib/overview/overview-bulk-page-size";
 import { extractInternalLinksFromHtml } from "@/lib/overview/overview-blog-links-extract";
 import {
@@ -21,6 +22,17 @@ import type { OverviewInventoryUrlMatch } from "@/lib/overview/overview-row-scra
 import type { OverviewSitemapSource } from "@/lib/overview/overview-sitemap-source";
 import { lookupOverviewInventoryHitForUrl } from "@/hooks/content-optimization/bulk-seo-extra-text-fast-path";
 import type { OverviewBinding } from "@/hooks/overview/use-overview-wordpress-binding";
+import type { AiseoAfterRowWriteFn } from "@/lib/overview/overview-aiseo-after-upload";
+import type { AiseoCacheWriteAccumulator } from "@/lib/overview/overview-aiseo-cache-write";
+import {
+  aiseoRowFilesForUpload,
+  buildAiseoElementJsonFile,
+  mergeAiseoRowFinishFiles,
+} from "@/lib/overview/overview-aiseo-row-artifacts";
+import {
+  generatedFilesForUrl,
+  storageKeyForUrlGeneratedFiles,
+} from "@/lib/content-optimization/content-optimizer-bulk-generator-bindings";
 
 type SetBulkState = Dispatch<SetStateAction<Record<string, BulkOptimizationState>>>;
 type SetOptProgress = Dispatch<SetStateAction<Record<string, unknown>>>;
@@ -127,31 +139,57 @@ function markWikiRowActive(
   });
 }
 
-function markWikiRowStatus(
+function writeWikiRowFiles(
   url: string,
   setters: WikipediaLinkHarnessSetters,
-  status: "completed" | "skipped" | "error",
-  markdown?: string,
+  patch: WikipediaLinkRowPatch,
 ): void {
   setters.setBulkOptimizationState((prev) => {
     const current = prev[setters.batchKey];
     if (!current) return prev;
-    const urlGeneratedFiles = { ...(current.urlGeneratedFiles || {}) };
-    if (markdown?.trim()) {
-      urlGeneratedFiles[url] = [
-        {
-          name: "wikipedia-link.md",
-          content: markdown,
-          mimeType: "text/markdown",
+    const existingFiles = generatedFilesForUrl(current.urlGeneratedFiles, url);
+    const storageKey = storageKeyForUrlGeneratedFiles(
+      current.urlGeneratedFiles,
+      url,
+      current.urls,
+    );
+    const elementFile = buildAiseoElementJsonFile("wikipedia-link.json", {
+      summary: patch.blogWikiLinkSummary,
+      links: patch.blogWikiLinkList,
+    });
+    const mergedFiles = mergeAiseoRowFinishFiles({
+      runKind: "aiWikipediaLink",
+      url,
+      existingFiles,
+      elementFiles: elementFile ? [elementFile] : [],
+      postHtml: patch.postContentOptimized,
+    });
+    return {
+      ...prev,
+      [setters.batchKey]: {
+        ...current,
+        urlGeneratedFiles: {
+          ...(current.urlGeneratedFiles || {}),
+          [storageKey]: mergedFiles,
         },
-      ];
-    }
+      },
+    };
+  });
+}
+
+function markWikiRowStatus(
+  url: string,
+  setters: WikipediaLinkHarnessSetters,
+  status: "completed" | "skipped" | "error",
+): void {
+  setters.setBulkOptimizationState((prev) => {
+    const current = prev[setters.batchKey];
+    if (!current) return prev;
     return {
       ...prev,
       [setters.batchKey]: {
         ...current,
         urlStatuses: { ...(current.urlStatuses || {}), [url]: status },
-        urlGeneratedFiles,
       },
     };
   });
@@ -208,9 +246,7 @@ export function initOverviewWikipediaLinkHarnessBatchState(params: {
 
   const batchKey = `${site.id}-batch`;
   const urls = catalog.map((c) => c.url.trim()).filter(Boolean);
-  const initialUrlStatuses: BulkOptimizationState["urlStatuses"] = {};
   for (const url of urls) {
-    initialUrlStatuses[url] = "pending";
   }
 
   setOptimizingState(setIsOptimizingContent, batchKey, true);
@@ -228,7 +264,7 @@ export function initOverviewWikipediaLinkHarnessBatchState(params: {
     [batchKey]: {
       urls,
       currentIndex: 0,
-      urlStatuses: initialUrlStatuses,
+      urlStatuses: {},
       currentStep: "Wikipedia link",
       currentUrl: urls[0],
       urlKeywords: {},
@@ -450,9 +486,21 @@ export async function runOverviewWikipediaLinkHarnessBatch(params: {
   rows: OverviewRow[];
   harnessSetters: WikipediaLinkHarnessSetters;
   updateRow: (index: number, patch: Partial<OverviewRow>) => void;
+  cacheWrite?: AiseoCacheWriteAccumulator;
+  uploadAfterRowWrite?: AiseoAfterRowWriteFn;
 }): Promise<{ ok: number; skipped: number; failed: number }> {
-  const { catalog, site, sitemapSource, apiKey, urlEntities, rows, harnessSetters, updateRow } =
-    params;
+  const {
+    catalog,
+    site,
+    sitemapSource,
+    apiKey,
+    urlEntities,
+    rows,
+    harnessSetters,
+    updateRow,
+    cacheWrite,
+    uploadAfterRowWrite,
+  } = params;
   if (!catalog.length) return { ok: 0, skipped: 0, failed: 0 };
 
   const wikiCache = new Map<string, { url: string; title: string; matchLabel: string } | null>();
@@ -460,7 +508,6 @@ export async function runOverviewWikipediaLinkHarnessBatch(params: {
   let ok = 0;
   let skipped = 0;
   let failed = 0;
-  let globalRowNum = 0;
 
   for (const { start, end, page, pageCount } of pageRanges) {
     const pageCatalog = catalog.slice(start, end);
@@ -477,8 +524,12 @@ export async function runOverviewWikipediaLinkHarnessBatch(params: {
       step: "Wikipedia link",
     });
 
-    for (const entry of pageCatalog) {
-      globalRowNum += 1;
+    await mapOverviewAiCopyWithConcurrency(
+      pageCatalog.map((entry, localIndex) => ({
+        entry,
+        globalRowNum: start + localIndex + 1,
+      })),
+      async ({ entry, globalRowNum }) => {
       const url = entry.url.trim();
       const pageTitle = entry.title || url;
       markWikiRowActive(url, globalRowNum, harnessSetters);
@@ -504,36 +555,49 @@ export async function runOverviewWikipediaLinkHarnessBatch(params: {
         });
         if (outcome.kind === "skipped") {
           skipped += 1;
-          markWikiRowStatus(url, harnessSetters, "skipped", outcome.markdown);
+          markWikiRowStatus(url, harnessSetters, "skipped");
           updateRow(entry.index, {
             status: "idle",
             blogWikiLinkSummary: outcome.summary,
           });
-          continue;
+          return;
         }
         updateRow(entry.index, {
           ...outcome.patch,
           status: "idle",
         });
+        cacheWrite?.push(url, outcome.patch.postContentOptimized);
+        writeWikiRowFiles(url, harnessSetters, outcome.patch);
+        const rowFiles = aiseoRowFilesForUpload({
+          runKind: "aiWikipediaLink",
+          url,
+          elementFiles: (() => {
+            const elementFile = buildAiseoElementJsonFile("wikipedia-link.json", {
+              summary: outcome.patch.blogWikiLinkSummary,
+              links: outcome.patch.blogWikiLinkList,
+            });
+            return elementFile ? [elementFile] : [];
+          })(),
+          postHtml: outcome.patch.postContentOptimized,
+        });
+        if (uploadAfterRowWrite) {
+          await uploadAfterRowWrite({
+            index: entry.index,
+            url,
+            html: outcome.patch.postContentOptimized,
+            rowFiles: rowFiles.length ? rowFiles : undefined,
+          });
+        }
         ok += 1;
-        markWikiRowStatus(url, harnessSetters, "completed", outcome.markdown);
+        markWikiRowStatus(url, harnessSetters, "completed");
       } catch {
         failed += 1;
         const summary = `${pageTitle}: error`;
-        markWikiRowStatus(
-          url,
-          harnessSetters,
-          "error",
-          formatWikiRowMarkdown({
-            pageTitle,
-            url,
-            outcome: "skipped",
-            reason: "Harness error",
-          }),
-        );
+        markWikiRowStatus(url, harnessSetters, "error");
         updateRow(entry.index, { status: "error", blogWikiLinkSummary: summary });
       }
-    }
+    },
+    );
   }
 
   return { ok, skipped, failed };

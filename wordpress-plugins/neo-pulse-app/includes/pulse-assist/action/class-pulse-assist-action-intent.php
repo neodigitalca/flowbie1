@@ -20,6 +20,7 @@ class Neo_Pulse_App_Pulse_Assist_Action_Intent {
 		'task_decomposer',
 		'task_validator',
 		'template_resolver',
+		'forge_resolver',
 	);
 
 	/**
@@ -73,7 +74,39 @@ class Neo_Pulse_App_Pulse_Assist_Action_Intent {
 			return 'action_plan';
 		}
 
+		if ( self::is_forge_message( $lower ) ) {
+			return 'action_plan';
+		}
+
 		return 'none';
+	}
+
+	/**
+	 * Pulse Forge dashboard, workflows, and recipe-as-workflow requests.
+	 */
+	public static function is_forge_message( string $lower ): bool {
+		$needles = array(
+			'pulse forge',
+			'forge dashboard',
+			'my forge',
+			'workflows',
+			'publish workflow',
+			'run workflow',
+			'create workflow',
+			'list workflow',
+			'open workflow',
+			'recipe builder',
+			'as a workflow',
+			'forge_dashboard',
+			'workflows_list',
+			'workflows_create',
+		);
+		foreach ( $needles as $needle ) {
+			if ( str_contains( $lower, $needle ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -315,15 +348,16 @@ class Neo_Pulse_App_Pulse_Assist_Action_Intent {
 		$system = 'You plan Pulse Assist task-manager actions. Return JSON only:
 {"intentSummary":"","sliceTeam":[{"id":"project_creator","role":"Project creator","slice":"project_creator","focus":"","systemPrompt":""}],"readTools":["tasks_list_projects"],"needsWrite":true}
 Rules:
-- sliceTeam: pick 2-4 agents from: member_resolver, project_resolver, project_creator, task_decomposer, task_validator.
+- sliceTeam: pick 2-4 agents from: member_resolver, project_resolver, project_creator, task_decomposer, task_validator, forge_resolver.
 - member_resolver when a person name or assignee is mentioned.
 - project_resolver when matching an existing client, property, or project.
 - project_creator when the user wants to create a new task project (not tasks inside an existing project).
 - task_decomposer when creating multiple tasks or optimization work is requested.
 - task_validator when duplicates might exist.
+- forge_resolver when the user asks about Pulse Forge, My Forge, Agents recipes, or workflows.
 - When the user asks to create a new project AND add task(s), include both project_creator and task_decomposer.
-- readTools: subset of tasks_list_projects, tasks_list_sections, tasks_search, tasks_list_my, team_list_members, tasks_list_templates.
-- needsWrite true when user wants tasks or projects created or updated.';
+- readTools: subset of tasks_list_projects, tasks_list_sections, tasks_search, tasks_list_my, team_list_members, tasks_list_templates, recipes_list, recipes_describe, forge_dashboard, workflows_list, workflows_get, workflows_list_runs.
+- needsWrite true when user wants tasks, projects, workflows, or recipe installs created or updated.';
 
 		$user = "User message:\n{$message}\n\n{$ctx_block}\n{$props}";
 
@@ -340,12 +374,16 @@ Rules:
 		);
 
 		if ( ! is_array( $parsed ) || empty( $parsed['sliceTeam'] ) || ! is_array( $parsed['sliceTeam'] ) ) {
+			$lower = strtolower( $message );
+			$forge = self::is_forge_message( $lower ) || self::is_recipe_message( $lower );
 			return array_merge(
 				$empty,
 				array(
-					'intentSummary' => 'Task manager request',
+					'intentSummary' => $forge ? 'Pulse Forge request' : 'Task manager request',
 					'sliceTeam'     => self::default_slice_team( $message ),
-					'readTools'     => array( 'team_list_members', 'tasks_list_projects', 'tasks_search' ),
+					'readTools'     => $forge
+						? array( 'forge_dashboard', 'workflows_list', 'recipes_list' )
+						: array( 'team_list_members', 'tasks_list_projects', 'tasks_search' ),
 					'needsWrite'    => $route === 'action_plan',
 					'reason'        => 'Fallback slice team',
 				)
@@ -395,6 +433,18 @@ Rules:
 	 */
 	private static function default_slice_team( string $message ): array {
 		$lower = strtolower( $message );
+		if ( self::is_forge_message( $lower ) || self::is_recipe_message( $lower ) ) {
+			$read_focus = self::is_forge_message( $lower ) ? 'Pulse Forge workflows and dashboard' : 'Automation recipes';
+			return array(
+				array(
+					'id'           => 'forge_resolver',
+					'role'         => 'Forge resolver',
+					'slice'        => 'forge_resolver',
+					'focus'        => $read_focus,
+					'systemPrompt' => self::default_system_for_slice( 'forge_resolver' ),
+				),
+			);
+		}
 		if ( self::is_template_message( $lower ) ) {
 			return array(
 				array(
@@ -490,6 +540,8 @@ Rules:
 				return 'Check existing tasks to avoid duplicate titles for the same project.';
 			case 'template_resolver':
 				return 'Match template keyword or name from tasks_list_templates. Propose defaultTasks and note {client} placeholders for client-specific titles.';
+			case 'forge_resolver':
+				return 'Resolve Pulse Forge requests. Use recipes_install for site-bound automation projects. Use workflows_create with recipeKeyword for the Forge canvas. List dashboard, workflows, and runs with read tools.';
 			default:
 				return 'Analyze the task request slice and return structured findings.';
 		}

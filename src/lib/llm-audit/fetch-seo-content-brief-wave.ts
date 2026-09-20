@@ -1,5 +1,10 @@
 import type { WordPressSite } from "@/components/integrations/types";
 import { backendApiUrl } from "@/lib/wordpress-api/connection";
+import {
+  isDataForSeoPaymentFailure,
+  isDfsPaymentLatched,
+  markDfsPaymentFailed,
+} from "@/lib/llm-audit/dataforseo-llm-responses-live";
 import { mcp_DataForSEO_serp_organic_live_advanced } from "@/lib/mcp-tools";
 import {
   buildMergedSeoContentBrief,
@@ -90,6 +95,9 @@ async function fetchDataForSeoSerpMcpSafe(input: {
   serpMcpJson: Awaited<ReturnType<typeof mcp_DataForSEO_serp_organic_live_advanced>> | null;
   serpError: string | null;
 }> {
+  if (isDfsPaymentLatched()) {
+    return { serpMcpJson: null, serpError: null };
+  }
   try {
     const serpMcpJson = await mcp_DataForSEO_serp_organic_live_advanced({
       keyword: input.keyword,
@@ -101,6 +109,9 @@ async function fetchDataForSeoSerpMcpSafe(input: {
     return { serpMcpJson, serpError: null };
   } catch (err) {
     const serpError = err instanceof Error ? err.message : String(err);
+    if (isDataForSeoPaymentFailure({ message: serpError })) {
+      markDfsPaymentFailed();
+    }
     return { serpMcpJson: null, serpError };
   }
 }
@@ -167,12 +178,13 @@ export async function resolveSerpDumpJsonForBrief(input: {
   };
 }
 
-/** Parallel DataForSEO SERP MCP + OpenRouter LLM audit (same wave as Overview research brief). */
+/** Live DataForSEO SERP + ChatGPT / Gemini / Perplexity audit. */
 export async function runSerpAndLlmAuditParallel(input: {
   keyword: string;
   pageUrl: string;
   site?: WordPressSite | null;
   location?: string;
+  requireSerpDump?: boolean;
   callbacks?: SerpLlmWaveCallbacks;
 }): Promise<SerpLlmWaveResult> {
   const keyword = input.keyword.trim();
@@ -182,33 +194,58 @@ export async function runSerpAndLlmAuditParallel(input: {
 
   const location = (input.location ?? resolveSiteLocationLabel(input.site, keyword)).trim();
   const serpLocation = resolveSerpLocationName(location, keyword);
-  input.callbacks?.onProgress?.("DataForSEO SERP");
+  const report = (message: string) => input.callbacks?.onProgress?.(message);
 
-  const [{ serpMcpJson, serpError }, llmAudit] = await Promise.all([
-    fetchDataForSeoSerpMcpSafe({ keyword, location_name: serpLocation }),
+  const runSerp = () => fetchDataForSeoSerpMcpSafe({ keyword, location_name: serpLocation });
+  const runAudit = () =>
     fetchLlmAuditParallel({
       keyword,
       siteUrl: pageUrl,
       site: input.site ?? undefined,
       location: location || undefined,
-    }),
-  ]);
+      onProgress: report,
+    });
+
+  report(`Live DataForSEO SERP (${serpLocation})`);
+  let serpMcpJson: Awaited<ReturnType<typeof fetchDataForSeoSerpMcpSafe>>["serpMcpJson"];
+  let serpError: string | null;
+  let llmAudit: Awaited<ReturnType<typeof fetchLlmAuditParallel>>;
+
+  if (input.requireSerpDump) {
+    ({ serpMcpJson, serpError } = await runSerp());
+  } else {
+    [{ serpMcpJson, serpError }, llmAudit] = await Promise.all([runSerp(), runAudit()]);
+  }
 
   const storedFile = storedFileFromSerpMcpResponse(
     serpMcpJson as Record<string, unknown> | null | undefined,
   );
-  input.callbacks?.onSerpDone?.(
-    storedFile
-      ? `SERP saved: ${storedFile}`
+  const hasInlineSerp = Boolean(extractSerpDumpJsonFromMcpResponse(serpMcpJson));
+  const serpSummary = storedFile
+    ? "Live SERP ready"
+    : serpError && isDataForSeoPaymentFailure({ message: serpError })
+      ? ""
       : serpError
-        ? `DataForSEO SERP failed: ${serpError}`
-        : "DataForSEO SERP unavailable; OpenRouter LLM audit used",
-  );
+        ? `Live SERP failed: ${serpError}`
+      : hasInlineSerp
+        ? "Live SERP ready"
+        : "Live SERP returned no results";
+  if (serpSummary) {
+    input.callbacks?.onSerpDone?.(serpSummary);
+    report(serpSummary);
+  }
+
+  if (input.requireSerpDump) {
+    llmAudit = await runAudit();
+  }
 
   const llmOkCount = llmAudit.platforms.filter((p) => p.status === "ok").length;
   const llmTotal = llmAudit.platforms.length;
-  input.callbacks?.onLlmDone?.(`LLM audit: ${llmOkCount}/${llmTotal} ok`);
-  input.callbacks?.onProgress?.(`LLM audit: ${llmOkCount}/${llmTotal} ok`);
+  if (llmOkCount > 0) {
+    const auditSummary = `Live audit: ${llmOkCount}/${llmTotal} ok`;
+    input.callbacks?.onLlmDone?.(auditSummary);
+    report(auditSummary);
+  }
 
   return { storedFile, llmAudit, serpMcpJson, serpError };
 }
@@ -292,6 +329,7 @@ export type FetchSeoContentBriefWaveInput = {
   gscPageUrl?: string;
   semrushOverviewJson?: unknown | null;
   serpDumpUrl?: (filename: string) => string;
+  requireSerpDump?: boolean;
   callbacks?: SerpLlmWaveCallbacks;
 };
 
@@ -304,16 +342,19 @@ export async function fetchSeoContentBriefWave(
     pageUrl: input.pageUrl,
     site: input.site,
     location: input.location,
+    requireSerpDump: input.requireSerpDump,
     callbacks: input.callbacks,
   });
 
-  const { serpDumpJson } = await resolveSerpDumpJsonForBrief({
+  const { serpDumpJson, loadSummary } = await resolveSerpDumpJsonForBrief({
     storedFile,
     serpMcpJson,
     serpDumpUrl: input.serpDumpUrl,
   });
+  const serpTasks = Array.isArray(serpDumpJson.tasks) ? serpDumpJson.tasks : [];
+  input.callbacks?.onProgress?.(serpTasks.length > 0 ? "Live SERP ready" : loadSummary);
 
-  input.callbacks?.onProgress?.("Brief merged");
+  input.callbacks?.onProgress?.("New research brief merged");
   const brief = mergeSeoContentBriefFromParts({
     serpDumpJson,
     pageUrl: input.pageUrl,

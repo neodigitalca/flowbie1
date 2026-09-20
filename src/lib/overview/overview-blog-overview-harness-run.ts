@@ -1,6 +1,8 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { WordPressSite } from "@/components/integrations/types";
-import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
+import type { AiseoCacheWriteAccumulator } from "@/lib/overview/overview-aiseo-cache-write";
+import type { AiseoAfterRowWriteFn } from "@/lib/overview/overview-aiseo-after-upload";
+import { aiseoRowFilesForUpload } from "@/lib/overview/overview-aiseo-row-artifacts";
 import {
   mergeHarnessProgressSiteAndBatch,
   setOptimizingState,
@@ -12,6 +14,7 @@ import {
   initOverviewBulkHarnessPagination,
   setOverviewBulkHarnessPageState,
 } from "@/lib/overview/overview-bulk-page-state";
+import { mapOverviewAiCopyWithConcurrency } from "@/lib/overview/overview-ai-copy-concurrency";
 import { overviewBulkPageRanges } from "@/lib/overview/overview-bulk-page-size";
 import {
   markOverviewRowDone,
@@ -23,7 +26,6 @@ import {
   type OverviewHarnessSetters,
 } from "@/lib/overview/overview-blog-overview-harness-mutations";
 import {
-  buildWaitingOverviewHarnessSections,
   formatOverviewAnalyzeMarkdown,
   formatOverviewSectionMarkdown,
   makeOverviewHarnessDonePayload,
@@ -78,15 +80,11 @@ export function initOverviewBlogOverviewHarnessBatchState(params: {
   const batchKey = `${site.id}-batch`;
   const urls = catalog.map((c) => c.url.trim()).filter(Boolean);
   const urlKeywords: Record<string, string> = {};
-  const initialUrlStatuses: BulkOptimizationState["urlStatuses"] = {};
-  const urlHarnessSections: NonNullable<BulkOptimizationState["urlHarnessSections"]> = {};
 
   for (const entry of catalog) {
     const url = entry.url.trim();
     if (!url) continue;
     if (entry.focusKeyword) urlKeywords[url] = entry.focusKeyword;
-    initialUrlStatuses[url] = "pending";
-    urlHarnessSections[url] = buildWaitingOverviewHarnessSections();
   }
 
   setOptimizingState(setIsOptimizingContent, batchKey, true);
@@ -104,13 +102,13 @@ export function initOverviewBlogOverviewHarnessBatchState(params: {
     [batchKey]: {
       urls,
       currentIndex: 0,
-      urlStatuses: initialUrlStatuses,
+      urlStatuses: {},
       currentStep: "Overview",
       currentUrl: urls[0],
       urlKeywords,
       runKind: "aiOverview",
       harnessStartedAt: Date.now(),
-      urlHarnessSections,
+      urlHarnessSections: {},
       urlGeneratedFiles: {},
       currentStepProgress: {
         step: "Overview",
@@ -151,14 +149,14 @@ export type RunOverviewBlogOverviewHarnessBatchParams = {
   apiKey: string;
   model?: string;
   harnessSetters: OverviewHarnessSetters;
-  updateRow: (index: number, patch: Partial<OverviewRow>) => void;
-  onRowOk?: (url: string, html: string) => void;
+  cacheWrite: AiseoCacheWriteAccumulator;
+  uploadAfterRowWrite?: AiseoAfterRowWriteFn;
 };
 
 export async function runOverviewBlogOverviewHarnessBatch(
   params: RunOverviewBlogOverviewHarnessBatchParams,
 ): Promise<{ ok: number; failed: number }> {
-  const { catalog, site, apiKey, model, harnessSetters, updateRow, onRowOk } = params;
+  const { catalog, site, apiKey, model, harnessSetters, cacheWrite, uploadAfterRowWrite } = params;
   if (!catalog.length) return { ok: 0, failed: 0 };
 
   await ensureMasterInstructionsInMemory(site.id ?? null);
@@ -166,7 +164,6 @@ export async function runOverviewBlogOverviewHarnessBatch(
   const pageRanges = overviewBulkPageRanges(catalog.length);
   let ok = 0;
   let failed = 0;
-  let globalRowNum = 0;
 
   for (const { start, end, page, pageCount } of pageRanges) {
     const pageCatalog = catalog.slice(start, end);
@@ -183,15 +180,18 @@ export async function runOverviewBlogOverviewHarnessBatch(
       step: "Overview",
     });
 
-    for (const row of pageCatalog) {
-      globalRowNum += 1;
+    await mapOverviewAiCopyWithConcurrency(
+      pageCatalog.map((row, localIndex) => ({
+        row,
+        globalRowNum: start + localIndex + 1,
+      })),
+      async ({ row, globalRowNum }) => {
       const url = row.url.trim();
       try {
         markOverviewRowOptimizing(
           url,
           row.index,
           harnessSetters,
-          updateRow,
           globalRowNum,
           catalog.length,
           row.title || url,
@@ -199,8 +199,8 @@ export async function runOverviewBlogOverviewHarnessBatch(
 
         const sourceHtml = resolveOverviewSourceHtml({ postContentOptimized: row.html }, row.html);
         if (!sourceHtml.trim()) {
-          markOverviewRowSkipped(url, row.index, harnessSetters, updateRow);
-          continue;
+          markOverviewRowSkipped(url, harnessSetters);
+          return;
         }
 
         const bodyH2Titles = extractH2TextsFromHtml(sourceHtml).filter(
@@ -231,12 +231,10 @@ export async function runOverviewBlogOverviewHarnessBatch(
           failed += 1;
           markOverviewRowError(
             url,
-            row.index,
             harnessSetters,
-            updateRow,
             "Could not resolve place entity for this SAP page",
           );
-          continue;
+          return;
         }
 
         const result = await generateAndPrependOverviewHtml({
@@ -254,8 +252,8 @@ export async function runOverviewBlogOverviewHarnessBatch(
         });
 
         if (!result) {
-          markOverviewRowSkipped(url, row.index, harnessSetters, updateRow);
-          continue;
+          markOverviewRowSkipped(url, harnessSetters);
+          return;
         }
 
         const overviewHtml =
@@ -270,19 +268,45 @@ export async function runOverviewBlogOverviewHarnessBatch(
             formatOverviewSectionMarkdown(overviewHtml),
           ),
         );
-        markOverviewRowDone(url, row.index, harnessSetters, updateRow, result.html, overviewHtml);
-        onRowOk?.(url, result.html);
+        markOverviewRowDone(url, row.index, harnessSetters, {
+          overviewSectionHtml: overviewHtml,
+          postHtml: result.html,
+        });
+        cacheWrite.push(url, result.html);
+        const rowFiles = aiseoRowFilesForUpload({
+          runKind: "aiOverview",
+          url,
+          elementFiles: overviewHtml?.trim()
+            ? [
+                {
+                  name: "overview.html",
+                  content: overviewHtml.trim(),
+                  mimeType: "text/html;charset=utf-8",
+                },
+              ]
+            : [],
+          postHtml: result.html,
+        });
+        if (uploadAfterRowWrite) {
+          await uploadAfterRowWrite({
+            index: row.index,
+            url,
+            html: result.html,
+            rowFiles: rowFiles.length ? rowFiles : undefined,
+          });
+        }
         ok += 1;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         if (isMissingBodyHtmlMessage(message)) {
-          markOverviewRowSkipped(url, row.index, harnessSetters, updateRow);
-          continue;
+          markOverviewRowSkipped(url, harnessSetters);
+          return;
         }
         failed += 1;
-        markOverviewRowError(url, row.index, harnessSetters, updateRow, message);
+        markOverviewRowError(url, harnessSetters, message);
       }
-    }
+    },
+    );
   }
 
   setOverviewHarnessMessage(

@@ -176,26 +176,38 @@ export function formatLlmAuditAuthorityLinksForPrompt(links: LlmAuditAuthorityLi
   });
   return `
 === LLM AUDIT AUTHORITY LINKS (MANDATORY — COPY EXACTLY) ===
-These URLs come from the stored SERP/LLM research brief (government, municipal, news, weather, BBB, education). Every link MUST appear in the final article using the **exact** URL below. Use [[EXTERNAL:exact-url|exact-anchor]] in harness output with the exact anchor phrase from this list. Weave each link mid-sentence inside a paragraph — same placement as [[LINK:query|anchor]] internal links. Include **all** of them at least once. Do not substitute, shorten, or omit any href. FORBIDDEN: bare domain anchors, "for more", "here", or links appended after the final period.
+These URLs come from the stored SERP/LLM research brief (government, municipal, news, weather, BBB, education). Every link MUST appear in the final article using the **exact** URL below. Use [[EXTERNAL:exact-url|exact-anchor]] in harness output with the exact anchor phrase from this list. Weave each link mid-sentence inside an existing topical paragraph — same placement as [[LINK:query|anchor]] internal links. Include **all** of them at least once. Do not substitute, shorten, or omit any href. FORBIDDEN: a new checklist item, agent, or published H2 for these URLs (no "LLM Audit Authority Link", "Further Links", or "Section"). FORBIDDEN: bare domain anchors, "for more", "here", or links appended after the final period.
 
 ${lines.join("\n")}
 
-Checklist: include \`[LLM_AUDIT_AUTHORITY_LINK]\` with the exact markdown for each URL above.
-Blueprint: include \`[LLM_AUDIT_AUTHORITY_LINK]\` in features with the exact markdown.
+Checklist: attach \`[LLM_AUDIT_AUTHORITY_LINK]\` to existing topical H2 items only. NEVER add a new checklist item or H2 for these URLs.
+Blueprint: include \`[LLM_AUDIT_AUTHORITY_LINK]\` in features on existing agents only.
 === END LLM AUDIT AUTHORITY LINKS ===
 `;
+}
+
+function checklistItemIsFaq(item: string): boolean {
+  return /\[faq\]/i.test(item) || /\bfaq\b/i.test(item.split("[")[0] ?? "");
 }
 
 export function injectLlmAuditAuthorityLinksIntoChecklist(
   checklist: string[],
   links: LlmAuditAuthorityLinkLike[],
 ): string[] {
-  if (links.length === 0) return checklist;
+  if (links.length === 0 || checklist.length === 0) return checklist;
   const next = [...checklist];
-  for (const link of links) {
-    const line = `[LLM_AUDIT_AUTHORITY_LINK]: Weave [[EXTERNAL:${link.url}|${link.anchorText}]] mid-sentence in body copy (same rules as internal [[LINK:...]]). Exact href: ${link.url}. Forbidden: bare domain anchor, "for more", or trailing link after final period.`;
+  const bodyIndexes = next
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => !checklistItemIsFaq(item))
+    .map(({ index }) => index);
+  const targets = bodyIndexes.length > 0 ? bodyIndexes : next.map((_, index) => index);
+
+  for (let n = 0; n < links.length; n++) {
+    const link = links[n]!;
     if (next.some((item) => item.includes(link.url))) continue;
-    next.push(line);
+    const idx = targets[n % targets.length]!;
+    const line = `[LLM_AUDIT_AUTHORITY_LINK]: Weave [[EXTERNAL:${link.url}|${link.anchorText}]] mid-sentence in body copy (same rules as internal [[LINK:...]]). Exact href: ${link.url}. Forbidden: new H2, bare domain anchor, "for more", or trailing link after final period.`;
+    next[idx] = `${next[idx]}\n${line}`;
   }
   return next;
 }

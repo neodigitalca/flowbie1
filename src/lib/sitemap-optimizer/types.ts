@@ -270,74 +270,7 @@ export type SitemapOptimizerCatalogEntry = {
 };
 
 /** Sitemap Optimizer workspace sub-mode. */
-export type SitemapOptimizerWorkspaceMode = "plan" | "legacy_redirects" | "url_optimizer";
-
-export type LegacyRedirectMatchRow = {
-  legacyUrl: string;
-  destinationUrl: string;
-  uploadRow: number;
-};
-
-export type LegacyRedirectGridRow = {
-  uploadRow: number;
-  legacyUrl: string;
-  destinationUrl: string;
-};
-
-export type LegacyRedirectBatchStatus = "pending" | "running" | "done" | "error";
-
-export type LegacyRedirectBatchProgress = {
-  batchIndex: number;
-  batchTotal: number;
-  lineCount: number;
-  matchedCount: number;
-  status: LegacyRedirectBatchStatus;
-  durationMs?: number;
-  error?: string;
-};
-
-export type LegacyRedirectMatchProgressPhase =
-  | "idle"
-  | "inventory"
-  | "match"
-  | "done"
-  | "error";
-
-export type LegacyRedirectMatchProgress = {
-  phase: LegacyRedirectMatchProgressPhase;
-  completed: number;
-  total: number;
-  message?: string;
-  detail?: string;
-  uploadRowCount?: number;
-  catalogSize?: number;
-  batchesCompleted?: number;
-  batchesTotal?: number;
-  /** Sheet lines processed (redirect assigned or skipped). */
-  matchedCount?: number;
-  /** Rows with a redirect destination (excludes no-redirect skips). */
-  redirectCount?: number;
-};
-
-export type LegacyRedirectHeaderProgress = {
-  phase: string;
-  completed: number;
-  total: number;
-  progressPct?: number;
-  batchesCompleted?: number;
-  batchesTotal?: number;
-  catalogSize?: number;
-  matchedCount?: number;
-  redirectCount?: number;
-  sheetLineCount?: number;
-  sheetName?: string;
-};
-
-export type LegacyRedirectMatchRunResult = {
-  rows: LegacyRedirectMatchRow[];
-  catalogSize: number;
-  csv: string;
-};
+export type SitemapOptimizerWorkspaceMode = "plan" | "url_optimizer";
 
 export function gscPageQueriesToRows(queries: GSCPageQuery[]): SitemapOptimizerGscQueryRow[] {
   return [...queries]

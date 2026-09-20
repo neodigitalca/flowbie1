@@ -9,7 +9,7 @@ import { gapScheduleStartDate } from '@/lib/bulk-schedule-gap';
 import { resolveBulkWordPressPublishDate, resolveTimesPerMonthAnchorStart, type ScheduleFrequency } from '@/lib/wordpress-scheduler';
 
 import type { BulkSitemapMode } from '@/lib/bulk/bulk-sitemap-mode';
-import { postingSitemapPlaceholder } from '@/lib/bulk/bulk-sitemap-mode';
+import { defaultBulkSitemapMode, postingSitemapPlaceholder } from '@/lib/bulk/bulk-sitemap-mode';
 
 type SiteCfg = { sitemapType: BulkSitemapMode };
 
@@ -31,7 +31,7 @@ export function resolveDefaultWordPressSiteSelection(): {
   return {
     selectedSiteIds: new Set([enabled.id]),
     siteConfigs: {
-      [enabled.id]: { sitemapType: 'post' },
+      [enabled.id]: { sitemapType: defaultBulkSitemapMode() },
     },
   };
 }

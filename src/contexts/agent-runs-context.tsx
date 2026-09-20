@@ -33,7 +33,18 @@ import {
   fetchAgentRuns,
   patchAgentRun,
 } from "@/lib/agent-runs-api";
-import { buildAgentRunBatchKey } from "@/lib/agent-runs/agent-run-batch-key";
+import { agentRunSiteId, buildAgentRunBatchKey } from "@/lib/agent-runs/agent-run-batch-key";
+import { pinAgentRunSiteId } from "@/lib/agent-runs/resolve-agent-run-site";
+import {
+  applyOptimisticWorkflowAgentProgress,
+  createOptimisticWorkflowAgentRun,
+  retainSiblingOptimisticAgentRuns,
+} from "@/lib/agent-runs/optimistic-workflow-agent-run";
+import {
+  AGENT_RUNS_ALL_SITES_ID,
+  isAgentsAllSitesFilter,
+  resolveDefaultAgentsSiteFilter,
+} from "@/lib/agent-runs/agent-runs-site-filter";
 import { flushAllAgentRunCheckpointPatches } from "@/lib/agent-runs/agent-run-checkpoint";
 import { agentRunHasResumeProgress } from "@/lib/agent-runs/agent-run-resume";
 import { agentRunIsServerExecution } from "@/lib/agent-runs/agent-run-display";
@@ -69,7 +80,6 @@ import type { TeamTask } from "@/lib/tasks-types";
 import { rememberWorkflowAgentBinding } from "@/lib/workflow/workflow-agent-binding";
 import { resolveWorkflowActionPayload } from "@/lib/workflow/resolve-workflow-action-payload";
 import { wordpressSiteDisplayName } from "@/lib/wordpress-site-display-name";
-import { resolveDefaultAgentsSiteFilter } from "@/lib/agent-runs/agent-runs-site-filter";
 
 type StartRunOptions = {
   openSidebar?: boolean;
@@ -118,6 +128,8 @@ type AgentRunsContextValue = {
   agentsSiteFilter: string;
   setAgentsSiteFilter: (siteId: string) => void;
   openSidebar: (runId?: number) => void;
+  seedOptimisticWorkflowAgent: (title: string, siteId?: string | readonly string[]) => void;
+  patchOptimisticWorkflowAgentProgress: (message: string, siteId?: string) => void;
   selectRun: (runId: number | null) => void;
   refreshRuns: () => Promise<void>;
   patchRunInList: (runId: number, patch: AgentRunListPatch) => void;
@@ -287,7 +299,14 @@ export function AgentRunsContextProvider({
 
       for (const run of prev) {
         if (mergedById.has(run.id)) continue;
-        if (run.id < 0) continue;
+        if (run.id < 0) {
+          const site = agentRunSiteId(run);
+          const replaced = site
+            ? [...mergedById.values()].some((item) => item.id > 0 && agentRunSiteId(item) === site)
+            : false;
+          if (!replaced) mergedById.set(run.id, run);
+          continue;
+        }
         const normalized = applyCancelledRunState(run, teamId);
         if (isAgentRunTerminal(normalized.status)) continue;
         mergedById.set(normalized.id, normalized);
@@ -336,6 +355,32 @@ export function AgentRunsContextProvider({
     [setSidebarOpen, setSidebarPanel],
   );
 
+  const seedOptimisticWorkflowAgent = useCallback(
+    (title: string, siteId?: string | readonly string[]) => {
+      if (!teamId) {
+        openSidebar();
+        return;
+      }
+      const siteIds = Array.isArray(siteId) ? siteId : siteId ? [siteId] : [undefined];
+      const now = Date.now();
+      const nextRuns = siteIds.map((id, index) =>
+        createOptimisticWorkflowAgentRun({
+          teamId,
+          title,
+          siteId: id,
+          id: -(now + index + 1),
+        }),
+      );
+      setRuns((prev) => [...nextRuns, ...prev.filter((item) => item.id > 0)]);
+      openSidebar(nextRuns[0]?.id);
+    },
+    [openSidebar, teamId],
+  );
+
+  const patchOptimisticWorkflowAgentProgress = useCallback((message: string, siteId?: string) => {
+    setRuns((prev) => applyOptimisticWorkflowAgentProgress(prev, message, siteId));
+  }, []);
+
   const startRun = useCallback(
     async (payload: StartAgentRunPayload, options?: StartRunOptions) => {
       const result = await createAgentRun(applyWorkflowBinding(payload, options?.workflowBinding));
@@ -349,10 +394,14 @@ export function AgentRunsContextProvider({
           });
         }
         const clientBatchKey = buildAgentRunBatchKey(result.run.id);
-        const run = { ...result.run, clientBatchKey };
+        const siteId =
+          payload.context?.siteId?.trim()
+          || String(payload.plan?.clientRunContract?.siteId ?? "").trim()
+          || String((payload.plan?.executionPayload as { siteId?: string } | undefined)?.siteId ?? "").trim();
+        const run = pinAgentRunSiteId({ ...result.run, clientBatchKey }, siteId);
         void patchAgentRun(result.run.teamId, result.run.id, { clientBatchKey });
         setRuns((prev) => {
-          const withoutOptimistic = prev.filter((run) => run.id > 0);
+          const withoutOptimistic = retainSiblingOptimisticAgentRuns(prev, run);
           const idx = withoutOptimistic.findIndex((r) => r.id === run.id);
           if (idx >= 0) {
             const next = [...withoutOptimistic];
@@ -377,6 +426,7 @@ export function AgentRunsContextProvider({
             kickClientAgentRuns([run]);
           }
         }
+        return { ok: true, run };
       } else {
         void refreshRuns();
       }
@@ -473,8 +523,9 @@ export function AgentRunsContextProvider({
       const recipeKey = taskExecutionKindToRecipe(kind);
       if (!recipeKey) return { ok: false, error: "Task has no execution recipe" };
 
-      const siteId =
-        prepared.wordpressSiteId?.trim() || resolveTaskExecuteSiteId(prepared, activeWordPressSiteId);
+      const siteId = options?.workflowBinding
+        ? task.wordpressSiteId?.trim() || ""
+        : prepared.wordpressSiteId?.trim() || resolveTaskExecuteSiteId(prepared, activeWordPressSiteId);
       if (!siteId) {
         return { ok: false, error: "Set a client on the project." };
       }
@@ -501,9 +552,14 @@ export function AgentRunsContextProvider({
             )
           : executionPayload;
 
+      const pinnedPayload = {
+        ...payloadForExecution,
+        siteId,
+        wordpressSiteId: siteId,
+      };
       const exec = await startTaskExecution(teamId, prepared.id, {
         executionKind: kind as TeamTask["executionKind"],
-        executionPayload: payloadForExecution,
+        executionPayload: pinnedPayload,
         wordpressSiteId: siteId,
       });
       if (!exec.ok || !exec.execution) {
@@ -527,6 +583,8 @@ export function AgentRunsContextProvider({
             plan: {
               taskExecutionId: exec.execution.id,
               completedOnServer: true,
+              executionPayload: pinnedPayload,
+              clientRunContract: { siteId },
             },
           },
           options,
@@ -549,13 +607,16 @@ export function AgentRunsContextProvider({
             taskTitle: prepared.title,
             projectId: prepared.projectId,
           },
-          plan: {
-            taskExecutionId: exec.execution.id,
-            executionKind: kind,
-            clientRunContract: exec.execution.clientRunContract ?? undefined,
-            executionPayload: payloadForExecution,
-            executionMode,
-          },
+            plan: {
+              taskExecutionId: exec.execution.id,
+              executionKind: kind,
+              clientRunContract: {
+                ...(exec.execution.clientRunContract ?? {}),
+                siteId,
+              },
+              executionPayload: pinnedPayload,
+              executionMode,
+            },
         },
         options,
       );
@@ -592,8 +653,16 @@ export function AgentRunsContextProvider({
         mapStartRunResult(await startRunFromTask(task, options)),
       startRunFromTaskAndWait: startRunFromTaskForWorkflow,
       listAvailableSiteIds: listWorkflowAvailableSiteIds,
+      onClientProgress: patchOptimisticWorkflowAgentProgress,
     }),
-    [mapStartRunResult, startRun, startRunForWorkflow, startRunFromTask, startRunFromTaskForWorkflow],
+    [
+      mapStartRunResult,
+      patchOptimisticWorkflowAgentProgress,
+      startRun,
+      startRunForWorkflow,
+      startRunFromTask,
+      startRunFromTaskForWorkflow,
+    ],
   );
 
   const workflowChainRef = useRef({
@@ -625,9 +694,11 @@ export function AgentRunsContextProvider({
       if (options?.openAgentSidebar) {
         const clientSiteId = options.clientSiteId?.trim();
         setAgentsSiteFilterState(
-          clientSiteId && agentsSiteIds.includes(clientSiteId)
-            ? clientSiteId
-            : resolveDefaultAgentsSiteFilter(activeWordPressSiteId, agentsSiteIds),
+          isAgentsAllSitesFilter(clientSiteId ?? "")
+            ? AGENT_RUNS_ALL_SITES_ID
+            : clientSiteId && agentsSiteIds.includes(clientSiteId)
+              ? clientSiteId
+              : resolveDefaultAgentsSiteFilter(activeWordPressSiteId, agentsSiteIds),
         );
       }
       const callbacks = {
@@ -927,6 +998,8 @@ export function AgentRunsContextProvider({
       agentsSiteFilter,
       setAgentsSiteFilter,
       openSidebar,
+      seedOptimisticWorkflowAgent,
+      patchOptimisticWorkflowAgentProgress,
       selectRun: setSelectedRunId,
       refreshRuns,
       patchRunInList,
@@ -946,6 +1019,8 @@ export function AgentRunsContextProvider({
       clearHistory,
       hasTerminalHistory,
       openSidebar,
+      seedOptimisticWorkflowAgent,
+      patchOptimisticWorkflowAgentProgress,
       patchRunInList,
       refreshRuns,
       resumeRun,

@@ -10,6 +10,7 @@ import {
 import { AutomationWhatAspectPills } from "@/components/manager/tasks/planner/AutomationWhatAspectPills";
 import { PostCreatorExecutionFields } from "@/components/manager/tasks/PostCreatorExecutionFields";
 import { GscReportingExecutionFields } from "@/components/manager/tasks/GscReportingExecutionFields";
+import { AdsReportingExecutionFields } from "@/components/manager/tasks/AdsReportingExecutionFields";
 import { ChatGptAuditExecutionFields } from "@/components/manager/tasks/ChatGptAuditExecutionFields";
 import { DfsArticleAuditExecutionFields } from "@/components/manager/tasks/DfsArticleAuditExecutionFields";
 import { BrowserAutomationExecutionFields } from "@/components/manager/tasks/BrowserAutomationExecutionFields";
@@ -82,6 +83,8 @@ const ACTION_KIND_PILLS: { keyword: string; label: string; kind: TaskExecutionKi
   { keyword: "post-creator-monthly", label: "Post creator", kind: "post_creator" },
   { keyword: "gsc-report-mom", label: "GSC MoM", kind: "gsc_reporting" },
   { keyword: "gsc-report-yoy", label: "GSC YoY", kind: "gsc_reporting" },
+  { keyword: "ads-report-mom", label: "Ads MoM", kind: "ads_reporting" },
+  { keyword: "ads-report-yoy", label: "Ads YoY", kind: "ads_reporting" },
   { keyword: "entity-page-creator-monthly", label: "Entity pages", kind: "entity_page_creator" },
   { keyword: "entity-generator-monthly", label: "Entity generator", kind: "entity_generator" },
   { keyword: "sap-generator-monthly", label: "SAP generator", kind: "sap_generator" },
@@ -393,6 +396,19 @@ export function AutomationWhatPanel({
             disabled={disabled}
             onChange={(executionPayload) =>
               onChange({ ...action, executionKind: "gsc_reporting", executionPayload })
+            }
+          />
+        </TaskFormPanel>
+      ) : null}
+
+      {kind === "ads_reporting" ? (
+        <TaskFormPanel title="PPC report">
+          <AdsReportingExecutionFields
+            layout="inline"
+            executionPayload={action.executionPayload}
+            disabled={disabled}
+            onChange={(executionPayload) =>
+              onChange({ ...action, executionKind: "ads_reporting", executionPayload })
             }
           />
         </TaskFormPanel>

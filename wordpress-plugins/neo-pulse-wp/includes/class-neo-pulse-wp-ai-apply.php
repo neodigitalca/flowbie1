@@ -206,6 +206,7 @@ class Neo_Pulse_Wp_Ai_Apply {
 
 	public static function write_focus_keyword( int $post_id, string $value ): void {
 		update_post_meta( $post_id, 'rank_math_focus_keyword', $value );
+		update_post_meta( $post_id, '_neo_pulse_focus_keyword', $value );
 		self::write_acf_or_meta( $post_id, 'keyword_focus', $value );
 	}
 

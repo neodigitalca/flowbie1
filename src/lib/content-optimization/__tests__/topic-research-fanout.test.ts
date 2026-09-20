@@ -134,6 +134,20 @@ describe("illustrative research query helpers", () => {
     expect(query).not.toContain("homeowner");
   });
 
+  it("normalizeIllustrativeExample uses a partial extract instead of dropping it", () => {
+    const ex = normalizeIllustrativeExample(
+      {
+        leadIn: "Hypothetical scenario:",
+        personaName: "Elena",
+        householdProfile: "Old Naples homeowner concerned about humidity",
+      },
+      "September 2026",
+    );
+    expect(ex?.leadIn).toBe("Hypothetical scenario:");
+    expect(ex?.quoteBody).toContain("Elena");
+    expect(ex?.quoteBody).toContain("humidity");
+  });
+
   it("normalizeIllustrativeExample returns structured brief field", () => {
     const ex = normalizeIllustrativeExample(
       {

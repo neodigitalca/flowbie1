@@ -45,7 +45,11 @@ class Neo_Pulse_Wp_Fields_Meta_Box {
 				$post_type,
 				(string) ( $group['position'] ?? 'normal' ),
 				'high',
-				array( 'group' => $group )
+				array(
+					'group'                            => $group,
+					'__back_compat_meta_box'           => false,
+					'__block_editor_compatible_meta_box' => true,
+				)
 			);
 		}
 	}

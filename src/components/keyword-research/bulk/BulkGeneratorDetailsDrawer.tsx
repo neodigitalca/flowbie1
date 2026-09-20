@@ -4,6 +4,7 @@ import { BulkSitemapInventoryRunDetail } from "@/components/keyword-research/bul
 import {
   csvRowToEntitySapOverviewRowDisplay,
   csvRowToOverviewRowDisplay,
+  detailsDrawerRowKey,
   publishDateLabelForRow,
   rowFilesToDownloadables,
 } from "@/components/shared/bulk-details-row-display";
@@ -20,15 +21,26 @@ import {
   contentOptimizerRowStripeClass,
 } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import type { BulkHarnessSectionUi } from "@/hooks/use-bulk-auto-generate";
+import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
 import {
-  resolveBulkRowPipelineTitles,
+  isAiseoSimpleHarnessRunKind,
+  resolveBulkRowPipelineTitlesWithGoogleImage,
 } from "@/lib/overview/overview-bulk-pipeline-titles";
+import {
+  GOOGLE_IMAGE_PIPELINE_TITLE,
+  rowUsesGoogleImageFeatured,
+} from "@/lib/overview/overview-content-optimize-pipeline";
+import {
+  buildAiseoRowDisplaySections,
+  filterAiseoRowDisplayFiles,
+  isAiseoFileSlotRunKind,
+} from "@/lib/overview/overview-aiseo-row-artifacts";
 import {
   RESEARCH_HARNESS_PIPELINE_TITLES,
   isResearchHarnessPipelineTitles,
 } from "@/lib/overview/overview-research-harness-sections";
-import { resolveContentOptimizePipelineTitlesForRow } from "@/lib/overview/overview-content-optimize-pipeline";
 import { publishedLinkFromRowFiles } from "@/lib/sitemap-optimizer/sitemap-merge-bulk-state";
+import { isBulkDetailsDrawerRowActive } from "@/components/overview/overview-tab/overview-bulk-run-helpers";
 import { notify } from "@/lib/app-notifications";
 import { NOTIFY_CSV_DOWNLOADED } from "@/lib/notify-messages";
 
@@ -68,35 +80,43 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
     researchBatchSignals,
     researchRowIndices,
     liveMessage,
+    totalRows,
     entitySapRowDisplay = false,
     urlStatuses,
+    detailsPageStart = 0,
   } = props;
 
-  const [expandedRows, setExpandedRows] = useState<Set<number>>(() => new Set());
-  const pinnedExpandedRowsRef = useRef<Set<number>>(new Set());
+  const isSimpleAiseoHarness = isAiseoSimpleHarnessRunKind(runKind);
+
+  const effectivePipelineSectionTitles = pipelineSectionTitles?.length
+    ? pipelineSectionTitles
+    : undefined;
+
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(() => new Set());
+  const pinnedExpandedRowsRef = useRef<Set<string>>(new Set());
   const [detailsPrepOpen, setDetailsPrepOpen] = useState(true);
 
   const livePhase = headerProgress?.phase?.trim() || (isProcessing ? status.trim() : "");
 
-  const setRowExpanded = useCallback((index: number, open: boolean) => {
-    if (open) pinnedExpandedRowsRef.current.add(index);
-    else pinnedExpandedRowsRef.current.delete(index);
+  const setRowExpanded = useCallback((rowKey: string, open: boolean) => {
+    if (open) pinnedExpandedRowsRef.current.add(rowKey);
+    else pinnedExpandedRowsRef.current.delete(rowKey);
     setExpandedRows((prev) => {
       const next = new Set(prev);
-      if (open) next.add(index);
-      else next.delete(index);
+      if (open) next.add(rowKey);
+      else next.delete(rowKey);
       return next;
     });
   }, []);
 
-  const commitAutoExpandedRows = useCallback((auto: Set<number>) => {
+  const commitAutoExpandedRows = useCallback((auto: Set<string>) => {
     const merged = new Set(auto);
-    for (const index of pinnedExpandedRowsRef.current) merged.add(index);
+    for (const rowKey of pinnedExpandedRowsRef.current) merged.add(rowKey);
     setExpandedRows((prev) => {
       if (prev.size === merged.size) {
         let same = true;
-        for (const index of merged) {
-          if (!prev.has(index)) {
+        for (const rowKey of merged) {
+          if (!prev.has(rowKey)) {
             same = false;
             break;
           }
@@ -115,11 +135,13 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
   const isResearchBatch =
     runKind === "research" ||
     researchBatchSignals?.runKind === "research" ||
-    isResearchHarnessPipelineTitles(pipelineSectionTitles) ||
+    isResearchHarnessPipelineTitles(effectivePipelineSectionTitles) ||
     (researchRowIndices?.size ?? 0) > 0;
 
   const researchBatchInFlight =
-    isResearchBatch && researchBatchSignals?.currentStep !== "Batch complete";
+    isResearchBatch &&
+    isProcessing &&
+    researchBatchSignals?.currentStep !== "Batch complete";
 
   const showInventory =
     !isResearchBatch &&
@@ -138,9 +160,40 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
   }, [displayRows, entitySapRowDisplay]);
 
   useEffect(() => {
+    const keyForIndex = (index: number) => detailsDrawerRowKey(displayRows[index], index);
+
+    if (isSimpleAiseoHarness && runKind !== "aiFaq" && runKind !== "aiScenario") {
+      commitAutoExpandedRows(new Set());
+      return;
+    }
+
+    if ((runKind === "aiFaq" || runKind === "aiScenario") && isProcessing) {
+      let activeIndex = currentRow;
+      if (activeIndex < 0) {
+        for (let i = 0; i < displayRows.length; i += 1) {
+          const url = displayRows[i]?.destination_url?.trim();
+          if (!url || !urlStatuses) continue;
+          const key = normalizePageUrlKey(url);
+          const status =
+            urlStatuses[url] ??
+            Object.entries(urlStatuses).find(
+              ([candidate]) => normalizePageUrlKey(candidate) === key,
+            )?.[1];
+          if (status === "optimizing") {
+            activeIndex = i;
+            break;
+          }
+        }
+      }
+      if (activeIndex >= 0 && activeIndex < displayRows.length) {
+        commitAutoExpandedRows(new Set([keyForIndex(activeIndex)]));
+      }
+      return;
+    }
+
     if (entitySapRowDisplay) {
       if (isProcessing && currentRow >= 0 && currentRow < displayRows.length) {
-        commitAutoExpandedRows(new Set([currentRow]));
+        commitAutoExpandedRows(new Set([keyForIndex(currentRow)]));
       } else {
         commitAutoExpandedRows(new Set());
       }
@@ -148,7 +201,7 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
     }
 
     if (researchBatchInFlight && currentRow >= 0 && currentRow < displayRows.length) {
-      commitAutoExpandedRows(new Set([currentRow]));
+      commitAutoExpandedRows(new Set([keyForIndex(currentRow)]));
       return;
     }
 
@@ -157,19 +210,22 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
       return;
     }
 
-    const next = new Set<number>();
+    const next = new Set<string>();
     if (currentRow >= 0 && currentRow < displayRows.length) {
-      next.add(currentRow);
+      next.add(keyForIndex(currentRow));
     }
     commitAutoExpandedRows(next);
   }, [
     commitAutoExpandedRows,
     currentRow,
-    displayRows.length,
+    displayRows,
     entityRowExpandSignature,
     isProcessing,
     entitySapRowDisplay,
     researchBatchInFlight,
+    isSimpleAiseoHarness,
+    runKind,
+    urlStatuses,
   ]);
 
   const saveDownloadable = (file: BulkDetailsDownloadable) => {
@@ -221,20 +277,32 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
             ) : null}
 
             {rows.map((row, index) => {
+              const globalRowIndex = detailsPageStart + index;
               const stripeIndex = rowStripeBase + index;
-              const isActive = isProcessing && index === currentRow;
-              const isExpanded = expandedRows.has(index);
-              const rowFiles = filesByRow?.get(index) ?? [];
+              const rowKey = detailsDrawerRowKey(row, globalRowIndex);
+              const isExpanded = expandedRows.has(rowKey);
+              const rowUsesGoogleImage =
+                entitySapRowDisplay ||
+                rowUsesGoogleImageFeatured(row, undefined) ||
+                effectivePipelineSectionTitles?.[0] === GOOGLE_IMAGE_PIPELINE_TITLE;
+              const rowFiles = filesByRow?.get(globalRowIndex) ?? [];
               const previewUrl = publishedLinkFromRowFiles(rowFiles) ?? undefined;
               const displayRow = entitySapRowDisplay
                 ? csvRowToEntitySapOverviewRowDisplay(row, index, previewUrl)
                 : csvRowToOverviewRowDisplay(row, index, previewUrl);
+              const isActive = isBulkDetailsDrawerRowActive(
+                displayRow.url,
+                isProcessing,
+                globalRowIndex,
+                currentRow,
+                urlStatuses,
+              );
               const dateLabelOverride = publishDateLabelForRow(
-                index,
+                globalRowIndex,
                 publishDateLabelByIndex,
                 draftOnly,
               );
-              const persistedHarness = harnessByRow?.get(index);
+              const persistedHarness = harnessByRow?.get(globalRowIndex);
               const liveHarnessForRow = isActive ? harnessSections : undefined;
               const hasGeneratingHarness = (liveHarnessForRow ?? persistedHarness)?.some(
                 (section) => section.status === "generating",
@@ -242,50 +310,70 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
               const rowIsResearch = runKind === "research";
               const rowPipelineTitles = rowIsResearch
                 ? [...RESEARCH_HARNESS_PIPELINE_TITLES]
-                : resolveContentOptimizePipelineTitlesForRow(
+                : resolveBulkRowPipelineTitlesWithGoogleImage(
+                    runKind,
                     persistedHarness,
                     rowFiles.map((file) => ({
                       name: file.fileName,
                       fileName: file.fileName,
                       content: file.content,
                     })),
-                    row.title?.trim() || row.keyword?.trim() || "",
+                    rowUsesGoogleImage,
+                    effectivePipelineSectionTitles,
+                    researchBatchSignals,
                   );
-              const tilePipelineTitles = rowPipelineTitles;
-              const displayFiles = rowFilesToDownloadables(rowFiles);
-              const rowHarnessSectionsList = resolveDetailsPipelineSections(
-                persistedHarness,
-                liveHarnessForRow,
-                tilePipelineTitles,
-                displayFiles,
+              const isFileSlotRun = isAiseoFileSlotRunKind(runKind);
+              const tilePipelineTitles = isFileSlotRun ? [] : rowPipelineTitles;
+              const displayFiles = rowFilesToDownloadables(
+                isFileSlotRun ? filterAiseoRowDisplayFiles(runKind, rowFiles) : rowFiles,
               );
+              const rowHarnessSectionsList = isFileSlotRun
+                ? buildAiseoRowDisplaySections(
+                    runKind,
+                    persistedHarness,
+                    rowFiles.map((file) => ({ name: file.fileName })),
+                  )
+                : resolveDetailsPipelineSections(
+                    persistedHarness,
+                    liveHarnessForRow,
+                    tilePipelineTitles,
+                    displayFiles,
+                  );
               const serpBriefDownload = resolveSerpBriefDownloadable(
                 row.keyword?.trim() || row.url?.trim() || "brief",
                 displayFiles,
                 row.seo_research,
               );
-              const panelId = `bulk-generator-details-row-${index}`;
-              const toggleRow = () => setRowExpanded(index, !isExpanded);
+              const panelId = `bulk-generator-details-row-${rowKey}`;
+              const toggleRow = () => setRowExpanded(rowKey, !isExpanded);
               const activeProgressLabel =
-                isActive && rows.length > 0 ? `${index + 1}/${rows.length}` : "";
-              const rowStepProgress =
-                isActive && rowHarnessSectionsList.length > 0
+                isActive && totalRows > 0
+                  ? `${detailsPageStart + index + 1}/${totalRows}`
+                  : "";
+              const rowStepProgress = isFileSlotRun
+                ? isActive && (persistedHarness?.length ?? 0) > 0
+                  ? `${persistedHarness!.filter((section) => section.status === "done").length}/${persistedHarness!.length}`
+                  : ""
+                : isActive && !isSimpleAiseoHarness && rowHarnessSectionsList.length > 0
                   ? `${rowHarnessSectionsList.filter((section) => section.status === "done").length}/${rowHarnessSectionsList.length}`
                   : "";
-              const showGeneratedFiles =
-                isExpanded ||
-                Boolean(activeProgressLabel) ||
-                hasGeneratingHarness ||
-                isActive;
-              const useRowShell =
-                isExpanded ||
-                isActive ||
-                hasGeneratingHarness ||
-                (entitySapRowDisplay && Boolean(row.entity?.trim() || row.keyword?.trim()));
+              const showGeneratedFiles = isFileSlotRun
+                ? isExpanded || isActive
+                : isSimpleAiseoHarness
+                  ? isExpanded
+                  : isExpanded ||
+                    Boolean(activeProgressLabel) ||
+                    hasGeneratingHarness ||
+                    isActive;
+              const useRowShell = isFileSlotRun
+                ? isExpanded || isActive
+                : isSimpleAiseoHarness
+                  ? isExpanded
+                  : isExpanded || isActive || hasGeneratingHarness;
 
               if (useRowShell) {
                 return (
-                  <div key={`row-${index}`} className={CONTENT_OPTIMIZER_MULTI_SITE_ROW_WRAPPER_CLASS}>
+                  <div key={rowKey} className={CONTENT_OPTIMIZER_MULTI_SITE_ROW_WRAPPER_CLASS}>
                     <div
                       className={contentOptimizerRowStripeClass(stripeIndex, {
                         isActiveOptimize: isActive,
@@ -313,7 +401,9 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
                           serpBriefDownload={serpBriefDownload}
                           statusMessage={isActive ? livePhase || undefined : undefined}
                           progressLabel={rowStepProgress || activeProgressLabel || undefined}
-                          defaultFilesOpen={false}
+                          defaultFilesOpen={isFileSlotRun && isActive}
+                          filesOnly={isFileSlotRun}
+                          fileSlotRunKind={isFileSlotRun ? runKind : undefined}
                         />
                       ) : null}
                     </div>
@@ -322,13 +412,13 @@ export function BulkGeneratorDetailsDrawer(props: BulkGeneratorDetailsPanelProps
               }
 
               return (
-                <div key={`row-${index}`} className={CONTENT_OPTIMIZER_MULTI_SITE_ROW_WRAPPER_CLASS}>
+                <div key={rowKey} className={CONTENT_OPTIMIZER_MULTI_SITE_ROW_WRAPPER_CLASS}>
                   <MetaOptimizerPageRowCompact
                     row={displayRow}
                     wpTitlesByUrl={{}}
                     isExpanded={false}
                     stripeIndex={stripeIndex}
-                    isActiveOptimize={false}
+                    isActiveOptimize={isActive}
                     panelId={panelId}
                     dateLabelOverride={dateLabelOverride}
                     onToggle={toggleRow}

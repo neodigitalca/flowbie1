@@ -55,7 +55,7 @@ class Neo_Pulse_App_Task_Execution_Coordinator {
 		$target_url = trim( (string) ( $payload['targetUrl'] ?? '' ) );
 		$target_bucket = Neo_Pulse_App_Tasks_Store::sanitize_execution_target_bucket( $payload['targetBucket'] ?? '' );
 		$target_urls = isset( $payload['targetUrls'] ) && is_array( $payload['targetUrls'] ) ? $payload['targetUrls'] : array();
-		if ( $kind !== 'gsc_reporting' && $kind !== 'post_creator' && $kind !== 'local_dominator_export' && $kind !== 'chatgpt_website_audit' && $kind !== 'browser_automation' && $kind !== 'content_gap_check' ) {
+		if ( $kind !== 'gsc_reporting' && $kind !== 'ads_reporting' && $kind !== 'post_creator' && $kind !== 'local_dominator_export' && $kind !== 'chatgpt_website_audit' && $kind !== 'browser_automation' && $kind !== 'content_gap_check' ) {
 			if ( Neo_Pulse_App_Tasks_Store::is_execution_target_all( $target_url ) && $target_bucket === '' ) {
 				$target_bucket = 'all';
 			}
@@ -65,7 +65,7 @@ class Neo_Pulse_App_Task_Execution_Coordinator {
 			if ( $target_bucket === '' && count( $target_urls ) > 0 ) {
 				$target_bucket = 'pages';
 			}
-		} elseif ( $kind === 'gsc_reporting' ) {
+		} elseif ( $kind === 'gsc_reporting' || $kind === 'ads_reporting' ) {
 			$trailing_count = Neo_Pulse_App_Tasks_Store::sanitize_gsc_trailing_month_count( $payload['gscTrailingMonthCount'] ?? null );
 			$preset_id      = sanitize_key( (string) ( $payload['gscComparePresetId'] ?? $payload['comparePreset'] ?? 'mom' ) );
 			if ( $trailing_count === null && $preset_id === 'custom_compare' ) {
@@ -166,6 +166,8 @@ class Neo_Pulse_App_Task_Execution_Coordinator {
 		} elseif ( $status === 'awaiting_client' ) {
 			$message = $kind === 'gsc_reporting'
 				? 'Ready for client GSC reporting harness.'
+				: ( $kind === 'ads_reporting'
+				? 'Ready for client Ads reporting harness.'
 				: ( $kind === 'post_creator'
 					? 'Ready for client post creator harness.'
 					: ( $kind === 'local_dominator_export'
@@ -176,7 +178,7 @@ class Neo_Pulse_App_Task_Execution_Coordinator {
 								? 'Ready for client browser automation harness.'
 								: ( $kind === 'content_gap_check'
 									? 'Ready for client content gap check harness.'
-									: 'Ready for client content optimizer harness.' ) ) ) ) );
+									: 'Ready for client content optimizer harness.' ) ) ) ) ) );
 			Neo_Pulse_App_Task_Execution_Progress::update(
 				$team_id,
 				$execution_id,
@@ -386,7 +388,7 @@ class Neo_Pulse_App_Task_Execution_Coordinator {
 		}
 		$payload = is_array( $task['executionPayload'] ?? null ) ? $task['executionPayload'] : array();
 		$kind    = (string) ( $task['executionKind'] ?? '' );
-		if ( $kind === 'gsc_reporting' ) {
+		if ( $kind === 'gsc_reporting' || $kind === 'ads_reporting' ) {
 			return ! array_key_exists( 'saveLocalArchive', $payload ) || ! empty( $payload['saveLocalArchive'] );
 		}
 		if (

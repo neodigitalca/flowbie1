@@ -1,0 +1,64 @@
+{
+  "keyword": "ads-monthly-yoy-report",
+  "name": "Ads Monthly YoY Report",
+  "description": "Generate a full Google Ads year-over-year report on the 1st of each month. Deliver via workflow Then steps (Google Drive, email, or local archive).",
+  "notes": [
+    "Runs on a calendar schedule (1st of each month, 9:00 Edmonton time).",
+    "Compare preset: last full calendar month vs the same month last year.",
+    "Fetches the Ads bundle and runs the PPC reporting pipeline. Add Then steps for delivery.",
+    "Requires Google Ads (MCC + developer token + Connect), a 10-digit customer ID on the property, and an OpenRouter key."
+  ],
+  "category": "reporting",
+  "verticals": [
+    "general"
+  ],
+  "tags": [
+    "ads",
+    "ppc",
+    "reporting",
+    "yoy",
+    "monthly"
+  ],
+  "prerequisites": [
+    "wordpress"
+  ],
+  "filters": {
+    "executionKinds": [
+      "ads_reporting"
+    ],
+    "actionCount": 1
+  },
+  "defaultTasks": [
+    {
+      "keyword": "ads-yoy-report",
+      "title": "Generate PPC year-over-year report",
+      "status": "todo",
+      "assignPulse": true,
+      "executionKind": "ads_reporting",
+      "executionPayload": {
+        "comparePreset": "yoy"
+      },
+      "scheduleMode": "calendar",
+      "dueDate": "2026-09-01",
+      "dueTime": "09:00",
+      "recurrenceRule": "monthly"
+    }
+  ],
+  "isAutomation": true,
+  "kind": "template",
+  "triggerBlock": {
+    "keyword": "schedule-monthly",
+    "kind": "calendar",
+    "frequency": "monthly",
+    "startDate": "2026-09-01",
+    "time": "09:00"
+  },
+  "actionBlock": {
+    "keyword": "ads-report-yoy",
+    "executionKind": "ads_reporting",
+    "executionPayload": {
+      "comparePreset": "yoy"
+    },
+    "title": "Generate PPC year-over-year report"
+  }
+}

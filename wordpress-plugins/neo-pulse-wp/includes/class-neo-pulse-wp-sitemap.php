@@ -43,8 +43,20 @@ class Neo_Pulse_Wp_Sitemap {
 		return (bool) $enabled;
 	}
 
+	/**
+	 * @return array<int, string>
+	 */
+	public static function index_rewrite_patterns(): array {
+		return array(
+			'^sitemap_index\.xml$',
+			'^sitemap\.xml$',
+		);
+	}
+
 	public static function register_rewrites(): void {
-		add_rewrite_rule( '^sitemap_index\.xml$', 'index.php?' . self::QUERY_VAR . '=index', 'top' );
+		foreach ( self::index_rewrite_patterns() as $pattern ) {
+			add_rewrite_rule( $pattern, 'index.php?' . self::QUERY_VAR . '=index', 'top' );
+		}
 		add_rewrite_rule( '^([a-z0-9_-]+)-sitemap([0-9]+)?\.xml$', 'index.php?' . self::QUERY_VAR . '=child&neo-pulse_sitemap_type=$matches[1]&neo-pulse_sitemap_page=$matches[2]', 'top' );
 	}
 

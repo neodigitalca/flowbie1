@@ -9,6 +9,18 @@ defined( 'ABSPATH' ) || exit;
 
 class Neo_Pulse_Wp_Backend_Assist_Workflow_Builder {
 
+	public static function expand_create_to_full_page( array $decomposed, string $message, array $classification = array() ): array {
+		return Neo_Pulse_Wp_Backend_Assist_Workflow_Expand::expand_create_to_full_page( $decomposed, $message, $classification );
+	}
+
+	public static function apply_heading_outline_to_steps( array $decomposed, array $sections ): array {
+		return Neo_Pulse_Wp_Backend_Assist_Workflow_Expand::apply_heading_outline_to_steps( $decomposed, $sections );
+	}
+
+	public static function attach_heading_outline( array $decomposed, string $message, array $history = array() ) {
+		return Neo_Pulse_Wp_Backend_Assist_Workflow_Expand::attach_heading_outline( $decomposed, $message, $history );
+	}
+
 	public static function build_workflow_steps( string $message, array $history, array $decomposed ): array {
 		$steps                 = array();
 		$outline               = array();
@@ -23,7 +35,24 @@ class Neo_Pulse_Wp_Backend_Assist_Workflow_Builder {
 		$raw_steps = isset( $decomposed['steps'] ) && is_array( $decomposed['steps'] ) ? $decomposed['steps'] : array();
 
 		foreach ( $raw_steps as $step ) {
-			if ( ! is_array( $step ) || empty( $step['tool'] ) ) {
+			if ( ! is_array( $step ) ) {
+				continue;
+			}
+			$step_kind = sanitize_key( (string) ( $step['step_kind'] ?? '' ) );
+			if ( $step_kind === 'heading' ) {
+				$steps[] = array(
+					'tool'       => '',
+					'label'      => isset( $step['label'] ) ? sanitize_text_field( (string) $step['label'] ) : '',
+					'params'     => isset( $step['params'] ) && is_array( $step['params'] ) ? $step['params'] : array(),
+					'status'     => 'pending',
+					'result'     => null,
+					'executable' => false,
+					'step_kind'  => 'heading',
+					'visible'    => true,
+				);
+				continue;
+			}
+			if ( empty( $step['tool'] ) ) {
 				continue;
 			}
 			$tool   = sanitize_key( $step['tool'] );

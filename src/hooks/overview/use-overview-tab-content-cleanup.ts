@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import { flushSync } from "react-dom";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { OverviewBinding } from "@/hooks/overview/use-overview-wordpress-binding";
@@ -10,9 +9,7 @@ import {
   overviewRowInBulkScope,
 } from "@/lib/overview/overview-bulk-row-scope";
 import type { OverviewInventoryUrlMatch } from "@/lib/overview/overview-row-scrape";
-import { fetchOverviewPageContentBatch } from "@/lib/overview/overview-page-content-batch";
 import type { OverviewInventoryRow } from "@/lib/overview/overview-inventory-csv";
-import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
 import { setOptimizingState } from "@/hooks/content-optimization/optimization-helpers-a";
 import {
   buildContentCleanupStubCatalog,
@@ -23,6 +20,12 @@ import {
   type ContentCleanupSetters,
 } from "@/lib/overview/overview-content-cleanup-run";
 
+import {
+  createAiseoCacheWriteAccumulator,
+  finalizeAiseoCacheWriteForUpload,
+} from "@/lib/overview/overview-aiseo-cache-write";
+import type { AiseoAfterRowWriteFn } from "@/lib/overview/overview-aiseo-after-upload";
+
 type Args = Pick<
   OverviewTabBase,
   | "rows"
@@ -31,6 +34,7 @@ type Args = Pick<
   | "updateRow"
   | "opt"
 > & {
+  rowsRef: OverviewTabBase["rowsRef"];
   site: WordPressSite | undefined;
   sitemapSource: OverviewSitemapSource;
   bulkScopeUrlKeys: Set<string>;
@@ -43,6 +47,7 @@ type Args = Pick<
     source: OverviewSitemapSource,
     contentRows: OverviewInventoryRow[],
   ) => void;
+  uploadAfterRowWrite?: AiseoAfterRowWriteFn;
 };
 
 export function useOverviewTabContentCleanup({
@@ -56,6 +61,8 @@ export function useOverviewTabContentCleanup({
   bulkScopeUrlKeys,
   getInventoryMatchForUrl,
   mergeInventoryContentForSource,
+  rowsRef,
+  uploadAfterRowWrite,
 }: Args) {
   const makeSetters = useCallback(
     (batchKey: string): ContentCleanupSetters | null => {
@@ -83,17 +90,16 @@ export function useOverviewTabContentCleanup({
       );
       const stubCatalog = buildContentCleanupStubCatalog(scopedIndices, rows);
       const urls = stubCatalog.map((r) => r.url);
+      const cacheWrite = createAiseoCacheWriteAccumulator(site);
 
-      flushSync(() => {
-        setOptimizingState(opt.setIsOptimizingContent, batchKey, true);
-        initOverviewContentCleanupBatchState({
-          site,
-          catalog: stubCatalog,
-          setBulkOptimizationState: opt.setBulkOptimizationState,
-          setOptimizationProgress: opt.setOptimizationProgress,
-          setIsOptimizingContent: opt.setIsOptimizingContent,
-          prepMessage: "Starting Clean Up…",
-        });
+      setOptimizingState(opt.setIsOptimizingContent, batchKey, true);
+      initOverviewContentCleanupBatchState({
+        site,
+        catalog: stubCatalog,
+        setBulkOptimizationState: opt.setBulkOptimizationState,
+        setOptimizationProgress: opt.setOptimizationProgress,
+        setIsOptimizingContent: opt.setIsOptimizingContent,
+        prepMessage: "Starting Clean Up…",
       });
 
       try {
@@ -105,7 +111,9 @@ export function useOverviewTabContentCleanup({
         await runOverviewContentCleanupBatch({
           catalog: stubCatalog,
           harnessSetters: setters,
+          cacheWrite,
           updateRow,
+          uploadAfterRowWrite,
           preparePage: async ({ page, pageCount, pageCatalog }) => {
             setters.setBulkOptimizationState((prev) => {
               const current = prev[batchKey];
@@ -118,66 +126,22 @@ export function useOverviewTabContentCleanup({
                     ...(current.currentStepProgress || {}),
                     step: "Clean Up",
                     progress: 5 + Math.round(((page - 1) / Math.max(pageCount, 1)) * 10),
-                    message: `Fetching content page ${page}/${pageCount}…`,
+                    message: `Clean Up page ${page}/${pageCount}: using cache…`,
                   },
                 },
               };
             });
-
-            const pageRows = pageCatalog
-              .map((c) => rows[c.index])
-              .filter(Boolean) as OverviewRow[];
-
-            const batch = await fetchOverviewPageContentBatch({
-              site,
-              sitemapSource,
-              pageRows,
-              bindings: mergedBindings,
-              getInventoryMatchForUrl,
-            });
-
-            if (!batch.ok) {
-              for (const entry of pageCatalog) {
-                updateRow(entry.index, {
-                  status: "error",
-                  error: batch.error || "Page content inventory fetch failed",
-                });
-                setters.setBulkOptimizationState((prev) => {
-                  const current = prev[batchKey];
-                  if (!current) return prev;
-                  return {
-                    ...prev,
-                    [batchKey]: {
-                      ...current,
-                      urlStatuses: {
-                        ...(current.urlStatuses || {}),
-                        [entry.url]: "error",
-                      },
-                    },
-                  };
-                });
-              }
-              return [];
-            }
-
-            if (batch.contentRows.length) {
-              mergeInventoryContentForSource(site, sitemapSource, batch.contentRows);
-            }
-
-            for (const entry of pageCatalog) {
-              const patch = batch.patches.get(normalizePageUrlKey(entry.url));
-              if (patch) updateRow(entry.index, { ...patch, status: "idle" });
-            }
 
             return hydrateCleanupCatalogHtml(
               pageCatalog,
               rows,
               site,
               getInventoryMatchForUrl,
-              batch.patches,
             );
           },
         });
+
+        finalizeAiseoCacheWriteForUpload(cacheWrite, rowsRef);
       } finally {
         finalizeOverviewContentCleanupBatch(
           batchKey,
@@ -198,6 +162,7 @@ export function useOverviewTabContentCleanup({
       bulkScopeUrlKeys,
       updateRow,
       makeSetters,
+      rowsRef,
       opt.setBulkOptimizationState,
       opt.setOptimizationProgress,
       opt.setIsOptimizingContent,

@@ -13,6 +13,7 @@ import {
 import { notify } from "@/lib/app-notifications";
 import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
 import type { OverviewTabController } from "@/hooks/overview/use-overview-tab-controller";
+import { isActiveBulkProgressSlice } from "@/lib/overview/overview-bulk-inline-status";
 
 export type OverviewBulkClusterContext = {
   hasDetectedSitemaps: boolean;
@@ -110,6 +111,12 @@ export function buildOverviewBulkActionClusters(
   const batchKey = siteId ? `${siteId}-batch` : "";
   const optimizingBatch = batchKey ? Boolean(c.opt.isOptimizingContent[batchKey]) : false;
   const batchBulkState = batchKey ? c.opt.bulkOptimizationState[batchKey] : undefined;
+  const aiTitleHarnessRunning = batchBulkState?.runKind === "aiTitle" && optimizingBatch;
+  const aiMetaHarnessRunning = batchBulkState?.runKind === "aiMeta" && optimizingBatch;
+  const aiUrlHarnessRunning = batchBulkState?.runKind === "aiUrl" && optimizingBatch;
+  const keywordsHarnessRunning =
+    isActiveBulkProgressSlice(p.contentKw) || isActiveBulkProgressSlice(p.entityKw);
+  const researchHarnessRunning = batchBulkState?.runKind === "research" && optimizingBatch;
   const faqHarnessRunning = batchBulkState?.runKind === "aiFaq" && optimizingBatch;
   const headersHarnessRunning = batchBulkState?.runKind === "aiHeaders" && optimizingBatch;
   const contentCleanupRunning = batchBulkState?.runKind === "contentCleanup" && optimizingBatch;
@@ -122,8 +129,8 @@ export function buildOverviewBulkActionClusters(
   const inContentImageHarnessRunning =
     batchBulkState?.runKind === "aiInContentImage" && optimizingBatch;
 
-  const researchBusy = !!p.research || !!p.contentKw || !!p.entityKw;
-  const keywordsBusy = !!p.contentKw || !!p.entityKw;
+  const researchBusy = researchHarnessRunning;
+  const keywordsBusy = keywordsHarnessRunning;
 
   const aiseo: OverviewBulkActionCluster = {
     id: "aiseo",
@@ -143,7 +150,7 @@ export function buildOverviewBulkActionClusters(
         id: "keywords-all",
         label: "Keywords",
         icon: KeyRound,
-        disabled: noRows(c) || keywordsBusy || !!p.research,
+        disabled: noRows(c) || keywordsBusy || researchHarnessRunning,
         onSelect: () => void c.handleKeywordsAll(),
       },
       { kind: "category", id: "meta-cat", label: "Meta" },
@@ -165,7 +172,7 @@ export function buildOverviewBulkActionClusters(
         id: "ai-titles",
         label: "Titles",
         icon: Wand2,
-        disabled: noRows(c) || !!p.aiTitle,
+        disabled: noRows(c) || aiTitleHarnessRunning,
         onSelect: () => void c.handleAiTitleAll(),
       },
       {
@@ -173,7 +180,7 @@ export function buildOverviewBulkActionClusters(
         id: "ai-meta",
         label: "MD",
         icon: Wand2,
-        disabled: noRows(c) || !!p.aiMeta,
+        disabled: noRows(c) || aiMetaHarnessRunning,
         onSelect: () => void c.handleAiMetaAll(),
       },
       {
@@ -181,7 +188,7 @@ export function buildOverviewBulkActionClusters(
         id: "ai-url",
         label: "URLs",
         icon: Wand2,
-        disabled: noRows(c) || !!p.aiUrl,
+        disabled: noRows(c) || aiUrlHarnessRunning,
         onSelect: () => void c.handleAiUrlAll(),
       },
       {
@@ -203,7 +210,7 @@ export function buildOverviewBulkActionClusters(
               disabled:
                 noRows(c) ||
                 !c.site ||
-                !!p.optimizeAll ||
+                isActiveBulkProgressSlice(p.optimizeAll) ||
                 optimizingSite ||
                 optimizingBatch,
               onSelect: () => void c.handleOptimizeAll(),
@@ -285,6 +292,19 @@ export function buildOverviewBulkActionClusters(
         icon: Wand2,
         disabled: noRows(c) || inContentImageHarnessRunning || ctx.bulkWorkspaceBusy,
         onSelect: () => void c.handleAiInContentImageAll(),
+      },
+      {
+        kind: "action",
+        id: "ai-featured-image",
+        label: "Featured image",
+        icon: Wand2,
+        disabled:
+          noRows(c) ||
+          !c.site ||
+          ctx.bulkWorkspaceBusy ||
+          optimizingSite ||
+          optimizingBatch,
+        onSelect: () => void c.handleAiFeaturedImageAll(),
       },
       ...(c.sitemapSource === "sap"
         ? [

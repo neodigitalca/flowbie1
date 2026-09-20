@@ -6,6 +6,7 @@ import { componentTagger } from "lovable-tagger";
 import { dataforseoLlmResponsesDevPlugin } from "./scripts/vite-dataforseo-llm-responses-plugin.mjs";
 import { localDominatorDevExportPlugin } from "./scripts/vite-local-dominator-export-plugin.mjs";
 import { localWpApiProxyPlugin } from "./scripts/vite-local-wp-api-proxy-plugin.mjs";
+import { entityMapsPuppeteerDevPlugin } from "./scripts/vite-entity-maps-puppeteer-plugin.mjs";
 
 const require = createRequire(import.meta.url);
 const { resolveDevApiTarget, isLocalWpProxyTarget } = require("./scripts/resolve-dev-api-target.cjs");
@@ -57,6 +58,7 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === "development" && componentTagger(),
     mode === "development" && dataforseoLlmResponsesDevPlugin(),
+    mode === "development" && entityMapsPuppeteerDevPlugin(),
     mode === "development" && isLocalWpProxy && localDominatorDevExportPlugin(),
     mode === "development" && isLocalWpProxy && localWpApiProxyPlugin(),
   ].filter(Boolean),

@@ -28,7 +28,6 @@ import {
 } from "@/lib/content-optimization/ensure-seo-research-brief-for-optimize";
 import { getMuteOptimizationToasts } from "./optimization-toast-mute";
 import { generateBlueprintFlow, generateAndUploadFlow } from "./blueprint-content-flow";
-import { runOptimizeViaBulkGenerate } from "@/lib/content-optimization/optimize-via-bulk-generate";
 import type { PendingOptimization } from "./use-optimization-state";
 import { markContentPrepHarnessSection, syncContentOptimizeHarnessBodySections } from "@/lib/overview/overview-content-prep-harness-run";
 import type { ContentPrepHarnessSetters } from "@/lib/overview/overview-content-prep-harness-run";
@@ -48,10 +47,13 @@ import {
   swotTextFromResearchFields,
 } from "@/lib/content-optimization/first-party-authority-prompt";
 import { extractH2Titles } from "@/lib/content-optimization/optimize-output-verification";
+import { mergeOptimizerInstructions } from "@/lib/prompt-builders/system-user";
+import { isAgentRunBatchKey } from "@/lib/agent-runs/agent-run-batch-key";
 import type { LinkTargetsPlan } from "@/lib/bulk/bulk-generation-wp-inventory";
 import {
   runContentLinkTargetsHarness,
 } from "@/lib/overview/overview-content-link-targets-harness-run";
+import { runContinueOptimizationElementorPage } from "@/lib/elementor-page-content/continue-optimization-elementor";
 
 export interface ContinueOptimizationTryBodyInput {
   siteId: string;
@@ -183,6 +185,7 @@ async function runContinueOptimizationTryBodyInner(input: ContinueOptimizationTr
     contentPrepHarnessSetters,
     flushGeneratedFiles,
   } = input;
+  const batchKey = String((pending as { batchKey?: string }).batchKey ?? "").trim();
 
   if (contentPrepHarnessSetters) {
     markContentPrepHarnessSection(
@@ -212,6 +215,10 @@ async function runContinueOptimizationTryBodyInner(input: ContinueOptimizationTr
     .map((q) => q.query?.trim())
     .filter(Boolean) as string[];
 
+  const forceNewResearch =
+    (finalOptimizationOptions as { forceNewResearch?: boolean } | undefined)?.forceNewResearch ===
+    true;
+
   const ensured = await ensureSeoResearchBriefForOptimize({
     url,
     site,
@@ -221,12 +228,22 @@ async function runContinueOptimizationTryBodyInner(input: ContinueOptimizationTr
     focusKeyword,
     gscQueries,
     muteToasts: getMuteOptimizationToasts(),
+    forceNewResearch,
     onProgress: (message) =>
       updateOptimizationProgress(setOptimizationProgress, siteId, "plan", 0.05, message),
   });
 
   const workingAcfFields = ensured.acfFields;
-  const workingAcfContext = ensured.acfContext;
+  const operatorInstructions = String(
+    (finalOptimizationOptions as { optionalPrompt?: string } | undefined)?.optionalPrompt ?? "",
+  ).trim();
+  const workingAcfContext = {
+    ...ensured.acfContext,
+    promptModifier: mergeOptimizerInstructions(
+      operatorInstructions,
+      ensured.acfContext?.promptModifier,
+    ),
+  };
   const seoResearchRaw = ensured.seoResearchRaw;
 
   if (pending.acfFields && typeof pending.acfFields === "object") {
@@ -248,7 +265,13 @@ async function runContinueOptimizationTryBodyInner(input: ContinueOptimizationTr
       pendingPrimaryKeyword: primaryKeyword,
     }) || primaryKeyword;
 
-  updateOptimizationProgress(setOptimizationProgress, siteId, "plan", 0.1, "Loading research brief…");
+  updateOptimizationProgress(
+    setOptimizationProgress,
+    siteId,
+    "plan",
+    0.1,
+    forceNewResearch ? "Using new live research…" : "Using saved research brief…",
+  );
 
   const {
     keywordData,
@@ -357,8 +380,8 @@ async function runContinueOptimizationTryBodyInner(input: ContinueOptimizationTr
 
   const swotText = swotTextFromResearchFields({
     promptModifier: String(
-      (acfFields as { prompt_modifier?: string } | undefined)?.prompt_modifier
-      ?? (acfContext as { promptModifier?: string } | undefined)?.promptModifier
+      workingAcfContext.promptModifier
+      ?? (acfFields as { prompt_modifier?: string } | undefined)?.prompt_modifier
       ?? "",
     ),
     seoResearch: seoResearchRaw,
@@ -382,79 +405,27 @@ async function runContinueOptimizationTryBodyInner(input: ContinueOptimizationTr
   }
   const llmAuditSummary = llmAuditSummaryFromSeoResearchBrief(seoResearchRaw);
 
-  const isSapRun =
-    optimizationOptions?.hasEntity === true ||
-    optimizationOptions?.inventorySitemapSource === "sap";
+  const resolvedSubtype = String(
+    (resolved as { subtype?: string; postType?: string } | undefined)?.subtype ?? "",
+  ).toLowerCase();
 
-  if (isSapRun) {
-    const titleForGenerate = pendingCleanedTitle || finalTitle || existingTitle;
-    const acfRecord = workingAcfFields as Record<string, unknown>;
-    const { changes } = await runOptimizeViaBulkGenerate({
-      siteId,
+  if (resolvedSubtype === "page") {
+    const internalLinkHints = wordPressPosts
+      .slice(0, 40)
+      .map((p) => `${p.title}: ${p.link}`)
+      .join("\n");
+    await runContinueOptimizationElementorPage({
       site,
-      url,
-      updateMode,
-      primaryKeyword: resolvedPrimaryKeyword,
-      title: titleForGenerate,
-      seoResearchRaw,
-      entity: extractedEntity !== "N/A" ? extractedEntity : undefined,
-      origin: String(acfRecord.origin ?? acfRecord.service_area ?? "").trim() || undefined,
-      metaDescription: String(acfRecord.meta_description ?? acfRecord.metaDescription ?? "").trim() || undefined,
-      promptModifier: String(acfRecord.prompt_modifier ?? "").trim() || undefined,
-      keywordFocus: String(acfRecord.keyword_focus ?? "").trim() || undefined,
-      selectedKeyword,
-      gscResult: gscResult as PageGscResultLike,
-      clusterKeywords,
-      secondaryKeywords,
-      existingPost: existingPost as { id?: number; slug?: string; link?: string },
-      existingTitle,
-      existingContent,
-      existingExcerpt,
-      wordPressPosts,
-      wordPressPagesForOfferTable: wordPressPagesForOfferTable.length ? wordPressPagesForOfferTable : undefined,
-      openRouterApiKey,
-      isSapRun: true,
-      optimizationOptions: finalOptimizationOptions,
-      fileManager,
-      setOptimizationProgress,
-    });
-
-    setOptimizationFileManagers((prev: Record<string, OptimizationFileManager>) => ({ ...prev, [siteId]: fileManager }));
-
-    if (changes) {
-      setPendingOptimization((prev: Record<string, PendingOptimization>) => {
-        const pend = prev[siteId];
-        if (!pend) return prev;
-        return {
-          ...prev,
-          [siteId]: { ...pend, optimizationChanges: changes, url },
-        };
-      });
-      await new Promise((resolve) => setTimeout(resolve, 200));
-    }
-
-    setPendingOptimization((prev: Record<string, PendingOptimization>) => {
-      const updated = { ...prev };
-      delete updated[siteId];
-      return updated;
-    });
-
-    setOptimizationFileManagers((prev: Record<string, OptimizationFileManager>) => ({ ...prev }));
-
-    const finalFileManager = optimizationFileManagers[siteId] || fileManager;
-    const fileCount = finalFileManager.getFileCount();
-    const totalOptimizationTime = Math.floor((Date.now() - optimizationStartTime) / 1000);
-    const minutes = Math.floor(totalOptimizationTime / 60);
-    const seconds = totalOptimizationTime % 60;
-    const timeString = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
-
-    updateOptimizationProgress(
-      setOptimizationProgress,
       siteId,
-      "done",
-      1,
-      `Optimization complete in ${timeString}. ${fileCount} files generated.`,
-    );
+      url,
+      focusKeyword: resolvedPrimaryKeyword,
+      pageTitle: resolved?.title?.trim() || undefined,
+      seoResearchRaw,
+      internalLinkHints,
+      setOptimizationProgress,
+      contentPrepHarnessSetters,
+      flushGeneratedFiles,
+    });
     return;
   }
 
@@ -603,7 +574,7 @@ async function runContinueOptimizationTryBodyInner(input: ContinueOptimizationTr
 
   const bodyTitlesForPipeline = bodyTitlesForLinkPlan;
   const pipelineTitlesForContent = pipelineTitlesAfterBlueprint;
-  const contentHtmlIndex = pipelineTitlesForContent.indexOf("Content HTML");
+  const contentHtmlIndex = pipelineTitlesForContent.indexOf("Post content");
   const contentMdIndex = pipelineTitlesForContent.indexOf("Content Markdown");
 
   const { changes } = await generateAndUploadFlow(
@@ -627,10 +598,10 @@ async function runContinueOptimizationTryBodyInner(input: ContinueOptimizationTr
     undefined,
     undefined,
     finalPaa,
-    { ...finalOptimizationOptions, llmAuditSummary, firstPartyAuthorityBlock, llmAuditAuthorityExternalPairs, linkTargetsPlan },
+    { ...finalOptimizationOptions, optionalPrompt: operatorInstructions || undefined, llmAuditSummary, firstPartyAuthorityBlock, llmAuditAuthorityExternalPairs, linkTargetsPlan },
     inContentImageRequest,
-    acfFields,
-    acfContext,
+    workingAcfFields,
+    workingAcfContext,
     pending.acfFullPostSnapshot,
     fileManager,
     siteId,
@@ -700,11 +671,13 @@ async function runContinueOptimizationTryBodyInner(input: ContinueOptimizationTr
   const seconds = totalOptimizationTime % 60;
   const timeString = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
 
-  updateOptimizationProgress(
-    setOptimizationProgress,
-    siteId,
-    "done",
-    1,
-    `Optimization complete in ${timeString}. ${fileCount} files generated.`,
-  );
+  if (!isAgentRunBatchKey(batchKey)) {
+    updateOptimizationProgress(
+      setOptimizationProgress,
+      siteId,
+      "done",
+      1,
+      `Optimization complete in ${timeString}. ${fileCount} files generated.`,
+    );
+  }
 }

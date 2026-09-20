@@ -35,6 +35,7 @@ import {
   upstreamRagVariablesForNode,
 } from "@/lib/workflow/workflow-rag-utils";
 import { defaultGscReportingExecutionPayload } from "@/lib/gsc-reporting/resolve-gsc-reporting-run-config";
+import { defaultAdsReportingExecutionPayload } from "@/lib/ads-reporting/resolve-ads-reporting-run-config";
 import { workflowNodeSupportsStepTest, type WorkflowStepTestResult } from "@/lib/workflow/workflow-step-test";
 import { isWorkflowThenKind } from "@/lib/workflow/workflow-types";
 import type {
@@ -49,6 +50,7 @@ import type {
   WorkflowRagVariable,
 } from "@/lib/workflow/workflow-types";
 import { GscReportingExecutionFields } from "@/components/manager/tasks/GscReportingExecutionFields";
+import { AdsReportingExecutionFields } from "@/components/manager/tasks/AdsReportingExecutionFields";
 import { ChatGptAuditExecutionFields } from "@/components/manager/tasks/ChatGptAuditExecutionFields";
 import { DfsArticleAuditExecutionFields } from "@/components/manager/tasks/DfsArticleAuditExecutionFields";
 import { BrowserAutomationExecutionFields } from "@/components/manager/tasks/BrowserAutomationExecutionFields";
@@ -80,6 +82,7 @@ const EXECUTION_KINDS: TaskExecutionKind[] = [
   "content_optimizer_meta",
   "content_optimizer",
   "gsc_reporting",
+  "ads_reporting",
   "post_creator",
   "entity_page_creator",
   "entity_generator",
@@ -164,6 +167,8 @@ export function WorkflowNodeInspector({
     const nextPayload =
       value === "gsc_reporting"
         ? { ...defaultGscReportingExecutionPayload(), ...executionPayload }
+        : value === "ads_reporting"
+        ? { ...defaultAdsReportingExecutionPayload(), ...executionPayload }
         : value === "content_gap_check"
           ? ensureContentGapCheckPayload(executionPayload)
           : executionPayload;
@@ -356,6 +361,13 @@ export function WorkflowNodeInspector({
           </WorkflowInspectorGroup>
           {executionKind === "gsc_reporting" ? (
             <GscReportingExecutionFields
+              layout="workflow"
+              executionPayload={executionPayload}
+              onChange={patchExecutionPayload}
+            />
+          ) : null}
+          {executionKind === "ads_reporting" ? (
+            <AdsReportingExecutionFields
               layout="workflow"
               executionPayload={executionPayload}
               onChange={patchExecutionPayload}

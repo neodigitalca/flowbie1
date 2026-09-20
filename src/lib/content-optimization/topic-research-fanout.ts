@@ -20,7 +20,6 @@ import { resolveSiteLocationLabel } from "@/lib/llm-audit/resolve-site-location-
 import {
   formatPageLocalContextPromptBlock,
   resolvePageLocalContext,
-  validateIllustrativeScenarioGeo,
   type PageLocalContext,
 } from "@/lib/content-optimization/page-local-context";
 import { formatAnswerTopicContractForIllustrativeExtract } from "@/lib/content-optimization/defensible-specificity-prompt";
@@ -151,7 +150,7 @@ export const ILLUSTRATIVE_EXTRACT_SYSTEM = `Create one persona for this blog art
 
 Return JSON only: { leadIn, personaName, householdProfile, situationHook, scenarioQuestion, scenarioNarrative, recommendationTitle, recommendationParagraph }.
 
-Topic contract (non-negotiable): the persona's decision MUST be the same topic as Keyword + Service topic + Page title + ARTICLE ANSWER when present. Match the buyer type those sources imply (homeowner, renter, business owner, marketing lead, etc.). Forbidden: inventing a different industry, product line, or room problem than those sources.
+Topic contract (non-negotiable): the persona's decision MUST be the same topic as Keyword + Service topic + Page title + ARTICLE ANSWER + CONNECTED SITE IDENTITY when present. The connected site is the seller. Match that site's buyer for this keyword. If the site sells SEO, web, or ads and the keyword names another industry, the persona is a business buyer of that marketing service, not a shopper of the industry product. Forbidden: inventing a different industry, product line, or room problem than those sources. Forbidden: product-trend or homeowner-shopping copy when this site does not sell that product.
 
 leadIn: always "Hypothetical scenario:" (writer ignores this).
 
@@ -159,11 +158,11 @@ personaName: invent a fresh first name for this page only (AI-generated — no f
 
 householdProfile: one-line persona situation that matches this article's buyer (not a default household when the article is B2B or strategy).
 
-situationHook: ONE constraint taken from Keyword or Answer (the tension that makes the decision hard).
+situationHook: 1-2 sentences that INTRODUCE the general decision context for any reader facing this topic (from Keyword + Answer). Third-person, industry-level setup only. Describe the tension in plain language so someone understands why this decision is hard BEFORE meeting the persona. Forbidden: personaName or any proper name; "Hypothetical scenario:"; copying scenarioNarrative; posing scenarioQuestion verbatim; opening with "Arthur is…" or any named owner.
 
-scenarioQuestion: one decision question for the blockquote paragraph only (never as an H2 or H3, never prefixed with "Scenario:"). Use the site profile city from PRIMARY LOCAL CONTEXT when the example is local. Do not invent a city. Brand and product names (Hunter Douglas, Alta, Duette) are products, never towns. Forbidden: a question about a topic the Answer does not cover.
+scenarioQuestion: one decision question for the blockquote only (never in the intro p, never as H2 or H3, never prefixed with "Scenario:"). Use the site profile city from PRIMARY LOCAL CONTEXT when the example is local. Do not invent a city. Brand and product names (Hunter Douglas, Alta, Duette) are products, never towns. Forbidden: a question about a topic the Answer does not cover.
 
-scenarioNarrative: 2-3 tight sentences. personaName weighs ONE choice from this article and why they are stuck. Anchor place names to primary service city when local.
+scenarioNarrative: 2-3 tight sentences for the blockquote. personaName weighs ONE choice from this article and why they are stuck. Weave scenarioQuestion here as a natural sentence when provided. Anchor place names to primary service city when local. Forbidden: repeating situationHook wording or restating the same intro setup.
 
 recommendationTitle: the specific option the connected Company would recommend (strategy, service, product, or tier named in Keyword/Answer).
 
@@ -178,7 +177,9 @@ BAD: citing another city for local examples when primary city is set.
 BAD: a persona deciding something Keyword, Service topic, and Answer never mention.
 BAD recommendationParagraph: "{personaName} should implement…"
 
-Forbidden: Homeowner A/B, two personas, product-catalog tours, keyword slug phrasing, treating service topic tokens as geography, other-city cost bands when primary city is set, new dollar amounts when sources lack them.`;
+Forbidden: Homeowner A/B, two personas, product-catalog tours, keyword slug phrasing, treating service topic tokens as geography, other-city cost bands when primary city is set, new dollar amounts when sources lack them.
+
+Keep every field to 1-2 short sentences. Finish the entire JSON object in one reply. Never leave a string unclosed.`;
 
 export function normalizeIllustrativeExample(
   raw: unknown,
@@ -201,8 +202,14 @@ export function normalizeIllustrativeExample(
       .filter(Boolean)
       .join("\n\n");
   }
-  if (!leadIn || !quoteBody || !personaName || !scenarioNarrative || !recommendationParagraph) return undefined;
-  const out: IllustrativeExample = { leadIn, quoteBody, asOf };
+  const usedLeadIn = leadIn || "Hypothetical scenario:";
+  const usedQuote =
+    quoteBody
+    || [scenarioQuestion, scenarioNarrative, recommendationTitle, recommendationParagraph, personaName, householdProfile, situationHook]
+      .filter(Boolean)
+      .join("\n\n");
+  if (!usedQuote) return undefined;
+  const out: IllustrativeExample = { leadIn: usedLeadIn, quoteBody: usedQuote, asOf };
   const h2 = illustrativeH2Title?.trim();
   if (h2) out.illustrativeH2Title = h2;
   out.personaName = personaName;
@@ -307,19 +314,24 @@ export async function extractIllustrativeExample(input: {
     ]
       .filter(Boolean)
       .join("\n"),
-    maxTokens: 900,
+    maxTokens: 4000,
     temperature: ILLUSTRATIVE_PERSONA_EXTRACT_TEMPERATURE,
     responseFormat: {
       type: "json_schema",
       json_schema: { name: "illustrative_example_extract", strict: true, schema: ILLUSTRATIVE_EXTRACT_SCHEMA },
     },
   });
-  const { parsed } = parseJsonWithRepair<unknown>(content);
+  let cleaned = content.trim();
+  if (cleaned.startsWith("```json")) {
+    cleaned = cleaned.replace(/^```json\s*/i, "").replace(/\s*```$/i, "");
+  } else if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```\s*/i, "").replace(/\s*```$/i, "");
+  }
+  const parsed = JSON.parse(cleaned) as unknown;
   const normalized = normalizeIllustrativeExample(parsed, input.researchAsOf, input.illustrativeH2Title);
   if (!normalized) {
     throw new Error("Illustrative persona extract returned invalid JSON shape.");
   }
-  validateIllustrativeScenarioGeo(normalized.scenarioQuestion, pageCtx);
   return normalized;
 }
 
@@ -1565,8 +1577,8 @@ export async function runTopicResearchFanout(input: {
           topic,
           namedProgram,
           siteUrl,
-        });
-        return { query, responseText: result.responseText ?? "" };
+        }).catch(() => null);
+        return { query, responseText: result?.responseText ?? "" };
       }),
     );
     fanout = {
@@ -1594,8 +1606,10 @@ export async function runTopicResearchFanout(input: {
         pageExcerpt: input.pageExcerpt,
         siteId: input.site?.id,
         site: input.site,
-      });
-      fanout = { ...fanout, illustrativeExample };
+      }).catch(() => undefined);
+      if (illustrativeExample) {
+        fanout = { ...fanout, illustrativeExample };
+      }
     }
   }
 

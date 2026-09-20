@@ -45,14 +45,22 @@ import {
 } from "@/lib/bulk/harness-section-validate";
 import { callOpenRouterChatCompletion } from "@/lib/competitor-research/competitor-report-openrouter";
 import { getProductionModel } from "@/lib/optimization-settings-storage";
-import { extractH2TextsFromHtml } from "@/lib/overview/overview-blog-headers-extract";
+import {
+  extractH2TextsFromHtml,
+  plainTextFromH2InnerHtml,
+} from "@/lib/overview/overview-blog-headers-extract";
 import { generateSingleSectionPrompt } from "@/lib/prompt-builders/core";
 import { buildBulkHarnessSectionUserPrompt } from "@/lib/prompt-builders/system-user";
 import {
   llmAuditSummaryFromSeoResearchBrief,
   parseSeoResearchBrief,
 } from "@/lib/content-optimization/seo-research-brief-for-optimize";
-import { firstPartyAuthorityBlockFromBrief, PRIMARY_CITY_CONSISTENCY_RULE } from "@/lib/content-optimization/first-party-authority-prompt";
+import {
+  buildConnectedSiteIdentityBlock,
+  firstPartyAuthorityBlockFromBrief,
+  PRIMARY_CITY_CONSISTENCY_RULE,
+} from "@/lib/content-optimization/first-party-authority-prompt";
+import { resolveSiteLocationLabel } from "@/lib/llm-audit/resolve-site-location-label";
 import { formatAnswerGroundingForIllustrativePromptBlock } from "@/lib/content-optimization/defensible-specificity-prompt";
 import {
   formatPageLocalContextPromptBlock,
@@ -193,6 +201,54 @@ function normalizeOverviewTitleKey(title: string): string {
     .replace(/\s+/g, " ");
 }
 
+function headingTagLevelAt(html: string, openAt: number): 1 | 2 | null {
+  const low = html.toLowerCase();
+  if (low.startsWith("<h1", openAt) && isTagBoundaryChar(html[openAt + 3])) return 1;
+  if (low.startsWith("<h2", openAt) && isTagBoundaryChar(html[openAt + 3])) return 2;
+  return null;
+}
+
+function plainInnerFromTitleHeadingOpen(html: string, openAt: number): string {
+  const level = headingTagLevelAt(html, openAt);
+  if (!level) return "";
+  const closeTag = `</h${level}>`;
+  const gt = html.indexOf(">", openAt);
+  if (gt < 0) return "";
+  const close = html.toLowerCase().indexOf(closeTag, gt + 1);
+  const inner = close < 0 ? html.slice(gt + 1) : html.slice(gt + 1, close);
+  return plainTextFromH2InnerHtml(inner);
+}
+
+/**
+ * Drop leading H1/H2 when it repeats the WordPress post title (theme already shows it).
+ */
+export function stripLeadingDuplicateArticleTitleHeading(
+  html: string,
+  articleTitle: string,
+): string {
+  const titleKey = normalizeOverviewTitleKey(articleTitle);
+  if (!titleKey) return (html ?? "").trim();
+
+  let src = (html ?? "").trim();
+  for (let guard = 0; guard < 5; guard += 1) {
+    const trimmed = src.trimStart();
+    const skip = src.length - trimmed.length;
+    const openAt = skip;
+    const level = headingTagLevelAt(trimmed, 0);
+    if (level == null) break;
+
+    const headingText = plainInnerFromTitleHeadingOpen(trimmed, 0);
+    if (normalizeOverviewTitleKey(headingText) !== titleKey) break;
+
+    const closeTag = `</h${level}>`;
+    const gt = trimmed.indexOf(">");
+    const close = trimmed.toLowerCase().indexOf(closeTag, gt + 1);
+    if (close < 0) break;
+    src = trimmed.slice(close + closeTag.length).trim();
+  }
+  return src;
+}
+
 function isAnswerHeadingTitle(title: string): boolean {
   const key = normalizeOverviewTitleKey(title);
   if (!key) return false;
@@ -221,6 +277,14 @@ function answerSectionEndAt(html: string, openAt: number): number {
     return positions[i]!;
   }
   return html.length;
+}
+
+/** True when HTML is only an Answer harness block with no remaining post body. */
+export function isAnswerOnlyHarnessBody(html: string): boolean {
+  const src = (html ?? "").trim();
+  if (!src) return false;
+  if (!extractAnswerSectionHtml(src).trim()) return false;
+  return !stripLeadingAnswerSection(src).trim();
 }
 
 /** Remove leading Answer H2 blocks (through the next H2) before Overview re-runs. */
@@ -354,13 +418,16 @@ export function dedupeStackedOverviewSections(html: string): string {
 
   const keptOverview = src.slice(firstOverviewStart, firstOverviewEnd);
   const withoutAll = stripLeadingOverviewSection(src);
-  return `${keptOverview}${withoutAll}`.trim();
+  return enforceHarnessAnswerBeforeOverview(`${keptOverview}${withoutAll}`.trim());
 }
 
 /** Build a harness-shaped outline from body H2 titles (no Overview agent). */
 export function outlineFromBodyH2Titles(titles: string[]): BulkHarnessOutlineSection[] {
   return titles.map((title, index) => {
-    const trimmed = title.trim() || `Section ${index + 1}`;
+    const trimmed = title.trim();
+    if (!trimmed) {
+      throw new Error(`Overview outline contract failed: empty body H2 at index ${index}`);
+    }
     const agent: AgentConfig = {
       id: `body-h2-${index + 1}`,
       step: index + 1,
@@ -454,6 +521,19 @@ export function resolveOverviewSourceHtml(row: {
     row.postContentOptimized?.trim() ||
     row.postContent?.trim() ||
     fetchedHtml?.trim() ||
+    ""
+  );
+}
+
+/** Existing post body for Answer/Overview prepend — scraped content first, not prior harness output. */
+export function resolveHarnessPrependSourceHtml(row: {
+  postContent?: string;
+  postContentOptimized?: string;
+}, fetchedHtml?: string): string {
+  return (
+    row.postContent?.trim() ||
+    fetchedHtml?.trim() ||
+    row.postContentOptimized?.trim() ||
     ""
   );
 }
@@ -590,110 +670,50 @@ export type GenerateAnswerSectionArgs = {
   signal?: AbortSignal;
 };
 
-/** Generate the direct-answer harness section HTML (H2 Answer + one paragraph). */
+/** Generate the Answer section HTML. One write. No retries, no name checks. */
 export async function generateAnswerSectionHtml(args: GenerateAnswerSectionArgs): Promise<string> {
   const keyword = args.focusKeyword.trim() || args.articleTitle.trim() || "this topic";
-  const bodyH2Titles = args.bodyH2Titles.filter(Boolean);
-  const outline = outlineFromBodyH2Titles(bodyH2Titles);
-  const outlineBlock = formatOutlineTitlesForHarnessPrompt(outline);
-  const siblingTitles = args.includeOverviewInOutline
-    ? ["Overview", ...bodyH2Titles]
-    : bodyH2Titles;
-  const publishedTitles = args.includeOverviewInOutline
-    ? ["Answer", "Overview", ...bodyH2Titles]
-    : ["Answer", ...bodyH2Titles];
-  const totalSections = bodyH2Titles.length + (args.includeOverviewInOutline ? 2 : 1);
-  const pageLabel = harnessPageKindLabel(args.pageKind);
-  const purpose =
-    args.pageKind === "entity" && args.entity?.trim()
-      ? `Direct answer for "${keyword}" at the top of an existing ${pageLabel} near ${args.entity.trim()}.`
-      : `Direct answer for "${keyword}" at the top of an existing ${pageLabel}.`;
-
-  const answerAgent = buildBlogHarnessAnswerAgent();
-  const answerPrompt = generateSingleSectionPrompt(answerAgent, "html");
-  let answerUserPrompt = buildBulkHarnessSectionUserPrompt(
-    args.articleTitle.trim() || keyword,
-    purpose,
-    answerPrompt,
-    outlineBlock,
-    siblingTitles,
-    0,
-    totalSections,
-    args.connectedSite,
-    args.pageKind === "entity" ? args.entity?.trim() : undefined,
-    { keywordFocus: keyword },
-    true,
-    args.pageUrl,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    keyword,
-    publishedTitles,
-  );
-  answerUserPrompt = appendHarnessBriefGroundingToPrompt(answerUserPrompt, args.seoResearchBrief);
-  if (args.pageKind === "entity") {
-    answerUserPrompt += entityHarnessPromptAddendum(args.entity, args.connectedSite, keyword);
-  }
-  const pageCtx = resolvePageLocalContext({
-    keyword,
-    site: args.site,
-    entity: args.pageKind === "entity" ? args.entity : undefined,
-  });
-  if (pageCtx.primaryCity) {
-    answerUserPrompt += `\n\n${formatPageLocalContextPromptBlock(pageCtx)}`;
-  }
-
+  const title = args.articleTitle.trim() || keyword;
+  const businessName = args.connectedSite?.name?.trim() || "";
   const entityCanonical =
     args.pageKind === "entity" && args.entity?.trim()
       ? normalizeEntityHintCommaLabel(args.entity.trim())
       : "";
-  const answerSystem =
-    entityCanonical
-      ? `You write the Answer harness section for an existing service-area entity page. Output HTML only. Exactly <h2>Answer</h2> and one <p> with two sentences. Primary keyword: ${keyword}. Place entity (comma label): ${entityCanonical}. Refer to the place with comma grammar (e.g. "Lacombe Park, St. Albert"), never slug-style "Lacombe Park St. Albert".\n${PRIMARY_CITY_CONSISTENCY_RULE}`
-      : `You write the Answer harness section for an existing page. Output HTML only. Exactly <h2>Answer</h2> and one <p> with two sentences. Primary keyword: ${keyword}.\n${PRIMARY_CITY_CONSISTENCY_RULE}`;
+  const pageLabel = harnessPageKindLabel(args.pageKind);
+  const answerSystem = entityCanonical
+    ? `You write the Answer section for an existing ${pageLabel}. Output HTML only: <h2>Answer</h2> and one <p> with two or three sentences. No other headings. Primary keyword: ${keyword}. Place entity (comma label): ${entityCanonical}. Mention the connected business name somewhere in the Answer paragraph when one is listed.`
+    : `You write the Answer section for an existing ${pageLabel}. Output HTML only: <h2>Answer</h2> and one <p> with two or three sentences. No other headings. Primary keyword: ${keyword}. Mention the connected business name somewhere in the Answer paragraph when one is listed.`;
+  const answerUserPrompt = [
+    `Title: ${title}`,
+    `Keyword: ${keyword}`,
+    businessName ? `Business name (mention somewhere in the Answer): ${businessName}` : "",
+    entityCanonical ? `Place entity: ${entityCanonical}` : "",
+    args.pageKind === "entity" ? "This is a service-area entity page." : "",
+    "Write the Answer HTML now.",
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   const model = args.model?.trim() || getProductionModel();
-  let lastPrepared = "";
-
-  for (let attempt = 1; attempt <= HARNESS_SECTION_MAX_ATTEMPTS; attempt++) {
-    const attemptMaxTokens = Math.round(384 * (1 + (attempt - 1) * 0.15));
-    const answerResult = await callOpenRouterChatCompletion({
-      apiKey: args.apiKey,
-      model,
-      system: answerSystem,
-      user: answerUserPrompt,
-      maxTokens: attemptMaxTokens,
-      temperature: 0.35,
-      signal: args.signal,
-    });
-
-    const rawAnswer = (answerResult.content || "").trim();
-    if (!rawAnswer) {
-      continue;
-    }
-
-    const prepared = prepareHarnessSectionHtml(rawAnswer, {
-      title: BLOG_HARNESS_ANSWER_TITLE,
-      isOverview: false,
-      isAnswer: true,
-    });
-    lastPrepared = prepared;
-    if (harnessSectionPreparedValid(prepared, {})) {
-      return prepared;
-    }
+  const answerResult = await callOpenRouterChatCompletion({
+    apiKey: args.apiKey,
+    model,
+    system: answerSystem,
+    user: answerUserPrompt,
+    maxTokens: 384,
+    temperature: 0.35,
+    signal: args.signal,
+  });
+  const rawAnswer = (answerResult.content || "").trim();
+  if (!rawAnswer) {
+    throw new Error("Answer section could not be generated");
   }
-
-  if (lastPrepared.trim()) {
-    return lastPrepared;
-  }
-  throw new Error(`Answer section could not be generated after ${HARNESS_SECTION_MAX_ATTEMPTS} attempts`);
+  const prepared = prepareHarnessSectionHtml(rawAnswer, {
+    title: BLOG_HARNESS_ANSWER_TITLE,
+    isOverview: false,
+    isAnswer: true,
+  });
+  return prepared.trim() || rawAnswer;
 }
 
 export type PrependAnswerResult = {
@@ -715,17 +735,16 @@ export async function generateAndPrependAnswerHtml(args: {
   apiKey: string;
   model?: string;
   signal?: AbortSignal;
-}): Promise<PrependAnswerResult | null> {
-  const stripped = stripLeadingAnswerSection(args.sourceHtml);
+}): Promise<PrependAnswerResult> {
+  const stripped = stripLeadingDuplicateArticleTitleHeading(
+    stripLeadingAnswerSection(args.sourceHtml ?? ""),
+    args.articleTitle,
+  );
   if (!stripped.trim()) {
-    return null;
-  }
-  if (looksLikeBlockedHostHtml(stripped)) {
     throw new Error(
-      "Page body looks like a Cloudflare block page, not WordPress content. Re-scrape or reload inventory, then retry Answer.",
+      "Post body HTML is required before Answer can be prepended. Load inventory with content, then retry.",
     );
   }
-
   const bodyH2Titles = extractH2TextsFromHtml(stripped).filter(
     (t) => !isOverviewHeadingTitle(t) && !isAnswerHeadingTitle(t),
   );
@@ -747,13 +766,9 @@ export async function generateAndPrependAnswerHtml(args: {
     signal: args.signal,
   });
 
-  if (!answerHtml.trim()) {
-    throw new Error(`Answer section could not be generated after ${HARNESS_SECTION_MAX_ATTEMPTS} attempts`);
-  }
-
   const answerWithId = injectHarnessSectionH2AnchorId(answerHtml.trim(), HARNESS_ANSWER_ANCHOR_ID);
   return {
-    html: stitchHarnessSections([answerWithId, stripped]),
+    html: enforceHarnessAnswerBeforeOverview(stitchHarnessSections([answerWithId, stripped])),
     answerHtml: answerWithId,
   };
 }
@@ -933,7 +948,9 @@ ${pageCtx.primaryCity ? `\n${PRIMARY_CITY_CONSISTENCY_RULE}` : ""}`;
   overviewHtml = wrapOverviewSectionHtml(overviewHtml);
 
   return {
-    html: stitchHarnessSections([answerHtml, overviewHtml, bodyWithIds]),
+    html: enforceHarnessAnswerBeforeOverview(
+      stitchHarnessSections([answerHtml, overviewHtml, bodyWithIds]),
+    ),
     bodyH2Titles,
     anchorMap,
   };

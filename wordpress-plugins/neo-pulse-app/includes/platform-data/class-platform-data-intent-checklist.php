@@ -32,6 +32,7 @@ class Neo_Pulse_App_Platform_Data_Intent_Checklist {
 		'gsc_pages',
 		'gsc_blog_performers',
 		'ga_organic',
+		'ads_reporting',
 	);
 
 	/** @var array<string,string> Map mistaken tool ids to slice keys. */
@@ -42,6 +43,8 @@ class Neo_Pulse_App_Platform_Data_Intent_Checklist {
 		'gsc_performance_summary'   => 'gsc_summary',
 		'gsc_reporting_compare_summary' => 'gsc_reporting',
 		'gsc_reporting_status'      => 'gsc_reporting',
+		'ads_reporting_compare_summary' => 'ads_reporting',
+		'ads_reporting_status'      => 'ads_reporting',
 		'gsc_top_queries'           => 'gsc_queries',
 		'gsc_top_pages'             => 'gsc_pages',
 		'gsc_blog_performers'       => 'gsc_blog_performers',
@@ -996,6 +999,9 @@ class Neo_Pulse_App_Platform_Data_Intent_Checklist {
 		if ( $slice === 'gsc_reporting' ) {
 			return 'You are a GSC reporting compare specialist. Summarize MoM or YoY period labels and site-total deltas (clicks, impressions, CTR, position) from the analytics payload. Return JSON: {"findings":["string"],"score":null,"notes":"string","byUrl":{}}.';
 		}
+		if ( $slice === 'ads_reporting' ) {
+			return 'You are a PPC Ads reporting compare specialist. Summarize MoM or YoY spend, clicks, impressions, conversions, CTR, and avg CPC from the analytics payload. Do not invent spend. Return JSON: {"findings":["string"],"score":null,"notes":"string","byUrl":{}}.';
+		}
 		if ( $slice === 'gsc_pages' ) {
 			return 'You are a GSC top pages specialist. Review top pages by clicks and impressions from the analytics payload. Return JSON: {"findings":["string"],"score":null,"notes":"string","byUrl":{}}.';
 		}
@@ -1180,6 +1186,7 @@ class Neo_Pulse_App_Platform_Data_Intent_Checklist {
 			'featured_image' => 'Featured image reviewer',
 			'gsc_summary'    => 'GSC performance reviewer',
 			'gsc_reporting'  => 'GSC reporting compare reviewer',
+			'ads_reporting'  => 'PPC Ads reporting compare reviewer',
 			'gsc_queries'    => 'GSC top queries reviewer',
 			'gsc_pages'      => 'GSC top pages reviewer',
 			'gsc_blog_performers' => 'GSC blog performer finder',

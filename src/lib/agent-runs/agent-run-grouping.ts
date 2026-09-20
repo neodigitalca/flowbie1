@@ -67,7 +67,7 @@ function bucketLabel(key: AgentRunBucketKey): string {
 
 function recipeBucketKey(run: AgentRun): AgentRunRecipeBucketKey | null {
   const recipe = resolveAgentRunRecipeKey(run);
-  if (recipe === "gsc_reporting") return "reporting";
+  if (recipe === "gsc_reporting" || recipe === "ads_reporting") return "reporting";
   if (recipe === "local_dominator_export") return "research";
   if (recipe === "chatgpt_website_audit") return "research";
   if (recipe === "browser_automation") return "research";
@@ -210,6 +210,21 @@ export function buildAgentRunGroups(
 
   groups.sort(compareClientGroups);
   return groups;
+}
+
+export function flattenAgentRunClientRuns(
+  groups: AgentRunClientGroup[],
+): Array<{ client: AgentRunClientGroup; run: AgentRun }> {
+  const rows: Array<{ client: AgentRunClientGroup; run: AgentRun }> = [];
+  for (const client of groups) {
+    for (const bucket of client.buckets) {
+      for (const run of bucket.runs) {
+        rows.push({ client, run });
+      }
+    }
+  }
+  rows.sort((a, b) => b.run.id - a.run.id);
+  return rows;
 }
 
 /** One drawer per enabled site, merged with run groups so empty clients still appear. */

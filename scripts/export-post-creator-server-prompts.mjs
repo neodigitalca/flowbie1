@@ -65,19 +65,6 @@ PROMPT;
 \t\treturn 'You write SEO blog sections in Markdown for a harnessed generator. Follow section word budget and harness length rules. No FAQ sections. Output exactly one ## section.';
 \t}
 
-\tpublic static function checklist_structure_requirements( string $primary_keyword ): string {
-\t\t$kw = $primary_keyword !== '' ? $primary_keyword : 'primary keyword';
-\t\treturn "Requirements (NON-NEGOTIABLE):\\n"
-\t\t\t. "1. Create 5-6 checklist items maximum: introduction-style first H2, 3-4 body topics, conclusion.\\n"
-\t\t\t. "2. Each item must include [STRUCTURE], [EXACT PRIMARY PER H2], [FOCUS KEYWORD DENSITY], [PARAGRAPH LENGTH], and [LINK]: 3-5 internal links via [[LINK:phrase|anchor]].\\n"
-\t\t\t. "3. Include at least one [TABLE], one [LIST]: bullet, and one [LIST]: number across the article (max 2 [TABLE] total).\\n"
-\t\t\t. "4. First H2: NEVER title it Introduction or Intro — use SEO-friendly active title. Exact primary keyword ({$kw}) once in body.\\n"
-\t\t\t. "5. Conclusion H2 with exact primary keyword once in body.\\n"
-\t\t\t. "6. **[FORBIDDEN]**: FAQ, Q&A, Frequently Asked Questions body sections.\\n"
-\t\t\t. "7. One checklist line = one H2 = one harness pass (~" . (int) floor( Neo_Pulse_App_Agent_Run_Article_Length_Policy::ARTICLE_MAX_WORDS / 6 ) . " words target per section).\\n"
-\t\t\t. "8. Include [REAL-WORLD EXAMPLE] in at least one section.";
-\t}
-
 \tpublic static function rename_intro_agent_title( string $title, string $keyword ): string {
 \t\t$lower = strtolower( trim( $title ) );
 \t\tif ( ! in_array( $lower, array( 'introduction', 'intro' ), true ) ) {

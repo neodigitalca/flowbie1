@@ -110,6 +110,8 @@ describe("runOverviewAiAllMetaBatch pagination", () => {
 
     await runOverviewAiAllMetaBatch({
       site,
+      sitemapSource: "posts",
+      getInventoryMatchForUrl: () => undefined,
       eligible,
       harnessSetters: {
         siteId: site.id,

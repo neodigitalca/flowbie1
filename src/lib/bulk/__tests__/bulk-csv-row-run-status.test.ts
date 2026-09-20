@@ -39,7 +39,19 @@ describe("bulkCsvRowRunStatus", () => {
     ).toBe("generating");
   });
 
-  it("returns done when row has completed files", () => {
+  it("returns generating for the active row even when partial files exist", () => {
+    const filesByRow = new Map([[1, [completedFile(1)]]]);
+    expect(
+      bulkCsvRowRunStatus({
+        rowIndex: 1,
+        currentRow: 1,
+        isProcessing: true,
+        filesByRow,
+      }),
+    ).toBe("generating");
+  });
+
+  it("returns done for finished rows before the active index", () => {
     const filesByRow = new Map([[1, [completedFile(1)]]]);
     expect(
       bulkCsvRowRunStatus({

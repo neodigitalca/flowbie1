@@ -24,6 +24,40 @@ describe("pulse assist action tools", () => {
     expect(routes).toContain("automation-recipes");
   });
 
+  it("registers Pulse Forge dashboard and workflow tools with build write gate", () => {
+    const registry = readPhp("includes/pulse-assist/action/class-pulse-assist-action-registry.php");
+    expect(registry).toContain("forge_dashboard");
+    expect(registry).toContain("workflows_list");
+    expect(registry).toContain("workflows_get");
+    expect(registry).toContain("workflows_list_runs");
+    expect(registry).toContain("workflows_create");
+    expect(registry).toContain("workflows_publish");
+    expect(registry).toContain("workflows_run");
+
+    const forge = readPhp("includes/pulse-assist/action/class-pulse-assist-action-tools-forge.php");
+    expect(forge).toContain("graph_from_recipe_keyword");
+    expect(forge).toContain("Recipe has no trigger or action blocks.");
+    expect(forge).toContain("Valid recipe keyword is required.");
+    expect(forge).toContain("'nodes'");
+    expect(forge).toContain("'edges'");
+
+    const loader = readPhp("includes/class-neo-pulse-app-loader.php");
+    expect(loader).toContain("class-pulse-assist-action-tools-forge.php");
+
+    const intent = readPhp("includes/pulse-assist/action/class-pulse-assist-action-intent.php");
+    expect(intent).toContain("is_forge_message");
+    expect(intent).toContain("forge_resolver");
+
+    const lead = readPhp("includes/pulse-assist/action/class-pulse-assist-action-lead-agent.php");
+    expect(lead).toContain("workflows_create");
+    expect(lead).toContain("Do not emit nodes or edges");
+
+    const orchestrator = readPhp("includes/pulse-assist/action/class-pulse-assist-action-orchestrator.php");
+    expect(orchestrator).toContain("Created workflow");
+    expect(orchestrator).toContain("pulseForge");
+    expect(orchestrator).toContain("pulse-forge/forge");
+  });
+
   it("defines read and write task tools with build gate", () => {
     const registry = readPhp("includes/pulse-assist/action/class-pulse-assist-action-registry.php");
     expect(registry).toContain("tasks_create_batch");
@@ -73,6 +107,29 @@ describe("pulse assist action tools", () => {
     expect(orchestrator).toContain("createdProjectIds");
   });
 
+  it("registers ads_reporting_execute before GSC steal on PPC phrasing", () => {
+    const registry = readPhp("includes/pulse-assist/action/class-pulse-assist-action-registry.php");
+    expect(registry).toContain("ads_reporting_execute");
+
+    const executions = readPhp("includes/pulse-assist/action/class-pulse-assist-action-tools-executions.php");
+    expect(executions).toContain("ads_reporting_execute");
+    expect(executions).toContain("'recipeKey' => 'ads_reporting'");
+    expect(executions).toContain("Set a 10-digit Google Ads customer ID on this property.");
+
+    const intent = readPhp("includes/pulse-assist/action/class-pulse-assist-automation-intent.php");
+    const adsIdx = intent.indexOf("is_ads_reporting");
+    const gscIdx = intent.indexOf("is_gsc_reporting");
+    expect(adsIdx).toBeGreaterThan(0);
+    expect(gscIdx).toBeGreaterThan(adsIdx);
+    expect(intent).toContain("'ppc report'");
+    expect(intent).toContain("'ads_reporting'");
+
+    const lead = readPhp("includes/pulse-assist/action/class-pulse-assist-action-lead-agent.php");
+    expect(lead).toContain("ads_reporting_execute");
+    expect(lead).toContain("ads-monthly-mom-report");
+    expect(lead).toContain("Do not use gsc_reporting_execute for Ads or PPC spend");
+  });
+
   it("handles compound project + task intents with title normalization and chaining", () => {
     const intent = readPhp("includes/pulse-assist/action/class-pulse-assist-action-intent.php");
     expect(intent).toContain("is_compound_project_task_message");
@@ -120,6 +177,7 @@ describe("pulse assist action tools", () => {
     expect(orchestrator).toContain("Deleted template");
 
     const newProject = readFileSync(join(root, "../../src/components/manager/tasks/NewProjectDialog.tsx"), "utf8");
-    expect(newProject).toContain("Apply client to all");
+    expect(newProject).toContain("Save as template");
+    expect(newProject).toContain('placeholder="Client"');
   });
 });

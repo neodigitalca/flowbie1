@@ -15,6 +15,7 @@ class Neo_Pulse_Wp_Backend_Assist {
 
 	public static function init(): void {
 		self::ensure_dependencies();
+		Neo_Pulse_Wp_Backend_Assist_Novamira_Page::register_cron();
 		add_action( 'rest_api_init', array( __CLASS__, 'register_routes' ) );
 	}
 
@@ -37,9 +38,16 @@ class Neo_Pulse_Wp_Backend_Assist {
 		require_once $dir . 'class-neo-pulse-wp-backend-assist-cards.php';
 		require_once $dir . 'class-neo-pulse-wp-backend-assist-tools-wp.php';
 		require_once $dir . 'class-neo-pulse-wp-backend-assist-tools-seo.php';
+		require_once $dir . 'class-neo-pulse-wp-backend-assist-tools-elementor-sections.php';
+		require_once $dir . 'class-neo-pulse-wp-backend-assist-novamira-page-design-rag.php';
+		require_once $dir . 'class-neo-pulse-wp-backend-assist-novamira-page-compose.php';
+		require_once $dir . 'class-neo-pulse-wp-backend-assist-openrouter-agent.php';
+		require_once $dir . 'class-neo-pulse-wp-backend-assist-novamira-page-design-harness.php';
+		require_once $dir . 'class-neo-pulse-wp-backend-assist-novamira-page.php';
 		require_once $dir . 'class-neo-pulse-wp-backend-assist-tools-analytics.php';
 		require_once $dir . 'class-neo-pulse-wp-backend-assist-registry.php';
 		require_once $dir . 'class-neo-pulse-wp-backend-assist-content.php';
+		require_once $dir . 'class-neo-pulse-wp-backend-assist-workflow-expand.php';
 		require_once $dir . 'class-neo-pulse-wp-backend-assist-workflow-builder.php';
 		require_once $dir . 'class-neo-pulse-wp-backend-assist-workflow.php';
 		require_once $dir . 'class-neo-pulse-wp-backend-assist-pipeline-classify.php';
@@ -155,6 +163,14 @@ class Neo_Pulse_Wp_Backend_Assist {
 		return Neo_Pulse_Wp_Backend_Assist_Tools_Seo::tool_list_seo_blocks( $params );
 	}
 
+	public static function tool_get_seo_block( array $params ): array {
+		return Neo_Pulse_Wp_Backend_Assist_Tools_Seo::tool_get_seo_block( $params );
+	}
+
+	public static function tool_duplicate_seo_block( array $params ): array {
+		return Neo_Pulse_Wp_Backend_Assist_Tools_Seo::tool_duplicate_seo_block( $params );
+	}
+
 	public static function tool_create_seo_block( array $params ): array {
 		return Neo_Pulse_Wp_Backend_Assist_Tools_Seo::tool_create_seo_block( $params );
 	}
@@ -169,5 +185,9 @@ class Neo_Pulse_Wp_Backend_Assist {
 
 	public static function tool_apply_seo_block_to_page( array $params ): array {
 		return Neo_Pulse_Wp_Backend_Assist_Tools_Seo::tool_apply_seo_block_to_page( $params );
+	}
+
+	public static function tool_design_page_with_novamira( array $params ): array {
+		return Neo_Pulse_Wp_Backend_Assist_Tools_Seo::tool_design_page_with_novamira( $params );
 	}
 }

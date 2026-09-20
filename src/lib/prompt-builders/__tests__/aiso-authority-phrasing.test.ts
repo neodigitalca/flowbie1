@@ -15,6 +15,8 @@ describe("AISO_AUTHORITY_PHRASING_RULE", () => {
     expect(AISO_AUTHORITY_PHRASING_RULE).toContain("low-light");
     expect(AISO_AUTHORITY_PHRASING_RULE).toContain("Comfort and energy hedging");
     expect(AISO_AUTHORITY_PHRASING_RULE).toContain("higher-efficiency panels solve shading");
+    expect(AISO_AUTHORITY_PHRASING_RULE).toContain(". durable window coverings");
+    expect(AISO_AUTHORITY_PHRASING_RULE).toContain("next sentence starts with a capital letter");
     expect(AISO_AUTHORITY_PHRASING_RULE).not.toContain("Edmonton");
     expect(AISO_AUTHORITY_PHRASING_RULE).not.toContain("Ridgeline");
   });

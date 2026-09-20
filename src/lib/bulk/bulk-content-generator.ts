@@ -46,13 +46,14 @@ import {
   isHarnessSeoOpenerBodyAgent,
 } from '@/lib/bulk/harness-section-max-tokens';
 import { formatMandatoryEntityWikipediaForPrompt } from '@/lib/bulk/entity-wikipedia-prompt';
+import { findServiceAreaPageForPlace } from '@/lib/bulk/bulk-generation-wp-inventory';
 import { formatAnswerGroundingForIllustrativePromptBlock } from '@/lib/content-optimization/defensible-specificity-prompt';
 import {
   extractIllustrativeExample,
   formatResearchAsOfLabel,
   buildIllustrativeExampleResearchQuery,
 } from '@/lib/content-optimization/topic-research-fanout';
-import { formatIllustrativePersonaPromptBlock, formatOverviewPersonaTeaserBlock, resolveIllustrativeH2Title } from '@/lib/content-optimization/first-party-authority-prompt';
+import { formatIllustrativePersonaPromptBlock, formatOverviewPersonaTeaserBlock } from '@/lib/content-optimization/first-party-authority-prompt';
 import type { IllustrativeExample } from '@/lib/overview-seo-content-brief';
 import {
   formatPageLocalContextPromptBlock,
@@ -61,6 +62,7 @@ import {
 import { parseSeoResearchBrief } from '@/lib/content-optimization/seo-research-brief-for-optimize';
 import { resolveSiteLocationLabel } from '@/lib/llm-audit/resolve-site-location-label';
 import type { WordPressSite } from '@/components/integrations/types';
+import { mergeOptimizerInstructions } from "@/lib/prompt-builders/system-user";
 
 function agentHasIllustrativeFeature(agent: AgentConfig): boolean {
   return (
@@ -186,7 +188,7 @@ export async function generateMarkdownContent(
 
   // Build AI-driven ACF context from row (CSV columns are already semantic; no AI call for bulk)
   const acfContext: AIDrivenACFContext = {
-    promptModifier: row.prompt_modifier?.trim() || undefined,
+    promptModifier: mergeOptimizerInstructions(options.optionalPrompt, row.prompt_modifier),
     keywordFocus: row.keyword_focus?.trim() || undefined,
     serviceArea: row.service_area_fields?.trim() || undefined,
   };
@@ -355,7 +357,7 @@ export async function generateMarkdownContentHarnessed(
   const acfContext: AIDrivenACFContext =
     promptEnv?.acfContextOverride ??
     ({
-      promptModifier: row.prompt_modifier?.trim() || undefined,
+      promptModifier: mergeOptimizerInstructions(options.optionalPrompt, row.prompt_modifier),
       keywordFocus: row.keyword_focus?.trim() || undefined,
       serviceArea: row.service_area_fields?.trim() || undefined,
     } satisfies AIDrivenACFContext);
@@ -575,8 +577,11 @@ export async function generateMarkdownContentHarnessed(
     const illustrativeAgentIndex = bodyAgents.findIndex(agentHasIllustrativeFeature);
     const illustrativeTitle =
       illustrativeAgentIndex >= 0
-        ? bodyOutline[illustrativeAgentIndex]!.displayTitle
-        : resolveIllustrativeH2Title("");
+        ? bodyOutline[illustrativeAgentIndex]!.displayTitle.trim()
+        : "";
+    if (!illustrativeTitle) {
+      throw new Error("Harness: [ILLUSTRATIVE] section is missing a planner H2 title");
+    }
     const brief = acfContext?.seoResearch?.trim()
       ? parseSeoResearchBrief(acfContext.seoResearch)
       : null;
@@ -612,16 +617,30 @@ export async function generateMarkdownContentHarnessed(
       entity,
       serpByQuery: brief?.queryFanout?.serpByQuery,
       chatGptByQuery: brief?.queryFanout?.chatGptByQuery,
-      illustrativeH2Title: resolveIllustrativeH2Title(illustrativeTitle),
+      illustrativeH2Title: illustrativeTitle,
       pageTitle: blueprint.title || row.title,
       siteId: promptEnv?.siteId,
       site: promptEnv?.wordpressSite,
       pageLocalContext: pageCtx,
       answerSectionHtml,
     });
+    const cityPlace =
+      entity?.trim()
+      || pageCtx.prosePlaceLabel
+      || pageCtx.primaryCity
+      || location;
+    const cityServiceArea = wordPressPosts?.length
+      ? findServiceAreaPageForPlace(wordPressPosts, cityPlace)
+      : undefined;
     cachedIllustrativePersonaBlock = [
       formatPageLocalContextPromptBlock(pageCtx),
-      formatIllustrativePersonaPromptBlock(persona, researchAsOf),
+      formatIllustrativePersonaPromptBlock(
+        persona,
+        researchAsOf,
+        cityServiceArea
+          ? { pageTitle: cityServiceArea.title, anchor: cityServiceArea.anchor }
+          : undefined,
+      ),
     ].join("\n\n");
     cachedOverviewPersonaTeaser = formatOverviewPersonaTeaserBlock(persona.personaName ?? "");
   };

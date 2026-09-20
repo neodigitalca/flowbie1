@@ -134,6 +134,9 @@ class Neo_Pulse_Wp_Tools {
 			array( 'wp_super_migrate_flo_sheet', 'read', 'Get Flo Sheet JSON workbook', 'wp_super_migrate_flo_sheet', 'manage_options' ),
 			array( 'wp_super_migrate_flo_sheet_import', 'write', 'Import Flo Sheet and apply', 'wp_super_migrate_flo_sheet_import', 'manage_options' ),
 			array( 'wp_seo_blocks_list', 'read', 'List Agent Hub SEO blocks', 'wp_seo_blocks_list', 'edit_posts' ),
+			array( 'wp_seo_block_get', 'read', 'Get one Agent Hub SEO block', 'tool_get_seo_block', 'edit_posts', 'Neo_Pulse_Wp_Backend_Assist_Tools_Seo' ),
+			array( 'wp_seo_block_duplicate', 'write', 'Duplicate an Agent Hub SEO block', 'tool_duplicate_seo_block', 'edit_posts', 'Neo_Pulse_Wp_Backend_Assist_Tools_Seo' ),
+			array( 'wp_seo_block_apply_to_page', 'write', 'Apply Agent Hub SEO block to a page', 'tool_apply_seo_block_to_page', 'post', 'Neo_Pulse_Wp_Backend_Assist_Tools_Seo' ),
 			array( 'wp_seo_block_save', 'write', 'Save Agent Hub SEO block', 'wp_seo_block_save', 'manage_options' ),
 			array( 'wp_seo_block_optimize', 'write', 'Preview or apply SEO block optimization', 'wp_seo_block_optimize', 'edit_posts' ),
 			array( 'wp_seo_block_sync_library', 'write', 'Sync SEO block to Elementor library', 'wp_seo_block_sync_library', 'manage_options' ),
@@ -144,10 +147,11 @@ class Neo_Pulse_Wp_Tools {
 
 		$registry = array();
 		foreach ( $defs as $d ) {
+			$handler_class = isset( $d[5] ) ? (string) $d[5] : 'Neo_Pulse_Wp_Tools_Handlers';
 			$registry[ $d[0] ] = array(
 				'risk'        => $d[1],
 				'description' => $d[2],
-				'handler'     => array( 'Neo_Pulse_Wp_Tools_Handlers', $d[3] ),
+				'handler'     => array( $handler_class, $d[3] ),
 				'capability'  => $d[4],
 				'schema'      => array( 'type' => 'object' ),
 			);
@@ -217,6 +221,9 @@ class Neo_Pulse_Wp_Tools {
 		}
 
 		$handler = $def['handler'];
+		if ( ! is_callable( $handler ) && class_exists( 'Neo_Pulse_Wp_Backend_Assist', false ) ) {
+			Neo_Pulse_Wp_Backend_Assist::ensure_dependencies();
+		}
 		if ( ! is_callable( $handler ) ) {
 			return new WP_Error( 'neo-pulse_tool_handler', __( 'Tool handler missing.', 'neo-pulse-wp' ), array( 'status' => 500 ) );
 		}

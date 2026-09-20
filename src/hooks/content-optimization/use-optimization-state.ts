@@ -131,7 +131,7 @@ export interface BulkOptimizationState {
   /** URLs that have completed the research phase and are ready for optimization. */
   researchedUrls?: string[];
   /** Overview AI All Meta harness bulk (no WordPress upload). */
-  runKind?: "content" | "extraText" | "aiAllMeta" | "aiFaq" | "aiHeaders" | "aiLinks" | "aiWikipediaLink" | "aiAnswer" | "aiOverview" | "aiScenario" | "aiInContentImage" | "contentCleanup" | "research" | "wpUpload";
+  runKind?: "content" | "extraText" | "aiAllMeta" | "aiTitle" | "aiMeta" | "aiUrl" | "contentKw" | "entityKw" | "aiFaq" | "aiHeaders" | "aiLinks" | "aiWikipediaLink" | "aiAnswer" | "aiOverview" | "aiScenario" | "aiInContentImage" | "aiFeaturedImage" | "contentCleanup" | "research" | "wpUpload";
   /** Timestamp when this harness batch started (auto-open Details drawer). */
   harnessStartedAt?: number;
   /** Content Optimizer: page size when bulk run is paginated (>100 URLs). */

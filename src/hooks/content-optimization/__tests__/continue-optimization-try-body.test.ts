@@ -7,39 +7,23 @@ const tryBodyPath = join(
   dirname(fileURLToPath(import.meta.url)),
   "../continue-optimization-try-body.ts",
 );
-const bulkAutoGeneratePath = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "../../../lib/bulk-auto-generate.ts",
-);
 
-describe("continue-optimization-try-body bulk generate path", () => {
-  it("routes SAP runs through runOptimizeViaBulkGenerate", () => {
-    const src = readFileSync(tryBodyPath, "utf8");
-    expect(src).toMatch(/runOptimizeViaBulkGenerate/);
-    expect(src).toMatch(/if \(isSapRun\)/);
-  });
-
-  it("keeps blog optimize on blueprint flow", () => {
+describe("continue-optimization-try-body one generate path", () => {
+  it("uses generateBlueprintFlow then generateAndUploadFlow for every row", () => {
     const src = readFileSync(tryBodyPath, "utf8");
     expect(src).toMatch(/generateBlueprintFlow/);
     expect(src).toMatch(/generateAndUploadFlow/);
+    expect(src).not.toMatch(/runOptimizeViaBulkGenerate/);
+    expect(src).not.toMatch(/if \(isSapRun\)/);
+    expect(src).not.toMatch(/optimize-via-bulk-generate/);
   });
 
   it("still ensures stored SEO research before generate", () => {
     const src = readFileSync(tryBodyPath, "utf8");
     expect(src).toMatch(/ensureSeoResearchBriefForOptimize/);
     expect(src).toMatch(/buildOptimizeSelectionsFromStoredBrief/);
+    expect(src).toMatch(/isAgentRunBatchKey\(batchKey\)/);
     expect(src).not.toMatch(/performKeywordResearchFlow/);
     expect(src).not.toMatch(/runTopicResearchFanout/);
-  });
-});
-
-describe("bulk-auto-generate optimize upload", () => {
-  it("supports updateTargetPostId via updateWordPressPost branch", () => {
-    const src = readFileSync(bulkAutoGeneratePath, "utf8");
-    expect(src).toMatch(/updateTargetPostId/);
-    expect(src).toMatch(/isOptimizeUpdate/);
-    expect(src).toMatch(/updateWordPressPost\(/);
-    expect(src).toMatch(/createWordPressPost\(/);
   });
 });

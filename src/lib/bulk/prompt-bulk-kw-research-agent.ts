@@ -1,7 +1,6 @@
 import { callOpenRouterChatCompletion } from "@/lib/competitor-research/competitor-report-openrouter";
 import { aiFilterAllowedBrandTexts } from "@/lib/content-brand-ai-gate";
 import { GLOBAL_BLOCKED_TOPIC_PROMPT_BLOCK } from "@/lib/content-topic-blocklist";
-import { parseJsonWithRepair } from "@/lib/json-repair-utility";
 import { getResearchModel } from "@/lib/optimization-settings-storage";
 
 const GSC_INVENTORY_EXCLUSION = `INVENTORY EXCLUSION (mandatory when SITE_INVENTORY_JSON is present):
@@ -42,9 +41,10 @@ Selection rules:
 - Unique only: no duplicates and no two keywords that target the same search intent (no cannibalization). Merge near-duplicates into one.
 - No keyword may overlap search intent with any SITE_INVENTORY_JSON post title or slug.
 - If topic is provided, every keyword must fit that topic; otherwise trim or replace it.
-- Return at most numberOfBlogs keywords. Return [] when the JSON has no useful data.
+- Return at most numberOfBlogs keywords. Never more. Never dump the product catalog. If numberOfBlogs is 2, return 2 strings and stop. Return [] when the JSON has no useful data.
 
-Return only JSON: {"keywords":["..."]}.`;
+JSON contract (mandatory, last): output one object only. Double-quoted keys. No markdown fences. No extra keys. Exact shape:
+{"keywords":["..."]}`;
 
 type AgentResponse = {
   keywords?: unknown;
@@ -62,28 +62,60 @@ function cleanKeyword(value: unknown): string {
   return value.trim().replace(/\s+/g, " ");
 }
 
+export function buildLowHangingKeywordsResponseFormat(limit: number): {
+  type: "json_schema";
+  json_schema: {
+    name: string;
+    strict: boolean;
+    schema: Record<string, unknown>;
+  };
+} {
+  const maxItems = Math.max(1, Math.min(50, Math.floor(limit) || 1));
+  return {
+    type: "json_schema",
+    json_schema: {
+      name: "prompt_bulk_low_hanging_keywords",
+      strict: true,
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["keywords"],
+        properties: {
+          keywords: {
+            type: "array",
+            maxItems,
+            items: { type: "string" },
+          },
+        },
+      },
+    },
+  };
+}
+
 function parseKeywords(raw: string, limit: number): string[] {
+  let parsed: AgentResponse;
   try {
-    const { parsed } = parseJsonWithRepair<AgentResponse>(raw, {
-      targetKeys: ["keywords"],
-      fallback: { keywords: [] },
-    });
-    if (!Array.isArray(parsed.keywords)) return [];
-    const out: string[] = [];
-    const seen = new Set<string>();
-    for (const item of parsed.keywords) {
-      const keyword = cleanKeyword(item);
-      if (!keyword) continue;
-      const key = keyword.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(keyword);
-      if (out.length >= limit) break;
-    }
-    return out;
+    parsed = JSON.parse(raw) as AgentResponse;
   } catch {
-    return [];
+    throw new Error(
+      `Keyword research agent returned invalid JSON (expected {"keywords":["..."]}). Got: ${raw.slice(0, 240)}`,
+    );
   }
+  if (!Array.isArray(parsed.keywords)) {
+    throw new Error("Keyword research agent returned JSON without a keywords array");
+  }
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of parsed.keywords) {
+    const keyword = cleanKeyword(item);
+    if (!keyword) continue;
+    const key = keyword.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(keyword);
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 
 export function buildPromptBulkKwConnectedSiteContext(site: {
@@ -128,44 +160,40 @@ export async function selectPromptBulkLowHangingKeywords(args: {
   const jsonText = args.keywordsJsonText.trim();
   if (!apiKey || !jsonText) return [];
 
-  try {
-    const inventoryJson = args.siteInventoryJson?.trim();
-    const userPayload: Record<string, unknown> = {
-      numberOfBlogs: limit,
-      topic: args.topic?.trim() || "",
-      modifier: args.modifier?.trim() || "",
-      inventoryUrlCount: args.inventoryUrlCount ?? null,
-      CONNECTED_SITE: args.connectedSite ?? null,
-      SITE_KW_JSON: JSON.parse(jsonText) as unknown,
-    };
-    if (inventoryJson) {
-      userPayload.SITE_INVENTORY_JSON = JSON.parse(inventoryJson) as unknown;
-    }
-
-    const user = JSON.stringify(userPayload);
-
-    const { content } = await callOpenRouterChatCompletion({
-      apiKey,
-      model: getResearchModel(args.siteId),
-      system: SYSTEM,
-      user,
-      maxTokens: Math.min(2048, Math.max(512, limit * 80)),
-      temperature: 0.25,
-      responseFormat: { type: "json_object" },
-    });
-
-    const parsed = parseKeywords(content, limit * 2);
-    const companyName = args.connectedSite?.name?.trim() || "";
-    if (!companyName) return parsed.slice(0, limit);
-    const allowed = await aiFilterAllowedBrandTexts({
-      apiKey,
-      model: getResearchModel(args.siteId),
-      companyName,
-      candidates: parsed,
-      kind: "keyword",
-    });
-    return allowed.slice(0, limit);
-  } catch {
-    return [];
+  const inventoryJson = args.siteInventoryJson?.trim();
+  const userPayload: Record<string, unknown> = {
+    numberOfBlogs: limit,
+    topic: args.topic?.trim() || "",
+    modifier: args.modifier?.trim() || "",
+    inventoryUrlCount: args.inventoryUrlCount ?? null,
+    CONNECTED_SITE: args.connectedSite ?? null,
+    SITE_KW_JSON: JSON.parse(jsonText) as unknown,
+  };
+  if (inventoryJson) {
+    userPayload.SITE_INVENTORY_JSON = JSON.parse(inventoryJson) as unknown;
   }
+
+  const user = JSON.stringify(userPayload);
+
+  const { content } = await callOpenRouterChatCompletion({
+    apiKey,
+    model: getResearchModel(args.siteId),
+    system: SYSTEM,
+    user,
+    maxTokens: Math.max(256, limit * 48),
+    temperature: 0.25,
+    responseFormat: buildLowHangingKeywordsResponseFormat(limit),
+  });
+
+  const parsed = parseKeywords(content, limit);
+  const companyName = args.connectedSite?.name?.trim() || "";
+  if (!companyName) return parsed;
+  const allowed = await aiFilterAllowedBrandTexts({
+    apiKey,
+    model: getResearchModel(args.siteId),
+    companyName,
+    candidates: parsed,
+    kind: "keyword",
+  });
+  return allowed.slice(0, limit);
 }

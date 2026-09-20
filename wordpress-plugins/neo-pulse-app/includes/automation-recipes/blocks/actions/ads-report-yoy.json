@@ -1,0 +1,17 @@
+{
+  "keyword": "ads-report-yoy",
+  "name": "Ads YoY report",
+  "executionKind": "ads_reporting",
+  "description": "Year-over-year PPC report saved locally.",
+  "filters": {
+    "categories": ["reporting"],
+    "verticals": ["general"]
+  },
+  "defaults": {
+    "executionPayload": {
+      "comparePreset": "yoy",
+      "saveToDisk": true,
+      "saveLocalArchive": true
+    }
+  }
+}

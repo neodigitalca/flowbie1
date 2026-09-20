@@ -152,6 +152,22 @@ describe("isOverviewResearchWorkerActive", () => {
       ),
     ).toBe(false);
   });
+
+  it("returns false when every row is finished even if optimizing flags linger", () => {
+    expect(
+      isOverviewResearchWorkerActive(
+        {
+          runKind: "research",
+          urls: ["https://example.com/a"],
+          urlStatuses: { "https://example.com/a": "completed" },
+          currentStep: "Researching…",
+        } as never,
+        "site1-batch",
+        "site1",
+        { "site1-batch": true, site1: true },
+      ),
+    ).toBe(false);
+  });
 });
 
 describe("buildSinglePageOptimizationSnapshot", () => {

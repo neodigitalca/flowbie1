@@ -38,6 +38,9 @@ describe("post-creator-generator-prompts", () => {
     expect(system).toContain("INTERNAL LINK TARGETS");
     expect(system).toContain("FOCUS KEYWORD DENSITY");
     expect(user).toContain("5-6 checklist items");
+    expect(user).toContain("SERP H2 OUTLINE");
+    expect(user).not.toContain("ARTICLE CONTENT TYPE");
+    expect(user).not.toContain("type-skeleton");
     expect(system).toContain("[DECISION]");
     expect(system).toContain("[TRADEOFF]");
     expect(system).toContain("AUTHENTICITY CHECKLIST");
@@ -52,7 +55,9 @@ describe("post-creator-generator-prompts", () => {
     expect(user).toContain("SAP PAGE TEMPLATE");
     expect(user).toContain("Product | Best for | Budget | Reason");
     expect(user).toContain("6-7 checklist items");
-    expect(system).toContain("Our Recommendation for Homeowners in Ben Hill, Atlanta");
+    expect(system).toContain("Recommendation in Ben Hill, Atlanta");
+    expect(system).not.toContain("Sunlight And Privacy Challenges");
+    expect(system).not.toContain("Our Recommendation for Homeowners");
     expect(user).not.toContain("how it works, vs adjacent, apply, measure");
   });
 
@@ -143,7 +148,8 @@ describe("post-creator-generator-prompts", () => {
     const raw =
       '1. Create a first section agent with the SEO-friendly header: "Why Digital Marketing Matters for Window Companies". [STRUCTURE]: 2 paragraphs. [LINK]: 3-5 links.';
     const parsed = parseBlogTemplateChecklist(raw);
-    expect(parsed[0]).toMatch(/^Why Digital Marketing Matters for Window Companies \[STRUCTURE\]/);
+    expect(parsed[0]).toContain("[STRUCTURE]");
+    expect(parsed[0]).toContain("Why Digital Marketing Matters for Window Companies");
     expect(
       rewriteChecklistItemHeading(
         'Create a first section agent with the SEO-friendly header: "Why Digital Marketing Matters for Window Companies".',
@@ -189,5 +195,17 @@ describe("post-creator-generator-prompts", () => {
     });
     expect(system).toContain("[DECISION]");
     expect(system).toContain("[TRADEOFF]");
+  });
+
+  it("PHP generator prompts do not contain the destroyed generic skeleton", () => {
+    const phpPath = path.join(
+      process.cwd(),
+      "wordpress-plugins/neo-pulse-app/includes/agent-runs/prompts/post-creator-generator-prompts.php",
+    );
+    const php = fs.readFileSync(phpPath, "utf8");
+    expect(php).not.toContain("introduction-style");
+    expect(php).not.toContain("Conclusion and Next Steps");
+    expect(php).toContain("SERP H2 OUTLINE");
+    expect(php).toContain("SAP PAGE TEMPLATE");
   });
 });

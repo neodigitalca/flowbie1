@@ -70,7 +70,7 @@ function parseIntroJson(raw: string, executionKind: TaskExecutionKind): Automati
     throw new Error("OpenRouter email intro missing intro text.");
   }
 
-  const isGsc = executionKind === "gsc_reporting";
+  const isGsc = executionKind === "gsc_reporting" || executionKind === "ads_reporting";
   if (isGsc) {
     const highlights = parseStringList(parsed.highlights, 6);
     const talkingPoints =

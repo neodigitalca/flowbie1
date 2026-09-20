@@ -1,5 +1,9 @@
 import type { WordPressSite } from "@/components/integrations/types";
-import { getStoredSites } from "@/components/integrations/storage";
+import {
+  fetchWordPressSitesMirror,
+  getStoredSites,
+  restoreSitesFromServerMirrorIfEmpty,
+} from "@/components/integrations/storage";
 import { fetchAgentRun } from "@/lib/agent-runs-api";
 import type { AgentRun } from "@/lib/agent-runs-types";
 import { getPublicSiteUrl } from "@/lib/wordpress-site-public-url";
@@ -49,6 +53,38 @@ export function resolveAgentRunWordPressSite(
     if (site) return site;
   }
   throw new Error(missingError);
+}
+
+/** Keep the workflow client on the run. Shared compiled tasks can drop it. */
+export function pinAgentRunSiteId(run: AgentRun, siteId: string): AgentRun {
+  const id = siteId.trim();
+  if (!id) return run;
+  const payload = (run.plan?.executionPayload ?? {}) as Record<string, unknown>;
+  const contract = (run.plan?.clientRunContract ?? {}) as Record<string, unknown>;
+  return {
+    ...run,
+    context: { ...run.context, siteId: id },
+    plan: {
+      ...run.plan,
+      executionPayload: {
+        ...payload,
+        siteId: id,
+        wordpressSiteId: id,
+      },
+      clientRunContract: {
+        ...contract,
+        siteId: id,
+      },
+    },
+  };
+}
+
+export function mergeAgentRunSiteFromSeed(fetched: AgentRun, seed: AgentRun): AgentRun {
+  const fetchedIds = resolveAgentRunSiteIds(fetched);
+  if (fetchedIds.some((id) => findConnectedWordPressSite(id))) return fetched;
+  const seedId = resolveAgentRunSiteIds(seed)[0];
+  if (!seedId) return fetched;
+  return pinAgentRunSiteId(fetched, seedId);
 }
 
 /** Display name + URL for a connected property row (not the header active site). */
@@ -112,6 +148,29 @@ function mergeSitePool(sites: WordPressSite[]): WordPressSite[] {
     if (site?.id) map.set(site.id, site);
   }
   return [...map.values()];
+}
+
+function poolHasAgentRunSite(run: AgentRun, pool: WordPressSite[]): boolean {
+  return resolveAgentRunSiteIds(run).some((id) => pool.some((site) => site.id === id));
+}
+
+/**
+ * Connected properties for this agent. Loads the server sites.json mirror when
+ * the run's client is missing from the in-memory / localStorage list (cold start).
+ */
+export async function loadSitesForAgentRun(
+  run: AgentRun,
+  sites: WordPressSite[] = [],
+): Promise<WordPressSite[]> {
+  const pool = mergeSitePool(sites);
+  if (poolHasAgentRunSite(run, pool)) return pool;
+
+  const restored = await restoreSitesFromServerMirrorIfEmpty();
+  const afterRestore = mergeSitePool([...pool, ...restored]);
+  if (poolHasAgentRunSite(run, afterRestore)) return afterRestore;
+
+  const mirror = await fetchWordPressSitesMirror();
+  return mergeSitePool([...afterRestore, ...mirror]);
 }
 
 function siteHasPublicUrl(site: WordPressSite): boolean {

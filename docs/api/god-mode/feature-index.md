@@ -87,7 +87,7 @@ Exhaustive checklist of NEO Pulse Chat **God Mode** capabilities (Backend Assist
     - Undo/correction → `restore_post_revision`
     - Field instruction misroute → restore revision
 
-## F. Read-only tools (11)
+## F. Read-only tools (12)
 
 | # | Tool | Capability |
 | --- | --- | --- |
@@ -102,13 +102,14 @@ Exhaustive checklist of NEO Pulse Chat **God Mode** capabilities (Backend Assist
 | 60 | `list_posts` | Sample post list (not full inventory) |
 | 61 | `get_post` | Single post details by id or title |
 | 62 | `list_seo_blocks` | Agent Hub SEO blocks list |
+| 62a | `get_seo_block` | One Agent Hub block by id or exact title |
 
-## G. Write tools (13)
+## G. Write tools (14)
 
 | # | Tool | Capability |
 | --- | --- | --- |
-| 63 | `create_page` | New WordPress page (draft default) |
-| 64 | `create_post` | New WordPress post |
+| 63 | `create_page` | New WordPress page (draft). Always a new page, never the URL God Mode is open on. Build inserts it immediately from the keyword. Plan expands to SEO meta + Agent Hub block apply |
+| 64 | `create_post` | New WordPress post. Plan expands to SEO meta + body content |
 | 65 | `add_content` | Append/replace body HTML, or mode ops deterministic edits |
 | 66 | `update_post` | post_title, status, excerpt, slug (not body, not SEO meta) |
 | 67 | `save_post_meta` | focusKeyword, metaDescription, seoTitle, faq, seoResearch, dateModifier; clear fields |
@@ -116,9 +117,10 @@ Exhaustive checklist of NEO Pulse Chat **God Mode** capabilities (Backend Assist
 | 69 | `restore_post_revision` | Undo last agent body edit snapshot |
 | 70 | `compose_seo_block` | Generate/optimize/analyze full Agent Hub SEO block manifest |
 | 71 | `modify_seo_block_slots` | Add/remove/update individual block slots |
-| 72 | `create_seo_block` | New draft SEO block |
+| 72 | `create_seo_block` | New draft SEO block (empty; not enough for apply) |
 | 73 | `delete_seo_block` | Delete block by id |
 | 74 | `save_seo_block` | Persist block manifest |
+| 74a | `duplicate_seo_block` | New Agent Hub row from a template; optional user_copy |
 | 75 | `apply_seo_block_to_page` | Insert Elementor neo-pulse_seo_section widget on page |
 
 ## H. Compound / special runners (Build only)
@@ -127,7 +129,9 @@ Exhaustive checklist of NEO Pulse Chat **God Mode** capabilities (Backend Assist
 77. **Body schema cleanup** — strip JSON-LD from body + save FAQ schema to meta  
 78. **FAQ table append** — deterministic table append response path  
 79. **Multi-step workflows** — saved workflow id, step execution, status polling  
-80. **Elementor SEO block workflow** — compose → save → apply chain  
+80. **Elementor SEO block workflow** — one Agent Hub Block Builder compose/save/apply triplet per H2 on a new page; apply requires a persisted Agent Hub `block_id` with slots. Final layout: `design_page_with_novamira` (Novamira agent, Elementor abilities, check-design).
+80b. **Elementor widgets create-page mode** — composer pill **Elementor** sets `page_content_mode=elementor_widgets`: `compose_elementor_page_sections` per H2 (or once), then `design_page_with_novamira` with native Elementor widgets (no Agent Hub save).  
+80a. **Template + user_copy** — `duplicate_seo_block` fills a copy; source block is unchanged  
 81. **Create + body content workflow** — create post/page then add_content steps  
 
 ## I. Body operations (14 deterministic ops via add_content mode ops)

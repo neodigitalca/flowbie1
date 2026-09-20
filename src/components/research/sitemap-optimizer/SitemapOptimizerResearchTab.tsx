@@ -6,7 +6,7 @@ import { useSitemapOptimizerApprovePlan } from "@/hooks/research/use-sitemap-opt
 import { useSitemapOptimizerRankMathImport } from "@/hooks/research/use-sitemap-optimizer-rankmath-import";
 import { useSitemapOptimizerRun } from "@/hooks/research/use-sitemap-optimizer-run";
 import { notify } from "@/lib/app-notifications";
-import { NOTIFY_CONNECT_WORDPRESS_CREDENTIALS_IN_INTEGRA, NOTIFY_COPY_FAILED, NOTIFY_NO_REDIRECTS_TO_EXPORT_LEGACY_URLS_ALREA, NOTIFY_NO_REPLACEMENT_CONTENT_TO_EXPORT_RUN_ANA, NOTIFY_RUN_ANALYZE_FIRST_2, NOTIFY_SELECT_SITE_URL, NOTIFY_UPLOAD_A_GSC_GRID_CSV_FIRST, notifyAnalyzedXRedirectSFromYourCsvTemp, notifyDownloadedXRedirects, notifyLoadedXContentPlanSFromRedirectEx, notifyRankMathPlanX } from "@/lib/notify-messages";
+import { NOTIFY_CONNECT_WORDPRESS_CREDENTIALS_IN_INTEGRA, NOTIFY_COPY_FAILED, NOTIFY_NO_REPLACEMENT_CONTENT_TO_EXPORT_RUN_ANA, NOTIFY_RUN_ANALYZE_FIRST_2, NOTIFY_SELECT_SITE_URL, NOTIFY_UPLOAD_A_GSC_GRID_CSV_FIRST, notifyAnalyzedXRedirectSFromYourCsvTemp, notifyDownloadedXRedirects, notifyLoadedXContentPlanSFromRedirectEx, notifyRankMathPlanX } from "@/lib/notify-messages";
 import { buildSitemapOptimizerCollectionOptions } from "@/lib/sitemap-optimizer/collection-options";
 import { getFullHistorySitemapOptimizerGscDateRange } from "@/lib/sitemap-optimizer/gsc-date-range";
 import {
@@ -34,8 +34,6 @@ import type {
   SitemapOptimizerCollectionKey,
   SitemapOptimizerWorkspaceMode,
 } from "@/lib/sitemap-optimizer/types";
-import { SitemapLegacyRedirectPanel } from "@/components/research/sitemap-optimizer/SitemapLegacyRedirectPanel";
-import type { SitemapLegacyRedirectWorkspaceBindings } from "@/components/research/sitemap-optimizer/sitemap-legacy-redirect-workspace-bindings";
 import { SitemapUrlOptimizerPanel } from "@/components/research/sitemap-optimizer/SitemapUrlOptimizerPanel";
 import type { SitemapUrlOptimizerWorkspaceBindings } from "@/components/research/sitemap-optimizer/sitemap-url-optimizer-workspace-bindings";
 import { SitemapOptimizerContentSheetGrid } from "@/components/research/sitemap-optimizer/SitemapOptimizerContentSheetGrid";
@@ -87,21 +85,12 @@ export function SitemapOptimizerResearchTab() {
   const [workspaceSubMode, setWorkspaceSubMode] = useState<SitemapOptimizerWorkspaceMode>(
     () => readStoredSitemapOptimizerSection(),
   );
-  const [legacyBindings, setLegacyBindings] =
-    useState<SitemapLegacyRedirectWorkspaceBindings | null>(null);
   const [urlBindings, setUrlBindings] = useState<SitemapUrlOptimizerWorkspaceBindings | null>(null);
 
   const handleWorkspaceSubModeChange = useCallback((mode: SitemapOptimizerWorkspaceMode) => {
     setWorkspaceSubMode(mode);
     writeStoredSitemapOptimizerSection(mode);
   }, []);
-
-  const onLegacyRedirectWorkspaceBindings = useCallback(
-    (bindings: SitemapLegacyRedirectWorkspaceBindings) => {
-      setLegacyBindings(bindings);
-    },
-    [],
-  );
 
   const onUrlOptimizerWorkspaceBindings = useCallback(
     (bindings: SitemapUrlOptimizerWorkspaceBindings) => {
@@ -456,14 +445,12 @@ export function SitemapOptimizerResearchTab() {
   const busy = running || rankMathImport.running || approving;
   const activeProgress = rankMathImport.running ? rankMathImport.progress : progress;
   const inPublishWorkspace = publishWorkspaceActive && hasMergePlan;
-  const legacyGenerating = Boolean(legacyBindings?.generating);
   const urlRunning = Boolean(urlBindings?.running);
-  const workspaceBusy = busy || legacyGenerating || urlRunning;
+  const workspaceBusy = busy || urlRunning;
   const modeSwitchDisabled = workspaceBusy;
 
   const placeholderOnlyBody =
     (workspaceSubMode === "plan" && !result) ||
-    (workspaceSubMode === "legacy_redirects" && !legacyBindings?.hasSheet) ||
     (workspaceSubMode === "url_optimizer" && !urlBindings?.detailsProps?.result);
 
   const planHeaderProgress = useMemo(
@@ -641,7 +628,6 @@ export function SitemapOptimizerResearchTab() {
           siteConnected: Boolean(site),
           workspaceMode,
         }}
-        legacyBindings={legacyBindings}
         urlBindings={urlBindings}
       />
       </div>
@@ -656,15 +642,7 @@ export function SitemapOptimizerResearchTab() {
         {detailsDrawerOpen ? (
           <div className={WORKSPACE_DETAILS_DIM_OVERLAY_CLASS} aria-hidden />
         ) : null}
-      {workspaceSubMode === "legacy_redirects" ? (
-        <SitemapLegacyRedirectPanel
-          site={site ?? null}
-          workspaceMode={workspaceMode}
-          siteReady={siteReady}
-          legacyRedirectWorkspace
-          onLegacyRedirectWorkspaceBindings={onLegacyRedirectWorkspaceBindings}
-        />
-      ) : workspaceSubMode === "url_optimizer" ? (
+      {workspaceSubMode === "url_optimizer" ? (
         <SitemapUrlOptimizerPanel
           urlOptimizerWorkspace
           onUrlOptimizerWorkspaceBindings={onUrlOptimizerWorkspaceBindings}

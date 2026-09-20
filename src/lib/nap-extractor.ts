@@ -7,6 +7,7 @@ import type { WordPressSite, NAPInfo, Location } from '@/components/integrations
 import { parseSitemap } from './wordpress-api';
 import { streamChatCompletion } from './api';
 import { htmlToMarkdown } from './wordpress-converter';
+import { getResearchModel } from './optimization-settings-storage';
 
 export interface NAPExtractionResult {
   success: boolean;
@@ -399,7 +400,8 @@ async function fetchPageContentFromUrl(
 async function extractLocationsWithAI(
   scrapedPages: Array<{ title: string; content: string; url: string }>,
   apiKey: string,
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  siteId?: string
 ): Promise<NAPInfo | null> {
   onProgress?.('🤖 AI analyzing pages to find all locations...');
   
@@ -487,7 +489,7 @@ Extract every location mentioned. For locations without specific emails, use the
     let aiResponse = '';
     await streamChatCompletion({
       apiKey,
-        model: getResearchModel(),
+        model: getResearchModel(siteId),
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
@@ -735,7 +737,7 @@ export async function extractNAPFromSite(
     // Step 5: Use AI to extract locations (token optimized)
     const napInfo = await extractLocationsWithAI(scrapedPages, apiKey, (message) => {
       onProgress?.({ step: 'ai_analysis', progress: 85, message });
-    });
+    }, site.id);
 
     if (!napInfo || !napInfo.locations || napInfo.locations.length === 0) {
       return {

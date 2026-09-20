@@ -30,6 +30,7 @@ import {
 import { durableWorkflowOutputFileRefs, resolveStepOutputFileRefs } from "@/lib/workflow/workflow-step-file-refs";
 import {
   dedupeWorkflowRagFilesByName,
+  downloadableCsvFromStepOutput,
   type WorkflowRagDownloadableFile,
 } from "@/lib/workflow/workflow-rag-run-files";
 import type { WorkflowNode, WorkflowRun, WorkflowStepOutput } from "@/lib/workflow/workflow-types";
@@ -115,6 +116,16 @@ async function resolveOutputFiles(
         sizeBytes: await fileHrefSize(file.url!),
       })),
     );
+  }
+
+  const fromCsv = downloadableCsvFromStepOutput(output);
+  if (fromCsv) {
+    return [
+      {
+        ...fromCsv,
+        sizeBytes: (await fileHrefSize(fromCsv.href)) ?? fromCsv.sizeBytes,
+      },
+    ];
   }
 
   if (agentRunId) {

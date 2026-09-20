@@ -11,6 +11,7 @@ import type { WorkflowNode, WorkflowStepOutput } from "@/lib/workflow/workflow-t
 const nodes: WorkflowNode[] = [
   { id: "ld", kind: "action_agent", label: "Grid", config: {}, position: { x: 0, y: 0 } },
   { id: "r1", kind: "rag_archive", label: "Archive", config: {}, position: { x: 0, y: 140 } },
+  { id: "csv", kind: "csv_rows", label: "Page audit", config: {}, position: { x: 0, y: 280 } },
 ];
 
 describe("workflow-rag-client", () => {
@@ -58,6 +59,24 @@ describe("workflow-rag-client", () => {
     const siteA = clientDeliverableOutputs(outputs, nodes, "site-a", clientSiteIds);
     expect(siteA).toHaveLength(1);
     expect(siteA[0]?.fileRefs?.[0]?.name).toBe("a.csv");
+  });
+
+  it("includes page audit CSV rows in deliverables", () => {
+    const audit: WorkflowStepOutput = {
+      id: 3,
+      runId: 1,
+      nodeId: "csv",
+      variableKey: "csv_rows_1",
+      scope: "run",
+      label: "Page audit",
+      textPreview: "url,H2\nhttps://a.test/old/,\n",
+      fileRefs: [{ name: "missing-template-posts.csv", mime: "text/csv" }],
+      siteId: "site-a",
+      createdAt: "",
+    };
+    const listed = clientDeliverableOutputs([audit], nodes, "site-a", ["site-a"]);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.variableKey).toBe("csv_rows_1");
   });
 
   it("filters outputs for one client when clientSiteIds is narrowed to a single site", () => {

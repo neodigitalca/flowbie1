@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 import type { WordPressSite } from "@/components/integrations/types";
-import { normalizeFocusKeywordPhrase } from "@/lib/seo-redirect-csv";
 import { getWordPressPostMeta } from "@/lib/wordpress-api";
 import { getSeoResearchFromAcf } from "@/lib/content-generation/ai-driven-acf-reader";
+import { focusKeywordFromWordPressSources } from "@/lib/overview/focus-keyword-from-wp-sources";
 import type { OverviewBinding } from "./use-overview-wordpress-binding";
 
 export interface DownloadedSeoFields {
@@ -87,14 +87,13 @@ export function useOverviewDownloadFromSite(): UseOverviewDownloadResult {
           }
         }
 
-        // Focus keyword: ACF keyword_focus only.
-        const acfKeyword =
-          typeof acf["keyword_focus"] === "string"
-            ? acf["keyword_focus"]
-            : "";
-        // IMPORTANT: Overview mode is ACF-only. No plugin fallback.
         const focusKeyword =
-          normalizeFocusKeywordPhrase((acfKeyword || "").trim()) || undefined;
+          focusKeywordFromWordPressSources({
+            acf,
+            meta: meta as Record<string, unknown>,
+            title: postTitle,
+            collection: binding.subtype === "page" ? "pages" : "posts",
+          }) || undefined;
 
         const acfFaq = typeof acf["faq"] === "string" ? acf["faq"] : "";
 

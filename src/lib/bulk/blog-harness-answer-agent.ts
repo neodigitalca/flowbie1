@@ -10,7 +10,7 @@ export const HARNESS_ANSWER_ANCHOR_ID = "answer";
 export const BLOG_HARNESS_ANSWER_TITLE = "Answer";
 
 /**
- * Synthetic harness section: two-sentence direct answer before Overview.
+ * Synthetic harness section: two or three sentence direct answer before Overview.
  * Prompt specifics live in `generateSingleSectionPrompt` (keyed by this agent id).
  */
 export function buildBlogHarnessAnswerAgent(): AgentConfig {
@@ -19,7 +19,7 @@ export function buildBlogHarnessAnswerAgent(): AgentConfig {
     step: 0,
     title: BLOG_HARNESS_ANSWER_TITLE,
     description:
-      "Direct answer: two or three sentences in one paragraph. Stat/fact first in sentence 1; sourced cost/ROI figure in sentence 2 when sources provide it; final sentence names the connected business plus one concrete installer constraint from listed sources. Never hollow team speak.",
+      "Direct answer: two or three sentences in one paragraph. Stat/fact first in sentence 1; sourced cost/ROI figure in sentence 2 when sources provide it; mention the connected business name somewhere in the paragraph. Never hollow team speak.",
     features: [],
     headingLevel: 1,
   };

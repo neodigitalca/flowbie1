@@ -48,6 +48,26 @@ describe("ensureSeoResearchBriefForOptimize", () => {
     expect(fetchMergedSeoContentBriefLive).not.toHaveBeenCalled();
   });
 
+  it("fetches live SERP when forceNewResearch is true even if ACF already has a brief", async () => {
+    const brief = '{"focusKeyword":"solar","dataforseo":{}}';
+    vi.mocked(fetchMergedSeoContentBriefLive).mockResolvedValueOnce({
+      focusKeyword: "solar",
+      pageUrl: "https://example.com/post/",
+    } as never);
+
+    await ensureSeoResearchBriefForOptimize({
+      url: "https://example.com/post/",
+      site,
+      acfFields: { keyword_focus: "solar", seo_research: brief },
+      acfContext: { keywordFocus: "solar", seoResearch: brief },
+      focusKeyword: "solar",
+      muteToasts: true,
+      forceNewResearch: true,
+    });
+
+    expect(fetchMergedSeoContentBriefLive).toHaveBeenCalledTimes(1);
+  });
+
   it("fetches live SERP brief when ACF brief is missing", async () => {
     vi.mocked(fetchMergedSeoContentBriefLive).mockResolvedValueOnce({
       focusKeyword: "solar panel install cost",
@@ -64,6 +84,9 @@ describe("ensureSeoResearchBriefForOptimize", () => {
     });
 
     expect(fetchMergedSeoContentBriefLive).toHaveBeenCalledTimes(1);
+    expect(fetchMergedSeoContentBriefLive).toHaveBeenCalledWith(
+      expect.objectContaining({ requireSerpDump: false }),
+    );
     expect(out.seoResearchRaw).toContain("solar panel install cost");
     expect(out.acfFields.seo_research).toContain("focusKeyword");
   });

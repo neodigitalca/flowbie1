@@ -89,6 +89,44 @@ export function localDominatorArchiveFiles(input: {
   ];
 }
 
+export function adsReportingFinalReportFile(input: {
+  markdown: string;
+  siteName: string;
+  comparePreset: "mom" | "yoy";
+  dateStamp?: number;
+}): TaskArchiveFileInput {
+  const stamp = input.dateStamp ?? Date.now();
+  const slug = input.siteName.replace(/\s+/g, "-").replace(/[^\w-]/g, "").toLowerCase() || "ppc-report";
+  const presetTag = input.comparePreset === "yoy" ? "yoy" : "mom";
+  return {
+    fileName: `ppc-report-${presetTag}-${slug}-${stamp}.md`,
+    mime: "text/markdown",
+    content: input.markdown.trim(),
+  };
+}
+
+export function adsReportingArchiveFiles(input: {
+  markdown: string;
+  files: Array<{ name: string; content: string }>;
+  siteName: string;
+  comparePreset: "mom" | "yoy";
+  dateStamp?: number;
+}): TaskArchiveFileInput[] {
+  const presetTag = input.comparePreset === "yoy" ? "yoy" : "mom";
+  const out: TaskArchiveFileInput[] = [adsReportingFinalReportFile(input)];
+  for (const file of input.files) {
+    const base = file.name.split("/").pop() ?? file.name;
+    if (!base.endsWith(".csv")) continue;
+    const safeName = base.replace(/[/\\?%*:|"<>]/g, "-");
+    out.push({
+      fileName: `${presetTag}-${safeName}`,
+      mime: "text/csv",
+      content: file.content,
+    });
+  }
+  return out;
+}
+
 export function gscReportingArchiveFiles(input: {
   markdown: string;
   files: Array<{ name: string; content: string }>;

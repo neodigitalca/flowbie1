@@ -27,20 +27,42 @@ export {
   siteHasNeoPulseWp,
 };
 
-/** Extract custom fields from a WP REST full post (acf or neo_pulse_fields). */
+function asRestFieldObject(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+/** Plugin fields win when they have a non-empty value (Rank Math / NEO Pulse over stale ACF). */
+export function mergeRestFieldObjects(
+  acf: Record<string, unknown> | null | undefined,
+  plugin: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...(acf ?? {}) };
+  if (!plugin) return merged;
+  for (const [key, value] of Object.entries(plugin)) {
+    const pluginText =
+      typeof value === "string" || typeof value === "number" ? String(value).trim() : "";
+    const existing = merged[key];
+    const existingText =
+      typeof existing === "string" || typeof existing === "number" ? String(existing).trim() : "";
+    if (pluginText || existingText === "") {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+/** Extract custom fields from a WP REST full post (acf merged with neo_pulse_fields). */
 export function restAcfFromFullPost(
   fullPost: Record<string, unknown> | null | undefined,
 ): Record<string, unknown> {
-  if (!fullPost || typeof fullPost !== 'object') return {};
-  const acf = fullPost.acf;
-  if (acf && typeof acf === 'object' && !Array.isArray(acf)) {
-    return { ...(acf as Record<string, unknown>) };
-  }
-  const neoPulseFields = fullPost.neo_pulse_fields;
-  if (neoPulseFields && typeof neoPulseFields === 'object' && !Array.isArray(neoPulseFields)) {
-    return { ...(neoPulseFields as Record<string, unknown>) };
-  }
-  return {};
+  if (!fullPost || typeof fullPost !== "object") return {};
+  const acf = asRestFieldObject(fullPost.acf);
+  const neoPulseFields = asRestFieldObject(fullPost.neo_pulse_fields);
+  if (!acf && !neoPulseFields) return {};
+  return mergeRestFieldObjects(acf, neoPulseFields);
 }
 
 export function siteUsesNeoPulseFieldsBackend(site: WordPressSite): boolean {

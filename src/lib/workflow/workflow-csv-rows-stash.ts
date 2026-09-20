@@ -13,23 +13,36 @@ type CsvRowsBulkState = {
   mapping: CsvRowsActionMapping;
 };
 
-const bulkByRunId = new Map<number, CsvRowsBulkState>();
+const bulkByRunId = new Map<number, Map<string, CsvRowsBulkState>>();
 const sequentialByRunId = new Map<number, CsvRowsSequentialState>();
+
+function siteKey(siteId?: string): string {
+  return siteId?.trim() ?? "";
+}
 
 export function stashWorkflowCsvRowsMapping(
   workflowRunId: number,
   mapping: CsvRowsActionMapping,
   nextNodeId: string,
+  siteId?: string,
 ): void {
   if (workflowRunId <= 0) return;
-  bulkByRunId.set(workflowRunId, { mapping, nextNodeId });
+  let bySite = bulkByRunId.get(workflowRunId);
+  if (!bySite) {
+    bySite = new Map();
+    bulkByRunId.set(workflowRunId, bySite);
+  }
+  bySite.set(siteKey(siteId), { mapping, nextNodeId });
 }
 
 export function peekWorkflowCsvRowsMapping(
   workflowRunId: number,
   nodeId?: string,
+  siteId?: string,
 ): CsvRowsActionMapping | undefined {
-  const stashed = bulkByRunId.get(workflowRunId);
+  const bySite = bulkByRunId.get(workflowRunId);
+  if (!bySite) return undefined;
+  const stashed = bySite.get(siteKey(siteId));
   if (!stashed) return undefined;
   if (nodeId && stashed.nextNodeId !== nodeId) return undefined;
   return stashed.mapping;

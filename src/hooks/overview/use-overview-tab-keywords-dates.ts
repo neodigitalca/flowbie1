@@ -6,19 +6,18 @@ import type { OverviewRow } from "@/components/overview/overview-meta-row-types"
 import { stripHtmlForKeywordContext } from "@/lib/overview/overview-row-helpers";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { OverviewTabBase } from "@/hooks/overview/use-overview-tab-base";
+import { initBulkSliceWithStatus } from "@/lib/overview/overview-bulk-inline-status";
 import {
-  initBulkSliceWithStatus,
-  patchActiveBulkSlice,
-} from "@/lib/overview/overview-bulk-inline-status";
+  advanceBulkSliceBatchProgress,
+  buildKeywordBatchPipelineSteps,
+  initBulkSliceBatchHarness,
+  setBatchStepStatus,
+} from "@/lib/overview/overview-batch-pipeline-progress";
 import type { MetaBulkActionKey } from "@/components/overview/overview-tab-constants";
 import {
   OVERVIEW_KEYWORD_BATCH_SIZE,
   OVERVIEW_KEYWORD_BODY_PREFETCH_CONCURRENCY,
 } from "@/lib/overview/overview-keyword-batch-constants";
-import {
-  buildKeywordBatchPipelineSteps,
-  setBatchStepStatus,
-} from "@/lib/overview/overview-batch-pipeline-progress";
 import type { OverviewKeywordCatalogRow } from "@/lib/overview/overview-keyword-batch-agent";
 import { normalizeOverviewKeywordUrlKey } from "@/lib/overview/overview-keyword-batch-parse";
 import { pathSlugToFocusHint } from "@/lib/overview/focus-keyword-path-hint";
@@ -504,13 +503,58 @@ export function useOverviewTabKeywordsDates({
       notify.error(NOTIFY_CONNECT_A_WORDPRESS_SITE_FIRST_IN_THE_IN);
       return;
     }
+    const indices = overviewBulkRowIndices(rows, bulkScopeUrlKeys);
+    if (!indices.length) return;
+
     const mode = sitemapSource === "sap" ? "entity" : "content";
     const progressKey = mode === "content" ? "contentKw" : "entityKw";
-    const { ensured, failed } = await runKeywordBulkInBatches({
-      mode,
-      progressKey,
-      silent: false,
-    });
+    const total = indices.length;
+    const statusLabel = mode === "content" ? "Focus keywords" : "Entity keywords";
+    setBulkActionProgress((p) => ({
+      ...p,
+      [progressKey]: initBulkSliceBatchHarness(
+        initBulkSliceWithStatus(progressKey, total, 0),
+        total,
+        statusLabel,
+      ),
+    }));
+
+    let completed = 0;
+    let ensured = 0;
+    let failed = 0;
+    const bump = () => {
+      completed += 1;
+      setBulkActionProgress((p) => {
+        const cur = p[progressKey];
+        if (!cur) return p;
+        return {
+          ...p,
+          [progressKey]: advanceBulkSliceBatchProgress(cur, completed, total),
+        };
+      });
+    };
+
+    try {
+      for (const i of indices) {
+        const result =
+          mode === "content"
+            ? await handleContentAiKeywordRow(i, {
+                skipFocusKeywordLoading: true,
+                suppressNoBodyToast: true,
+              })
+            : await handleEntityKeywordRow(i, { skipFocusKeywordLoading: true });
+        if (result) ensured += 1;
+        else failed += 1;
+        bump();
+      }
+    } finally {
+      setBulkActionProgress((p) => {
+        const next = { ...p };
+        delete next[progressKey];
+        return next;
+      });
+    }
+
     if (ensured > 0 && failed === 0) {
       notify.success(notifyFocusKeywordsDerivedForXRowS(ensured));
     } else if (ensured > 0 && failed > 0) {
@@ -518,7 +562,15 @@ export function useOverviewTabKeywordsDates({
     } else if (failed > 0) {
       notify.error(notifyKeywordDerivationFailedForXRowS(failed));
     }
-  }, [bulkScopeUrlKeys.size, site, sitemapSource, runKeywordBulkInBatches]);
+  }, [
+    bulkScopeUrlKeys,
+    site,
+    sitemapSource,
+    rows,
+    setBulkActionProgress,
+    handleContentAiKeywordRow,
+    handleEntityKeywordRow,
+  ]);
 
   const handleAiKeywordRow = useCallback(
     async (index: number): Promise<string | null> => {

@@ -123,6 +123,7 @@ trait Neo_Pulse_Wp_Admin_Trait_Handlers_Settings {
 		check_admin_referer( 'neo_pulse_wp_save_chat', 'neo_pulse_wp_chat_nonce' );
 
 		$enabled          = ! empty( $_POST['neo_pulse_chat_enabled'] );
+		$disable_backend  = ! empty( $_POST['neo_pulse_chat_disable_backend'] );
 		$logged_in_only   = ! empty( $_POST['neo_pulse_chat_logged_in_only'] );
 		$admin_only       = ! empty( $_POST['neo_pulse_chat_admin_only'] );
 		$god_mode_enabled = ! empty( $_POST['neo_pulse_chat_god_mode_enabled'] );
@@ -149,6 +150,7 @@ trait Neo_Pulse_Wp_Admin_Trait_Handlers_Settings {
 		Neo_Pulse_Wp_Chat::save_settings(
 			array(
 				'enabled'              => $enabled,
+				'disable_backend'      => $disable_backend,
 				'logged_in_only'       => $logged_in_only,
 				'admin_only'           => $admin_only,
 				'god_mode_enabled'     => $god_mode_enabled,
@@ -219,9 +221,9 @@ trait Neo_Pulse_Wp_Admin_Trait_Handlers_Settings {
 
 		$assistant_name = isset( $_POST['neo_pulse_chat_assistant_name'] )
 			? sanitize_text_field( trim( (string) wp_unslash( $_POST['neo_pulse_chat_assistant_name'] ) ) )
-			: 'Flow Assist';
+			: 'Pulse Assist';
 		if ( $assistant_name === '' ) {
-			$assistant_name = 'Flow Assist';
+			$assistant_name = 'Pulse Assist';
 		}
 
 		$system_prompt = isset( $_POST['neo_pulse_chat_system_prompt'] )

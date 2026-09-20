@@ -24,7 +24,7 @@ class Neo_Pulse_Wp_Editor {
 		}
 
 		$post_type = isset( $screen->post_type ) ? (string) $screen->post_type : '';
-		if ( $post_type === '' || ! Neo_Pulse_Wp_Ai_Gate::post_type_allowed( $post_type ) ) {
+		if ( $post_type === '' ) {
 			return;
 		}
 
@@ -34,7 +34,11 @@ class Neo_Pulse_Wp_Editor {
 			array( __CLASS__, 'render_meta_box' ),
 			$post_type,
 			'side',
-			'high'
+			'high',
+			array(
+				'__back_compat_meta_box'             => false,
+				'__block_editor_compatible_meta_box' => true,
+			)
 		);
 	}
 
@@ -62,7 +66,7 @@ class Neo_Pulse_Wp_Editor {
 		}
 
 		$post = get_post( $post_id );
-		if ( ! $post instanceof WP_Post || ! Neo_Pulse_Wp_Ai_Gate::post_type_allowed( $post->post_type ) ) {
+		if ( ! $post instanceof WP_Post ) {
 			return;
 		}
 
@@ -125,6 +129,7 @@ class Neo_Pulse_Wp_Editor {
 				'wp-components',
 				'wp-data',
 				'wp-i18n',
+				'wp-dom-ready',
 			)
 		);
 	}
@@ -149,7 +154,7 @@ class Neo_Pulse_Wp_Editor {
 		}
 
 		$post = get_post( $post_id );
-		if ( ! $post instanceof WP_Post || ! Neo_Pulse_Wp_Ai_Gate::post_type_allowed( $post->post_type ) ) {
+		if ( ! $post instanceof WP_Post ) {
 			return;
 		}
 
@@ -298,9 +303,6 @@ class Neo_Pulse_Wp_Editor {
 	}
 
 	private static function enqueue_fields_shim(): void {
-		if ( class_exists( 'Neo_Pulse_Wp_Fields', false ) && Neo_Pulse_Wp_Fields::acf_is_active() ) {
-			return;
-		}
 		$rel = 'assets/fields/acf-shim.js';
 		$abs = NEO_PULSE_WP_PLUGIN_DIR . $rel;
 		if ( ! is_readable( $abs ) ) {

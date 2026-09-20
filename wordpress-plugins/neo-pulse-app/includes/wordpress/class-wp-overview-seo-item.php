@@ -64,6 +64,35 @@ class Neo_Pulse_App_Wp_Overview_Seo_Item {
 	}
 
 	/**
+	 * One WordPress core batch/v1 sub-request (title, excerpt, content, acf).
+	 *
+	 * @param array<string,mixed> $item Normalized item.
+	 * @return array{method:string,path:string,body:array<string,mixed>}|null
+	 */
+	public static function to_batch_v1_request( $item ) {
+		$body = self::build_core_put_body( $item );
+		if ( ! is_array( $body ) ) {
+			$body = array();
+		}
+		$acf = self::direct_acf_from_client( isset( $item['acf'] ) ? $item['acf'] : array() );
+		if ( $acf ) {
+			$body['acf'] = $acf;
+		}
+		if ( ! $body ) {
+			return null;
+		}
+		$endpoint = Neo_Pulse_App_Wp_Url_Normalize::resolve_wp_v2_collection_endpoint(
+			isset( $item['postTypeEndpoint'] ) ? $item['postTypeEndpoint'] : null,
+			isset( $item['postType'] ) ? $item['postType'] : 'post'
+		);
+		return array(
+			'method' => 'POST',
+			'path'   => '/wp/v2/' . rawurlencode( $endpoint ) . '/' . (int) $item['postId'],
+			'body'   => $body,
+		);
+	}
+
+	/**
 	 * @param string              $normalized Site URL.
 	 * @param string              $username User.
 	 * @param string              $app_password Password.

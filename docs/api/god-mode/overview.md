@@ -43,7 +43,7 @@ NEO Pulse Chat widget (frontend)
       → Neo_Pulse_Wp_Chat_Super_Admin
         → Neo_Pulse_Wp_Backend_Assist_Submode
           → Classify → Plan → Execute → Card
-            → 25+ registered tools
+            → 28+ registered tools
 ```
 
 ## Access

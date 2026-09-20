@@ -24,7 +24,75 @@ class Neo_Pulse_Wp_Backend_Assist_Pipeline_Content_Prep {
 		'list_seo_blocks',
 	);
 
+	public static function page_content_mode_from_context(): string {
+		$ctx = Neo_Pulse_Wp_Backend_Assist_Context::$builder_context;
+		if ( ! is_array( $ctx ) || empty( $ctx['page_content_mode'] ) ) {
+			return 'seo_blocks';
+		}
+		$mode = sanitize_key( (string) $ctx['page_content_mode'] );
+		return $mode === 'elementor_widgets' ? 'elementor_widgets' : 'seo_blocks';
+	}
+
 	public static function prepare_tool_params( string $message, array $history, string $tool, array $params, ?array $workflow = null ): array {
+		if ( in_array( $tool, array( 'create_page', 'create_post' ), true ) ) {
+			$topic = self::create_page_title_from_message( $message );
+			if ( empty( $params['title'] ) ) {
+				$params['title'] = $topic['title'];
+			}
+			if ( empty( $params['focus_keyword'] ) && $topic['keyword'] !== '' ) {
+				$params['focus_keyword'] = $topic['keyword'];
+			}
+			return array(
+				'tool'   => $tool,
+				'params' => $params,
+			);
+		}
+
+		if ( $tool === 'apply_seo_block_to_page' && self::message_requests_new_page_or_post( $message ) ) {
+			$pid = 0;
+			if ( is_array( $workflow ) && ! empty( $workflow['last_post_id'] ) ) {
+				$pid = (int) $workflow['last_post_id'];
+			}
+			if ( $pid > 0 ) {
+				$params['post_id'] = $pid;
+			} else {
+				unset( $params['post_id'] );
+			}
+			return array(
+				'tool'   => 'apply_seo_block_to_page',
+				'params' => $params,
+			);
+		}
+
+		if ( $tool === 'design_page_with_novamira' && self::message_requests_new_page_or_post( $message ) ) {
+			$pid = 0;
+			if ( is_array( $workflow ) && ! empty( $workflow['last_post_id'] ) ) {
+				$pid = (int) $workflow['last_post_id'];
+			}
+			if ( $pid > 0 ) {
+				$params['post_id'] = $pid;
+			} else {
+				unset( $params['post_id'] );
+			}
+			$elementor_mode = self::page_content_mode_from_context() === 'elementor_widgets';
+			if ( is_array( $workflow ) && ! empty( $workflow['last_elementor_sections'] ) && is_array( $workflow['last_elementor_sections'] ) ) {
+				$elementor_mode = true;
+			}
+			if ( $elementor_mode ) {
+				$params['content_mode'] = 'elementor_widgets';
+				if ( ! empty( $workflow['last_elementor_sections'] ) && is_array( $workflow['last_elementor_sections'] ) ) {
+					$params['elementor_sections'] = $workflow['last_elementor_sections'];
+				}
+				unset( $params['block_ids'], $params['block_id'] );
+			} elseif ( empty( $params['block_ids'] ) && is_array( $workflow ) && ! empty( $workflow['last_block_ids'] ) && is_array( $workflow['last_block_ids'] ) ) {
+				$params['block_ids'] = array_values( array_filter( array_map( 'absint', $workflow['last_block_ids'] ) ) );
+			}
+			return array(
+				'tool'   => 'design_page_with_novamira',
+				'params' => $params,
+			);
+		}
+
 		if ( $tool === 'add_content' && self::message_is_undo_or_correction( $message ) ) {
 			$tool = 'restore_post_revision';
 		}
@@ -146,7 +214,14 @@ class Neo_Pulse_Wp_Backend_Assist_Pipeline_Content_Prep {
 			if ( empty( $params['mode'] ) ) {
 				$params['mode'] = 'generate_full';
 			}
-			if (
+			if ( self::message_requests_new_page_or_post( $message ) || ! empty( $params['new_block'] ) ) {
+				$pid = 0;
+				if ( isset( $params['current_block'] ) && is_array( $params['current_block'] ) ) {
+					$pid = absint( $params['current_block']['primary_post_id'] ?? 0 );
+				}
+				$params['current_block'] = $pid > 0 ? array( 'primary_post_id' => $pid ) : array();
+				unset( $params['block_id'] );
+			} elseif (
 				empty( $params['current_block'] )
 				&& is_array( Neo_Pulse_Wp_Backend_Assist_Context::$builder_context )
 				&& ! empty( Neo_Pulse_Wp_Backend_Assist_Context::$builder_context['block'] )
@@ -549,7 +624,11 @@ PROMPT;
 		return (bool) preg_match( '/\bat the end\b|\bappend\b/i', $message );
 	}
 
-	public static function resolve_effective_post_id( array $params = array() ): int {
+	public static function resolve_effective_post_id( array $params = array(), string $message = '' ): int {
+		if ( $message !== '' && self::message_requests_new_page_or_post( $message ) ) {
+			return 0;
+		}
+
 		if ( ! empty( $params['post_id'] ) ) {
 			$post_id = absint( $params['post_id'] );
 			if ( $post_id > 0 ) {
@@ -598,6 +677,13 @@ PROMPT;
 	public static function resolve_write_tool_for_message( string $message, string $tool ): string {
 		$tool = sanitize_key( $tool );
 
+		if ( self::message_requests_new_page_or_post( $message ) ) {
+			if ( in_array( $tool, array( 'create_page', 'create_post' ), true ) ) {
+				return $tool;
+			}
+			return 'create_page';
+		}
+
 		if ( self::message_requests_date_modifier( $message ) || self::message_clear_meta_field_hub_key( $message ) !== '' ) {
 			return 'save_post_meta';
 		}
@@ -612,6 +698,9 @@ PROMPT;
 	}
 
 	public static function message_requests_meta_only_write( string $message ): bool {
+		if ( self::message_requests_new_page_or_post( $message ) ) {
+			return false;
+		}
 		if ( self::message_implies_body_content_edit( $message ) ) {
 			return false;
 		}
@@ -635,7 +724,11 @@ PROMPT;
 	 * @return array<string, mixed>|null
 	 */
 	public static function try_execute_contextual_write( string $message, array $history ): ?array {
-		$post_id = self::resolve_effective_post_id( array() );
+		if ( self::message_requests_new_page_or_post( $message ) || self::history_requests_new_page_or_post( $history ) ) {
+			return null;
+		}
+
+		$post_id = self::resolve_effective_post_id( array(), $message );
 		if ( $post_id < 1 ) {
 			return null;
 		}
@@ -2317,6 +2410,9 @@ PROMPT;
 	 * @return array<string, mixed>
 	 */
 	private static function apply_frontend_page_context( string $message, array $params, string $tool = '' ): array {
+		if ( self::message_requests_new_page_or_post( $message ) ) {
+			return $params;
+		}
 		if ( ! empty( $params['post_id'] ) || ! empty( $params['title'] ) ) {
 			return $params;
 		}
@@ -2357,6 +2453,82 @@ PROMPT;
 			return 0;
 		}
 		return absint( $ctx['frontend_page']['post_id'] ?? 0 );
+	}
+
+	public static function message_requests_new_page_or_post( string $message ): bool {
+		$lower = strtolower( $message );
+		if (
+			str_contains( $lower, 'create a page' )
+			|| str_contains( $lower, 'create a post' )
+			|| str_contains( $lower, 'create page' )
+			|| str_contains( $lower, 'create post' )
+			|| str_contains( $lower, 'new page' )
+			|| str_contains( $lower, 'new post' )
+			|| str_contains( $lower, 'make a page' )
+			|| str_contains( $lower, 'make a new page' )
+			|| str_contains( $lower, 'make new page' )
+			|| str_contains( $lower, 'new content' )
+		) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * @param array<int, array<string, mixed>> $history
+	 */
+	public static function history_requests_new_page_or_post( array $history ): bool {
+		for ( $i = count( $history ) - 1; $i >= 0; $i-- ) {
+			$turn = $history[ $i ];
+			if ( ! is_array( $turn ) || ( $turn['role'] ?? '' ) !== 'user' ) {
+				continue;
+			}
+			$content = isset( $turn['content'] ) ? (string) $turn['content'] : '';
+			if ( $content !== '' && self::message_requests_new_page_or_post( $content ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Title and focus keyword for a new page/post. Uses classifier params, then the words after "keyword".
+	 *
+	 * @param array<string, mixed> $classification
+	 * @return array{title: string, keyword: string}
+	 */
+	public static function create_page_title_from_message( string $message, array $classification = array() ): array {
+		$params  = isset( $classification['params'] ) && is_array( $classification['params'] ) ? $classification['params'] : array();
+		$title   = isset( $params['title'] ) ? sanitize_text_field( (string) $params['title'] ) : '';
+		$keyword = '';
+		if ( ! empty( $params['focus_keyword'] ) ) {
+			$keyword = sanitize_text_field( (string) $params['focus_keyword'] );
+		} elseif ( ! empty( $params['focusKeyword'] ) ) {
+			$keyword = sanitize_text_field( (string) $params['focusKeyword'] );
+		}
+
+		if ( $keyword === '' ) {
+			$lower  = strtolower( $message );
+			$marker = 'keyword ';
+			$pos    = strpos( $lower, $marker );
+			if ( $pos !== false ) {
+				$rest = trim( substr( $message, $pos + strlen( $marker ) ) );
+				$cut  = stripos( $rest, ' and ' );
+				if ( $cut !== false ) {
+					$rest = substr( $rest, 0, $cut );
+				}
+				$keyword = sanitize_text_field( $rest );
+			}
+		}
+
+		if ( $title === '' ) {
+			$title = $keyword !== '' ? $keyword : __( 'New page', 'neo-pulse-wp' );
+		}
+
+		return array(
+			'title'   => $title,
+			'keyword' => $keyword,
+		);
 	}
 
 	private static function message_implies_current_page_edit( string $message ): bool {

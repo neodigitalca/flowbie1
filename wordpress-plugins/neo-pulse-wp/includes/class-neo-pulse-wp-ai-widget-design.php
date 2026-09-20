@@ -237,11 +237,13 @@ class Neo_Pulse_Wp_Ai_Widget_Design {
 			'icon_open_as',
 			'modal_max_width',
 			'launcher_label',
+			'launcher_style',
 			'panel_layout',
 			'panel_offset_top',
 			'panel_offset_top_unit',
 			'panel_content_align',
 			'backdrop_opacity',
+			'header_search_opens_sidebar',
 		);
 		foreach ( $keys as $field ) {
 			if ( array_key_exists( $field, $instance ) && $instance[ $field ] !== '' ) {
@@ -316,15 +318,6 @@ class Neo_Pulse_Wp_Ai_Widget_Design {
 			? $settings[ $bag_key ]
 			: self::fallback_palette();
 
-		if ( $settings['color_source'] === 'site_branding' ) {
-			$branded = self::palette_from_elementor_kit();
-			foreach ( self::site_branding_token_keys() as $key ) {
-				if ( isset( $branded[ $key ] ) ) {
-					$base[ $key ] = $branded[ $key ];
-				}
-			}
-		}
-
 		self::$resolved_cache[ $widget ] = $base;
 		return $base;
 	}
@@ -360,7 +353,6 @@ class Neo_Pulse_Wp_Ai_Widget_Design {
 		if ( $primary !== '' ) {
 			$out['accent']       = $primary;
 			$out['button_bg']    = $primary;
-			$out['launcher_bg']  = $primary;
 			$out['send_bg']      = $primary;
 			$out['mic_idle']     = $primary;
 			$out['focus_ring']   = $primary;
@@ -626,7 +618,7 @@ class Neo_Pulse_Wp_Ai_Widget_Design {
 			$out['panel_width'] = max( 280, min( 560, (int) $bag['panel_width'] ) );
 		}
 		if ( isset( $bag['panel_max_height'] ) ) {
-			$out['panel_max_height'] = max( 320, min( 800, (int) $bag['panel_max_height'] ) );
+			$out['panel_max_height'] = max( 320, min( 1200, (int) $bag['panel_max_height'] ) );
 		}
 		if ( isset( $bag['offset_x'] ) ) {
 			$out['offset_x'] = max( 0, min( 120, (int) $bag['offset_x'] ) );

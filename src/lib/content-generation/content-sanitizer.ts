@@ -7,7 +7,6 @@
 import { stripPlaceholderDomainLinks } from "../placeholder-link-domains";
 import { isMediaAssetUrl } from "@/lib/content-optimization/images-extract";
 import { contentAlreadyHasBlockHtml } from "@/lib/content-generation/content-format";
-import { isServiceAreaUrl } from "@/lib/bulk/bulk-generation-wp-inventory";
 import { repairHarnessLinkLeaks } from "@/lib/content-generation/harness-link-leak-repair";
 
 // Placeholder patterns to strip - these break live pages if they slip through
@@ -1428,7 +1427,7 @@ export function removeInvalidInternalLinks(content: string, wordPressPosts?: Arr
     } catch {}
   };
   wordPressPosts.forEach(post => {
-    if (post.link?.trim() && !isServiceAreaUrl(post.link)) addUrlVariants(post.link);
+    if (post.link?.trim()) addUrlVariants(post.link);
   });
 
   const pageCount = wordPressPosts.filter(
@@ -1483,10 +1482,6 @@ export function removeInvalidInternalLinks(content: string, wordPressPosts?: Arr
       // Same-site media assets (uploads / image / video files) are not post URLs — keep them.
       if (isMediaAssetUrl(url)) {
         return match;
-      }
-      if (isServiceAreaUrl(url)) {
-        removedCount++;
-        return anchorText;
       }
       // For internal links, allow only if URL matches one from WordPress API (www/non-www, trailing slash variants)
       const urlTrimmed = url.trim();
@@ -1668,8 +1663,8 @@ function normalizeWikiHrefForCompare(u: string): string {
 }
 
 /**
- * Entity pages: ensure every blockquote links the target entity to its Wikipedia URL
- * (first occurrence in the quote, or a leading linked entity name if the name does not appear).
+ * Entity pages: wrap the first in-quote mention of the entity with its Wikipedia URL.
+ * Do not prepend a leading cite when the name is not in the quote.
  */
 export function linkWikipediaEntityInBlockquotes(
   html: string,
@@ -1718,12 +1713,7 @@ export function linkWikipediaEntityInBlockquotes(
         inner.slice(offset + matched.length);
       return `<blockquote>${linked}</blockquote>`;
     }
-    const safeLabel = label
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-    return `<blockquote><a href="${safeHref}">${safeLabel}</a> - ${inner}</blockquote>`;
+    return `<blockquote>${inner}</blockquote>`;
   });
 }
 
@@ -1772,15 +1762,6 @@ export function sanitizeContentForUpload(
   sanitized = fixOrphanedListItems(sanitized);
   sanitized = flattenListItemBlockWrappers(sanitized);
 
-  // Step 1.49: Entity pages - link blockquotes to the entity Wikipedia URL (first entity mention or leading link)
-  if (allowedWikipediaUrl && wikipediaEntityLabel?.trim()) {
-    sanitized = linkWikipediaEntityInBlockquotes(
-      sanitized,
-      wikipediaEntityLabel.trim(),
-      allowedWikipediaUrl
-    );
-  }
-  
   // Bulk: no colon/em-dash transforms - preserve HTML exactly
   // Step 2: Remove invalid internal links (CRITICAL - only allow links from WordPress posts)
   // Same-site media asset URLs (uploads / image / video) are kept via isMediaAssetUrl.

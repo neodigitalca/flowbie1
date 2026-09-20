@@ -16,6 +16,7 @@ export type InternalLinkQuery = {
   id: string;
   query: string;
   anchor: string;
+  bucket?: "PAGE" | "BLOG";
 };
 
 const SUGGEST_LINK_SYSTEM =
@@ -23,9 +24,9 @@ const SUGGEST_LINK_SYSTEM =
   "Each inventory row is labeled [PAGE] (page-sitemap product, service, or general page) or [BLOG] (blog post).\n" +
   INTERNAL_LINK_INTENT_ROUTING_RULE +
   "\nBrand, product, service, and commercial queries: rank [PAGE] rows only. Informational queries: rank [BLOG] rows only. A query that copies a [PAGE] title: that [PAGE] row.\n" +
-  "Return ONLY a comma-separated list of up to 5 page numbers, ranked from most to least relevant.\n" +
-  "Example: 3,7,12,1,5\n" +
-  "If no row in the allowed bucket is relevant, return 0. Do not explain. Just the numbers.";
+  "Always return 1 to 5 inventory numbers from the allowed bucket, ranked closest first. Never return 0. Never return an empty answer. Rank the closest rows in that bucket even when none is a perfect topical match.\n" +
+  "Return ONLY a comma-separated list of numbers.\n" +
+  "Example: 3,7,12,1,5";
 
 export function normalizeInternalLinkUrl(url: string): string {
   return url.trim().toLowerCase().replace(/\/+$/, "");
@@ -120,7 +121,11 @@ export async function matchInternalLinkQueriesToCatalog(args: {
         apiKey,
         model: getResearchModel(args.siteId),
         system: SUGGEST_LINK_SYSTEM,
-        user: `Highlighted text: "${q.query.trim()}"\n\nAvailable pages:\n${list}`,
+        user:
+          `Highlighted text: "${q.query.trim()}"\n` +
+          (q.bucket ? `Allowed bucket: [${q.bucket}]. Rank only [${q.bucket}] rows.\n` : "") +
+          `Must return 1 to 5 inventory numbers from the allowed bucket. Never return 0.\n\n` +
+          `Available pages:\n${list}`,
         maxTokens: 30,
         temperature: 0,
         signal: args.signal,

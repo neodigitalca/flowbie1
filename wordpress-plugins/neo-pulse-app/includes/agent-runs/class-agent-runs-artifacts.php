@@ -138,6 +138,7 @@ class Neo_Pulse_App_Agent_Runs_Artifacts {
 			'entity_wiki_picks',
 			'entity_hydrated_rows',
 			'gsc_reporting',
+			'ads_reporting',
 			'gsc-deliverables',
 			'gscdeliverables',
 			'entity_bulk_csv',

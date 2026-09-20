@@ -48,6 +48,7 @@
     "check:circular": "node scripts/check-circular-imports.mjs",
     "build:neo-pulse-wp-zip": "node scripts/build-neo-pulse-wp-zip.mjs",
     "setup:google-maps-image": "node scripts/setup-google-maps-image.cjs",
+    "entity-maps-puppeteer": "node scripts/entity-maps-puppeteer.mjs",
     "test:sftp-upload": "node wordpress-plugins/sftp-test-upload.js",
     "deploy:wp-clients": "node wordpress-plugins/deploy-wp-clients.js",
     "deploy:wp-staging": "node wordpress-plugins/deploy-wp-staging.js",
@@ -65,7 +66,9 @@
     "verify:post-creator-worker": "node scripts/verify-post-creator-worker.mjs",
     "setup:game-copilot": "node scripts/setup-game-copilot.mjs",
     "setup:game-copilot:smoke": "node scripts/setup-game-copilot.mjs --smoke",
-    "game-copilot:start": "node apps/game-copilot/server.mjs"
+    "game-copilot:start": "node apps/game-copilot/server.mjs",
+    "template-client-migrate": "node scripts/template-client-migrate/run.mjs",
+    "transfer-header": "node scripts/template-client-migrate/apply-header-blindmagic.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.8",

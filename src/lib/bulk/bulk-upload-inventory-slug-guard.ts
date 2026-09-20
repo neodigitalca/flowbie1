@@ -12,7 +12,21 @@ export type UploadSlugConflict = {
   slug: string;
   reason: string;
   existingUrl?: string;
+  existingPostId?: number;
 };
+
+export function findInventoryRowForSlug(
+  rows: SiteInventoryBulkRow[],
+  slug: string,
+): SiteInventoryBulkRow | undefined {
+  const want = sanitizeWordPressSlugSegment(slug.trim());
+  if (!want) return undefined;
+  return rows.find((row) => {
+    const rowSlug = sanitizeWordPressSlugSegment(row.slug?.trim() ?? "");
+    if (rowSlug === want) return true;
+    return sanitizeWordPressSlugSegment(urlPathTail(row.url ?? "")) === want;
+  });
+}
 
 export function buildInventoryCatalogFromBulkRows(
   rows: SiteInventoryBulkRow[],
@@ -57,12 +71,16 @@ export function findUploadSlugConflict(args: {
   }
 
   const catalog = buildInventoryCatalogFromBulkRows(args.inventoryRows);
+  const inventoryMatch = findInventoryRowForSlug(args.inventoryRows, slug);
+  const existingPostId =
+    inventoryMatch?.id != null && inventoryMatch.id > 0 ? inventoryMatch.id : undefined;
   if (catalog.slugKeys.has(slug)) {
     const match = catalog.rows.find((row) => row.slug === slug);
     return {
       slug,
       reason: "Slug already exists on site (published or scheduled)",
-      existingUrl: match?.url,
+      existingUrl: match?.url ?? inventoryMatch?.url,
+      existingPostId,
     };
   }
 
@@ -75,6 +93,7 @@ export function findUploadSlugConflict(args: {
           slug,
           reason: "URL already exists on site (published or scheduled)",
           existingUrl: candidate,
+          existingPostId,
         };
       }
     }

@@ -327,6 +327,7 @@ class Neo_Pulse_App_Workflow_Server_Dispatch {
 			'entity_generator'       => 'entity_generator',
 			'post_creator'           => 'post_creator',
 			'gsc_reporting'          => 'gsc_reporting',
+			'ads_reporting'          => 'ads_reporting',
 			'content_gap_check'      => 'content_gap_check',
 			'chatgpt_website_audit'  => 'chatgpt_website_audit',
 			'browser_automation'     => 'browser_automation',

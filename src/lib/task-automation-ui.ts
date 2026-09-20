@@ -22,6 +22,13 @@ export const GSC_REPORTING_RECIPE_KEYWORDS = [
 
 export const GSC_REPORTING_TASK_KEYWORDS = ["gsc-mom-report", "gsc-yoy-report"] as const;
 
+export const ADS_REPORTING_RECIPE_KEYWORDS = [
+  "ads-monthly-mom-report",
+  "ads-monthly-yoy-report",
+] as const;
+
+export const ADS_REPORTING_TASK_KEYWORDS = ["ads-mom-report", "ads-yoy-report"] as const;
+
 export const RESEARCH_LOCAL_DOMINATOR_RECIPE_KEYWORDS = [
   "research-local-dominator-grid-export",
 ] as const;
@@ -38,6 +45,7 @@ const CALENDAR_AUTOMATION_KINDS = new Set<TaskExecutionKind>([
   "entity_generator",
   "sap_generator",
   "gsc_reporting",
+  "ads_reporting",
 ]);
 
 export function isEditorialPostCreatorProject(
@@ -83,9 +91,10 @@ export function resolveEffectiveExecutionKind(
   project?: Pick<TaskProject, "keyword" | "sourceTemplateKeyword"> | null,
 ): TaskExecutionKind {
   const kind = (task?.executionKind ?? "").trim();
-  if (kind === "post_creator" || kind === "gsc_reporting" || kind === "entity_page_creator" || kind === "entity_generator" || kind === "sap_generator" || kind === "local_dominator_export" || kind === "chatgpt_website_audit" || kind === "browser_automation" || kind === "content_gap_check") return kind;
+  if (kind === "post_creator" || kind === "gsc_reporting" || kind === "ads_reporting" || kind === "entity_page_creator" || kind === "entity_generator" || kind === "sap_generator" || kind === "local_dominator_export" || kind === "chatgpt_website_audit" || kind === "browser_automation" || kind === "content_gap_check") return kind;
   if (isEditorialPostCreatorTask(task, project)) return "post_creator";
   if (isGscReportingTask(task, project)) return "gsc_reporting";
+  if (isAdsReportingTask(task, project)) return "ads_reporting";
   if (isResearchChatGptAuditTask(task, project)) return "chatgpt_website_audit";
   if (isResearchLocalDominatorTask(task, project)) return "local_dominator_export";
   return (kind || "content_optimizer") as TaskExecutionKind;
@@ -142,6 +151,27 @@ export function isGscReportingProject(
     GSC_REPORTING_RECIPE_KEYWORDS.includes(recipeKw as (typeof GSC_REPORTING_RECIPE_KEYWORDS)[number]) ||
     GSC_REPORTING_RECIPE_KEYWORDS.includes(projectKw as (typeof GSC_REPORTING_RECIPE_KEYWORDS)[number])
   );
+}
+
+export function isAdsReportingProject(
+  project?: Pick<TaskProject, "keyword" | "sourceTemplateKeyword"> | null,
+): boolean {
+  const recipeKw = (project?.sourceTemplateKeyword ?? "").trim();
+  const projectKw = (project?.keyword ?? "").trim();
+  return (
+    ADS_REPORTING_RECIPE_KEYWORDS.includes(recipeKw as (typeof ADS_REPORTING_RECIPE_KEYWORDS)[number]) ||
+    ADS_REPORTING_RECIPE_KEYWORDS.includes(projectKw as (typeof ADS_REPORTING_RECIPE_KEYWORDS)[number])
+  );
+}
+
+export function isAdsReportingTask(
+  task?: Pick<TeamTask, "keyword" | "executionKind"> | null,
+  project?: Pick<TaskProject, "keyword" | "sourceTemplateKeyword"> | null,
+): boolean {
+  if ((task?.executionKind ?? "").trim() === "ads_reporting") return true;
+  if (isAdsReportingProject(project)) return true;
+  const taskKw = (task?.keyword ?? "").trim();
+  return ADS_REPORTING_TASK_KEYWORDS.includes(taskKw as (typeof ADS_REPORTING_TASK_KEYWORDS)[number]);
 }
 
 export function isGscReportingTask(

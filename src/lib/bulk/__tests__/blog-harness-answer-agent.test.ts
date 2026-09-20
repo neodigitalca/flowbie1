@@ -30,6 +30,8 @@ describe("buildBlogHarnessAnswerAgent", () => {
     expect(prompt).toContain("numeric anchor with units and explicit CAD or USD");
     expect(prompt).toContain("installer-only concrete detail");
     expect(prompt).toContain("CONNECTED SITE IDENTITY lists a business name");
+    expect(prompt).toContain("somewhere in the Answer paragraph");
+    expect(prompt).toContain("Do not skip the name");
     expect(prompt).not.toContain("include the keyword naturally");
   });
 });

@@ -43,6 +43,33 @@ vi.mock("@/lib/agent-runs-api", () => ({
   fetchAgentRuns: vi.fn(async () => []),
 }));
 
+const csvAuditConcurrency = { inFlight: 0, maxInFlight: 0 };
+
+vi.mock("@/lib/workflow/workflow-csv-rows-runner", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/workflow/workflow-csv-rows-runner")>();
+  return {
+    ...actual,
+    persistPageAuditCsvToNextTask: vi.fn(async () => undefined),
+    attachPageAuditCsvToAgentRun: vi.fn(async () => undefined),
+    ensureWorkflowCsvRowsStashForAction: vi.fn(async () => undefined),
+    executeWorkflowCsvRowsStep: vi.fn(async (input: { siteId?: string }) => {
+      csvAuditConcurrency.inFlight += 1;
+      csvAuditConcurrency.maxInFlight = Math.max(
+        csvAuditConcurrency.maxInFlight,
+        csvAuditConcurrency.inFlight,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      csvAuditConcurrency.inFlight -= 1;
+      return {
+        preview: "url,H2\n",
+        mapping: { mode: "bulk", payload: { targetUrls: [] } },
+        csvText: "url,H2\n",
+        fileName: `${input.siteId ?? "site"}.csv`,
+      };
+    }),
+  };
+});
+
 import { executeWorkflowRun } from "@/lib/workflow/workflow-runner";
 
 describe("workflow parallel clients", () => {
@@ -235,6 +262,68 @@ describe("workflow parallel clients", () => {
 
     expect(result.ok).toBe(false);
     expect(result.error).toBe("No WordPress sites available. Add clients in Integrations.");
+  });
+
+  it("runs page audits for every selected client in parallel", async () => {
+    const csvWorkflow: WorkflowDefinition = {
+      ...workflow,
+      nodes: [
+        workflow.nodes[0]!,
+        workflow.nodes[1]!,
+        {
+          id: "csv",
+          kind: "csv_rows",
+          label: "Page audit",
+          config: { csvInputSource: "site", ragVariableKey: "csv_1" },
+          position: { x: 0, y: 140 },
+        },
+        workflow.nodes[2]!,
+      ],
+      edges: [
+        { id: "e1", source: "trigger", target: "client" },
+        { id: "e2", source: "client", target: "csv" },
+        { id: "e3", source: "csv", target: "agent" },
+      ],
+    };
+
+    const { fetchWorkflow, fetchWorkflowRun, fetchWorkflowStepOutputs, saveWorkflowStepOutput } =
+      await import("@/lib/workflow/workflow-api");
+    const { executeWorkflowCsvRowsStep } = await import("@/lib/workflow/workflow-csv-rows-runner");
+
+    csvAuditConcurrency.inFlight = 0;
+    csvAuditConcurrency.maxInFlight = 0;
+    vi.mocked(fetchWorkflow).mockResolvedValue(csvWorkflow);
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(run);
+    vi.mocked(fetchWorkflowStepOutputs).mockResolvedValue([]);
+    vi.mocked(saveWorkflowStepOutput).mockResolvedValue({
+      ok: true,
+      output: {
+        id: 1,
+        runId: 10,
+        nodeId: "csv",
+        variableKey: "csv_1",
+        scope: "run",
+        label: "Page audit",
+        textPreview: "url,H2\n",
+        fileRefs: [],
+        createdAt: "",
+      },
+    });
+
+    const startRunAndWait = vi.fn(async () => ({
+      ok: true,
+      run: { id: 77, status: "done", result: { message: "ok" } },
+    }));
+
+    const result = await executeWorkflowRun(1, 1, 10, {
+      startRun: startRunAndWait,
+      startRunAndWait,
+      listAvailableSiteIds: () => ["site-a", "site-b"],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(executeWorkflowCsvRowsStep).toHaveBeenCalledTimes(2);
+    expect(csvAuditConcurrency.maxInFlight).toBe(2);
   });
 });
 

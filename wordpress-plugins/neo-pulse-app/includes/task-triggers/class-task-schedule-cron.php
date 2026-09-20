@@ -239,6 +239,9 @@ class Neo_Pulse_App_Task_Schedule_Cron {
 		if ( $kind === 'gsc_reporting' ) {
 			return 'gsc_reporting';
 		}
+		if ( $kind === 'ads_reporting' ) {
+			return 'ads_reporting';
+		}
 		if ( $kind === 'post_creator' ) {
 			return 'post_creator';
 		}

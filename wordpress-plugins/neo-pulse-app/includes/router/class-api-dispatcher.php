@@ -138,6 +138,11 @@ class Neo_Pulse_App_Api_Dispatcher {
 			return;
 		}
 
+		if ( 0 === strpos( $route, 'google-ads/' ) ) {
+			Neo_Pulse_App_Google_Ads_Route_Handlers::dispatch_http( substr( $route, 11 ), $method, $body );
+			return;
+		}
+
 		if ( 0 === strpos( $route, 'google-mcp/' ) ) {
 			Neo_Pulse_App_Google_Mcp_Route_Handlers::dispatch_http( substr( $route, 11 ), $method, $body );
 			return;
@@ -205,6 +210,12 @@ class Neo_Pulse_App_Api_Dispatcher {
 
 		if ( 0 === strpos( $route, 'images/' ) ) {
 			Neo_Pulse_App_Images_Route_Handlers::dispatch_http( substr( $route, 7 ), $method, $body );
+			return;
+		}
+
+		if ( 0 === strpos( $route, 'elementor/' ) ) {
+			@set_time_limit( 180 );
+			Neo_Pulse_App_Elementor_Route_Handlers::dispatch_http( substr( $route, 10 ), $method, $body );
 			return;
 		}
 
@@ -367,15 +378,6 @@ class Neo_Pulse_App_Api_Dispatcher {
 		$status = isset( $result[0] ) ? (int) $result[0] : 200;
 		$data   = isset( $result[1] ) && is_array( $result[1] ) ? $result[1] : array();
 		$type   = isset( $result[2] ) ? (string) $result[2] : 'application/json; charset=utf-8';
-
-		if ( ! empty( $data['ndjson'] ) && is_array( $data['ndjson'] ) ) {
-			status_header( $status );
-			header( 'Content-Type: application/x-ndjson' );
-			foreach ( $data['ndjson'] as $line ) {
-				echo wp_json_encode( $line ) . "\n";
-			}
-			return;
-		}
 
 		self::send_json( $data, $status, $type );
 	}

@@ -8,7 +8,7 @@ import { readWorkflowAgentBinding } from "@/lib/workflow/workflow-agent-binding"
 import { filterWorkflowOutputsForSite } from "@/lib/workflow/workflow-rag-client";
 import { executeWorkflowThenStep } from "@/lib/workflow/workflow-then-runner";
 import { linearExecutableTailNodes } from "@/lib/workflow/workflow-linear-tail";
-import { thenConfig } from "@/lib/workflow/workflow-then-utils";
+import { thenConfig, workflowThenOutputExistsForSite } from "@/lib/workflow/workflow-then-utils";
 import { workflowClientVariableSuffix } from "@/lib/workflow/workflow-client-config";
 import { workflowRunThenEmailAlreadySent } from "@/lib/workflow/workflow-then-aggregate";
 import type { WorkflowActionConfig, WorkflowStepOutput } from "@/lib/workflow/workflow-types";
@@ -129,7 +129,7 @@ export async function runWorkflowBoundDeliverySteps(args: {
   const allSiteIds = siteId ? [siteId] : [];
 
   for (const node of thenNodes) {
-    if (outputs.some((output) => output.nodeId === node.id && output.scope === "run")) {
+    if (workflowThenOutputExistsForSite(outputs, node.id, siteId, args.run.id)) {
       continue;
     }
 

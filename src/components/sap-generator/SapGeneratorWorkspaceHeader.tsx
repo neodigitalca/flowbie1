@@ -43,6 +43,9 @@ export type SapGeneratorWorkspaceHeaderProps = {
   };
   onDetailsOpenChange?: (open: boolean) => void;
   detailsOpenSignal?: number | string | null;
+  showBlindMagicKeywords?: boolean;
+  useBlindMagicKeywords?: boolean;
+  onUseBlindMagicKeywordsChange?: (v: boolean) => void;
 };
 
 export function SapGeneratorWorkspaceHeader({
@@ -76,6 +79,9 @@ export function SapGeneratorWorkspaceHeader({
   detailsProps,
   onDetailsOpenChange,
   detailsOpenSignal,
+  showBlindMagicKeywords = false,
+  useBlindMagicKeywords = false,
+  onUseBlindMagicKeywordsChange,
 }: SapGeneratorWorkspaceHeaderProps) {
   const showTempUrl =
     workspace.mode === "temp" || (!workspace.showConnectedToggle && workspace.mode !== "connected");
@@ -118,6 +124,9 @@ export function SapGeneratorWorkspaceHeader({
           showTempUrl={showTempUrl}
           tempSeedUrl={workspace.tempSeedUrl}
           onTempSeedUrlChange={workspace.onTempSeedUrlChange}
+          showBlindMagicKeywords={showBlindMagicKeywords}
+          useBlindMagicKeywords={useBlindMagicKeywords}
+          onUseBlindMagicKeywordsChange={onUseBlindMagicKeywordsChange}
         />
       }
       detailsPanel={

@@ -273,6 +273,32 @@ class Neo_Pulse_App_Secrets {
 		);
 	}
 
+	public static function google_ads_developer_token(): string {
+		if ( defined( 'NEO_PULSE_APP_GOOGLE_ADS_DEVELOPER_TOKEN' ) && NEO_PULSE_APP_GOOGLE_ADS_DEVELOPER_TOKEN !== '' ) {
+			return trim( (string) NEO_PULSE_APP_GOOGLE_ADS_DEVELOPER_TOKEN );
+		}
+		$file = Neo_Pulse_App_Json_File_Store::read( Neo_Pulse_App_Data_Paths::google_ads_api_path() );
+		if ( is_array( $file ) && ! empty( $file['developerToken'] ) ) {
+			return trim( (string) $file['developerToken'] );
+		}
+		return '';
+	}
+
+	public static function google_ads_mcc_id(): string {
+		$from_env = '';
+		if ( defined( 'NEO_PULSE_APP_GOOGLE_ADS_MCC_ID' ) && NEO_PULSE_APP_GOOGLE_ADS_MCC_ID !== '' ) {
+			$from_env = preg_replace( '/\D+/', '', trim( (string) NEO_PULSE_APP_GOOGLE_ADS_MCC_ID ) ) ?? '';
+		}
+		if ( $from_env !== '' ) {
+			return $from_env;
+		}
+		$file = Neo_Pulse_App_Json_File_Store::read( Neo_Pulse_App_Data_Paths::google_ads_api_path() );
+		if ( is_array( $file ) && ! empty( $file['mccId'] ) ) {
+			return preg_replace( '/\D+/', '', trim( (string) $file['mccId'] ) ) ?? '';
+		}
+		return '';
+	}
+
 	public static function agentmail_api_key(): string {
 		$keys_path = Neo_Pulse_App_Data_Paths::root() . '/email-worker-keys.json';
 		$keys      = Neo_Pulse_App_Json_File_Store::read( $keys_path );

@@ -577,6 +577,7 @@ class Neo_Pulse_App_Platform_Inventory {
 				);
 			case 'gsc_summary':
 			case 'gsc_reporting':
+			case 'ads_reporting':
 			case 'gsc_queries':
 			case 'gsc_pages':
 			case 'gsc_blog_performers':

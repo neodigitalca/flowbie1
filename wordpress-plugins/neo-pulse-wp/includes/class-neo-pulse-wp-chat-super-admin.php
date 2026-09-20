@@ -285,6 +285,17 @@ class Neo_Pulse_Wp_Chat_Super_Admin {
 	/**
 	 * @param array<string, mixed>|null $body Stream request body.
 	 */
+	public static function normalize_page_content_mode_from_body( ?array $body ): string {
+		if ( ! is_array( $body ) || ! isset( $body['page_content_mode'] ) ) {
+			return 'seo_blocks';
+		}
+		$mode = sanitize_key( (string) $body['page_content_mode'] );
+		return $mode === 'elementor_widgets' ? 'elementor_widgets' : 'seo_blocks';
+	}
+
+	/**
+	 * @param array<string, mixed>|null $body Stream request body.
+	 */
 	private static function parse_submode_from_body( ?array $body ): string {
 		if ( ! is_array( $body ) || ! isset( $body['admin_submode'] ) ) {
 			return 'ask';
@@ -307,8 +318,9 @@ class Neo_Pulse_Wp_Chat_Super_Admin {
 		}
 
 		$ctx = array(
-			'admin_submode' => Neo_Pulse_Wp_Backend_Assist_Submode::normalize_submode( $submode ),
-			'target_scope'  => self::parse_target_scope_from_body( $body ),
+			'admin_submode'      => Neo_Pulse_Wp_Backend_Assist_Submode::normalize_submode( $submode ),
+			'page_content_mode'  => self::normalize_page_content_mode_from_body( $body ),
+			'target_scope'       => self::parse_target_scope_from_body( $body ),
 		);
 
 		$ctx = self::merge_pulse_context( $ctx, $body );

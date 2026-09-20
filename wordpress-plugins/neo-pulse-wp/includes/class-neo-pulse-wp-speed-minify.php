@@ -26,7 +26,7 @@ class Neo_Pulse_Wp_Speed_Minify {
 	}
 
 	/**
-	 * Add font-display:swap to @font-face blocks that omit it.
+	 * Force font-display:swap so icon/heading text is not held by FOIT.
 	 *
 	 * @param string $css Raw or minified CSS.
 	 */
@@ -37,13 +37,109 @@ class Neo_Pulse_Wp_Speed_Minify {
 		return (string) preg_replace_callback(
 			'/@font-face\s*\{([^}]*)\}/i',
 			static function ( array $m ): string {
-				if ( preg_match( '/font-display\s*:/i', $m[1] ) ) {
+				$body = $m[1];
+				if ( preg_match( '/font-display\s*:\s*(swap|optional)\b/i', $body ) ) {
 					return $m[0];
 				}
-				return '@font-face{font-display:swap;' . $m[1] . '}';
+				if ( preg_match( '/font-display\s*:[^;]+;?/i', $body ) ) {
+					$body = (string) preg_replace( '/font-display\s*:[^;]+;?/i', 'font-display:swap;', $body );
+					return '@font-face{' . $body . '}';
+				}
+				return '@font-face{font-display:swap;' . $body . '}';
 			},
 			$css
 		);
+	}
+
+	/**
+	 * Directory URL of a stylesheet (query string stripped).
+	 *
+	 * @param string $stylesheet_url Public CSS URL.
+	 */
+	public static function stylesheet_dir_url( string $stylesheet_url ): string {
+		$cut = strpos( $stylesheet_url, '?' );
+		if ( $cut !== false ) {
+			$stylesheet_url = substr( $stylesheet_url, 0, $cut );
+		}
+		$hash = strpos( $stylesheet_url, '#' );
+		if ( $hash !== false ) {
+			$stylesheet_url = substr( $stylesheet_url, 0, $hash );
+		}
+		return rtrim( str_replace( '\\', '/', dirname( $stylesheet_url ) ), '/' ) . '/';
+	}
+
+	/**
+	 * Rewrite relative css url() values so cached files still load fonts and images.
+	 *
+	 * @param string $css              CSS text.
+	 * @param string $stylesheet_url Public URL of the original stylesheet.
+	 */
+	public static function rewrite_relative_urls( string $css, string $stylesheet_url ): string {
+		if ( $css === '' || $stylesheet_url === '' || stripos( $css, 'url(' ) === false ) {
+			return $css;
+		}
+		if ( strpos( $stylesheet_url, '/cache/neo-pulse-speed/' ) !== false ) {
+			return $css;
+		}
+		if ( strpos( $stylesheet_url, '//' ) !== 0 && strpos( $stylesheet_url, '/' ) === 0 && function_exists( 'home_url' ) ) {
+			$stylesheet_url = home_url( $stylesheet_url );
+		}
+		$base = self::stylesheet_dir_url( $stylesheet_url );
+		$out  = preg_replace_callback(
+			'/url\(\s*([\'"]?)([^\'")]+)\1\s*\)/i',
+			static function ( array $m ) use ( $base ): string {
+				$abs = self::resolve_css_url( $base, trim( $m[2] ) );
+				return 'url(' . $abs . ')';
+			},
+			$css
+		);
+		return is_string( $out ) ? $out : $css;
+	}
+
+	/**
+	 * @param string $base_dir_url Directory URL ending in /.
+	 * @param string $rel          url() payload.
+	 */
+	public static function resolve_css_url( string $base_dir_url, string $rel ): string {
+		$rel = trim( $rel );
+		if ( $rel === '' ) {
+			return $rel;
+		}
+		$lower = strtolower( $rel );
+		if (
+			strpos( $lower, 'data:' ) === 0
+			|| strpos( $lower, 'http://' ) === 0
+			|| strpos( $lower, 'https://' ) === 0
+			|| strpos( $rel, '//' ) === 0
+			|| strpos( $rel, '/' ) === 0
+			|| strpos( $rel, '#' ) === 0
+		) {
+			return $rel;
+		}
+		$query = '';
+		$qpos  = strpos( $rel, '?' );
+		if ( $qpos !== false ) {
+			$query = substr( $rel, $qpos );
+			$rel   = substr( $rel, 0, $qpos );
+		}
+		$joined = $base_dir_url . $rel;
+		$parts  = wp_parse_url( $joined );
+		if ( ! is_array( $parts ) || empty( $parts['host'] ) || ! isset( $parts['path'] ) ) {
+			return $rel . $query;
+		}
+		$segs = array();
+		foreach ( explode( '/', (string) $parts['path'] ) as $seg ) {
+			if ( $seg === '' || $seg === '.' ) {
+				continue;
+			}
+			if ( $seg === '..' ) {
+				array_pop( $segs );
+				continue;
+			}
+			$segs[] = $seg;
+		}
+		$scheme = isset( $parts['scheme'] ) ? $parts['scheme'] . ':' : '';
+		return $scheme . '//' . $parts['host'] . '/' . implode( '/', $segs ) . $query;
 	}
 
 	/**
@@ -54,6 +150,9 @@ class Neo_Pulse_Wp_Speed_Minify {
 	public static function js( string $js ): string {
 		if ( $js === '' ) {
 			return '';
+		}
+		if ( strpos( $js, "\n" ) === false ) {
+			return trim( $js );
 		}
 		$out    = '';
 		$len    = strlen( $js );

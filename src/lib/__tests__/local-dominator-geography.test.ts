@@ -12,6 +12,7 @@ import {
   haversineDistanceMiles,
   roughCountryLabelFromCentroid,
   wikipediaSearchAugmentFromGridRows,
+  regionCodeFromFullName,
 } from "../local-dominator-csv";
 import type { LocalDominatorRow } from "../local-dominator-csv";
 
@@ -205,5 +206,12 @@ describe("entityMatchesCsvPlaceHints", () => {
     expect(entityMatchesCsvPlaceHints("Blinds in North Phoenix", hints)).toBe(true);
     expect(entityMatchesCsvPlaceHints("Old Town Scottsdale", hints)).toBe(true);
     expect(entityMatchesCsvPlaceHints("Painted Desert", hints)).toBe(false);
+  });
+});
+
+describe("regionCodeFromFullName", () => {
+  it("maps Florida and Manitoba to postal codes", () => {
+    expect(regionCodeFromFullName("Florida")).toBe("FL");
+    expect(regionCodeFromFullName("manitoba")).toBe("MB");
   });
 });

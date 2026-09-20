@@ -1,9 +1,10 @@
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
 import type { OverviewSitemapSource } from "@/lib/overview/overview-sitemap-source";
 import { clearOverviewSitemapLoadFingerprints } from "@/lib/overview/overview-sitemap-load-cache";
+import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
 
 function cacheKey(siteId: string, source: OverviewSitemapSource): string {
-  return `neo-pulse-overview-rows-v2:${siteId}:${source}`;
+  return `neo-pulse-overview-rows-v4:${siteId}:${source}`;
 }
 
 const memoryByKey = new Map<string, OverviewRow[]>();
@@ -70,6 +71,15 @@ export function clearOverviewRowsSessionCache(siteId: string): void {
   }
 }
 
+function rowsByNormalizedUrl(rows: Map<string, OverviewRow>): Map<string, OverviewRow> {
+  const map = new Map<string, OverviewRow>();
+  for (const [url, row] of rows) {
+    const key = normalizePageUrlKey(url) || normalizePageUrlKey(row.url);
+    if (key && !map.has(key)) map.set(key, row);
+  }
+  return map;
+}
+
 /** Merge sitemap URL list with cached row data (editor fields preserved on remount). */
 export function mergeOverviewRowsForSitemapLoad(
   urls: string[],
@@ -77,9 +87,12 @@ export function mergeOverviewRowsForSitemapLoad(
   sessionByUrl: Map<string, OverviewRow>,
   emptyRow: (url: string) => OverviewRow,
 ): OverviewRow[] {
+  const existingNorm = rowsByNormalizedUrl(existingByUrl);
+  const sessionNorm = rowsByNormalizedUrl(sessionByUrl);
   return urls.map((url) => {
-    const existing = existingByUrl.get(url);
-    const session = sessionByUrl.get(url);
+    const key = normalizePageUrlKey(url);
+    const existing = existingByUrl.get(url) ?? (key ? existingNorm.get(key) : undefined);
+    const session = sessionByUrl.get(url) ?? (key ? sessionNorm.get(key) : undefined);
     const base = existing || session || emptyRow(url);
     return {
       ...base,

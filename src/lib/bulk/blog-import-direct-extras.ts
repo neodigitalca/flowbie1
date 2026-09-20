@@ -273,9 +273,6 @@ export async function generateDirectFeaturedImagePayload(args: {
       throw new Error("Direct Google Maps featured image needs an entity");
     }
     const maps = await fetchGoogleMapsImageForEntity(entity);
-    if (!maps?.imageBase64) {
-      throw new Error("Direct Google Maps featured image failed");
-    }
     imageBase64 = maps.imageBase64;
   } else {
     const purpose = `Featured image for ${args.title}`;
@@ -305,7 +302,7 @@ export async function uploadDirectFeaturedMedia(args: {
   filename: string;
   title: string;
   keyword: string;
-}): Promise<number> {
+}): Promise<{ mediaId: number; url: string | null }> {
   const media = await uploadWordPressMedia(
     args.site.siteUrl,
     args.site.username,
@@ -318,7 +315,8 @@ export async function uploadDirectFeaturedMedia(args: {
   if (!media.success || !media.mediaId) {
     throw new Error(media.error || "Direct featured image upload failed");
   }
-  return media.mediaId;
+  const url = media.url?.trim() || media.link?.trim() || null;
+  return { mediaId: media.mediaId, url };
 }
 
 export async function writeDirectSeoAcfAndRankMath(args: {

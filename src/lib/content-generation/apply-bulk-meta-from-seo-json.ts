@@ -4,13 +4,7 @@
  * is content-optimizer parity in bulk-auto-generate. Rank Math post meta is written in bulk-auto-generate.
  */
 
-import { stripTitleSeparatorSuffix } from "@/lib/content-generation/content-sanitizer";
-import {
-  containsCaseInsensitive,
-  ensureExactKeywordInMetaDescription,
-  ensureExactKeywordInSeoTitle,
-  focusKeywordRepresentedInSeoTitle,
-} from "@/lib/content-generation/rank-math-exact-keyword";
+import { ensureExactKeywordInMetaDescription } from "@/lib/content-generation/rank-math-exact-keyword";
 import type { OptimizedMetaFields } from "@/lib/meta-field-optimizer";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { ACFFieldMapping } from "@/lib/content-generation/acf-field-mapper";
@@ -29,27 +23,9 @@ export function buildOptimizedMetaFromKeywordResearch(
 ): OptimizedMetaFields {
   const exactKw = (primaryKw || rankMeta.focusKeyword || '').trim().slice(0, 500);
 
-  let rawTitle = rankMeta.seoTitle
-    ? stripTitleSeparatorSuffix(rankMeta.seoTitle).trim()
-    : postTitle.trim();
-  if (
-    exactKw &&
-    rankMeta.seoTitle &&
-    !containsCaseInsensitive(rawTitle, exactKw) &&
-    containsCaseInsensitive(rankMeta.seoTitle, exactKw)
-  ) {
-    rawTitle = rankMeta.seoTitle.trim();
-  }
-
   const rawDesc = rankMeta.metaDescription ? rankMeta.metaDescription.trim() : excerpt.trim();
 
-  // Prefer full WordPress post title. Never hard-cut to 60 (that produced mid-word titles like "…for Al").
-  const fullPostTitle = postTitle.trim();
-  const titleSource = fullPostTitle || rawTitle;
-  const title =
-    exactKw && !focusKeywordRepresentedInSeoTitle(titleSource, exactKw)
-      ? ensureExactKeywordInSeoTitle(titleSource, exactKw, Math.max(titleSource.length + exactKw.length + 32, 500))
-      : titleSource;
+  const title = postTitle.trim();
   const desc = ensureExactKeywordInMetaDescription(rawDesc, exactKw, 160);
   const kw = exactKw;
   const baseUrl = String(siteUrl || "").replace(/\/$/, "");

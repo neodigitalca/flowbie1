@@ -2,6 +2,7 @@ import { GoogleAnalyticsSettingsContent } from "@/components/GoogleAnalyticsSett
 import { GSCSettingsConnectionSection } from "@/components/integrations/GSCFeature";
 import { GMBSettingsContent } from "@/components/GMBSettingsContent";
 import { GoogleDriveSettingsContent } from "@/components/GoogleDriveSettingsContent";
+import { GoogleAdsSettingsContent } from "@/components/manager/GoogleAdsSettingsContent";
 import {
   DASHBOARD_SETTINGS_GROUP_CLASS,
   DASHBOARD_SETTINGS_PANEL_CLASS,
@@ -23,7 +24,7 @@ export function GoogleServicesSettingsContent() {
 
       <div className={DASHBOARD_SETTINGS_GROUP_CLASS}>
         <p className="font-semibold text-white">Start here</p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <a href="#gsc" className={jumpLink}>
             <span className="font-semibold">Search Console</span>
             <p className="mt-1 text-white">Service account JSON. Copy the API email, then test.</p>
@@ -40,6 +41,10 @@ export function GoogleServicesSettingsContent() {
             <span className="font-semibold">Google Drive</span>
             <p className="mt-1 text-white">Connect Google Drive for Doc exports and share links.</p>
           </a>
+          <a href="#ads" className={jumpLink}>
+            <span className="font-semibold">Google Ads</span>
+            <p className="mt-1 text-white">MCC ID, then Connect with the same Cloud OAuth client as Drive and Business Profile.</p>
+          </a>
         </div>
       </div>
 
@@ -54,6 +59,9 @@ export function GoogleServicesSettingsContent() {
       </section>
       <section id="drive" aria-labelledby="drive-heading" className={`${DASHBOARD_SETTINGS_GROUP_CLASS} scroll-mt-4`}>
         <GoogleDriveSettingsContent />
+      </section>
+      <section id="ads" aria-labelledby="ads-heading" className={`${DASHBOARD_SETTINGS_GROUP_CLASS} scroll-mt-4`}>
+        <GoogleAdsSettingsContent />
       </section>
     </div>
   );

@@ -1,0 +1,4 @@
+date,day,time,transaction_number,status,payee,payment_allocation,account_number,issuer_name,transaction_by,debit_amount,currency,issuer_confirmation,authorization_number,source
+2026-09-17,Thursday,,,Approved,Canada Revenue Agency,Individual income tax (T1) - Canada emergency benefit repayment,654625441,Sean Craig,VISA DEBIT,3000.00,CAD,,,user-confirmed
+2026-09-18,Friday,17:53:23,20260918686681449,Approved,Canada Revenue Agency,Individual income tax (T1) - Canada emergency benefit repayment,654625441,Sean Craig,VISA DEBIT,1000.00,CAD,175322,175322,visa_20260918686681449.pdf
+2026-09-18,Friday,17:58:38,20260918686682033,Approved,Canada Revenue Agency,Individual income tax (T1) - Canada emergency benefit repayment,654625441,Sean Craig,VISA DEBIT,2000.00,CAD,175837,175837,visa_20260918686682033.pdf

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWordPressSites } from "@/hooks/use-wordpress-sites";
 import { useOverviewSitemap } from "@/hooks/overview/use-overview-sitemap";
 import { useOverviewScrape } from "@/hooks/overview/use-overview-scrape";
@@ -38,13 +38,15 @@ import {
   overviewRowMatchesErrorFilters,
   type OverviewRowErrorFilterKey,
 } from "@/lib/overview/overview-row-error-filters";
-import { overviewBulkScopeUrlKeysFromRows } from "@/lib/overview/overview-bulk-row-scope";
+import { useOverviewRowSelection } from "@/hooks/overview/use-overview-row-selection";
+import { resolveOverviewBulkScopeUrlKeys } from "@/lib/overview/overview-bulk-row-scope";
 import {
   overviewDateModifierTodayIso,
   patchOverviewRowsDateModifierForUrls,
   pushOverviewDateModifiersToAcfForUrls,
 } from "@/lib/overview/overview-bulk-seo-payload";
 import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
+import { deferHarnessUiUpdate } from "@/lib/overview/overview-harness-ui-update";
 
 export function useOverviewTabBase({
   site,
@@ -73,8 +75,40 @@ export function useOverviewTabBase({
   );
 
   const opt = useWordPressOptimization();
+  const overviewOpt = useMemo(
+    () => ({
+      ...opt,
+      setBulkOptimizationState: ((action) => {
+        deferHarnessUiUpdate(() => {
+          opt.setBulkOptimizationState(action);
+        });
+      }) as typeof opt.setBulkOptimizationState,
+      setOptimizationProgress: ((action) => {
+        deferHarnessUiUpdate(() => {
+          opt.setOptimizationProgress(action);
+        });
+      }) as typeof opt.setOptimizationProgress,
+      setIsOptimizingContent: ((action) => {
+        deferHarnessUiUpdate(() => {
+          opt.setIsOptimizingContent(action);
+        });
+      }) as typeof opt.setIsOptimizingContent,
+    }),
+    [opt],
+  );
   const contentOptDateSyncedRef = useRef(new Set<string>());
   const bulkBatchKey = site ? `${site.id}-batch` : "";
+  const isOptimizingContentRef = useRef(opt.isOptimizingContent);
+  isOptimizingContentRef.current = opt.isOptimizingContent;
+  const bulkOptimizationStateRef = useRef(opt.bulkOptimizationState);
+  bulkOptimizationStateRef.current = opt.bulkOptimizationState;
+
+  const isMultiRowBulkActive = useCallback(() => {
+    if (!bulkBatchKey) return false;
+    if (!isOptimizingContentRef.current[bulkBatchKey]) return false;
+    const batch = bulkOptimizationStateRef.current[bulkBatchKey];
+    return (batch?.urls?.length ?? 0) > 1;
+  }, [bulkBatchKey]);
 
   const { sites: wordPressSites } = useWordPressSites();
   const portfolioBlockedHostsForSemrush = useMemo(
@@ -132,18 +166,26 @@ export function useOverviewTabBase({
 
     if (newlyOptimizing.length > 0) {
       const iso = overviewDateModifierTodayIso();
-      patchOverviewRowsDateModifierForUrls(setRows, newlyOptimizing, iso);
-      if (site.username?.trim() && site.appPassword?.trim()) {
-        void pushOverviewDateModifiersToAcfForUrls(
-          site,
-          bindings,
-          rowsRef.current,
-          newlyOptimizing,
-          iso,
+      const multiRowBulk = isMultiRowBulkActive();
+      if (multiRowBulk) {
+        const keys = new Set(newlyOptimizing.map((url) => normalizePageUrlKey(url)));
+        rowsRef.current = rowsRef.current.map((row) =>
+          keys.has(normalizePageUrlKey(row.url)) ? { ...row, dateModifier: iso } : row,
         );
+      } else {
+        patchOverviewRowsDateModifierForUrls(setRows, newlyOptimizing, iso);
+        if (site.username?.trim() && site.appPassword?.trim()) {
+          void pushOverviewDateModifiersToAcfForUrls(
+            site,
+            bindings,
+            rowsRef.current,
+            newlyOptimizing,
+            iso,
+          );
+        }
       }
     }
-  }, [opt.bulkOptimizationState, site, bulkBatchKey, setRows, bindings]);
+  }, [opt.bulkOptimizationState, opt.isOptimizingContent, site, bulkBatchKey, setRows, bindings, isMultiRowBulkActive]);
 
   const getInventoryRow = useCallback(
     (url: string) => getInventoryRowForUrl(site, url),
@@ -234,11 +276,26 @@ export function useOverviewTabBase({
       setRows([]);
       return;
     }
-    const cached = (getOverviewRowsSessionCache(site.id, sitemapSource) ?? []).filter((row) =>
-      Boolean(row.url?.trim()),
+    let cancelled = false;
+    const idleId = requestIdleCallback(
+      () => {
+        if (cancelled) return;
+        const cached = (getOverviewRowsSessionCache(site.id, sitemapSource) ?? []).filter((row) =>
+          Boolean(row.url?.trim()),
+        );
+        if (cached.length) {
+          startTransition(() => {
+            if (!cancelled) setRows(cached);
+          });
+        }
+        activateInventoryCacheForSource(site.id, sitemapSource);
+      },
+      { timeout: 500 },
     );
-    if (cached.length) setRows(cached);
-    activateInventoryCacheForSource(site.id, sitemapSource);
+    return () => {
+      cancelled = true;
+      cancelIdleCallback(idleId);
+    };
   }, [site?.id, sitemapSource, activateInventoryCacheForSource]);
 
   useEffect(() => {
@@ -285,12 +342,25 @@ export function useOverviewTabBase({
     return copy;
   }, [visibleRows, semrushFilterUrlKeys, activeErrorFilters, sortColumn, sortDir, wpTitlesByUrl]);
 
+  const {
+    selectedUrlKeys,
+    selectedCount,
+    toggleSelectedUrlKey,
+    toggleSelectPageRows,
+  } = useOverviewRowSelection({
+    siteId: site?.id,
+    sitemapSource,
+    displayRows,
+  });
   const bulkScopeUrlKeys = useMemo(
-    () => overviewBulkScopeUrlKeysFromRows(displayRows),
-    [displayRows],
+    () => resolveOverviewBulkScopeUrlKeys(selectedUrlKeys, displayRows),
+    [selectedUrlKeys, displayRows],
   );
   const bulkScopeUrlKeysRef = useRef(bulkScopeUrlKeys);
   bulkScopeUrlKeysRef.current = bulkScopeUrlKeys;
+
+  const displayRowsRef = useRef(displayRows);
+  displayRowsRef.current = displayRows;
 
   useEffect(() => {
     setGridPageIndex(0);
@@ -394,14 +464,27 @@ export function useOverviewTabBase({
     [serpDumpUrl],
   );
 
-  const updateRow = useCallback((index: number, patch: Partial<OverviewRow>) => {
-    setRows((prev) =>
-      prev.map((row, i) => {
-        if (i !== index) return row;
-        return { ...row, ...patch };
-      }),
-    );
+  const syncRowsFromRef = useCallback(() => {
+    startTransition(() => {
+      setRows(rowsRef.current);
+    });
   }, []);
+
+  const updateRow = useCallback((index: number, patch: Partial<OverviewRow>) => {
+    const next = rowsRef.current.map((row, i) => {
+      if (i !== index) return row;
+      return { ...row, ...patch };
+    });
+    rowsRef.current = next;
+    if (patch.status !== undefined) {
+      setRows(next);
+      return;
+    }
+    if (isMultiRowBulkActive()) return;
+    startTransition(() => {
+      setRows(next);
+    });
+  }, [isMultiRowBulkActive]);
 
   const setSemrushCsvUpload = useCallback((file: File) => {
     void file.text().then((text) => {
@@ -443,7 +526,8 @@ export function useOverviewTabBase({
     setBulkSeoCsvExportBusy,
     overviewMetaCsvExportBusy,
     setOverviewMetaCsvExportBusy,
-    opt,
+    opt: overviewOpt,
+    syncOpt: opt,
     portfolioBlockedHostsForSemrush,
     expandedContentUrl,
     setExpandedContentUrl,
@@ -482,6 +566,11 @@ export function useOverviewTabBase({
     loadSitemap,
     loadOverviewSitemapSource,
     displayRows,
+    displayRowsRef,
+    selectedUrlKeys,
+    selectedCount,
+    toggleSelectedUrlKey,
+    toggleSelectPageRows,
     bulkScopeUrlKeys,
     bulkScopeUrlKeysRef,
     visibleRows,
@@ -505,6 +594,7 @@ export function useOverviewTabBase({
     serpDumpUrl,
     getDfsSerpContext,
     updateRow,
+    syncRowsFromRef,
     remapBindingUrl,
     semrushFilterUrlKeys,
     semrushCsvFileName,

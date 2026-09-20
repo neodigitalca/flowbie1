@@ -15,11 +15,20 @@ import {
 import {
   CONTENT_OPTIMIZER_MULTI_SITE_ROW_STACK_CLASS,
   CONTENT_OPTIMIZER_MULTI_SITE_ROW_WRAPPER_CLASS,
+  CONTENT_OPTIMIZER_PAGE_ROW_GRID_CLASS,
+  CONTENT_OPTIMIZER_PAGE_ROW_SELECT_CELL,
   OVERVIEW_GRID_VISIBLE_ROW_COUNT,
   contentOptimizerRowStripeClass,
 } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import { isOverviewRowBulkActive, isOverviewBulkWorkerActive } from "@/components/overview/overview-tab/overview-bulk-run-helpers";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DASHBOARD_LIST_CHECKBOX_CLASS } from "@/components/shared/workspace-checkbox-styles";
+import {
+  overviewDisplayRowSelectionKeys,
+  overviewPageSelectionState,
+} from "@/lib/overview/overview-row-selection";
 import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
+import { cn } from "@/lib/utils";
 
 function metaOptimizerPipelineBusy(row: OverviewRow): boolean {
   return (
@@ -45,6 +54,9 @@ export interface OverviewPagesSectionProps {
   sitemapSource: OverviewSitemapSource;
   rows: OverviewRow[];
   displayRows: OverviewRow[];
+  selectedUrlKeys?: Set<string>;
+  toggleSelectedUrlKey: (url: string, shiftKey?: boolean) => void;
+  toggleSelectPageRows: (pageRows: readonly { url: string }[]) => void;
   gridPageIndex: number;
   wpTitlesByUrl: Record<string, string>;
   expandedPageUrl: string | null;
@@ -101,6 +113,11 @@ export interface OverviewPagesSectionProps {
   handleAiOverviewRow: (index: number) => Promise<void>;
   handleAiScenarioRow: (index: number) => Promise<void>;
   handleAiInContentImageRow: (index: number) => Promise<void>;
+  handleAiElementorSectionRow?: (index: number, sectionId: string) => Promise<void>;
+  handleAiElementorSectionHeaderRow?: (index: number, sectionId: string) => Promise<void>;
+  handleAiElementorSectionContentRow?: (index: number, sectionId: string) => Promise<void>;
+  handleAiElementorSectionLinkRow?: (index: number, sectionId: string, linkIndex: number) => Promise<void>;
+  handleAiElementorFullPageRow?: (index: number) => Promise<void>;
 }
 
 export function OverviewPagesSection({
@@ -108,6 +125,9 @@ export function OverviewPagesSection({
   sitemapSource,
   rows,
   displayRows,
+  selectedUrlKeys,
+  toggleSelectedUrlKey,
+  toggleSelectPageRows,
   gridPageIndex,
   wpTitlesByUrl,
   expandedPageUrl,
@@ -141,6 +161,11 @@ export function OverviewPagesSection({
   handleAiOverviewRow,
   handleAiScenarioRow,
   handleAiInContentImageRow,
+  handleAiElementorSectionRow,
+  handleAiElementorSectionHeaderRow,
+  handleAiElementorSectionContentRow,
+  handleAiElementorSectionLinkRow,
+  handleAiElementorFullPageRow,
 }: OverviewPagesSectionProps) {
   const batchKey = `${site.id}-batch`;
   const batchBulkState = opt.bulkOptimizationState[batchKey];
@@ -150,6 +175,8 @@ export function OverviewPagesSection({
     () => overviewGridPageSlice(displayRows, gridPageIndex, OVERVIEW_GRID_VISIBLE_ROW_COUNT),
     [displayRows, gridPageIndex],
   );
+  const pageKeys = useMemo(() => overviewDisplayRowSelectionKeys(pageRows), [pageRows]);
+  const { allSelected, someSelected } = overviewPageSelectionState(selectedUrlKeys, pageKeys);
 
   const gridSlots = useMemo(() => {
     return Array.from({ length: OVERVIEW_GRID_VISIBLE_ROW_COUNT }, (_, i) => pageRows[i] ?? createEmptyOverviewRow());
@@ -187,18 +214,39 @@ export function OverviewPagesSection({
     handleAiOverviewRow,
     handleAiScenarioRow,
     handleAiInContentImageRow,
+    handleAiElementorSectionRow,
+    handleAiElementorSectionHeaderRow,
+    handleAiElementorSectionContentRow,
+    handleAiElementorSectionLinkRow,
+    handleAiElementorFullPageRow,
   } satisfies Omit<
     MetaOptimizerPageRowDetailsProps,
-    "row" | "rowIndex" | "metaOptimizerPipelineBusy" | "placeholder" | "accordionBody"
+    | "row"
+    | "rowIndex"
+    | "metaOptimizerPipelineBusy"
+    | "placeholder"
+    | "accordionBody"
+    | "isSelected"
+    | "onToggleSelect"
+    | "onCollapse"
   >;
 
   const renderPageRow = (row: OverviewRow, index: number, stripeIndex: number, placeholder = false) => {
     const busy = metaOptimizerPipelineBusy(row);
     const isActiveOptimize =
       isOverviewRowBulkActive(row.url, batchBulkState, batchRunning) ||
+      row.status === "ai-faq" ||
+      row.status === "ai-scenario" ||
       row.status === "ai-wikipedia-link";
     const panelId = `neo-pulse-meta-panel-${index}`;
-    const isExpanded = !placeholder && expandedPageUrl === row.url;
+    const rowUrlKey = normalizePageUrlKey(row.url);
+    const isExpanded =
+      !placeholder &&
+      Boolean(rowUrlKey) &&
+      normalizePageUrlKey(expandedPageUrl ?? "") === rowUrlKey;
+
+    const isSelected = Boolean(rowUrlKey) && Boolean(selectedUrlKeys?.has(rowUrlKey));
+    const onToggleSelect = (shiftKey?: boolean) => toggleSelectedUrlKey(row.url, shiftKey);
 
     if (!isExpanded) {
       return (
@@ -210,6 +258,8 @@ export function OverviewPagesSection({
           isActiveOptimize={isActiveOptimize}
           placeholder={placeholder}
           panelId={panelId}
+          isSelected={isSelected}
+          onToggleSelect={onToggleSelect}
           onToggle={() => toggleExpandedPageUrl(row.url)}
         />
       );
@@ -226,6 +276,8 @@ export function OverviewPagesSection({
           rowIndex={index}
           metaOptimizerPipelineBusy={busy}
           accordionBody
+          isSelected={isSelected}
+          onToggleSelect={onToggleSelect}
           onCollapse={() => toggleExpandedPageUrl(row.url)}
         />
       </div>
@@ -235,6 +287,24 @@ export function OverviewPagesSection({
   return (
     <div className="w-full">
       <div className={CONTENT_OPTIMIZER_MULTI_SITE_ROW_STACK_CLASS}>
+        <div className={CONTENT_OPTIMIZER_MULTI_SITE_ROW_WRAPPER_CLASS}>
+          <div
+            className={cn(
+              contentOptimizerRowStripeClass(0),
+              CONTENT_OPTIMIZER_PAGE_ROW_GRID_CLASS,
+            )}
+          >
+            <div className={CONTENT_OPTIMIZER_PAGE_ROW_SELECT_CELL}>
+              <Checkbox
+                checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                onCheckedChange={() => toggleSelectPageRows(pageRows)}
+                disabled={pageKeys.length === 0}
+                aria-label={allSelected ? "Deselect this page" : "Select this page"}
+                className={DASHBOARD_LIST_CHECKBOX_CLASS}
+              />
+            </div>
+          </div>
+        </div>
         {gridSlots.map((row, stripeIndex) => {
           const hasUrl = Boolean(row.url?.trim());
           const rowKey = hasUrl
@@ -245,7 +315,7 @@ export function OverviewPagesSection({
             : -1;
           return (
             <div key={rowKey} className={CONTENT_OPTIMIZER_MULTI_SITE_ROW_WRAPPER_CLASS}>
-              {renderPageRow(row, index >= 0 ? index : stripeIndex, stripeIndex, !hasUrl)}
+              {renderPageRow(row, index, stripeIndex, !hasUrl || index < 0)}
             </div>
           );
         })}

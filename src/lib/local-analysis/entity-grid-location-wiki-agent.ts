@@ -14,6 +14,8 @@ import {
 import {
   buildClusterWikiCandidateTiers,
   clusterCityWikiTitle,
+  extractClusterWikiGeo,
+  isCityLevelWikiTitle,
   isRejectedClusterWikiTitle,
   isRejectedNeighbourhoodWikiTitle,
 } from "@/lib/local-analysis/cluster-wiki-candidates";
@@ -21,6 +23,7 @@ import { wikipediaArticleUrl } from "@/lib/wikipedia/wiki-urls";
 import {
   buildCityLocationBucketsFromRows,
   buildGridLocationBucketsFromRows,
+  cityBucketFromLocationLabel,
   type GridLocationBucket,
 } from "@/lib/local-analysis/grid-location-buckets";
 import { pickGridLocationBucketsFromSummary } from "@/lib/local-analysis/pick-grid-location-buckets-from-summary";
@@ -348,6 +351,8 @@ function cityFromBucket(bucket: GridLocationBucket): string | null {
     const city = firstCityStateLabelFromAddress(addr);
     if (city) return city;
   }
+  const fromLabel = extractClusterWikiGeo(bucket.placeLabel);
+  if (fromLabel) return `${fromLabel.city}, ${fromLabel.regionCode}`;
   return null;
 }
 
@@ -425,43 +430,28 @@ async function resolveGridCluster(
   return resolveClusterWiki(entity, bucket, apiKey, siteId);
 }
 
-/** Wikipedia resolve for sub-ads: neighbourhood-tier only (rejects city-level fallback). */
+/** Stamp the parent city article for wiki content. Entity stays the neighbourhood. */
 export async function resolveNeighbourhoodWikiOnly(
   entity: string,
   bucket: GridLocationBucket,
-  apiKey: string,
-  siteId: string | undefined,
+  _apiKey: string,
+  _siteId: string | undefined,
 ): Promise<GridClusterWikipedia | null> {
-  const tiers = buildClusterWikiCandidateTiers(entity, bucket);
-  const geo = tiers.geo;
-  const model = getResearchModel(siteId);
+  return cityWikiStampFromParent(entity, bucket);
+}
 
-  for (const candidate of tiers.neighbourhood) {
-    const ex = await checkWikipediaPageExists(candidate);
-    if (!ex.exists || !ex.title || !ex.url) continue;
-    if (isRejectedNeighbourhoodWikiTitle(ex.title, geo)) continue;
-    if (geo?.city) {
-      const intro = await fetchWikipediaIntroPlainText(ex.title, 600);
-      const validation = await validateWikipediaPlacePage({
-        apiKey,
-        model,
-        siteId,
-        entity,
-        candidateTitle: candidate,
-        resolvedTitle: ex.title,
-        expectedCity: geo.city,
-        expectedRegion: geo.regionName,
-        intro,
-      });
-      if (!isAcceptedWikiPlaceValidation(validation, "neighbourhood")) continue;
-    }
-    return {
-      gridPlaceLabel: bucket.placeLabel,
-      title: ex.title,
-      url: ex.url,
-    };
-  }
-  return null;
+function cityWikiStampFromParent(
+  entity: string,
+  bucket: GridLocationBucket,
+): GridClusterWikipedia | null {
+  const tiers = buildClusterWikiCandidateTiers(entity, bucket);
+  const title = tiers.city[0]?.trim() || (tiers.geo ? clusterCityWikiTitle(tiers.geo) : "");
+  if (!title) return null;
+  return {
+    gridPlaceLabel: bucket.placeLabel,
+    title,
+    url: wikipediaArticleUrl(title),
+  };
 }
 
 export type ResolveNeighbourhoodSapSlotsOptions = {
@@ -529,30 +519,6 @@ function isAcceptableSubAdEntity(
   return !usedKeys.has(key);
 }
 
-/** Reuse the grid bucket place when Wikipedia neighbourhood harvest returns nothing. */
-async function buildBucketLocationFallbackSlot(
-  bucket: GridLocationBucket,
-  apiKey: string,
-  siteId: string | undefined,
-): Promise<SubAdSlot | null> {
-  const entity =
-    normalizeEntityHintCommaLabel(bucket.placeLabel.trim()) || bucket.placeLabel.trim();
-  if (!entity) return null;
-  const wiki = await resolveClusterWiki(entity, bucket, apiKey, siteId);
-  return { entity, wiki };
-}
-
-function stampFallbackSlotUsage(
-  slot: SubAdSlot,
-  globalUsedKeys: Set<string>,
-  globalUsedNames: string[],
-): void {
-  const key = slot.entity.trim().toLowerCase();
-  if (!key || globalUsedKeys.has(key)) return;
-  globalUsedKeys.add(key);
-  globalUsedNames.push(slot.entity);
-}
-
 /** One distinct sub-ad entity per slot under a parent city bucket (Wikipedia harvest → AI pick). */
 async function fillDistinctNeighbourhoodSlotsForBucket(
   options: FillDistinctNeighbourhoodSlotsOptions,
@@ -577,10 +543,7 @@ async function fillDistinctNeighbourhoodSlotsForBucket(
     cityFromBucket(bucket) ?? bucket.placeLabel.trim(),
   );
   if (!parentLabel) {
-    const fallback = await buildBucketLocationFallbackSlot(bucket, apiKey, siteId);
-    if (!fallback) return [];
-    stampFallbackSlotUsage(fallback, globalUsedKeys, globalUsedNames);
-    return [fallback];
+    return [];
   }
 
   const localHints = bucketPlaceHints(bucket);
@@ -663,7 +626,9 @@ async function fillDistinctNeighbourhoodSlotsForBucket(
         if (!entity || !isAcceptableSubAdEntity(entity, parentLabel, globalUsedKeys)) continue;
         const wiki = await resolveNeighbourhoodWikiOnly(entity, bucket, apiKey, siteId);
         if (!wiki) continue;
-        if (!isWikiTitleScopedToParentCity(wiki.title, parentLabel)) continue;
+        const wikiGeo = buildClusterWikiCandidateTiers(entity, bucket).geo;
+        const wikiIsCityContent = isCityLevelWikiTitle(wiki.title, wikiGeo);
+        if (!wikiIsCityContent && !isWikiTitleScopedToParentCity(wiki.title, parentLabel)) continue;
         const key = entity.trim().toLowerCase();
         globalUsedKeys.add(key);
         globalUsedNames.push(entity);
@@ -671,14 +636,6 @@ async function fillDistinctNeighbourhoodSlotsForBucket(
       }
     } catch {
       // Keep wiki-pool slots when neighbourhood supplement fails.
-    }
-  }
-
-  if (slots.length === 0) {
-    const fallback = await buildBucketLocationFallbackSlot(bucket, apiKey, siteId);
-    if (fallback) {
-      stampFallbackSlotUsage(fallback, globalUsedKeys, globalUsedNames);
-      return [fallback];
     }
   }
 
@@ -873,6 +830,9 @@ export type EntityLocationClusterFromBucketsOptions = {
 export type EntityGridLocationClusterOptions = EntityLocationClusterFromBucketsOptions & {
   gridRows: LocalDominatorRow[];
   gridKeywordWeights: GridKeywordWeight[];
+  /** City, ST from the site profile or Location field when no grid CSV. */
+  profileLocationLabel?: string;
+  profileSampleAddress?: string;
 };
 
 function explicitLayoutSapCounts(adGroupCount: number, adsPerGroup: number): number[] {
@@ -1035,20 +995,6 @@ export async function runEntityLocationClusterFromBuckets(
         validPicks.push({ name: entity, posWeight: 1 });
       }
       if (validPicks.length === 0) {
-        const fallbackEntity =
-          normalizeEntityHintCommaLabel(bucket.placeLabel.trim()) || bucket.placeLabel.trim();
-        if (fallbackEntity) {
-          const wiki = await resolveClusterWiki(fallbackEntity, bucket, apiKey, siteId);
-          clusterPlans.push({
-            bucket,
-            entity: fallbackEntity,
-            baseKeywords: Array.from({ length: sapPageCount }, () => ""),
-            sapPageCount,
-            wiki,
-          });
-          cumulativeSapRows += sapPageCount;
-          onClusterProgress?.(i + 1, maxClusters, fallbackEntity, cumulativeSapRows);
-        }
         continue;
       }
       const allocations = allocatePagesAcrossNeighbourhoodPicks(validPicks, sapPageCount);
@@ -1141,10 +1087,28 @@ export async function runEntityGridLocationClusterAgent(
     entityAdGroupCount,
     businessName,
     clientAudienceContextMarkdown,
+    profileLocationLabel,
+    profileSampleAddress,
     ...rest
   } = options;
   if (gridRows.length === 0) {
-    throw new Error("Grid CSV has no rows for location clustering.");
+    const label = profileLocationLabel?.trim();
+    if (!label) {
+      throw new Error("No city on this site profile for location clustering.");
+    }
+    return runEntityLocationClusterFromBuckets({
+      ...rest,
+      apiKey,
+      siteId,
+      gridSummaryMarkdown,
+      totalSapBudget,
+      entityAdGroupCount,
+      businessName,
+      clientAudienceContextMarkdown,
+      entityTypeFocus,
+      buckets: [cityBucketFromLocationLabel(label, profileSampleAddress)],
+      gridRows: [],
+    });
   }
   const wantsNeighbourhoods = entityTypeFocusWantsNeighbourhoods(entityTypeFocus);
   const allBuckets = await buildGridLocationBucketsWithSummaryFallback({

@@ -18,6 +18,7 @@ import {
 import { uploadDeliverableToDrive } from "@/lib/google-drive/upload-deliverable-to-drive";
 import type { TaskExecutionClientRunContract } from "@/lib/tasks-types";
 import { inferAutomationDeliveryStepKey } from "@/lib/workflow/automation-delivery-log";
+import { generateAdsReportingDriveDocumentTitle } from "@/lib/ads-reporting/ads-reporting-document-title";
 import { generateGscReportingDriveDocumentTitle, sanitizeGoogleDriveDocumentTitle } from "@/lib/gsc-reporting/gsc-reporting-drive-document-title";
 import { reportPeriodFromMarkdownHeading } from "@/lib/gsc-reporting/gsc-reporting-document-title";
 import {
@@ -77,7 +78,7 @@ function isExcludedDeliverableFile(fileName: string): boolean {
 
 function isGscReportMarkdown(file: TaskArchiveFileInput): boolean {
   const lower = file.fileName.toLowerCase();
-  if (!lower.includes("gsc-report")) return false;
+  if (!lower.includes("gsc-report") && !lower.includes("ppc-report")) return false;
   if (lower.endsWith(".md")) return true;
   return file.mime === "text/markdown" && Boolean(file.content.trim());
 }
@@ -157,7 +158,7 @@ export function resolvePrimaryDeliverable(
   options?: ResolvePrimaryDeliverableOptions,
 ): ResolvedPrimaryDeliverable | null {
   const executionKind = String(options?.executionKind ?? "").trim();
-  const reportOnly = options?.reportOnly === true || executionKind === "gsc_reporting";
+  const reportOnly = options?.reportOnly === true || executionKind === "gsc_reporting" || executionKind === "ads_reporting";
   const files = (archiveFiles ?? []).filter(
     (file) =>
       file.fileName.trim() &&
@@ -288,6 +289,12 @@ export async function resolveDriveUploadDeliverables(
 ): Promise<ResolvedPrimaryDeliverable[]> {
   const executionKind = String(input.executionKind ?? "").trim();
   const files = usableArchiveFiles(input.archiveFiles);
+
+  if (executionKind === "ads_reporting") {
+    const report = files.find((file) => isGscReportMarkdown(file));
+    if (!report) return [];
+    return [markdownDocDeliverable(report.fileName, report.content)];
+  }
 
   if (executionKind === "gsc_reporting") {
     const report = files.find((file) => isGscReportMarkdown(file));
@@ -491,17 +498,23 @@ export async function uploadDeliverableToGoogleDriveIfConfigured(args: {
   for (const deliverable of deliverables) {
     let uploadFileName: string;
     if (
-      args.executionKind === "gsc_reporting" &&
+      (args.executionKind === "gsc_reporting" || args.executionKind === "ads_reporting") &&
       deliverable.content.trim() &&
       !isGscMeetingNotesDeliverable(deliverable.fileName)
     ) {
       try {
-        uploadFileName = await generateGscReportingDriveDocumentTitle({
-          siteName: String(args.siteName ?? "").trim(),
-          markdown: deliverable.content,
-        });
+        uploadFileName =
+          args.executionKind === "ads_reporting"
+            ? await generateAdsReportingDriveDocumentTitle({
+                siteName: String(args.siteName ?? "").trim(),
+                markdown: deliverable.content,
+              })
+            : await generateGscReportingDriveDocumentTitle({
+                siteName: String(args.siteName ?? "").trim(),
+                markdown: deliverable.content,
+              });
       } catch (err) {
-        const message = err instanceof Error ? err.message : "GSC Drive title failed.";
+        const message = err instanceof Error ? err.message : "Drive title failed.";
         await reportStep(`Google Drive: failed (${message})`, "error");
         return { googleDriveError: message };
       }

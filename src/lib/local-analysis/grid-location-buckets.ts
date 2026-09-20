@@ -93,6 +93,24 @@ export function buildCityLocationBucketsFromRows(rows: LocalDominatorRow[]): Gri
   return buckets.sort((a, b) => b.weight - a.weight || a.placeLabel.localeCompare(b.placeLabel));
 }
 
+/** One city bucket from a profile or Location-field label (no grid CSV). */
+export function cityBucketFromLocationLabel(
+  placeLabel: string,
+  sampleAddress?: string | null,
+): GridLocationBucket {
+  const label = placeLabel.trim();
+  const sample = sampleAddress?.trim();
+  const sampleAddresses = [sample, label].filter((s, i, arr): s is string => Boolean(s) && arr.indexOf(s) === i);
+  return {
+    bucketId: "profile-city",
+    placeLabel: label,
+    weight: 1,
+    avgRank: 10,
+    rowCount: 1,
+    sampleAddresses,
+  };
+}
+
 export function selectGridLocationBucketsForBudget(
   buckets: GridLocationBucket[],
   _totalSap: number,

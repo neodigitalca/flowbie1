@@ -130,6 +130,8 @@ describe("ILLUSTRATIVE_PERSONA_OUTPUT_SHAPE", () => {
     expect(ILLUSTRATIVE_PERSONA_OUTPUT_SHAPE).toContain("Connected business name");
     expect(ILLUSTRATIVE_PERSONA_OUTPUT_SHAPE).toContain("3-8 words");
     expect(ILLUSTRATIVE_PERSONA_OUTPUT_SHAPE).not.toContain("<h3>Scenario:");
+    expect(ILLUSTRATIVE_PERSONA_OUTPUT_SHAPE).toContain("[[LINK:service-area page title|short place]]");
+    expect(ILLUSTRATIVE_PERSONA_OUTPUT_SHAPE).toContain("location cite");
   });
 });
 

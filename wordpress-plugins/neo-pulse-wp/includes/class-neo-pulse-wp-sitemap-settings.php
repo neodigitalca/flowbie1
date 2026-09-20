@@ -122,13 +122,16 @@ class Neo_Pulse_Wp_Sitemap_Settings {
 	public static function default_post_types(): array {
 		$out   = array();
 		$types = get_post_types( array( 'public' => true ), 'objects' );
+		$skip = class_exists( 'Neo_Pulse_Wp_Index_Rules', false )
+			? Neo_Pulse_Wp_Index_Rules::noindex_post_types()
+			: array( 'attachment' );
 		foreach ( $types as $slug => $obj ) {
-			$include = 'attachment' !== $slug;
+			$include = ! in_array( (string) $slug, $skip, true );
 			$out[ $slug ] = array(
 				'include_xml'         => $include,
 				'include_html'        => $include,
 				'image_meta'          => '',
-				'content_optimizer'   => 'post' === $slug,
+				'content_optimizer'   => in_array( $slug, array( 'post', 'page' ), true ),
 			);
 		}
 		return $out;
@@ -140,10 +143,14 @@ class Neo_Pulse_Wp_Sitemap_Settings {
 	public static function default_taxonomies(): array {
 		$out  = array();
 		$taxs = get_taxonomies( array( 'public' => true ), 'objects' );
+		$skip_tax = class_exists( 'Neo_Pulse_Wp_Index_Rules', false )
+			? Neo_Pulse_Wp_Index_Rules::noindex_taxonomies()
+			: array( 'post_tag', 'post_format' );
 		foreach ( $taxs as $slug => $obj ) {
+			$include = ! in_array( (string) $slug, $skip_tax, true );
 			$out[ $slug ] = array(
-				'include_xml'  => true,
-				'include_html' => true,
+				'include_xml'  => $include,
+				'include_html' => $include,
 			);
 		}
 		return $out;

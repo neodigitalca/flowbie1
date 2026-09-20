@@ -203,7 +203,7 @@ export async function bulkOptimizationRunPostLoop(p: BulkPostLoopParams): Promis
         };
       });
       updateBulkStateForPost(setBulkOptimizationState, batchKey, url, i, i + 1, urls.length, "error");
-      break;
+      continue;
     }
 
     const currentPost = i + 1;

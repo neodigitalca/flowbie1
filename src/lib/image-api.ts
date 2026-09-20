@@ -90,17 +90,6 @@ export const generateImage = async ({
 
     const data = (await readOpenRouterResponseJson(response)) as Record<string, unknown>;
 
-    
-    // Log the full response structure for debugging
-    console.log('Image generation API response:', JSON.stringify(data, null, 2));
-console.log('Response structure:', {
-      hasChoices: !!data.choices,
-      choicesLength: data.choices?.length,
-      firstChoice: data.choices?.[0],
-      message: data.choices?.[0]?.message,
-      messageKeys: data.choices?.[0]?.message ? Object.keys(data.choices[0].message) : [],
-    });
-    
     // Check for error in response
     if (data.error) {
       const errorMsg = typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error));
@@ -127,7 +116,6 @@ throw new Error(
     // Format 0: Check for top-level data field (standard image API format)
     if (data.data && Array.isArray(data.data) && data.data.length > 0) {
       const firstItem = data.data[0];
-      console.log('Found data array, first item keys:', Object.keys(firstItem));
       if (firstItem.url) {
         return { imageUrl: firstItem.url };
       }
@@ -154,11 +142,9 @@ throw new Error(
     // Check for images array first (OpenRouter image generation format)
     if (data.choices && data.choices[0]?.message?.images && Array.isArray(data.choices[0].message.images)) {
       const images = data.choices[0].message.images;
-      console.log('Found images array with', images.length, 'images');
       if (images.length > 0) {
         const firstImage = images[0];
-        console.log('First image object:', Object.keys(firstImage));
-// Handle image_url - it might be a string or an object
+        // Handle image_url - it might be a string or an object
         if (firstImage.image_url) {
           let imageUrl: string;
           if (typeof firstImage.image_url === 'string') {

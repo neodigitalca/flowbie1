@@ -1,8 +1,13 @@
 import type { Dispatch, SetStateAction } from "react";
-import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
-import { mergeHarnessProgressSiteAndBatch } from "@/hooks/content-optimization/optimization-helpers-a";
 import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
-import { extractH2TextsFromHtml } from "@/lib/overview/overview-blog-headers-extract";
+import {
+  buildAiseoElementHtmlFile,
+  mergeAiseoRowFinishFiles,
+} from "@/lib/overview/overview-aiseo-row-artifacts";
+import {
+  generatedFilesForUrl,
+  storageKeyForUrlGeneratedFiles,
+} from "@/lib/content-optimization/content-optimizer-bulk-generator-bindings";
 
 type SetBulkState = Dispatch<SetStateAction<Record<string, BulkOptimizationState>>>;
 type SetOptProgress = Dispatch<SetStateAction<Record<string, unknown>>>;
@@ -38,39 +43,18 @@ export function setAnswerHarnessMessage(
       },
     };
   });
-  setters.setOptimizationProgress((prev) => {
-    const next = { ...(prev as Record<string, unknown>) };
-    mergeHarnessProgressSiteAndBatch(next, setters.siteId, {
-      step: STEP_LABEL,
-      progress: pct,
-      message,
-    });
-    const batch = next[setters.batchKey] as Record<string, unknown> | undefined;
-    if (batch && typeof batch === "object") {
-      next[setters.batchKey] = {
-        ...batch,
-        currentStepProgress: {
-          ...(batch.currentStepProgress as object),
-          step: STEP_LABEL,
-          progress: pct,
-          message,
-        },
-      };
-    }
-    return next;
-  });
 }
 
 export function markAnswerRowOptimizing(
   url: string,
-  index: number,
+  _index: number,
   setters: AnswerHarnessSetters,
-  updateRow: (index: number, patch: Partial<OverviewRow>) => void,
   rowNum: number,
   total: number,
   label: string,
 ): void {
-  updateRow(index, { status: "ai-answer" });
+  const pct = 10 + Math.round(((rowNum - 1) / Math.max(total, 1)) * 85);
+  const message = `${STEP_LABEL} ${rowNum}/${total}: ${label}`;
   setters.setBulkOptimizationState((prev) => {
     const current = prev[setters.batchKey];
     if (!current) return prev;
@@ -81,44 +65,43 @@ export function markAnswerRowOptimizing(
         currentUrl: url,
         currentIndex: rowNum - 1,
         urlStatuses: { ...(current.urlStatuses || {}), [url]: "optimizing" },
+        currentStepProgress: {
+          step: STEP_LABEL,
+          progress: pct,
+          message,
+        },
       },
     };
   });
-  setAnswerHarnessMessage(
-    setters,
-    `${STEP_LABEL} ${rowNum}/${total}: ${label}`,
-    10 + Math.round(((rowNum - 1) / Math.max(total, 1)) * 85),
-  );
 }
 
 export function markAnswerRowDone(
   url: string,
-  index: number,
+  _index: number,
   setters: AnswerHarnessSetters,
-  updateRow: (index: number, patch: Partial<OverviewRow>) => void,
-  html: string,
-  answerSectionHtml?: string,
+  files?: { answerHtml?: string; postHtml?: string },
 ): void {
-  const blogH2List = extractH2TextsFromHtml(html);
-  updateRow(index, {
-    status: "idle",
-    postContent: html,
-    postContentOptimized: html,
-    blogH2List,
-  });
   setters.setBulkOptimizationState((prev) => {
     const current = prev[setters.batchKey];
     if (!current) return prev;
-    const answerFile =
-      answerSectionHtml?.trim()
-        ? [
-            {
-              name: "answer.html",
-              content: answerSectionHtml.trim(),
-              mimeType: "text/html;charset=utf-8",
-            },
-          ]
-        : [];
+    const existingFiles = generatedFilesForUrl(current.urlGeneratedFiles, url);
+    const storageKey = storageKeyForUrlGeneratedFiles(
+      current.urlGeneratedFiles,
+      url,
+      current.urls,
+    );
+    const elementFiles = files?.answerHtml?.trim()
+      ? [buildAiseoElementHtmlFile("answer.html", files.answerHtml)].filter(
+          (file): file is NonNullable<typeof file> => file != null,
+        )
+      : [];
+    const mergedFiles = mergeAiseoRowFinishFiles({
+      runKind: "aiAnswer",
+      url,
+      existingFiles,
+      elementFiles,
+      postHtml: files?.postHtml,
+    });
     return {
       ...prev,
       [setters.batchKey]: {
@@ -126,20 +109,14 @@ export function markAnswerRowDone(
         urlStatuses: { ...(current.urlStatuses || {}), [url]: "completed" },
         urlGeneratedFiles: {
           ...(current.urlGeneratedFiles || {}),
-          ...(answerFile.length ? { [url]: answerFile } : {}),
+          [storageKey]: mergedFiles,
         },
       },
     };
   });
 }
 
-export function markAnswerRowSkipped(
-  url: string,
-  index: number,
-  setters: AnswerHarnessSetters,
-  updateRow: (index: number, patch: Partial<OverviewRow>) => void,
-): void {
-  updateRow(index, { status: "idle" });
+export function markAnswerRowSkipped(url: string, setters: AnswerHarnessSetters): void {
   setters.setBulkOptimizationState((prev) => {
     const current = prev[setters.batchKey];
     if (!current) return prev;
@@ -155,12 +132,9 @@ export function markAnswerRowSkipped(
 
 export function markAnswerRowError(
   url: string,
-  index: number,
   setters: AnswerHarnessSetters,
-  updateRow: (index: number, patch: Partial<OverviewRow>) => void,
   message: string,
 ): void {
-  updateRow(index, { status: "error" });
   setters.setBulkOptimizationState((prev) => {
     const current = prev[setters.batchKey];
     if (!current) return prev;
@@ -169,8 +143,12 @@ export function markAnswerRowError(
       [setters.batchKey]: {
         ...current,
         urlStatuses: { ...(current.urlStatuses || {}), [url]: "error" },
+        currentStepProgress: {
+          ...(current.currentStepProgress || {}),
+          step: STEP_LABEL,
+          message,
+        },
       },
     };
   });
-  setAnswerHarnessMessage(setters, message);
 }

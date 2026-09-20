@@ -1,0 +1,17 @@
+{
+  "keyword": "ads-report-mom",
+  "name": "Ads MoM report",
+  "executionKind": "ads_reporting",
+  "description": "Month-over-month PPC report saved locally.",
+  "filters": {
+    "categories": ["reporting"],
+    "verticals": ["general"]
+  },
+  "defaults": {
+    "executionPayload": {
+      "comparePreset": "mom",
+      "saveToDisk": true,
+      "saveLocalArchive": true
+    }
+  }
+}

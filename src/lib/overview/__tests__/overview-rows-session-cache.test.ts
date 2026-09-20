@@ -3,6 +3,7 @@ import type { OverviewRow } from "@/components/overview/overview-meta-row-types"
 import {
   clearOverviewRowsSessionCache,
   getOverviewRowsSessionCache,
+  mergeOverviewRowsForSitemapLoad,
   setOverviewRowsSessionCache,
 } from "@/lib/overview/overview-rows-session-cache";
 
@@ -51,5 +52,22 @@ describe("overview-rows-session-cache", () => {
     expect(pages?.[0]?.url).toContain("giving-back");
     expect(posts?.[0]?.url).toContain("commercial-blinds");
     expect(posts?.[0]?.url).not.toContain("giving-back");
+  });
+
+  it("reattaches session row data when refresh only changes the trailing slash", () => {
+    const session = new Map<string, OverviewRow>([
+      ["https://example.com/how-tariffs", { ...row("https://example.com/how-tariffs"), title: "How Tariffs", postId: 9 }],
+    ]);
+    const merged = mergeOverviewRowsForSitemapLoad(
+      ["https://example.com/how-tariffs/"],
+      new Map(),
+      session,
+      (url) => row(url),
+    );
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.url).toBe("https://example.com/how-tariffs/");
+    expect(merged[0]?.title).toBe("How Tariffs");
+    expect(merged[0]?.postId).toBe(9);
   });
 });

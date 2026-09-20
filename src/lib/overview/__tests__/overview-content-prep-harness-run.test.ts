@@ -99,7 +99,7 @@ describe("overview-content-prep-harness-run batch vs post harness", () => {
           { sectionIndex: 0, title: "SERP research brief", status: "done" },
           { sectionIndex: 1, title: "Checklist", status: "waiting" },
           { sectionIndex: 2, title: "Blueprint", status: "waiting" },
-          { sectionIndex: 3, title: "Content HTML", status: "waiting" },
+          { sectionIndex: 3, title: "Post content", status: "waiting" },
           { sectionIndex: 4, title: "Content Markdown", status: "waiting" },
         ],
       },

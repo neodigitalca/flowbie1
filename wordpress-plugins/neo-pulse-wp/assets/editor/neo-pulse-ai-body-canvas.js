@@ -9,7 +9,9 @@
 	var useEffect = wp.element.useEffect;
 	var useState = wp.element.useState;
 	var registerPlugin = wp.plugins.registerPlugin;
-	var PluginDocumentSettingPanel = wp.editor.PluginDocumentSettingPanel;
+	var PluginDocumentSettingPanel =
+		(wp.editor && wp.editor.PluginDocumentSettingPanel) ||
+		(wp.editPost && wp.editPost.PluginDocumentSettingPanel);
 	var createHigherOrderComponent = wp.compose.createHigherOrderComponent;
 	var BlockEdit = wp.blockEditor.BlockEdit;
 
@@ -41,7 +43,7 @@
 			});
 		}, []);
 
-		if (!state.sessionId && state.phase === 'idle') {
+		if (!PluginDocumentSettingPanel || (!state.sessionId && state.phase === 'idle')) {
 			return null;
 		}
 

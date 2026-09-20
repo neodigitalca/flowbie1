@@ -26,10 +26,6 @@ export function linkRowsToCatalogItems(rows: ExtraTextInventoryLinkRow[]): Inter
   }));
 }
 
-function catalogHasPages(catalog: InternalLinkCatalogItem[]): boolean {
-  return catalog.some((item) => blogPlayLinkInventoryLabel(item.collection, item.postType) === "PAGE");
-}
-
 function catalogItemByUrl(
   catalog: InternalLinkCatalogItem[],
   url: string,
@@ -69,26 +65,30 @@ export function buildLinkTargetQueries(args: {
     const words = queryWordsFromTitle(sectionTitle);
     queries.push({
       id: `section-${i}-page`,
-      query: `${words} product service`.trim(),
+      query: words || sectionTitle,
       anchor: sectionTitle,
+      bucket: "PAGE",
     });
     queries.push({
       id: `section-${i}-blog`,
-      query: `${words} guide tips how to`.trim(),
+      query: words || sectionTitle,
       anchor: sectionTitle,
+      bucket: "BLOG",
     });
     queries.push({
       id: `section-${i}-related`,
-      query: `${words} options features`.trim(),
+      query: words || sectionTitle,
       anchor: sectionTitle,
+      bucket: "PAGE",
     });
   }
 
   if (keyword) {
     queries.push({
       id: "global-page",
-      query: `${keyword} product service`,
+      query: keyword,
       anchor: keyword,
+      bucket: "PAGE",
     });
   }
 
@@ -129,15 +129,6 @@ export function buildLinkTargetsPlanFromMatches(args: {
     } else {
       blogTargets.push(entry);
     }
-  }
-
-  if (catalogHasPages(args.catalog) && pageTargets.length === 0) {
-    throw new Error(
-      "Link targets plan: page inventory exists but intent matching returned no page targets.",
-    );
-  }
-  if (!pageTargets.length && !blogTargets.length) {
-    throw new Error("Link targets plan: intent matching returned no page or blog targets.");
   }
 
   return { pageTargets, blogTargets };

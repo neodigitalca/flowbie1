@@ -405,6 +405,11 @@ class Neo_Pulse_App_Platform_Data_Orchestrator {
 					'lines' => $result['lines'] ?? array(),
 				);
 			}
+			if ( $tool_id === 'ads_reporting_compare_summary' ) {
+				$analytics['ads_reporting'] = array(
+					'lines' => $result['lines'] ?? array(),
+				);
+			}
 			if ( $tool_id === 'gsc_top_queries' ) {
 				$analytics['gsc_queries'] = array(
 					'queries' => $result['rows'] ?? array(),

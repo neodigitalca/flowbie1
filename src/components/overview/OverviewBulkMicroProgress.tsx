@@ -10,6 +10,7 @@ import {
   type MetaPipelineStepUi,
 } from "@/components/overview/overview-tab-constants";
 import { pickActiveBulkProgressSlice } from "@/lib/overview/overview-bulk-inline-status";
+import { wpUploadBatchDisplayCount } from "@/lib/overview/overview-batch-pipeline-progress";
 import { WorkspaceDetailsPipelineStepRow } from "@/components/shared/WorkspaceDetailsPipelineSteps";
 import type { OptimizationProgressState } from "@/hooks/content-optimization/use-optimization-state";
 import { pickLatestOptimizationStatus } from "@/lib/content-optimization/optimization-progress-humanize";
@@ -84,6 +85,11 @@ function countBatchCurrentPost(
 export function resolveBulkPostTicker(
   batchState: BulkOptimizationState | null | undefined,
 ): { current: number; total: number; completed: number } | null {
+  if (batchState?.runKind === "wpUpload") {
+    const ticker = wpUploadBatchDisplayCount(batchState.batchPipelineSteps);
+    if (!ticker) return null;
+    return { current: ticker.current, total: ticker.total, completed: ticker.current };
+  }
   if (!batchState?.urls?.length || !batchProgressBarUsesPostCompletion(batchState)) {
     return null;
   }
@@ -128,11 +134,10 @@ export function BulkPostProgressLeading({
 }
 
 function countBatchProcessed(batchState: BulkOptimizationState): { completed: number; total: number } {
-  // WP upload: one tick per max-25 parallel batch, not per post.
   if (batchState.runKind === "wpUpload" && batchState.batchPipelineSteps?.length) {
-    const total = batchState.batchPipelineSteps.length;
-    const completed = batchState.batchPipelineSteps.filter((s) => s.status === "done").length;
-    return { completed: Math.min(completed, total), total };
+    const ticker = wpUploadBatchDisplayCount(batchState.batchPipelineSteps);
+    if (!ticker) return { completed: 0, total: 0 };
+    return { completed: ticker.current, total: ticker.total };
   }
   const urls = batchState.urls || [];
   const total = urls.length;
@@ -175,6 +180,8 @@ function batchRunLabel(batchState: BulkOptimizationState, siteName?: string): st
       return `Scenario${siteSuffix}`;
     case "aiInContentImage":
       return `In Content Image${siteSuffix}`;
+    case "aiFeaturedImage":
+      return `Featured image${siteSuffix}`;
     default:
       return siteName?.trim() ? `Content Optimizer - ${siteName.trim()}` : META_BULK_MICRO_LABELS.optimizeAll;
   }
@@ -208,6 +215,8 @@ function defaultBatchStatusMessage(batchState: BulkOptimizationState): string {
       return "Regenerating Scenario";
     case "aiInContentImage":
       return "Generating in-content image";
+    case "aiFeaturedImage":
+      return "Featured image";
     default:
       return "Optimizing page content";
   }
@@ -232,9 +241,12 @@ function buildBatchMicroSnapshot(
   const progressPct = batchProgressBarUsesPostCompletion(batchState)
     ? pagePct
     : Math.min(100, Math.max(pagePct, harnessPct));
-  const tickerPost = batchProgressBarUsesPostCompletion(batchState)
-    ? countBatchCurrentPost(batchState, completed, total)
-    : undefined;
+  const tickerPost =
+    batchState.runKind === "wpUpload"
+      ? completed
+      : batchProgressBarUsesPostCompletion(batchState)
+        ? countBatchCurrentPost(batchState, completed, total)
+        : undefined;
   return {
     label,
     completed,
@@ -249,10 +261,7 @@ function isActiveBatchProgress(
   batchState: BulkOptimizationState | null | undefined,
   isBatchContentRunning: boolean,
 ): batchState is BulkOptimizationState {
-  if (!batchState?.urls?.length) return false;
-  if (isBatchContentRunning) return true;
-  const { completed, total } = countBatchProcessed(batchState);
-  return completed < total;
+  return Boolean(isBatchContentRunning && batchState?.urls?.length);
 }
 
 export type PickMetaBulkMicroSnapshotOptions = {
@@ -273,7 +282,7 @@ export function pickMetaBulkMicroSnapshot(
   for (const key of META_BULK_MICRO_ORDER) {
     if (key === "loadSitemap" || key === "inventoryHydrate") continue;
     const slice = bulkActionProgress[key];
-    if (slice && slice.total > 0) {
+    if (slice && slice.total > 0 && slice.completed < slice.total) {
       const label = META_BULK_MICRO_LABELS[key];
       const rawStatus = slice.statusMessage?.trim();
       const completed = Math.min(slice.completed, slice.total);
@@ -286,9 +295,6 @@ export function pickMetaBulkMicroSnapshot(
         statusMessage: shouldShowBulkInlineStatus(label, rawStatus) ? rawStatus : undefined,
       };
     }
-  }
-  if (batchState?.urls?.length) {
-    return buildBatchMicroSnapshot(batchState, siteName, runLabelOverride);
   }
   return null;
 }

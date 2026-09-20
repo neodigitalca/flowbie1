@@ -479,22 +479,26 @@ class Neo_Pulse_Wp_Seo_Blocks_Storage {
 			return new WP_Error( 'neo-pulse_seo_block_missing', __( 'SEO block not found.', 'neo-pulse-wp' ) );
 		}
 
+		return self::save( self::duplicate_source_to_save_input( $source ) );
+	}
+
+	/**
+	 * @param array<string,mixed> $source
+	 * @return array<string,mixed>
+	 */
+	public static function duplicate_source_to_save_input( array $source ): array {
 		$title = sanitize_text_field( (string) ( $source['title'] ?? '' ) );
 		if ( $title === '' ) {
 			$title = __( 'SEO block', 'neo-pulse-wp' );
 		}
-		$title .= ' ' . __( '(Copy)', 'neo-pulse-wp' );
-
-		return self::save(
-			array(
-				'title'           => $title,
-				'focus_keyword'   => (string) ( $source['focus_keyword'] ?? '' ),
-				'topic_focus'     => (string) ( $source['topic_focus'] ?? '' ),
-				'slots'           => $source['slots'] ?? array(),
-				'layout_config'   => $source['layout_config'] ?? array(),
-				'primary_post_id' => (int) ( $source['primary_post_id'] ?? 0 ),
-				'status'          => 'draft',
-			)
+		return array(
+			'title'           => $title . ' ' . __( '(Copy)', 'neo-pulse-wp' ),
+			'focus_keyword'   => (string) ( $source['focus_keyword'] ?? '' ),
+			'topic_focus'     => (string) ( $source['topic_focus'] ?? '' ),
+			'slots'           => isset( $source['slots'] ) && is_array( $source['slots'] ) ? $source['slots'] : array(),
+			'layout_config'   => isset( $source['layout_config'] ) && is_array( $source['layout_config'] ) ? $source['layout_config'] : array(),
+			'primary_post_id' => (int) ( $source['primary_post_id'] ?? 0 ),
+			'status'          => 'draft',
 		);
 	}
 }

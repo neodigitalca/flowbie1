@@ -41,6 +41,8 @@ describe("buildKeywordPunctuationPromptBlock", () => {
     const block = buildKeywordPunctuationPromptBlock("veneers vs crowns");
     expect(block).not.toContain("STORED FOCUS KEYWORD");
     expect(block).toContain('Focus keyword: "veneers vs crowns"');
+    expect(block).toContain(". durable window coverings");
+    expect(block).toContain("next sentence starts with a capital letter");
   });
 });
 

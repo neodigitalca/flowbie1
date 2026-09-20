@@ -12,6 +12,7 @@ import {
   type OverviewSitemapSource,
 } from "@/lib/overview/overview-sitemap-source";
 import { applyInventoryPatchesToOverviewRows } from "@/lib/overview/overview-inventory-progressive-hydrate";
+import { applyCachedElementorFieldsToOverviewRows } from "@/lib/elementor-page-content/elementor-section-headers-from-cache";
 import {
   getOverviewRowsSessionCache,
   mergeOverviewRowsForSitemapLoad,
@@ -27,6 +28,7 @@ import {
   NEO_PULSE_SITE_DATA_REFRESHED_EVENT,
 } from "@/lib/local-analysis/entity-site-warm-cache";
 import type { WordPressSite } from "@/components/integrations/types";
+import type { OverviewBinding } from "@/hooks/overview/use-overview-wordpress-binding";
 import type { OverviewTabBase } from "@/hooks/overview/use-overview-tab-base";
 
 type Args = Pick<
@@ -37,6 +39,7 @@ type Args = Pick<
   | "resolveBindings"
   | "prefetchOverviewInventory"
   | "getInventoryMatchForUrl"
+  | "bindings"
 > & {
   site: WordPressSite | undefined;
 };
@@ -48,6 +51,23 @@ type LoadOptions = {
   generation?: number;
 };
 
+function finalizeOverviewRowsFromInventory(
+  rows: OverviewRow[],
+  site: WordPressSite,
+  source: OverviewSitemapSource,
+  bindingMap: Record<string, OverviewBinding | undefined>,
+  getInventoryMatchForUrl: Args["getInventoryMatchForUrl"],
+): OverviewRow[] {
+  const patched = applyInventoryPatchesToOverviewRows(
+    rows,
+    site,
+    source,
+    bindingMap,
+    getInventoryMatchForUrl,
+  );
+  return applyCachedElementorFieldsToOverviewRows(patched, source);
+}
+
 export function useOverviewTabSitemapLoad({
   rowsRef,
   setRows,
@@ -56,6 +76,7 @@ export function useOverviewTabSitemapLoad({
   resolveBindings,
   prefetchOverviewInventory,
   getInventoryMatchForUrl,
+  bindings,
 }: Args) {
   const [overviewSitemapLoadBusy, setOverviewSitemapLoadBusy] = useState(false);
   const uiLoadCountByGenerationRef = useRef<Map<number, number>>(new Map());
@@ -72,7 +93,10 @@ export function useOverviewTabSitemapLoad({
   const isStaleLoad = useCallback((generation: number) => generation !== loadGenerationRef.current, []);
 
   const syncOverviewSitemapLoadBusy = useCallback(() => {
-    const activeCount = uiLoadCountByGenerationRef.current.get(loadGenerationRef.current) ?? 0;
+    let activeCount = 0;
+    for (const count of uiLoadCountByGenerationRef.current.values()) {
+      activeCount += count;
+    }
     setOverviewSitemapLoadBusy(activeCount > 0);
   }, []);
 
@@ -134,20 +158,26 @@ export function useOverviewTabSitemapLoad({
         }
       };
 
-      if (!force) {
-        const cachedRows = getOverviewRowsSessionCache(activeSite.id, source);
-        if (cachedRows?.length) {
-          if (source === sitemapSourceRef.current) {
-            setRows(cachedRows);
-          }
-          return;
+      inFlightBySourceRef.current.add(source);
+
+      const sessionRows = getOverviewRowsSessionCache(activeSite.id, source) ?? [];
+      const hasImmediateRows =
+        sessionRows.length > 0 ||
+        (applyToUi &&
+          rowsRef.current.some(
+            (row) =>
+              row.url?.trim() &&
+              ((row.title || row.pageHeading || "").trim().length > 0),
+          ));
+
+      if (hasImmediateRows && applyToUi && !isStaleLoad(generation)) {
+        if (sessionRows.length) {
+          setRows(sessionRows);
         }
       }
 
-      inFlightBySourceRef.current.add(source);
-
       let uiLoadOpen = false;
-      if (!silent && applyToUi) {
+      if (!silent && applyToUi && !hasImmediateRows) {
         beginUiLoad(generation);
         uiLoadOpen = true;
       }
@@ -158,13 +188,12 @@ export function useOverviewTabSitemapLoad({
           source,
         );
 
-        const sessionRows = getOverviewRowsSessionCache(activeSite.id, source) ?? [];
         const sessionByUrl = new Map(sessionRows.map((r) => [r.url, r]));
 
         const inv = await prefetchOverviewInventory(activeSite, {
           downloadCsv: false,
           collections: inventoryCollections,
-          includeContent: false,
+          includeContent: true,
           includePageHeading: true,
           source,
           silent: true,
@@ -172,11 +201,6 @@ export function useOverviewTabSitemapLoad({
         });
 
         if (isStaleLoad(generation)) return;
-
-        if (uiLoadOpen) {
-          endUiLoad(generation);
-          uiLoadOpen = false;
-        }
 
         if (!inv.ok) {
           if (!silent || force) {
@@ -232,7 +256,7 @@ export function useOverviewTabSitemapLoad({
 
         if (isStaleLoad(generation)) return;
 
-        const hydratedRows = applyInventoryPatchesToOverviewRows(
+        const rowsToCommit = finalizeOverviewRowsFromInventory(
           rowsFinal,
           activeSite,
           source,
@@ -240,7 +264,8 @@ export function useOverviewTabSitemapLoad({
           getInventoryMatchForUrl,
         );
 
-        commitRows(hydratedRows.length ? hydratedRows : rowsFinal);
+        if (isStaleLoad(generation)) return;
+        commitRows(rowsToCommit);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Failed to load sitemap.";
         if (!silent || force) {

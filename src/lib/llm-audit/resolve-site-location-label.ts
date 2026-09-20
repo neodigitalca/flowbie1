@@ -105,13 +105,17 @@ export function resolveFanoutLocationForResearch(
   const tokens = keyword.trim().split(/\s+/).filter(Boolean);
   if (tokens.length >= 2) {
     const lead: string[] = [];
+    let hitService = false;
     for (const token of tokens) {
       const lower = token.toLowerCase();
-      if (GENERIC_SERVICE_TOKENS.has(lower)) break;
+      if (GENERIC_SERVICE_TOKENS.has(lower)) {
+        hitService = true;
+        break;
+      }
       lead.push(token);
     }
     const city = lead.join(" ").trim();
-    if (city) {
+    if (hitService && city) {
       if (province && !city.toLowerCase().includes(province.toLowerCase().split(/\s+/)[0] ?? "")) {
         return `${city}, ${province}`;
       }

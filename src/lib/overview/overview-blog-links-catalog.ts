@@ -20,6 +20,7 @@ import { computeBlogLinksBudget } from "@/lib/overview/overview-blog-links-budge
 import type { LinkInventoryBucket } from "@/lib/overview/overview-blog-links-bucket";
 import type { BlogLinksSiteLinkPool } from "@/lib/overview/overview-blog-links-inventory";
 import { normalizeInternalUrl } from "@/lib/wordpress-api/validate-internal-links";
+import { buildElementorPageHtml } from "@/lib/elementor-page-content/elementor-page-html";
 
 export type BlogLinkCandidate = {
   url: string;
@@ -45,6 +46,7 @@ export type BlogLinksCatalogRow = {
   paragraphCount: number;
   gscPicks?: BlogHeadersGscPicks;
   userLinkTargets?: Array<{ anchor: string; href: string }>;
+  elementorSourceJson?: string;
 };
 
 export type BuildBlogLinksCatalogResult = {
@@ -119,8 +121,11 @@ export function buildBlogLinksCatalog(
     }
 
     const inventoryHtml = snapshotHit?.row?.fields?.content?.trim() ?? "";
+    const elementorSourceJson = row.elementorDataJson?.trim() || undefined;
+    const elementorBuiltHtml = elementorSourceJson ? buildElementorPageHtml(elementorSourceJson) : "";
     const html =
       rowHtmlByIndex?.[index]?.trim() ||
+      elementorBuiltHtml ||
       row.postContentOptimized?.trim() ||
       inventoryHtml ||
       row.postContent?.trim() ||
@@ -166,6 +171,7 @@ export function buildBlogLinksCatalog(
       linksToAdd: budget.linksToAdd,
       paragraphCount: findHtmlParagraphSpans(html).length,
       userLinkTargets,
+      elementorSourceJson,
     });
   });
 

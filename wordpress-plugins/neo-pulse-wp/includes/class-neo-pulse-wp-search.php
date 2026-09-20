@@ -23,6 +23,9 @@ class Neo_Pulse_Wp_Search {
 	/** @var bool */
 	private static bool $front_page_search_rendered = false;
 
+	/** @var bool */
+	private static bool $sidebar_search_rendered = false;
+
 	// ── Settings CRUD ────────────────────────────────────────────
 
 	/**
@@ -165,6 +168,7 @@ class Neo_Pulse_Wp_Search {
 		} else {
 			add_action( 'wp_body_open', array( __CLASS__, 'maybe_render_front_page_search' ), 5 );
 		}
+		add_action( 'wp_footer', array( __CLASS__, 'maybe_render_header_search_host' ), 5 );
 
 		require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/search/integrations/class-neo-pulse-wp-search-elementor.php';
 		Neo_Pulse_Wp_Search_Elementor::init();
@@ -241,6 +245,31 @@ class Neo_Pulse_Wp_Search {
 			array(
 				'layout' => 'hero',
 				'slot'   => 'header',
+			)
+		);
+	}
+
+	/**
+	 * Hidden search sidebar host when Design is set to use the header search icon.
+	 */
+	public static function maybe_render_header_search_host(): void {
+		if ( is_admin() ) {
+			return;
+		}
+		$sidebar = Neo_Pulse_Wp_Ai_Widget_Design::resolve_sidebar_config( 'search' );
+		if ( empty( $sidebar['header_search_opens_sidebar'] ) ) {
+			return;
+		}
+		if ( self::$sidebar_search_rendered ) {
+			return;
+		}
+		$side = ( ( $sidebar['sidebar_side'] ?? 'right' ) === 'left' ) ? 'left' : 'right';
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Markup from render_instance().
+		echo self::render_instance(
+			array(
+				'header_search_host' => true,
+				'display_mode'       => 'icon_only',
+				'icon_open_as'       => $side === 'left' ? 'sidebar_left' : 'sidebar_right',
 			)
 		);
 	}
@@ -408,6 +437,10 @@ class Neo_Pulse_Wp_Search {
 			$wrap_class .= ' fai-sidebar-root--transition-' . $transition;
 		}
 
+		if ( ! empty( $instance['header_search_host'] ) ) {
+			$wrap_class .= ' neo-pulse-search-wrap--header-host';
+		}
+
 		if ( ! empty( $sidebar['display_mode'] ) && $sidebar['display_mode'] === 'icon_only' ) {
 			$wrap_class .= ' neo-pulse-search-wrap--icon-only';
 			$open_as = (string) ( $sidebar['icon_open_as'] ?? 'sidebar_right' );
@@ -546,7 +579,7 @@ class Neo_Pulse_Wp_Search {
 		wp_register_style(
 			'neo-pulse-search',
 			$base_url . 'assets/search/neo-pulse-search.css',
-			array( 'neo-pulse-wp-lato' ),
+			array(),
 			$asset_ver
 		);
 
@@ -554,6 +587,14 @@ class Neo_Pulse_Wp_Search {
 			'neo-pulse-search',
 			$base_url . 'assets/search/neo-pulse-search.js',
 			array(),
+			$asset_ver,
+			true
+		);
+
+		wp_register_script(
+			'neo-pulse-search-header-trigger',
+			$base_url . 'assets/search/neo-pulse-search-header-trigger.js',
+			array( 'neo-pulse-search', 'neo-pulse-ai-sidebar-shell' ),
 			$asset_ver,
 			true
 		);
@@ -565,10 +606,11 @@ class Neo_Pulse_Wp_Search {
 	 * @param array<string,mixed> $sidebar Optional sidebar config.
 	 */
 	public static function enqueue_search_assets( array $sidebar = array() ): void {
-		$display_mode = ! empty( $sidebar['display_mode'] ) ? (string) $sidebar['display_mode'] : '';
-		$is_sidebar   = $display_mode === 'sidebar';
-		$icon_open_as = (string) ( $sidebar['icon_open_as'] ?? 'sidebar_right' );
-		$needs_shell  = $is_sidebar || ( $display_mode === 'icon_only' && $icon_open_as !== 'expand_inline' );
+		$display_mode   = ! empty( $sidebar['display_mode'] ) ? (string) $sidebar['display_mode'] : '';
+		$is_sidebar     = $display_mode === 'sidebar';
+		$icon_open_as   = (string) ( $sidebar['icon_open_as'] ?? 'sidebar_right' );
+		$header_trigger = ! empty( $sidebar['header_search_opens_sidebar'] );
+		$needs_shell    = $is_sidebar || $header_trigger || ( $display_mode === 'icon_only' && $icon_open_as !== 'expand_inline' );
 		self::register_search_assets();
 		if ( $needs_shell ) {
 			self::register_sidebar_assets();
@@ -581,7 +623,6 @@ class Neo_Pulse_Wp_Search {
 				true
 			);
 		}
-		wp_enqueue_style( 'neo-pulse-wp-lato' );
 		wp_enqueue_style( 'neo-pulse-search' );
 		if ( $needs_shell ) {
 			wp_enqueue_style( 'neo-pulse-ai-sidebar-shell' );
@@ -590,6 +631,9 @@ class Neo_Pulse_Wp_Search {
 			wp_enqueue_script( 'neo-pulse-ai-sidebar-unify' );
 		}
 		wp_enqueue_script( 'neo-pulse-search' );
+		if ( $header_trigger ) {
+			wp_enqueue_script( 'neo-pulse-search-header-trigger' );
+		}
 	}
 
 	/**
@@ -598,12 +642,16 @@ class Neo_Pulse_Wp_Search {
 	public static function search_asset_version(): string {
 		$css = NEO_PULSE_WP_PLUGIN_DIR . 'assets/search/neo-pulse-search.css';
 		$js  = NEO_PULSE_WP_PLUGIN_DIR . 'assets/search/neo-pulse-search.js';
+		$header_js = NEO_PULSE_WP_PLUGIN_DIR . 'assets/search/neo-pulse-search-header-trigger.js';
 		$ver = defined( 'NEO_PULSE_WP_VERSION' ) ? NEO_PULSE_WP_VERSION : '1';
 		if ( is_readable( $css ) ) {
 			$ver .= '.' . (string) filemtime( $css );
 		}
 		if ( is_readable( $js ) ) {
 			$ver .= '.' . (string) filemtime( $js );
+		}
+		if ( is_readable( $header_js ) ) {
+			$ver .= '.' . (string) filemtime( $header_js );
 		}
 		return $ver;
 	}
@@ -671,6 +719,7 @@ class Neo_Pulse_Wp_Search {
 
 		$is_panel_search = $is_sidebar || ( $is_icon_only && $icon_open_as !== 'expand_inline' );
 		if ( $is_panel_search ) {
+			self::$sidebar_search_rendered = true;
 			$layout = self::normalize_sidebar_panel_layout( $layout );
 		}
 		if ( $is_panel_search && $show_search ) {
@@ -774,6 +823,9 @@ class Neo_Pulse_Wp_Search {
 			<?php if ( $is_icon_only ) : ?>
 				data-icon-mode="1"
 				data-icon-open-as="<?php echo esc_attr( $icon_open_as ); ?>"
+			<?php endif; ?>
+			<?php if ( ! empty( $sidebar['header_search_opens_sidebar'] ) ) : ?>
+				data-header-search-trigger="1"
 			<?php endif; ?>
 			<?php if ( $hide_ai ) : ?>
 				data-hide-ai-banner="1"
@@ -1038,7 +1090,7 @@ class Neo_Pulse_Wp_Search {
 						<p class="fbs__results-slot-empty-label"><?php esc_html_e( 'Search results appear here', 'neo-pulse-wp' ); ?></p>
 					</div>
 					<div class="fbs__panel fbs__panel--sidebar">
-						<div class="fbs__dropdown" role="listbox" hidden></div>
+						<div class="fbs__dropdown" hidden></div>
 						<div class="fbs__status" aria-live="polite" hidden></div>
 					</div>
 				</div>
@@ -1177,7 +1229,7 @@ class Neo_Pulse_Wp_Search {
 		}
 		?>
 		<div class="fbs__panel">
-			<div class="fbs__dropdown" role="listbox" hidden style="display:none;"></div>
+			<div class="fbs__dropdown" hidden style="display:none;"></div>
 			<div class="fbs__status" aria-live="polite" style="display:none;"></div>
 		</div>
 		<?php

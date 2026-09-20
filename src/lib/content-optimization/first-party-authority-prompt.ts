@@ -9,11 +9,6 @@ import {
 
 export type { FirstPartyClaim };
 
-import {
-  ILLUSTRATIVE_DEFAULT_H2,
-  resolveIllustrativeH2Title,
-} from "@/lib/content-optimization/illustrative-h2";
-
 export {
   ILLUSTRATIVE_DEFAULT_H2,
   isBadIllustrativeH2Title,
@@ -60,13 +55,14 @@ When no first-party block is present: use qualitative field voice only with spec
 /** A+ article contract: specs with meaning, regional climate, cost-worth-it, concrete decisions. */
 export const A_PLUS_HOMEOWNER_ARTICLE_RULE = `**A+ HOMEOWNER ARTICLE (NON-NEGOTIABLE)**:
 1. **Numbers that mean something**: When the topic involves measurable specs, cost, ROI, savings, payback, or production (efficiency %, kWh, kW, CAD/USD, COP, R-value, SEER, rebates, degradation, etc.), include sourced figures with units and explicit currency (CAD for Canadian sites, USD for US sites — infer from connected service area, province/state, or site country; never bare "$" without CAD or USD). Cost/ROI/savings H2s must carry at least two distinct sourced data points when sources provide them (range + driver, or two drivers). Present install and $/W figures as illustrative ranges, not universal prices: qualify with variance drivers (system size, equipment, roof complexity, electrical work, market timing, location). Never invent specs or dollar amounts; if missing from sources, state what drives variance and what to verify.
-2. **Regional climate H2**: When ARTICLE CONTENT TYPE is cost or how_to, exactly one H2 must explain how the connected service area's climate/seasons affect the decision (production, comfort, timing, durability, snow, humidity, freeze-thaw, etc.) using only facts from sources. Not a generic national overview. For guide, what_is, and vs: skip a dedicated climate H2; spend that slot on process, comparison, metrics, or recommendation.
-3. **Worth-the-extra-cost H2**: When ARTICLE CONTENT TYPE is cost or how_to (or sources show product tiers), the [TRADEOFF] checklist item must answer whether the premium/higher-efficiency/higher-tier option is worth the extra cost for typical local readers, with constraints (roof, usage, budget, payback horizon, market, competition). No vague "it depends" without criteria. For guide, what_is, and vs without tiers: [TRADEOFF] is when the approach fails or who it is not for, not a fake premium product tier.
+2. **Regional climate H2**: Write a climate or season H2 only when climate or season changes a decision in THIS connected site's trade (the service this business sells). When the connected site sells SEO, web, ads, or other marketing, climate facts about a client's product category are not a license for a product-trends, insulation, style, or homeowner-product H2. When sources do not show climate drivers for THIS trade, skip a dedicated climate H2; spend that slot on process, comparison, metrics, or recommendation.
+3. **Worth-the-extra-cost H2**: When sources show product tiers, the [TRADEOFF] checklist item must answer whether the premium/higher-efficiency/higher-tier option is worth the extra cost for typical local readers, with constraints (roof, usage, budget, payback horizon, market, competition). No vague "it depends" without criteria. When there are no tiers: [TRADEOFF] is when the approach fails or who it is not for, not a fake premium product tier.
 4. **No generic filler**: Replace encyclopedia prose with reader decisions, side-by-side comparisons, and field examples from FIRST-PARTY / audit / existing HTML. Forbidden: repeated generic benefits, textbook definitions, restating the Answer definition, copy any site could publish.`;
 
 /** A+ keyword spine: place is a modifier; practitioner knowledge, intent examples, human voice, sourced we-lines. */
 export const A_PLUS_KEYWORD_AUTHORITY_RULE = `**A+ KEYWORD AUTHORITY (NON-NEGOTIABLE)**:
 The writing keyword is the article's subject. Place names, the connected business, and SEO mechanics are supporting context. Derive every requirement from the writing keyword and listed sources. Never from a hardcoded vertical.
+**Trade + keyword (topic contract)**: CONNECTED SITE IDENTITY is the seller. Write as that business serving the searcher behind the writing keyword. If the site sells SEO, web, or ads and the keyword names another industry, the topic is that marketing service for businesses in that industry. Forbidden: product encyclopedia, style trends, SKU catalogs, install how-tos, or homeowner product-choice copy for the industry noun unless FIRST-PARTY CLAIMS, GBP, or inventory show this site sells that product. The only chrome titles are Answer and Overview. Every body H2 is unique and written from the writing keyword. Never invent fixed H2 titles. Never Section N. Exactly one [ILLUSTRATIVE] section. Never a second homeowner-example H2.
 1. **Place-entity density (~70% cut)**: When a place entity (street, neighborhood, district, landmark) is present, it is a location modifier, not the topic. Exact entity name at most once per body H2 (skip if the prior H2 already used it); article-wide at most ~3 exact mentions in prose (Answer may use it once). After the first mention prefer here / this area / local. Forbidden: making the place name the grammatical subject of most paragraphs; repeating "{keyword} {entity}" slug stacks; writing a place-history page with the keyword bolted on. If no place entity is present, skip this item. City/region still obeys SERVICE AREA DENSITY.
 2. **Keyword-specific practitioner knowledge**: Each body H2 must include at least one fact, constraint, process step, spec, mistake, or decision that a knowledgeable provider for THIS writing keyword would know, taken from FIRST-PARTY CLAIMS, VERIFIED FACTS, audit blocks, existing HTML, or the keyword's meaning. Forbidden: generic local-page filler that would work for any service at this place; encyclopedia of the place; copy that never names a decision unique to the keyword.
 3. **Concrete search-intent examples**: In Overview or the first body H2 (no new H2), include 2-3 concrete searcher questions or query examples implied by the writing keyword. Use peopleAlsoAsk / related searches from the SEO brief when present; otherwise paraphrase the decision behind the keyword. Shape: short query plus what the searcher is trying to decide. Forbidden: abstract labels only (informational / commercial intent) with no example queries. Do not invent SERP queries that are not implied by the keyword or brief.
@@ -86,7 +82,7 @@ export const AISO_DEPTH_RULE = `**AISO DEPTH (NON-NEGOTIABLE)**:
 
 /** AISO authority: natural phrasing, claim reasoning, technical accuracy (no extra sections). */
 export const AISO_AUTHORITY_PHRASING_RULE = `**AISO AUTHORITY PHRASING (NON-NEGOTIABLE)**:
-1. **Natural phrasing (no SEO stubs)**: Forbidden in body copy: dangling tails "for more", "learn more", "read more", or "click here" when not part of a complete natural sentence. Forbidden broken patterns: [noun phrase] for more with no clear object (e.g. "initial cost for more", "energy future for more"). Internal and external links must stay mid-sentence with words before and after the anchor; never append a link or stub phrase after the final period.
+1. **Natural phrasing (no SEO stubs)**: Forbidden in body copy: dangling tails "for more", "learn more", "read more", or "click here" when not part of a complete natural sentence. Forbidden broken patterns: [noun phrase] for more with no clear object (e.g. "initial cost for more", "energy future for more"). Internal and external links must stay mid-sentence with words before and after the anchor. Never append a link, keyword, page title, plan query, or [[LINK]] after the final period. Forbidden leftover fragment after a finished sentence: ". durable window coverings". After a period, question mark, or exclamation point, the next sentence starts with a capital letter. If you cannot weave a remaining keyword or link inside a sentence you are already writing, STOP. Do not append it.
 2. **Conclusion requires mechanism**: Any strong recommendation or regional benefit claim must name at least one cause in the same paragraph (roof area limit, annual sun hours, winter sun angle, temperature coefficient, snow cover, payback horizon, usage pattern, etc.). Forbidden: standalone conclusions ("X is particularly beneficial here") with no because tied to a measurable or observable factor from sources.
 3. **Technical accuracy (no spec conflation)**: Do not equate unrelated specs: panel efficiency vs partial-shading tolerance vs low-light or diffuse-light performance vs temperature coefficient vs inverter/optimizer/string layout. Forbidden: implying higher-efficiency panels solve shading, "perform better in sub-optimal conditions" when shade is the issue, that efficiency ratings mitigate shading losses, or that high efficiency automatically means better low-light performance. Forbidden blanket pros: "better performance in low light conditions" or "better in low light" as a default pro of high-efficiency tiers. When low light matters, use conditional wording (e.g. some high-efficiency panels may perform well under lower-light conditions, depending on module technology and design) or name the driver (cell type, bifacial gain, low-light current, etc.) when sources support it. When shading matters, name the actual drivers (MLPE/optimizers, string layout, bypass diodes, tree/structure obstructions, layout changes) — not buying a higher-efficiency module as the fix unless sources explicitly tie them. Prefer qualified, source-bound statements over broad superlatives.
 4. **Qualified claims (no blanket pros)**: Pros/cons tables, comparison tables, and benefit lists must not use unqualified universal claims. Use may / can / when / depending on / for models that plus a named factor or source. Each Pros row should carry one specific, verifiable angle, not a generic superlative.
@@ -208,13 +204,13 @@ export const ILLUSTRATIVE_ONE_PERSONA_FORBIDDEN = `Forbidden in [ILLUSTRATIVE]: 
 /** Exact HTML/markdown shape: one persona, one decision matching Answer, compact. */
 export const ILLUSTRATIVE_PERSONA_OUTPUT_SHAPE = `**ILLUSTRATIVE OUTPUT SHAPE (exact — compact, one decision matching Answer)**:
 Do NOT output lead-in labels. Forbidden: the word "Scenario:" anywhere in this section. Do NOT use a persona name as h3. Keep this block **short** — do not add extra paragraphs or expand word count.
-After the section H2 (exact title "${ILLUSTRATIVE_DEFAULT_H2}" only — 3-8 words, no links, no place names, no keyword slug):
+After the section H2 (use this section's checklist title exactly — 3-8 words, unique, no links, no place names, no keyword slug. Never retitle it to a stock label. Never write a second homeowner-example H2):
 HTML:
-<p>{summary: situationHook in 1-2 sentences only — a plain overview of the tension. No "Scenario:" prefix. No question as its own labeled line.}</p>
-<blockquote><p>{personaName} … 2-3 sentences: ONE real choice from the Answer they're weighing and why they're stuck. Put scenarioQuestion here as a normal sentence inside the quote if used — never as a heading or a standalone "Scenario:" paragraph.}</p></blockquote>
+<p>{situationHook only — 1-2 sentences: general decision context for readers facing this topic. Introduce the tension at industry/reader level. Forbidden: personaName or any proper name; scenarioQuestion; repeating blockquote prose; "Scenario:" prefix.}</p>
+<blockquote><p>{personaName} + scenarioNarrative — 2-3 sentences: the specific stuck moment, ONE choice from the Answer, why they are stuck. Weave scenarioQuestion here as a normal sentence when assigned. Weave the place name inside this sentence as [[LINK:service-area page title|short place]] when CITY INTERNAL LINK is listed. Forbidden: a location cite as the first child of the blockquote; forbidden "{place} —" or "{place} -" before the scenario sentence; forbidden copying situationHook from the intro.}</p></blockquote>
 <h3>Recommendation: {specific pick title that matches Answer, short}</h3>
 <p>MANDATORY SITE-FIRST: {Connected business name} would recommend / recommends … (2 sentences max: the quote and why it resolves their decision). Forbidden: opening with personaName should, they should, or a generic a-business-should.</p>
-Markdown — same shape: ## ${ILLUSTRATIVE_DEFAULT_H2}, summary paragraph, blockquote, ### Recommendation.
+Markdown — same shape: ## {this section's checklist title}, summary paragraph, blockquote, ### Recommendation.
 ${ILLUSTRATIVE_ONE_PERSONA_FORBIDDEN}
 Forbidden: "A realistic local situation" or "A realistic local scenario" as the H2; a full scenario question as H2 or H3; Scenario as an H3 heading; any link inside H2 or H3; demonstrating that products exist without a decision; a vertical Answer does not discuss; checklist-dumping every article topic; keyword+location slug in the H2; ending after Recommendation h3 with no p.`;
 
@@ -223,8 +219,8 @@ export const ILLUSTRATIVE_SCENARIO_PERSONA_RULE = `**ILLUSTRATIVE PERSONA + SITE
 1. **Copy ILLUSTRATIVE EXAMPLE only**: personaName, householdProfile, situationHook, scenarioQuestion, scenarioNarrative, recommendationTitle, recommendationParagraph are assigned by OpenRouter before this section runs. Copy them exactly — forbidden to rename personaName or invent a different persona.
 2. **Name in blockquote only**: personaName appears inside blockquote prose — never as <h2> or <h3>.
 3. **Decision matching Answer (mandatory)**: Blockquote + recommendation show ONE decision from Keyword + Answer — not a product catalog and not a different vertical.
-4. **Short H2, scenario in body**: H2 is a short topic title (3-8 words), like other body H2s. Intro <p> then blockquote. Put assigned scenarioQuestion in the intro or the quote as a sentence. Forbidden: scenarioQuestion as H2 or H3. Forbidden: Scenario as an H3 heading.
-5. **Compact**: Intro 1-2 sentences; blockquote 2-3 sentences; recommendation p 2 sentences max.
+4. **Short H2, scenario in body**: H2 is a short topic title (3-8 words), like other body H2s. Intro <p> sets general context (situationHook). Blockquote carries personaName + scenarioNarrative. Put scenarioQuestion in the blockquote only. Forbidden: persona names in the intro p; scenarioQuestion in the intro p; scenarioQuestion as H2 or H3; Scenario as an H3 heading.
+5. **Compact, non-redundant**: Intro 1-2 sentences (general setup only); blockquote 2-3 sentences (named persona only); recommendation p 2 sentences max. Intro and blockquote must not say the same thing.
 6. **Titled recommendation h3 + mandatory paragraph**: Recommendation h3 is a short pick title only. Forbidden: stopping after Recommendation h3 with no <p>. Forbidden: links in H2 or H3.
 7. **Site-first recommendation**: Recommendation <p> opens with the connected business name as the grammatical subject ("{Business} would recommend…"). Forbidden: persona-first advice ("{persona} should…").
 8. **Answer ceiling**: Economic numbers must not exceed Answer qualification.
@@ -235,12 +231,12 @@ ${ILLUSTRATIVE_PERSONA_OUTPUT_SHAPE}`;
 export const ILLUSTRATIVE_BLOCKQUOTE_RULE = `**ILLUSTRATIVE SCENARIO (NON-NEGOTIABLE)**:
 1. Exactly one body H2 carries [ILLUSTRATIVE]: short H2 + intro p + blockquote + h3 titled Recommendation + **mandatory recommendation p (2-3 sentences)**. Forbidden: ending after Recommendation h3 with no following <p>. Forbidden: Scenario as an H3.
 2. Ground to Answer: the persona decision must match Answer topic; economic numbers and payback framing must not exceed Answer qualification. When ANSWER GROUNDING block is present, treat Answer text as the topic contract and the ceiling.
-3. **ILLUSTRATIVE EXAMPLE block is mandatory**: Copy its structured fields with minimal edit: situationHook → intro p, scenarioQuestion → sentence in intro or blockquote (never a heading), scenarioNarrative → blockquote (personaName only), recommendationTitle → Recommendation h3, recommendationParagraph → following p. Use personaName, householdProfile, and situationHook exactly. Forbidden to invent or rename the persona. ${ILLUSTRATIVE_ONE_PERSONA_FORBIDDEN}
+3. **ILLUSTRATIVE EXAMPLE block is mandatory**: Copy its structured fields with minimal edit: situationHook → intro p (general context, no persona name), scenarioQuestion + scenarioNarrative → blockquote (personaName inside quote only; never a heading), recommendationTitle → Recommendation h3, recommendationParagraph → following p. Intro and blockquote must not repeat each other. Forbidden to invent or rename the persona. ${ILLUSTRATIVE_ONE_PERSONA_FORBIDDEN}
 4. Overview announces the example; the full persona scenario lives only in the [ILLUSTRATIVE] body section. No other body section may output Recommendation h3 blocks or ILLUSTRATIVE EXAMPLE text.`;
 
 /** Non-[ILLUSTRATIVE] body sections: forbid duplicating the worked hypothetical. */
 export const NON_ILLUSTRATIVE_HYPOTHETICAL_BAN_RULE = `**NO DUPLICATE HYPOTHETICAL (NON-NEGOTIABLE — this section is NOT [ILLUSTRATIVE])**:
-Forbidden in this section: H2 titled "${ILLUSTRATIVE_DEFAULT_H2}", "Hypothetical scenario:", "Hypothetical homeowner situation:", Homeowner A/B, <h3>Scenario:</h3> blocks, <h3>Recommendation:</h3> blocks, <blockquote> hypothetical scenarios, or copying ILLUSTRATIVE EXAMPLE leadIn/quoteBody.
+Forbidden in this section: H2 titled "A Local Homeowner Example", "Section 1", any "Section N", "Hypothetical scenario:", "Hypothetical homeowner situation:", Homeowner A/B, <h3>Scenario:</h3> blocks, <h3>Recommendation:</h3> blocks, <blockquote> hypothetical scenarios, or copying ILLUSTRATIVE EXAMPLE leadIn/quoteBody.
 The full labeled hypothetical with persona scenarios and site recommendations lives in exactly one other [ILLUSTRATIVE] body section. Use brief inline when/skip-if or one-sentence tradeoff instead. Overview already points readers to Real-World Example — do not repeat that setup here.`;
 
 /** Verified facts from QFO official-source pass are the source of truth for checkable claims. */
@@ -357,24 +353,33 @@ export function chatGptBusinessFactsFromBrief(
   return parts.join("\n\n").trim();
 }
 
+export type IllustrativeCityServiceAreaLink = {
+  pageTitle: string;
+  anchor: string;
+};
+
 export function formatIllustrativePersonaPromptBlock(
   ex: IllustrativeExample,
   researchAsOf?: string,
+  cityServiceArea?: IllustrativeCityServiceAreaLink,
 ): string {
-  if (!ex?.personaName?.trim() || !ex.scenarioNarrative?.trim() || !ex.recommendationParagraph?.trim()) {
-    throw new Error("Illustrative persona block requires personaName, scenarioNarrative, and recommendationParagraph.");
-  }
   const lines = [
     "--- ILLUSTRATIVE EXAMPLE (MANDATORY — copy into [ILLUSTRATIVE] section) ---",
-    `personaName (only person in section): ${ex.personaName.trim()}`,
   ];
+  if (ex?.personaName?.trim()) {
+    lines.push(`personaName (only person in section): ${ex.personaName.trim()}`);
+  }
   if (ex.householdProfile?.trim()) lines.push(`householdProfile: ${ex.householdProfile.trim()}`);
-  if (ex.situationHook?.trim()) lines.push(`situationHook: ${ex.situationHook.trim()}`);
+  if (ex.situationHook?.trim()) {
+    lines.push(
+      `situationHook (intro p only — general reader context, no persona name, no question): ${ex.situationHook.trim()}`,
+    );
+  }
   if (ex.scenarioQuestion?.trim()) {
-    lines.push(`scenarioQuestion (intro p or start of blockquote; never a heading): ${ex.scenarioQuestion.trim()}`);
+    lines.push(`scenarioQuestion (blockquote only; never intro p; never a heading): ${ex.scenarioQuestion.trim()}`);
   }
   if (ex.scenarioNarrative?.trim()) {
-    lines.push(`scenarioNarrative (blockquote p — one named persona only): ${ex.scenarioNarrative.trim()}`);
+    lines.push(`scenarioNarrative (blockquote p with personaName — specific stuck moment): ${ex.scenarioNarrative.trim()}`);
   }
   if (ex.recommendationTitle?.trim()) {
     lines.push(`recommendationTitle (h3 after "Recommendation: "): ${ex.recommendationTitle.trim()}`);
@@ -387,13 +392,18 @@ export function formatIllustrativePersonaPromptBlock(
   if (ex.asOf?.trim() || researchAsOf?.trim()) {
     lines.push(`asOf: ${ex.asOf?.trim() || researchAsOf?.trim() || ""}`);
   }
-  if (ex.illustrativeH2Title?.trim()) {
-    lines.push(`target H2: ${resolveIllustrativeH2Title(ex.illustrativeH2Title)} (exact — use this title verbatim in <h2>)`);
-  } else {
-    lines.push(`target H2: ${ILLUSTRATIVE_DEFAULT_H2} (exact — use this title verbatim in <h2>)`);
+  const targetH2 = ex.illustrativeH2Title?.trim();
+  if (!targetH2) {
+    throw new Error("Illustrative persona block requires illustrativeH2Title from the planner H2.");
+  }
+  lines.push(`target H2: ${targetH2} (exact — use this checklist title verbatim in <h2>. Never retitle it. Never write a second homeowner H2.)`);
+  if (cityServiceArea?.pageTitle.trim() && cityServiceArea.anchor.trim()) {
+    lines.push(
+      `CITY INTERNAL LINK (required inside the blockquote sentence): [[LINK:${cityServiceArea.pageTitle.trim()}|${cityServiceArea.anchor.trim()}]]. Weave that placeholder into the scenario sentence. Forbidden: a location cite as the first child of the blockquote. Forbidden: "${cityServiceArea.anchor.trim()} —" or "${cityServiceArea.anchor.trim()} -" before the scenario sentence.`,
+    );
   }
   lines.push(
-    "Output shape: exact H2 above + summary <p> (situationHook only, no Scenario: label) + blockquote + h3 Recommendation + p (SITE-FIRST). Copy persona fields exactly — do not rename personaName. Forbidden: Scenario as H3; Scenario: prefix; links in headings.",
+    "Output shape (HTML tags required): <h2>{target H2}</h2> then <p>{situationHook — general intro, no persona name}</p> then <blockquote><p>{personaName} {scenarioNarrative}{scenarioQuestion woven in when assigned}</p></blockquote> then <h3>Recommendation: {recommendationTitle}</h3> then <p>{recommendationParagraph}</p>. Copy persona fields exactly. The H2 MUST start with Scenario: (included in target H2). Intro p introduces the general decision context; blockquote is the named persona story only. Forbidden: persona name in intro p; intro repeating blockquote; scenarioNarrative outside <blockquote>. Forbidden: omitting <blockquote> tags. Forbidden: Scenario as H3; Scenario: in paragraphs; links in headings. Forbidden: a place name cite on top of the blockquote.",
     ILLUSTRATIVE_ONE_PERSONA_FORBIDDEN,
     "Ground to Answer + VERIFIED FACTS. Persona decision must match Keyword + Answer topic. Recommendation p is site-first (Company would recommend…), never persona-first (persona should…). Natural local phrasing only — no keyword+location slug stuffing.",
     "--- END ILLUSTRATIVE EXAMPLE ---",
@@ -405,7 +415,7 @@ export function formatIllustrativeExamplePromptBlock(
   brief: SeoContentBriefV1 | null | undefined,
 ): string {
   const ex = brief?.queryFanout?.illustrativeExample;
-  if (!ex?.personaName?.trim() || !ex.scenarioNarrative?.trim() || !ex.recommendationParagraph?.trim()) return "";
+  if (!ex?.illustrativeH2Title?.trim()) return "";
   return formatIllustrativePersonaPromptBlock(ex, brief?.queryFanout?.researchAsOf);
 }
 
@@ -504,7 +514,7 @@ export function buildConnectedSiteIdentityBlock(
   if (name) lines.push(`Business name (use when a sentence carries a sourced claim): ${name}`);
   if (area) lines.push(`Primary service area: ${area}`);
   lines.push(
-    "Do not open every article with the company name. Lead with a sourced fact or stat. In Answer, name the business in the final sentence when that sentence carries a sourced installer claim.",
+    "Do not open every article with the company name. Lead with a sourced fact or stat. In Answer, mention this exact business name somewhere in the Answer paragraph. Do not skip the name.",
     SERVICE_AREA_DENSITY_RULE,
   );
   return lines.join("\n");

@@ -193,8 +193,8 @@ ${TABLE_FORMAT} No empty tables; at least one data row. No duplicate headings. N
 Lists: Numbered steps = <ol><li>one sentence on the same line as the number</li></ol>. Bullet items = <ul><li>one sentence</li></ul>. NEVER use bullets for sequential steps. Every <li> MUST be inside <ul> or <ol>. NEVER output bare <li>. Wrong: <li>Item</li>. Correct: <ol><li>Prepare your data. Organize titles and SEO metadata into a CSV.</li></ol>. Forbidden inside <li>: <p>, <br>, a number on its own line, typing "1." in the item (the <ol> already numbers), a bold mini-heading then a paragraph, or **Label**: markdown.
 
 *** SEO HEADING HIERARCHY (THIS IS THE ONLY RULE - FOLLOW IT) ***
-DEPTH OF CONTENT: Each main substantive topic = H2. Main topics follow ARTICLE CONTENT TYPE jobs: how it works, vs adjacent approach, how to apply, how to measure, who it is for / not for, site recommendation. These are NOT H3s - they are H2s. One H2 per major concept. Forbidden as a main H2: "What is [X]?", "Your Guide to [X]", "Introduction".
-H2 = agents you dictate + every main substantive topic (how it works, comparison, process, costs, recommendation).
+DEPTH OF CONTENT: Each main substantive topic = H2. When SERP H2 OUTLINE is present, those titles are the body H2s. When SAP PAGE TEMPLATE is present, those mandatory titles are the body H2s. These are NOT H3s - they are H2s. One H2 per major concept. Forbidden as a main H2: "What is [X]?", "Your Guide to [X]", "Introduction".
+H2 = agents you dictate + every main substantive topic from the outline or SAP template.
 H3 = only truly subordinate subtopics under an H2 (e.g. under "How it works" you might have 2-3 H3s). MAX 3-5 H3s per H2.
 H4 = rare; sub-subsections when 3+ levels.
 FORBIDDEN: Nesting main topics (how it works, comparison, costs, recommendation) as H3s. Flattening everything to H3. More than 5 H3s under any H2.
@@ -223,7 +223,7 @@ Every link MUST include visible anchor text inside <a>...</a> — never empty, n
 External links: [[EXTERNAL:exact-url|exact-anchor]] only (code emits <a href="url">anchor</a>). Weave mid-sentence like [[LINK:...]] — never bare domain, never "for more"/"here", never after the final period.
 Scroll links: [[SCROLL:#id|phrase]] or <a href="#id">phrase</a> with a natural phrase.
 Format: <a href="url-or-#id">anchor text</a>
-FORBIDDEN: a link or the writing keyword as the last words of a sentence.
+FORBIDDEN: a link, [[LINK]], or the writing keyword as the last words of a sentence or after the final period (". durable window coverings"). After a period, the next sentence starts with a capital letter. If you cannot weave it mid-sentence, STOP.
 FORBIDDEN: wrapping **markdown**, <strong>, or <b> as the link. Never output asterisk bold.
 FORBIDDEN on <a>: target=, rel=, class=, id=, style=, or any attribute besides href.
 Never output partial tags, orphaned attributes (e.g. target="_blank" rel="noopener">), or markdown [text](url).`;
@@ -514,6 +514,21 @@ Below is JSON: semrush_keyword_clusters with **clusters** (related phrases) and 
 4. If a cluster does not fit a section’s topic, skip it - judgment over coverage.
 === END SEMRUSH CLUSTERS ===`;
 
+export const OPTIMIZER_INSTRUCTIONS_LABEL = "INSTRUCTIONS (MUST FOLLOW)";
+
+export function mergeOptimizerInstructions(
+  operator: string | undefined,
+  existing: string | undefined,
+): string | undefined {
+  const a = operator?.trim() ?? "";
+  const b = existing?.trim() ?? "";
+  if (!a) return b || undefined;
+  if (!b) return a;
+  if (a === b || b.includes(a)) return b;
+  if (a.includes(b)) return a;
+  return `${a}\n\n${b}`;
+}
+
 export const buildUserPrompt = (
   flowTitle: string,
   flowPurpose: string,
@@ -552,7 +567,7 @@ Entity: ${entityName}. Use varied phrases: ${general.map((ex) => `"${ex}"`).join
 No entity. General post; no locations or placeholders. ${ENTITY_FORBIDDEN}`;
 
   const acfParts: string[] = [];
-  if (acfContext?.promptModifier?.trim()) acfParts.push(`Prompt modifier: ${acfContext.promptModifier.trim()}`);
+  if (acfContext?.promptModifier?.trim()) acfParts.push(`${OPTIMIZER_INSTRUCTIONS_LABEL}: ${acfContext.promptModifier.trim()}`);
   if (acfContext?.keywordFocus?.trim()) acfParts.push(`Keyword focus: ${acfContext.keywordFocus.trim()}`);
   if (acfContext?.serviceArea?.trim()) acfParts.push(`Service area: ${acfContext.serviceArea.trim()}`);
   if (acfContext?.seoResearch?.trim()) {
@@ -818,7 +833,7 @@ Entity: ${normalizedEntity}. Use varied phrases: ${general.map((ex) => `"${ex}"`
 No entity. General post; no locations or placeholders. ${ENTITY_FORBIDDEN}`;
 
   const acfParts: string[] = [];
-  if (acfContext?.promptModifier?.trim()) acfParts.push(`Prompt modifier: ${acfContext.promptModifier.trim()}`);
+  if (acfContext?.promptModifier?.trim()) acfParts.push(`${OPTIMIZER_INSTRUCTIONS_LABEL}: ${acfContext.promptModifier.trim()}`);
   if (acfContext?.keywordFocus?.trim()) acfParts.push(`Keyword focus: ${acfContext.keywordFocus.trim()}`);
   if (acfContext?.serviceArea?.trim()) acfParts.push(`Service area: ${acfContext.serviceArea.trim()}`);
   if (acfContext?.seoResearch?.trim()) {

@@ -50,6 +50,7 @@ type Args = Pick<
     site: WordPressSite | null,
     url: string,
   ) => OverviewInventoryUrlMatch | undefined;
+  hydrateElementorRowAtIndex?: (index: number) => Promise<boolean>;
 };
 
 export function useOverviewTabScrapeWp({
@@ -68,6 +69,7 @@ export function useOverviewTabScrapeWp({
   remapBindingUrl,
   mergeInventoryContentForSource,
   bulkScopeUrlKeys,
+  hydrateElementorRowAtIndex,
 }: Args) {
   const handleUpdateWordPressForRow = useCallback(
     async (
@@ -244,18 +246,21 @@ export function useOverviewTabScrapeWp({
         if (downloaded?.seoResearch?.trim() && !(patch.seoResearch ?? "").trim()) {
           patch.seoResearch = downloaded.seoResearch.trim();
         }
-        if (downloaded?.focusKeyword?.trim() && !(patch.focusKeyword ?? "").trim()) {
+        if (downloaded?.focusKeyword?.trim()) {
           patch.focusKeyword = downloaded.focusKeyword.trim();
         }
         if (downloaded?.faq?.trim() && !(patch.faq ?? "").trim()) {
           patch.faq = downloaded.faq.trim();
         }
         updateRow(index, { ...patch, status: "idle" });
+        if (sitemapSource === "pages" && hydrateElementorRowAtIndex && !row.elementorDataJson?.trim()) {
+          await hydrateElementorRowAtIndex(index).catch(() => undefined);
+        }
       } catch {
         updateRow(index, { status: "error" });
       }
     },
-    [rows, site, sitemapSource, bindings, updateRow, getInventoryMatchForUrl, mergeInventoryContentForSource, downloadRow],
+    [rows, site, sitemapSource, bindings, updateRow, getInventoryMatchForUrl, mergeInventoryContentForSource, downloadRow, hydrateElementorRowAtIndex],
   );
 
   const handleScrapeAll = useCallback(async () => {

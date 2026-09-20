@@ -41,6 +41,16 @@ export function getPrimaryLocationLabel(site: WordPressSite): string | null {
   return null;
 }
 
+/** Location field first, then Integrations / NAP city + state. */
+export function resolveEntityClusterLocationLabel(
+  site: WordPressSite,
+  focusLocation?: string | null,
+): string {
+  const focus = focusLocation?.trim();
+  if (focus) return focus;
+  return getPrimaryCityStateLabel(site)?.trim() ?? "";
+}
+
 /** City + state (or city) from Integrations / NAP - for SAP market hints when no manual override. */
 export function getPrimaryCityStateLabel(site: WordPressSite): string | undefined {
   const fromSite = site.locations?.length ? pickLocation(site.locations) : null;

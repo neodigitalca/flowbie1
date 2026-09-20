@@ -34,6 +34,7 @@ export type AgentRunRecipeKey =
   | "overview_pages_meta_batch"
   | "content_optimizer_bulk"
   | "gsc_reporting"
+  | "ads_reporting"
   | "post_creator"
   | "entity_page_creator"
   | "entity_generator"
@@ -206,6 +207,7 @@ export function taskExecutionKindToRecipe(kind: string): AgentRunRecipeKey | nul
   if (kind === "content_optimizer") return "content_optimizer_bulk";
   if (kind === "content_optimizer_meta") return "overview_pages_meta_batch";
   if (kind === "gsc_reporting") return "gsc_reporting";
+  if (kind === "ads_reporting") return "ads_reporting";
   if (kind === "post_creator") return "post_creator";
   if (kind === "entity_page_creator") return "entity_page_creator";
   if (kind === "entity_generator") return "entity_generator";
@@ -239,7 +241,7 @@ function taskExecutionIsConfigured(
     targetUrlVariable?: string;
   },
 ): boolean {
-  if (kind === "gsc_reporting") return taskExecutionReportingIsConfigured(payload);
+  if (kind === "gsc_reporting" || kind === "ads_reporting") return taskExecutionReportingIsConfigured(payload);
   if (kind === "local_dominator_export") return taskExecutionLocalDominatorIsConfigured(payload);
   if (kind === "chatgpt_website_audit") return true;
   if (kind === "dfs_llm_article_audit") {

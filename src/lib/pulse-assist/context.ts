@@ -1,6 +1,7 @@
 import type { WordPressSite } from "@/components/integrations/types";
 import { wordpressSiteDisplayName } from "@/lib/wordpress-site-display-name";
 import { buildLocationSummary } from "@/lib/pulse-assist/app-module-catalog";
+import { forgeContextFromHash } from "@/lib/pulse-assist/navigation";
 import {
   getMergedBulkInventorySessionSnapshot,
 } from "@/lib/wordpress-bulk-inventory-session-cache";
@@ -11,6 +12,7 @@ import type { SitePostInventoryRow } from "@/lib/wordpress-api/types";
 import type {
   AssistRequestPayload,
   AssistSubmode,
+  PageContentMode,
   AssistTargetScope,
   PropertiesContextPayload,
   PulseContextPayload,
@@ -114,6 +116,7 @@ export type PulseAssistContextInput = {
   expandedPageTitle?: string | null;
   postId?: number;
   submode: AssistSubmode;
+  pageContentMode: PageContentMode;
   targetScope: AssistTargetScope;
   message: string;
   history: AssistRequestPayload["history"];
@@ -138,6 +141,7 @@ export function buildPropertiesContext(
       siteUrl: s.siteUrl,
       enabled: s.enabled !== false,
       ga4PropertyId: s.ga4PropertyId?.trim() || undefined,
+      googleAdsCustomerId: s.googleAdsCustomerId?.replace(/\D/g, "") || undefined,
     })),
   };
 }
@@ -145,6 +149,7 @@ export function buildPropertiesContext(
 export function buildPulseContext(
   input: Omit<PulseAssistContextInput, "message" | "history" | "submode" | "targetScope">,
 ): PulseContextPayload {
+  const forge = input.managerTab === "pulse-forge" ? forgeContextFromHash() : {};
   const locationSummary = buildLocationSummary({
     managerTab: input.managerTab,
     dashboardCluster: input.dashboardCluster,
@@ -153,6 +158,7 @@ export function buildPulseContext(
     researchSection: input.researchSection,
     sitemapMode: input.sitemapMode,
     contentOptimizerSection: input.contentOptimizerSection,
+    forgeSection: forge.forgeSection,
   });
 
   return {
@@ -164,6 +170,9 @@ export function buildPulseContext(
     researchSection: input.researchSection,
     sitemapMode: input.sitemapMode,
     contentOptimizerSection: input.contentOptimizerSection,
+    forgeSection: forge.forgeSection,
+    forgeWorkflowId: forge.forgeWorkflowId,
+    forgeRecipeKeyword: forge.forgeRecipeKeyword,
     pulseAppUrl: typeof window !== "undefined" ? window.location.href : "",
     siteId: input.site?.id ?? "",
     siteName: input.siteDisplayName || "",
@@ -273,6 +282,7 @@ export function buildAssistPayload(input: PulseAssistContextInput): AssistReques
     history: input.history,
     admin_mode: "backend",
     admin_submode: input.submode,
+    page_content_mode: input.pageContentMode,
     target_scope: input.targetScope,
     post_id: postId,
     page_url: pageUrl,

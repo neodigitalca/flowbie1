@@ -40,6 +40,7 @@ import {
   urlStepIndex,
   type ContentOptimizerStepId,
 } from "@/lib/content-optimization/content-optimizer-step-labels";
+import { generatedFilesForUrl } from "@/lib/content-optimization/content-optimizer-bulk-generator-bindings";
 import { GscPerformancePreviewRow } from "@/components/integrations/wordpress/GscPerformancePreviewRow";
 import { BulkHarnessSectionsPanel } from "@/components/keyword-research/bulk/BulkHarnessSectionsPanel";
 import { OptimizationArtifactDownloads } from "./OptimizationArtifactDownloads";
@@ -155,7 +156,12 @@ import {
   resolveDetailsPipelineSections,
   resolveSerpBriefDownloadable,
 } from "@/components/shared/bulk-details-tile-sections";
-import { resolveBulkRowPipelineTitles } from "@/lib/overview/overview-bulk-pipeline-titles";
+import { resolveBulkRowPipelineTitles, isAiseoSimpleHarnessRunKind } from "@/lib/overview/overview-bulk-pipeline-titles";
+import {
+  buildAiseoRowDisplaySections,
+  filterAiseoRowDisplayFiles,
+  isAiseoFileSlotRunKind,
+} from "@/lib/overview/overview-aiseo-row-artifacts";
 import { resolveOverviewBulkPipelineTitles } from "@/lib/overview/overview-bulk-details-bindings";
 
 export type BulkPanelVariant = "modal" | "page";
@@ -570,6 +576,10 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
     }
 
     if (isDetailsOnly) {
+      if (isAiseoSimpleHarnessRunKind(bulkState?.runKind)) {
+        commitAutoExpandedUrls(new Set());
+        return;
+      }
       const next = new Set<string>();
       const focusUrl = urls[detailsCurrentIndex]?.trim();
       if (focusUrl) {
@@ -669,7 +679,7 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
       lines.push('                   COMPLETED URLS                          ');
       lines.push('───────────────────────────────────────────────────────────');
       optimizedUrls.forEach((url, i) => {
-        const files = urlGeneratedFiles[url] || [];
+        const files = generatedFilesForUrl(urlGeneratedFiles, url);
         lines.push(`${i + 1}. ${url}`);
         lines.push(`   Keyword: ${urlKeywords[url] || 'N/A'}`);
         lines.push(`   Entity:  ${urlEntities[url] || 'N/A'}`);
@@ -788,32 +798,38 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
               isActive && !isParallelHarnessRow
                 ? (currentStepProgress?.harnessSections as BulkHarnessSectionUi[] | undefined)
                 : undefined;
+            const rowGeneratedFiles = generatedFilesForUrl(urlGeneratedFiles, url);
             const rawFiles = mergeGeneratedFilesByName(
-              urlGeneratedFiles[url] || [],
+              rowGeneratedFiles,
               isActive ? siteProgress?.generatedFiles ?? [] : [],
             );
             const { otherFiles } = partitionPeerDetailFiles({ peers: [], files: rawFiles });
+            const isFileSlotRun = isAiseoFileSlotRunKind(bulkState?.runKind);
             const displayFiles = sortFilesForDisplay(
-              isInContentImageRun
-                ? otherFiles.filter((f) => f.name === "in-content-image.md")
+              isFileSlotRun
+                ? filterAiseoRowDisplayFiles(bulkState!.runKind, otherFiles)
                 : otherFiles,
             );
             const batchPipelineTitles = bulkState
               ? resolveOverviewBulkPipelineTitles(bulkState.runKind, bulkState)
               : undefined;
-            const rowPipelineTitles = resolveBulkRowPipelineTitles(
-              bulkState?.runKind,
-              persistedHarness,
-              displayFiles,
-              batchPipelineTitles,
-              bulkState ?? undefined,
-            );
-            const rowHarnessSectionsList = resolveDetailsPipelineSections(
-              persistedHarness,
-              liveHarness,
-              rowPipelineTitles,
-              displayFiles,
-            );
+            const rowPipelineTitles = isFileSlotRun
+              ? []
+              : resolveBulkRowPipelineTitles(
+                  bulkState?.runKind,
+                  persistedHarness,
+                  displayFiles,
+                  batchPipelineTitles,
+                  bulkState ?? undefined,
+                );
+            const rowHarnessSectionsList = isFileSlotRun
+              ? buildAiseoRowDisplaySections(bulkState!.runKind, persistedHarness, displayFiles)
+              : resolveDetailsPipelineSections(
+                  persistedHarness,
+                  liveHarness,
+                  rowPipelineTitles,
+                  displayFiles,
+                );
             const rowKeyword = row.focusKeyword?.trim() || bulkRowLinkLabel(url, urlKeywords[url]);
             const serpBriefDownload = resolveSerpBriefDownloadable(
               rowKeyword,
@@ -825,12 +841,21 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
             };
             const panelId = `bulk-details-row-${index}`;
             const activeStatus = isActive && detailsLiveMessage ? detailsLiveMessage : "";
+            const isSimpleAiseoHarness = isAiseoSimpleHarnessRunKind(bulkState?.runKind);
+            const fileSlotProgress =
+              isFileSlotRun && isActive && (persistedHarness?.length ?? 0) > 0
+                ? `${persistedHarness!.filter((section) => section.status === "done").length}/${persistedHarness!.length}`
+                : "";
             const activeProgressLabel =
-              isActive && totalCount > 0 ? `${index + 1}/${totalCount}` : "";
-            const showGeneratedFiles =
-              isExpanded || Boolean(activeStatus) || Boolean(activeProgressLabel);
+              fileSlotProgress ||
+              (isActive && totalCount > 0 ? `${index + 1}/${totalCount}` : "");
+            const showGeneratedFiles = isFileSlotRun
+              ? isExpanded || isActive
+              : isSimpleAiseoHarness
+                ? isExpanded
+                : isExpanded || Boolean(activeStatus) || Boolean(activeProgressLabel);
 
-            if (isExpanded || isActive) {
+            if (isExpanded || (isActive && (!isSimpleAiseoHarness || isFileSlotRun))) {
               return (
                 <div key={url} className={CONTENT_OPTIMIZER_MULTI_SITE_ROW_WRAPPER_CLASS}>
                   <div className={contentOptimizerRowStripeClass(stripeIndex, { isActiveOptimize: isActive })}>
@@ -866,6 +891,9 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                         serpBriefDownload={serpBriefDownload}
                         statusMessage={activeStatus || undefined}
                         progressLabel={activeProgressLabel || undefined}
+                        defaultFilesOpen={isFileSlotRun && isActive}
+                        filesOnly={isFileSlotRun}
+                        fileSlotRunKind={isFileSlotRun ? bulkState!.runKind : undefined}
                       />
                     ) : null}
                   </div>
@@ -1204,6 +1232,7 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                   const isError = status === "error";
                   const isPending = status === "pending";
                   const localImageOutcome = urlLocalImageOutcomes[url];
+                  const rowGeneratedFiles = generatedFilesForUrl(urlGeneratedFiles, url);
                   const isWarmingUp =
                     !isParallelHarnessRow &&
                     ((warmingUpIndex !== null && index === warmingUpIndex) ||
@@ -1317,7 +1346,7 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                     isDetailsOnly,
                     showOptimizationSequence,
                     harnessSectionCount: rowHarnessSectionsList?.length ?? 0,
-                    generatedFileCount: (urlGeneratedFiles[url] || []).length,
+                    generatedFileCount: generatedFilesForUrl(urlGeneratedFiles, url).length,
                     peerSiteCount: 0,
                     isActive,
                     isWarmingUp,
@@ -1452,20 +1481,20 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                                   Entity · {entityLabel}
                                 </div>
                               ) : null}
-                              {(urlGeneratedFiles[url] || []).length > 0 ? (
+                              {generatedFilesForUrl(urlGeneratedFiles, url).length > 0 ? (
                                 <Button
                                   type="button"
                                   variant="ghost"
                                   size="sm"
                                   className="h-7 shrink-0 px-2 text-base text-white hover:bg-white/10 hover:text-white"
-                                  title={`Download ${(urlGeneratedFiles[url] || []).length} file(s)`}
+                                  title={`Download ${generatedFilesForUrl(urlGeneratedFiles, url).length} file(s)`}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    downloadAllForUrl(urlGeneratedFiles[url] || []);
+                                    downloadAllForUrl(generatedFilesForUrl(urlGeneratedFiles, url));
                                   }}
                                 >
                                   <Download className="mr-1 h-3.5 w-3.5" />
-                                  {(urlGeneratedFiles[url] || []).length}
+                                  {generatedFilesForUrl(urlGeneratedFiles, url).length}
                                 </Button>
                               ) : null}
                             </div>
@@ -1556,8 +1585,8 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                           {isActive ? (
                             <OptimizationArtifactDownloads
                               files={
-                                urlGeneratedFiles[url]?.length
-                                  ? urlGeneratedFiles[url]
+                                rowGeneratedFiles.length
+                                  ? rowGeneratedFiles
                                   : siteProgress?.generatedFiles ?? []
                               }
                               className="mt-2"
@@ -1629,7 +1658,7 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                           )}
 
                           {(() => {
-                            const files = urlGeneratedFiles[url] || [];
+                            const files = generatedFilesForUrl(urlGeneratedFiles, url);
                             if (!files || files.length === 0) return null;
                             const sorted = sortFilesForDisplay(files);
                             return (
@@ -1695,7 +1724,7 @@ export const BulkOptimizationPanel: React.FC<BulkOptimizationPanelProps> = ({
                       isCompleted &&
                         !isActive &&
                         (() => {
-                          const files = urlGeneratedFiles[url] || [];
+                          const files = generatedFilesForUrl(urlGeneratedFiles, url);
                           if (!files || files.length === 0) return null;
                           const sorted = sortFilesForDisplay(files);
                           return (

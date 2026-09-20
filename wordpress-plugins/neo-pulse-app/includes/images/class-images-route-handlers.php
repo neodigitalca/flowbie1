@@ -21,13 +21,21 @@ class Neo_Pulse_App_Image_Fetch_Data_Url {
 			return array( 'status' => 400, 'body' => array( 'error' => 'url must be an http(s) image URL' ) );
 		}
 
+		$referer = isset( $body['referer'] ) ? trim( (string) $body['referer'] ) : '';
+		if ( $referer === '' || ! preg_match( '#^https?://#i', $referer ) ) {
+			$referer = 'https://www.google.com/';
+		}
+
 		$response = wp_remote_get(
 			$url,
 			array(
-				'timeout'    => 25,
-				'headers'    => array(
-					'User-Agent' => 'NeoPulseLocalImage/1.0',
-					'Accept'     => 'image/*,*/*;q=0.8',
+				'timeout'     => 25,
+				'redirection' => 5,
+				'user-agent'  => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+				'headers'     => array(
+					'Accept'          => 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+					'Accept-Language' => 'en-US,en;q=0.9',
+					'Referer'         => $referer,
 				),
 			)
 		);
@@ -39,7 +47,13 @@ class Neo_Pulse_App_Image_Fetch_Data_Url {
 		$code = (int) wp_remote_retrieve_response_code( $response );
 		$raw  = wp_remote_retrieve_body( $response );
 		if ( $code !== 200 || $raw === '' ) {
-			return array( 'status' => 502, 'body' => array( 'error' => 'Failed to download image (' . $code . ')' ) );
+			return array(
+				'status' => 200,
+				'body'   => array(
+					'success' => false,
+					'error'   => 'Failed to download image (' . $code . ')',
+				),
+			);
 		}
 
 		if ( strlen( $raw ) > self::MAX_BYTES ) {
@@ -55,7 +69,13 @@ class Neo_Pulse_App_Image_Fetch_Data_Url {
 			}
 		}
 		if ( $mime === null ) {
-			return array( 'status' => 502, 'body' => array( 'error' => 'URL did not return an image' ) );
+			return array(
+				'status' => 200,
+				'body'   => array(
+					'success' => false,
+					'error'   => 'URL did not return an image',
+				),
+			);
 		}
 
 		return array(
@@ -134,7 +154,7 @@ class Neo_Pulse_App_Image_Prepare_Local {
 			return array( 'status' => 500, 'body' => array( 'error' => 'GD extension not available' ) );
 		}
 
-		$src = @imagecreatefromstring( $input );
+		$src = self::image_from_buffer( $input );
 		if ( ! $src ) {
 			return array(
 				'status' => 422,
@@ -218,6 +238,30 @@ class Neo_Pulse_App_Image_Prepare_Local {
 				'sourceHeight'  => $height,
 			),
 		);
+	}
+
+	/**
+	 * @return \GdImage|resource|false
+	 */
+	private static function image_from_buffer( string $input ) {
+		$src = @imagecreatefromstring( $input );
+		if ( $src ) {
+			return $src;
+		}
+		$is_webp = strlen( $input ) >= 12 && substr( $input, 8, 4 ) === 'WEBP';
+		if ( $is_webp && function_exists( 'imagecreatefromwebp' ) ) {
+			$tmp = function_exists( 'wp_tempnam' ) ? wp_tempnam( 'prepare-webp' ) : tempnam( sys_get_temp_dir(), 'prepare-webp' );
+			if ( ! is_string( $tmp ) || $tmp === '' ) {
+				return false;
+			}
+			if ( file_put_contents( $tmp, $input ) === false ) {
+				return false;
+			}
+			$src = @imagecreatefromwebp( $tmp );
+			unlink( $tmp );
+			return $src;
+		}
+		return false;
 	}
 
 	private static function buffer_from_data_url( string $data_url ): string {

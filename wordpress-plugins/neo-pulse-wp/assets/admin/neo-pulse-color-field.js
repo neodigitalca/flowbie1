@@ -6,7 +6,7 @@
 
   var KIT_BRAND_MAP = {
     primary: [
-      'accent', 'button_bg', 'launcher_bg', 'send_bg', 'mic_idle',
+      'accent', 'button_bg', 'send_bg', 'mic_idle',
       'focus_ring', 'link', 'user_bubble_bg', 'icon_color', 'powered_icon'
     ],
     secondary: [

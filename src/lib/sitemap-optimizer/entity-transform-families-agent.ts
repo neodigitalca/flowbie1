@@ -32,7 +32,6 @@ import {
 import { parseAssistantJsonObject } from "@/lib/competitor-research/competitor-report-json-parse";
 import { z } from "zod";
 import type { SitemapOptimizerPostRow } from "@/lib/sitemap-optimizer/types";
-import { SAP_DEFAULT_COMBINED_OUTLINE } from "@/lib/prompt-builders/sap-page-template";
 
 export {
   isPlaceholderKeyword,
@@ -70,8 +69,8 @@ function realKeywordFromCatalog(
   const place = placeLabels[0] ?? "";
   const title = (pillar?.title ?? members[0]?.title ?? "").trim();
   if (title && !isPlaceholderStrategyField(title)) return title.slice(0, 60);
-  if (place) return `blinds ${place}`.trim();
-  return "window treatments";
+  if (place) return place;
+  return "";
 }
 
 const TRANSFORM_SYSTEM = `You are a senior SEO strategist writing replacement briefs for service-area redirect families.
@@ -275,10 +274,7 @@ export function fillFamilyStrategyFromPillar(
   if (alsoCovers && !placeLabels.every((p) => sapModifier.toLowerCase().includes(p.toLowerCase()))) {
     sapModifier = `${sapModifier} ${alsoCovers}`.trim();
   }
-  let combinedOutline =
-    working.combinedOutline?.length
-      ? [...working.combinedOutline]
-      : [...SAP_DEFAULT_COMBINED_OUTLINE];
+  let combinedOutline = working.combinedOutline?.length ? [...working.combinedOutline] : [];
   const outlineMentionsPlaces = placeLabels.every((p) =>
     combinedOutline.some((line) => line.toLowerCase().includes(p.toLowerCase())),
   );
@@ -350,9 +346,7 @@ function ensurePlaceMentionsOnFamily(
 
   let recommendedPrimaryKeyword = family.recommendedPrimaryKeyword?.trim() || "";
   if (isPlaceholderKeyword(recommendedPrimaryKeyword)) {
-    recommendedPrimaryKeyword = realEntity
-      ? `window treatments ${realEntity}`.trim()
-      : "window treatments";
+    recommendedPrimaryKeyword = realEntity || "";
   }
 
   return {

@@ -1,4 +1,5 @@
 import React from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -42,7 +43,20 @@ import {
 import { cn } from "@/lib/utils";
 import { parseFaqEntries, serializeFaqEntriesPlain } from "@/lib/faq-entries";
 import { extractH2TextsFromHtml } from "@/lib/overview/overview-blog-headers-extract";
-import { extractInternalLinksFromHtml } from "@/lib/overview/overview-blog-links-extract";
+import { normalizeSectionProseHtml, prosePlainText } from "@/lib/elementor-page-content/extract-text-editor-prose";
+import { elementorSectionHeadersFromCachedRow } from "@/lib/elementor-page-content/elementor-section-headers-from-cache";
+import { OverviewSectionProseEditor } from "@/components/overview/OverviewSectionProseEditor";
+import { patchElementorSectionKeyword } from "@/lib/elementor-page-content/elementor-section-focus-keyword";
+import {
+  patchElementorSectionInJson,
+  sectionOutlineFromJson,
+} from "@/lib/elementor-page-content/apply-elementor-section-copy";
+import { buildElementorPageHtml } from "@/lib/elementor-page-content/elementor-page-html";
+import { extractAllSectionLinkRowsFromHtml, extractInternalLinksFromHtml } from "@/lib/overview/overview-blog-links-extract";
+import {
+  appendInternalLinkToHtml,
+  patchSectionLinkAtIndex,
+} from "@/lib/overview/overview-blog-links-apply-local";
 import { isWikipediaHref, extractWikipediaLinksWithContext, wikipediaTitleFromHref } from "@/lib/overview/overview-blog-wikipedia-link-insert";
 import { extractOverviewSectionHtml, extractAnswerSectionHtml } from "@/lib/overview/overview-blog-overview-prepend";
 import { extractIllustrativeSectionHtml } from "@/lib/overview/overview-blog-scenario-section";
@@ -51,6 +65,7 @@ import { overviewBindingForRow, overviewDateModifierTodayIso } from "@/lib/overv
 import { subtypeToEndpoint } from "@/hooks/content-optimization/optimization-helpers";
 import type { OverviewSitemapSource } from "@/lib/overview/overview-sitemap-source";
 import { overviewTitleOptimizationExcluded } from "@/lib/overview/overview-page-bucket";
+import { DASHBOARD_LIST_CHECKBOX_CLASS } from "@/components/shared/workspace-checkbox-styles";
 import {
   buildOverviewRedirectRow,
   downloadOverviewRedirectCsv,
@@ -97,6 +112,22 @@ const META_EDITABLE_LIST_INPUT = cn(
   META_INPUT_SURFACE,
 );
 
+function isVisualElementorSection(section: {
+  hasHeadingWidget?: boolean;
+  headingInBodyHtml?: boolean;
+  title: string;
+  bodyText?: string;
+  bodyHtml?: string;
+}): boolean {
+  return (
+    !section.hasHeadingWidget &&
+    !section.headingInBodyHtml &&
+    !section.title?.trim() &&
+    !section.bodyText?.trim() &&
+    !section.bodyHtml?.trim()
+  );
+}
+
 function MetaEditableListTextarea({
   index,
   value,
@@ -127,23 +158,31 @@ function MetaEditableListTextarea({
 }
 
 function MetaEditableLinkRow({
-  index,
   anchor,
   href,
   readOnly,
   onAnchorChange,
   onHrefChange,
+  showAddButton,
+  onAdd,
+  linkLabel,
+  onAiLink,
+  aiLinkLoading,
 }: {
-  index: number;
   anchor: string;
   href: string;
   readOnly?: boolean;
   onAnchorChange: (value: string) => void;
   onHrefChange: (value: string) => void;
+  showAddButton?: boolean;
+  onAdd?: () => void;
+  linkLabel?: string;
+  onAiLink?: () => void | Promise<void>;
+  aiLinkLoading?: boolean;
 }) {
+  const label = linkLabel ?? "Link";
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <span className="w-6 shrink-0 tabular-nums text-muted-foreground">{index + 1}</span>
       <Input
         value={anchor}
         onChange={(e) => onAnchorChange(e.target.value)}
@@ -151,17 +190,147 @@ function MetaEditableLinkRow({
         disabled={readOnly}
         className={cn(META_EDITABLE_LIST_INPUT, "min-w-0 max-w-[40%] flex-[2]")}
         placeholder="Anchor"
-        aria-label={`Link ${index + 1} anchor`}
+        aria-label={`${label} anchor`}
       />
-      <Input
-        value={href}
-        onChange={(e) => onHrefChange(e.target.value)}
-        readOnly={readOnly}
-        disabled={readOnly}
-        className={cn(META_EDITABLE_LIST_INPUT, "min-w-0 flex-1")}
-        placeholder="URL"
-        aria-label={`Link ${index + 1} URL`}
-      />
+      <div className="relative min-w-0 flex-1">
+        <Input
+          value={href}
+          onChange={(e) => onHrefChange(e.target.value)}
+          readOnly={readOnly}
+          disabled={readOnly}
+          className={cn(META_EDITABLE_LIST_INPUT, "min-w-0 w-full", onAiLink && "pr-[2.75rem]")}
+          placeholder="URL"
+          aria-label={`${label} URL`}
+        />
+        {onAiLink ? (
+          <MetaFieldEndRail align="top">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={META_FIELD_END_RAIL_BTN}
+              disabled={readOnly || aiLinkLoading}
+              title="Find an appropriate internal link for this section"
+              onClick={() => void onAiLink()}
+            >
+              {aiLinkLoading ? (
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
+              ) : (
+                <Wand2 className="h-4 w-4 shrink-0 text-emerald-400" />
+              )}
+            </Button>
+          </MetaFieldEndRail>
+        ) : null}
+      </div>
+      {showAddButton ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className={META_FAQ_TOOL_ICON}
+          disabled={readOnly}
+          title="Add link to this section"
+          onClick={onAdd}
+        >
+          <span className="text-base font-medium leading-none">+</span>
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+function ElementorSectionLinks({
+  bodyHtml,
+  readOnly,
+  onBodyChange,
+  onAiLinkRow,
+}: {
+  bodyHtml: string;
+  readOnly?: boolean;
+  onBodyChange: (nextHtml: string) => void;
+  onAiLinkRow?: (linkIndex: number) => void | Promise<void>;
+}) {
+  const extracted = React.useMemo(
+    () =>
+      extractAllSectionLinkRowsFromHtml(bodyHtml).filter((link) => !isWikipediaHref(link.href)),
+    [bodyHtml],
+  );
+  const [pendingRows, setPendingRows] = React.useState<Array<{ anchor: string; href: string }> | null>(null);
+  const [aiLinkLoadingIndex, setAiLinkLoadingIndex] = React.useState<number | null>(null);
+
+  React.useEffect(() => {
+    if (extracted.length > 0 && !(pendingRows?.length ?? 0)) {
+      setPendingRows(null);
+    }
+  }, [extracted.length, pendingRows?.length]);
+
+  const rows =
+    extracted.length > 0
+      ? [...extracted, ...(pendingRows ?? [])]
+      : (pendingRows ?? [{ anchor: "", href: "" }]);
+
+  const commitRow = (linkIndex: number, patch: { anchor?: string; href?: string }) => {
+    const current = rows[linkIndex]!;
+    const next = {
+      anchor: patch.anchor ?? current.anchor,
+      href: patch.href ?? current.href,
+    };
+
+    if (linkIndex < extracted.length) {
+      onBodyChange(patchSectionLinkAtIndex(bodyHtml, linkIndex, next));
+      return;
+    }
+
+    const pendingIndex = linkIndex - extracted.length;
+    const pending = pendingRows ?? (extracted.length === 0 ? [{ anchor: "", href: "" }] : []);
+    const updated = [...pending];
+    updated[pendingIndex] = next;
+    setPendingRows(updated);
+
+    if (next.anchor.trim() || next.href.trim()) {
+      onBodyChange(appendInternalLinkToHtml(bodyHtml, next.anchor, next.href));
+      const remaining = updated.filter((_, i) => i !== pendingIndex);
+      setPendingRows(remaining.length > 0 ? remaining : null);
+    }
+  };
+
+  const handleAdd = () => {
+    if (extracted.length > 0) {
+      onBodyChange(appendInternalLinkToHtml(bodyHtml, "", ""));
+      return;
+    }
+    const base = pendingRows ?? [{ anchor: "", href: "" }];
+    setPendingRows([...base, { anchor: "", href: "" }]);
+  };
+
+  return (
+    <div className="min-w-0 space-y-1.5">
+      {rows.map((link, linkIndex) => (
+        <MetaEditableLinkRow
+          key={`section-link-${linkIndex}`}
+          linkLabel={`Section link ${linkIndex + 1}`}
+          anchor={link.anchor}
+          href={link.href}
+          readOnly={readOnly}
+          onAnchorChange={(nextAnchor) => commitRow(linkIndex, { anchor: nextAnchor })}
+          onHrefChange={(nextHref) => commitRow(linkIndex, { href: nextHref })}
+          showAddButton={linkIndex === rows.length - 1}
+          onAdd={handleAdd}
+          onAiLink={
+            onAiLinkRow
+              ? async () => {
+                  setAiLinkLoadingIndex(linkIndex);
+                  try {
+                    await onAiLinkRow(linkIndex);
+                  } finally {
+                    setAiLinkLoadingIndex(null);
+                  }
+                }
+              : undefined
+          }
+          aiLinkLoading={aiLinkLoadingIndex === linkIndex}
+        />
+      ))}
     </div>
   );
 }
@@ -293,10 +462,17 @@ export interface MetaOptimizerPageRowDetailsProps {
   handleAiOverviewRow: (index: number) => void | Promise<void>;
   handleAiScenarioRow: (index: number) => void | Promise<void>;
   handleAiInContentImageRow: (index: number) => void | Promise<void>;
+  handleAiElementorSectionRow?: (index: number, sectionId: string) => void | Promise<void>;
+  handleAiElementorSectionHeaderRow?: (index: number, sectionId: string) => void | Promise<void>;
+  handleAiElementorSectionContentRow?: (index: number, sectionId: string) => void | Promise<void>;
+  handleAiElementorSectionLinkRow?: (index: number, sectionId: string, linkIndex: number) => void | Promise<void>;
+  handleAiElementorFullPageRow?: (index: number) => void | Promise<void>;
   /** Shell-only tile: empty fields, actions disabled (no URLs loaded yet). */
   placeholder?: boolean;
   /** Nested inside compact accordion shell: skip outer row border/background. */
   accordionBody?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (shiftKey?: boolean) => void;
   /** Collapse expanded accordion row (chevron shown in URL/actions bar). */
   onCollapse?: () => void;
 }
@@ -336,26 +512,109 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
   handleAiOverviewRow,
   handleAiScenarioRow,
   handleAiInContentImageRow,
+  handleAiElementorSectionRow,
+  handleAiElementorSectionHeaderRow,
+  handleAiElementorSectionContentRow,
+  handleAiElementorSectionLinkRow,
+  handleAiElementorFullPageRow,
   placeholder = false,
   accordionBody = false,
+  isSelected = false,
+  onToggleSelect,
   onCollapse,
 }) => {
   const shellOnly = placeholder;
+  const isElementorRow =
+    sitemapSource === "pages" ||
+    row.contentFormat === "elementor" ||
+    Boolean(row.elementorDataJson?.trim());
+  const elementorFullPageReady = Boolean(row.seoResearch?.trim());
+  const elementorRunError =
+    row.status === "error" ? opt.optimizationProgress[site.id]?.message?.trim() : "";
   const faqEntries = parseFaqEntries(row.faq);
   const faqPairCount = faqEntries.length;
   const bodyHtmlForUi =
-    row.postContentOptimized?.trim() || row.postContent?.trim() || "";
-  const headerList = bodyHtmlForUi
-    ? extractH2TextsFromHtml(bodyHtmlForUi)
-    : row.blogH2List?.length
-      ? row.blogH2List
-      : [];
+    isElementorRow && row.elementorDataJson?.trim()
+      ? buildElementorPageHtml(row.elementorDataJson)
+      : row.postContentOptimized?.trim() || row.postContent?.trim() || "";
+  const elementorHeaders = React.useMemo(
+    () => elementorSectionHeadersFromCachedRow(row),
+    [row],
+  );
+  const headerList = isElementorRow
+    ? elementorHeaders.length
+      ? elementorHeaders.map((s) => s.title)
+      : row.blogH2List?.length
+        ? row.blogH2List
+        : []
+    : bodyHtmlForUi
+      ? extractH2TextsFromHtml(bodyHtmlForUi)
+      : row.blogH2List?.length
+        ? row.blogH2List
+        : [];
+  const overviewReady = isElementorRow
+    ? row.elementorHarnessSlots?.overview === true
+    : Boolean(extractOverviewSectionHtml(bodyHtmlForUi));
+  const answerReady = isElementorRow
+    ? row.elementorHarnessSlots?.answer === true
+    : Boolean(extractAnswerSectionHtml(bodyHtmlForUi));
+  const scenarioReady = isElementorRow
+    ? row.elementorHarnessSlots?.scenario === true
+    : Boolean(extractIllustrativeSectionHtml(bodyHtmlForUi));
   const overviewSectionHtml = extractOverviewSectionHtml(bodyHtmlForUi);
-  const overviewReady = Boolean(overviewSectionHtml);
   const answerSectionHtml = extractAnswerSectionHtml(bodyHtmlForUi);
-  const answerReady = Boolean(answerSectionHtml);
   const scenarioSectionHtml = extractIllustrativeSectionHtml(bodyHtmlForUi);
-  const scenarioReady = Boolean(scenarioSectionHtml);
+
+  const commitElementorSectionField = React.useCallback(
+    (sectionId: string, patch: { title?: string; bodyText?: string; bodyHtml?: string }) => {
+      if (shellOnly || !sectionId) return;
+      const bodyPatch =
+        patch.bodyHtml != null
+          ? { ...patch, bodyHtml: normalizeSectionProseHtml(patch.bodyHtml) }
+          : patch;
+      const raw = row.elementorDataJson?.trim();
+      if (raw) {
+        const nextJson = patchElementorSectionInJson(raw, sectionId, bodyPatch);
+        const headers = sectionOutlineFromJson(nextJson).map((section) => ({
+          ...section,
+          bodyHtml: normalizeSectionProseHtml(section.bodyHtml ?? ""),
+          bodyText: prosePlainText(normalizeSectionProseHtml(section.bodyHtml ?? "")),
+        }));
+        updateRow(index, {
+          contentFormat: "elementor",
+          elementorDataJson: nextJson,
+          elementorSectionHeaders: headers,
+          blogH2List: headers.map((section) => section.title),
+        });
+        return;
+      }
+      const headers = elementorSectionHeadersFromCachedRow(row);
+      const nextHeaders = headers.map((section) => {
+        if (section.id !== sectionId) return section;
+        const bodyHtml =
+          bodyPatch.bodyHtml != null
+            ? bodyPatch.bodyHtml
+            : bodyPatch.bodyText != null
+              ? bodyPatch.bodyText
+              : section.bodyHtml;
+        const bodyText =
+          bodyPatch.bodyText ??
+          (bodyPatch.bodyHtml != null
+            ? bodyPatch.bodyHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
+            : section.bodyText);
+        return {
+          ...section,
+          ...(bodyPatch.title != null ? { title: bodyPatch.title } : {}),
+          ...(bodyHtml != null ? { bodyHtml, bodyText } : {}),
+        };
+      });
+      updateRow(index, {
+        elementorSectionHeaders: nextHeaders,
+        blogH2List: nextHeaders.map((section) => section.title),
+      });
+    },
+    [row, shellOnly, index, updateRow],
+  );
   const [headersOpen, setHeadersOpen] = React.useState(false);
   const [headersPlanOpen, setHeadersPlanOpen] = React.useState(false);
   const [linksOpen, setLinksOpen] = React.useState(false);
@@ -366,6 +625,18 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
   const [scenarioOpen, setScenarioOpen] = React.useState(false);
   const [inContentImageOpen, setInContentImageOpen] = React.useState(false);
   const inContentImageReady = Boolean(row.blogInContentImageUrl?.trim());
+  const elementorLinkCount = React.useMemo(() => {
+    if (!isElementorRow || !site?.siteUrl) return 0;
+    return elementorHeaders.reduce((total, section) => {
+      const html = section.bodyHtml?.trim() || section.bodyText?.trim() || "";
+      if (!html) return total;
+      return (
+        total +
+        extractInternalLinksFromHtml(html, site.siteUrl, row.url).filter((l) => !isWikipediaHref(l.href))
+          .length
+      );
+    }, 0);
+  }, [isElementorRow, elementorHeaders, site?.siteUrl, row.url]);
   const rawLinkList =
     row.blogLinkList?.length
       ? row.blogLinkList
@@ -427,11 +698,12 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
               )}
               onClick={(e) => {
                 if (!accordionBody || !onCollapse) return;
-                if ((e.target as HTMLElement).closest("a, button")) return;
+                if ((e.target as HTMLElement).closest("a, button, [role='checkbox']")) return;
                 onCollapse();
               }}
               onKeyDown={(e) => {
                 if (!accordionBody || !onCollapse) return;
+                if ((e.target as HTMLElement).closest("[role='checkbox']")) return;
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   onCollapse();
@@ -441,6 +713,18 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
               tabIndex={accordionBody && onCollapse ? 0 : undefined}
               aria-label={accordionBody && onCollapse ? "Collapse row" : undefined}
             >
+              {onToggleSelect && !shellOnly ? (
+                <Checkbox
+                  checked={isSelected}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onToggleSelect(e.shiftKey);
+                  }}
+                  aria-label="Select row"
+                  className={DASHBOARD_LIST_CHECKBOX_CLASS}
+                />
+              ) : null}
               {keywordUrlAlreadyOptimized && !shellOnly ? (
                 <span className="shrink-0" title="URL matches keyword" aria-label="URL matches keyword">
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400/90" aria-hidden />
@@ -1018,52 +1302,305 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
           <MetaAccordionHeaderRow
             open={headersOpen}
             icon={<Heading2 className="h-4 w-4 shrink-0" aria-hidden />}
-            label="Headers"
+            label={isElementorRow ? "Sections" : "Headers"}
             count={headerList.length.toLocaleString()}
-            countTitle="H2 count"
+            countTitle={
+              isElementorRow
+                ? `Elementor sections · ${elementorLinkCount.toLocaleString()} internal links`
+                : "H2 count"
+            }
             action={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={META_FIELD_END_RAIL_BTN}
-                disabled={shellOnly}
-                title="AI Headers (all H2s on this post)"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  void handleAiHeadersRow(index);
-                }}
-              >
-                {row.status === "ai-headers" ? (
-                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
-                ) : (
-                  <Wand2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                )}
-              </Button>
+              isElementorRow ? (
+                <div className="flex shrink-0 items-center">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={META_FIELD_END_RAIL_BTN}
+                    disabled={shellOnly}
+                    title="AI Links (internal href optimization)"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void handleAiLinksRow(index);
+                    }}
+                  >
+                    {row.status === "ai-links" ? (
+                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
+                    ) : (
+                      <Link2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={META_FIELD_END_RAIL_BTN}
+                    disabled={shellOnly}
+                    title="AI Headers (all section titles)"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void handleAiHeadersRow(index);
+                    }}
+                  >
+                    {row.status === "ai-headers" ? (
+                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
+                    ) : (
+                      <Wand2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={META_FIELD_END_RAIL_BTN}
+                  disabled={shellOnly}
+                  title="AI Headers (all H2s on this post)"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void handleAiHeadersRow(index);
+                  }}
+                >
+                  {row.status === "ai-headers" ? (
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
+                  ) : (
+                    <Wand2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                  )}
+                </Button>
+              )
             }
           />
           <CollapsibleContent className="space-y-3 pt-3">
+            {isElementorRow && handleAiElementorFullPageRow && elementorHeaders.length > 0 ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-8 w-full justify-start gap-2 rounded-none border-0 bg-zinc-900 px-3 text-base text-left hover:bg-zinc-800 disabled:opacity-45"
+                disabled={shellOnly || !elementorFullPageReady || row.status === "scraping"}
+                title={
+                  elementorFullPageReady
+                    ? "Rewrite all section copy in place from the research brief"
+                    : "Run Research on this row first"
+                }
+                onClick={() => void handleAiElementorFullPageRow(index)}
+              >
+                {row.status === "scraping" ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sky-400" />
+                ) : (
+                  <Sparkles className="h-4 w-4 shrink-0 text-sky-400" />
+                )}
+                Full page optimize
+              </Button>
+            ) : null}
+            {isElementorRow && elementorRunError ? (
+              <p className="text-base text-red-400">{elementorRunError}</p>
+            ) : null}
             {headerList.length > 0 ? (
-              <div className="space-y-2 text-base">
-                {headerList.map((h2, i) => (
-                  <MetaEditableListTextarea
-                    key={`header-${i}`}
-                    index={i}
-                    value={h2}
-                    readOnly={shellOnly}
-                    ariaLabel={`Header ${i + 1}`}
-                    onChange={(nextText) => {
-                      const base = row.blogH2List?.length ? [...row.blogH2List] : [...headerList];
-                      base[i] = nextText;
-                      updateRow(index, { blogH2List: base });
-                    }}
-                  />
-                ))}
-              </div>
+              isElementorRow ? (
+                <div className="space-y-3 text-base">
+                  {elementorHeaders.map((section, i) => {
+                    const visualOnly = isVisualElementorSection(section);
+                    return (
+                    <div key={section.id || `elementor-section-${i}`} className="min-w-0 space-y-2">
+                      <div className="flex min-w-0 items-start gap-2">
+                        <span className="w-6 shrink-0 pt-1.5 tabular-nums text-muted-foreground">
+                          {i + 1}
+                        </span>
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <div className="relative min-w-0 flex-1">
+                              {visualOnly ? (
+                                <div
+                                  className={cn(
+                                    "flex h-8 min-w-0 items-center px-3 text-left text-base font-medium text-muted-foreground",
+                                    META_INPUT_SURFACE,
+                                  )}
+                                >
+                                  {section.title || "Layout or image band"}
+                                </div>
+                              ) : (
+                                <Input
+                                  value={section.title}
+                                  readOnly={shellOnly}
+                                  placeholder="Section heading"
+                                  className={cn(
+                                    "h-8 min-w-0 w-full pr-[2.75rem] text-base font-medium",
+                                    META_INPUT_SURFACE,
+                                  )}
+                                  aria-label={`Section ${i + 1} title`}
+                                  onChange={(event) => {
+                                    if (!section.id) return;
+                                    if (!section.hasHeadingWidget && !section.headingInBodyHtml) return;
+                                    commitElementorSectionField(section.id, {
+                                      title: event.target.value,
+                                    });
+                                  }}
+                                />
+                              )}
+                              {handleAiElementorSectionHeaderRow &&
+                              section.id &&
+                              !visualOnly &&
+                              section.hasHeadingWidget ? (
+                                <MetaFieldEndRail align="top">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className={META_FIELD_END_RAIL_BTN}
+                                    disabled={shellOnly || row.status === "ai-headers"}
+                                    title={`AI header: ${section.title || `Section ${i + 1}`}`}
+                                    onClick={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      void handleAiElementorSectionHeaderRow(index, section.id);
+                                    }}
+                                  >
+                                    {row.status === "ai-headers" ? (
+                                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-400" />
+                                    ) : (
+                                      <Wand2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                                    )}
+                                  </Button>
+                                </MetaFieldEndRail>
+                              ) : null}
+                            </div>
+                            {!visualOnly && section.id ? (
+                              <Input
+                                value={row.elementorSectionKeywords?.[section.id] ?? ""}
+                                readOnly={shellOnly}
+                                disabled={shellOnly}
+                                placeholder="Section keyword"
+                                className={cn(
+                                  META_EDITABLE_LIST_INPUT,
+                                  "h-8 min-w-0 w-[14rem] shrink-0",
+                                )}
+                                aria-label={`Section ${i + 1} keyword`}
+                                onChange={(event) => {
+                                  const patch = patchElementorSectionKeyword(
+                                    row,
+                                    section.id,
+                                    event.target.value,
+                                  );
+                                  if (Object.keys(patch).length > 0) updateRow(index, patch);
+                                }}
+                              />
+                            ) : null}
+                          </div>
+                          {!visualOnly ? (
+                            <div className="relative min-w-0 flex-1">
+                              <OverviewSectionProseEditor
+                                value={section.bodyHtml?.trim() || ""}
+                                readOnly={shellOnly}
+                                placeholder="Section copy"
+                                siteUrl={site?.siteUrl}
+                                className="pr-[2.75rem]"
+                                onChange={(nextHtml) => {
+                                  if (!section.id) return;
+                                  commitElementorSectionField(section.id, { bodyHtml: nextHtml });
+                                }}
+                              />
+                              {handleAiElementorSectionContentRow && section.id ? (
+                                <MetaFieldEndRail align="top">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className={META_FIELD_END_RAIL_BTN}
+                                    disabled={shellOnly || row.status === "ai-headers"}
+                                    title={`AI content: ${section.title?.trim() || `Section ${i + 1}`}`}
+                                    onClick={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      void handleAiElementorSectionContentRow(index, section.id);
+                                    }}
+                                  >
+                                    {row.status === "ai-headers" ? (
+                                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sky-400" />
+                                    ) : (
+                                      <Wand2 className="h-4 w-4 shrink-0 text-sky-400" />
+                                    )}
+                                  </Button>
+                                </MetaFieldEndRail>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <p className="min-h-12 px-3 py-2 text-base text-muted-foreground">
+                              Layout or image band
+                            </p>
+                          )}
+                          {!visualOnly && section.id ? (
+                            <ElementorSectionLinks
+                              bodyHtml={section.bodyHtml?.trim() || section.bodyText?.trim() || ""}
+                              readOnly={shellOnly}
+                              onBodyChange={(nextHtml) => {
+                                commitElementorSectionField(section.id, { bodyHtml: nextHtml });
+                              }}
+                              onAiLinkRow={
+                                handleAiElementorSectionLinkRow
+                                  ? (linkIndex) =>
+                                      handleAiElementorSectionLinkRow(index, section.id, linkIndex)
+                                  : undefined
+                              }
+                            />
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="space-y-2 text-base">
+                  {headerList.map((h2, i) => (
+                    <div key={`header-${i}`} className="flex min-w-0 items-start gap-2">
+                      <MetaEditableListTextarea
+                        index={i}
+                        value={h2}
+                        readOnly={shellOnly}
+                        ariaLabel={`Header ${i + 1}`}
+                        onChange={(nextText) => {
+                          const base = row.blogH2List?.length ? [...row.blogH2List] : [...headerList];
+                          base[i] = nextText;
+                          updateRow(index, { blogH2List: base });
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : !isElementorRow ? (
+              <p className="text-base text-muted-foreground">
+                No H2 headings in cached body HTML yet.
+              </p>
             ) : (
-              <p className="text-base text-muted-foreground">No H2 headings yet. Scrape or reload the sitemap to import body HTML.</p>
+              <p className="text-base text-muted-foreground">
+                No sections in cached body HTML yet.
+              </p>
             )}
+            {isElementorRow && row.elementorDesignBreakdown?.trim() ? (
+              <Collapsible open={headersPlanOpen} onOpenChange={setHeadersPlanOpen}>
+                <CollapsibleTrigger asChild>
+                  <button type="button" className={cn(META_TRIGGER_FLAT, "text-base")}>
+                    <span className="flex-1 text-left">Design breakdown</span>
+                    <ChevronDown
+                      className={cn(
+                        "h-4 w-4 shrink-0 transition-transform",
+                        headersPlanOpen && "rotate-180",
+                      )}
+                    />
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-2">
+                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-none bg-zinc-900/60 p-2 text-base text-zinc-300">
+                    {row.elementorDesignBreakdown}
+                  </pre>
+                </CollapsibleContent>
+              </Collapsible>
+            ) : null}
             {row.blogH2PlanJson?.trim() ? (
               <Collapsible open={headersPlanOpen} onOpenChange={setHeadersPlanOpen}>
                 <CollapsibleTrigger asChild>
@@ -1088,6 +1625,7 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
         </Collapsible>
         </MetaAccordionStripeRow>
 
+        {!isElementorRow ? (
         <MetaAccordionStripeRow stripeIndex={2}>
         <Collapsible open={linksOpen} onOpenChange={setLinksOpen}>
           <MetaAccordionHeaderRow
@@ -1141,7 +1679,7 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
                 {linkList.map((link, i) => (
                   <MetaEditableLinkRow
                     key={`link-${i}`}
-                    index={i}
+                    linkLabel={`Link ${i + 1}`}
                     anchor={link.anchor}
                     href={link.href}
                     readOnly={shellOnly}
@@ -1184,6 +1722,7 @@ export const MetaOptimizerPageRowDetails: React.FC<MetaOptimizerPageRowDetailsPr
           </CollapsibleContent>
         </Collapsible>
         </MetaAccordionStripeRow>
+        ) : null}
 
         <MetaAccordionStripeRow stripeIndex={3}>
         <Collapsible open={wikiLinksOpen} onOpenChange={setWikiLinksOpen}>

@@ -2,8 +2,9 @@
  * Elementor API – fetch/update Elementor pages via backend Elementor-MCP proxy.
  */
 
-import { BACKEND_API_BASE } from './wordpress-api/connection';
-import { resolveWordPressUrls } from './wordpress-api/posts';
+import { backendApiUrl } from './wordpress-api/connection';
+import { elementorPageTargetFromInput } from '@/lib/elementor-page-target';
+import { getPublicSiteUrl } from '@/lib/wordpress-site-public-url';
 import type { WordPressSite } from '@/components/integrations/types';
 
 export interface ElementorPageResult {
@@ -13,53 +14,77 @@ export interface ElementorPageResult {
   rawElementorData?: string;
 }
 
+export type ElementorStatus = {
+  novamira: boolean;
+  elementor: boolean;
+  frontPageId?: number;
+};
+
+function siteAuth(site: WordPressSite) {
+  return {
+    siteUrl: site.siteUrl,
+    username: site.username,
+    appPassword: site.appPassword,
+  };
+}
+
+export function siteReadyForElementorApi(site: WordPressSite | undefined): site is WordPressSite {
+  return Boolean(
+    site?.siteUrl?.trim() && site?.username?.trim() && site?.appPassword?.trim(),
+  );
+}
+
+function assertSiteAuth(site: WordPressSite): void {
+  if (!siteReadyForElementorApi(site)) {
+    throw new Error("WordPress site credentials are not configured.");
+  }
+}
+
+async function postElementor<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const res = await fetch(backendApiUrl(path), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      typeof (data as { error?: string }).error === 'string'
+        ? (data as { error: string }).error
+        : `Elementor request failed: ${res.status}`,
+    );
+  }
+  return data as T;
+}
+
+export async function fetchElementorStatus(site: WordPressSite): Promise<ElementorStatus> {
+  assertSiteAuth(site);
+  const data = await postElementor<ElementorStatus>('/api/elementor/status', siteAuth(site));
+  return {
+    novamira: data.novamira === true,
+    elementor: data.elementor === true,
+    frontPageId: typeof data.frontPageId === 'number' ? data.frontPageId : undefined,
+  };
+}
+
 /**
- * Resolve page URL or slug to numeric page ID.
- * - If input looks like a URL: uses resolve-urls, returns first resolved id (must be a page).
- * - If input is numeric: returns it as number.
- * - Otherwise: treats as slug and calls /api/elementor/get-page-id-by-slug.
+ * Map a page row value to a numeric page ID via Novamira only.
+ * Does not call the WordPress post/entity URL resolver.
  */
-async function resolveToPageId(
+export async function resolveElementorPageId(
   site: WordPressSite,
   pageIdOrUrl: string
 ): Promise<number> {
-  const trimmed = pageIdOrUrl.trim();
-  const numeric = parseInt(trimmed, 10);
-  if (!Number.isNaN(numeric) && String(numeric) === trimmed) {
-    return numeric;
+  const target = elementorPageTargetFromInput(pageIdOrUrl, getPublicSiteUrl(site));
+  if (target.kind === "id") {
+    return target.pageId;
   }
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    const result = await resolveWordPressUrls(
-      site.siteUrl,
-      site.username,
-      site.appPassword,
-      [trimmed]
-    );
-    if (!result.resolved?.length) {
-      throw new Error(
-        result.unresolvable?.[0]?.reason || 'Could not resolve page URL'
-      );
-    }
-    return result.resolved[0].id;
-  }
-  const slug = trimmed.replace(/^\//, '').replace(/\/$/, '') || trimmed;
-  const url = `${BACKEND_API_BASE}/api/elementor/get-page-id-by-slug`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      siteUrl: site.siteUrl,
-      username: site.username,
-      appPassword: site.appPassword,
-      slug,
-    }),
+  const slug = target.kind === "front" ? "__front" : target.slug;
+  const data = await postElementor<{ pageId?: number }>("/api/elementor/get-page-id-by-slug", {
+    ...siteAuth(site),
+    slug,
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Failed to resolve slug: ${res.status}`);
-  }
-  const data = await res.json();
-  if (data.pageId == null) throw new Error('No pageId in response');
+  if (data.pageId == null) throw new Error("No front page is set on this WordPress site.");
   return Number(data.pageId);
 }
 
@@ -70,23 +95,15 @@ export async function fetchElementorPage(
   site: WordPressSite,
   pageIdOrUrl: string
 ): Promise<ElementorPageResult> {
-  const pageId = await resolveToPageId(site, pageIdOrUrl);
-  const url = `${BACKEND_API_BASE}/api/elementor/get-page`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      siteUrl: site.siteUrl,
-      username: site.username,
-      appPassword: site.appPassword,
-      pageId,
-    }),
+  assertSiteAuth(site);
+  const pageId = await resolveElementorPageId(site, pageIdOrUrl);
+  const pageData = await postElementor<{
+    id?: number;
+    meta?: Record<string, unknown>;
+  }>('/api/elementor/get-page', {
+    ...siteAuth(site),
+    pageId,
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Failed to get page: ${res.status}`);
-  }
-  const pageData = await res.json();
   const meta = pageData.meta || {};
   let raw = meta._elementor_data;
   if (raw == null || raw === '') {
@@ -97,11 +114,7 @@ export async function fetchElementorPage(
   try {
     elementorData = JSON.parse(raw);
   } catch {
-    try {
-      elementorData = JSON.parse(JSON.parse(raw));
-    } catch {
-      throw new Error('Invalid _elementor_data JSON');
-    }
+    throw new Error('Invalid _elementor_data JSON');
   }
   return {
     postId: pageData.id ?? pageId,
@@ -117,47 +130,45 @@ export async function fetchElementorPage(
 export async function fetchElementorMcpTools(
   site: WordPressSite
 ): Promise<{ name: string; description?: string; inputSchema?: unknown }[]> {
-  const url = `${BACKEND_API_BASE}/api/elementor/tools`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      siteUrl: site.siteUrl,
-      username: site.username,
-      appPassword: site.appPassword,
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || 'Failed to list Elementor MCP tools');
-  }
-  const data = await res.json();
+  const data = await postElementor<{ tools?: unknown }>('/api/elementor/tools', siteAuth(site));
   const tools = data.tools ?? [];
   return Array.isArray(tools) ? tools : [];
 }
 
+function firstElementorId(data: unknown): string {
+  if (!Array.isArray(data) || !data[0] || typeof data[0] !== "object") return "";
+  const id = (data[0] as { id?: unknown }).id;
+  return id == null ? "" : String(id);
+}
+
 /**
- * Apply optimized Elementor data to a page via Elementor-MCP update_page.
+ * Write Elementor JSON onto the live page and confirm _elementor_data changed.
  */
 export async function applyElementorOptimization(
   site: WordPressSite,
   pageId: number,
-  elementorDataJson: string
+  elementorDataJson: string,
+  options?: { draft?: boolean }
 ): Promise<void> {
-  const url = `${BACKEND_API_BASE}/api/elementor/update-page`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      siteUrl: site.siteUrl,
-      username: site.username,
-      appPassword: site.appPassword,
-      pageId,
-      elementor_data: elementorDataJson,
-    }),
+  let sent: unknown;
+  try {
+    sent = JSON.parse(elementorDataJson);
+  } catch {
+    throw new Error("elementor_data is not valid JSON.");
+  }
+  const wantId = firstElementorId(sent);
+  const data = await postElementor<{ ok?: boolean; firstId?: string }>('/api/elementor/update-page', {
+    ...siteAuth(site),
+    pageId,
+    elementor_data: elementorDataJson,
+    draft: options?.draft === true,
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Failed to update page: ${res.status}`);
+  if (data.ok !== true) {
+    throw new Error("Elementor layout did not save on the live page.");
+  }
+  const page = await fetchElementorPage(site, String(pageId));
+  const gotId = firstElementorId(page.elementorData);
+  if (wantId && gotId !== wantId) {
+    throw new Error(`Live Elementor data did not change on page ${pageId}.`);
   }
 }

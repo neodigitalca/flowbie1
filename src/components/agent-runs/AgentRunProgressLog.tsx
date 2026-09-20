@@ -1,7 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactElement } from "react";
 import { Download, ExternalLink } from "lucide-react";
 import { contentOptimizerRowStripeClass } from "@/components/overview/overview-tab/overview-tab-content-constants";
-import type { AgentRunLogTimelineRow } from "@/lib/agent-runs/agent-run-log-format";
+import {
+  splitAgentRunLogLabelUrl,
+  type AgentRunLogTimelineRow,
+} from "@/lib/agent-runs/agent-run-log-format";
 import { cn } from "@/lib/utils";
 
 function statusClass(status: AgentRunLogTimelineRow["status"]): string {
@@ -17,6 +20,26 @@ function isExternalUrl(url: string): boolean {
 
 function isContentBucketArtifact(name: string): boolean {
   return /^content-bucket-/i.test(name.trim());
+}
+
+function ProgressLogLabel({ label }: { label: string }): ReactElement {
+  const parts = splitAgentRunLogLabelUrl(label);
+  if (!parts) return <>{label}</>;
+  return (
+    <>
+      {parts.before}
+      <a
+        href={parts.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-cyan-300 underline hover:text-cyan-200"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {parts.url}
+      </a>
+      {parts.after}
+    </>
+  );
 }
 
 type AgentRunProgressLogProps = {
@@ -56,7 +79,9 @@ export function AgentRunProgressLog({ rows }: AgentRunProgressLogProps) {
             </span>
             <span className={cn("mt-2 h-2 w-2 shrink-0 rounded-full", statusClass(row.status))} aria-hidden />
             <div className="min-w-0 flex-1">
-              <span className="text-base text-zinc-100 [overflow-wrap:anywhere]">{row.label}</span>
+              <span className="text-base text-zinc-100 [overflow-wrap:anywhere]">
+                <ProgressLogLabel label={row.label} />
+              </span>
               {row.artifacts && row.artifacts.length > 0 ? (
                 <div className="mt-1 flex flex-wrap gap-2">
                   {row.artifacts.map((artifact) =>

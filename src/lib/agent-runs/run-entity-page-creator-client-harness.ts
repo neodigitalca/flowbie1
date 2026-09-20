@@ -161,7 +161,7 @@ export async function runEntityPageCreatorClientHarness(
   const payload = entityPageCreatorPayloadFromContract(contract as Record<string, unknown>);
   const postCount = payload.entityPageCount ?? payload.postCount ?? 1;
 
-  initPostCreatorProof(run.id, postCount, false);
+  initPostCreatorProof(run.id, postCount, true);
 
   if (!ctx.isResume) {
     await ctx.onStep?.("Preflight", "running", undefined, AGENT_RUN_STEP_KEYS.preflight);
@@ -191,7 +191,7 @@ export async function runEntityPageCreatorClientHarness(
   syncPostCreatorProof(run.id, {
     postCount,
     files: [],
-    featuredImageEnabled: false,
+    featuredImageEnabled: true,
     uploadedPosts: result.uploadedPosts,
   });
 
@@ -280,7 +280,7 @@ export async function runEntityPageCreatorDirectHarness(
   );
   const postCount = payload.entityPageCount ?? payload.postCount ?? 1;
 
-  initPostCreatorProof(run.id, postCount, false);
+  initPostCreatorProof(run.id, postCount, true);
   await ctx.onStep?.("Starting entity page creator…", "running", undefined, AGENT_RUN_STEP_KEYS.starting);
 
   const result = await runEntityPageCreatorAgentHarness({
@@ -297,7 +297,7 @@ export async function runEntityPageCreatorDirectHarness(
   syncPostCreatorProof(run.id, {
     postCount,
     files: [],
-    featuredImageEnabled: false,
+    featuredImageEnabled: true,
     uploadedPosts: result.uploadedPosts,
   });
 

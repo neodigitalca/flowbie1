@@ -3,6 +3,7 @@ import {
   newWorkflowDraftScopeKey,
   shouldApplyFetchedWorkflow,
   shouldInitializeNewWorkflowDraft,
+  shouldShowWorkflowLoadSpinner,
 } from "@/lib/workflow/workflow-editor-load-guard";
 import { persistWorkflowDefinition, resetWorkflowSummaryFingerprintCache } from "@/lib/workflow/workflow-persist";
 
@@ -79,6 +80,30 @@ describe("workflow-editor-load-guard", () => {
         responseSeq: 4,
         latestLoadSeq: 4,
         isDirty: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not flash the load spinner when the same workflow is already on screen", () => {
+    expect(
+      shouldShowWorkflowLoadSpinner({
+        loadedWorkflowId: 12,
+        nextWorkflowId: 12,
+      }),
+    ).toBe(false);
+  });
+
+  it("shows the load spinner when switching workflows or nothing is loaded", () => {
+    expect(
+      shouldShowWorkflowLoadSpinner({
+        loadedWorkflowId: 12,
+        nextWorkflowId: 13,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowWorkflowLoadSpinner({
+        loadedWorkflowId: null,
+        nextWorkflowId: 12,
       }),
     ).toBe(true);
   });

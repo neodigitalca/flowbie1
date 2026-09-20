@@ -43,6 +43,7 @@ import {
   stripWorkflowAgentDeliveryPayload,
   thenConfig,
   workflowAgentUsesThenDelivery,
+  workflowThenOutputExistsForSite,
 } from "@/lib/workflow/workflow-then-utils";
 import {
   applyWorkflowTriggerScheduleToPayload,
@@ -70,9 +71,12 @@ import { ensureChatGptAuditExecutionPayload } from "@/lib/workflow/resolve-chatg
 import { resolveWorkflowActionPayload } from "@/lib/workflow/resolve-workflow-action-payload";
 import { applyCsvRowsPayloadForNode } from "@/lib/workflow/apply-csv-rows-payload";
 import {
+  attachPageAuditCsvToAgentRun,
   ensureWorkflowCsvRowsStashForAction,
   executeWorkflowCsvRowsStep,
+  persistPageAuditCsvToNextTask,
 } from "@/lib/workflow/workflow-csv-rows-runner";
+import { csvTextToDataHref } from "@/lib/workflow/workflow-rag-run-files";
 import { peekWorkflowCsvSequential, stashWorkflowCsvSequential } from "@/lib/workflow/workflow-csv-rows-stash";
 import { applyUpstreamContextToPostCreatorPayload } from "@/lib/workflow/upstream-research-facts";
 import { getStoredSites } from "@/components/integrations/storage";
@@ -151,6 +155,8 @@ export type WorkflowRunCallbacks = {
   stopAfterNodeId?: string;
   /** Test: skip Client and Schedule; walk from first actionable step. */
   skipSetupSteps?: boolean;
+  /** Update sidebar placeholders while a client audit or agent is starting. */
+  onClientProgress?: (message: string, siteId?: string) => void;
 };
 
 type WalkFromNodeResult = { ok: boolean; error?: string; deferWorkflowCompletion?: boolean };
@@ -248,6 +254,10 @@ function workflowStepChainKey(workflowRunId: number, nodeId: string, agentRunId?
   return `${workflowRunId}:${nodeId}`;
 }
 
+export function workflowActionStartsFromCompiledTask(kind: string | undefined): boolean {
+  return kind === "dfs_llm_article_audit" || kind === "content_optimizer";
+}
+
 type SiteAgentRunResult = {
   ok: boolean;
   error?: string;
@@ -295,6 +305,7 @@ async function startWorkflowAgentForSite(args: {
     workflow,
     actionNode: node,
     outputs,
+    siteId,
   });
 
   const startRunFn = awaitAgentCompletion
@@ -442,22 +453,23 @@ async function startWorkflowAgentForSite(args: {
   let started: WorkflowStartRunResult;
   if (
     config.compiledTaskId
-    && config.executionKind === "dfs_llm_article_audit"
+    && workflowActionStartsFromCompiledTask(config.executionKind)
     && callbacks.startRunFromTaskAndWait
   ) {
     const detail = await fetchTaskDetail(workflow.teamId, config.compiledTaskId);
     if (!detail.task) {
       return {
         ok: false,
-        error: detail.error ?? "Compiled task missing for DFS LLM article audit.",
+        error: detail.error ?? "Compiled task missing for this workflow action.",
       };
     }
     let executionPayload: TaskExecutionPayload = applyCsvRowsPayloadForNode(
       run.id,
       node.id,
-      { ...(config.executionPayload ?? {}) },
+      { ...(config.executionPayload ?? {}), siteId, wordpressSiteId: siteId },
+      siteId,
     );
-    if (siteId.trim()) {
+    if (config.executionKind === "dfs_llm_article_audit" && siteId.trim()) {
       const site = getStoredSites().find((item) => item.id === siteId);
       if (site) {
         try {
@@ -472,11 +484,16 @@ async function startWorkflowAgentForSite(args: {
       {
         ...detail.task,
         wordpressSiteId: siteId || detail.task.wordpressSiteId,
-        executionKind: "dfs_llm_article_audit",
+        executionKind: config.executionKind,
         executionPayload,
       },
       runOptions,
     );
+  } else if (config.executionKind === "content_optimizer") {
+    return {
+      ok: false,
+      error: "Full AISEO needs a compiled workflow task. Save the workflow, then run again.",
+    };
   } else {
     started = await startRunFn(payload, runOptions);
   }
@@ -484,6 +501,14 @@ async function startWorkflowAgentForSite(args: {
   if (!started.ok || !started.run) {
     return { ok: false, error: started.error ?? "Agent run failed to start" };
   }
+
+  await attachPageAuditCsvToAgentRun({
+    agentRun: started.run,
+    outputs,
+    workflow,
+    actionNodeId: node.id,
+    persistToTask: !config.compiledTaskId,
+  });
 
   let agentRunId = started.run.id;
   let status = started.run.status;
@@ -623,6 +648,7 @@ async function buildActionPayload(
     workflow,
     actionNode: node,
     outputs,
+    siteId,
   });
   let basePayload: TaskExecutionPayload = {
     ...config.executionPayload,
@@ -682,7 +708,7 @@ async function buildActionPayload(
       clientSiteIds,
     );
   }
-  payload = applyCsvRowsPayloadForNode(run.id, node.id, payload);
+  payload = applyCsvRowsPayloadForNode(run.id, node.id, payload, resolvedSiteId);
   if (kind === "post_creator") {
     payload = applyUpstreamContextToPostCreatorPayload(payload);
   }
@@ -800,22 +826,119 @@ async function walkFromNode(
       currentNodeId: node.id,
     });
     try {
-      const executed = await executeWorkflowCsvRowsStep({
-        teamId: workflow.teamId,
-        workflowRunId: run.id,
-        workflow,
-        node,
-        outputs,
-      });
-      const config = (node.config ?? {}) as { ragVariableKey?: string };
-      const saved = await saveWorkflowStepOutput(workflow.teamId, workflow.id, run.id, {
-        nodeId: node.id,
-        variableKey: config.ragVariableKey ?? `csv_${node.id}`,
-        scope: "run",
-        label: node.label,
-        textPreview: executed.preview,
-      });
-      if (saved.ok && saved.output) outputs.push(saved.output);
+      const csvConfig = (node.config ?? {}) as { ragVariableKey?: string; csvInputSource?: string };
+      const siteSource = csvConfig.csvInputSource === "site";
+      const sitesToAudit = siteSource
+        ? walkScope.activeSiteIds.length > 0
+          ? walkScope.activeSiteIds
+          : ([resolveWorkflowSiteId(workflow)].filter(Boolean) as string[])
+        : [""];
+      if (siteSource && sitesToAudit.length === 0) {
+        return { ok: false, error: "No clients selected for this workflow." };
+      }
+      const nextEdge = outgoingEdges(workflow.edges, node.id)[0];
+      const nextNode = nextEdge ? nodeById(workflow.nodes, nextEdge.target) : undefined;
+      const fanOutAgent = nextNode?.kind === "action_agent" ? nextNode : undefined;
+      const fanOutConfig = fanOutAgent
+        ? (actionConfig(fanOutAgent) as WorkflowActionConfig & { compiledTaskId?: number })
+        : undefined;
+      const siteResults = await Promise.all(
+        sitesToAudit.map(async (siteId) => {
+          try {
+          callbacks.onClientProgress?.("Page audit…", siteId || undefined);
+          const executed = await executeWorkflowCsvRowsStep({
+            teamId: workflow.teamId,
+            workflowRunId: run.id,
+            workflow,
+            node,
+            outputs,
+            siteId: siteId || undefined,
+          });
+          const baseKey = csvConfig.ragVariableKey ?? `csv_${node.id}`;
+          const variableKey = `${baseKey}${workflowClientVariableSuffix(allSiteIds, siteId)}`;
+          const saved = await saveWorkflowStepOutput(workflow.teamId, workflow.id, run.id, {
+            nodeId: node.id,
+            variableKey,
+            scope: "run",
+            label: node.label,
+            textPreview: executed.csvText,
+            fileRefs: [
+              {
+                name: executed.fileName,
+                mime: "text/csv",
+                url: csvTextToDataHref(executed.csvText),
+              },
+            ],
+            siteId: siteId || undefined,
+          });
+          await persistPageAuditCsvToNextTask({
+            teamId: workflow.teamId,
+            workflow,
+            csvNodeId: node.id,
+            fileName: executed.fileName,
+            csvText: executed.csvText,
+          });
+          const output = saved.ok && saved.output ? saved.output : null;
+          if (!fanOutAgent || !fanOutConfig) {
+            return { output, agentResult: null };
+          }
+          callbacks.onClientProgress?.("Starting Full AISEO…", siteId || undefined);
+          const ragInputKeys = resolveRagInputKeys(fanOutConfig);
+          const agentOutputs = output ? [...outputs, output] : outputs;
+          const agentResult = await startWorkflowAgentForSite({
+            workflow,
+            run,
+            node: fanOutAgent,
+            config: fanOutConfig,
+            siteId,
+            sitesToRun: allSiteIds.length > 1 ? allSiteIds : sitesToAudit,
+            outputs: agentOutputs,
+            contextBlock: collectContextBlock(agentOutputs, ragInputKeys, siteId, allSiteIds),
+            usesThenDelivery: workflowAgentUsesThenDelivery(workflow, fanOutAgent.id),
+            showAgentInSidebar: callbacks.openAgentSidebar === true,
+            callbacks,
+          });
+          return { output, agentResult };
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "CSV rows step failed";
+            callbacks.onClientProgress?.(message, siteId || undefined);
+            return {
+              output: null,
+              agentResult: { ok: false as const, error: message, siteId },
+            };
+          }
+        }),
+      );
+      for (const row of siteResults) {
+        if (row.output) outputs.push(row.output);
+        if (row.agentResult?.stepOutput) outputs.push(row.agentResult.stepOutput);
+      }
+      const failedAgents = siteResults.filter((row) => row.agentResult && !row.agentResult.ok);
+      if (failedAgents.length > 0 && failedAgents.length === siteResults.length) {
+        return {
+          ok: false,
+          error: failedAgents[0]?.agentResult?.error ?? "Agent run failed",
+        };
+      }
+      if (fanOutAgent) {
+        visited.add(fanOutAgent.id);
+        if (callbacks.stopAfterNodeId === fanOutAgent.id) {
+          return { ok: true };
+        }
+        const afterAgent = outgoingEdges(workflow.edges, fanOutAgent.id)[0];
+        if (!afterAgent) {
+          return { ok: true };
+        }
+        return walkFromNode(
+          workflow,
+          run,
+          afterAgent.target,
+          outputs,
+          callbacks,
+          visited,
+          walkScope,
+        );
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "CSV rows step failed";
       return { ok: false, error: message };
@@ -1057,14 +1180,25 @@ async function walkFromNode(
   }
 
   if (isWorkflowThenKind(node.kind)) {
-    if (outputs.some((output) => output.nodeId === node.id && output.scope === "run")) {
-      // Bound automation runner already executed and saved this Then step.
-    } else {
+    const config = thenConfig(node);
+    const runWorkflowWideEmail =
+      node.kind === "then_email" && config.emailBatchScope === "workflow_run";
+    const sitesForThen =
+      walkScope.activeSiteIds.length > 0
+        ? walkScope.activeSiteIds
+        : ([resolveWorkflowSiteId(workflow)].filter(Boolean) as string[]);
+    const pendingSites = runWorkflowWideEmail
+      ? sitesForThen
+      : sitesForThen.filter((siteId) => !workflowThenOutputExistsForSite(outputs, node.id, siteId));
+    const thenAlreadyDone = runWorkflowWideEmail
+      ? workflowRunThenEmailAlreadySent(outputs, node.id)
+      : pendingSites.length === 0 && sitesForThen.length > 0;
+
+    if (!thenAlreadyDone) {
     await patchWorkflowRun(workflow.teamId, workflow.id, run.id, {
       status: "running",
       currentNodeId: node.id,
     });
-    const config = thenConfig(node);
     const waitCtx = { teamId: workflow.teamId, workflowId: workflow.id, runId: run.id };
 
     if (shouldDeferThenStepForParallelWait(node, waitCtx)) {
@@ -1081,17 +1215,10 @@ async function walkFromNode(
       return { ok: false, error: "Upstream deliverables are not ready yet." };
     }
 
-    const sitesForThen =
-      walkScope.activeSiteIds.length > 0
-        ? walkScope.activeSiteIds
-        : ([resolveWorkflowSiteId(workflow)].filter(Boolean) as string[]);
     const upstreamAgent = findUpstreamActionAgent(workflow, node.id);
     const executionKind = upstreamAgent
       ? String((upstreamAgent.config as WorkflowActionConfig).executionKind ?? "")
       : undefined;
-
-    const runWorkflowWideEmail =
-      node.kind === "then_email" && config.emailBatchScope === "workflow_run";
 
     if (runWorkflowWideEmail) {
       if (workflowRunThenEmailAlreadySent(outputs, node.id)) {
@@ -1127,7 +1254,7 @@ async function walkFromNode(
       }
     } else {
       const thenResults = await Promise.all(
-        sitesForThen.map(async (siteId) => {
+        pendingSites.map(async (siteId) => {
           const siteContext = resolveSiteContext(siteId);
           const siteOutputs = filterWorkflowOutputsForSite(outputs, siteId, allSiteIds);
           return executeWorkflowThenStep(node, siteOutputs, {
@@ -1151,7 +1278,7 @@ async function walkFromNode(
       for (let index = 0; index < thenResults.length; index += 1) {
         const thenResult = thenResults[index]!;
         if (!thenResult.output) continue;
-        const siteId = sitesForThen[index]!;
+        const siteId = pendingSites[index]!;
         const thenVariableKey =
           allSiteIds.length > 1
             ? `${thenResult.output.variableKey}${workflowClientVariableSuffix(allSiteIds, siteId)}`

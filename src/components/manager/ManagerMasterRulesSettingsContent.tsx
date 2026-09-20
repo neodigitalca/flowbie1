@@ -76,6 +76,8 @@ export function ManagerMasterRulesSettingsContent() {
       ) : activeSite ? (
         <MasterInstructionsSection
           siteId={activeSite.id}
+          siteUrl={activeSite.siteUrl}
+          siteName={activeSite.name}
           disabled={activeSite.enabled === false}
         />
       ) : null}

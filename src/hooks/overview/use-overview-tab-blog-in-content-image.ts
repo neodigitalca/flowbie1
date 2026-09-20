@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import { flushSync } from "react-dom";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { OverviewTabBase } from "@/hooks/overview/use-overview-tab-base";
@@ -28,15 +27,13 @@ import {
 import type { OverviewInventoryUrlMatch } from "@/lib/overview/overview-row-scrape";
 import type { OverviewSitemapSource } from "@/lib/overview/overview-sitemap-source";
 import { setOptimizingState } from "@/hooks/content-optimization/optimization-helpers-a";
-import {
-  getEntitySiteWarmCacheIfReady,
-  mergeSitePrefetchBulkInventoryRows,
-} from "@/lib/local-analysis/entity-site-warm-cache";
-import type { SiteInventoryBulkRow } from "@/lib/wordpress-api/types";
+import { getEntitySiteWarmCacheIfReady } from "@/lib/local-analysis/entity-site-warm-cache";
+import type { AiseoAfterRowWriteFn } from "@/lib/overview/overview-aiseo-after-upload";
+import { createAiseoCacheWriteAccumulator, finalizeAiseoCacheWriteForUpload } from "@/lib/overview/overview-aiseo-cache-write";
 
 type Args = Pick<
   OverviewTabBase,
-  "rows" | "bindings" | "resolveBindings" | "updateRow" | "opt" | "prefetchOverviewInventory"
+  "rows" | "bindings" | "resolveBindings" | "updateRow" | "opt" | "prefetchOverviewInventory" | "rowsRef"
 > & {
   site: WordPressSite | undefined;
   sitemapSource: OverviewSitemapSource;
@@ -47,6 +44,7 @@ type Args = Pick<
     site: WordPressSite | null,
     url: string,
   ) => OverviewInventoryUrlMatch | undefined;
+  uploadAfterRowWrite?: AiseoAfterRowWriteFn;
 };
 
 function htmlHasH2s(html: string): boolean {
@@ -150,28 +148,6 @@ function buildInContentImageCatalogFromCache(
   return catalog;
 }
 
-function mergeInContentHtmlIntoSiteCache(
-  site: WordPressSite,
-  results: Array<{ url: string; html: string }>,
-): void {
-  const warm = getEntitySiteWarmCacheIfReady(site.id);
-  const bulk = warm?.bulkInventoryRows;
-  if (!bulk?.length || !results.length) return;
-  const byUrl = new Map(results.map((r) => [r.url.trim().toLowerCase(), r.html]));
-  let patched = 0;
-  const next = bulk.map((row) => {
-    const html = byUrl.get((row.url ?? "").trim().toLowerCase());
-    if (!html) return row;
-    patched += 1;
-    return {
-      ...row,
-      fields: { ...row.fields, content: html },
-    } as SiteInventoryBulkRow;
-  });
-  if (patched === 0) return;
-  mergeSitePrefetchBulkInventoryRows(site, next);
-}
-
 export function useOverviewTabBlogInContentImage({
   site,
   sitemapSource,
@@ -184,6 +160,8 @@ export function useOverviewTabBlogInContentImage({
   bulkScopeUrlKeys,
   getInventoryMatchForUrl,
   prefetchOverviewInventory,
+  rowsRef,
+  uploadAfterRowWrite,
 }: Args) {
   const { sites: peerSites } = useWordPressSites();
   const makeHarnessSetters = useCallback(
@@ -242,39 +220,28 @@ export function useOverviewTabBlogInContentImage({
                 : "Generate Local Image (New)"
             : "In Content Image";
 
-      flushSync(() => {
-        setOptimizingState(opt.setIsOptimizingContent, batchKey, true);
-        initOverviewBlogInContentImageHarnessBatchState({
-          site,
-          catalog: scoped.map((index) => {
-            const row = rows[index]!;
-            return {
-              index,
-              url: row.url!.trim(),
-              title: row.title ?? "",
-              focusKeyword: row.focusKeyword ?? "",
-              html: "",
-            };
-          }),
-          setBulkOptimizationState: opt.setBulkOptimizationState,
-          setOptimizationProgress: opt.setOptimizationProgress,
-          setIsOptimizingContent: opt.setIsOptimizingContent,
-          prepMessage: `Loading post HTML for ${prepLabel} (${scoped.length})…`,
-        });
+      setOptimizingState(opt.setIsOptimizingContent, batchKey, true);
+      initOverviewBlogInContentImageHarnessBatchState({
+        site,
+        catalog: scoped.map((index) => {
+          const row = rows[index]!;
+          return {
+            index,
+            url: row.url!.trim(),
+            title: row.title ?? "",
+            focusKeyword: row.focusKeyword ?? "",
+            html: "",
+          };
+        }),
+        setBulkOptimizationState: opt.setBulkOptimizationState,
+        setOptimizationProgress: opt.setOptimizationProgress,
+        setIsOptimizingContent: opt.setIsOptimizingContent,
+        prepMessage: `Loading post HTML for ${prepLabel} (${scoped.length})…`,
       });
 
       try {
         // Find Local Image: do NOT re-crawl the connected (current) site looking for images.
         // Peer caches hold reusable local images; use already-loaded HTML for placement.
-        if (forceLocalMode !== "find") {
-          await prefetchOverviewInventory(site, {
-            includeContent: true,
-            includePageHeading: true,
-            source: sitemapSource,
-            silent: true,
-          });
-        }
-
         const catalog = buildInContentImageCatalogFromCache(
           site,
           scoped,
@@ -309,15 +276,13 @@ export function useOverviewTabBlogInContentImage({
           return;
         }
 
-        flushSync(() => {
-          initOverviewBlogInContentImageHarnessBatchState({
-            site,
-            catalog,
-            setBulkOptimizationState: opt.setBulkOptimizationState,
-            setOptimizationProgress: opt.setOptimizationProgress,
-            setIsOptimizingContent: opt.setIsOptimizingContent,
-            prepMessage: `${prepLabel} (${catalog.length} rows)…`,
-          });
+        initOverviewBlogInContentImageHarnessBatchState({
+          site,
+          catalog,
+          setBulkOptimizationState: opt.setBulkOptimizationState,
+          setOptimizationProgress: opt.setOptimizationProgress,
+          setIsOptimizingContent: opt.setIsOptimizingContent,
+          prepMessage: `${prepLabel} (${catalog.length} rows)…`,
         });
 
         // Find: skip current-site inventory resolve — peers supply images; bindings already on rows.
@@ -330,7 +295,7 @@ export function useOverviewTabBlogInContentImage({
           );
         }
 
-        const writtenForCsv: Array<{ url: string; html: string }> = [];
+        const cacheWrite = createAiseoCacheWriteAccumulator(site);
         await runOverviewBlogInContentImageHarnessBatch({
           catalog,
           site,
@@ -339,15 +304,12 @@ export function useOverviewTabBlogInContentImage({
           allowLocalImage: canUseLocalInContentImage(sitemapSource),
           peerSites,
           harnessSetters,
+          cacheWrite,
           updateRow,
-          onRowOk: (url, html) => {
-            writtenForCsv.push({ url, html });
-          },
+          uploadAfterRowWrite,
         });
 
-        if (writtenForCsv.length) {
-          mergeInContentHtmlIntoSiteCache(site, writtenForCsv);
-        }
+        finalizeAiseoCacheWriteForUpload(cacheWrite, rowsRef);
       } finally {
         finalizeOverviewBlogInContentImageHarnessBatch(
           batchKey,

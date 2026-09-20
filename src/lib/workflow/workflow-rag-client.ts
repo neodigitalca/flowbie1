@@ -35,12 +35,15 @@ function outputBelongsToSite(
   );
 }
 
-function actionAgentNodeIds(nodes: WorkflowNode[]): Set<string> {
-  return new Set(nodes.filter((node) => node.kind === "action_agent").map((node) => node.id));
-}
-
-function archiveNodeIds(nodes: WorkflowNode[]): Set<string> {
-  return new Set(nodes.filter((node) => node.kind === "rag_archive").map((node) => node.id));
+function deliverableNodeIds(nodes: WorkflowNode[]): Set<string> {
+  return new Set(
+    nodes
+      .filter(
+        (node) =>
+          node.kind === "action_agent" || node.kind === "rag_archive" || node.kind === "csv_rows",
+      )
+      .map((node) => node.id),
+  );
 }
 
 export function parseClientSiteIdFromOutput(
@@ -76,9 +79,7 @@ function isActionOrArchiveOutput(
   output: WorkflowStepOutput,
   nodes: WorkflowNode[],
 ): boolean {
-  const agentIds = actionAgentNodeIds(nodes);
-  const archiveIds = archiveNodeIds(nodes);
-  return agentIds.has(output.nodeId) || archiveIds.has(output.nodeId);
+  return deliverableNodeIds(nodes).has(output.nodeId);
 }
 
 export function clientDeliverableOutputs(

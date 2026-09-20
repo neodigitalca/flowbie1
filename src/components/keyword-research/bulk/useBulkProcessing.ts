@@ -41,8 +41,6 @@ interface UseBulkProcessingProps {
   scheduleOccupancy?: ScheduleOccupancy | null;
   useGapScheduling?: boolean;
   refreshScheduleOccupancy?: () => Promise<ScheduleOccupancy | null>;
-  /** Blog import: requires DataForSEO for keyword research; OpenRouter still parses the draft file. */
-  skipDataForSeoApiKey?: boolean;
   processAllRows: (
     rows: CSVRow[],
     wordPressPosting?: WordPressPostingOptions,
@@ -81,7 +79,6 @@ export function useBulkProcessing({
   scheduleOccupancy = null,
   useGapScheduling = false,
   refreshScheduleOccupancy,
-  skipDataForSeoApiKey = false,
   processAllRows,
   setIsProcessing,
   setCurrentRow,

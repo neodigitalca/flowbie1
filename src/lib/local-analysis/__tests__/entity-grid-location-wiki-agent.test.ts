@@ -5,6 +5,7 @@ import {
   cycleItemsForRowCount,
   isDirectionalCompassPlaceLabel,
   pickNeighbourhoodEntitiesForCluster,
+  runEntityGridLocationClusterAgent,
 } from "@/lib/local-analysis/entity-grid-location-wiki-agent";
 import type { GridLocationBucket } from "@/lib/local-analysis/grid-location-buckets";
 
@@ -234,6 +235,22 @@ describe("explicit layout row budget", () => {
     const total = threeGroups.flatMap(() => oneCitySlots);
     expect(total).toHaveLength(configuredTotal);
     expect(new Set(threeGroups).size).toBe(1);
+  });
+});
+
+describe("runEntityGridLocationClusterAgent profile location", () => {
+  it("fails when there is no grid and no profile city", async () => {
+    await expect(
+      runEntityGridLocationClusterAgent({
+        apiKey: "test-key",
+        gridRows: [],
+        gridKeywordWeights: [],
+        buckets: [],
+        gridLocations: [],
+        gridSummaryMarkdown: "",
+        totalSapBudget: 9,
+      }),
+    ).rejects.toThrow("No city on this site profile for location clustering.");
   });
 });
 

@@ -1,11 +1,17 @@
 import type { Dispatch, SetStateAction } from "react";
-import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
 import { mergeHarnessProgressSiteAndBatch } from "@/hooks/content-optimization/optimization-helpers-a";
 import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
 import type { BulkHarnessSectionPayload } from "@/lib/bulk-auto-generate";
 import { reduceHarnessSectionList } from "@/lib/bulk/harness-sections-reducer";
-import { extractH2TextsFromHtml } from "@/lib/overview/overview-blog-headers-extract";
 import { OVERVIEW_HARNESS_SECTION_TITLES } from "@/lib/overview/overview-blog-overview-harness-sections";
+import {
+  buildAiseoElementHtmlFile,
+  mergeAiseoRowFinishFiles,
+} from "@/lib/overview/overview-aiseo-row-artifacts";
+import {
+  generatedFilesForUrl,
+  storageKeyForUrlGeneratedFiles,
+} from "@/lib/content-optimization/content-optimizer-bulk-generator-bindings";
 
 type SetBulkState = Dispatch<SetStateAction<Record<string, BulkOptimizationState>>>;
 type SetOptProgress = Dispatch<SetStateAction<Record<string, unknown>>>;
@@ -114,14 +120,12 @@ export function emitOverviewHarnessPayload(
 
 export function markOverviewRowOptimizing(
   url: string,
-  index: number,
+  _index: number,
   setters: OverviewHarnessSetters,
-  updateRow: (index: number, patch: Partial<OverviewRow>) => void,
   rowNum: number,
   total: number,
   label: string,
 ): void {
-  updateRow(index, { status: "ai-overview" });
   setters.setBulkOptimizationState((prev) => {
     const current = prev[setters.batchKey];
     if (!current) return prev;
@@ -144,32 +148,31 @@ export function markOverviewRowOptimizing(
 
 export function markOverviewRowDone(
   url: string,
-  index: number,
+  _index: number,
   setters: OverviewHarnessSetters,
-  updateRow: (index: number, patch: Partial<OverviewRow>) => void,
-  html: string,
-  overviewSectionHtml?: string,
+  files?: { overviewSectionHtml?: string; postHtml?: string },
 ): void {
-  const blogH2List = extractH2TextsFromHtml(html);
-  updateRow(index, {
-    status: "idle",
-    postContent: html,
-    postContentOptimized: html,
-    blogH2List,
-  });
   setters.setBulkOptimizationState((prev) => {
     const current = prev[setters.batchKey];
     if (!current) return prev;
-    const overviewFile =
-      overviewSectionHtml?.trim()
-        ? [
-            {
-              name: "overview.html",
-              content: overviewSectionHtml.trim(),
-              mimeType: "text/html;charset=utf-8",
-            },
-          ]
-        : [];
+    const existingFiles = generatedFilesForUrl(current.urlGeneratedFiles, url);
+    const storageKey = storageKeyForUrlGeneratedFiles(
+      current.urlGeneratedFiles,
+      url,
+      current.urls,
+    );
+    const elementFiles = files?.overviewSectionHtml?.trim()
+      ? [buildAiseoElementHtmlFile("overview.html", files.overviewSectionHtml)].filter(
+          (file): file is NonNullable<typeof file> => file != null,
+        )
+      : [];
+    const mergedFiles = mergeAiseoRowFinishFiles({
+      runKind: "aiOverview",
+      url,
+      existingFiles,
+      elementFiles,
+      postHtml: files?.postHtml,
+    });
     return {
       ...prev,
       [setters.batchKey]: {
@@ -177,20 +180,14 @@ export function markOverviewRowDone(
         urlStatuses: { ...(current.urlStatuses || {}), [url]: "completed" },
         urlGeneratedFiles: {
           ...(current.urlGeneratedFiles || {}),
-          ...(overviewFile.length ? { [url]: overviewFile } : {}),
+          [storageKey]: mergedFiles,
         },
       },
     };
   });
 }
 
-export function markOverviewRowSkipped(
-  url: string,
-  index: number,
-  setters: OverviewHarnessSetters,
-  updateRow: (index: number, patch: Partial<OverviewRow>) => void,
-): void {
-  updateRow(index, { status: "idle" });
+export function markOverviewRowSkipped(url: string, setters: OverviewHarnessSetters): void {
   setters.setBulkOptimizationState((prev) => {
     const current = prev[setters.batchKey];
     if (!current) return prev;
@@ -206,12 +203,9 @@ export function markOverviewRowSkipped(
 
 export function markOverviewRowError(
   url: string,
-  index: number,
   setters: OverviewHarnessSetters,
-  updateRow: (index: number, patch: Partial<OverviewRow>) => void,
   message: string,
 ): void {
-  updateRow(index, { status: "error" });
   setters.setBulkOptimizationState((prev) => {
     const current = prev[setters.batchKey];
     if (!current) return prev;

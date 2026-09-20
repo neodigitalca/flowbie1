@@ -1,15 +1,15 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { buildBulkRunContentCsv } from '@/lib/bulk-run-content-csv';
 import { notify, notifyHeaderError } from "@/lib/app-notifications";
-import { NOTIFY_FETCHING_WORDPRESS_POSTS, NOTIFY_INTERNAL_ERROR_ROW_INDEX_MAPPING_DOES_NO, NOTIFY_INVALID_TARGET_SITE_EXAMPLE_COM_IS_NOT_A, NOTIFY_LOADING_WORDPRESS_SITE_INVENTORY_ONE_REQ, NOTIFY_OPENROUTER_API_KEY_IS_REQUIRED, NOTIFY_PROCESSING_CANCELLED_BY_USER, notifyBulkProcessingCompleteXFilesGenerat, notifyBulkProcessingFailedX, notifyLoadedXLinkableUrlsFromSiteInvento, notifyRowXFailedX, notifyRowXXCompletedXFilesGenerated, notifyWordpressFetchFailedX, notifyWordpressSiteNotFoundX } from "@/lib/notify-messages";
+import { NOTIFY_INTERNAL_ERROR_ROW_INDEX_MAPPING_DOES_NO, NOTIFY_INVALID_TARGET_SITE_EXAMPLE_COM_IS_NOT_A, NOTIFY_LOADING_WORDPRESS_SITE_INVENTORY_ONE_REQ, NOTIFY_OPENROUTER_API_KEY_IS_REQUIRED, NOTIFY_PROCESSING_CANCELLED_BY_USER, notifyBulkProcessingCompleteXFilesGenerat, notifyBulkProcessingFailedX, notifyLoadedXLinkableUrlsFromSiteInvento, notifyRowXFailedX, notifyRowXXCompletedXFilesGenerated, notifyWordpressFetchFailedX, notifyWordpressSiteNotFoundX } from "@/lib/notify-messages";
 import {
   parseCsvStatic,
   generateRowOutputs,
   generateBlueprintAndContent,
   clearBulkUploadValidationCache,
   addKeywordResearchSnapshotToBulkFiles,
+  emitEntitySapPipelineHarnessDone,
   buildSitesToPostFromPosting,
-  prefetchBulkWordPressLinkValidationForRun,
   type CSVRow,
   type BulkProcessingOptions,
   type BulkHarnessSectionPayload,
@@ -36,7 +36,17 @@ import { getStoredSites } from '@/components/integrations/storage';
 import { buildPortfolioBlockedHosts } from '@/lib/portfolio-link-blocklist';
 import type { ConnectedSiteSummary, WordPressSite } from '@/components/integrations/types';
 import { getPublicSiteUrl } from '@/lib/wordpress-site-public-url';
-import { clearGoogleMapsImageSessionCache } from '@/lib/content-generation/google-maps-image-api';
+import {
+  clearGoogleMapsImageSessionCache,
+  fetchGoogleMapsImageForEntityWithFallback,
+} from '@/lib/content-generation/google-maps-image-api';
+import { resolveSiteLocationLabel } from '@/lib/llm-audit/resolve-site-location-label';
+import {
+  buildContentOptimizeHarnessPayload,
+  buildGoogleImageEntitySapPipelineTitles,
+  rowUsesGoogleImageFeatured,
+} from '@/lib/overview/overview-content-optimize-pipeline';
+import { sapMapsImageFileName } from '@/lib/bulk/sap-maps-media-bank';
 import {
   countSapMapsRowsByEntity,
   createSapMapsMediaBank,
@@ -105,7 +115,7 @@ import { buildBulkBaseRows } from '@/lib/bulk-processing-order';
 import { buildWordPressPostingFromSelection } from '@/lib/build-wordpress-bulk-posting';
 import {
   applyRowSitemapToPosting,
-  buildCustomModePrefetchSites,
+  defaultBulkSitemapMode,
   resolveRowSitemapType,
   resolveSiteSitemapMode,
 } from '@/lib/bulk/bulk-sitemap-mode';
@@ -157,8 +167,6 @@ export interface UseBulkAutoGenerateProps {
   useCsvPublishDates?: boolean;
   wordpressDraftOnly?: boolean;
   bulkPostDestination?: WordPressPostDestination;
-  /** Legacy OpenRouter-only mode (unused in Blog Generator). */
-  skipDataForSeoApiKey?: boolean;
   blogImportSourceFile?: File | null;
   blogImportForm?: {
     focusKeyword: string;
@@ -192,7 +200,6 @@ export function useBulkAutoGenerate({
   useCsvPublishDates = true,
   wordpressDraftOnly = false,
   bulkPostDestination = 'wordpress',
-  skipDataForSeoApiKey = false,
   blogImportSourceFile = null,
   blogImportForm,
 }: UseBulkAutoGenerateProps) {
@@ -307,7 +314,7 @@ export function useBulkAutoGenerate({
     paaRawResponse,
     clearResults,
   } = useKeywordResearch({
-    apiKey: skipDataForSeoApiKey ? undefined : apiKey,
+    apiKey,
     openRouterApiKey,
     selectedModel,
     temperature,
@@ -437,11 +444,76 @@ isAnalyzingRef.current = isAnalyzing;
           ? options.portfolioBlockedHosts
           : undefined;
 
-      const semrushPromise = fetchSemrushBulkEnrichment({
-        pageUrl: pageUrlEarly,
-        seedKeyword: seedEarly,
-        portfolioBlockedHosts,
-      });
+      const pushHarness = (payload: BulkHarnessSectionPayload) => {
+        setHarnessPlannedSectionCount(payload.totalSections);
+        setHarnessSections((prev) => reduceHarnessSectionList(prev, payload));
+      };
+
+      let googleMapsImagePromise: Promise<void> | undefined;
+      let googleMapsSerpLocationForRow: string | undefined;
+      if (rowUsesGoogleImageFeatured(activeRow, options.featuredImageType)) {
+        const entity = activeRow.entity?.trim();
+        if (entity && entity !== "N/A") {
+          const pipelineTitles = buildGoogleImageEntitySapPipelineTitles([]);
+          const harnessStart = buildContentOptimizeHarnessPayload(
+            rowIndex,
+            0,
+            "start",
+            undefined,
+            pipelineTitles,
+          );
+          pushHarness(harnessStart);
+          options.onHarnessSection?.(harnessStart);
+          options.onProgress?.(rowIndex, 0, `Google Image for ${entity}...`);
+
+          const seedForLocation =
+            activeRow.keyword?.trim() || activeRow.keyword_focus?.trim() || "";
+          const storedSite = connectedSite
+            ? getStoredSites().find(
+                (s) =>
+                  s.siteUrl.replace(/\/+$/, "").toLowerCase() ===
+                  connectedSite.siteUrl.replace(/\/+$/, "").toLowerCase(),
+              )
+            : undefined;
+          const cityLabel = resolveSiteLocationLabel(storedSite, seedForLocation) || "";
+          const cityToken = cityLabel.split(",")[0]?.trim().toLowerCase() || "";
+          googleMapsSerpLocationForRow =
+            cityLabel && cityToken && !entity.toLowerCase().includes(cityToken)
+              ? `${entity}, ${cityLabel}`
+              : cityLabel || undefined;
+
+          googleMapsImagePromise = fetchGoogleMapsImageForEntityWithFallback(
+            entity,
+            googleMapsSerpLocationForRow,
+          ).then((mapsPayload) => {
+            if (!mapsPayload?.imageBase64?.trim()) return;
+            const mimeType = mapsPayload.mimeType || "image/jpeg";
+            const extension = mimeType === "image/jpeg" ? "jpg" : "png";
+            const timestamp = Date.now();
+            const imageFile: BulkGeneratedFile = {
+              id: BulkFileManager.createFileId(rowIndex, "image", timestamp),
+              rowIndex,
+              fileName: sapMapsImageFileName(entity, extension),
+              content: `data:${mimeType};base64,${mapsPayload.imageBase64}`,
+              mimeType,
+              status: "completed",
+              timestamp,
+              rowData: activeRow,
+            };
+            fileManager.addFile(imageFile);
+            const harnessDone = buildContentOptimizeHarnessPayload(
+              rowIndex,
+              0,
+              "done",
+              undefined,
+              pipelineTitles,
+            );
+            pushHarness(harnessDone);
+            options.onHarnessSection?.(harnessDone);
+            setFilesTick((t) => t + 1);
+          });
+        }
+      }
 
       // Step 1: Fetch Wikipedia and run keyword research
       const { files: initialFiles, research: keywordResearchFromRow } = await generateRowOutputs(
@@ -453,10 +525,16 @@ isAnalyzingRef.current = isAnalyzing;
       );
       allFiles.push(...initialFiles);
 
-      const useOpenRouterOnly = skipDataForSeoApiKey || options.openRouterOnly;
+      options.onProgress?.(rowIndex, 0, "Semrush enrichment...");
+      const semrushResult = await fetchSemrushBulkEnrichment({
+        pageUrl: pageUrlEarly,
+        seedKeyword: seedEarly,
+        portfolioBlockedHosts,
+      });
+
+      const useOpenRouterOnly = Boolean(options.openRouterOnly);
       let finalKeywordData: import('@/lib/keyword-types').KeywordData;
       let finalAiAnalysis: import('@/lib/keyword-types').KeywordAIAnalysis;
-      let semrushResult: Awaited<ReturnType<typeof fetchSemrushBulkEnrichment>>;
       let intelligentMerge: Awaited<
         ReturnType<typeof runIntelligentKeywordResearchMerge>
       >['merge'];
@@ -468,7 +546,6 @@ isAnalyzingRef.current = isAnalyzing;
         const stub = buildBlogImportKeywordResearchStub(activeRow);
         finalKeywordData = stub.keywordData;
         finalAiAnalysis = stub.aiAnalysis;
-        semrushResult = await semrushPromise;
         const mergeResult = await runIntelligentKeywordResearchMerge(activeRow, stub.keywordData, semrushResult, {
           apiKey: options.openRouterApiKey,
           model: selectedModel || getResearchModel(),
@@ -496,6 +573,7 @@ isAnalyzingRef.current = isAnalyzing;
           },
         );
         allFiles.push(dfsFile);
+        emitEntitySapPipelineHarnessDone(options, rowIndex, activeRow, "Keyword research");
       } else {
         const csvPrimary = activeRow.keyword?.trim() || activeRow.keyword_focus?.trim() || '';
         if (!keywordResearchFromRow?.result?.keywordData || !keywordResearchFromRow.aiAnalysis) {
@@ -509,8 +587,6 @@ isAnalyzingRef.current = isAnalyzing;
           };
           finalAiAnalysis = keywordResearchFromRow.aiAnalysis;
         }
-        semrushResult = await semrushPromise;
-
         options.onProgress?.(rowIndex, 0, 'Merging keyword research with Semrush...');
         const mergeResult = await runIntelligentKeywordResearchMerge(row, finalKeywordData, semrushResult, {
           apiKey: openRouterApiKey,
@@ -540,6 +616,7 @@ isAnalyzingRef.current = isAnalyzing;
           },
         );
         allFiles.push(dfsFile);
+        emitEntitySapPipelineHarnessDone(options, rowIndex, activeRow, "Keyword research");
       }
 
       // Step 3: Load knowledge base from localStorage
@@ -608,12 +685,20 @@ isAnalyzingRef.current = isAnalyzing;
       const wordPressPosts = options.wordPressPostsByKeyword?.get(keywordLower);
 
       // Step 5: Generate blueprint and content with knowledge base (including Wikipedia and WordPress posts)
-      setHarnessSections([]);
+      setHarnessSections((prev) =>
+        prev.filter(
+          (section) =>
+            section.title === "Google Image" &&
+            (section.status === "done" || section.status === "generating"),
+        ),
+      );
       setHarnessPlannedSectionCount(null);
       options.onProgress?.(rowIndex, 0, 'Generating checklist and blueprint...');
       const optionsWithHarness: BulkProcessingOptions = {
         ...options,
-        openRouterOnly: skipDataForSeoApiKey || Boolean(options.openRouterOnly),
+        openRouterOnly: Boolean(options.openRouterOnly),
+        googleMapsImagePromise,
+        googleMapsImageSerpLocation: googleMapsSerpLocationForRow,
         onHarnessSection: (payload: BulkHarnessSectionPayload) => {
           options.onHarnessSection?.(payload);
           setHarnessPlannedSectionCount(payload.totalSections);
@@ -667,7 +752,6 @@ isAnalyzingRef.current = isAnalyzing;
     connectedSite,
     openRouterApiKey,
     selectedModel,
-    skipDataForSeoApiKey,
     appendProcessingStep,
     setRows,
   ]);
@@ -744,78 +828,30 @@ isAnalyzingRef.current = isAnalyzing;
       selectedWordPressSites,
       entitySitemapAvailable,
     );
-    const rowSitemapFallback: BulkRowSitemapType = 'post';
+    const rowSitemapFallback: BulkRowSitemapType = defaultBulkSitemapMode();
 
-    let sitesToPostForPrefetch = buildSitesToPostFromPosting(postingForLoop);
-    if (siteSitemapMode === 'custom' && postingForLoop?.enabled) {
-      sitesToPostForPrefetch = buildCustomModePrefetchSites(
-        postingForLoop,
-        csvRows,
-        rowSitemapFallback,
-      );
-    }
-    let linkPrefetchPromise: Promise<void> | undefined;
-    if (postingForLoop?.enabled && sitesToPostForPrefetch.length > 0) {
-      linkPrefetchPromise = prefetchBulkWordPressLinkValidationForRun(sitesToPostForPrefetch);
-    }
-
-    // Step 1: Fetch WordPress posts for unique keywords (if connectedSite is provided)
     const wordPressPostsByKeyword = new Map<string, Array<{ id: number; slug: string; title: string; excerpt: string; link: string; date_gmt: string; collection?: string; postType?: string }>>();
-    
+    let wordPressInventoryLoaded = false;
+
+    let wordPressSiteForRun: ReturnType<typeof getStoredSites>[number] | undefined;
     if (connectedSite) {
-      console.log('[Bulk Generate] Connected site provided:', connectedSite);
-      try {
-        notify.info(NOTIFY_FETCHING_WORDPRESS_POSTS);
-        const sites = getStoredSites();
-        console.log('[Bulk Generate] Found', sites.length, 'stored WordPress sites');
-        
-        // Hard block placeholder domains from ever being used
-        const normalizeDomain = (url: string): string =>
-          url.trim().toLowerCase().replace(/\/$/, '').replace(/^https?:\/\/(www\.)?/, '').split('/')[0];
-
-        const connectedDomain = normalizeDomain(connectedSite.siteUrl);
-        if (connectedDomain === 'example.com' || connectedDomain.endsWith('.example.com')) {
-          notify.error(NOTIFY_INVALID_TARGET_SITE_EXAMPLE_COM_IS_NOT_A);
-          setIsProcessing(false);
-          return;
-        }
-
-        // Match site by connectedSite URL - must be exact match
-        const wordPressSite = sites.find(s => {
-          const normalize = (url: string) => url.trim().toLowerCase().replace(/\/$/, '').replace(/^https?:\/\/(www\.)?/, '');
-          return normalize(s.siteUrl) === normalize(connectedSite.siteUrl);
-        });
-        
-        console.log('[Bulk Generate] WordPress site match:', wordPressSite ? 'Found' : 'Not found', connectedSite.siteUrl);
-        
-        if (!wordPressSite) {
-          console.warn('[WordPress] No matching site found for:', connectedSite.siteUrl);
-          notify.warning(notifyWordpressSiteNotFoundX(connectedSite.siteUrl));
-        } else if (wordPressSite.username && wordPressSite.appPassword) {
-          const uniqueKeywords = new Set(csvRows.map(r => r.keyword.toLowerCase().trim()));
-          console.log('[Bulk Generate] WordPress site credentials found, loading shared inventory for', uniqueKeywords.size, 'unique keywords');
-
-          try {
-            notify.info(NOTIFY_LOADING_WORDPRESS_SITE_INVENTORY_ONE_REQ);
-            const inv = await ensureBulkGenerationWpInventory(wordPressSite, (msg) => notify.info(msg));
-            if (inv.error?.trim()) {
-              notify.warning(inv.error.trim());
-            }
-            const allLinkables = await loadBlogPlayLinkablesForSite(wordPressSite, inv.rows ?? []);
-            for (const keyword of uniqueKeywords) {
-              wordPressPostsByKeyword.set(keyword, allLinkables);
-            }
-            notify.success(notifyLoadedXLinkableUrlsFromSiteInvento(allLinkables.length, uniqueKeywords.size));
-          } catch (error) {
-            console.error('[WordPress] Inventory fetch error:', error);
-            notify.warning(notifyWordpressFetchFailedX(error instanceof Error ? error.message : 'Unknown error'));
-          }
-
-        }
-      } catch (error) {
-        console.error('[WordPress] Fetch error:', error);
-        notify.warning(notifyWordpressFetchFailedX(error instanceof Error ? error.message : 'Unknown error'));
-        // Continue processing even if WordPress fetch fails
+      const normalizeDomain = (url: string): string =>
+        url.trim().toLowerCase().replace(/\/$/, '').replace(/^https?:\/\/(www\.)?/, '').split('/')[0];
+      const connectedDomain = normalizeDomain(connectedSite.siteUrl);
+      if (connectedDomain === 'example.com' || connectedDomain.endsWith('.example.com')) {
+        notify.error(NOTIFY_INVALID_TARGET_SITE_EXAMPLE_COM_IS_NOT_A);
+        processingInFlightRef.current = false;
+        setIsProcessing(false);
+        return;
+      }
+      const sites = getStoredSites();
+      wordPressSiteForRun = sites.find((s) => {
+        const normalize = (url: string) =>
+          url.trim().toLowerCase().replace(/\/$/, '').replace(/^https?:\/\/(www\.)?/, '');
+        return normalize(s.siteUrl) === normalize(connectedSite.siteUrl);
+      });
+      if (!wordPressSiteForRun) {
+        notify.warning(notifyWordpressSiteNotFoundX(connectedSite.siteUrl));
       }
     }
 
@@ -868,7 +904,42 @@ isAnalyzingRef.current = isAnalyzing;
           throw new Error('Processing cancelled');
         }
 
-        const displayRowIndex = displayIndices[i]!;
+        setCurrentRow(i);
+        setHarnessSections([]);
+        setHarnessPlannedSectionCount(null);
+
+        if (
+          !wordPressInventoryLoaded &&
+          wordPressSiteForRun?.username &&
+          wordPressSiteForRun.appPassword
+        ) {
+          wordPressInventoryLoaded = true;
+          try {
+            notify.info(NOTIFY_LOADING_WORDPRESS_SITE_INVENTORY_ONE_REQ);
+            const inv = await ensureBulkGenerationWpInventory(wordPressSiteForRun, (msg) =>
+              notify.info(msg),
+            );
+            if (inv.error?.trim()) {
+              notify.warning(inv.error.trim());
+            }
+            const allLinkables = await loadBlogPlayLinkablesForSite(
+              wordPressSiteForRun,
+              inv.rows ?? [],
+            );
+            const uniqueKeywords = new Set(csvRows.map((r) => r.keyword.toLowerCase().trim()));
+            for (const keyword of uniqueKeywords) {
+              wordPressPostsByKeyword.set(keyword, allLinkables);
+            }
+            notify.success(
+              notifyLoadedXLinkableUrlsFromSiteInvento(allLinkables.length, uniqueKeywords.size),
+            );
+          } catch (error) {
+            console.error('[WordPress] Inventory fetch error:', error);
+            notify.warning(
+              notifyWordpressFetchFailedX(error instanceof Error ? error.message : 'Unknown error'),
+            );
+          }
+        }
 
         const rowSitemapType = resolveRowSitemapType(
           siteSitemapMode,
@@ -877,11 +948,9 @@ isAnalyzingRef.current = isAnalyzing;
         );
         const rowWordPressPosting = applyRowSitemapToPosting(postingForLoop, rowSitemapType);
 
-        const openRouterOnly = skipDataForSeoApiKey;
         const options: BulkProcessingOptions = {
-          apiKey: openRouterOnly ? effectiveOpenRouterKey : effectiveDataForSeoKey,
+          apiKey: effectiveDataForSeoKey,
           openRouterApiKey: effectiveOpenRouterKey,
-          openRouterOnly,
           blogImportSourceFile,
           blogImportForm,
           selectedModel,
@@ -892,7 +961,6 @@ isAnalyzingRef.current = isAnalyzing;
           featuredImageType,
           wordPressPosting: rowWordPressPosting,
           headerPostDestination: bulkPostDestination,
-          linkPrefetchPromise,
           wordPressPostsByKeyword: wordPressPostsByKeyword.size > 0 ? wordPressPostsByKeyword : undefined,
           portfolioBlockedHosts: portfolioBlockedHostsOpt,
           bulkScheduleSlotIndex: i,
@@ -914,11 +982,8 @@ isAnalyzingRef.current = isAnalyzing;
           },
         };
 
-        setCurrentRow(i);
-
         try {
-          // processRow now clears state internally before processing
-          const files = await processRow(displayRowIndex, csvRows[i], options);
+          const files = await processRow(i, csvRows[i], options);
           snapshotHarnessForRow(i);
           // Only mark as complete if we got files back (all generation succeeded)
           if (files && files.length > 0) {
@@ -935,10 +1000,6 @@ isAnalyzingRef.current = isAnalyzing;
           console.error(`Error processing row ${i + 1}:`, error);
         }
 
-        // Small delay between rows to avoid rate limiting
-        if (i < csvRows.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay between rows
-        }
       }
 
       if (!runHadFailure) {
@@ -991,7 +1052,7 @@ isAnalyzingRef.current = isAnalyzing;
       abortControllerRef.current = null;
       processingInFlightRef.current = false;
     }
-  }, [apiKey, openRouterApiKey, selectedModel, temperature, maxTokens, topP, flowPurpose, fileManager, processRow, connectedSite, wordPressPosting, siteConfigs, selectedWordPressSites, skipDataForSeoApiKey, blogImportSourceFile, blogImportForm, bulkPostDestination, recordRunStatus, snapshotHarnessForRow]);
+  }, [apiKey, openRouterApiKey, selectedModel, temperature, maxTokens, topP, flowPurpose, fileManager, processRow, connectedSite, wordPressPosting, siteConfigs, selectedWordPressSites, blogImportSourceFile, blogImportForm, bulkPostDestination, recordRunStatus, snapshotHarnessForRow]);
 
   /**
    * Cancel processing

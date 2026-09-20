@@ -16,6 +16,7 @@ import {
   firstPartyAuthorityBlockFromBrief,
   formatChatGptBusinessFactsPromptBlock,
   formatIllustrativeExamplePromptBlock,
+  formatIllustrativePersonaPromptBlock,
   formatVerifiedFactsPromptBlock,
   formatSiteUsedOpenersPromptBlock,
   swotTextFromResearchFields,
@@ -162,11 +163,31 @@ describe("first-party authority prompt blocks", () => {
     expect(block).toContain("personaName (only person in section): Quinn");
     expect(block).toContain("scenarioNarrative");
     expect(block).toContain("recommendationParagraph");
-    expect(block).toContain("matching Answer and Keyword");
+    expect(block).toContain("Persona decision must match Keyword + Answer topic");
     expect(block).toContain("keyword+location slug");
     expect(block).toContain("Choosing Panels");
     expect(block).toContain("SITE-FIRST");
     expect(block).toContain("would recommend");
+    expect(block).toContain("Forbidden: a place name cite on top of the blockquote");
+  });
+
+  it("formatIllustrativePersonaPromptBlock requires the city [[LINK]] inside the quote", () => {
+    const block = formatIllustrativePersonaPromptBlock(
+      {
+        leadIn: "Hypothetical scenario:",
+        quoteBody: "legacy",
+        asOf: "September 2026",
+        illustrativeH2Title: "Gulf Light And Glare",
+        personaName: "Eleanor",
+        scenarioNarrative: "Eleanor is redecorating her Park Shore condo.",
+        recommendationParagraph: "Lindsey Blinds would recommend solar roller shades.",
+      },
+      "September 2026",
+      { pageTitle: "Park Shore Window Treatments", anchor: "Park Shore" },
+    );
+    expect(block).toContain("[[LINK:Park Shore Window Treatments|Park Shore]]");
+    expect(block).toContain("required inside the blockquote sentence");
+    expect(block).toContain("Forbidden: a location cite as the first child of the blockquote");
   });
 
   it("reads SWOT prose but not a version-1 brief as SWOT", () => {
@@ -241,7 +262,7 @@ describe("opener contract", () => {
     expect(block).toContain("Ridgeline Solar");
     expect(block).toContain("SERVICE AREA DENSITY");
     expect(block).toContain("Lead with a sourced fact or stat");
-    expect(block).toContain("In Answer, name the business in the final sentence");
+    expect(block).toContain("In Answer, mention this exact business name somewhere in the Answer paragraph");
     expect(block).not.toContain("at least once in the intro and once in the body");
     expect(block).not.toContain("Open the intro by establishing who we are");
   });

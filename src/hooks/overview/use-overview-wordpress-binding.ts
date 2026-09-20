@@ -44,6 +44,7 @@ import { getBulkGenerationWpInventoryIfReady } from "@/lib/bulk/bulk-generation-
 import { bindingsFromInventorySnapshot } from "@/lib/overview/overview-inventory-bindings";
 import { mergeInventoryContentRows } from "@/lib/overview/overview-page-content-batch";
 import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
+import { focusKeywordFromWordPressSources } from "@/lib/overview/focus-keyword-from-wp-sources";
 
 export interface OverviewBinding {
   postId: number;
@@ -152,8 +153,12 @@ function inventoryRowsHaveRealIds(rows: OverviewInventoryRow[]): boolean {
 function inventoryRowDisplayKeyword(row: OverviewInventoryRow): string {
   const acf =
     row.acf && typeof row.acf === "object" ? (row.acf as Record<string, unknown>) : {};
-  const fromAcf = typeof acf.keyword_focus === "string" ? acf.keyword_focus.trim() : "";
-  return fromAcf || (row.fields?.keyword ?? "").trim();
+  return focusKeywordFromWordPressSources({
+    acf,
+    fieldsKeyword: row.fields?.keyword,
+    title: (row.fields?.title || row.fields?.pageHeading || "").trim(),
+    collection: row.collection,
+  });
 }
 
 function inventoryRowDisplayDate(row: OverviewInventoryRow): string {

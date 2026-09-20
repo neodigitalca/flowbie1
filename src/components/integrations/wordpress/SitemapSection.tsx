@@ -18,7 +18,6 @@ import {
   CheckCircle2,
   Sparkles,
   Search,
-  FileSpreadsheet,
   Calendar as CalendarIcon,
   RefreshCw,
   Ban,
@@ -26,7 +25,6 @@ import {
 } from "lucide-react";
 import { type WordPressSite } from "../types";
 import { PostCalendar } from "./PostCalendar";
-import { PostPagePackGenerator } from "./PostPagePackGenerator";
 import { cn } from "@/lib/utils";
 import {
   WP_PANEL_SECTION_SHELL,
@@ -140,7 +138,6 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
 }) => {
   const chrome = sitemapSectionChrome(layout);
   const [openCalendars, setOpenCalendars] = useState<Record<string, boolean>>({});
-  const [openPackGenerator, setOpenPackGenerator] = useState<Record<string, boolean>>({});
   const [manualSitemapUrl, setManualSitemapUrl] = useState("");
 
   const handleCalendarOpenChange = useCallback((sitemapUrl: string, open: boolean) => {
@@ -264,8 +261,6 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
               const isGenerating = isGeneratingEntities[generatingKey] || false;
               const indexingKey = `${site.id}-${url}`;
               const isIndexing = isIndexingSitemap[indexingKey] || false;
-              const sitemapName = url.split('/').pop()?.replace('-sitemap.xml', '').replace('_sitemap.xml', '').replace('-', ' ').replace('_', ' ') || 'Pack';
-              const packName = sitemapName.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') + ' Pack';
               const loadingKey = `${site.id}-${url}`;
               const isLoading = isLoadingCalendar[loadingKey] || false;
               const postMetadata = site.sitemaps?.postMetadata?.[url];
@@ -426,18 +421,6 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                             )}
                           </DropdownMenuItem>
                         )}
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setOpenPackGenerator(prev => ({ ...prev, [url]: true }));
-                          }}
-                          disabled={site.enabled === false || rowDisabled}
-                          className={chrome.menuItem}
-                        >
-                          <FileSpreadsheet className="h-4 w-4 mr-2" />
-                          Generate {packName}
-                        </DropdownMenuItem>
                         {onSetEntitySitemap ? (
                           <>
                             <DropdownMenuSeparator className={chrome.menuSep} />
@@ -528,16 +511,6 @@ export const SitemapSection: React.FC<SitemapSectionProps> = ({
                         )}
                       </DropdownMenuContent>
                     </DropdownMenu>
-                    <PostPagePackGenerator
-                      key={`pack-${url}`}
-                      open={openPackGenerator[url] || false}
-                      onOpenChange={(open) => {
-                        setOpenPackGenerator(prev => ({ ...prev, [url]: open }));
-                      }}
-                      site={site}
-                      sitemapUrl={url}
-                      postType="post"
-                    />
                     <Dialog
                       open={openCalendars[url] || false}
                       onOpenChange={(open) => {

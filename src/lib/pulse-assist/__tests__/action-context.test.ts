@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildTeamContext } from "@/lib/pulse-assist/context";
+import { buildLocationSummary } from "@/lib/pulse-assist/app-module-catalog";
+import { buildPropertiesContext, buildTeamContext } from "@/lib/pulse-assist/context";
+import type { WordPressSite } from "@/components/integrations/types";
+import { forgeContextFromHash } from "@/lib/pulse-assist/navigation";
 import type { TeamSummary } from "@/lib/teams-types";
 import type { TaskProject } from "@/lib/tasks-types";
 
@@ -84,5 +87,34 @@ describe("buildTeamContext", () => {
 
     expect(ctx?.activeProjectId).toBe(9);
     expect(ctx?.activeProjectTitle).toBe("Advance Blinds");
+  });
+});
+
+describe("buildPropertiesContext", () => {
+  it("forwards the 10-digit Google Ads customer ID", () => {
+    const site = {
+      id: "site-1",
+      name: "You Junk It",
+      siteUrl: "https://example.com",
+      username: "admin",
+      appPassword: "x",
+      connectedAt: 1,
+      googleAdsCustomerId: "629-330-5294",
+    } as WordPressSite;
+
+    const ctx = buildPropertiesContext([site], "site-1");
+    expect(ctx.activePropertyId).toBe("site-1");
+    expect(ctx.properties[0]?.googleAdsCustomerId).toBe("6293305294");
+  });
+});
+
+describe("buildPulseContext forge route", () => {
+  it("adds forge section and workflow id from the hash", () => {
+    const forge = forgeContextFromHash("#pulse-forge/workflows/12");
+    expect(forge.forgeSection).toBe("workflows");
+    expect(forge.forgeWorkflowId).toBe(12);
+    expect(buildLocationSummary({ managerTab: "pulse-forge", forgeSection: "workflows" })).toContain(
+      "Workflows",
+    );
   });
 });

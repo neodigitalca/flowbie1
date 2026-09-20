@@ -2,6 +2,7 @@ import type React from "react";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
 import type { OverviewBinding } from "@/hooks/overview/use-overview-wordpress-binding";
 import type { WordPressSite } from "@/components/integrations/types";
+import { applyElementorOptimization } from "@/lib/elementor-api";
 import type { OverviewInventoryRow } from "@/lib/overview/overview-inventory-csv";
 import { getWordPressPostMeta, updateOverviewSeoItem } from "@/lib/wordpress-api/meta";
 import type { BulkOverviewSeoResultRow } from "@/lib/wordpress-api/meta";
@@ -35,6 +36,8 @@ export type BuildOverviewBulkSeoItemOptions = {
   /** When true, always sends today's date in `acf.date_modifier` (WordPress upload only). */
   forWordPressUpload?: boolean;
   semrushScope?: SemrushUploadScope;
+  /** Warm inventory body when grid row has no postContentOptimized yet. */
+  inventoryContent?: string;
 };
 
 /** YYYY-MM-DD for ACF `date_modifier` (matches Overview "Update dates" bulk action). */
@@ -99,9 +102,20 @@ export function patchOverviewRowsDateModifierForUrls(
   );
 }
 
-/** Upload body HTML must already be on the row as `postContentOptimized`. */
-export function resolveOverviewPostContentForUpload(row: OverviewRow): string {
-  const html = (row.postContentOptimized ?? "").trim();
+/** Body HTML for AISEO upload: cache or grid, no transforms. */
+export function resolveOverviewAiseoBodyForUpload(
+  row: OverviewRow,
+  inventoryContent?: string,
+): string {
+  return (row.postContentOptimized ?? row.postContent ?? inventoryContent ?? "").trim();
+}
+
+/** Upload body HTML from row or warm inventory cache. */
+export function resolveOverviewPostContentForUpload(
+  row: OverviewRow,
+  inventoryContent?: string,
+): string {
+  const html = (row.postContentOptimized ?? row.postContent ?? inventoryContent ?? "").trim();
   if (!html) return "";
   const lower = html.toLowerCase();
   if (
@@ -210,10 +224,15 @@ export function buildOverviewBulkSeoItem(
   const seoTrimmed = (row.seoResearch ?? "").trim();
   const faqRaw = (row.faq ?? "").trim();
   const dateRaw = (row.dateModifier ?? "").trim();
-  const postContentForUpload = resolveOverviewPostContentForUpload(row);
+  const postContentForUpload =
+    row.contentFormat === "elementor"
+      ? ""
+      : resolveOverviewPostContentForUpload(row, options?.inventoryContent);
+  const hasElementorPayload =
+    row.contentFormat === "elementor" && Boolean(row.elementorDataJson?.trim());
 
   const hasGridFields =
-    Boolean(et || em || focusTrimmed || faqRaw || dateRaw || seoTrimmed || postContentForUpload);
+    Boolean(et || em || focusTrimmed || faqRaw || dateRaw || seoTrimmed || postContentForUpload || hasElementorPayload);
   if (!hasGridFields && !options?.forWordPressUpload) {
     return null;
   }
@@ -364,8 +383,23 @@ export async function uploadOverviewRowSeoToWordPress(
   site: WordPressSite,
   row: OverviewRow,
   binding: OverviewBinding,
+  options?: Pick<BuildOverviewBulkSeoItemOptions, "inventoryContent">,
 ): Promise<{ ok: boolean; error?: string; link?: string }> {
-  const item = buildOverviewBulkSeoItem(row, binding, { forWordPressUpload: true });
+  if (row.contentFormat === "elementor" && row.elementorDataJson?.trim()) {
+    try {
+      await applyElementorOptimization(site, binding.postId, row.elementorDataJson.trim());
+    } catch (e) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e.message : "Elementor upload failed.",
+      };
+    }
+  }
+
+  const item = buildOverviewBulkSeoItem(row, binding, {
+    forWordPressUpload: true,
+    inventoryContent: options?.inventoryContent,
+  });
   if (!item) {
     return { ok: false, error: "Nothing to upload for this row." };
   }

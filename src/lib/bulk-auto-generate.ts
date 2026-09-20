@@ -1,5 +1,6 @@
 import { buildFocusedArticlePurpose } from "@/lib/content-generation/article-length-policy";
 import { parseImportedLinksJson, parseImportedSectionsJson, parseModifierLinksJson } from './bulk/bulk-csv-parser';
+import { importedBodyH2Outline } from './bulk/blog-import-parser';
 import {
   injectImportedLinksIntoBlueprintAgents,
   injectImportedLinksIntoChecklist,
@@ -29,8 +30,7 @@ import {
   hasCsvFilledMeta,
   hasCsvFilledWikipediaUrl,
 } from './bulk/prefilled-bulk-row-contract';
-import { generateChecklistFromSelections, generateBlueprintFromTemplate, buildBlueprintFromChecklistRows, type BlogTemplateContext } from './blog-template-builder';
-import { sapSelectedH2OutlineTitles } from '@/lib/prompt-builders/sap-page-template';
+import { generateChecklistFromSelections, generateBlueprintFromTemplate, type BlogTemplateContext } from './blog-template-builder';
 import { getResearchModel } from './optimization-settings-storage';
 import { buildImagePrompt } from './image-prompt-builder';
 import type { ImageChecklistItem } from './image-checklist-builder';
@@ -44,7 +44,24 @@ import {
   uploadWordPressMedia,
   updateWordPressPostMeta,
 } from './wordpress-api';
-import { fetchGoogleMapsImageForEntity, peekGoogleMapsImageCache } from './content-generation/google-maps-image-api';
+import {
+  fetchGoogleMapsImageForEntity,
+  fetchGoogleMapsImageForEntityWithFallback,
+  peekGoogleMapsImageCache,
+} from './content-generation/google-maps-image-api';
+import {
+  generateDirectFeaturedImagePayload,
+  uploadDirectFeaturedMedia,
+} from './bulk/blog-import-direct-extras';
+import {
+  buildContentOptimizeHarnessPayload,
+  buildGoogleImageEntitySapPipelineTitles,
+  buildContentOptimizePipelineTitles,
+  extractBodyHarnessTitlesFromRowFiles,
+  rowUsesGoogleImageFeatured,
+} from './overview/overview-content-optimize-pipeline';
+import { wpUploadHarnessGeneratedFiles } from './overview/overview-wp-upload-harness-artifacts';
+import { shouldPeerSearchFeaturedImage } from './bulk/peer-featured-image-gate';
 import {
   findPeerFeaturedImageForRow,
   type PeerFeaturedImageForRow,
@@ -57,12 +74,9 @@ import type { PeerFeaturedLibraryCsvFile } from './overview/sap-peer-featured-im
 import {
   getSapMapsMediaId,
   sapMapsImageFileName,
-  sapMapsMediaTitleAlt,
-  sapMapsReuseProgressLabel,
   setSapMapsMediaId,
   type SapMapsMediaBank,
 } from './bulk/sap-maps-media-bank';
-import { entityAdGroupKey } from './local-analysis/sap-entity-ad-groups';
 import { markdownToHtml, generateExcerpt } from './markdown-to-html';
 import {
   formatWordPressDate,
@@ -71,12 +85,6 @@ import {
 } from './wordpress-scheduler';
 import { sanitizeWordPressSlugSegment } from './rank-math-redirect-csv';
 import { buildSapSlugFromKeywordEntity } from '@/lib/sap-slug-from-keyword-entity';
-import {
-  assertWordPressCreateKeptSlug,
-  findUploadSlugConflict,
-  reserveUploadSlug,
-} from '@/lib/bulk/bulk-upload-inventory-slug-guard';
-import { getBulkGenerationWpInventoryIfReady } from '@/lib/bulk/bulk-generation-wp-inventory';
 import { extractEndpointFromEntitySitemapUrl } from './entity-endpoint-extractor';
 import { resolveUploadSitemapType } from '@/lib/bulk/bulk-sitemap-mode';
 import { updateACFFields } from './wordpress-acf-origin';
@@ -104,7 +112,6 @@ import {
 } from '@/lib/content-generation/bulk-acf-seo-bundle';
 import { generateMetaDescription } from '@/lib/content-generation/content-generator';
 import { resolveBulkWordPressPostTitle } from '@/lib/bulk/bulk-post-title-agent';
-import { resolveEntitySapPostTitle } from '@/lib/local-analysis/entity-sap-title-agent';
 import {
   sanitizeContentForUpload,
 } from './content-generation/content-sanitizer';
@@ -148,8 +155,9 @@ import type { CSVRow } from './bulk/bulk-csv-parser';
 import { resolveBulkPrimaryKeyword } from './bulk/bulk-primary-keyword';
 import { buildBlogImportKeywordResearchStub } from './bulk/blog-import-parse';
 import { parseCSV, parseBlogIdeasChecklist } from './bulk/bulk-csv-parser';
-import { 
-  autoSelectKeywords, 
+import {
+  autoSelectKeywords,
+  autoSelectH2Sections,
   autoSelectPeopleAlsoAsk,
 } from './bulk/bulk-blueprint-generator';
 import { 
@@ -165,7 +173,15 @@ import { generateEntityTitleFromSitemap } from './bulk/bulk-entity-handler';
 import type { RunHistoryEntry } from '@/hooks/content-optimization/use-optimization-state';
 import { validateAndStripInvalidLinksFromContent, normalizeInternalUrl } from './wordpress-api/validate-internal-links';
 import { getValidatedPosts } from './cached-link-validation';
-import { keepBlogPlayLinkTargets } from './bulk/bulk-generation-wp-inventory';
+import {
+  keepBlogPlayLinkTargets,
+  inventoryRowsToWordPressLinkables,
+  type LinkTargetsPlan,
+} from './bulk/bulk-generation-wp-inventory';
+import { getBulkGenerationWpInventoryIfReady } from './bulk/bulk-generation-inventory-cache-store';
+import type { ExtraTextInventoryLinkRow } from './content-generation/extra-text-inventory-links';
+import { runContentLinkTargetsHarness } from './overview/overview-content-link-targets-harness-run';
+import { OptimizationFileManager } from './optimization-file-manager';
 import { createSiteCache, seedSiteCacheFromBulkInventory } from './wordpress-site-cache';
 import { clearValidationCache } from './cached-link-validation';
 import { extractOriginFromSapTitle } from '@/lib/sap-origin-from-title';
@@ -248,6 +264,76 @@ export function clearBulkUploadValidationCache(siteIds: string[]): void {
     preValidatedUrlsBySite.delete(id);
     clearValidationCache(id);
   }
+}
+
+type BulkInternalLinkRow = {
+  id: number;
+  slug: string;
+  title: string;
+  excerpt: string;
+  link: string;
+  date_gmt: string;
+  collection?: string;
+  postType?: string;
+};
+
+function bulkPostsToExtraTextLinkRows(posts: BulkInternalLinkRow[]): ExtraTextInventoryLinkRow[] {
+  return posts.map((item) => ({
+    id: item.id,
+    slug: item.slug,
+    title: item.title,
+    excerpt: item.excerpt,
+    link: item.link,
+    date_gmt: item.date_gmt,
+    postType:
+      item.collection === "pages" || item.postType === "page" ? ("page" as const) : ("post" as const),
+  }));
+}
+
+function emitBulkPipelineHarnessDoneByTitle(
+  options: BulkProcessingOptions,
+  rowIndex: number,
+  stepTitle: string,
+  pipelineTitles: readonly string[],
+): void {
+  const sectionIndex = pipelineTitles.findIndex((title) => title === stepTitle);
+  if (sectionIndex < 0) return;
+  options.onHarnessSection?.(
+    buildContentOptimizeHarnessPayload(rowIndex, sectionIndex, "done", undefined, pipelineTitles),
+  );
+}
+
+export function emitEntitySapPipelineHarnessDone(
+  options: BulkProcessingOptions,
+  rowIndex: number,
+  row: Pick<CSVRow, "featuredImage">,
+  stepTitle: string,
+  bodyHarnessTitles?: readonly string[],
+): void {
+  if (!rowUsesGoogleImageFeatured(row, options.featuredImageType)) return;
+  emitBulkPipelineHarnessDoneByTitle(
+    options,
+    rowIndex,
+    stepTitle,
+    buildGoogleImageEntitySapPipelineTitles(bodyHarnessTitles ?? []),
+  );
+}
+
+export function buildBulkSelectedKeywordArtifactPayload(
+  primaryKeyword: string,
+  selectedKeywords: string[],
+  selectedPeopleAlsoAsk: string[],
+): string {
+  return JSON.stringify(
+    {
+      primaryKeyword,
+      selectedKeywords,
+      selectedPeopleAlsoAsk,
+      generatedAt: new Date().toISOString(),
+    },
+    null,
+    2,
+  );
 }
 
 /**
@@ -383,6 +469,10 @@ export interface BulkProcessingOptions {
   useEntitySitemapTemplate?: boolean;
   /** Started at bulk run start (tandem with research); await at WordPress upload only */
   linkPrefetchPromise?: Promise<void>;
+  /** Entity SAP: parallel Google Maps fetch started in processRow; join at publish. */
+  googleMapsImagePromise?: Promise<void>;
+  /** SERP city composite for Google Maps label fallback (entity + city). */
+  googleMapsImageSerpLocation?: string;
   wordPressPostsByKeyword?: Map<string, Array<{ id: number; slug: string; title: string; excerpt: string; link: string; date_gmt: string; collection?: string; postType?: string }>>;
   onProgress?: (rowIndex: number, totalRows: number, status: string) => void;
   onRowComplete?: (rowIndex: number, files: BulkGeneratedFile[]) => void;
@@ -394,6 +484,8 @@ export interface BulkProcessingOptions {
   sequentialHarnessSections?: boolean;
   /** AI summary of site (posts sitemap scraped + summarized) for aligning service-area content */
   siteSummary?: string;
+  /** Forge / task Instructions the writer must follow. */
+  optionalPrompt?: string;
   /** Other managed client domains - Semrush bulk enrichment must not surface these as approved externals */
   portfolioBlockedHosts?: string[];
   /**
@@ -973,15 +1065,38 @@ try {
     }
     
     const selectedKeywords = autoSelectKeywords(aiAnalysis, keywordsWithVolumeData);
-    const selectedH2Sections = entityForLocalTemplate
-      ? sapSelectedH2OutlineTitles(entityForLocalTemplate)
-      : [];
+    const selectedH2Sections = autoSelectH2Sections(aiAnalysis);
     const selectedPeopleAlsoAsk = autoSelectPeopleAlsoAsk(aiAnalysis);
+    const primaryKeywordForSelection =
+      keywordData.keyword?.trim() ||
+      enrichedRow.keyword?.trim() ||
+      row.keyword?.trim() ||
+      selectedKeywords[0] ||
+      "";
+    const selectedKeywordFileName = BulkFileManager.generateFileName(enrichedRow, "selected_keyword", timestamp);
+    const selectedKeywordFile: BulkGeneratedFile = {
+      id: BulkFileManager.createFileId(rowIndex, "selected-keyword", timestamp),
+      rowIndex,
+      fileName: selectedKeywordFileName,
+      content: buildBulkSelectedKeywordArtifactPayload(
+        primaryKeywordForSelection,
+        selectedKeywords,
+        selectedPeopleAlsoAsk,
+      ),
+      mimeType: "application/json",
+      status: "completed",
+      timestamp,
+      rowData: enrichedRow,
+    };
+    fileManager.addFile(selectedKeywordFile);
+    generatedFiles.push(selectedKeywordFile);
+    emitEntitySapPipelineHarnessDone(options, rowIndex, enrichedRow, "Selected keyword");
     const importedDraftLinks: ImportedDraftLink[] =
       parseImportedLinksJson(enrichedRow.imported_links_json ?? row.imported_links_json) ?? [];
     const importedSections = options.updateTargetPostId != null
       ? undefined
       : parseImportedSectionsJson(enrichedRow.imported_sections_json ?? row.imported_sections_json);
+    const importedH2Outline = importedBodyH2Outline(importedSections);
 
     const modifierUrls =
       parseModifierLinksJson(enrichedRow.modifier_links_json ?? row.modifier_links_json)?.map(
@@ -1185,6 +1300,7 @@ try {
     };
     fileManager.addFile(seoBriefFile);
     generatedFiles.push(seoBriefFile);
+    emitEntitySapPipelineHarnessDone(options, rowIndex, enrichedRow, "SERP research brief");
 
     // Generate checklist (after SERP + LLM brief)
     options.onProgress?.(rowIndex, 0, 'Reading blacklist...');
@@ -1223,6 +1339,7 @@ try {
         primaryKeyword: keywordData.keyword,
         currentPageUrl: destinationPageUrl || undefined,
         ...(llmAuditAuthorityLinks.length ? { llmAuditAuthorityLinks } : {}),
+        ...(importedH2Outline.length ? { importedH2Outline } : {}),
         ...(!entityForLocalTemplate ? { serpResearchBriefJson: serpLlmBriefJson } : {}),
         ...(options.forbiddenLiveH2s?.length ? { forbiddenLiveH2s: options.forbiddenLiveH2s } : {}),
       }
@@ -1273,7 +1390,68 @@ try {
     checklist = pipelineChecklist;
     fileManager.addFile(checklistFile);
     generatedFiles.push(checklistFile);
+    emitEntitySapPipelineHarnessDone(options, rowIndex, enrichedRow, "Checklist");
     options.onProgress?.(rowIndex, 0, 'Blog checklist ready');
+
+    let linkTargetsPlan: LinkTargetsPlan | undefined;
+    const linkSiteId = serpSite?.id ?? connectedSite?.id;
+    const linkApiKey = options.openRouterApiKey || loadApiKey();
+    let linkPoolSource: BulkInternalLinkRow[] = postsForInternalLinks;
+    if (!linkPoolSource.length && linkSiteId) {
+      const invRows = getBulkGenerationWpInventoryIfReady(linkSiteId);
+      if (invRows?.length) {
+        linkPoolSource = keepBlogPlayLinkTargets(inventoryRowsToWordPressLinkables(invRows));
+      }
+    }
+    const bodyTitlesForLinkPlan = checklistResult.h2Outline?.length
+      ? checklistResult.h2Outline
+      : selectedH2Sections;
+    if (
+      linkSiteId &&
+      linkApiKey?.trim() &&
+      linkPoolSource.length > 0 &&
+      bodyTitlesForLinkPlan.length > 0
+    ) {
+      options.onProgress?.(rowIndex, 0, "Planning internal link targets...");
+      const linkOptFileManager = new OptimizationFileManager();
+      const linkFileSlug =
+        generateSEOSlug(keywordData.keyword) ||
+        generateSEOSlug(enrichedRow.title) ||
+        "article";
+      linkTargetsPlan = await runContentLinkTargetsHarness({
+        apiKey: linkApiKey,
+        siteId: linkSiteId,
+        primaryKeyword: keywordData.keyword,
+        bodySectionTitles: bodyTitlesForLinkPlan,
+        linkPool: bulkPostsToExtraTextLinkRows(linkPoolSource),
+        fileManager: linkOptFileManager,
+        fileSlug: linkFileSlug,
+      });
+      const linkTargetsOptFile = linkOptFileManager
+        .getFiles()
+        .find((file) => file.name.toLowerCase().startsWith("link-targets-"));
+      if (linkTargetsOptFile) {
+        const linkTargetsFile: BulkGeneratedFile = {
+          id: BulkFileManager.createFileId(rowIndex, "link-targets", timestamp),
+          rowIndex,
+          fileName: linkTargetsOptFile.name,
+          content: linkTargetsOptFile.content,
+          mimeType: linkTargetsOptFile.mimeType,
+          status: "completed",
+          timestamp,
+          rowData: enrichedRow,
+        };
+        fileManager.addFile(linkTargetsFile);
+        generatedFiles.push(linkTargetsFile);
+        emitEntitySapPipelineHarnessDone(
+          options,
+          rowIndex,
+          enrichedRow,
+          "Link targets",
+          checklistResult.h2Outline ?? [],
+        );
+      }
+    }
 
     const flowPurposeStr = options.flowPurpose || buildFocusedArticlePurpose(keywordData.keyword);
     const outlineTextForImage = `Blog checklist outline:\n${checklist.join('\n')}`;
@@ -1284,11 +1462,9 @@ try {
         : row.entity && row.entity.trim() && row.entity.trim() !== 'N/A'
           ? row.entity.trim()
           : undefined;
-    const featuredImageTypeFromRow = row.featuredImage === 'google-maps' ? 'google-maps' : 'ai-generated';
-    const featuredImageType =
-      featuredImageTypeFromRow === 'google-maps' ? featuredImageTypeFromRow : options.featuredImageType || 'ai-generated';
-    const useGoogleMaps = featuredImageType === 'google-maps' && !!entityForImage;
-    if (featuredImageType === 'google-maps' && !entityForImage) {
+    const useGoogleMaps =
+      rowUsesGoogleImageFeatured(row, options.featuredImageType) && !!entityForImage;
+    if (rowUsesGoogleImageFeatured(row, options.featuredImageType) && !entityForImage) {
       throw new Error(
         `Google Maps image requested but no entity found for row ${rowIndex + 1}. Add an entity to the row or use AI-generated images.`
       );
@@ -1304,7 +1480,12 @@ try {
     };
 
     // Parallel: blueprint + image checklist + SEO skeleton (LLM audit already merged above)
-    options.onProgress?.(rowIndex, 0, 'Blueprint + SEO draft (parallel)...');
+    const sequentialDraft = Boolean(options.sequentialHarnessSections || useGoogleMaps);
+    options.onProgress?.(
+      rowIndex,
+      0,
+      sequentialDraft ? "Blueprint + SEO draft..." : "Blueprint + SEO draft (parallel)...",
+    );
     const baseUserPrompt = enrichedRow.prompt_modifier || enrichedRow.modifier;
     const context: BlogTemplateContext = {
       flowTitle: enrichedRow.title,
@@ -1320,56 +1501,85 @@ try {
       ? enrichedRow.meta_description!.trim()
       : "";
 
-    const [blueprintResultRaw, precomputedImageChecklist, preBlogSeoSkeleton, precomputedMetaDescription] = await Promise.all([
-      entityForLocalTemplate
-        ? Promise.resolve(
-            buildBlueprintFromChecklistRows(
-              pipelineChecklist,
-              context,
-              entityForLocalTemplate,
-            ),
+    const blueprintTemplateArgs = {
+      apiKey: options.openRouterApiKey,
+      model: options.selectedModel || getResearchModel(),
+      temperature: options.temperature || 1.0,
+      maxTokens: options.maxTokens || 8000,
+      topP: options.topP || 0.9,
+      connectedSite,
+      entity: entityForLocalTemplate,
+      importedDraftLinks: importedDraftLinks.length ? importedDraftLinks : undefined,
+      modifierExternalLinks: modifierExternalLinks.length ? modifierExternalLinks : undefined,
+      userExternalLinks: rowExplicitExternalPairs.length ? rowExplicitExternalPairs : undefined,
+      wikipediaUrl: entityWikiUrl,
+      wikipediaTitle: entityWikiTitle,
+      llmAuditSummary: llmAuditSummaryPrompt || undefined,
+      dfsArticleAuditBlock: dfsArticleAuditBlock || undefined,
+      firstPartyAuthorityBlock: firstPartyAuthorityBlock || undefined,
+      ...(llmAuditAuthorityLinks.length ? { llmAuditAuthorityLinks } : {}),
+    };
+    const preBlogSeoSkeleton = buildPreBlogSeoResearchSkeleton({
+      keywordData,
+      enrichedRow,
+      semrushKeywordsContext,
+      semrushScatterContext,
+      flowTitle: enrichedRow.title,
+    });
+
+    let blueprintResultRaw: Awaited<ReturnType<typeof generateBlueprintFromTemplate>>;
+    let precomputedImageChecklist: ImageChecklistItem[];
+    let precomputedMetaDescription: string | undefined;
+
+    if (sequentialDraft) {
+      blueprintResultRaw = await generateBlueprintFromTemplate(
+        pipelineChecklist,
+        context,
+        blueprintTemplateArgs,
+      );
+      precomputedImageChecklist = useAiImagePath
+        ? await generateImageChecklist(
+            enrichedRow.title,
+            flowPurposeStr,
+            outlineTextForImage,
+            imageChecklistLlmOptions,
           )
-        : generateBlueprintFromTemplate(pipelineChecklist, context, {
-            apiKey: options.openRouterApiKey,
-            model: options.selectedModel || getResearchModel(),
-            temperature: options.temperature || 1.0,
-            maxTokens: options.maxTokens || 8000,
-            topP: options.topP || 0.9,
-            connectedSite,
-            entity: entityForLocalTemplate,
-            importedDraftLinks: importedDraftLinks.length ? importedDraftLinks : undefined,
-            modifierExternalLinks: modifierExternalLinks.length ? modifierExternalLinks : undefined,
-            userExternalLinks: rowExplicitExternalPairs.length ? rowExplicitExternalPairs : undefined,
-            wikipediaUrl: entityWikiUrl,
-            wikipediaTitle: entityWikiTitle,
-            llmAuditSummary: llmAuditSummaryPrompt || undefined,
-            dfsArticleAuditBlock: dfsArticleAuditBlock || undefined,
-            firstPartyAuthorityBlock: firstPartyAuthorityBlock || undefined,
-            ...(llmAuditAuthorityLinks.length ? { llmAuditAuthorityLinks } : {}),
-          }),
-      useAiImagePath
-        ? generateImageChecklist(enrichedRow.title, flowPurposeStr, outlineTextForImage, imageChecklistLlmOptions)
-        : Promise.resolve([] as ImageChecklistItem[]),
-      Promise.resolve(
-        buildPreBlogSeoResearchSkeleton({
-          keywordData,
-          enrichedRow,
-          semrushKeywordsContext,
-          semrushScatterContext,
-          flowTitle: enrichedRow.title,
-        })
-      ),
-      csvMetaDescription
-        ? Promise.resolve(csvMetaDescription)
-        : generateMetaDescription(
+        : [];
+      precomputedMetaDescription = csvMetaDescription
+        ? csvMetaDescription
+        : await generateMetaDescription(
             metaContextBulk,
             keywordData.keyword,
             options.openRouterApiKey,
             connectedSite?.id,
             metaTitleForBulk,
-            false
-          ),
-    ]);
+            false,
+          );
+    } else {
+      [blueprintResultRaw, precomputedImageChecklist, , precomputedMetaDescription] =
+        await Promise.all([
+          generateBlueprintFromTemplate(pipelineChecklist, context, blueprintTemplateArgs),
+          useAiImagePath
+            ? generateImageChecklist(
+                enrichedRow.title,
+                flowPurposeStr,
+                outlineTextForImage,
+                imageChecklistLlmOptions,
+              )
+            : Promise.resolve([] as ImageChecklistItem[]),
+          Promise.resolve(preBlogSeoSkeleton),
+          csvMetaDescription
+            ? Promise.resolve(csvMetaDescription)
+            : generateMetaDescription(
+                metaContextBulk,
+                keywordData.keyword,
+                options.openRouterApiKey,
+                connectedSite?.id,
+                metaTitleForBulk,
+                false,
+              ),
+        ]);
+    }
     const blueprintAgentsWithImports = injectImportedLinksIntoBlueprintAgents(
       blueprintResultRaw.agents,
       importedDraftLinks,
@@ -1404,21 +1614,6 @@ try {
         );
     if (checklistResult.h2Outline?.length) {
       (blueprintResult as { h2Outline?: string[] }).h2Outline = checklistResult.h2Outline;
-    }
-
-    const isEntitySapRow =
-      Boolean(enrichedRow.entity?.trim() && enrichedRow.entity.trim() !== 'N/A') &&
-      (options.useEntitySitemapTemplate === true || enrichedRow.sitemap_type === 'entity');
-    if (isEntitySapRow) {
-      const lockedTitle = resolveEntitySapPostTitle(
-        enrichedRow.keyword ?? keywordData.keyword,
-        enrichedRow.entity ?? '',
-        enrichedRow.title,
-      );
-      blueprintResult.title = lockedTitle;
-      if (!enrichedRow.title?.trim()) {
-        enrichedRow = { ...enrichedRow, title: lockedTitle };
-      }
     }
 
     mergeBlueprintIntoPreBlogSkeleton(preBlogSeoSkeleton, blueprintResult.title, blueprintResult.purpose);
@@ -1475,6 +1670,13 @@ try {
 
     fileManager.addFile(blueprintFile);
     generatedFiles.push(blueprintFile);
+    emitEntitySapPipelineHarnessDone(
+      options,
+      rowIndex,
+      enrichedRow,
+      "Blueprint",
+      checklistResult.h2Outline ?? [],
+    );
 
     const flowTitleForBlueprint = blueprintResult.title || enrichedRow.title;
     const flowPurposeResolved = blueprintResult.purpose || flowPurposeStr;
@@ -1490,21 +1692,16 @@ try {
     if (options.optimizePreserveTitle?.trim()) {
       bulkResolvedPostTitle = options.optimizePreserveTitle.trim();
       options.onProgress?.(rowIndex, 0, 'Using existing post title for optimize upload');
-    } else if (isEntitySapRow) {
-      bulkResolvedPostTitle = resolveEntitySapPostTitle(
-        enrichedRow.keyword ?? bulkPrimaryKwResolved,
-        enrichedRow.entity ?? '',
-        enrichedRow.title,
-      );
-      if (!enrichedRow.title?.trim()) {
-        enrichedRow = { ...enrichedRow, title: bulkResolvedPostTitle };
-      }
-      options.onProgress?.(rowIndex, 0, 'Using entity SAP title');
     } else {
+      const entityPlace =
+        enrichedRow.entity?.trim() && enrichedRow.entity.trim() !== 'N/A'
+          ? enrichedRow.entity.trim()
+          : undefined;
       options.onProgress?.(rowIndex, 0, 'Writing post title...');
       bulkResolvedPostTitle = await resolveBulkWordPressPostTitle({
         apiKey: options.openRouterApiKey || loadApiKey(),
         focusKeyword: bulkPrimaryKwResolved,
+        entity: entityPlace,
         candidates: {
           researchSeoTitle: rankMetaForTitle.seoTitle,
           csvTitle: enrichedRow.title,
@@ -1538,6 +1735,7 @@ try {
         anchor: link.anchorText,
       })),
       ...(checklistResult.h2Outline?.length ? { h2Outline: checklistResult.h2Outline } : {}),
+      ...(linkTargetsPlan ? { linkTargetsPlan } : {}),
     };
 
     const runMarkdownPipeline = async (): Promise<string> => {
@@ -1581,6 +1779,25 @@ try {
 
       fileManager.addFile(contentFile);
       generatedFiles.push(contentFile);
+
+      const contentHtml = markdownToHtml(md);
+      const contentHtmlFileName = contentFileName.replace(/\.md$/i, ".html");
+      const contentHtmlFile: BulkGeneratedFile = {
+        id: BulkFileManager.createFileId(rowIndex, "content-html", timestamp),
+        rowIndex,
+        fileName: contentHtmlFileName,
+        content: contentHtml,
+        mimeType: "text/html",
+        status: "completed",
+        timestamp,
+        rowData: enrichedRow,
+      };
+      fileManager.addFile(contentHtmlFile);
+      generatedFiles.push(contentHtmlFile);
+      const bodyTitles = checklistResult.h2Outline ?? [];
+      emitEntitySapPipelineHarnessDone(options, rowIndex, enrichedRow, "Post content", bodyTitles);
+      emitEntitySapPipelineHarnessDone(options, rowIndex, enrichedRow, "Content Markdown", bodyTitles);
+
       options.onProgress?.(rowIndex, 0, 'Markdown content generated successfully');
       return md;
     };
@@ -1628,10 +1845,12 @@ try {
     const peerMatchKey = useGoogleMaps
       ? entityForImage!
       : (keywordData.keyword || enrichedRow.keyword || '').trim();
-    const canPeerSearch =
-      row.featuredImage !== 'n' &&
-      (useAiImagePath || useGoogleMaps) &&
-      Boolean(options.peerSites?.length && peerTargetSite);
+    const canPeerSearch = shouldPeerSearchFeaturedImage({
+      featuredImage: row.featuredImage,
+      useGoogleMaps,
+      useAiImagePath,
+      hasPeerSites: Boolean(options.peerSites?.length && peerTargetSite),
+    });
 
     const recordPeerFeaturedImageFile = (peer: PeerFeaturedImageForRow) => {
       const imageFileId = BulkFileManager.createFileId(rowIndex, 'image', timestamp);
@@ -1784,59 +2003,8 @@ try {
     options.onProgress?.(
       rowIndex,
       0,
-      row.featuredImage !== 'n' && (useAiImagePath || useGoogleMaps)
-        ? 'Blog content + featured image (parallel)...'
-        : 'Generating blog content...',
+      useAiImagePath ? 'Blog content + featured image (parallel)...' : 'Generating blog content...',
     );
-
-    const persistGoogleMapsEntityImage = async (): Promise<void> => {
-      if (!entityForImage) return;
-      const entityKey = entityAdGroupKey(entityForImage);
-      const sharedPageCount = options.sapMapsEntityRowCounts?.get(entityKey);
-      const alreadyCached = peekGoogleMapsImageCache(entityForImage) != null;
-      options.onProgress?.(
-        rowIndex,
-        0,
-        sapMapsReuseProgressLabel(entityForImage, sharedPageCount, alreadyCached),
-      );
-
-      const mapsPayload = await fetchGoogleMapsImageForEntity(entityForImage);
-      if (!mapsPayload?.imageBase64) {
-        options.onProgress?.(
-          rowIndex,
-          0,
-          `Google Maps image unavailable for ${entityForImage}; continuing without featured image`,
-        );
-        return;
-      }
-
-      const imageBase64 = mapsPayload.imageBase64;
-      const mimeType = mapsPayload.mimeType || 'image/jpeg';
-      const extension = mimeType === 'image/jpeg' ? 'jpg' : 'png';
-      const finalImageFileName = sapMapsImageFileName(entityForImage, extension);
-
-      const imageFileId = BulkFileManager.createFileId(rowIndex, 'image', timestamp);
-      const imageFile: BulkGeneratedFile = {
-        id: imageFileId,
-        rowIndex,
-        fileName: finalImageFileName,
-        content: `data:${mimeType};base64,${imageBase64}`,
-        mimeType,
-        status: 'completed',
-        timestamp,
-        rowData: row,
-      };
-
-      fileManager.addFile(imageFile);
-      generatedFiles.push(imageFile);
-      options.onProgress?.(
-        rowIndex,
-        0,
-        alreadyCached
-          ? `Featured image ready (Google Maps reused; ${sharedPageCount ?? 1} SAP pages share this location)`
-          : 'Featured image generated (Google Maps - no checklist needed)',
-      );
-    };
 
     const markdownPromise = runMarkdownPipeline();
     const peerPromise = canPeerSearch
@@ -1852,7 +2020,9 @@ try {
         })
       : Promise.resolve(null as PeerFeaturedImageForRow | null);
 
-    const imagePipelinePromise = (async (): Promise<void> => {
+    const imagePipelinePromise = useGoogleMaps
+      ? Promise.resolve()
+      : (async (): Promise<void> => {
       if (row.featuredImage === 'n') return;
 
       let peer: PeerFeaturedImageForRow | null = null;
@@ -1879,21 +2049,6 @@ try {
           mode: useGoogleMaps ? 'entity' : 'blog',
           generator: useGoogleMaps ? 'google-maps' : 'ai',
         });
-      }
-
-      if (useGoogleMaps && entityForImage) {
-        try {
-          await persistGoogleMapsEntityImage();
-        } catch (error: unknown) {
-          console.error('Error generating featured image:', error);
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          options.onProgress?.(
-            rowIndex,
-            0,
-            `Google Maps featured image failed (${errorMessage}); continuing without featured image`,
-          );
-        }
-        return;
       }
 
       if (useAiImagePath) {
@@ -1925,8 +2080,12 @@ try {
     })();
 
     try {
-      const [md] = await Promise.all([markdownPromise, imagePipelinePromise]);
-      markdownContent = md;
+      if (useGoogleMaps) {
+        markdownContent = await markdownPromise;
+      } else {
+        const [md] = await Promise.all([markdownPromise, imagePipelinePromise]);
+        markdownContent = md;
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error generating markdown content:', error);
@@ -2061,62 +2220,77 @@ try {
 
       const bulkPrimaryKw = bulkPrimaryKwResolved;
 
-      // Upload featured image once per location entity (Maps) or once per row (AI) — skipped for post bank
       let featuredImageId: number | undefined;
-      const imageFile = generatedFiles.find(f => f.fileName.endsWith('.png') || f.fileName.endsWith('.jpg') || f.fileName.endsWith('.jpeg'));
-      if (useGoogleMaps && entityForImage && !imageFile) {
-        options.onProgress?.(
-          rowIndex,
-          0,
-          `No Google Maps featured image for ${entityForImage}; publishing without featured image`,
-        );
-      }
-      if (imageFile && imageFile.content) {
-        try {
-          const mapsEntity =
-            useGoogleMaps && entityForImage ? entityForImage : undefined;
-          const mapsTitleAlt = mapsEntity ? sapMapsMediaTitleAlt(mapsEntity) : undefined;
-          const bank = options.sapMapsMediaBank;
-          const firstSite = sitesToPost[0]?.site;
-          const bankedId =
-            mapsEntity && bank && firstSite?.id
-              ? getSapMapsMediaId(bank, firstSite.id, mapsEntity)
-              : undefined;
+      let featuredImageLink: string | null = null;
+      let directFeaturedPayload: { imageBase64: string; filename: string } | undefined;
+      let imageFile: { fileName: string; content: string } | undefined;
 
-          if (bankedId != null) {
-            featuredImageId = bankedId;
-            const sharedPageCount = options.sapMapsEntityRowCounts?.get(entityAdGroupKey(mapsEntity!));
-            options.onProgress?.(
-              rowIndex,
-              0,
-              sapMapsReuseProgressLabel(mapsEntity!, sharedPageCount, true) + ` - Media ID ${featuredImageId}`,
-            );
-          } else {
+      if (useGoogleMaps && entityForImage) {
+        if (options.googleMapsImagePromise) {
+          await options.googleMapsImagePromise;
+        }
+        let mapsPayload =
+          peekGoogleMapsImageCache(entityForImage) ??
+          (await fetchGoogleMapsImageForEntityWithFallback(
+            entityForImage,
+            options.googleMapsImageSerpLocation,
+          ));
+        const bank = options.sapMapsMediaBank;
+        const firstSite = sitesToPost[0].site;
+        featuredImageId = bank ? getSapMapsMediaId(bank, firstSite.id, entityForImage) : undefined;
+        if (featuredImageId == null && mapsPayload?.imageBase64?.trim()) {
+          const extension = mapsPayload.mimeType === "image/jpeg" ? "jpg" : "png";
+          directFeaturedPayload = {
+            imageBase64: mapsPayload.imageBase64,
+            filename: sapMapsImageFileName(entityForImage, extension),
+          };
+          const uploaded = await uploadDirectFeaturedMedia({
+            site: firstSite,
+            imageBase64: directFeaturedPayload.imageBase64,
+            filename: directFeaturedPayload.filename,
+            title: enrichedRow.title || blueprintResult.title || entityForImage,
+            keyword: bulkPrimaryKw || entityForImage,
+          });
+          featuredImageId = uploaded.mediaId;
+          featuredImageLink = uploaded.url;
+          if (bank) {
+            setSapMapsMediaId(bank, firstSite.id, entityForImage, featuredImageId);
+          }
+        }
+      } else {
+        const aiImageFile = generatedFiles.find(
+          (f) =>
+            f.fileName.endsWith('.png') ||
+            f.fileName.endsWith('.jpg') ||
+            f.fileName.endsWith('.jpeg'),
+        );
+        if (aiImageFile?.content && sitesToPost[0]?.site) {
+          imageFile = { fileName: aiImageFile.fileName, content: aiImageFile.content };
+          try {
             options.onProgress?.(rowIndex, 0, 'Uploading featured image to WordPress...');
-            let imageBase64 = imageFile.content;
+            let imageBase64 = aiImageFile.content;
             if (imageBase64.startsWith('data:')) {
               imageBase64 = imageBase64.split(',')[1];
             }
-            const mediaTitle = mapsTitleAlt ?? (enrichedRow.title || blueprintResult.title);
+            const mediaTitle = enrichedRow.title || blueprintResult.title;
             const mediaResult = await uploadWordPressMedia(
               sitesToPost[0].site.siteUrl,
               sitesToPost[0].site.username,
               sitesToPost[0].site.appPassword,
               imageBase64,
-              imageFile.fileName,
+              aiImageFile.fileName,
               mediaTitle,
-              mapsTitleAlt,
+              undefined,
             );
             if (mediaResult.success && mediaResult.mediaId) {
               featuredImageId = mediaResult.mediaId;
-              if (mapsEntity && bank && firstSite?.id) {
-                setSapMapsMediaId(bank, firstSite.id, mapsEntity, featuredImageId);
-              }
               options.onProgress?.(rowIndex, 0, `Featured image uploaded: Media ID ${featuredImageId}`);
+            } else {
+              options.onError?.(rowIndex, new Error('WordPress media upload failed'));
             }
+          } catch (error) {
+            options.onError?.(rowIndex, error instanceof Error ? error : new Error(String(error)));
           }
-        } catch (error) {
-          console.error('Failed to upload featured image:', error);
         }
       }
 
@@ -2151,46 +2325,61 @@ try {
             entityEndpoint = 'posts';
           }
 
-          // Upload featured image to this site if not already uploaded (or re-upload for each site)
           let siteFeaturedImageId = featuredImageId;
-          if (imageFile && imageFile.content && siteIndex > 0) {
-            try {
-              const mapsEntity =
-                useGoogleMaps && entityForImage ? entityForImage : undefined;
-              const mapsTitleAlt = mapsEntity ? sapMapsMediaTitleAlt(mapsEntity) : undefined;
-              const bank = options.sapMapsMediaBank;
-              const bankedId =
-                mapsEntity && bank && site.id
-                  ? getSapMapsMediaId(bank, site.id, mapsEntity)
-                  : undefined;
-
-              if (bankedId != null) {
-                siteFeaturedImageId = bankedId;
-              } else {
-                let imageBase64 = imageFile.content;
-                if (imageBase64.startsWith('data:')) {
-                  imageBase64 = imageBase64.split(',')[1];
-                }
-                const mediaTitle = mapsTitleAlt ?? (enrichedRow.title || blueprintResult.title);
-                const mediaResult = await uploadWordPressMedia(
-                  site.siteUrl,
-                  site.username,
-                  site.appPassword,
-                  imageBase64,
-                  imageFile.fileName,
-                  mediaTitle,
-                  mapsTitleAlt,
-                );
-                if (mediaResult.success && mediaResult.mediaId) {
-                  siteFeaturedImageId = mediaResult.mediaId;
-                  if (mapsEntity && bank && site.id) {
-                    setSapMapsMediaId(bank, site.id, mapsEntity, siteFeaturedImageId);
-                  }
+          if (siteIndex > 0 && useGoogleMaps && entityForImage) {
+            const bank = options.sapMapsMediaBank;
+            siteFeaturedImageId = bank ? getSapMapsMediaId(bank, site.id, entityForImage) : undefined;
+            if (siteFeaturedImageId == null) {
+              let payload = directFeaturedPayload;
+              if (!payload) {
+                const mapsPayload =
+                  peekGoogleMapsImageCache(entityForImage) ??
+                  (await fetchGoogleMapsImageForEntityWithFallback(
+                    entityForImage,
+                    options.googleMapsImageSerpLocation,
+                  ));
+                if (mapsPayload?.imageBase64?.trim()) {
+                  const extension = mapsPayload.mimeType === "image/jpeg" ? "jpg" : "png";
+                  payload = {
+                    imageBase64: mapsPayload.imageBase64,
+                    filename: sapMapsImageFileName(entityForImage, extension),
+                  };
                 }
               }
-            } catch (error) {
-              console.error(`Failed to upload featured image to ${site.name}:`, error);
+              if (payload) {
+                const uploaded = await uploadDirectFeaturedMedia({
+                  site,
+                  imageBase64: payload.imageBase64,
+                  filename: payload.filename,
+                  title: enrichedRow.title || blueprintResult.title || entityForImage,
+                  keyword: bulkPrimaryKw || entityForImage,
+                });
+                siteFeaturedImageId = uploaded.mediaId;
+                if (!featuredImageLink) featuredImageLink = uploaded.url;
+                if (bank) {
+                  setSapMapsMediaId(bank, site.id, entityForImage, siteFeaturedImageId);
+                }
+              }
             }
+          } else if (siteIndex > 0 && imageFile?.content) {
+            let imageBase64 = imageFile.content;
+            if (imageBase64.startsWith('data:')) {
+              imageBase64 = imageBase64.split(',')[1];
+            }
+            const mediaTitle = enrichedRow.title || blueprintResult.title;
+            const mediaResult = await uploadWordPressMedia(
+              site.siteUrl,
+              site.username,
+              site.appPassword,
+              imageBase64,
+              imageFile.fileName,
+              mediaTitle,
+              undefined,
+            );
+            if (!mediaResult.success || !mediaResult.mediaId) {
+              throw new Error('WordPress media upload failed');
+            }
+            siteFeaturedImageId = mediaResult.mediaId;
           }
 
           const postTitle = bulkResolvedPostTitle;
@@ -2229,42 +2418,6 @@ try {
               slug = undefined;
             }
           }
-          }
-
-          if (slug && !options.updateTargetPostId) {
-            if (!options.reservedUploadSlugsBySite) {
-              options.reservedUploadSlugsBySite = new Map();
-            }
-            const siteInventoryRows = getBulkGenerationWpInventoryIfReady(site.id) ?? [];
-            const reservedOnly = findUploadSlugConflict({
-              site,
-              slug,
-              inventoryRows: [],
-              reservedSlugs: options.reservedUploadSlugsBySite.get(site.id),
-            });
-            if (reservedOnly) {
-              const msg = `${reservedOnly.reason}: /${reservedOnly.slug}`;
-              if (sitemapType === "entity" || options.useEntitySitemapTemplate === true) {
-                throw new Error(`Entity page slug collision at upload: ${msg}`);
-              }
-              options.onError?.(rowIndex, new Error(msg));
-              continue;
-            }
-            if (sitemapType === "entity" || options.useEntitySitemapTemplate === true) {
-              const slugConflict = findUploadSlugConflict({
-                site,
-                slug,
-                inventoryRows: siteInventoryRows,
-                reservedSlugs: options.reservedUploadSlugsBySite.get(site.id),
-              });
-              if (slugConflict) {
-                const msg = slugConflict.existingUrl
-                  ? `${slugConflict.reason}: /${slugConflict.slug} (${slugConflict.existingUrl})`
-                  : `${slugConflict.reason}: /${slugConflict.slug}`;
-                throw new Error(`Entity page slug collision at upload: ${msg}`);
-              }
-            }
-            reserveUploadSlug(options.reservedUploadSlugsBySite, site.id, slug);
           }
 
           const wpPostStatus = options.wordPressPosting.draftOnly
@@ -2332,57 +2485,73 @@ try {
             }
           }
 
-          // Update existing post (optimize) or create new post
-          const isOptimizeUpdate =
-            options.updateTargetPostId != null && options.updateTargetPostId > 0;
-          const postResult = isOptimizeUpdate
-            ? await (async () => {
-                const updateResult = await updateWordPressPost(
-                  site.siteUrl,
-                  site.username,
-                  site.appPassword,
-                  options.updateTargetPostId!,
-                  postTitle,
-                  contentForUpload,
-                  excerpt,
-                  wpPostStatus,
-                  sitemapType === 'entity' ? entityEndpoint : 'post',
-                  siteFeaturedImageId,
-                  undefined,
-                  undefined,
-                  slug,
-                  entityEndpoint,
-                );
-                return {
-                  success: updateResult.success,
-                  postId: updateResult.postId ?? options.updateTargetPostId,
-                  link: updateResult.link,
-                };
-              })()
-            : await createWordPressPost(
-            site.siteUrl,
-            site.username,
-            site.appPassword,
-            postTitle,
-            contentForUpload,
-            excerpt,
-            wpPostStatus,
-            options.wordPressPosting.draftOnly
-              ? undefined
-              : formatWordPressDate(scheduledDate),
-            siteFeaturedImageId,
-            undefined, // categories
-            undefined, // tags
-            undefined, // postType
-            entityEndpoint,
-            slug,
-            authorId
-          );
+          if (useGoogleMaps && entityForImage && !siteFeaturedImageId) {
+            const mapsPayload = await fetchGoogleMapsImageForEntityWithFallback(
+              entityForImage,
+              options.googleMapsImageSerpLocation,
+            );
+            if (mapsPayload?.imageBase64?.trim()) {
+              const extension = mapsPayload.mimeType === "image/jpeg" ? "jpg" : "png";
+              const uploaded = await uploadDirectFeaturedMedia({
+                site,
+                imageBase64: mapsPayload.imageBase64,
+                filename: sapMapsImageFileName(entityForImage, extension),
+                title: enrichedRow.title || blueprintResult.title || entityForImage,
+                keyword: bulkPrimaryKw || entityForImage,
+              });
+              siteFeaturedImageId = uploaded.mediaId;
+              featuredImageLink = uploaded.url ?? featuredImageLink;
+              if (options.sapMapsMediaBank) {
+                setSapMapsMediaId(options.sapMapsMediaBank, site.id, entityForImage, siteFeaturedImageId);
+              }
+            }
+          }
+          let postResult: { success: boolean; postId?: number; link?: string } = { success: false };
+          if (options.updateTargetPostId != null && options.updateTargetPostId > 0) {
+            const updateResult = await updateWordPressPost(
+              site.siteUrl,
+              site.username,
+              site.appPassword,
+              options.updateTargetPostId,
+              postTitle,
+              contentForUpload,
+              excerpt,
+              wpPostStatus,
+              sitemapType === 'entity' ? entityEndpoint : 'post',
+              siteFeaturedImageId,
+              undefined,
+              undefined,
+              slug,
+              entityEndpoint,
+            );
+            postResult = {
+              success: true,
+              postId: updateResult.postId ?? options.updateTargetPostId,
+              link: updateResult.link,
+            };
+          } else {
+            postResult = await createWordPressPost(
+              site.siteUrl,
+              site.username,
+              site.appPassword,
+              postTitle,
+              contentForUpload,
+              excerpt,
+              wpPostStatus,
+              options.wordPressPosting.draftOnly
+                ? undefined
+                : formatWordPressDate(scheduledDate),
+              siteFeaturedImageId,
+              undefined,
+              undefined,
+              undefined,
+              entityEndpoint,
+              slug,
+              authorId,
+            );
+          }
 
           if (postResult.success && postResult.postId) {
-            if (slug) {
-              assertWordPressCreateKeptSlug(slug, postResult.link);
-            }
             // Update ACF fields after successful post creation (discover field names like wordpress-uploader)
             const entity = enrichedRow.entity && enrichedRow.entity.trim() && enrichedRow.entity.trim() !== 'N/A'
               ? enrichedRow.entity.trim()
@@ -2773,6 +2942,76 @@ try {
             fileManager.addFile(wordPressPostFile);
             generatedFiles.push(wordPressPostFile);
 
+            if (siteIndex === 0) {
+              const pageUrl =
+                (typeof postResult.link === "string" && postResult.link.trim()) ||
+                `${String(site.siteUrl).replace(/\/$/, "")}/?p=${postResult.postId}`;
+              const wordpressDoc = {
+                success: true,
+                postId: postResult.postId,
+                link: postResult.link ?? null,
+                pageUrl,
+                title: postTitle,
+                wordpressSite: site.siteUrl,
+                wordpressSiteId: site.id,
+                wordpressSiteName: site.name,
+                uploadedAt: new Date().toISOString(),
+                error: null,
+                featuredMediaId: siteFeaturedImageId ?? null,
+                featuredImageLink: featuredImageLink ?? null,
+              };
+              const payloadDoc = {
+                pageUrl,
+                postId: postResult.postId,
+                postTitle,
+                postExcerpt: excerpt,
+                endpoint: entityEndpoint,
+                sitemapType,
+                featuredMediaId: siteFeaturedImageId ?? null,
+                featuredImageLink: featuredImageLink ?? null,
+              };
+              for (const proof of wpUploadHarnessGeneratedFiles(
+                pageUrl,
+                JSON.stringify(payloadDoc, null, 2),
+                JSON.stringify(wordpressDoc, null, 2),
+              )) {
+                const proofFile: BulkGeneratedFile = {
+                  id: BulkFileManager.createFileId(rowIndex, proof.name, timestamp),
+                  rowIndex,
+                  fileName: proof.name,
+                  content: proof.content,
+                  mimeType: proof.mimeType,
+                  status: "completed",
+                  timestamp,
+                  rowData: row,
+                };
+                fileManager.addFile(proofFile);
+                generatedFiles.push(proofFile);
+              }
+              const bodyTitles = extractBodyHarnessTitlesFromRowFiles(
+                generatedFiles.map((file) => ({
+                  name: file.fileName,
+                  fileName: file.fileName,
+                  content: file.content,
+                })),
+              );
+              const pipelineTitles = rowUsesGoogleImageFeatured(enrichedRow, options.featuredImageType)
+                ? buildGoogleImageEntitySapPipelineTitles(bodyTitles)
+                : buildContentOptimizePipelineTitles(bodyTitles);
+              const wpSectionIndex = pipelineTitles.indexOf("WordPress upload");
+              if (wpSectionIndex >= 0) {
+                options.onHarnessSection?.(
+                  buildContentOptimizeHarnessPayload(
+                    rowIndex,
+                    wpSectionIndex,
+                    "done",
+                    undefined,
+                    pipelineTitles,
+                  ),
+                );
+              }
+            }
+
             options.onProgress?.(
               rowIndex,
               0,
@@ -2792,28 +3031,94 @@ try {
               acfUpdated: acfUpdatedList,
               mode: sitemapType,
             });
-          } else {
-            throw new Error(postResult.error || `WordPress post creation failed on ${site.name}`);
           }
-        } catch (error) {
-          console.error(`WordPress upload error for ${site.name}:`, error);
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          options.onError?.(rowIndex, new Error(`WordPress upload failed on ${site.name}: ${errorMessage}`));
-          options.onAppendHistory?.({
-            ts: Date.now(),
-            entityOrTitle: enrichedRow.entity?.trim() || enrichedRow.title || undefined,
-            site: site.name,
-            step: 'upload',
-            message: `Upload failed on ${site.name}: ${errorMessage}`,
-            outcome: 'fail',
-            error: errorMessage,
-            mode: sitemapType,
-          });
-          // Continue with other sites even if one fails
+        } catch (uploadError) {
+          const errMsg =
+            uploadError instanceof Error ? uploadError.message : String(uploadError);
+          console.error(`[WordPress] Upload failed for ${site.name}:`, uploadError);
+          options.onProgress?.(rowIndex, 0, `WordPress upload failed: ${errMsg}`);
+          options.onError?.(
+            rowIndex,
+            uploadError instanceof Error ? uploadError : new Error(errMsg),
+          );
+          if (siteIndex === 0) {
+            const failEndpoint =
+              sitemapType === "entity" && site.entitySitemapUrl
+                ? extractEndpointFromEntitySitemapUrl(site.entitySitemapUrl)
+                : "posts";
+            const pageUrl =
+              uploadPageUrl ||
+              `${String(site.siteUrl).replace(/\/$/, "")}/?p=pending`;
+            const wordpressDoc = {
+              success: false,
+              postId: null,
+              link: null,
+              pageUrl,
+              title: bulkResolvedPostTitle,
+              wordpressSite: site.siteUrl,
+              wordpressSiteId: site.id,
+              wordpressSiteName: site.name,
+              uploadedAt: new Date().toISOString(),
+              error: errMsg,
+              featuredMediaId: featuredImageId ?? null,
+              featuredImageLink: featuredImageLink ?? null,
+            };
+            const payloadDoc = {
+              pageUrl,
+              postId: null,
+              postTitle: bulkResolvedPostTitle,
+              postExcerpt: excerpt,
+              endpoint: failEndpoint,
+              sitemapType,
+              featuredMediaId: featuredImageId ?? null,
+              featuredImageLink: featuredImageLink ?? null,
+              error: errMsg,
+            };
+            for (const proof of wpUploadHarnessGeneratedFiles(
+              pageUrl,
+              JSON.stringify(payloadDoc, null, 2),
+              JSON.stringify(wordpressDoc, null, 2),
+            )) {
+              const proofFile: BulkGeneratedFile = {
+                id: BulkFileManager.createFileId(rowIndex, proof.name, timestamp),
+                rowIndex,
+                fileName: proof.name,
+                content: proof.content,
+                mimeType: proof.mimeType,
+                status: "completed",
+                timestamp,
+                rowData: row,
+              };
+              fileManager.addFile(proofFile);
+              generatedFiles.push(proofFile);
+            }
+            const bodyTitles = extractBodyHarnessTitlesFromRowFiles(
+              generatedFiles.map((file) => ({
+                name: file.fileName,
+                fileName: file.fileName,
+                content: file.content,
+              })),
+            );
+            const pipelineTitles = rowUsesGoogleImageFeatured(enrichedRow, options.featuredImageType)
+              ? buildGoogleImageEntitySapPipelineTitles(bodyTitles)
+              : buildContentOptimizePipelineTitles(bodyTitles);
+            const wpSectionIndex = pipelineTitles.indexOf("WordPress upload");
+            if (wpSectionIndex >= 0) {
+              options.onHarnessSection?.(
+                buildContentOptimizeHarnessPayload(
+                  rowIndex,
+                  wpSectionIndex,
+                  "done",
+                  undefined,
+                  pipelineTitles,
+                ),
+              );
+            }
+          }
         }
       }
     }
-return generatedFiles;
+    return generatedFiles;
   } catch (error) {
     if (error instanceof Error) throw error;
     throw new Error(String(error));

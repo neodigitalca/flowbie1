@@ -98,10 +98,13 @@ export const CONTENT_OPTIMIZER_PAGE_ROW_EXPANDED_GRID_CLASS = cn(
   "flex w-full min-w-0 min-h-9 items-center justify-end gap-2 sm:min-h-10",
 );
 
-/** Collapsed row: title→url (1fr) | keyword (40%) | date (8.5rem) | actions (2.75rem). */
+/** Collapsed row: select (2.25rem) | title→url (1fr) | keyword (40%) | date (8.5rem) | actions (2.75rem). */
 export const CONTENT_OPTIMIZER_PAGE_ROW_GRID_CLASS = cn(
-  "grid w-full min-w-0 min-h-[3rem] grid-cols-[minmax(0,1fr)_40%_8.5rem_2.75rem] items-center gap-x-2 sm:min-h-[3.25rem] sm:gap-x-3",
+  "grid w-full min-w-0 min-h-[3rem] grid-cols-[2.25rem_minmax(0,1fr)_40%_8.5rem_2.75rem] items-center gap-x-2 sm:min-h-[3.25rem] sm:gap-x-3",
 );
+
+export const CONTENT_OPTIMIZER_PAGE_ROW_SELECT_CELL =
+  "flex shrink-0 items-center justify-center pl-0.5";
 
 export const CONTENT_OPTIMIZER_PAGE_ROW_URL_CELL =
   "flex min-w-0 items-center border-0 bg-transparent px-0 py-0";

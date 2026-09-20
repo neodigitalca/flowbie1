@@ -24,24 +24,30 @@ Backend Assist registers tools in `class-neo-pulse-wp-backend-assist-registry.ph
 | `list_posts` | Sample post list | Default 10, max 50; not full inventory |
 | `get_post` | Single post details | Requires post_id or title |
 | `list_seo_blocks` | Agent Hub SEO blocks list | id, title, focus keyword, status |
+| `get_seo_block` | One Agent Hub block | block_id or exact title |
 
 ## Write tools (Plan preview / Build execute)
 
 | Tool | Description | Key params |
 | --- | --- | --- |
-| `create_page` | New WordPress page | title (required), status, focus_keyword |
-| `create_post` | New WordPress post | title (required), status, focus_keyword, categories |
+| `create_page` | New WordPress page | title (required), status, focus_keyword. Always a new page. Plan checklist: create page, then one Agent Hub Block Builder compose/save/apply triplet per H2 (new block each time). Build inserts the page, binds that post_id, and runs those Block Builder steps. Never post 9157 or an existing block. Novamira MCP is Elementor only, not H2 copy |
+| `create_post` | New WordPress post | title (required), status, focus_keyword, categories. Plan always expands to save_post_meta plus add_content replace |
 | `add_content` | Body HTML append/replace or mode `ops` | post_id, mode, content_brief |
 | `update_post` | post_title, status, excerpt, slug | post_id; not body, not SEO meta |
 | `save_post_meta` | ACF SEO fields | focusKeyword, metaDescription, seoTitle, faq, seoResearch, dateModifier; clear fields |
 | `run_seo_research_brief` | SeoContentBriefV1 merge and auto-save | post_id, optional focusKeyword |
 | `restore_post_revision` | Undo last agent body edit | post_id |
-| `compose_seo_block` | Generate/optimize/analyze SEO block manifest | prompt, mode |
+| `compose_seo_block` | Generate/optimize/analyze SEO block manifest | prompt, mode, user_copy |
+| `compose_elementor_page_sections` | Section copy for native Elementor widgets (no Agent Hub) | prompt, section_h2, user_copy |
+| `duplicate_seo_block` | New Agent Hub row from an existing block | block_id or title, optional user_copy |
 | `modify_seo_block_slots` | Add/remove/update block slots | action, slot |
-| `create_seo_block` | New draft SEO block | |
+| `create_seo_block` | New empty draft SEO block | not enough for apply |
 | `delete_seo_block` | Delete block | block_id |
 | `save_seo_block` | Persist block manifest | block_id or manifest |
-| `apply_seo_block_to_page` | Insert Elementor neo-pulse_seo_section widget | post_id, block_id |
+| `apply_seo_block_to_page` | Insert Elementor neo-pulse_seo_section widget | post_id, Agent Hub block_id with slots |
+| `design_page_with_novamira` | Novamira-led Elementor page design | post_id; SEO blocks path needs saved slots; Elementor pill uses elementor_sections; Nov agent plus check-design; wp-cron when long-running |
+
+Composer pill **SEO blocks** (default) vs **Elementor** sets `page_content_mode` on create_page workflows only.
 
 ## save_post_meta field map
 
@@ -88,6 +94,8 @@ These are not separate registry tools; the pipeline runs them for matched intent
 | Visitor questions | `get_chat_insights` |
 | Site search analytics | `get_search_insights` |
 | Apply SEO block to page | `apply_seo_block_to_page` |
+| Create blocks / add pasted copy | `compose_seo_block` + `save_seo_block` then apply |
+| Use existing Agent Hub template | `duplicate_seo_block` then apply |
 
 ## Early reroutes (content prep)
 

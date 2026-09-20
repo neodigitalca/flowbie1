@@ -14,6 +14,10 @@ import {
   type BlogImportHeaderProgress,
 } from "@/lib/bulk/blog-import-header-progress";
 import { mergeGeneratedFilesByName } from "@/lib/overview/overview-peer-csv-details";
+import {
+  filterAiseoRowDisplayFiles,
+  isAiseoFileSlotRunKind,
+} from "@/lib/overview/overview-aiseo-row-artifacts";
 import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
 import type { OptimizationFileManager } from "@/lib/optimization-file-manager";
 import { OptimizationFileManager as OptimizationFileManagerClass } from "@/lib/optimization-file-manager";
@@ -24,7 +28,9 @@ import {
 } from "@/lib/overview/overview-research-harness-sections";
 import {
   buildResearchRowIndexSet,
+  isAiseoSimpleHarnessRunKind,
   isResearchBatchState,
+  resolveSimpleAiseoBatchPipelineTitles,
   rowHarnessIsResearch,
   type ResearchBatchSignals,
 } from "@/lib/overview/overview-bulk-pipeline-titles";
@@ -37,7 +43,14 @@ import {
   resolveContentOptimizePipelineTitlesForRow,
   sanitizeHarnessArticleTitle,
 } from "@/lib/overview/overview-content-optimize-pipeline";
-import { isOverviewResearchBatchInFlight } from "@/components/overview/overview-tab/overview-bulk-run-helpers";
+import {
+  isOverviewBatchAllComplete,
+  isOverviewResearchBatchInFlight,
+} from "@/components/overview/overview-tab/overview-bulk-run-helpers";
+import {
+  CONTENT_OPTIMIZER_BULK_PAGE_SIZE,
+  contentOptimizerBulkUsesPagination,
+} from "@/lib/content-optimizer/content-optimizer-bulk-page-size";
 
 export type ContentOptimizerBulkGeneratorBindingsInput = {
   siteId: string;
@@ -49,6 +62,8 @@ export type ContentOptimizerBulkGeneratorBindingsInput = {
   isOptimizingContent: Record<string, boolean>;
   optimizationFileManagers: Record<string, OptimizationFileManager>;
   siteName?: string;
+  /** Live grid page (0-based). Idle/complete details follow this page, not a stale batch page. */
+  gridPageIndex?: number;
 };
 
 const CONTENT_OPTIMIZER_RUN_LABEL = "Content Optimizer";
@@ -186,7 +201,7 @@ function buildFilesByRow(input: ContentOptimizerBulkGeneratorBindingsInput): Map
     const url = urls[index]!;
     const overviewRow = rowByUrl.get(normalizePageUrlKey(url));
     const csvRow = overviewRowToCsvRow(overviewRow, url, bulkState);
-    const persisted = bulkState.urlGeneratedFiles?.[url] ?? [];
+    const persisted = generatedFilesForUrl(bulkState.urlGeneratedFiles, url);
     const isActive = activeKey && normalizePageUrlKey(url) === activeKey;
     const live =
       isActive && siteProgress?.generatedFiles?.length
@@ -197,8 +212,11 @@ function buildFilesByRow(input: ContentOptimizerBulkGeneratorBindingsInput): Map
           }))
         : [];
     const merged = mergeGeneratedFilesByName(persisted, live);
-    if (merged.length > 0) {
-      map.set(index, optimizationFilesToBulkGenerated(merged, index, csvRow));
+    const rowFiles = isAiseoFileSlotRunKind(bulkState.runKind)
+      ? filterAiseoRowDisplayFiles(bulkState.runKind, merged)
+      : merged;
+    if (rowFiles.length > 0) {
+      map.set(index, optimizationFilesToBulkGenerated(rowFiles, index, csvRow));
     }
   }
 
@@ -244,6 +262,44 @@ function harnessSectionsForUrl(
   return undefined;
 }
 
+/** Read urlGeneratedFiles with normalized URL fallback (batch url vs row url slash drift). */
+export function generatedFilesForUrl<T extends { name?: string; fileName?: string }>(
+  byUrl: Record<string, T[]> | undefined,
+  url: string,
+): T[] {
+  const trimmed = url.trim();
+  const direct = byUrl?.[trimmed];
+  if (direct?.length) return direct;
+  const key = normalizePageUrlKey(trimmed);
+  if (!key || !byUrl) return [];
+  for (const [candidateUrl, files] of Object.entries(byUrl)) {
+    if (files?.length && normalizePageUrlKey(candidateUrl) === key) return files;
+  }
+  return [];
+}
+
+/** Pick the storage key for urlGeneratedFiles (prefer batch urls entry). */
+export function storageKeyForUrlGeneratedFiles(
+  byUrl: Record<string, unknown[]> | undefined,
+  url: string,
+  batchUrls?: string[],
+): string {
+  const trimmed = url.trim();
+  if (byUrl?.[trimmed]) return trimmed;
+  const key = normalizePageUrlKey(trimmed);
+  if (batchUrls?.length && key) {
+    for (const batchUrl of batchUrls) {
+      if (normalizePageUrlKey(batchUrl) === key) return batchUrl.trim();
+    }
+  }
+  if (byUrl && key) {
+    for (const candidateUrl of Object.keys(byUrl)) {
+      if (normalizePageUrlKey(candidateUrl) === key) return candidateUrl;
+    }
+  }
+  return trimmed;
+}
+
 function harnessBodyIntroLooksLikeUrl(title: string): boolean {
   const trimmed = title.trim();
   if (!trimmed) return false;
@@ -257,17 +313,25 @@ export function mergeContentOptimizeHarnessSections(
   articleTitle?: string,
   pageUrl?: string,
   keyword?: string,
+  entity?: string,
+  isSap?: boolean,
 ): BulkHarnessSectionUi[] {
   const fromHarness = extractBodyHarnessTitlesFromSections(stored);
   const fromFiles = extractBodyHarnessTitlesFromRowFiles(rowFiles);
   const harnessHasBadIntro = Boolean(fromHarness[0] && harnessBodyIntroLooksLikeUrl(fromHarness[0]));
   const safeArticleTitle = sanitizeHarnessArticleTitle(articleTitle ?? "", { pageUrl, keyword });
+  const templateTitles = buildPredeterminedBlogBodyHarnessTitles(safeArticleTitle, undefined, {
+    pageUrl,
+    keyword,
+    entity,
+    isSap,
+  });
   const bodyTitles =
-    fromHarness.length > 0 && !harnessHasBadIntro
-      ? fromHarness
-      : fromFiles.length > 0
-        ? fromFiles
-        : buildPredeterminedBlogBodyHarnessTitles(safeArticleTitle, undefined, { pageUrl, keyword });
+    templateTitles.length > 0
+      ? templateTitles
+      : fromHarness.length > 0 && !harnessHasBadIntro
+        ? fromHarness
+        : fromFiles;
   const waiting = buildWaitingContentOptimizeHarnessSections(bodyTitles).map((section, sectionIndex) => ({
     ...section,
     sectionIndex,
@@ -317,7 +381,7 @@ function buildHarnessByRow(
   for (let index = 0; index < urls.length; index += 1) {
     const url = urls[index]!;
     const stored = harnessSectionsForUrl(byUrl, url);
-    const rowFiles = filesByUrl[url] ?? [];
+    const rowFiles = generatedFilesForUrl(filesByUrl, url);
     const overviewRow = rowByUrl.get(normalizePageUrlKey(url));
     const articleTitle =
       sanitizeHarnessArticleTitle(
@@ -329,8 +393,17 @@ function buildHarnessByRow(
       );
     if (researchBatch) {
       map.set(index, mergeResearchHarnessSections(stored));
+    } else if (bulkState.runKind === "aiFaq" || bulkState.runKind === "aiScenario") {
+      map.set(index, (stored ?? []) as BulkHarnessSectionUi[]);
     } else {
-      map.set(index, mergeContentOptimizeHarnessSections(stored, rowFiles, articleTitle, url, bulkState.urlKeywords?.[url]));
+      map.set(index, mergeContentOptimizeHarnessSections(
+        stored,
+        rowFiles,
+        articleTitle,
+        url,
+        bulkState.urlKeywords?.[url],
+        typeof bulkState.urlEntities?.[url] === "string" ? bulkState.urlEntities[url] : undefined,
+      ));
     }
   }
   return map;
@@ -442,6 +515,7 @@ function isResearchBatchInFlight(bulkState: BulkOptimizationState): boolean {
 }
 
 function resolveBulkRunIsProcessing(input: ContentOptimizerBulkGeneratorBindingsInput): boolean {
+  if (isOverviewBatchAllComplete(input.bulkState)) return false;
   if (input.isOptimizingContent[input.batchKey] || input.isOptimizingContent[input.siteId]) {
     return true;
   }
@@ -457,28 +531,120 @@ function researchBatchSignals(bulkState: BulkOptimizationState): ResearchBatchSi
   };
 }
 
+type BulkDetailsPageSlice = {
+  displayRows: CSVRow[];
+  currentRow: number;
+  harnessByRow: Map<number, BulkHarnessSectionUi[]>;
+  filesByRow: Map<number, BulkGeneratedFile[]>;
+  totalRows: number;
+  detailsPageStart: number;
+};
+
+function attachPageArtifactsByUrl(
+  pageUrls: string[],
+  batchUrls: string[],
+  fullHarness: Map<number, BulkHarnessSectionUi[]>,
+  fullFiles: Map<number, BulkGeneratedFile[]>,
+): Pick<BulkDetailsPageSlice, "harnessByRow" | "filesByRow"> {
+  const harnessByUrl = new Map<string, BulkHarnessSectionUi[]>();
+  const filesByUrl = new Map<string, BulkGeneratedFile[]>();
+  for (let i = 0; i < batchUrls.length; i += 1) {
+    const key = normalizePageUrlKey(batchUrls[i] ?? "");
+    if (!key) continue;
+    const harness = fullHarness.get(i);
+    if (harness?.length) harnessByUrl.set(key, harness);
+    const files = fullFiles.get(i);
+    if (files?.length) filesByUrl.set(key, files);
+  }
+  const harnessByRow = new Map<number, BulkHarnessSectionUi[]>();
+  const filesByRow = new Map<number, BulkGeneratedFile[]>();
+  for (let localIndex = 0; localIndex < pageUrls.length; localIndex += 1) {
+    const key = normalizePageUrlKey(pageUrls[localIndex] ?? "");
+    if (!key) continue;
+    const harness = harnessByUrl.get(key);
+    if (harness?.length) harnessByRow.set(localIndex, harness);
+    const files = filesByUrl.get(key);
+    if (files?.length) filesByRow.set(localIndex, files);
+  }
+  return { harnessByRow, filesByRow };
+}
+
+function sliceBulkDetailsToPage(
+  input: ContentOptimizerBulkGeneratorBindingsInput,
+): BulkDetailsPageSlice {
+  const urls = input.bulkState.urls ?? [];
+  const overviewRows = input.overviewRows ?? [];
+  const isProcessing = resolveBulkRunIsProcessing(input);
+  const useLiveGrid = !isProcessing && overviewRows.length > 0;
+  const sourceUrls = useLiveGrid ? overviewRows.map((row) => row.url) : urls;
+  const totalRows = sourceUrls.length;
+  const rowByUrl = overviewRowByUrl(overviewRows);
+  const bulkPageSize = input.bulkState.bulkPageSize ?? CONTENT_OPTIMIZER_BULK_PAGE_SIZE;
+  const pageIndex =
+    input.gridPageIndex != null
+      ? Math.max(0, input.gridPageIndex)
+      : Math.max(0, (input.bulkState.currentBulkPage ?? 1) - 1);
+  const paginate = contentOptimizerBulkUsesPagination(totalRows);
+  const pageStart = paginate ? pageIndex * bulkPageSize : 0;
+  const pageEnd = paginate ? Math.min(pageStart + bulkPageSize, totalRows) : totalRows;
+  const pageUrls = sourceUrls.slice(pageStart, pageEnd);
+  const displayRows = pageUrls.map((url) =>
+    overviewRowToCsvRow(rowByUrl.get(normalizePageUrlKey(url)), url, input.bulkState),
+  );
+  const globalCurrentRow = resolveCurrentRow(input.bulkState);
+  const currentUrl = urls[globalCurrentRow] ?? input.bulkState.currentUrl?.trim() ?? "";
+  const currentKey = currentUrl ? normalizePageUrlKey(currentUrl) : "";
+  const currentRowOnPage = currentKey
+    ? pageUrls.findIndex((url) => normalizePageUrlKey(url) === currentKey)
+    : -1;
+  const currentRow = useLiveGrid
+    ? currentRowOnPage
+    : !paginate
+      ? globalCurrentRow
+      : globalCurrentRow >= pageStart && globalCurrentRow < pageEnd
+        ? globalCurrentRow - pageStart
+        : -1;
+
+  const fullHarnessByRow = buildHarnessByRow(input.bulkState, input.overviewRows);
+  const fullFilesByRow = buildFilesByRow(input);
+  const { harnessByRow, filesByRow } = attachPageArtifactsByUrl(
+    pageUrls,
+    urls,
+    fullHarnessByRow,
+    fullFilesByRow,
+  );
+
+  return {
+    displayRows,
+    currentRow,
+    harnessByRow,
+    filesByRow,
+    totalRows,
+    detailsPageStart: pageStart,
+  };
+}
+
 export function buildContentOptimizerBulkGeneratorDetailsProps(
   input: ContentOptimizerBulkGeneratorBindingsInput,
   workspaceBusy: boolean,
 ): BulkGeneratorDetailsPanelProps {
   const urls = input.bulkState.urls ?? [];
-  const rowByUrl = overviewRowByUrl(input.overviewRows);
-  const displayRows = urls.map((url) =>
-    overviewRowToCsvRow(rowByUrl.get(normalizePageUrlKey(url)), url, input.bulkState),
-  );
-  const currentRow = resolveCurrentRow(input.bulkState);
+  const pageSlice = sliceBulkDetailsToPage(input);
   const isProcessing = resolveBulkRunIsProcessing(input);
   const status = contentOptimizerLiveStatus(input);
   const headerProgress = contentOptimizerHeaderProgressFromRun(input);
   const downloadManager = new OptimizationFileManagerClass();
   const researchRowIndices = buildResearchRowIndexSet(input.bulkState, input.overviewRows);
   const usesResearchPipeline = bulkStateUsesResearchPipeline(input.bulkState);
+  const simpleAiseoTitles = resolveSimpleAiseoBatchPipelineTitles(input.bulkState.runKind);
   const currentRowIndex = resolveCurrentRow(input.bulkState);
   const currentUrl = input.bulkState.urls?.[currentRowIndex]?.trim();
   const currentRowHarness = currentUrl
     ? harnessSectionsForUrl(input.bulkState.urlHarnessSections, currentUrl)
     : undefined;
-  const currentRowFiles = currentUrl ? input.bulkState.urlGeneratedFiles?.[currentUrl] ?? [] : [];
+  const currentRowFiles = currentUrl
+    ? generatedFilesForUrl(input.bulkState.urlGeneratedFiles, currentUrl)
+    : [];
   const currentOverviewRow = currentUrl
     ? overviewRowByUrl(input.overviewRows).get(normalizePageUrlKey(currentUrl))
     : undefined;
@@ -489,13 +655,18 @@ export function buildContentOptimizerBulkGeneratorDetailsProps(
       "",
     { pageUrl: currentUrl, keyword: currentUrl ? input.bulkState.urlKeywords?.[currentUrl] : undefined },
   );
-  const mergedCurrentHarness = mergeContentOptimizeHarnessSections(
-    currentRowHarness,
-    currentRowFiles,
-    currentArticleTitle,
-    currentUrl,
-    currentUrl ? input.bulkState.urlKeywords?.[currentUrl] : undefined,
-  );
+  const mergedCurrentHarness = isAiseoFileSlotRunKind(input.bulkState.runKind)
+      ? ((currentRowHarness ?? []) as BulkHarnessSectionUi[])
+      : mergeContentOptimizeHarnessSections(
+          currentRowHarness,
+          currentRowFiles,
+          currentArticleTitle,
+          currentUrl,
+          currentUrl ? input.bulkState.urlKeywords?.[currentUrl] : undefined,
+          currentUrl && typeof input.bulkState.urlEntities?.[currentUrl] === "string"
+            ? input.bulkState.urlEntities[currentUrl]
+            : undefined,
+        );
 
   return {
     variant: "csv",
@@ -508,17 +679,22 @@ export function buildContentOptimizerBulkGeneratorDetailsProps(
     researchRowIndices,
     pipelineSectionTitles: usesResearchPipeline
       ? [...RESEARCH_HARNESS_PIPELINE_TITLES]
-      : [...resolveContentOptimizePipelineTitlesForRow(mergedCurrentHarness, currentRowFiles, currentArticleTitle)],
+      : isAiseoFileSlotRunKind(input.bulkState.runKind)
+        ? []
+        : simpleAiseoTitles
+          ? [...simpleAiseoTitles]
+          : [...resolveContentOptimizePipelineTitlesForRow(mergedCurrentHarness, currentRowFiles, currentArticleTitle)],
     harnessSections: liveHarnessSections(input),
-    harnessByRow: buildHarnessByRow(input.bulkState, input.overviewRows),
+    harnessByRow: pageSlice.harnessByRow,
     batchPrepHarnessSections: [],
     harnessPlannedSectionCount: harnessPlannedSectionCount(input),
-    currentRow,
-    totalRows: urls.length,
-    displayRows,
+    currentRow: pageSlice.currentRow,
+    totalRows: pageSlice.totalRows,
+    displayRows: pageSlice.displayRows,
+    detailsPageStart: pageSlice.detailsPageStart,
     postDestination: "wordpress",
     wpConfig: null,
-    filesByRow: buildFilesByRow(input),
+    filesByRow: pageSlice.filesByRow,
     downloadFile: (file) => {
       downloadManager.downloadFile({
         name: file.fileName,

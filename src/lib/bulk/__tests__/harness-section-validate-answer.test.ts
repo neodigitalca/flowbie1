@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  trimAnswerSectionToContract,
   assertHarnessAnswerProseComplete,
   assertStitchedHarnessArticle,
   countPlainTextSentences,
@@ -19,7 +20,7 @@ describe("Answer harness validation", () => {
   const validAnswer =
     `<h2>Answer</h2><p>Solar panels cost depends on system size. We see most Edmonton installs land in a mid five-figure range.</p>`;
 
-  it("accepts exactly two sentences in one paragraph", () => {
+  it("accepts two sentences in one paragraph", () => {
     expect(() => assertHarnessAnswerProseComplete(validAnswer)).not.toThrow();
     validateHarnessSectionOrThrow(validAnswer, {
       title: "Answer",
@@ -28,9 +29,19 @@ describe("Answer harness validation", () => {
     });
   });
 
-  it("rejects three sentences", () => {
-    const html = `<h2>Answer</h2><p>One. Two. Three.</p>`;
-    expect(() => assertHarnessAnswerProseComplete(html)).toThrow(/exactly two sentences/);
+  it("accepts three sentences", () => {
+    const html =
+      `<h2>Answer</h2><p>Solar panels cost depends on system size. Mid five-figure installs are common here. Acme Solar sizes arrays to roof span.</p>`;
+    expect(() => assertHarnessAnswerProseComplete(html)).not.toThrow();
+  });
+
+  it("rejects one or four sentences", () => {
+    expect(() =>
+      assertHarnessAnswerProseComplete(`<h2>Answer</h2><p>Only one.</p>`),
+    ).toThrow(/two or three sentences/);
+    expect(() =>
+      assertHarnessAnswerProseComplete(`<h2>Answer</h2><p>One. Two. Three. Four.</p>`),
+    ).toThrow(/two or three sentences/);
   });
 
   it("rejects lists in Answer body", () => {
@@ -54,6 +65,13 @@ describe("Answer harness validation", () => {
       { title: "Answer", isOverview: false, isAnswer: true },
     );
     expect(out).toContain(`id="${HARNESS_ANSWER_ANCHOR_ID}"`);
+  });
+
+  it("trimAnswerSectionToContract drops extra headings after Answer paragraph", () => {
+    const noisy =
+      `<h2>Answer</h2><p>One. Two.</p><h2>Bin Rental Tips For Home Renovations</h2><h2>Navigating</h2>`;
+    const out = trimAnswerSectionToContract(noisy);
+    expect(out).toBe(`<h2>Answer</h2><p>One. Two.</p>`);
   });
 });
 

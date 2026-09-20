@@ -46,6 +46,19 @@ class Neo_Pulse_App_Pulse_Assist_Automation_Intent {
 			);
 		}
 
+		if ( self::is_ads_reporting( $lower, $manager_tab, $body ) ) {
+			$preset = str_contains( $lower, 'yoy' ) || str_contains( $lower, 'year over year' ) ? 'yoy' : 'mom';
+			return self::plan(
+				'ads_reporting',
+				$preset === 'yoy' ? 'PPC YoY report' : 'PPC MoM report',
+				array(
+					'comparePreset' => $preset,
+					'saveToDisk'    => true,
+				),
+				$body
+			);
+		}
+
 		if ( self::is_gsc_reporting( $lower, $manager_tab, $body ) ) {
 			$preset = str_contains( $lower, 'yoy' ) || str_contains( $lower, 'year over year' ) ? 'yoy' : 'mom';
 			return self::plan(
@@ -142,6 +155,30 @@ class Neo_Pulse_App_Pulse_Assist_Automation_Intent {
 		}
 
 		unset( $body );
+		return false;
+	}
+
+	/**
+	 * @param array<string,mixed> $body
+	 */
+	private static function is_ads_reporting( string $lower, string $manager_tab, array $body ): bool {
+		$needles = array(
+			'ppc report',
+			'ads report',
+			'google ads report',
+			'ppc mom',
+			'ppc yoy',
+			'ads mom',
+			'ads yoy',
+		);
+		foreach ( $needles as $needle ) {
+			if ( str_contains( $lower, $needle ) ) {
+				unset( $manager_tab, $body );
+				return true;
+			}
+		}
+
+		unset( $manager_tab, $body );
 		return false;
 	}
 

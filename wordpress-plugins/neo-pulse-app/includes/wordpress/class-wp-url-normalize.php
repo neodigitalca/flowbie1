@@ -255,12 +255,36 @@ class Neo_Pulse_App_Wp_Url_Normalize {
 		if ( ! is_array( $post ) ) {
 			return null;
 		}
-		if ( array_key_exists( 'acf', $post ) ) {
-			return is_array( $post['acf'] ) ? $post['acf'] : array();
+		$has_acf    = array_key_exists( 'acf', $post );
+		$has_plugin = array_key_exists( 'neo_pulse_fields', $post );
+		if ( ! $has_acf && ! $has_plugin ) {
+			return null;
 		}
-		if ( array_key_exists( 'neo_pulse_fields', $post ) ) {
-			return is_array( $post['neo_pulse_fields'] ) ? $post['neo_pulse_fields'] : array();
+		$acf    = ( $has_acf && is_array( $post['acf'] ) ) ? $post['acf'] : array();
+		$plugin = ( $has_plugin && is_array( $post['neo_pulse_fields'] ) ) ? $post['neo_pulse_fields'] : array();
+		return self::merge_rest_field_objects( $acf, $plugin );
+	}
+
+	/**
+	 * Plugin fields win when they have a non-empty value (Rank Math / NEO Pulse over stale ACF).
+	 *
+	 * @param array<string,mixed> $acf    Native ACF object.
+	 * @param array<string,mixed> $plugin neo_pulse_fields object.
+	 * @return array<string,mixed>
+	 */
+	public static function merge_rest_field_objects( $acf, $plugin ) {
+		$merged = is_array( $acf ) ? $acf : array();
+		if ( ! is_array( $plugin ) ) {
+			return $merged;
 		}
-		return null;
+		foreach ( $plugin as $key => $value ) {
+			$plugin_text   = ( is_string( $value ) || is_numeric( $value ) ) ? trim( (string) $value ) : '';
+			$existing      = $merged[ $key ] ?? null;
+			$existing_text = ( is_string( $existing ) || is_numeric( $existing ) ) ? trim( (string) $existing ) : '';
+			if ( $plugin_text !== '' || $existing_text === '' ) {
+				$merged[ $key ] = $value;
+			}
+		}
+		return $merged;
 	}
 }

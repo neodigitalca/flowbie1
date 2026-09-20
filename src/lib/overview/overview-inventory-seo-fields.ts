@@ -1,8 +1,8 @@
 import type { SitePostInventoryRow } from "@/lib/wordpress-api/types";
 import type { DownloadedSeoFields } from "@/hooks/overview/use-overview-download";
 import { getSeoResearchFromAcf } from "@/lib/content-generation/ai-driven-acf-reader";
-import { normalizeFocusKeywordPhrase } from "@/lib/seo-redirect-csv";
 import { inventoryRowHasUsableBodyContent } from "@/lib/wordpress-api/inventory-match";
+import { focusKeywordFromWordPressSources } from "@/lib/overview/focus-keyword-from-wp-sources";
 
 /** First on-page H1 from post HTML (visitor-visible heading, not SEO title tag). */
 export function extractPageHeadingFromHtml(html: string): string {
@@ -47,10 +47,17 @@ export function downloadFieldsFromInventoryRow(row: SitePostInventoryRow): Downl
   const acfFaq = str("faq");
   const acfDate = str("date_modifier") || str("seo_date_modifier");
   const acfSeoResearch = getSeoResearchFromAcf(acf).trim();
-  const keywordFromAcf = str("keyword_focus").trim();
-  const keywordField = (row.fields?.keyword || "").trim();
+  const collection =
+    "collection" in row && typeof (row as { collection?: unknown }).collection === "string"
+      ? (row as { collection: string }).collection
+      : "posts";
   const focusKeyword =
-    normalizeFocusKeywordPhrase(keywordFromAcf || keywordField) || undefined;
+    focusKeywordFromWordPressSources({
+      acf,
+      fieldsKeyword: row.fields?.keyword,
+      title: (row.fields?.title || row.fields?.pageHeading || "").trim(),
+      collection,
+    }) || undefined;
   const title = (row.fields?.title || "").trim() || undefined;
   const pageHeading =
     (row.fields?.pageHeading || "").trim() ||

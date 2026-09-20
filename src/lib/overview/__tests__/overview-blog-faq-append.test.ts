@@ -100,25 +100,41 @@ describe("stripTrailingFaqSection", () => {
     expect(out).not.toContain("<table>");
   });
 
-  it("removes Frequently Asked Questions by title", () => {
-    const html = `<h2>Body</h2><p>x</p><h2>Frequently Asked Questions</h2><p>old</p><table></table>`;
+  it("removes trailing WordPress FAQ H2 and table at end", () => {
+    const html = [
+      `<h2>Overview</h2><p>Full article body.</p>`,
+      `<!-- wp:heading -->`,
+      `<h2 class="wp-block-heading"><strong>FAQ</strong></h2>`,
+      `<!-- /wp:heading -->`,
+      `<!-- wp:paragraph -->`,
+      `<p>Old intro.</p>`,
+      `<!-- /wp:paragraph -->`,
+      `<!-- wp:table -->`,
+      `<figure class="wp-block-table"><table><tbody><tr><td>Q</td><td>A</td></tr></tbody></table></figure>`,
+      `<!-- /wp:table -->`,
+    ].join("\n");
     const out = stripTrailingFaqSection(html);
-    expect(out).toBe(`<h2>Body</h2><p>x</p>`);
+    expect(out).toContain("Overview");
+    expect(out).toContain("Full article body.");
+    expect(out.toLowerCase()).not.toContain(">faq<");
+    expect(out).not.toContain("<table>");
   });
 
-  it("removes Answering Your Questions body section", () => {
+  it("keeps article question headings and only removes harness flo-faq", () => {
     const html = [
-      `<h2 id="selecting">Selecting the Right System</h2><p>Body</p>`,
+      `<h2>Body</h2><p>x</p>`,
+      `<h2>Frequently Asked Questions</h2><p>article faq copy</p>`,
       `<h2 id="questions">Answering Your Questions on Window Coverings</h2>`,
       `<p>Customers often have questions.</p>`,
-      `<table><thead><tr><th>Question</th><th>Answer</th></tr></thead><tbody><tr><td>Q?</td><td>A.</td></tr></tbody></table>`,
-      `<h2 id="find">Find the Right Operating System</h2><p>Close</p>`,
+      `<div class="flo-faq"><h2 id="faq">FAQ</h2><p>Intro</p><table><tbody><tr><td>Q</td><td>A</td></tr></tbody></table></div>`,
     ].join("");
     const out = stripTrailingFaqSection(html);
-    expect(out).toContain("Selecting the Right System");
-    expect(out).toContain("Find the Right Operating System");
-    expect(out).not.toContain("Answering Your Questions");
-    expect(out).not.toMatch(/<th>Question<\/th>/);
+    expect(out).toContain("Frequently Asked Questions");
+    expect(out).toContain("article faq copy");
+    expect(out).toContain("Answering Your Questions on Window Coverings");
+    expect(out).toContain("Customers often have questions.");
+    expect(out).not.toContain("flo-faq");
+    expect(out).not.toContain(`id="faq"`);
   });
 });
 
@@ -153,6 +169,23 @@ describe("appendFaqSectionToPostHtml", () => {
     expect(faqCount).toBe(1);
   });
 
+  it("appends flo-faq after the cached article without dropping question headings", () => {
+    const body = [
+      `<h2>CRA mail-in policy</h2><p>Full article body.</p>`,
+      `<h2>Common Questions About CRA Mail-In</h2><p>Keep this section.</p>`,
+    ].join("");
+    const appended = appendFaqSectionToPostHtml({
+      sourceHtml: body,
+      entries: [{ question: "When is the deadline?", answer: "April 30." }],
+      introParagraph: "Common questions about the CRA mail-in policy for this year.",
+    });
+    expect(appended).not.toBeNull();
+    expect(appended!.html).toContain("Full article body.");
+    expect(appended!.html).toContain("Common Questions About CRA Mail-In");
+    expect(appended!.html).toContain("Keep this section.");
+    expect(appended!.html).toContain(`class="${FLO_FAQ_CLASS}"`);
+  });
+
   it("returns null when source HTML is empty", () => {
     expect(
       appendFaqSectionToPostHtml({
@@ -175,14 +208,14 @@ describe("appendFaqSectionToPostHtml", () => {
 });
 
 describe("resolveFaqSourceHtml", () => {
-  it("prefers postContentOptimized over postContent", () => {
+  it("prefers scraped postContent over postContentOptimized", () => {
     expect(
       resolveFaqSourceHtml({
-        postContentOptimized: "<p>opt</p>",
         postContent: "<p>raw</p>",
+        postContentOptimized: "<p>opt</p>",
       }),
-    ).toBe("<p>opt</p>");
-    expect(resolveFaqSourceHtml({ postContent: "<p>raw</p>" })).toBe("<p>raw</p>");
+    ).toBe("<p>raw</p>");
+    expect(resolveFaqSourceHtml({ postContentOptimized: "<p>opt</p>" })).toBe("<p>opt</p>");
     expect(resolveFaqSourceHtml({})).toBe("");
   });
 });

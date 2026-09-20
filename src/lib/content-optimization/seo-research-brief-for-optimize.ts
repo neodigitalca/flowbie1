@@ -7,7 +7,6 @@ import {
   mergeSeoResearchFromAcfIntoContext,
   type AIDrivenACFContext,
 } from "@/lib/content-generation/ai-driven-acf-reader";
-import { sapSelectedH2OutlineTitles } from "@/lib/prompt-builders/sap-page-template";
 
 export type PageGscQueryRow = {
   query: string;
@@ -224,10 +223,7 @@ export function buildOptimizeSelectionsFromStoredBrief(args: {
     seoResearchBrief: args.seoResearchBrief,
   });
   const brief = parseSeoResearchBrief(args.seoResearchBrief);
-  const sapEntity = args.sapEntity?.trim();
-  const outlineH2s = sapEntity
-    ? sapSelectedH2OutlineTitles(sapEntity)
-    : [];
+  const outlineH2s: string[] = [];
   const paaQuestions = merged.paaItems.map((p) => p.question).slice(0, 7);
   const researchLinks = researchLinksFromSeoBrief(brief);
 

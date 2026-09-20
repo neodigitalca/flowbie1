@@ -48,4 +48,14 @@ describe("buildWordPressSitesCsv", () => {
       "Florida",
     ]);
   });
+
+  it("includes googleAdsCustomerId after ga4PropertyId", () => {
+    const csv = buildWordPressSitesCsv([site({ ga4PropertyId: "111", googleAdsCustomerId: "5619137403" })]);
+    const [header, row] = csv.split("\r\n");
+    const headers = header.split(",");
+    const ga4 = headers.indexOf("ga4PropertyId");
+    expect(headers[ga4 + 1]).toBe("googleAdsCustomerId");
+    const cells = row.split(",");
+    expect(cells[ga4 + 1]).toBe("5619137403");
+  });
 });

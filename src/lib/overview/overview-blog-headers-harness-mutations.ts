@@ -5,7 +5,16 @@ import { reduceHarnessSectionList } from "@/lib/bulk/harness-sections-reducer";
 import { mergeHarnessProgressSiteAndBatch } from "@/hooks/content-optimization/optimization-helpers-a";
 import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
-import { blogHeadersPatchToOverviewRow, type BlogHeadersRowPatch } from "@/lib/overview/overview-blog-headers-run";
+import type { AiseoCacheWriteAccumulator } from "@/lib/overview/overview-aiseo-cache-write";
+import { type BlogHeadersRowPatch } from "@/lib/overview/overview-blog-headers-run";
+import {
+  buildAiseoElementJsonFile,
+  mergeAiseoRowFinishFiles,
+} from "@/lib/overview/overview-aiseo-row-artifacts";
+import {
+  generatedFilesForUrl,
+  storageKeyForUrlGeneratedFiles,
+} from "@/lib/content-optimization/content-optimizer-bulk-generator-bindings";
 
 type SetBulkState = Dispatch<SetStateAction<Record<string, BulkOptimizationState>>>;
 type SetOptProgress = Dispatch<SetStateAction<Record<string, unknown>>>;
@@ -200,21 +209,47 @@ export function emitHeadersHarnessPayload(
 
 export function finishHeadersRowHarness(
   url: string,
-  rowIndex: number,
+  _rowIndex: number,
   patch: BlogHeadersRowPatch,
   setters: HeadersHarnessSetters,
-  updateRow: (index: number, patch: Partial<OverviewRow>) => void,
+  cacheWrite: AiseoCacheWriteAccumulator,
 ): void {
   const { batchKey, setBulkOptimizationState } = setters;
+
+  cacheWrite.push(url, patch.postContentOptimized);
 
   setBulkOptimizationState((prev) => {
     const current = prev[batchKey];
     if (!current) return prev;
+    const existingFiles = generatedFilesForUrl(current.urlGeneratedFiles, url);
+    const storageKey = storageKeyForUrlGeneratedFiles(
+      current.urlGeneratedFiles,
+      url,
+      current.urls,
+    );
+    let planPayload: unknown = patch.blogH2PlanJson;
+    try {
+      planPayload = JSON.parse(patch.blogH2PlanJson);
+    } catch {
+      planPayload = patch.blogH2PlanJson;
+    }
+    const elementFile = buildAiseoElementJsonFile("headers-plan.json", planPayload);
+    const mergedFiles = mergeAiseoRowFinishFiles({
+      runKind: "aiHeaders",
+      url,
+      existingFiles,
+      elementFiles: elementFile ? [elementFile] : [],
+      postHtml: patch.postContentOptimized,
+    });
     const nextBatch: BulkOptimizationState = {
       ...current,
       urlStatuses: {
         ...(current.urlStatuses || {}),
         [url]: "completed",
+      },
+      urlGeneratedFiles: {
+        ...(current.urlGeneratedFiles || {}),
+        [storageKey]: mergedFiles,
       },
     };
     const progress = computeHeadersBatchProgress(nextBatch);
@@ -232,17 +267,13 @@ export function finishHeadersRowHarness(
       },
     };
   });
-
-  updateRow(rowIndex, blogHeadersPatchToOverviewRow(patch));
 }
 
 export function markHeadersRowError(
   url: string,
-  rowIndex: number,
+  _rowIndex: number,
   setters: HeadersHarnessSetters,
-  updateRow: (index: number, patch: Partial<OverviewRow>) => void,
   error?: string,
 ): void {
   setHeadersUrlStatus(setters.batchKey, url, "error", setters.setBulkOptimizationState, error);
-  updateRow(rowIndex, { status: "error" });
 }

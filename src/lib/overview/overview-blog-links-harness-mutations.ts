@@ -5,7 +5,16 @@ import { reduceHarnessSectionList } from "@/lib/bulk/harness-sections-reducer";
 import { mergeHarnessProgressSiteAndBatch } from "@/hooks/content-optimization/optimization-helpers-a";
 import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
-import { blogLinksPatchToOverviewRow, type BlogLinksRowPatch } from "@/lib/overview/overview-blog-links-run";
+import type { AiseoCacheWriteAccumulator } from "@/lib/overview/overview-aiseo-cache-write";
+import { type BlogLinksRowPatch } from "@/lib/overview/overview-blog-links-run";
+import {
+  buildAiseoElementJsonFile,
+  mergeAiseoRowFinishFiles,
+} from "@/lib/overview/overview-aiseo-row-artifacts";
+import {
+  generatedFilesForUrl,
+  storageKeyForUrlGeneratedFiles,
+} from "@/lib/content-optimization/content-optimizer-bulk-generator-bindings";
 
 type SetBulkState = Dispatch<SetStateAction<Record<string, BulkOptimizationState>>>;
 type SetOptProgress = Dispatch<SetStateAction<Record<string, unknown>>>;
@@ -155,21 +164,47 @@ export function emitLinksHarnessPayload(
 
 export function finishLinksRowHarness(
   url: string,
-  rowIndex: number,
+  _rowIndex: number,
   patch: BlogLinksRowPatch,
   setters: LinksHarnessSetters,
-  updateRow: (index: number, patch: Partial<OverviewRow>) => void,
+  cacheWrite: AiseoCacheWriteAccumulator,
 ): void {
   const { batchKey, setBulkOptimizationState } = setters;
+
+  cacheWrite.push(url, patch.postContentOptimized);
 
   setBulkOptimizationState((prev) => {
     const current = prev[batchKey];
     if (!current) return prev;
+    const existingFiles = generatedFilesForUrl(current.urlGeneratedFiles, url);
+    const storageKey = storageKeyForUrlGeneratedFiles(
+      current.urlGeneratedFiles,
+      url,
+      current.urls,
+    );
+    let planPayload: unknown = patch.blogLinksPlanJson;
+    try {
+      planPayload = JSON.parse(patch.blogLinksPlanJson);
+    } catch {
+      planPayload = patch.blogLinksPlanJson;
+    }
+    const elementFile = buildAiseoElementJsonFile("links-plan.json", planPayload);
+    const mergedFiles = mergeAiseoRowFinishFiles({
+      runKind: "aiLinks",
+      url,
+      existingFiles,
+      elementFiles: elementFile ? [elementFile] : [],
+      postHtml: patch.postContentOptimized,
+    });
     const nextBatch: BulkOptimizationState = {
       ...current,
       urlStatuses: {
         ...(current.urlStatuses || {}),
         [url]: "completed",
+      },
+      urlGeneratedFiles: {
+        ...(current.urlGeneratedFiles || {}),
+        [storageKey]: mergedFiles,
       },
     };
     const progress = computeLinksBatchProgress(nextBatch);
@@ -187,8 +222,6 @@ export function finishLinksRowHarness(
       },
     };
   });
-
-  updateRow(rowIndex, blogLinksPatchToOverviewRow(patch));
 }
 
 export function markLinksRowSkipped(
@@ -220,9 +253,8 @@ export function markLinksRowSkipped(
 
 export function markLinksRowError(
   url: string,
-  rowIndex: number,
+  _rowIndex: number,
   setters: LinksHarnessSetters,
-  updateRow: (index: number, patch: Partial<OverviewRow>) => void,
   error?: string,
 ): void {
   const { batchKey, setBulkOptimizationState } = setters;
@@ -242,5 +274,4 @@ export function markLinksRowError(
       },
     };
   });
-  updateRow(rowIndex, { status: "error" });
 }

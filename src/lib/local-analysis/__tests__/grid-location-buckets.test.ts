@@ -3,6 +3,7 @@ import type { LocalDominatorRow } from "@/lib/local-dominator-csv";
 import {
   buildCityLocationBucketsFromRows,
   buildGridLocationBucketsFromRows,
+  cityBucketFromLocationLabel,
 } from "@/lib/local-analysis/grid-location-buckets";
 
 function gridRow(address: string, rank = 10): LocalDominatorRow {
@@ -27,6 +28,27 @@ describe("buildCityLocationBucketsFromRows", () => {
     expect(buckets[0]!.placeLabel).toBe("Edmonton, AB");
     expect(buckets[0]!.rowCount).toBe(3);
     expect(buckets[0]!.sampleAddresses.some((a) => a.includes("63 Ave"))).toBe(true);
+  });
+});
+
+describe("cityBucketFromLocationLabel", () => {
+  it("builds one city bucket from a profile location label", () => {
+    const bucket = cityBucketFromLocationLabel(
+      "Calgary, AB",
+      "100 8 Ave SW, Calgary, AB T2P 1B2",
+    );
+    expect(bucket.bucketId).toBe("profile-city");
+    expect(bucket.placeLabel).toBe("Calgary, AB");
+    expect(bucket.sampleAddresses).toEqual([
+      "100 8 Ave SW, Calgary, AB T2P 1B2",
+      "Calgary, AB",
+    ]);
+    expect(bucket.rowCount).toBe(1);
+  });
+
+  it("uses the label as the only sample when no street address is set", () => {
+    const bucket = cityBucketFromLocationLabel("Edmonton, AB");
+    expect(bucket.sampleAddresses).toEqual(["Edmonton, AB"]);
   });
 });
 

@@ -72,7 +72,7 @@ class Neo_Pulse_Wp_Backend_Assist_Plan_Preview {
 		$goal  = trim( (string) ( $narrative['goal'] ?? '' ) );
 		$plan  = trim( (string) ( $narrative['plan_description'] ?? '' ) );
 		$tasks = isset( $narrative['tasks'] ) && is_array( $narrative['tasks'] ) ? $narrative['tasks'] : array();
-		if ( empty( $tasks ) && ! empty( $context['task_labels'] ) && is_array( $context['task_labels'] ) ) {
+		if ( ! empty( $context['task_labels'] ) && is_array( $context['task_labels'] ) ) {
 			$tasks = $context['task_labels'];
 		}
 

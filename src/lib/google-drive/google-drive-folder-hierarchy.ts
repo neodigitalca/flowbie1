@@ -21,10 +21,6 @@ export const DEFAULT_TEAM_SHARED_DRIVE_FOLDER_ID = "0AHAVAVW8TixdUk9PVA";
 /** Workspace folder created under the shared drive for all client auto-find paths. */
 export const NEO_PULSE_TEAM_WORKSPACE_FOLDER_NAME = "NEO Pulse";
 
-export function googleDriveDeliveryFolderIsMonthLeaf(label: string): boolean {
-  return /\/ (Reporting|Audits|Grids) \/ \d{4} \/ /i.test(label.trim());
-}
-
 const AUDIT_EXECUTION_KINDS = new Set([
   "chatgpt_website_audit",
   "chatgpt_audit",
@@ -40,7 +36,7 @@ export function inferGoogleDriveDeliveryPath(
   const kind = String(executionKind ?? "").trim();
   if (AUDIT_EXECUTION_KINDS.has(kind)) return "audits";
   if (GRID_EXECUTION_KINDS.has(kind)) return "grids";
-  if (kind === "gsc_reporting") return "reporting";
+  if (kind === "gsc_reporting" || kind === "ads_reporting") return "reporting";
 
   const name = String(fileName ?? "").toLowerCase();
   if (name.includes("audit")) return "audits";
@@ -50,14 +46,31 @@ export function inferGoogleDriveDeliveryPath(
   return "reporting";
 }
 
-export function googleDrivePurposeFolderLabel(path: GoogleDriveFolderPurposeKey): string {
-  if (path === "audits") return "Audits";
-  if (path === "grids") return "Grids";
-  return "Reporting";
+export function googleDrivePurposeFolderLabel(path: string): string {
+  const trimmed = path.trim();
+  if (trimmed === "audits") return "Audits";
+  if (trimmed === "grids") return "Grids";
+  if (trimmed === "reporting" || !trimmed) return "Reporting";
+  return trimmed;
 }
 
 export function isGoogleDriveFolderPurposeKey(value: string): value is GoogleDriveFolderPurposeKey {
   return value === "reporting" || value === "audits" || value === "grids";
+}
+
+export const CUSTOM_DRIVE_PURPOSE_SELECT_VALUE = "__custom__";
+
+const CUSTOM_PURPOSE_STORAGE_KEY = "neo-pulse_google_drive_custom_purposes_v1";
+const MAX_CUSTOM_DRIVE_PURPOSES = 20;
+
+/** Single folder name. First path segment only. */
+export function normalizeCustomDrivePurposeName(raw: string): string {
+  const first =
+    raw
+      .split("/")
+      .map((part) => part.trim())
+      .filter(Boolean)[0] ?? "";
+  return first.replace(/\s+/g, " ").trim();
 }
 
 /** Use the inferred folder unless the user picked a different one. */
@@ -68,11 +81,13 @@ export function resolveWorkflowDriveFolderPath(
   },
   executionKind?: string,
   fileName?: string,
-): GoogleDriveFolderPurposeKey {
+): string {
   const inferred = inferGoogleDriveDeliveryPath(executionKind, fileName);
   if (payload.googleDriveFolderPathManual !== true) return inferred;
   const saved = String(payload.googleDriveFolderPath ?? "").trim();
-  return isGoogleDriveFolderPurposeKey(saved) ? saved : inferred;
+  if (!saved) return inferred;
+  if (isGoogleDriveFolderPurposeKey(saved)) return saved;
+  return normalizeCustomDrivePurposeName(saved) || inferred;
 }
 
 export const DEFAULT_GOOGLE_DRIVE_FOLDER_ALIASES: GoogleDriveFolderAlias[] = [
@@ -98,6 +113,83 @@ export const GOOGLE_DRIVE_PATH_PRESETS: { value: GoogleDriveFolderPurposeKey; la
   { value: "audits", label: "Audits" },
   { value: "grids", label: "Grids" },
 ];
+
+export function presetPurposeValueFromName(name: string): GoogleDriveFolderPurposeKey | null {
+  const normalized = normalizeCustomDrivePurposeName(name).toLowerCase();
+  if (!normalized) return null;
+  for (const preset of GOOGLE_DRIVE_PATH_PRESETS) {
+    if (preset.value === normalized || preset.label.toLowerCase() === normalized) {
+      return preset.value;
+    }
+  }
+  for (const alias of DEFAULT_GOOGLE_DRIVE_FOLDER_ALIASES) {
+    if (
+      alias.key === normalized ||
+      alias.folderName.toLowerCase() === normalized ||
+      alias.aliases.includes(normalized)
+    ) {
+      return alias.key;
+    }
+  }
+  return null;
+}
+
+export function listCustomDrivePurposePresets(): string[] {
+  if (typeof localStorage === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(CUSTOM_PURPOSE_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const names: string[] = [];
+    const seen = new Set<string>();
+    for (const item of parsed) {
+      const name = normalizeCustomDrivePurposeName(String(item ?? ""));
+      const key = name.toLowerCase();
+      if (!name || seen.has(key) || presetPurposeValueFromName(name)) continue;
+      seen.add(key);
+      names.push(name);
+    }
+    return names;
+  } catch {
+    return [];
+  }
+}
+
+export function rememberCustomDrivePurposePreset(name: string): string | null {
+  const mapped = presetPurposeValueFromName(name);
+  if (mapped) return mapped;
+  const normalized = normalizeCustomDrivePurposeName(name);
+  if (!normalized || normalized === CUSTOM_DRIVE_PURPOSE_SELECT_VALUE) return null;
+  if (typeof localStorage === "undefined") return normalized;
+  const existing = listCustomDrivePurposePresets().filter(
+    (item) => item.toLowerCase() !== normalized.toLowerCase(),
+  );
+  localStorage.setItem(
+    CUSTOM_PURPOSE_STORAGE_KEY,
+    JSON.stringify([normalized, ...existing].slice(0, MAX_CUSTOM_DRIVE_PURPOSES)),
+  );
+  return normalized;
+}
+
+export function listDrivePurposeSelectOptions(currentPath?: string): { value: string; label: string }[] {
+  const options: { value: string; label: string }[] = GOOGLE_DRIVE_PATH_PRESETS.map((preset) => ({
+    value: preset.value,
+    label: preset.label,
+  }));
+  const seen = new Set(options.map((option) => option.value.toLowerCase()));
+  for (const name of listCustomDrivePurposePresets()) {
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    options.push({ value: name, label: name });
+  }
+  const current = normalizeCustomDrivePurposeName(currentPath ?? "");
+  if (current && !presetPurposeValueFromName(current) && !seen.has(current.toLowerCase())) {
+    options.push({ value: current, label: current });
+  }
+  return options;
+}
 
 export function defaultGoogleDriveTeamSettings(): GoogleDriveTeamSettings {
   return {
@@ -305,6 +397,19 @@ export function isDriveCalendarYear(value: string): boolean {
 
 export function isDriveCalendarMonth(value: string): boolean {
   return isDriveMonthSegment(value);
+}
+
+/** True when the last three segments are purpose / year / month. */
+export function googleDriveDeliveryFolderIsMonthLeaf(label: string): boolean {
+  const parts = label
+    .split("/")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length < 3) return false;
+  const month = parts[parts.length - 1] ?? "";
+  const year = parts[parts.length - 2] ?? "";
+  const purpose = parts[parts.length - 3] ?? "";
+  return Boolean(purpose) && isDriveCalendarYear(year) && isDriveCalendarMonth(month);
 }
 
 /** @deprecated Prefer buildDeliverySubfolderSegments (client → year → month → purpose). */

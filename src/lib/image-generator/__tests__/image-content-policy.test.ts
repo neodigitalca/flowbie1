@@ -37,6 +37,12 @@ describe("detectMatureImageRequest", () => {
         userPrompt: "explicit adult scene",
       }),
     ).resolves.toBe(true);
+    expect(callOpenRouterChatCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("mature"),
+        user: "explicit adult scene",
+      }),
+    );
   });
 
   it("returns false on API failure", async () => {

@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import { Send } from "lucide-react";
-import type { AssistSubmode } from "@/lib/pulse-assist/types";
-import { ADMIN_SUBMODE_LABELS } from "@/lib/pulse-assist/types";
-import { cycleSubmode } from "@/lib/pulse-assist/storage";
+import type { AssistSubmode, PageContentMode } from "@/lib/pulse-assist/types";
+import { ADMIN_SUBMODE_LABELS, PAGE_CONTENT_MODE_LABELS } from "@/lib/pulse-assist/types";
+import { cycleSubmode, togglePageContentMode } from "@/lib/pulse-assist/storage";
 import { NEO_PULSE_ASSIST_LABEL } from "@/components/pulse-assist/PulseAssistBrandTitle";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +11,8 @@ type PulseAssistComposerProps = {
   onChange: (value: string) => void;
   submode: AssistSubmode;
   onSubmodeChange: (submode: AssistSubmode) => void;
+  pageContentMode: PageContentMode;
+  onPageContentModeChange: (mode: PageContentMode) => void;
   onSend: () => void;
   disabled?: boolean;
   autoFocus?: boolean;
@@ -22,6 +24,8 @@ export function PulseAssistComposer({
   onChange,
   submode,
   onSubmodeChange,
+  pageContentMode,
+  onPageContentModeChange,
   onSend,
   disabled,
   autoFocus,
@@ -53,14 +57,27 @@ export function PulseAssistComposer({
 
   return (
     <div className="fcw-composer">
-      <button
-        type="button"
-        className="fcw-submode-pill"
-        onClick={() => onSubmodeChange(cycleSubmode(submode))}
-        aria-label={`Submode ${ADMIN_SUBMODE_LABELS[submode]}. Shift+Tab to cycle.`}
-      >
-        {ADMIN_SUBMODE_LABELS[submode]}
-      </button>
+      <div className="fcw-composer-pills">
+        <button
+          type="button"
+          className="fcw-submode-pill"
+          onClick={() => onSubmodeChange(cycleSubmode(submode))}
+          aria-label={`Submode ${ADMIN_SUBMODE_LABELS[submode]}. Shift+Tab to cycle.`}
+        >
+          {ADMIN_SUBMODE_LABELS[submode]}
+        </button>
+        <button
+          type="button"
+          className={cn(
+            "fcw-submode-pill fcw-page-content-pill",
+            pageContentMode === "elementor_widgets" && "fcw-page-content-pill--elementor",
+          )}
+          onClick={() => onPageContentModeChange(togglePageContentMode(pageContentMode))}
+          aria-label={`Page content ${PAGE_CONTENT_MODE_LABELS[pageContentMode]}. Click to toggle.`}
+        >
+          {PAGE_CONTENT_MODE_LABELS[pageContentMode]}
+        </button>
+      </div>
       <textarea
         ref={textareaRef}
         className="fcw-textarea"

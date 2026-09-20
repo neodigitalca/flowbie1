@@ -13,21 +13,17 @@ defined( 'ABSPATH' ) || exit;
 class Neo_Pulse_Wp_Speed_Excludes {
 
 	/**
-	 * Built-in NEO Pulse script handles/URL needles (chat, voice).
+	 * Built-in JS URL needles that Speed will not minify.
 	 *
 	 * @return array<int, string>
 	 */
 	public static function default_js_needles(): array {
 		$defaults = array(
-			'neo-pulse-voice',
-			'neo-pulse-thinking-card',
-			'neo-pulse-chat-stream',
-			'neo-pulse-chat-prefetch',
-			'neo-pulse-chat-debug-log',
-			'neo-pulse-chat-widget',
-			'neo-pulse-overseer',
 			'webpack.runtime',
 			'wp-includes/js/dist',
+			'elementor',
+			'swiper',
+			'waypoint',
 		);
 		/**
 		 * Filter default JS URL fragments that Speed will not minify.
@@ -42,7 +38,9 @@ class Neo_Pulse_Wp_Speed_Excludes {
 	 * @return array<int, string>
 	 */
 	public static function default_css_needles(): array {
-		$defaults = array();
+		$defaults = array(
+			'elementor',
+		);
 		/**
 		 * Filter default CSS URL fragments that Speed will not minify.
 		 * Add needles such as `elementor-frontend` if per-file minify breaks layouts.
@@ -83,6 +81,11 @@ class Neo_Pulse_Wp_Speed_Excludes {
 				return true;
 			}
 			if ( strpos( $url, 'admin-bar' ) !== false ) {
+				return true;
+			}
+			$cut = strpos( $url, '?' );
+			$path = $cut === false ? $url : substr( $url, 0, $cut );
+			if ( strlen( $path ) >= 7 && substr( $path, -7 ) === '.min.js' ) {
 				return true;
 			}
 		}

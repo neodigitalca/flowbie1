@@ -261,12 +261,15 @@ async function fetchGoogleImagesForEntity(
   return items;
 }
 
-async function prefetchImageDataUrl(imageUrl: string): Promise<string | null> {
+async function prefetchImageDataUrl(imageUrl: string, referer?: string): Promise<string | null> {
   try {
     const res = await fetch(backendApiUrl("/images/fetch-data-url"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: imageUrl }),
+      body: JSON.stringify({
+        url: imageUrl,
+        referer: (referer || "").trim() || "https://www.google.com/",
+      }),
     });
     const data = (await res.json().catch(() => ({}))) as {
       dataUrl?: string;
@@ -338,7 +341,7 @@ async function tryWikipediaLocalImageReference(params: {
 }): Promise<LocalImageReference | null> {
   const lead = await fetchWikipediaPageLeadImage(params.entity);
   if (!lead) return null;
-  const dataUrl = await prefetchImageDataUrl(lead.imageUrl);
+  const dataUrl = await prefetchImageDataUrl(lead.imageUrl, lead.pageUrl);
   if (!dataUrl) return null;
   const gate = await isUsableWikipediaPlacePhotograph({
     apiKey: params.apiKey,
@@ -364,7 +367,7 @@ async function pickBestPlaceImage(params: {
   const capped = capGoogleImagesCandidates(params.candidates);
   const usable: Array<{ item: GoogleImagesSerpItem; dataUrl: string }> = [];
   for (const item of capped) {
-    const dataUrl = await prefetchImageDataUrl(item.image_url);
+    const dataUrl = await prefetchImageDataUrl(item.image_url, item.source_url);
     if (dataUrl) usable.push({ item, dataUrl });
   }
   if (!usable.length) {

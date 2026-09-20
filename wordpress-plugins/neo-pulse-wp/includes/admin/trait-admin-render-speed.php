@@ -193,7 +193,7 @@ trait Neo_Pulse_Wp_Admin_Trait_Render_Speed {
 		$form_id = 'neo-pulse-speed-settings-form-javascript';
 		?>
 		<h2 class="neo-pulse-wp-panel-content__title"><?php esc_html_e( 'JavaScript', 'neo-pulse-wp' ); ?></h2>
-		<p class="neo-pulse-wp-panel-content__desc"><?php esc_html_e( 'Minify, combine, and defer local scripts. NEO Pulse chat and voice scripts stay excluded by default.', 'neo-pulse-wp' ); ?></p>
+		<p class="neo-pulse-wp-panel-content__desc"><?php esc_html_e( 'Minify, combine, and defer local scripts. NEO Pulse chat and voice stay off the defer list.', 'neo-pulse-wp' ); ?></p>
 
 		<form id="<?php echo esc_attr( $form_id ); ?>" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="neo-pulse-wp-settings__form">
 			<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_SAVE_SPEED ); ?>" />
@@ -267,7 +267,7 @@ trait Neo_Pulse_Wp_Admin_Trait_Render_Speed {
 		?>
 		<h2 class="neo-pulse-wp-panel-content__title"><?php esc_html_e( 'Excludes', 'neo-pulse-wp' ); ?></h2>
 		<p class="neo-pulse-wp-panel-content__desc">
-			<?php esc_html_e( 'One pattern per line, matched against asset URLs. NEO Pulse chat, search, and voice scripts are excluded by default.', 'neo-pulse-wp' ); ?>
+			<?php esc_html_e( 'One pattern per line, matched against asset URLs. WordPress core dist scripts stay excluded from minify. NEO Pulse chat stays off the defer list.', 'neo-pulse-wp' ); ?>
 		</p>
 
 		<form id="<?php echo esc_attr( $form_id ); ?>" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="neo-pulse-wp-settings__form">

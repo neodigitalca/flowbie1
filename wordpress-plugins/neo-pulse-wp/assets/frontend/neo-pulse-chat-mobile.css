@@ -18,13 +18,18 @@
 	}
 
 	#neo-pulse-chat-mobile-launcher,
-	.fcw-mobile-launcher {
+	.fcw-mobile-launcher,
+	#neo-pulse-chat-mobile-launcher.fcw-launcher--edge-tab,
+	.fcw-mobile-launcher.fcw-launcher--edge-tab {
 		position: fixed !important;
 		bottom: 20px !important;
 		right: 16px !important;
 		left: auto !important;
+		top: auto !important;
 		width: 56px !important;
 		height: 56px !important;
+		min-width: 56px !important;
+		max-width: 56px !important;
 		z-index: 999900 !important;
 		pointer-events: auto !important;
 		margin: 0 !important;
@@ -38,8 +43,16 @@
 		box-sizing: border-box !important;
 	}
 
+	#neo-pulse-chat-mobile-launcher .fcw-launcher__label,
+	.fcw-mobile-launcher .fcw-launcher__label {
+		display: none !important;
+	}
+
 	#neo-pulse-chat-widget-root[hidden],
-	#neo-pulse-chat-widget-root.fcw-mobile-root-closed:not(.fai-sidebar-root--open) {
+	#neo-pulse-chat-widget-root.fcw-mobile-root-closed:not(.fai-sidebar-root--open),
+	#neo-pulse-chat-widget-root.fai-sidebar-root--peek:not(.fai-sidebar-root--open),
+	#neo-pulse-chat-widget-root.fai-sidebar-root--peek-track:not(.fai-sidebar-root--open),
+	#neo-pulse-chat-widget-root.fai-sidebar-root--edge-tab:not(.fai-sidebar-root--open) {
 		display: none !important;
 		visibility: hidden !important;
 		position: absolute !important;

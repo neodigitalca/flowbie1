@@ -43,6 +43,7 @@ function iconForExecutionKind(executionKind: string): WorkflowStepIconSpec {
     case "content_optimizer_meta":
       return { Icon: Sparkles, className: AGENT_ICON_CLASS };
     case "gsc_reporting":
+    case "ads_reporting":
       return { Icon: BarChart3, className: AGENT_ICON_CLASS };
     case "chatgpt_website_audit":
       return { Icon: Bot, className: AGENT_ICON_CLASS };

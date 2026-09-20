@@ -90,12 +90,39 @@ function forbiddenUrlsForReplace(
 
 export type ArticleLinkForIntent = { index: number; anchor: string; href: string };
 
+export type SectionLinkIntentContext = {
+  sectionHeading: string;
+  sectionFocusKeyword: string;
+  searchIntent: string;
+  intentRoutingRule: string;
+};
+
+function sectionContextUserFields(context?: SectionLinkIntentContext): Record<string, string> {
+  if (!context) return {};
+  return {
+    sectionHeading: context.sectionHeading,
+    sectionFocusKeyword: context.sectionFocusKeyword,
+    searchIntent: context.searchIntent,
+    intentRoutingRule: context.intentRoutingRule,
+  };
+}
+
+function withSectionContextSystem(base: string, context?: SectionLinkIntentContext): string {
+  if (!context) return base;
+  return (
+    `${base}\n\nSection context: optimize this link for section "${context.sectionHeading}" ` +
+    `(focus keyword: ${context.sectionFocusKeyword}, search intent: ${context.searchIntent}). ` +
+    `Follow intentRoutingRule: informational queries favor blog posts; commercial and transactional favor pages.`
+  );
+}
+
 export async function runBlogLinksReplaceIntent(
   row: BlogLinksCatalogRow,
   linkIndex: number,
   options: BlogLinksAgentOptions,
   usedDestinationUrls: string[],
   articleLinks: ArticleLinkForIntent[],
+  sectionContext?: SectionLinkIntentContext,
 ): Promise<{ proposedKeyword: string; proposedUrl: string } | null> {
   if (!options.apiKey?.trim()) {
     throw new Error("OpenRouter API key is missing. Set it in Settings first.");
@@ -113,8 +140,9 @@ export async function runBlogLinksReplaceIntent(
     link.href,
     siteUrl,
   );
+  const anchorHint = sectionContext?.sectionFocusKeyword.trim() || link.anchor;
   const availableCandidateKeywords = availableCandidateKeywordsForIntent(
-    keywordCandidatesForAnchor(link.anchor, row.linkPool, gscKeywords(row)),
+    keywordCandidatesForAnchor(anchorHint, row.linkPool, gscKeywords(row)),
     row.linkPool,
     siteUrl,
     forbiddenDestinationUrls,
@@ -125,7 +153,10 @@ export async function runBlogLinksReplaceIntent(
     return null;
   }
 
-  const system = appendMasterInstructionsToSystemPrompt(REPLACE_SYSTEM, options.siteId ?? null);
+  const system = appendMasterInstructionsToSystemPrompt(
+    withSectionContextSystem(REPLACE_SYSTEM, sectionContext),
+    options.siteId ?? null,
+  );
   const user = JSON.stringify({
     forbiddenDestinationUrls,
     sourcePageUrl: row.url,
@@ -136,6 +167,7 @@ export async function runBlogLinksReplaceIntent(
     sourceFocusKeyword: row.focusKeyword || undefined,
     gscHeadingKeywords: gscKeywords(row),
     availableCandidateKeywords,
+    ...sectionContextUserFields(sectionContext),
   });
 
   const { content, finishReason } = await callOpenRouterChatCompletion({
@@ -173,6 +205,7 @@ export async function runBlogLinksAddIntent(
   options: BlogLinksAgentOptions,
   usedDestinationUrls: string[],
   articleLinks: ArticleLinkForIntent[],
+  sectionContext?: SectionLinkIntentContext,
 ): Promise<{ proposedKeyword: string; proposedUrl: string; anchorText: string } | null> {
   if (!options.apiKey?.trim()) {
     throw new Error("OpenRouter API key is missing. Set it in Settings first.");
@@ -183,8 +216,9 @@ export async function runBlogLinksAddIntent(
   }
 
   const forbiddenDestinationUrls = usedDestinationUrls;
+  const anchorHint = sectionContext?.sectionFocusKeyword.trim() || paragraphText.slice(0, 200);
   const availableCandidateKeywords = availableCandidateKeywordsForIntent(
-    keywordCandidatesForAnchor(paragraphText.slice(0, 200), row.linkPool, gscKeywords(row)),
+    keywordCandidatesForAnchor(anchorHint, row.linkPool, gscKeywords(row)),
     row.linkPool,
     siteUrl,
     forbiddenDestinationUrls,
@@ -195,7 +229,10 @@ export async function runBlogLinksAddIntent(
     return null;
   }
 
-  const system = appendMasterInstructionsToSystemPrompt(ADD_SYSTEM, options.siteId ?? null);
+  const system = appendMasterInstructionsToSystemPrompt(
+    withSectionContextSystem(ADD_SYSTEM, sectionContext),
+    options.siteId ?? null,
+  );
   const user = JSON.stringify({
     forbiddenDestinationUrls,
     sourcePageUrl: row.url,
@@ -205,6 +242,7 @@ export async function runBlogLinksAddIntent(
     sourceFocusKeyword: row.focusKeyword || undefined,
     gscHeadingKeywords: gscKeywords(row),
     availableCandidateKeywords,
+    ...sectionContextUserFields(sectionContext),
   });
 
   const { content, finishReason } = await callOpenRouterChatCompletion({

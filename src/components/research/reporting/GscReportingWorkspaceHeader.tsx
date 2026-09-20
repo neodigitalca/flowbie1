@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { BlogGeneratorWorkspaceChrome } from "@/components/blog-generator/BlogGeneratorWorkspaceChrome";
+import type { ReactNode } from "react";
 import type { GeneratorWorkspaceChromeBindings } from "@/components/blog-generator/generator-workspace-chrome-bindings";
 import { BulkGeneratorDetailsDrawer } from "@/components/keyword-research/bulk/BulkGeneratorDetailsDrawer";
 import {
@@ -23,6 +24,7 @@ export type GscReportingWorkspaceHeaderProps = GeneratorWorkspaceChromeBindings 
   outlineSections?: GscReportingSectionPlan[];
   sectionMap?: Record<number, GscReportingSectionResult>;
   generatingSectionIndex?: number | null;
+  titleRowMenu?: ReactNode;
 };
 
 export function GscReportingWorkspaceHeader({
@@ -37,6 +39,7 @@ export function GscReportingWorkspaceHeader({
   outlineSections,
   sectionMap,
   generatingSectionIndex,
+  titleRowMenu,
 }: GscReportingWorkspaceHeaderProps) {
   const progressSnapshot = useMemo(
     () => (busy ? buildGscReportingMicroSnapshot(progress) : null),
@@ -58,6 +61,7 @@ export function GscReportingWorkspaceHeader({
     <BlogGeneratorWorkspaceChrome
       activeSection={activeSection}
       onSectionChange={onSectionChange}
+      titleRowMenu={titleRowMenu}
       sectionSwitchDisabled={busy}
       workspaceBusy={busy}
       progressSnapshot={progressSnapshot}

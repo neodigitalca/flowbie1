@@ -1297,6 +1297,28 @@
 	vertical-align: middle;
 }
 
+.neo-pulse-search-wrap--header-host {
+	position: absolute;
+	width: 0;
+	height: 0;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+.neo-pulse-search-wrap--header-host .fbs__icon-launcher,
+.neo-pulse-search-wrap--header-host .fai-sidebar-launcher {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+}
+
+.neo-pulse-search-wrap--header-host .fai-sidebar-panel,
+.neo-pulse-search-wrap--header-host .fai-sidebar-backdrop {
+	pointer-events: auto;
+}
+
 .neo-pulse-search-wrap--icon-only.fbs-icon-panel-root,
 .neo-pulse-search-wrap--icon-only.fai-sidebar-root--inline-launcher {
 	position: relative;

@@ -1,12 +1,16 @@
 import type { WordPressSite } from "@/components/integrations/types";
 import type { SeoContentBriefV1, LlmAuditBrief } from "@/lib/overview-seo-content-brief";
-import { dataforseoLlmResponsesLive } from "@/lib/llm-audit/dataforseo-llm-responses-live";
+import {
+  dataforseoLlmResponsesLive,
+  isDataForSeoPaymentFailure,
+  isDfsLlmPaymentSkip,
+  isDfsPaymentLatched,
+} from "@/lib/llm-audit/dataforseo-llm-responses-live";
 import {
   LLM_AUDIT_COMPANY_AUTHORITY_SYSTEM,
   LLM_AUDIT_SYSTEM_MESSAGE,
   buildLlmAuditUserPromptFull,
 } from "@/lib/llm-audit/llm-audit-prompts";
-import { fetchLlmAuditOpenRouter } from "@/lib/llm-audit/llm-audit-openrouter";
 import {
   dedupeLlmAuditUrls,
   urlsFromLlmAuditText,
@@ -127,6 +131,14 @@ export async function fetchChatGptCompanyAuthority(input: {
     platform: "chat_gpt",
     ...task,
   } as Parameters<typeof dataforseoLlmResponsesLive>[0]);
+  if (isDfsLlmPaymentSkip(dfsJson) || isDataForSeoPaymentFailure({ json: dfsJson })) {
+    return {
+      platform: "chat_gpt",
+      label: cfg.label,
+      model_name: cfg.model_name,
+      status: "error",
+    };
+  }
   const result = extractLlmAuditPlatformResult("chat_gpt", cfg.label, cfg.model_name, dfsJson);
   if (result.status !== "ok" || !result.responseText?.trim()) {
     throw new Error(result.error || "ChatGPT company-authority lookup returned no text");
@@ -265,12 +277,84 @@ export type FetchLlmAuditInput = {
   siteUrl: string;
   site?: WordPressSite | null;
   location?: string;
+  onProgress?: (message: string) => void;
 };
 
 export async function fetchLlmAuditParallel(
   input: FetchLlmAuditInput,
 ): Promise<LlmAuditBrief> {
-  return fetchLlmAuditOpenRouter(input);
+  const keyword = input.keyword.trim();
+  const siteUrl = input.siteUrl.trim();
+  const location = (input.location ?? resolveSiteLocationLabel(input.site, keyword)).trim();
+
+  const platforms: LlmAuditPlatformResult[] = [];
+  for (const cfg of PLATFORM_CONFIG) {
+    if (isDfsPaymentLatched()) {
+      platforms.push({
+        platform: cfg.platform,
+        label: cfg.label,
+        model_name: cfg.model_name,
+        status: "error",
+      });
+      continue;
+    }
+    input.onProgress?.(`Live audit: ${cfg.label}…`);
+    try {
+      const task = buildLlmAuditTask(cfg, { keyword, location });
+      const dfsJson = await dataforseoLlmResponsesLive({
+        platform: cfg.platform,
+        model_name: cfg.model_name,
+        user_prompt: String(task.user_prompt ?? ""),
+        system_message: String(task.system_message ?? ""),
+        web_search: true,
+        force_web_search: task.force_web_search === true ? true : undefined,
+        web_search_country_iso_code:
+          typeof task.web_search_country_iso_code === "string"
+            ? task.web_search_country_iso_code
+            : undefined,
+        web_search_city: typeof task.web_search_city === "string" ? task.web_search_city : undefined,
+        max_output_tokens: 2048,
+      });
+      if (isDfsLlmPaymentSkip(dfsJson) || isDataForSeoPaymentFailure({ json: dfsJson })) {
+        platforms.push({
+          platform: cfg.platform,
+          label: cfg.label,
+          model_name: cfg.model_name,
+          status: "error",
+        });
+        for (const rest of PLATFORM_CONFIG.slice(platforms.length)) {
+          platforms.push({
+            platform: rest.platform,
+            label: rest.label,
+            model_name: rest.model_name,
+            status: "error",
+          });
+        }
+        break;
+      }
+      const result = extractLlmAuditPlatformResult(cfg.platform, cfg.label, cfg.model_name, dfsJson);
+      if (result.status === "ok") {
+        input.onProgress?.(`Live audit: ${cfg.label} ok`);
+        platforms.push(result);
+      } else {
+        platforms.push({
+          platform: cfg.platform,
+          label: cfg.label,
+          model_name: cfg.model_name,
+          status: "error",
+        });
+      }
+    } catch {
+      platforms.push({
+        platform: cfg.platform,
+        label: cfg.label,
+        model_name: cfg.model_name,
+        status: "error",
+      });
+    }
+  }
+
+  return { siteUrl, location, focusKeyword: keyword, platforms };
 }
 
 /** Guidance text only — strips verification URLs for content generation. */

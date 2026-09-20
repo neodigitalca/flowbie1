@@ -111,6 +111,18 @@ class Neo_Pulse_App_Data_Paths {
 		return self::root() . '/google-mcp-tokens.json';
 	}
 
+	public static function google_ads_oauth_config_path(): string {
+		return self::root() . '/google-ads-oauth.json';
+	}
+
+	public static function google_ads_tokens_path(): string {
+		return self::root() . '/google-ads-tokens.json';
+	}
+
+	public static function google_ads_api_path(): string {
+		return self::root() . '/google-ads-api.json';
+	}
+
 	public static function gmb_schedule_queue_path(): string {
 		return self::root() . '/gmb-schedule-queue.json';
 	}

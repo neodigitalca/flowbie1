@@ -1,9 +1,11 @@
 import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
 import type { TaskExecutionKind, TaskExecutionPayload } from "@/lib/tasks-types";
+import { h2CellHasAnswer } from "@/lib/content-optimization/missing-new-template";
 import {
   csvRowsKindConsumesRows,
   csvRowsKindIsSequential,
   encodeCsvUtf8ToBase64,
+  normalizeCsvHeaderKey,
   type CsvRowsColumnMap,
 } from "@/lib/workflow/csv-rows-types";
 import {
@@ -44,23 +46,56 @@ function mergeResearch(existing: string | undefined, next: string): string {
   return `${a}\n\n${b}`;
 }
 
+function pickRecordStatus(record: WorkflowCsvRecord): string {
+  for (const [key, value] of Object.entries(record)) {
+    if (normalizeCsvHeaderKey(key) === "status") return value.trim().toLowerCase();
+  }
+  return "";
+}
+
+function pickRecordH2(record: WorkflowCsvRecord): string | null {
+  for (const [key, value] of Object.entries(record)) {
+    if (normalizeCsvHeaderKey(key) === "h2") return value.trim();
+  }
+  return null;
+}
+
+/** Full AISEO works rows marked missing, or rows whose scraped H2s do not include Answer. */
+export function recordsForOptimizerMapping(records: WorkflowCsvRecord[]): WorkflowCsvRecord[] {
+  const anyStatus = records.some((record) => pickRecordStatus(record));
+  if (anyStatus) return records.filter((record) => pickRecordStatus(record) === "missing");
+  const anyH2 = records.some((record) => pickRecordH2(record) !== null);
+  if (anyH2) return records.filter((record) => !h2CellHasAnswer(pickRecordH2(record) ?? ""));
+  return records;
+}
+
 function mapOptimizer(
   records: WorkflowCsvRecord[],
   columnMap: CsvRowsColumnMap,
+  csvText?: string,
+  csvFileName?: string,
 ): TaskExecutionPayload {
+  const workRecords = recordsForOptimizerMapping(records);
   const prefilledUrlResearch: Record<string, string> = {};
   const urls: string[] = [];
   for (let i = 0; i < records.length; i += 1) {
     const url = requireUrl(records[i]!, columnMap, i);
-    if (!prefilledUrlResearch[url]) urls.push(url);
     const research = pickCsvMappedCell(records[i]!, columnMap, "research");
     if (research) {
       prefilledUrlResearch[url] = mergeResearch(prefilledUrlResearch[url], research);
     }
   }
+  for (let i = 0; i < workRecords.length; i += 1) {
+    const url = requireUrl(workRecords[i]!, columnMap, i);
+    if (!urls.includes(url)) urls.push(url);
+  }
+  const fileName = csvFileName?.trim() || "page-audit.csv";
   return {
     targetUrls: urls,
     prefilledUrlResearch,
+    ...(csvText?.trim()
+      ? { csvBase64: encodeCsvUtf8ToBase64(csvText), csvFileName: fileName }
+      : {}),
   };
 }
 
@@ -146,6 +181,7 @@ export function mapCsvRecordsToAction(input: {
   records: WorkflowCsvRecord[];
   columnMap: CsvRowsColumnMap;
   csvText?: string;
+  csvFileName?: string;
   useUpstreamContext?: boolean;
   extractedQuestionsByRow?: Record<number, string[]>;
 }): CsvRowsActionMapping {
@@ -155,12 +191,14 @@ export function mapCsvRecordsToAction(input: {
       `CSV rows cannot run ${kind || "this step"}. Use optimizer, post creator, DFS LLM article audit, entity/SAP, or browser automation.`,
     );
   }
+  if (kind === "content_optimizer" || kind === "content_optimizer_meta") {
+    return {
+      mode: "bulk",
+      payload: mapOptimizer(input.records, input.columnMap, input.csvText, input.csvFileName),
+    };
+  }
   if (input.records.length === 0) {
     throw new Error("CSV has no data rows.");
-  }
-
-  if (kind === "content_optimizer" || kind === "content_optimizer_meta") {
-    return { mode: "bulk", payload: mapOptimizer(input.records, input.columnMap) };
   }
   if (kind === "post_creator") {
     return {

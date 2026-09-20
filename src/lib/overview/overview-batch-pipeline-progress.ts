@@ -5,8 +5,8 @@ import type {
 } from "@/components/overview/overview-tab-constants";
 import { CONTENT_OPTIMIZER_BULK_PAGE_SIZE } from "@/lib/content-optimizer/content-optimizer-bulk-page-size";
 
-/** WordPress core batch/v1 max sub-requests (matches server bulk-overview-seo.js). */
-export const OVERVIEW_WP_API_BATCH_SIZE = 25;
+/** Sequential debug: one post per Pulse request so each write can be inspected. */
+export const OVERVIEW_WP_API_BATCH_SIZE = 1;
 
 export function overviewWpApiBatchCount(total: number): number {
   if (total <= 0) return 0;
@@ -71,9 +71,8 @@ export function buildKeywordBatchPipelineSteps(
 export function buildWpUploadBatchPipelineSteps(total: number): MetaPipelineStepUi[] {
   const batchSize = OVERVIEW_WP_API_BATCH_SIZE;
   const batchCount = overviewWpApiBatchCount(total);
-  return buildBatchPipelineSteps(batchCount, batchSize, total, (batchIndex, count, rowCount) => {
-    const noun = rowCount === 1 ? "item" : "items";
-    return `WP batch ${batchIndex + 1}/${count} (${rowCount} ${noun})`;
+  return buildBatchPipelineSteps(batchCount, batchSize, total, (batchIndex, count) => {
+    return `WP post ${batchIndex + 1}/${count}`;
   });
 }
 
@@ -81,11 +80,28 @@ export function wpUploadBatchStepsAfterProgress(
   steps: MetaPipelineStepUi[],
   wpBatch: number,
   wpBatchCount: number,
+  phase: "start" | "done" = "done",
 ): MetaPipelineStepUi[] {
+  if (phase === "start") {
+    return setBatchStepStatus(steps, Math.max(0, wpBatch - 1), "running");
+  }
   if (wpBatch >= wpBatchCount) {
     return steps.map((s) => ({ ...s, status: "done" as const }));
   }
   return setBatchStepStatus(steps, wpBatch, "running");
+}
+
+/** 1-based batch in flight (1/4), or last finished batch when the run is done. */
+export function wpUploadBatchDisplayCount(
+  steps: MetaPipelineStepUi[] | undefined,
+): { current: number; total: number } | null {
+  if (!steps?.length) return null;
+  const total = steps.length;
+  const done = steps.filter((s) => s.status === "done").length;
+  const runningIdx = steps.findIndex((s) => s.status === "running");
+  const current =
+    runningIdx >= 0 ? runningIdx + 1 : done >= total ? total : Math.min(total, done + 1);
+  return { current, total };
 }
 
 export function initBulkSliceBatchHarness(

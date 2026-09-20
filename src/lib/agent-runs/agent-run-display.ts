@@ -113,9 +113,20 @@ export function agentRunServerStatusLabel(run: AgentRun): string {
   return "Server execution";
 }
 
+export function isAgentRunNodeDiagnosticLabel(label: string | null | undefined): boolean {
+  const trimmed = label?.trim() ?? "";
+  if (!trimmed) return false;
+  if (trimmed.includes("NODE_TLS_REJECT_UNAUTHORIZED")) return true;
+  if (trimmed.includes("node --trace-warnings")) return true;
+  return (
+    trimmed.startsWith("(node:") &&
+    (trimmed.includes("Warning:") || trimmed.includes("DeprecationWarning"))
+  );
+}
+
 export function agentRunStatusHint(label: string | null | undefined): string | null {
   const trimmed = label?.trim();
-  if (!trimmed) return null;
+  if (!trimmed || isAgentRunNodeDiagnosticLabel(trimmed)) return null;
   const { line1, line2 } = splitProgressLabel(trimmed);
   if (!isPlaceholderLine(line2)) return line2;
   if (!isPlaceholderLine(line1)) return line1;
@@ -124,7 +135,7 @@ export function agentRunStatusHint(label: string | null | undefined): string | n
 
 export function agentRunInlineStatus(label: string | null | undefined): string {
   const trimmed = label?.trim();
-  if (!trimmed) return "\u00a0";
+  if (!trimmed || isAgentRunNodeDiagnosticLabel(trimmed)) return "\u00a0";
   const { line1, line2 } = splitProgressLabel(trimmed);
   if (!isPlaceholderLine(line2)) return line2;
   if (!isPlaceholderLine(line1)) return line1;
@@ -142,6 +153,14 @@ export function agentRunCollapsedHint(
   live: AgentRunLiveSnapshot | null,
   hostedFileCount = 0,
 ): string {
+  if (live?.currentUrl?.trim()) {
+    const title = live.postTitle?.trim() || humanizeSlugFromUrl(live.currentUrl);
+    const progress = agentRunStatusHint(live.progressLabel);
+    if (progress && progress !== title && !progress.includes(live.currentUrl)) {
+      return `${title} · ${progress}`;
+    }
+    return title;
+  }
   if (live) {
     const hint = agentRunStatusHint(live.progressLabel);
     if (hint) {

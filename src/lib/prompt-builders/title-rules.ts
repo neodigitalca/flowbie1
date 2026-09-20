@@ -25,10 +25,8 @@ export const UNIFIED_COPY_FORMATTING_RULE = `**UNIFIED COPY FORMATTING (SAP + bl
 /** Body harness H2/H3 in section writer output (not post title). */
 export const HARNESS_HEADING_TITLE_CASE_RULE = `**Body H2/H3 Title Case (mandatory)**:
 - Every body section <h2> and <h3> MUST use Title Case: capitalize the first letter of **every** word, including articles, conjunctions, and short prepositions (A, An, The, And, Or, But, For, In, On, At, To, Of, With, Near, Vs).
-- Apply to pinned SAP titles (What We Offer, Next Steps, Our Recommendation for Homeowners in {place}) and all other body headings.
-- Forbidden: sentence case ("Getting your ideal blinds", "next steps: booking a consultation"), colon subtitles on pinned titles ("Next Steps: Getting your ideal blinds"), or any body heading with a lowercase word start (except mixed-case brand names when already correct).
-- Good: "What We Offer", "Next Steps", "Our Recommendation for Homeowners in Sunset Park", "Local Conditions That Change The Job".
-- Forbidden: "What we offer", "Next Steps: Getting Your Ideal Blinds", "Our recommendation for homeowners in Sunset Park".`;
+- Apply to every body heading the writer produces for this connected site's trade.
+- Forbidden: sentence case, colon subtitles, or any body heading with a lowercase word start (except mixed-case brand names when already correct).`;
 
 /** Natural front-load and single-mention keyword discipline for all title agents. */
 export const TITLE_KEYWORD_WEAVING_RULE = `**Keyword weaving (mandatory)**:
@@ -61,6 +59,7 @@ export const BULK_WORDPRESS_POST_TITLE_RULE = `**WORDPRESS POST TITLE (mandatory
 - Output **one** title string for the live post H1 and the SEO title field when used as the post title.
 - **NO COLONS** in the title. Never topic-then-subtitle. Rewrite any colon in candidate titles into one flowing phrase.
 - Never stitch the primary keyword and a second title with a colon (forbidden: "Hunter Douglas Vs Alta: Hunter Douglas vs. Alta Shades"). One headline only.
+- Never double-state the same keyword and place (forbidden: "Blackout Blinds Mediterra Naples Florida: Blackout Blinds For Homes In Mediterra Naples Florida"). Keyword once. Place once.
 - **Keyword is the topic signal, not the title.** Write a fresh editorial headline about that decision. Forbidden: pasting the writing keyword as the whole title. Forbidden: pasting it as a prefix or colon-block. Do not require the keyword as the first words. A natural phrase about the same choice is the title (example: How To Choose Between Hunter Douglas And Alta Shades).
 ${TITLE_CASE_RULE}
 ${TITLE_ANTI_CLICKBAIT_RULE}

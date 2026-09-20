@@ -119,6 +119,27 @@ describe("runWorkflowBoundDeliverySteps", () => {
     expect(saveWorkflowStepOutput).toHaveBeenCalled();
   });
 
+  it("still uploads Google Drive when another client already saved the Then output", async () => {
+    const { fetchWorkflowStepOutputs } = await import("@/lib/workflow/workflow-api");
+    vi.mocked(fetchWorkflowStepOutputs).mockResolvedValueOnce([
+      {
+        id: 1,
+        runId: 10,
+        nodeId: "drive",
+        variableKey: "then_drive",
+        scope: "run",
+        label: "Google Drive",
+        textPreview: "Uploaded",
+        fileRefs: [],
+        agentRunId: 99,
+        siteId: "site-other",
+        createdAt: "",
+      },
+    ]);
+    await runWorkflowBoundDeliverySteps({ teamId: 1, run: makeRun() });
+    expect(executeWorkflowThenStep).toHaveBeenCalledTimes(1);
+  });
+
   it("skips Google Drive when workflow output already exists", async () => {
     const { fetchWorkflowStepOutputs } = await import("@/lib/workflow/workflow-api");
     vi.mocked(fetchWorkflowStepOutputs).mockResolvedValueOnce([

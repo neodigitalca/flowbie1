@@ -1,12 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildLlmAuditUserPrompt,
   buildChatGptCompanyAuthorityUserPrompt,
   extractLlmAuditPlatformResult,
+  fetchLlmAuditParallel,
   llmAuditGuidanceFromBrief,
   llmAuditChecklistItemsFromBrief,
   formatLlmAuditHarnessPromptBlock,
 } from "@/lib/llm-audit/llm-audit-dataforseo";
+import { dataforseoLlmResponsesLive, resetDfsPaymentLatch } from "@/lib/llm-audit/dataforseo-llm-responses-live";
+
+vi.mock("@/lib/llm-audit/dataforseo-llm-responses-live", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/llm-audit/dataforseo-llm-responses-live")>();
+  return {
+    ...actual,
+    dataforseoLlmResponsesLive: vi.fn(),
+  };
+});
 import { cityStateFromNapAddress, resolveSiteLocationLabel, webSearchCountryIsoFromLocation } from "@/lib/llm-audit/resolve-site-location-label";
 import type { SeoContentBriefV1 } from "@/lib/overview-seo-content-brief";
 
@@ -177,5 +187,53 @@ describe("formatLlmAuditHarnessPromptBlock", () => {
     expect(block).toContain("exactly ONE section");
     expect(block).toContain("decision, tradeoff, or process");
     expect(block).toContain("Do not add H2s");
+  });
+});
+
+describe("fetchLlmAuditParallel", () => {
+  beforeEach(() => {
+    resetDfsPaymentLatch();
+    vi.mocked(dataforseoLlmResponsesLive).mockReset();
+  });
+
+  it("runs live ChatGPT, Gemini, and Perplexity", async () => {
+    vi.mocked(dataforseoLlmResponsesLive).mockResolvedValue({
+      tasks: [
+        {
+          status_code: 20000,
+          result: [
+            {
+              items: [{ type: "message", sections: [{ type: "text", text: "Local lodging fact." }] }],
+            },
+          ],
+        },
+      ],
+    });
+
+    const brief = await fetchLlmAuditParallel({
+      keyword: "nature lodging",
+      siteUrl: "https://posh-outdoors.com/blog/nature-lodging-guide/",
+    });
+
+    expect(dataforseoLlmResponsesLive).toHaveBeenCalledTimes(3);
+    expect(brief.platforms.map((p) => p.label)).toEqual(["ChatGPT", "Gemini", "Perplexity"]);
+    expect(brief.platforms.every((p) => p.status === "ok")).toBe(true);
+  });
+
+  it("skips DataForSEO payment failures without a failed progress line", async () => {
+    vi.mocked(dataforseoLlmResponsesLive).mockResolvedValue({
+      skipped: true,
+      reason: "dfs_payment",
+    });
+    const progress: string[] = [];
+    const brief = await fetchLlmAuditParallel({
+      keyword: "window blinds",
+      siteUrl: "https://blindswest.ca/blog/window-blind-repair-issues-fixes/",
+      onProgress: (message) => progress.push(message),
+    });
+    expect(dataforseoLlmResponsesLive).toHaveBeenCalledTimes(1);
+    expect(brief.platforms).toHaveLength(3);
+    expect(brief.platforms.every((p) => p.status === "error")).toBe(true);
+    expect(progress.some((line) => /failed|402|payment/i.test(line))).toBe(false);
   });
 });

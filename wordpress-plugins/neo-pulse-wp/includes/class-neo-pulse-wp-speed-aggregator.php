@@ -35,6 +35,9 @@ class Neo_Pulse_Wp_Speed_Aggregator {
 				continue;
 			}
 			$url = $m[3];
+			if ( Neo_Pulse_Wp_Speed_Assets::is_speed_cache_url( $url ) ) {
+				continue;
+			}
 			if ( Neo_Pulse_Wp_Speed_Excludes::is_excluded( $url, 'css', $config ) ) {
 				continue;
 			}
@@ -48,7 +51,8 @@ class Neo_Pulse_Wp_Speed_Aggregator {
 				continue;
 			}
 			$bundle .= "\n/* source: " . basename( $path ) . " */\n";
-			$bundle .= Neo_Pulse_Wp_Speed_Minify::css( $raw );
+			$css     = Neo_Pulse_Wp_Speed_Minify::css( $raw );
+			$bundle .= Neo_Pulse_Wp_Speed_Minify::rewrite_relative_urls( $css, $url );
 			$included_tags[] = $full;
 		}
 
@@ -72,7 +76,7 @@ class Neo_Pulse_Wp_Speed_Aggregator {
 			return $html;
 		}
 
-		$link     = '<link rel="stylesheet" href="' . esc_url( $url ) . '" media="all" />';
+		$link     = Neo_Pulse_Wp_Speed_Assets::with_nitro_exclude( '<link rel="stylesheet" href="' . esc_url( $url ) . '" media="all" />' );
 		$injected = preg_replace( '#</head>#i', $link . "\n</head>", $html, 1 );
 		if ( ! is_string( $injected ) || $injected === $html ) {
 			return $html;
@@ -167,6 +171,9 @@ class Neo_Pulse_Wp_Speed_Aggregator {
 			'#<link\b[^>]*href=(["\'])([^"\']+)\1[^>]*>#i',
 			static function ( $m ) use ( $config ) {
 				$url = $m[2];
+				if ( Neo_Pulse_Wp_Speed_Assets::is_speed_cache_url( $url ) ) {
+					return Neo_Pulse_Wp_Speed_Assets::with_nitro_exclude( $m[0] );
+				}
 				if ( Neo_Pulse_Wp_Speed_Excludes::is_excluded( $url, 'css', $config ) ) {
 					return $m[0];
 				}
@@ -174,8 +181,12 @@ class Neo_Pulse_Wp_Speed_Aggregator {
 				if ( $path === null ) {
 					return $m[0];
 				}
-				$cached = Neo_Pulse_Wp_Speed_Assets::minify_file_to_cache( $path, 'css', $config );
-				return $cached ? preg_replace( '#href=(["\'])[^"\']+\1#', 'href="' . esc_url( $cached ) . '"', $m[0] ) ?? $m[0] : $m[0];
+				$cached = Neo_Pulse_Wp_Speed_Assets::minify_file_to_cache( $path, 'css', $config, $url );
+				if ( ! $cached ) {
+					return $m[0];
+				}
+				$tag = preg_replace( '#href=(["\'])[^"\']+\1#', 'href="' . esc_url( $cached ) . '"', $m[0] );
+				return Neo_Pulse_Wp_Speed_Assets::with_nitro_exclude( is_string( $tag ) ? $tag : $m[0] );
 			},
 			$html
 		);

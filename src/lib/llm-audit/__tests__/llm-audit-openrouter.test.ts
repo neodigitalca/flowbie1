@@ -298,20 +298,3 @@ describe("fetchLlmAuditOpenRouterWithQfo", () => {
   });
 });
 
-describe("fetchLlmAuditParallel delegation", () => {
-  it("delegates to OpenRouter implementation", async () => {
-    const { fetchLlmAuditParallel } = await import("@/lib/llm-audit/llm-audit-dataforseo");
-    vi.mocked(postOpenRouterAppChat).mockResolvedValue({
-      content: "- Local detail https://example.com/a",
-      raw: {},
-    });
-
-    const brief = await fetchLlmAuditParallel({
-      keyword: "kw",
-      siteUrl: "https://example.com/page",
-    });
-
-    expect(postOpenRouterAppChat).toHaveBeenCalled();
-    expect(brief.platforms[0]?.status).toBe("ok");
-  });
-});

@@ -127,6 +127,13 @@ class Neo_Pulse_App_Loader {
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/gmb/class-gmb-posts-api.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/gmb/class-gmb-posts.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/gmb/class-gmb-route-handlers.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/google-ads/class-google-ads-oauth.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/google-ads/class-google-ads-tokens.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/google-ads/class-google-ads-credentials.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/google-ads/class-google-ads-api.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/google-ads/class-google-ads-reporting-bundle.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/google-ads/class-google-ads-route-handlers.php';
+
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/google-mcp/class-google-mcp-oauth.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/google-mcp/class-google-mcp-tokens.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/google-mcp/class-google-drive-settings.php';
@@ -192,6 +199,7 @@ class Neo_Pulse_App_Loader {
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-execution/runners/class-task-execution-runner-content-optimizer.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-execution/runners/class-task-execution-runner-content-gap-check.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-execution/runners/class-task-execution-runner-gsc-reporting.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-execution/runners/class-task-execution-runner-ads-reporting.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-execution/runners/class-task-execution-runner-post-creator.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-execution/runners/class-task-execution-runner-entity-page-creator.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/task-execution/runners/class-task-execution-runner-entity-generator.php';
@@ -237,6 +245,7 @@ class Neo_Pulse_App_Loader {
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/platform-data/class-platform-data-orchestrator.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/platform-data/class-platform-data-gsc-tools.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/platform-data/class-platform-data-gsc-reporting-tools.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/platform-data/class-platform-data-ads-reporting-tools.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/platform-data/class-platform-data-post-creator-tools.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/platform-data/class-platform-data-tools.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/pulse-assist/class-pulse-assist-module-catalog.php';
@@ -247,6 +256,7 @@ class Neo_Pulse_App_Loader {
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/pulse-assist/action/class-pulse-assist-action-tools-executions.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/pulse-assist/action/class-pulse-assist-action-tools-templates.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/pulse-assist/action/class-pulse-assist-action-tools-recipes.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/pulse-assist/action/class-pulse-assist-action-tools-forge.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/pulse-assist/action/class-pulse-assist-action-executor.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/pulse-assist/action/class-pulse-assist-action-intent.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/pulse-assist/action/class-pulse-assist-automation-intent.php';
@@ -279,6 +289,8 @@ class Neo_Pulse_App_Loader {
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/seo/class-page-address-llm.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/seo/class-seo-http.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/seo/class-seo-route-handlers.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/elementor/class-elementor-novamira-client.php';
+		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/elementor/class-elementor-route-handlers.php';
 
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/vertical-benchmark/class-vertical-benchmark-taxonomy.php';
 		require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/vertical-benchmark/class-vertical-benchmark-client-tag.php';

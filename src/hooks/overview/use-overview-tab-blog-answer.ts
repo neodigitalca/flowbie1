@@ -1,8 +1,5 @@
 import { useCallback } from "react";
-import { flushSync } from "react-dom";
-import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
 import type { WordPressSite } from "@/components/integrations/types";
-import type { OverviewBinding } from "@/hooks/overview/use-overview-wordpress-binding";
 import type { OverviewTabBase } from "@/hooks/overview/use-overview-tab-base";
 import { overviewBulkRowIndices, overviewRowInBulkScope } from "@/lib/overview/overview-bulk-row-scope";
 import type { AnswerHarnessSetters } from "@/lib/overview/overview-blog-answer-harness-mutations";
@@ -12,23 +9,13 @@ import {
   runOverviewBlogAnswerHarnessBatch,
   type BlogAnswerCatalogRow,
 } from "@/lib/overview/overview-blog-answer-harness-run";
-import {
-  buildOverviewHarnessCatalogWithHtml,
-  enrichHarnessCatalogWithEntities,
-} from "@/lib/overview/overview-harness-page-catalog";
+import { buildOverviewAnswerCatalogFromCache } from "@/lib/overview/overview-harness-page-catalog";
 import type { OverviewInventoryUrlMatch } from "@/lib/overview/overview-row-scrape";
 import type { OverviewSitemapSource } from "@/lib/overview/overview-sitemap-source";
-import { setOptimizingState } from "@/hooks/content-optimization/optimization-helpers-a";
-import {
-  getEntitySiteWarmCacheIfReady,
-  mergeSitePrefetchBulkInventoryRows,
-} from "@/lib/local-analysis/entity-site-warm-cache";
-import type { SiteInventoryBulkRow } from "@/lib/wordpress-api/types";
+import type { AiseoAfterRowWriteFn } from "@/lib/overview/overview-aiseo-after-upload";
+import { createAiseoCacheWriteAccumulator, finalizeAiseoCacheWriteForUpload } from "@/lib/overview/overview-aiseo-cache-write";
 
-type Args = Pick<
-  OverviewTabBase,
-  "rows" | "bindings" | "resolveBindings" | "updateRow" | "opt" | "prefetchOverviewInventory"
-> & {
+type Args = Pick<OverviewTabBase, "rows" | "opt" | "rowsRef"> & {
   site: WordPressSite | undefined;
   sitemapSource: OverviewSitemapSource;
   bulkScopeUrlKeys: Set<string>;
@@ -38,43 +25,20 @@ type Args = Pick<
     site: WordPressSite | null,
     url: string,
   ) => OverviewInventoryUrlMatch | undefined;
+  uploadAfterRowWrite?: AiseoAfterRowWriteFn;
 };
-
-function mergeAnswerHtmlIntoSiteCache(
-  site: WordPressSite,
-  results: Array<{ url: string; html: string }>,
-): void {
-  const warm = getEntitySiteWarmCacheIfReady(site.id);
-  const bulk = warm?.bulkInventoryRows;
-  if (!bulk?.length || !results.length) return;
-  const byUrl = new Map(results.map((r) => [r.url.trim().toLowerCase(), r.html]));
-  let patched = 0;
-  const next = bulk.map((row) => {
-    const html = byUrl.get((row.url ?? "").trim().toLowerCase());
-    if (!html) return row;
-    patched += 1;
-    return {
-      ...row,
-      fields: { ...row.fields, content: html },
-    } as SiteInventoryBulkRow;
-  });
-  if (patched === 0) return;
-  mergeSitePrefetchBulkInventoryRows(site, next);
-}
 
 export function useOverviewTabBlogAnswer({
   site,
   sitemapSource,
   rows,
-  bindings,
-  resolveBindings,
-  updateRow,
   opt,
   apiKey,
   selectedModel,
   bulkScopeUrlKeys,
   getInventoryMatchForUrl,
-  prefetchOverviewInventory,
+  rowsRef,
+  uploadAfterRowWrite,
 }: Args) {
   const makeHarnessSetters = useCallback(
     (batchKey: string): AnswerHarnessSetters | null => {
@@ -103,132 +67,52 @@ export function useOverviewTabBlogAnswer({
       );
       if (!scoped.length) return;
 
-      flushSync(() => {
-        setOptimizingState(opt.setIsOptimizingContent, batchKey, true);
-        initOverviewBlogAnswerHarnessBatchState({
-          site,
-          catalog: scoped.map((index) => {
-            const row = rows[index]!;
-            return {
-              index,
-              url: row.url!.trim(),
-              title: row.title ?? "",
-              focusKeyword: row.focusKeyword ?? "",
-              html: "",
-            };
-          }),
-          setBulkOptimizationState: opt.setBulkOptimizationState,
-          setOptimizationProgress: opt.setOptimizationProgress,
-          setIsOptimizingContent: opt.setIsOptimizingContent,
-          prepMessage: `Loading page HTML for Answer (${scoped.length})…`,
-        });
+      const bootstrapCatalog = scoped.map((index) => {
+        const row = rows[index]!;
+        return {
+          index,
+          url: row.url?.trim() ?? "",
+          title: (row.title || "").trim(),
+          focusKeyword: (row.focusKeyword || "").trim(),
+          html: "",
+          pageKind: (sitemapSource === "sap" ? "entity" : "post") as "post" | "entity",
+        };
+      }).filter((entry) => entry.url);
+
+      initOverviewBlogAnswerHarnessBatchState({
+        site,
+        catalog: bootstrapCatalog,
+        setBulkOptimizationState: opt.setBulkOptimizationState,
+        setOptimizationProgress: opt.setOptimizationProgress,
+        setIsOptimizingContent: opt.setIsOptimizingContent,
+        prepMessage: `Answer (${bootstrapCatalog.length} rows)…`,
       });
 
+      const catalog: BlogAnswerCatalogRow[] = buildOverviewAnswerCatalogFromCache({
+        site,
+        rows: rowsRef.current,
+        indices: scoped,
+        sitemapSource,
+        getInventoryMatchForUrl,
+        bulkScopeUrlKeys,
+      });
+
+      const cacheWrite = createAiseoCacheWriteAccumulator(site);
+
       try {
-        await prefetchOverviewInventory(site, {
-          includeContent: true,
-          includePageHeading: true,
-          source: sitemapSource,
-          silent: true,
-        });
+        if (!catalog.length) return;
 
-        const mergedBindings: Record<string, OverviewBinding | undefined> = {
-          ...bindings,
-          ...(await resolveBindings(
-            scoped.map((i) => rows[i]?.url?.trim() ?? "").filter(Boolean),
-            site,
-            undefined,
-            { inventoryOnly: true },
-          )),
-        };
-
-        const { catalog: loadedCatalog } = await buildOverviewHarnessCatalogWithHtml({
-          site,
-          rows,
-          indices: scoped,
-          sitemapSource,
-          bindings: mergedBindings,
-          getInventoryMatchForUrl,
-          bulkScopeUrlKeys,
-          onProgress: (message) => {
-            opt.setBulkOptimizationState((prev) => {
-              const current = prev[batchKey];
-              if (!current) return prev;
-              return {
-                ...prev,
-                [batchKey]: {
-                  ...current,
-                  currentStepProgress: {
-                    ...(current.currentStepProgress || {}),
-                    step: "Answer",
-                    progress: 5,
-                    message,
-                  },
-                },
-              };
-            });
-          },
-        });
-
-        const enriched = await enrichHarnessCatalogWithEntities({
-          catalog: loadedCatalog,
-          rows,
-          site,
-          sitemapSource,
-          apiKey,
-          setBulkOptimizationState: opt.setBulkOptimizationState,
-          batchKey,
-        });
-
-        const catalog: BlogAnswerCatalogRow[] = enriched.map((entry) => ({
-          index: entry.index,
-          url: entry.url,
-          title: entry.title,
-          focusKeyword: entry.focusKeyword,
-          html: entry.html,
-          entity: entry.entity,
-          pageKind: entry.pageKind,
-          seoResearchBrief: entry.seoResearchBrief,
-        }));
-
-        if (!catalog.length) {
-          finalizeOverviewBlogAnswerHarnessBatch(
-            batchKey,
-            site.id,
-            opt.setIsOptimizingContent,
-            opt.setOptimizationProgress,
-          );
-          return;
-        }
-
-        flushSync(() => {
-          initOverviewBlogAnswerHarnessBatchState({
-            site,
-            catalog,
-            setBulkOptimizationState: opt.setBulkOptimizationState,
-            setOptimizationProgress: opt.setOptimizationProgress,
-            setIsOptimizingContent: opt.setIsOptimizingContent,
-            prepMessage: `Answer (${catalog.length} rows)…`,
-          });
-        });
-
-        const writtenForCsv: Array<{ url: string; html: string }> = [];
         await runOverviewBlogAnswerHarnessBatch({
           catalog,
           site,
           apiKey,
           model: selectedModel || "google/gemini-2.5-flash",
           harnessSetters,
-          updateRow,
-          onRowOk: (url, html) => {
-            writtenForCsv.push({ url, html });
-          },
+          cacheWrite,
+          uploadAfterRowWrite,
         });
-
-        if (writtenForCsv.length) {
-          mergeAnswerHtmlIntoSiteCache(site, writtenForCsv);
-        }
       } finally {
+        finalizeAiseoCacheWriteForUpload(cacheWrite, rowsRef);
         finalizeOverviewBlogAnswerHarnessBatch(
           batchKey,
           site.id,
@@ -243,14 +127,12 @@ export function useOverviewTabBlogAnswer({
       apiKey,
       selectedModel,
       rows,
-      bindings,
       bulkScopeUrlKeys,
-      resolveBindings,
       getInventoryMatchForUrl,
-      prefetchOverviewInventory,
-      updateRow,
       opt,
       makeHarnessSetters,
+      rowsRef,
+      uploadAfterRowWrite,
     ],
   );
 

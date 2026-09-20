@@ -87,29 +87,32 @@ export function inferBulkSitemapModeFromRows(rows: CSVRow[]): {
   mode: BulkSitemapMode;
   rows: CSVRow[];
 } {
-  const normalized = rows.map((row) => {
-    const fromField = row.sitemap_type;
-    return fromField ? row : row;
-  });
+  const hasEntity = rows.some((r) => rowHasUploadEntity(r.entity));
+  if (!hasEntity) {
+    return { mode: "post", rows };
+  }
 
-  const explicitTypes = normalized
+  const explicitTypes = rows
     .map((r) => r.sitemap_type)
     .filter((t): t is BulkRowSitemapType => t === "post" || t === "entity");
 
-  if (explicitTypes.length === 0) {
-    return { mode: "post", rows: normalized };
+  if (explicitTypes.length > 0) {
+    const unique = new Set(explicitTypes);
+    if (unique.size > 1) {
+      return { mode: "custom", rows };
+    }
   }
 
-  const unique = new Set(explicitTypes);
-  if (unique.size === 1) {
-    return { mode: explicitTypes[0]!, rows: normalized };
-  }
-
-  return { mode: "custom", rows: normalized };
+  return { mode: "entity", rows };
 }
 
 export function postingSitemapPlaceholder(siteMode: BulkSitemapMode): BulkRowSitemapType {
   return siteMode === "entity" ? "entity" : "post";
+}
+
+/** Unset site pill is always Posts. CSV entity cells switch the pill after upload. */
+export function defaultBulkSitemapMode(): BulkRowSitemapType {
+  return "post";
 }
 
 export function resolveSiteSitemapMode(
@@ -119,7 +122,7 @@ export function resolveSiteSitemapMode(
 ): BulkSitemapMode {
   const siteId = Array.from(selectedWordPressSites)[0];
   const configured = siteId ? siteConfigs[siteId]?.sitemapType : undefined;
-  return configured ?? "post";
+  return configured ?? defaultBulkSitemapMode();
 }
 
 export function buildCustomModePrefetchSites(

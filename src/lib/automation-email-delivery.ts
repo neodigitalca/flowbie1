@@ -49,6 +49,7 @@ export function automationTitleFromRun(run: AgentRun): string {
 export function executionKindFromRun(run: AgentRun): TaskExecutionKind {
   const recipe = String(run.recipeKey ?? "");
   if (recipe === "gsc_reporting") return "gsc_reporting";
+  if (recipe === "ads_reporting") return "ads_reporting";
   if (recipe === "post_creator") return "post_creator";
   if (recipe === "dfs_llm_article_audit") return "dfs_llm_article_audit";
   if (recipe === "overview_pages_meta_batch") return "content_optimizer_meta";

@@ -49,6 +49,7 @@ export async function syncWordPressSitesToServer(sites: WordPressSite[]): Promis
       appPassword: s.appPassword,
       gbpLocationId: s.gbpLocationId,
       ga4PropertyId: s.ga4PropertyId,
+      googleAdsCustomerId: s.googleAdsCustomerId,
       optimizationPackage: s.optimizationPackage,
       editorialCountsPeriodStartYmd: s.editorialCountsPeriodStartYmd,
       entitySitemapUrl: s.entitySitemapUrl,
@@ -120,6 +121,7 @@ export function minimalSiteForLocalStorage(site: WordPressSite): WordPressSite {
     entitySitemapUrl: slim.entitySitemapUrl,
     manualEndpoint: slim.manualEndpoint,
     ga4PropertyId: slim.ga4PropertyId,
+    googleAdsCustomerId: slim.googleAdsCustomerId,
     gbpLocationId: slim.gbpLocationId,
     semrushSiteAuditProjectId: slim.semrushSiteAuditProjectId,
     editorialCountsPeriodStartYmd: slim.editorialCountsPeriodStartYmd,
@@ -284,12 +286,17 @@ export async function mergeServerGbpLocationIdsIntoLocalSites(): Promise<boolean
     let next = site;
     const gbp = row.gbpLocationId?.trim();
     const ga4 = row.ga4PropertyId?.trim();
+    const ads = row.googleAdsCustomerId?.trim();
     if (gbp && !site.gbpLocationId?.trim()) {
       next = { ...next, gbpLocationId: gbp };
       changed = true;
     }
     if (ga4 && !site.ga4PropertyId?.trim()) {
       next = { ...next, ga4PropertyId: ga4 };
+      changed = true;
+    }
+    if (ads && !site.googleAdsCustomerId?.trim()) {
+      next = { ...next, googleAdsCustomerId: ads };
       changed = true;
     }
     return next;

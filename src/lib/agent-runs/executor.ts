@@ -24,6 +24,10 @@ import { contentGapResultFromRun } from "@/lib/agent-runs/run-content-gap-check-
 import type { AgentRun, AgentRunResult } from "@/lib/agent-runs-types";
 import { isAgentRunTerminal } from "@/lib/agent-runs-types";
 import type { WordPressSite } from "@/components/integrations/types";
+import {
+  loadSitesForAgentRun,
+  mergeAgentRunSiteFromSeed,
+} from "@/lib/agent-runs/resolve-agent-run-site";
 import { completeTaskExecution, fetchTaskExecution, reopenTaskExecutionForResume } from "@/lib/tasks-api";
 import {
   clearPersistedAgentRunCancellations,
@@ -269,7 +273,7 @@ async function executeAgentRunOnce(
     }
 
     const latestForResume = (await fetchAgentRun(teamId, run.id)) ?? run;
-    activeRun = latestForResume;
+    activeRun = mergeAgentRunSiteFromSeed(latestForResume, run);
 
     if (latestForResume.status === "done") {
       return;
@@ -375,6 +379,7 @@ async function executeAgentRunOnce(
       }
     }
 
+    const pool = await loadSitesForAgentRun(activeRun, sites);
     const ctx = {
       onStep: async (
         label: string,
@@ -391,7 +396,7 @@ async function executeAgentRunOnce(
       },
       resumePoint,
       isResume,
-      sites,
+      sites: pool,
     };
 
     if (activeRun.id > 0) {
@@ -408,7 +413,7 @@ async function executeAgentRunOnce(
     if (activeRun.plan?.completedOnServer) {
       result = { message: "Completed on server", updated: 1 };
     } else if (activeRun.plan?.clientRunContract && activeRun.plan?.taskExecutionId) {
-      result = await runTaskExecutionClientHarness(activeRun, sites, ctx);
+      result = await runTaskExecutionClientHarness(activeRun, pool, ctx);
     } else {
       result = await runAgentRunHarness(activeRun, ctx);
     }
@@ -477,7 +482,6 @@ async function executeAgentRunOnce(
       return;
     }
 
-    await waitForAgentRunInflight(activeRun.id);
     const latestAfterInflight = (await fetchAgentRun(teamId, activeRun.id)) ?? activeRun;
     if (latestAfterInflight.status === "done") {
       return;

@@ -14,6 +14,8 @@ export const NEO_PULSE_APP_VISIBLE_TAB_ROUTES = [
   { method: "GET", path: "ga/credentials-status" },
   { method: "GET", path: "gmb/config-status" },
   { method: "POST", path: "gmb/performance" },
+  { method: "GET", path: "google-ads/config-status" },
+  { method: "POST", path: "google-ads/fetch-reporting-bundle" },
 ];
 
 export const NEO_PULSE_APP_PHASE1_ROUTES = NEO_PULSE_APP_VISIBLE_TAB_ROUTES;
@@ -23,6 +25,7 @@ export const NEO_PULSE_APP_DISPATCHER_MARKERS = [
   "Neo_Pulse_App_Gsc_Route_Handlers::dispatch_http",
   "Neo_Pulse_App_Ga_Route_Handlers::dispatch_http",
   "Neo_Pulse_App_Gmb_Route_Handlers::dispatch_http",
+  "Neo_Pulse_App_Google_Ads_Route_Handlers::dispatch_http",
   "Neo_Pulse_App_Dataforseo_Route_Handlers::dispatch_http",
   "Neo_Pulse_App_Semrush_Route_Handlers::dispatch_http",
   "Neo_Pulse_App_Proposal_Route_Handlers::dispatch_http",

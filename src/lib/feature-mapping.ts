@@ -60,14 +60,14 @@ export const mapFeatureToInstruction = (
   if (normalizedFeature.startsWith("[illustrative]")) {
     return useMarkdown
       ? "[ILLUSTRATIVE - MANDATORY]: Copy ILLUSTRATIVE EXAMPLE — one decision matching Answer and Keyword, compact. Forbidden: Homeowner A/B, a different vertical than Answer, product tours, keyword slug phrasing."
-      : "[ILLUSTRATIVE - MANDATORY]: Copy ILLUSTRATIVE EXAMPLE — one decision matching Answer and Keyword, compact (fixed H2: A Local Homeowner Example + summary p + blockquote + Recommendation h3 + p). Forbidden: Homeowner A/B, a different vertical than Answer, product catalog tours, keyword slug phrasing, Scenario: label, links in headings.";
+      : "[ILLUSTRATIVE - MANDATORY]: Copy ILLUSTRATIVE EXAMPLE — one decision matching Answer and Keyword, compact (this section's unique planner H2 + summary p + blockquote + Recommendation h3 + p). Forbidden: retitling to a stock label, a second homeowner H2, Homeowner A/B, a different vertical than Answer, product catalog tours, keyword slug phrasing, Scenario: label, links in headings.";
   }
 
   if (normalizedFeature.startsWith("[blockquote]")) {
     if (opts?.illustrativeContext) {
       return useMarkdown
         ? `[BLOCKQUOTE - MANDATORY ILLUSTRATIVE]: After the summary paragraph, scenario prose inside > blockquote. Persona name in quote only. Forbidden: "Scenario:" label; Scenario as a ### heading. ${MARKDOWN_QUOTE_OUTPUT_RULE}`
-        : `[BLOCKQUOTE - MANDATORY ILLUSTRATIVE]: After the summary <p>, scenario prose inside <blockquote><p>…</p></blockquote>. Persona name in quote only. Forbidden: "Scenario:" label; Scenario as an H3 heading. ${HTML_QUOTE_OUTPUT_RULE}`;
+        : `[BLOCKQUOTE - MANDATORY ILLUSTRATIVE]: After the summary <p>, scenario prose inside <blockquote><p>…</p></blockquote>. Persona name in quote only. Weave the CITY INTERNAL LINK [[LINK]] from ILLUSTRATIVE EXAMPLE inside that sentence. Forbidden: a location cite as the first child of the blockquote; "Scenario:" label; Scenario as an H3 heading. ${HTML_QUOTE_OUTPUT_RULE}`;
     }
     return useMarkdown
       ? `[BLOCKQUOTE - MANDATORY]: After the first paragraph, output one entity fact as a markdown quote. ${MARKDOWN_QUOTE_OUTPUT_RULE}`

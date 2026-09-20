@@ -3,7 +3,6 @@ import type { SitemapOptimizerWorkspaceMode } from "@/lib/sitemap-optimizer/type
 
 const MODES: { id: SitemapOptimizerWorkspaceMode; label: string }[] = [
   { id: "plan", label: "Plan" },
-  { id: "legacy_redirects", label: "Legacy redirects" },
   { id: "url_optimizer", label: "URL" },
 ];
 

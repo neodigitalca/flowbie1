@@ -89,14 +89,10 @@ export function createBulkGoogleMapsImageWarmupController(params: CreateBulkGoog
     if (!entity) return Promise.resolve(false);
 
     const promise = fetchGoogleMapsImageForEntity(entity)
-      .then((payload) => {
-        if (payload) {
-          readyEntities.add(entity.trim().toLowerCase());
-          return true;
-        }
-        return false;
+      .then(() => {
+        readyEntities.add(entity.trim().toLowerCase());
+        return true;
       })
-      .catch(() => false)
       .finally(() => {
         inFlight.delete(index);
       });

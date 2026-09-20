@@ -19,7 +19,7 @@ function isGscFileDeliverableStep(payload: Record<string, unknown>): boolean {
 }
 
 function gscCheckpointResumePoint(run: AgentRun | null | undefined): AgentRunResumePoint | null {
-  if (run?.recipeKey !== "gsc_reporting") return null;
+  if (run?.recipeKey !== "gsc_reporting" && run?.recipeKey !== "ads_reporting") return null;
   const checkpoint = readAgentRunCheckpoint(run);
   const payload = checkpoint.lastStepPayload ?? {};
   const phase = typeof payload.phase === "string" ? payload.phase : "";

@@ -1,22 +1,20 @@
-/** Fixed short H2 for every [ILLUSTRATIVE] body section (SAP + blog). */
+/** Stock label some drafts used. Never pin this onto a section. */
 export const ILLUSTRATIVE_DEFAULT_H2 = "A Local Homeowner Example";
 
 export function isBadIllustrativeH2Title(title: string): boolean {
   const t = title.trim().toLowerCase();
   if (!t) return true;
-  if (t === ILLUSTRATIVE_DEFAULT_H2.toLowerCase()) return false;
+  if (/^section\s+\d+$/i.test(t) || t === "section") return true;
   if (/realistic local|local situation|local scenario/.test(t)) return true;
   if (/^scenario\s*:/.test(t)) return true;
   if (t.includes("?")) return true;
-  if (/\bnear\b/.test(t)) return true;
   if (/<a\b/i.test(title)) return true;
-  return t.split(/\s+/).length > 8;
+  return false;
 }
 
+/** Return the planner title as written. Never substitute a stock H2. */
 export function resolveIllustrativeH2Title(title?: string): string {
-  const t = title?.trim() ?? "";
-  if (t && !isBadIllustrativeH2Title(t)) return t;
-  return ILLUSTRATIVE_DEFAULT_H2;
+  return title?.trim() ?? "";
 }
 
 /** Replace the H2 title prefix on a numbered checklist row; keep feature markers. */
@@ -38,20 +36,11 @@ export function stripIllustrativeMarkersFromChecklistItem(item: string): string 
     .trim();
 }
 
-/** Checklist line: force illustrative item to the fixed short H2 title. */
+/** Keep the planner H2. Do not rewrite titles. */
 export function rewriteIllustrativeChecklistItemHeading(
   item: string,
-  index?: number,
-  sapEntity?: string,
+  _index?: number,
+  _sapEntity?: string,
 ): string {
-  if (/\[FAQ\]/i.test(item)) return item;
-  const sap = sapEntity?.trim();
-  if (sap) {
-    if (index === 3) {
-      return replaceChecklistItemHeading(item, ILLUSTRATIVE_DEFAULT_H2);
-    }
-    return stripIllustrativeMarkersFromChecklistItem(item);
-  }
-  if (!/\[illustrative\]/i.test(item)) return item;
-  return replaceChecklistItemHeading(item, ILLUSTRATIVE_DEFAULT_H2);
+  return item;
 }

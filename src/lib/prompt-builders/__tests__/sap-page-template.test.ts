@@ -3,18 +3,10 @@ import {
   formatSapChecklistExample,
   formatSapPageChecklistBlock,
   formatSapPageWriterBlock,
-  sapLocalRecommendationHeading,
   sapPageTemplateIsActive,
-  SAP_DEFAULT_COMBINED_OUTLINE,
   SAP_FORBIDDEN_UNSUBSTANTIATED_LOCAL_EXPERTISE,
   SAP_LOCAL_RECOMMENDATION_TABLE_RULE,
-  SAP_LOCAL_CONDITIONS_H2,
-  SAP_OPTIONS_FIT_H2,
-  SAP_PROBLEM_H2,
-  SAP_NEXT_STEPS_H2,
-  SAP_WHAT_WE_OFFER_H2,
 } from "@/lib/prompt-builders/sap-page-template";
-import { ILLUSTRATIVE_DEFAULT_H2 } from "@/lib/content-optimization/first-party-authority-prompt";
 
 const HARDCODED_VERTICALS = [
   "111 Street",
@@ -27,6 +19,13 @@ const HARDCODED_VERTICALS = [
   "Silhouette",
 ];
 
+const PINNED_TITLES = [
+  "Sunlight And Privacy Challenges",
+  "Local Conditions That Change The Job",
+  "Options That Fit Local Conditions",
+  "Our Recommendation for Homeowners",
+];
+
 function assertNoHardcodedVerticals(text: string) {
   for (const banned of HARDCODED_VERTICALS) {
     expect(text).not.toContain(banned);
@@ -34,21 +33,22 @@ function assertNoHardcodedVerticals(text: string) {
 }
 
 describe("sap-page-template", () => {
-  it("checklist spine pins all seven mandatory H2 titles", () => {
+  it("checklist spine describes seven jobs without pinning H2 titles", () => {
     const block = formatSapPageChecklistBlock("Ben Hill, Atlanta");
     expect(block).toContain("SAP PAGE TEMPLATE");
-    expect(block).toContain("Do NOT emit ARTICLE CONTENT TYPE");
-    expect(block).toContain(SAP_PROBLEM_H2);
-    expect(block).toContain(SAP_LOCAL_CONDITIONS_H2);
-    expect(block).toContain(SAP_OPTIONS_FIT_H2);
-    expect(block).toContain(ILLUSTRATIVE_DEFAULT_H2);
-    expect(block).toContain(SAP_WHAT_WE_OFFER_H2);
-    expect(block).toContain(SAP_NEXT_STEPS_H2);
-    expect(block).toContain(sapLocalRecommendationHeading("Ben Hill, Atlanta"));
+    expect(block).toContain("Do NOT emit encyclopedia how-it-works");
+    expect(block).toContain("Do not pin any H2");
+    expect(block).toContain("UNIQUE DYNAMIC BODY H2s");
     expect(block).toContain("Product | Best for | Budget | Reason");
     expect(block).toContain("UNIFIED COPY FORMATTING");
+    expect(block).toContain("Ben Hill, Atlanta");
     expect(block).not.toContain("The problem here —");
     expect(block).not.toContain("local market knowledge and how we serve businesses");
+    expect(block).not.toContain("MANDATORY exact H2 title");
+    expect(block).not.toContain("The only forced body title is A Local Homeowner Example");
+    for (const pinned of PINNED_TITLES) {
+      expect(block).not.toContain(pinned);
+    }
     assertNoHardcodedVerticals(SAP_LOCAL_RECOMMENDATION_TABLE_RULE);
     assertNoHardcodedVerticals(SAP_FORBIDDEN_UNSUBSTANTIATED_LOCAL_EXPERTISE);
   });
@@ -71,24 +71,13 @@ describe("sap-page-template", () => {
     assertNoHardcodedVerticals(SAP_LOCAL_RECOMMENDATION_TABLE_RULE);
   });
 
-  it("checklist example uses pinned titles and four columns", () => {
+  it("checklist example names jobs, not pinned titles", () => {
     const example = formatSapChecklistExample("Oldsmar", "Shades near Oldsmar");
-    expect(example).toContain(ILLUSTRATIVE_DEFAULT_H2);
-    expect(example).toContain(SAP_PROBLEM_H2);
+    expect(example).toContain("Local problem for this trade in Oldsmar");
+    expect(example).toContain("Unique topical H2 for the one worked example");
     expect(example).toContain("scenario in body");
     expect(example).not.toContain("A realistic local situation");
+    expect(example).not.toContain("Sunlight And Privacy Challenges");
     expect(example).not.toMatch(/The problem Oldsmar creates/i);
-  });
-
-  it("default optimizer outline matches pinned spine", () => {
-    expect([...SAP_DEFAULT_COMBINED_OUTLINE]).toEqual([
-      SAP_PROBLEM_H2,
-      SAP_LOCAL_CONDITIONS_H2,
-      SAP_OPTIONS_FIT_H2,
-      ILLUSTRATIVE_DEFAULT_H2,
-      SAP_WHAT_WE_OFFER_H2,
-      "Our Recommendation for Homeowners in this area",
-      SAP_NEXT_STEPS_H2,
-    ]);
   });
 });

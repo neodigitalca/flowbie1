@@ -266,7 +266,7 @@ export async function collectEmailAttachmentsFromOutputs(
     return [...deduped.values()];
   }
 
-  if (executionKind === "gsc_reporting" && outputs.length === 1) {
+  if ((executionKind === "gsc_reporting" || executionKind === "ads_reporting") && outputs.length === 1) {
     const picked = pickSingle(allFiles);
     return picked ? [picked] : [];
   }

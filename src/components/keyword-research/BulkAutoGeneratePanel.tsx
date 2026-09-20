@@ -45,9 +45,10 @@ import { consumeEntityBulkCsvAutoRun, consumeSitemapOptimizerBulkCsvSeed } from 
 import type { BulkGeneratorWorkspaceBindings } from './bulk/bulk-generator-workspace-bindings';
 import type { BulkRowSitemapType, BulkSitemapMode } from '@/lib/bulk/bulk-sitemap-mode';
 import {
-  csvRowsHaveExplicitSitemap,
+  defaultBulkSitemapMode,
   inferBulkSitemapModeFromRows,
   resolveSiteSitemapMode,
+  rowHasUploadEntity,
   seedCustomRowSitemaps,
 } from '@/lib/bulk/bulk-sitemap-mode';
 import { cn } from '@/lib/utils';
@@ -298,7 +299,7 @@ export const BulkAutoGeneratePanel: React.FC<BulkAutoGeneratePanelProps> = ({
       return {
         ...prev,
         [wordPressSite.id]: {
-          sitemapType: "post",
+          sitemapType: defaultBulkSitemapMode(),
         },
       };
     });
@@ -564,23 +565,35 @@ export const BulkAutoGeneratePanel: React.FC<BulkAutoGeneratePanelProps> = ({
     [siteConfigs, selectedWordPressSites, entitySitemapAvailable],
   );
   const siteFallbackSitemapType: BulkRowSitemapType =
-    sapMode && entitySitemapAvailable ? "entity" : "post";
+    sapMode && entitySitemapAvailable ? "entity" : defaultBulkSitemapMode();
 
   const applyCsvSitemapInference = useCallback(
     (parsed: CSVRow[]): CSVRow[] => {
-      if (!csvRowsHaveExplicitSitemap(parsed)) return parsed;
       const { mode, rows: normalized } = inferBulkSitemapModeFromRows(parsed);
-      const selectedId = Array.from(selectedWordPressSites)[0];
+      const selectedId = Array.from(selectedWordPressSites)[0] ?? wordPressSite?.id;
       if (selectedId) {
         setSiteConfigs((prev) => ({
           ...prev,
           [selectedId]: { ...prev[selectedId], sitemapType: mode },
         }));
       }
+      if (mode === "entity" || mode === "custom") {
+        setFeaturedImageType("google-maps");
+        setFeaturedImagePerBlog(true);
+        return normalized.map((row) =>
+          rowHasUploadEntity(row.entity) ? { ...row, featuredImage: "google-maps" } : row,
+        );
+      }
       return normalized;
     },
-    [selectedWordPressSites],
+    [selectedWordPressSites, wordPressSite?.id],
   );
+
+  useEffect(() => {
+    if (sitemapMode !== "entity") return;
+    setFeaturedImageType("google-maps");
+    setFeaturedImagePerBlog(true);
+  }, [sitemapMode]);
 
   const handleRowSitemapChange = useCallback(
     (rowIndex: number, value: BulkRowSitemapType) => {
@@ -845,6 +858,13 @@ export const BulkAutoGeneratePanel: React.FC<BulkAutoGeneratePanelProps> = ({
         setRows([]);
         setTotalRows(0);
         if (fileInputRef.current) fileInputRef.current.value = "";
+        const siteId = wordPressSite?.id ?? Array.from(selectedWordPressSites)[0];
+        if (siteId) {
+          setSiteConfigs((prev) => ({
+            ...prev,
+            [siteId]: { ...prev[siteId], sitemapType: defaultBulkSitemapMode() },
+          }));
+        }
       },
       onClearPrompt: () => {
         resetPromptGeneration();

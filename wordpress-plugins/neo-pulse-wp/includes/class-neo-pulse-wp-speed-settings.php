@@ -24,6 +24,8 @@ class Neo_Pulse_Wp_Speed_Settings {
 
 	const SIMPLE_ENABLED_REPAIR_V3_KEY = 'neo_pulse_wp_speed_simple_enabled_repair_v3';
 
+	const SIMPLE_ENABLED_REPAIR_V4_KEY = 'neo_pulse_wp_speed_simple_enabled_repair_v4';
+
 	const DEFAULT_ON_MIGRATION_KEY = 'neo_pulse_wp_speed_default_on_v4';
 
 	/**
@@ -122,7 +124,7 @@ class Neo_Pulse_Wp_Speed_Settings {
 		if ( get_option( self::OPTION_KEY, null ) !== null ) {
 			return;
 		}
-		self::save_config( self::sanitize_config( self::merge_with_defaults( array() ) ) );
+		self::save_config( self::default_enabled_config() );
 	}
 
 	/**
@@ -440,5 +442,37 @@ class Neo_Pulse_Wp_Speed_Settings {
 			Neo_Pulse_Wp_Speed_Warm::warm_disk_cache();
 		}
 		update_option( self::SIMPLE_ENABLED_REPAIR_V3_KEY, '1', false );
+	}
+
+	/**
+	 * Turn per-file CSS/JS minify on when Speed is already enabled.
+	 */
+	public static function maybe_repair_simple_enabled_config_v4(): void {
+		if ( get_option( self::SIMPLE_ENABLED_REPAIR_V4_KEY, '' ) === '1' ) {
+			return;
+		}
+
+		$config = self::get_config();
+		if ( empty( $config['enabled'] ) ) {
+			update_option( self::SIMPLE_ENABLED_REPAIR_V4_KEY, '1', false );
+			return;
+		}
+
+		$changed = false;
+		if ( empty( $config['optimize_css'] ) ) {
+			$config['optimize_css'] = true;
+			$changed                = true;
+		}
+		if ( empty( $config['optimize_js'] ) ) {
+			$config['optimize_js'] = true;
+			$changed               = true;
+		}
+		if ( $changed ) {
+			self::save_config( $config );
+			if ( class_exists( 'Neo_Pulse_Wp_Speed_Warm', false ) ) {
+				Neo_Pulse_Wp_Speed_Warm::warm_disk_cache();
+			}
+		}
+		update_option( self::SIMPLE_ENABLED_REPAIR_V4_KEY, '1', false );
 	}
 }

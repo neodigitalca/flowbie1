@@ -34,6 +34,28 @@ describe("findUploadSlugConflict", () => {
     });
     expect(conflict?.slug).toBe("advanced-window-coverings-plum-coulee-mb");
     expect(conflict?.reason).toContain("already exists");
+    expect(conflict?.existingPostId).toBe(5320);
+    expect(conflict?.existingUrl).toBe(
+      "https://example.com/advanced-window-coverings-plum-coulee-mb/",
+    );
+  });
+
+  it("matches slug from the URL path when the inventory slug field is empty", () => {
+    const conflict = findUploadSlugConflict({
+      site,
+      slug: "blinds-old-naples-florida-fl",
+      inventoryRows: [
+        {
+          id: 8812,
+          slug: "",
+          url: "https://lindseyblindsetc.com/blinds-old-naples-florida-fl/",
+          collection: "posts",
+          fields: { title: "Blinds Near Old Naples, Florida", meta: "", keyword: "" },
+        },
+      ],
+    });
+    expect(conflict?.existingPostId).toBe(8812);
+    expect(conflict?.existingUrl).toContain("blinds-old-naples-florida-fl");
   });
 
   it("blocks slug reserved earlier in the same run", () => {

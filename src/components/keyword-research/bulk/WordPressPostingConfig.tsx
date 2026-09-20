@@ -14,7 +14,7 @@ import {
 } from '@/lib/bulk-auto-generate';
 import { WordPressScheduleFields } from './WordPressScheduleFields';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import type { BulkSitemapMode } from '@/lib/bulk/bulk-sitemap-mode';
+import { defaultBulkSitemapMode, type BulkSitemapMode } from '@/lib/bulk/bulk-sitemap-mode';
 
 /** Flat cells: stronger fill, no stroke - reads clearly on dark UI */
 const BULK_FIELD_TRIGGER =
@@ -141,7 +141,7 @@ export function WordPressPostingConfig({
       return {
         ...prev,
         [targetSite.id]: {
-          sitemapType: sapMode && targetSite.entitySitemapUrl ? 'entity' : 'post',
+          sitemapType: sapMode && targetSite.entitySitemapUrl ? 'entity' : defaultBulkSitemapMode(),
         },
       };
     });
@@ -161,7 +161,7 @@ export function WordPressPostingConfig({
           {(() => {
             const site = targetSite;
             const config = siteConfigs[site.id] || {
-              sitemapType: 'post' as const,
+              sitemapType: sapMode && site.entitySitemapUrl ? 'entity' : defaultBulkSitemapMode(),
             };
 
             return (

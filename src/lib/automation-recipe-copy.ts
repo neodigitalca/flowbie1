@@ -41,6 +41,9 @@ export function explainExecutionKind(kind: string | undefined, bucket?: string):
   if (kind === "gsc_reporting") {
     return "Generates a full GSC markdown report with MoM or YoY compare and optional local download.";
   }
+  if (kind === "ads_reporting") {
+    return "Generates a full PPC markdown report with MoM or YoY compare and optional local download.";
+  }
   if (kind === "post_creator") {
     return "Generates new blog posts with harness body, meta, FAQ, and AI featured image, then schedules them on WordPress.";
   }
@@ -57,6 +60,9 @@ function explainExecutionAction(kind: string | undefined, bucket?: string): stri
   if (kind === "gsc_reporting") {
     return "Then NEO Pulse fetches GSC data, runs the reporting pipeline, and saves markdown plus CSV bundle to your PC.";
   }
+  if (kind === "ads_reporting") {
+    return "Then NEO Pulse fetches Google Ads data, runs the PPC reporting pipeline, and saves markdown plus CSV bundle to your PC.";
+  }
   if (kind === "post_creator") {
     return "Then NEO Pulse generates blog ideas, writes full harness content, optimizes meta, creates featured images, and publishes or schedules posts on WordPress.";
   }
@@ -71,7 +77,7 @@ function explainExecutionAction(kind: string | undefined, bucket?: string): stri
 
 export function buildTaskRunSteps(task: TaskTemplateTaskDef): string[] {
   const kind = task.executionKind ?? "";
-  if (kind === "gsc_reporting") {
+  if (kind === "gsc_reporting" || kind === "ads_reporting") {
     const preset = task.executionPayload?.comparePreset === "yoy" ? "year over year" : "month over month";
     const steps = [
       "Calendar schedule (Edmonton time).",

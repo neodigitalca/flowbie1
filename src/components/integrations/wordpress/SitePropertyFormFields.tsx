@@ -183,11 +183,13 @@ export interface SitePropertyFormFieldsProps {
   formUsername: string;
   formAppPassword: string;
   formGa4PropertyId: string;
+  formGoogleAdsCustomerId: string;
   formGbpLocationId: string;
   formSemrushSiteAuditProjectId: string;
   /** Saved on site row / server mirror when form state is still empty. */
   persistedGbpLocationId?: string;
   persistedGa4PropertyId?: string;
+  persistedGoogleAdsCustomerId?: string;
   formEditorialCountsPeriodStartYmd: string;
   /** Empty string = no package (unlimited). */
   formOptimizationPackage: string;
@@ -201,6 +203,7 @@ export interface SitePropertyFormFieldsProps {
   onFormUsernameChange: (value: string) => void;
   onFormAppPasswordChange: (value: string) => void;
   onFormGa4PropertyIdChange: (value: string) => void;
+  onFormGoogleAdsCustomerIdChange: (value: string) => void;
   onFormGbpLocationIdChange: (value: string) => void;
   onFormSemrushSiteAuditProjectIdChange: (value: string) => void;
   onFormEditorialCountsPeriodStartYmdChange: (value: string) => void;
@@ -233,9 +236,11 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
   formUsername,
   formAppPassword,
   formGa4PropertyId,
+  formGoogleAdsCustomerId,
   formGbpLocationId,
   persistedGbpLocationId = "",
   persistedGa4PropertyId = "",
+  persistedGoogleAdsCustomerId = "",
   formSemrushSiteAuditProjectId,
   formEditorialCountsPeriodStartYmd,
   formOptimizationPackage,
@@ -249,6 +254,7 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
   onFormUsernameChange,
   onFormAppPasswordChange,
   onFormGa4PropertyIdChange,
+  onFormGoogleAdsCustomerIdChange,
   onFormGbpLocationIdChange,
   onFormSemrushSiteAuditProjectIdChange,
   onFormEditorialCountsPeriodStartYmdChange,
@@ -269,6 +275,7 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
   const sh = strongHelpClass(chrome);
   const gbpFieldValue = formGbpLocationId.trim() || persistedGbpLocationId.trim();
   const ga4FieldValue = formGa4PropertyId.trim() || persistedGa4PropertyId.trim();
+  const adsFieldValue = formGoogleAdsCustomerId.trim() || persistedGoogleAdsCustomerId.trim();
   const [semrushMatching, setSemrushMatching] = useState(false);
 
   const semrushBtnClass =
@@ -504,6 +511,20 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
               }}
               placeholder="GA4 Property ID"
               aria-label="GA4 Property ID"
+              className={flatInputClass}
+            />
+          </TaskFormPlaceholderCell>
+          <TaskFormPlaceholderCell>
+            <Input
+              value={adsFieldValue}
+              onChange={(e) => onFormGoogleAdsCustomerIdChange(e.target.value)}
+              onFocus={() => {
+                if (!formGoogleAdsCustomerId.trim() && persistedGoogleAdsCustomerId.trim()) {
+                  onFormGoogleAdsCustomerIdChange(persistedGoogleAdsCustomerId.trim());
+                }
+              }}
+              placeholder="Google Ads customer ID"
+              aria-label="Google Ads customer ID"
               className={flatInputClass}
             />
           </TaskFormPlaceholderCell>
@@ -919,6 +940,27 @@ export const SitePropertyFormFields: React.FC<SitePropertyFormFieldsProps> = ({
                   Numeric ID from GA4 Admin → Property settings for this site. Used by the Test GA button on the site
                   tile.
                 </p>
+              }
+            />
+
+            <FieldBlock
+              chrome={chrome}
+              label="Google Ads customer ID"
+              htmlFor="googleAdsCustomerId"
+              field={
+                <SitePropertyInput
+                  chrome={chrome}
+                  id="googleAdsCustomerId"
+                  type="text"
+                  value={adsFieldValue}
+                  onChange={(e) => onFormGoogleAdsCustomerIdChange(e.target.value)}
+                  onFocus={() => {
+                    if (!formGoogleAdsCustomerId.trim() && persistedGoogleAdsCustomerId.trim()) {
+                      onFormGoogleAdsCustomerIdChange(persistedGoogleAdsCustomerId.trim());
+                    }
+                  }}
+                  placeholder="123-456-7890"
+                />
               }
             />
 

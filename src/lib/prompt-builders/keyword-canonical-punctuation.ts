@@ -105,7 +105,8 @@ export function applyCanonicalKeywordPunctuation(stored: string): string {
 const KEYWORD_PUNCTUATION_RULES = `**KEYWORD PUNCTUATION (MANDATORY)**:
 - When a compound has a standard hyphenated editorial form (X-ray, e-commerce, COVID-19), you **must** use that form in all generated copy (titles, headings, body, FAQ).
 - Keep the same **words and word order** as the focus keyword; only add standard hyphens or punctuation where editorially required.
-- **WRITING KEYWORD casing**: paste the WRITING KEYWORD string exactly when an exact phrase is required — full Title Case on every word, same as all other generated copy. Never paste the raw lowercase ACF slug.
+- **WRITING KEYWORD casing**: paste the WRITING KEYWORD string exactly when an exact phrase is required. Full Title Case on every word, same as all other generated copy. Never paste the raw lowercase ACF slug.
+- Weave that phrase inside a complete sentence. After a period, the next sentence starts with a capital letter. Forbidden leftover after a period: ". durable window coverings". If you cannot weave it mid-sentence, STOP.
 - **Forbidden:** collapsing to one word (Xray), decorative punctuation (vs., colons inside the keyword phrase), or inventing hyphens on ordinary words.
 - **Do not** change ACF keyword_focus values; this applies only to generated content you write.`;
 

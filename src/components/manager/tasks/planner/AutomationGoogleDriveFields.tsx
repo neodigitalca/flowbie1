@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { CheckCircle } from "lucide-react";
 import {
+  CUSTOM_DRIVE_PURPOSE_SELECT_VALUE,
   DRIVE_MONTH_SEGMENTS,
   GOOGLE_DRIVE_PATH_PRESETS,
   driveYearSelectOptions,
@@ -25,7 +26,9 @@ import {
   googleDrivePurposeFolderLabel,
   isDriveCalendarMonth,
   isDriveCalendarYear,
-  type GoogleDriveFolderPurposeKey,
+  listDrivePurposeSelectOptions,
+  presetPurposeValueFromName,
+  rememberCustomDrivePurposePreset,
 } from "@/lib/google-drive/google-drive-folder-hierarchy";
 import {
   findGoogleDriveFolderPresetByFolderId,
@@ -220,6 +223,94 @@ function WorkflowDriveFolderPreview({
     >
       {label || "Open folder"}
     </a>
+  );
+}
+
+function DrivePurposeSelect({
+  value,
+  inferred,
+  disabled,
+  triggerId,
+  onSelect,
+}: {
+  value: string;
+  inferred: string;
+  disabled?: boolean;
+  triggerId: string;
+  onSelect: (value: string) => void;
+}): React.ReactElement {
+  const [enteringCustom, setEnteringCustom] = useState(false);
+  const [customDraft, setCustomDraft] = useState("");
+  const [options, setOptions] = useState(() => listDrivePurposeSelectOptions(value));
+
+  useEffect(() => {
+    setOptions(listDrivePurposeSelectOptions(value));
+  }, [value]);
+
+  const commitCustom = () => {
+    const raw = customDraft.trim();
+    setEnteringCustom(false);
+    setCustomDraft("");
+    if (!raw) return;
+    const path = rememberCustomDrivePurposePreset(raw);
+    if (!path) return;
+    setOptions(listDrivePurposeSelectOptions(path));
+    onSelect(path);
+  };
+
+  if (enteringCustom) {
+    return (
+      <Input
+        id={triggerId}
+        className={FORGE_FIELD_INPUT}
+        placeholder="Custom folder"
+        value={customDraft}
+        disabled={disabled}
+        autoFocus
+        aria-label="Custom folder"
+        onChange={(event) => setCustomDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            commitCustom();
+          }
+          if (event.key === "Escape") {
+            setEnteringCustom(false);
+            setCustomDraft("");
+          }
+        }}
+        onBlur={commitCustom}
+      />
+    );
+  }
+
+  return (
+    <Select
+      value={value || inferred}
+      onValueChange={(next) => {
+        if (next === CUSTOM_DRIVE_PURPOSE_SELECT_VALUE) {
+          setEnteringCustom(true);
+          setCustomDraft("");
+          return;
+        }
+        onSelect(next);
+      }}
+      disabled={disabled}
+    >
+      <SelectTrigger id={triggerId} className={FORGE_FIELD_TRIGGER} aria-label="Purpose">
+        <SelectValue placeholder="Purpose" />
+      </SelectTrigger>
+      <SelectContent className={FORGE_SELECT_CONTENT}>
+        {options.map((preset) => (
+          <SelectItem key={preset.value} value={preset.value} className={FORGE_SELECT_ITEM}>
+            {preset.label}
+          </SelectItem>
+        ))}
+        <SelectItem value={CUSTOM_DRIVE_PURPOSE_SELECT_VALUE} className={FORGE_SELECT_ITEM}>
+          Custom
+        </SelectItem>
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -428,12 +519,11 @@ export function AutomationGoogleDriveFields({
   const monthLabel = formatDriveMonthSegment();
 
   if (workflow) {
-    const inferred = (inferredFolderPath || "reporting") as GoogleDriveFolderPurposeKey;
+    const inferred = inferredFolderPath || "reporting";
+    const savedPath = String(payload.googleDriveFolderPath ?? "").trim();
     const selected =
-      payload.googleDriveFolderPathManual === true &&
-      payload.googleDriveFolderPath &&
-      GOOGLE_DRIVE_PATH_PRESETS.some((item) => item.value === payload.googleDriveFolderPath)
-        ? (payload.googleDriveFolderPath as GoogleDriveFolderPurposeKey)
+      payload.googleDriveFolderPathManual === true && savedPath
+        ? (presetPurposeValueFromName(savedPath) ?? savedPath)
         : inferred;
     const selectedYear = isDriveCalendarYear(String(payload.googleDriveFolderYear ?? "").trim())
       ? String(payload.googleDriveFolderYear).trim()
@@ -446,9 +536,12 @@ export function AutomationGoogleDriveFields({
     return (
       <div className="flex flex-col gap-2">
         <div className="grid grid-cols-3 gap-2">
-        <Select
+        <DrivePurposeSelect
           value={selected}
-          onValueChange={(value) =>
+          inferred={inferred}
+          disabled={disabled}
+          triggerId="automation-drive-folder-purpose"
+          onSelect={(value) =>
             patch({
               googleDriveFolderSource: "path",
               googleDriveFolderPath: value,
@@ -458,23 +551,7 @@ export function AutomationGoogleDriveFields({
               saveToGoogleDrive: true,
             })
           }
-          disabled={disabled}
-        >
-          <SelectTrigger
-            id="automation-drive-folder-purpose"
-            className={FORGE_FIELD_TRIGGER}
-            aria-label="Purpose"
-          >
-            <SelectValue placeholder="Purpose" />
-          </SelectTrigger>
-          <SelectContent className={FORGE_SELECT_CONTENT}>
-            {GOOGLE_DRIVE_PATH_PRESETS.map((preset) => (
-              <SelectItem key={preset.value} value={preset.value} className={FORGE_SELECT_ITEM}>
-                {preset.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        />
         <Select
           value={selectedYear}
           onValueChange={(value) =>
@@ -628,27 +705,20 @@ export function AutomationGoogleDriveFields({
 
       {folderSource === "path" ? (
         <div className="min-w-0">
-          <Label htmlFor="automation-drive-folder-purpose" className="mb-1 block text-base text-muted-foreground">
-            Purpose path
-          </Label>
-          <Select
+          <DrivePurposeSelect
             value={payload.googleDriveFolderPath ?? GOOGLE_DRIVE_PATH_PRESETS[0]?.value ?? "reporting"}
-            onValueChange={(value) =>
-              patch({ googleDriveFolderPath: value, googleDriveFolderSource: "path", saveToGoogleDrive: true })
-            }
+            inferred={inferredFolderPath || "reporting"}
             disabled={disabled}
-          >
-            <SelectTrigger id="automation-drive-folder-purpose" className={FORGE_FIELD_TRIGGER}>
-              <SelectValue placeholder="Pick a purpose folder" />
-            </SelectTrigger>
-            <SelectContent className={FORGE_SELECT_CONTENT}>
-              {GOOGLE_DRIVE_PATH_PRESETS.map((preset) => (
-                <SelectItem key={preset.value} value={preset.value} className={FORGE_SELECT_ITEM}>
-                  {preset.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            triggerId="automation-drive-folder-purpose"
+            onSelect={(value) =>
+              patch({
+                googleDriveFolderPath: value,
+                googleDriveFolderPathManual: true,
+                googleDriveFolderSource: "path",
+                saveToGoogleDrive: true,
+              })
+            }
+          />
         </div>
       ) : null}
 
@@ -674,7 +744,7 @@ export function AutomationGoogleDriveFields({
             : folderSource === "client_root"
               ? "Saves to the client folder under NEO Pulse."
               : folderSource === "path"
-                ? `Saves to ${googleDrivePurposeFolderLabel((payload.googleDriveFolderPath || "reporting") as GoogleDriveFolderPurposeKey)} / ${yearLabel} / ${monthLabel} under the client folder.`
+                ? `Saves to ${googleDrivePurposeFolderLabel(payload.googleDriveFolderPath || "reporting")} / ${yearLabel} / ${monthLabel} under the client folder.`
                 : "Saves to the folder from the selected upstream variable."}
         </p>
       ) : (

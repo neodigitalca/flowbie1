@@ -73,20 +73,3 @@ export const SITEMAP_OPTIMIZER_ENTITY_COMPRESS_CONCURRENCY = 8;
 
 /** Parallel Transform OpenRouter batches (entity Stage 3). */
 export const SITEMAP_OPTIMIZER_ENTITY_TRANSFORM_CONCURRENCY = 8;
-
-export const LEGACY_REDIRECT_MATCH_AGENT_MAX_TOKENS = 65536;
-
-/** URLs per Gemini call (small enough for complete JSON responses). */
-export const LEGACY_REDIRECT_MATCH_BATCH_LINE_SIZE = 10;
-
-/** Parallel URL-agent batches (one OpenRouter call per chunk). */
-export const LEGACY_REDIRECT_MATCH_BATCH_CONCURRENCY = 8;
-
-/** Max re-asks per chunk before splitting to single-URL agent calls. */
-export const LEGACY_REDIRECT_MATCH_CHUNK_MAX_RETRIES = 3;
-
-/** Hard cap on agent calls per chunk (prevents infinite retry loops). */
-export const LEGACY_REDIRECT_MATCH_MAX_CHUNK_ATTEMPTS = 12;
-
-/** Legacy redirect results grid rows per page. */
-export const LEGACY_REDIRECT_GRID_PAGE_SIZE = 100;

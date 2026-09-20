@@ -6,11 +6,8 @@
  */
 
 import { isFaqStyleHeadingTitle } from "@/lib/content-generation/faq-heading-policy";
-import {
-  rewriteIllustrativeChecklistItemHeading,
-  stripIllustrativeMarkersFromChecklistItem,
-} from "@/lib/content-optimization/illustrative-h2";
-import { pinSapChecklistMandatoryHeadings, pinBlueprintAgentTitle } from "@/lib/prompt-builders/sap-checklist-pin";
+import { stripIllustrativeMarkersFromChecklistItem } from "@/lib/content-optimization/illustrative-h2";
+import { isLlmAuditAuthorityDumpChecklistItem } from "@/lib/content-optimization/harness-heading-titles";
 
 export { isFaqStyleHeadingTitle } from "@/lib/content-generation/faq-heading-policy";
 
@@ -286,23 +283,21 @@ export function prepareChecklistForPipeline(
   const sapEntity = options?.sapEntity?.trim();
   let out = checklist.map(sanitizeForbiddenWordsInChecklistItem);
   if (sapEntity) {
-    out = out.map((item, index) => rewriteIllustrativeChecklistItemHeading(item, index, sapEntity));
-    out = pinSapChecklistMandatoryHeadings(sapEntity, out);
     out = out.slice(0, 7);
-  } else {
-    const firstIllustrative = out.findIndex(
-      (item) => /\[illustrative\]/i.test(item) && !/\[FAQ\]/i.test(item),
-    );
-    out = out.map((item, index) => {
-      if (/\[FAQ\]/i.test(item)) return item;
-      if (firstIllustrative >= 0 && index === firstIllustrative) {
-        return rewriteIllustrativeChecklistItemHeading(item);
-      }
-      return stripIllustrativeMarkersFromChecklistItem(item);
-    });
   }
+  const firstIllustrative = out.findIndex(
+    (item) => /\[illustrative\]/i.test(item) && !/\[FAQ\]/i.test(item),
+  );
+  out = out.map((item, index) => {
+    if (/\[FAQ\]/i.test(item)) return item;
+    if (firstIllustrative >= 0 && index !== firstIllustrative) {
+      return stripIllustrativeMarkersFromChecklistItem(item);
+    }
+    return item;
+  });
   return out.filter((item) => {
       if (item.length === 0) return false;
+      if (isLlmAuditAuthorityDumpChecklistItem(item)) return false;
       if (options?.allowFaqItems) return true;
       return !checklistItemHasFaqStyleHeading(item);
     });
@@ -517,11 +512,8 @@ export function sanitizeBlueprintAgentsForPipeline<T extends BlueprintAgentLike>
       const rawTitle = typeof agent.title === "string" ? agent.title : "";
       const features = Array.isArray(agent.features) ? agent.features : [];
       const sanitizedTitle = rawTitle ? sanitizeForbiddenHeadingTitle(rawTitle) : agent.title;
-      let title =
+      const title =
         typeof sanitizedTitle === "string" && sanitizedTitle.trim() ? sanitizedTitle : agent.title;
-      if (typeof title === "string" && title.trim()) {
-        title = pinBlueprintAgentTitle(title, features, index, sapEntity);
-      }
       const description =
         typeof agent.description === "string"
           ? sanitizeForbiddenWordsInPromptText(agent.description)

@@ -187,13 +187,59 @@ class Neo_Pulse_Wp_Chat {
 	}
 
 	/**
+	 * Elementor, block editor, and other page-builder UIs (Pulse must not overlay the canvas).
+	 */
+	public static function is_page_builder_editing_context(): bool {
+		if ( class_exists( 'Neo_Pulse_Wp_Search_Elementor_Widget' ) ) {
+			if ( Neo_Pulse_Wp_Search_Elementor_Widget::is_elementor_editor_context() ) {
+				return true;
+			}
+		} elseif ( class_exists( '\Elementor\Plugin' ) ) {
+			$plugin = \Elementor\Plugin::$instance;
+			if ( ( isset( $plugin->editor ) && $plugin->editor->is_edit_mode() )
+				|| ( isset( $plugin->preview ) && $plugin->preview->is_preview_mode() ) ) {
+				return true;
+			}
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only screen detection.
+		if ( ! empty( $_GET['action'] ) && sanitize_key( (string) wp_unslash( $_GET['action'] ) ) === 'elementor' ) {
+			return true;
+		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( ! empty( $_GET['elementor-preview'] ) || ! empty( $_GET['elementor_library'] ) ) {
+			return true;
+		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( ! empty( $_GET['fl_builder'] ) || ! empty( $_GET['et_fb'] ) || ! empty( $_GET['vc_editable'] ) ) {
+			return true;
+		}
+
+		if ( function_exists( 'get_current_screen' ) ) {
+			$screen = get_current_screen();
+			if ( $screen instanceof WP_Screen && $screen->is_block_editor() ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
 	 * Whether the chat sidebar should load on the current screen (frontend or wp-admin).
 	 */
 	public static function should_show_on_current_screen(): bool {
+		if ( self::is_page_builder_editing_context() ) {
+			return false;
+		}
 		if ( ! self::is_enabled() && ! current_user_can( 'manage_options' ) ) {
 			return false;
 		}
 		if ( is_admin() ) {
+			$settings = self::get_settings();
+			if ( ! empty( $settings['disable_backend'] ) ) {
+				return false;
+			}
 			return is_user_logged_in();
 		}
 		return self::should_show_for_visitor();
@@ -224,12 +270,13 @@ class Neo_Pulse_Wp_Chat {
 	public static function get_settings(): array {
 		$defaults = array(
 			'enabled'             => false,
+			'disable_backend'       => false,
 			'logged_in_only'        => false,
 			'admin_only'            => false,
 			'whitelist_url'       => '',
 			'welcome_message'     => __( 'Hi! Ask me anything about this website.', 'neo-pulse-wp' ),
 			'color'               => '#3b82f6',
-			'assistant_name'      => 'Flow Assist',
+			'assistant_name'      => 'Pulse Assist',
 			'system_prompt'       => '',
 			'greeting_style'      => 'friendly',
 			'knowledge_base'      => array(),
@@ -261,6 +308,9 @@ class Neo_Pulse_Wp_Chat {
 		$merged = array_merge( $defaults, $stored );
 		if ( isset( $merged['chekkit_cta_label'] ) && trim( (string) $merged['chekkit_cta_label'] ) === 'Talk To A Human' ) {
 			$merged['chekkit_cta_label'] = __( 'Send Us A Text', 'neo-pulse-wp' );
+		}
+		if ( ! isset( $merged['assistant_name'] ) || trim( (string) $merged['assistant_name'] ) === '' || trim( (string) $merged['assistant_name'] ) === 'Flow Assist' ) {
+			$merged['assistant_name'] = 'Pulse Assist';
 		}
 		$sidebar = Neo_Pulse_Wp_Ai_Widget_Design::resolve_sidebar_config( 'chat', $stored );
 
@@ -523,15 +573,23 @@ class Neo_Pulse_Wp_Chat {
 	 * Enqueue chat widget assets on the frontend when enabled.
 	 */
 	public static function maybe_enqueue_assets(): void {
-		if ( is_admin() ) {
-			if ( ! self::should_show_on_current_screen() ) {
-				return;
-			}
-		} elseif ( ! self::should_show_on_current_screen() ) {
+		if ( ! self::should_show_on_current_screen() ) {
+			return;
+		}
+
+		if ( self::should_lazy_load_frontend() ) {
+			self::enqueue_lazy_frontend();
 			return;
 		}
 
 		self::enqueue_assets();
+	}
+
+	/**
+	 * Public visitors get the launcher HTML plus a tiny loader. Full widget JS waits for tap or idle.
+	 */
+	public static function should_lazy_load_frontend(): bool {
+		return ! is_admin();
 	}
 
 	/**
@@ -552,16 +610,9 @@ class Neo_Pulse_Wp_Chat {
 		$in_admin = is_admin();
 
 		wp_enqueue_style(
-			'neo-pulse-wp-lato',
-			'https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;0,600;0,700;1,400&display=swap',
-			array(),
-			null
-		);
-
-		wp_enqueue_style(
 			'neo-pulse-chat-widget',
 			$base . 'neo-pulse-chat-widget.css',
-			array( 'neo-pulse-wp-lato' ),
+			array(),
 			$ver
 		);
 
@@ -659,6 +710,17 @@ class Neo_Pulse_Wp_Chat {
 			true
 		);
 
+		if ( ! empty( $settings['header_search_opens_sidebar'] ) ) {
+			$header_js = NEO_PULSE_WP_PLUGIN_DIR . 'assets/frontend/neo-pulse-chat-header-search.js';
+			wp_enqueue_script(
+				'neo-pulse-chat-header-search',
+				$base . 'neo-pulse-chat-header-search.js',
+				array( 'neo-pulse-chat-widget' ),
+				is_readable( $header_js ) ? (string) filemtime( $header_js ) : $widget_js_ver,
+				true
+			);
+		}
+
 		if ( is_user_logged_in() ) {
 			$can_backend      = self::current_user_can_backend_mode();
 			$backend_starters = $can_backend
@@ -675,12 +737,132 @@ class Neo_Pulse_Wp_Chat {
 			);
 		}
 
-		$design   = Neo_Pulse_Wp_Ai_Widget_Design::get_settings();
-		$tokens   = Neo_Pulse_Wp_Ai_Widget_Design::resolve( 'chat' );
-		$css_vars = Neo_Pulse_Wp_Ai_Widget_Design::build_chat_css_vars( $tokens );
+		wp_localize_script(
+			'neo-pulse-chat-widget',
+			'neoPulseChatConfig',
+			self::widget_localize_config( $in_admin, $settings, $voice_enabled, $chekkit_enabled, $chekkit_teaser )
+		);
+	}
+
+	/**
+	 * Frontend: launcher HTML + one small loader. Full widget CSS/JS load on tap or idle.
+	 */
+	public static function enqueue_lazy_frontend(): void {
+		$settings        = self::get_settings();
+		$chekkit_enabled = ! isset( $settings['chekkit_enabled'] ) || ! empty( $settings['chekkit_enabled'] );
+		$chekkit_teaser  = $chekkit_enabled && ( ! isset( $settings['chekkit_teaser_enabled'] ) || ! empty( $settings['chekkit_teaser_enabled'] ) );
+		$voice_enabled   = ! empty( $settings['voice_enabled'] ) && Neo_Pulse_Wp_OpenRouter::get_api_key() !== '';
+		$config          = self::widget_localize_config( false, $settings, $voice_enabled, $chekkit_enabled, $chekkit_teaser );
+		$assets          = self::frontend_lazy_assets( $config, $settings );
+
+		$lazy_js = NEO_PULSE_WP_PLUGIN_DIR . 'assets/frontend/neo-pulse-chat-lazy.js';
+		$ver     = NEO_PULSE_WP_VERSION;
+		if ( is_readable( $lazy_js ) ) {
+			$ver .= '.' . (string) filemtime( $lazy_js );
+		}
+
+		wp_enqueue_script(
+			'neo-pulse-chat-lazy',
+			plugin_dir_url( NEO_PULSE_WP_PLUGIN_FILE ) . 'assets/frontend/neo-pulse-chat-lazy.js',
+			array(),
+			$ver,
+			true
+		);
+
+		$lazy = array(
+			'config'  => $config,
+			'styles'  => $assets['styles'],
+			'scripts' => $assets['scripts'],
+		);
+		if ( ! empty( $config['voiceEnabled'] ) ) {
+			$lazy['voiceConfig'] = array(
+				'transcribeUrl' => $config['transcribeUrl'],
+				'nonce'         => $config['nonce'],
+				'voiceNonce'    => $config['streamNonce'],
+			);
+		}
+
+		wp_localize_script( 'neo-pulse-chat-lazy', 'neoPulseChatLazy', $lazy );
+	}
+
+	/**
+	 * Versioned plugin-relative URL for lazy injection.
+	 *
+	 * @param string $relative Path from plugin root.
+	 */
+	public static function versioned_plugin_url( string $relative ): string {
+		$url = plugin_dir_url( NEO_PULSE_WP_PLUGIN_FILE ) . ltrim( $relative, '/' );
+		$abs = NEO_PULSE_WP_PLUGIN_DIR . ltrim( $relative, '/' );
+		$ver = NEO_PULSE_WP_VERSION;
+		if ( is_readable( $abs ) ) {
+			$ver .= '.' . (string) filemtime( $abs );
+		}
+		return $url . '?ver=' . rawurlencode( $ver );
+	}
+
+	/**
+	 * CSS/JS the lazy loader injects after first tap or idle.
+	 *
+	 * @param array<string, mixed> $config   Localized widget config.
+	 * @param array<string, mixed> $settings Chat settings.
+	 * @return array{styles: array<int, string>, scripts: array<int, string>}
+	 */
+	public static function frontend_lazy_assets( array $config, array $settings ): array {
+		$styles = array(
+			self::versioned_plugin_url( 'assets/frontend/neo-pulse-chat-widget.css' ),
+			self::versioned_plugin_url( 'assets/shared/neo-pulse-thinking-card.css' ),
+			self::versioned_plugin_url( 'assets/shared/neo-pulse-build-harness.css' ),
+			self::versioned_plugin_url( 'assets/shared/neo-pulse-ai-sidebar-shell.css' ),
+			self::versioned_plugin_url( 'assets/shared/neo-pulse-ai-sidebar-unify.css' ),
+			self::versioned_plugin_url( 'assets/frontend/neo-pulse-chat-chrome.css' ),
+			self::versioned_plugin_url( 'assets/frontend/neo-pulse-chat-mobile.css' ),
+		);
+		$scripts = array(
+			self::versioned_plugin_url( 'assets/shared/neo-pulse-thinking-card.js' ),
+			self::versioned_plugin_url( 'assets/shared/neo-pulse-chat-stream.js' ),
+			self::versioned_plugin_url( 'assets/shared/neo-pulse-chat-prefetch.js' ),
+			self::versioned_plugin_url( 'assets/shared/neo-pulse-chat-debug-log.js' ),
+			self::versioned_plugin_url( 'assets/shared/neo-pulse-display-text.js' ),
+			self::versioned_plugin_url( 'assets/shared/neo-pulse-markdown.js' ),
+			self::versioned_plugin_url( 'assets/shared/neo-pulse-build-harness.js' ),
+			self::versioned_plugin_url( 'assets/shared/neo-pulse-ai-sidebar-shell.js' ),
+			self::versioned_plugin_url( 'assets/shared/neo-pulse-ai-sidebar-unify.js' ),
+		);
+		if ( class_exists( 'Neo_Pulse_Wp_Forms' ) ) {
+			$styles[]  = self::versioned_plugin_url( 'assets/frontend/neo-pulse-forms.css' );
+			$scripts[] = self::versioned_plugin_url( 'assets/frontend/neo-pulse-forms.js' );
+		}
+		if ( ! empty( $config['voiceEnabled'] ) ) {
+			$styles[]  = self::versioned_plugin_url( 'assets/shared/neo-pulse-voice.css' );
+			$scripts[] = self::versioned_plugin_url( 'assets/shared/neo-pulse-voice.js' );
+		}
+		$scripts[] = self::versioned_plugin_url( 'assets/frontend/neo-pulse-chat-widget.js' );
+		if ( ! empty( $settings['header_search_opens_sidebar'] ) ) {
+			$scripts[] = self::versioned_plugin_url( 'assets/frontend/neo-pulse-chat-header-search.js' );
+		}
+		return array(
+			'styles'  => $styles,
+			'scripts' => $scripts,
+		);
+	}
+
+	/**
+	 * Shared widget localize payload (admin enqueue + frontend lazy).
+	 *
+	 * @param bool                 $in_admin         Admin screen.
+	 * @param array<string, mixed> $settings         Chat settings.
+	 * @param bool                 $voice_enabled    Voice on.
+	 * @param bool                 $chekkit_enabled  Chekkit on.
+	 * @param bool                 $chekkit_teaser   Teaser on.
+	 * @return array<string, mixed>
+	 */
+	public static function widget_localize_config( bool $in_admin, array $settings, bool $voice_enabled, bool $chekkit_enabled, bool $chekkit_teaser ): array {
+		$design    = Neo_Pulse_Wp_Ai_Widget_Design::get_settings();
+		$tokens    = Neo_Pulse_Wp_Ai_Widget_Design::resolve( 'chat' );
+		$css_vars  = Neo_Pulse_Wp_Ai_Widget_Design::build_chat_css_vars( $tokens );
 		$css_vars .= Neo_Pulse_Wp_Ai_Widget_Design::build_sidebar_css_vars( $settings, $tokens );
 
-		$launcher_label   = isset( $settings['launcher_label'] ) ? trim( (string) $settings['launcher_label'] ) : '';
+		$launcher_label = isset( $settings['launcher_label'] ) ? trim( (string) $settings['launcher_label'] ) : '';
 		if ( $launcher_label === '' ) {
 			$launcher_label = sprintf(
 				/* translators: %s: assistant display name */
@@ -713,7 +895,7 @@ class Neo_Pulse_Wp_Chat {
 			);
 		}
 
-		$config          = array(
+		$config = array(
 			'restUrl'                => esc_url_raw( rest_url( self::REST_NAMESPACE . '/chat' ) ),
 			'acceptUrl'              => esc_url_raw( rest_url( self::REST_NAMESPACE . '/chat/accept' ) ),
 			'nonce'                  => wp_create_nonce( 'wp_rest' ),
@@ -738,6 +920,9 @@ class Neo_Pulse_Wp_Chat {
 				? $settings['sidebar_layout']
 				: array( 'chat' ),
 			'launcherLabel'          => $launcher_label,
+			'launcherStyle'          => ( isset( $settings['launcher_style'] ) && in_array( $settings['launcher_style'], array( 'edge_tab', 'none' ), true ) )
+				? (string) $settings['launcher_style']
+				: 'circle',
 			'greetingLine'           => __( 'Hello', 'neo-pulse-wp' ),
 			'greetingSubline'        => __( 'How can I help you today?', 'neo-pulse-wp' ),
 			'conversationStarters'   => $starters,
@@ -751,7 +936,7 @@ class Neo_Pulse_Wp_Chat {
 				? (string) $settings['chekkit_cta_label']
 				: __( 'Send Us A Text', 'neo-pulse-wp' ),
 			'chekkitTeaserEnabled'   => $chekkit_teaser ? 1 : 0,
-			'chekkitTeaserAvatarUrl' => esc_url_raw( plugin_dir_url( NEO_PULSE_WP_PLUGIN_FILE ) . 'assets/frontend/chekkit-teaser-avatar.png' ),
+			'chekkitTeaserAvatarUrl' => esc_url_raw( plugin_dir_url( NEO_PULSE_WP_PLUGIN_FILE ) . ( is_readable( NEO_PULSE_WP_PLUGIN_DIR . 'assets/frontend/chekkit-teaser-avatar-96.webp' ) ? 'assets/frontend/chekkit-teaser-avatar-96.webp' : 'assets/frontend/chekkit-teaser-avatar.png' ) ),
 			'canCopyLog'             => is_user_logged_in(),
 			'isLoggedIn'             => is_user_logged_in(),
 			'canBackendMode'         => self::current_user_can_backend_mode(),
@@ -759,6 +944,7 @@ class Neo_Pulse_Wp_Chat {
 			'canEditContent'         => current_user_can( 'edit_posts' ),
 			'backendStarters'        => self::current_user_can_backend_mode() ? Neo_Pulse_Wp_Chat_Super_Admin::get_backend_starters() : array(),
 			'backendAssistUrl'       => esc_url_raw( rest_url( self::REST_NAMESPACE . '/backend-assist' ) ),
+			'backendAssistStepUrl'   => esc_url_raw( rest_url( self::REST_NAMESPACE . '/backend-assist/step' ) ),
 			'backendAssistUndoUrl'   => esc_url_raw( rest_url( self::REST_NAMESPACE . '/backend-assist/undo' ) ),
 			'isWpAdmin'              => $in_admin,
 			'defaultAdminMode'       => ( $in_admin && self::current_user_can_backend_mode() ) ? 'backend' : 'visitor',
@@ -771,23 +957,26 @@ class Neo_Pulse_Wp_Chat {
 		if ( $chekkit_enabled ) {
 			$config['contactInfo'] = Neo_Pulse_Wp_Chat_Lead::get_widget_contact_facts( $settings );
 		}
+		return $config;
+	}
 
-		wp_localize_script(
-			'neo-pulse-chat-widget',
-			'neoPulseChatConfig',
-			$config
-		);
+	/**
+	 * Hide the launcher until lazy CSS/JS finish so the unstyled edge tab cannot fill the page.
+	 */
+	public static function pending_launcher_css(): string {
+		return '#neo-pulse-chat-mobile-launcher.fcw-launcher--pending,#neo-pulse-chat-mobile-launcher[hidden]{visibility:hidden!important;pointer-events:none!important;width:0!important;height:0!important;max-width:0!important;max-height:0!important;overflow:hidden!important;padding:0!important;border:0!important;clip:rect(0,0,0,0)!important}';
 	}
 
 	/**
 	 * Mobile CSS: zero-size fixed root, no off-screen panel translate (prevents horizontal scroll/CLS).
 	 */
-	private static function mobile_launcher_force_css(): string {
+	public static function mobile_launcher_force_css(): string {
 		return '@media (max-width:767px){'
 			. 'html,body{overflow-x:hidden!important;max-width:100%!important;width:100%!important;position:relative!important}'
 			. '#neo-pulse-chat-mobile-launcher[hidden],.fcw-mobile-launcher[hidden],body:has(#neo-pulse-chat-widget-root.fai-sidebar-root--open) #neo-pulse-chat-mobile-launcher{display:none!important;visibility:hidden!important;pointer-events:none!important}'
-			. '#neo-pulse-chat-mobile-launcher,.fcw-mobile-launcher{position:fixed!important;bottom:20px!important;right:16px!important;left:auto!important;width:56px!important;height:56px!important;z-index:999900!important;pointer-events:auto!important;margin:0!important;padding:0!important;border:0!important;border-radius:50%!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;transform:none!important;box-sizing:border-box!important}'
-			. '#neo-pulse-chat-widget-root[hidden],#neo-pulse-chat-widget-root.fcw-mobile-root-closed:not(.fai-sidebar-root--open){display:none!important;visibility:hidden!important;position:absolute!important;left:-9999px!important;top:auto!important;width:0!important;height:0!important;max-width:0!important;overflow:hidden!important;pointer-events:none!important;margin:0!important;padding:0!important;border:0!important}'
+			. '#neo-pulse-chat-mobile-launcher,.fcw-mobile-launcher,#neo-pulse-chat-mobile-launcher.fcw-launcher--edge-tab,.fcw-mobile-launcher.fcw-launcher--edge-tab{position:fixed!important;bottom:20px!important;right:16px!important;left:auto!important;top:auto!important;width:56px!important;height:56px!important;min-width:56px!important;max-width:56px!important;z-index:999900!important;pointer-events:auto!important;margin:0!important;padding:0!important;border:0!important;border-radius:50%!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;transform:none!important;box-sizing:border-box!important}'
+			. '#neo-pulse-chat-mobile-launcher .fcw-launcher__label,.fcw-mobile-launcher .fcw-launcher__label{display:none!important}'
+			. '#neo-pulse-chat-widget-root[hidden],#neo-pulse-chat-widget-root.fcw-mobile-root-closed:not(.fai-sidebar-root--open),#neo-pulse-chat-widget-root.fai-sidebar-root--peek:not(.fai-sidebar-root--open),#neo-pulse-chat-widget-root.fai-sidebar-root--peek-track:not(.fai-sidebar-root--open),#neo-pulse-chat-widget-root.fai-sidebar-root--edge-tab:not(.fai-sidebar-root--open){display:none!important;visibility:hidden!important;position:absolute!important;left:-9999px!important;top:auto!important;width:0!important;height:0!important;max-width:0!important;overflow:hidden!important;pointer-events:none!important;margin:0!important;padding:0!important;border:0!important}'
 			. '.fai-sidebar-panel[hidden],.fai-sidebar-backdrop[hidden]{display:none!important;visibility:hidden!important;pointer-events:none!important;transform:none!important}'
 			. 'html body #neo-pulse-chat-widget-root.neo-pulse-chat-widget:not(.fai-sidebar-root--open){display:none!important;visibility:hidden!important;position:absolute!important;left:-9999px!important;width:0!important;height:0!important;max-width:0!important;overflow:hidden!important;pointer-events:none!important}'
 			. 'html body #neo-pulse-chat-widget-root.neo-pulse-chat-widget.fai-sidebar-root--open{position:fixed!important;inset:0!important;width:auto!important;height:auto!important;max-width:none!important;overflow:visible!important;pointer-events:none!important;z-index:999950!important;display:block!important;visibility:visible!important;left:0!important}'
@@ -815,7 +1004,7 @@ class Neo_Pulse_Wp_Chat {
 		if ( is_admin() || ! self::should_show_on_current_screen() ) {
 			return;
 		}
-		echo "<script id=\"neo-pulse-chat-mobile-guard\">!function(){try{if(!window.matchMedia||!window.matchMedia('(max-width:767px)').matches)return;var d=document.documentElement,b=document.body;d.style.overflowX='hidden';d.style.maxWidth='100%';d.style.width='100%';if(b){b.style.overflowX='hidden';b.style.maxWidth='100%';b.style.width='100%';}var w=document.getElementById('neo-pulse-chat-widget-root');if(w){w.style.display='none';w.style.visibility='hidden';w.style.position='absolute';w.style.left='-9999px';w.style.width='0';w.style.height='0';w.style.overflow='hidden';w.classList.add('fcw-mobile-root-closed');}var l=document.getElementById('neo-pulse-chat-mobile-launcher');if(l){l.style.zIndex='999900';l.style.position='fixed';l.style.right='16px';l.style.bottom='20px';}}catch(e){}}();</script>\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		echo "<script id=\"neo-pulse-chat-mobile-guard\">!function(){try{if(!window.matchMedia||!window.matchMedia('(max-width:767px)').matches)return;var d=document.documentElement,b=document.body;d.style.overflowX='hidden';d.style.maxWidth='100%';d.style.width='100%';if(b){b.style.overflowX='hidden';b.style.maxWidth='100%';b.style.width='100%';}var w=document.getElementById('neo-pulse-chat-widget-root');if(w){w.style.display='none';w.style.visibility='hidden';w.style.position='absolute';w.style.left='-9999px';w.style.width='0';w.style.height='0';w.style.overflow='hidden';w.classList.add('fcw-mobile-root-closed');w.classList.remove('fai-sidebar-root--peek','fai-sidebar-root--peek-track','fai-sidebar-root--edge-tab');}var l=document.getElementById('neo-pulse-chat-mobile-launcher');if(l){l.classList.remove('fcw-launcher--edge-tab','fcw-launcher--docked');l.style.zIndex='999900';l.style.position='fixed';l.style.right='16px';l.style.left='auto';l.style.top='auto';l.style.bottom='20px';l.style.width='56px';l.style.height='56px';l.style.borderRadius='50%';l.style.padding='0';l.style.transform='none';}}catch(e){}}();</script>\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 	}
 
 	/**
@@ -825,7 +1014,7 @@ class Neo_Pulse_Wp_Chat {
 		if ( is_admin() || ! self::should_show_on_current_screen() ) {
 			return;
 		}
-		echo '<style id="neo-pulse-chat-mobile-critical">' . self::mobile_launcher_force_css() . '</style>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		echo '<style id="neo-pulse-chat-mobile-critical">' . self::pending_launcher_css() . self::mobile_launcher_force_css() . '</style>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 	}
 
 	/**
@@ -865,27 +1054,72 @@ class Neo_Pulse_Wp_Chat {
 			$launcher_label = sprintf(
 				/* translators: %s: assistant display name */
 				__( 'Open %s', 'neo-pulse-wp' ),
-				isset( $settings['assistant_name'] ) ? (string) $settings['assistant_name'] : 'Flow Assist'
+				isset( $settings['assistant_name'] ) ? (string) $settings['assistant_name'] : 'Pulse Assist'
 			);
 		}
-		$launcher_svg = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
-		$launcher_bg  = (string) ( $tokens['launcher_bg'] ?? $tokens['accent'] ?? '#9EAF43' );
+		$launcher_svg   = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+		$launcher_bg    = (string) ( $tokens['launcher_bg'] ?? $tokens['accent'] ?? '#9EAF43' );
+		$launcher_glow  = (string) ( $tokens['launcher_glow'] ?? $tokens['accent'] ?? '#3b82f6' );
+		$launcher_text  = (string) ( $tokens['launcher_text'] ?? $tokens['accent_text'] ?? '#ffffff' );
+		$panel_height   = max( 320, min( 1200, (int) ( $tokens['panel_max_height'] ?? 560 ) ) );
+		$sidebar_width  = max( 280, min( 560, (int) ( $settings['sidebar_width'] ?? 400 ) ) );
+		$is_edge_tab    = isset( $settings['launcher_style'] ) && $settings['launcher_style'] === 'edge_tab';
+		$hide_launcher  = isset( $settings['launcher_style'] ) && $settings['launcher_style'] === 'none';
+		$launcher_class = 'fcw-mobile-launcher fai-sidebar-launcher fcw-launcher';
+		if ( $is_edge_tab ) {
+			$launcher_class .= ' fcw-launcher--edge-tab';
+			if ( $side === 'left' ) {
+				$launcher_class .= ' fcw-launcher--side-left';
+			}
+		}
+		$lazy_hide = ! $in_admin && self::should_lazy_load_frontend();
+		if ( $lazy_hide ) {
+			$launcher_class .= ' fcw-launcher--pending';
+		}
+		$launcher_inner = $launcher_svg;
+		if ( $is_edge_tab ) {
+			$launcher_inner .= '<span class="fcw-launcher__label">' . esc_html( $launcher_label ) . '</span>';
+		}
+		$launcher_style = $is_edge_tab
+			? sprintf(
+				'position:fixed;top:max(180px,calc(var(--wp-admin--admin-bar--height,0px) + 20vh));bottom:max(120px,16vh);height:auto;width:44px;min-width:44px;max-width:44px;%s;z-index:999900;pointer-events:auto;margin:0;padding:16px 8px;border:0;background:%s;color:%s;--fcw-launcher-bg:%s;--fcw-launcher-glow:%s;--fcw-launcher-text:%s;--fcw-panel-max-height:%spx;--fai-sidebar-width:%spx;',
+				$side === 'left' ? 'left:0;right:auto' : 'right:0;left:auto',
+				esc_attr( $launcher_bg ),
+				esc_attr( $launcher_text ),
+				esc_attr( $launcher_bg ),
+				esc_attr( $launcher_glow ),
+				esc_attr( $launcher_text ),
+				(int) $panel_height,
+				(int) $sidebar_width
+			)
+			: sprintf(
+				'position:fixed;bottom:20px;right:16px;width:56px;height:56px;z-index:999900;pointer-events:auto;margin:0;padding:0;border:0;border-radius:50%%;display:inline-flex;align-items:center;justify-content:center;background:%s;color:%s;--fcw-launcher-text:%s;box-shadow:0 4px 24px rgba(0,0,0,0.12);',
+				esc_attr( $launcher_bg ),
+				esc_attr( $launcher_text ),
+				esc_attr( $launcher_text )
+			);
 
+		if ( ! $in_admin ) {
+			echo '<style id="neo-pulse-chat-mobile-inline">' . self::pending_launcher_css() . self::mobile_launcher_force_css() . '</style>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		}
+
+		if ( ! $hide_launcher ) {
+			printf(
+				'<button type="button" id="neo-pulse-chat-mobile-launcher" class="%1$s" data-fcw-chat-launcher="1" aria-label="%2$s" aria-expanded="false" aria-controls="neo-pulse-chat-widget-root" style="%3$s"%5$s>%4$s</button>' . "\n",
+				esc_attr( $launcher_class ),
+				esc_attr( $launcher_label ),
+				esc_attr( $launcher_style ),
+				$launcher_inner, // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+				$lazy_hide ? ' hidden' : ''
+			);
+		}
 		printf(
-			'<button type="button" id="neo-pulse-chat-mobile-launcher" class="fcw-mobile-launcher fai-sidebar-launcher fcw-launcher" data-fcw-chat-launcher="1" aria-label="%1$s" aria-expanded="false" aria-controls="neo-pulse-chat-widget-root" style="position:fixed;bottom:20px;right:16px;width:56px;height:56px;z-index:999900;pointer-events:auto;margin:0;padding:0;border:0;border-radius:50%%;display:inline-flex;align-items:center;justify-content:center;background:%2$s;color:#ffffff;box-shadow:0 4px 24px rgba(0,0,0,0.12);">%3$s</button>' . "\n",
-			esc_attr( $launcher_label ),
-			esc_attr( $launcher_bg ),
-			$launcher_svg // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-		);
-		printf(
-			'<div id="neo-pulse-chat-widget-root" class="neo-pulse-chat-widget neo-pulse-chat--sidebar neo-pulse-chat--standalone-launcher fcw-mobile-root-closed fai-sidebar-root fai-sidebar-root--%1$s fai-sidebar-root--transition-%2$s" data-fcw-chat-root="1" aria-hidden="true" hidden style="display:none!important;%3$s"></div>' . "\n",
+			'<div id="neo-pulse-chat-widget-root" class="neo-pulse-chat-widget neo-pulse-chat--sidebar neo-pulse-chat--standalone-launcher fcw-mobile-root-closed fai-sidebar-root fai-sidebar-root--%1$s fai-sidebar-root--transition-%2$s%4$s" data-fcw-chat-root="1" aria-hidden="true" hidden style="display:none!important;%3$s"></div>' . "\n",
 			esc_attr( $side ),
 			esc_attr( $transition ),
-			esc_attr( $css_vars )
+			esc_attr( $css_vars ),
+			$is_edge_tab ? ' fai-sidebar-root--edge-tab' : ''
 		);
-		if ( ! $in_admin ) {
-			echo '<style id="neo-pulse-chat-mobile-inline">' . self::mobile_launcher_force_css() . '</style>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-		}
 	}
 
 	/**

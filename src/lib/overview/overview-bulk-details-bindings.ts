@@ -5,6 +5,7 @@ import type {
   MetaBulkActionKey,
 } from "@/components/overview/overview-tab-constants";
 import {
+  FEATURED_IMAGE_PIPELINE_TITLES,
   META_BULK_MICRO_LABELS,
   META_BULK_MICRO_ORDER,
 } from "@/components/overview/overview-tab-constants";
@@ -24,10 +25,16 @@ import {
   buildContentOptimizerBulkMicroSnapshot,
   contentOptimizerHeaderProgressFromRun,
   contentOptimizerLiveStatus,
+  generatedFilesForUrl,
   isContentOptimizerBulkRun,
   mergeContentOptimizeHarnessSections,
   type ContentOptimizerBulkGeneratorBindingsInput,
 } from "@/lib/content-optimization/content-optimizer-bulk-generator-bindings";
+import {
+  filterAiseoRowDisplayFiles,
+  generatedFileName,
+  isAiseoFileSlotRunKind,
+} from "@/lib/overview/overview-aiseo-row-artifacts";
 import {
   CONTENT_OPTIMIZE_PIPELINE_TITLES,
   resolveContentOptimizePipelineTitlesForRow,
@@ -41,12 +48,17 @@ import { HEADERS_HARNESS_SECTION_TITLES } from "@/lib/overview/overview-blog-hea
 import { OVERVIEW_HARNESS_SECTION_TITLES } from "@/lib/overview/overview-blog-overview-harness-sections";
 import { IN_CONTENT_IMAGE_HARNESS_SECTION_TITLES } from "@/lib/overview/overview-blog-in-content-image-harness-sections";
 import { WP_UPLOAD_HARNESS_SECTION_TITLES } from "@/lib/overview/overview-wp-upload-harness-sections";
+import { buildOverviewWpUploadBatchDetailsProps } from "@/lib/overview/overview-wp-upload-batch-details";
 import { linksHarnessSectionTitle } from "@/lib/overview/overview-blog-links-harness-sections";
 import type { BlogLinksCatalogRow } from "@/lib/overview/overview-blog-links-catalog";
 import { overviewBulkRowEntries } from "@/lib/overview/overview-bulk-row-scope";
 import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
 import type { OptimizationFileManager } from "@/lib/optimization-file-manager";
 import { OptimizationFileManager as OptimizationFileManagerClass } from "@/lib/optimization-file-manager";
+import {
+  CONTENT_OPTIMIZER_BULK_PAGE_SIZE,
+  contentOptimizerBulkUsesPagination,
+} from "@/lib/content-optimizer/content-optimizer-bulk-page-size";
 
 export {
   buildContentOptimizerBulkGeneratorDetailsProps,
@@ -86,7 +98,7 @@ const MICRO_ACTION_SINGLE_STEP: Partial<Record<MetaBulkActionKey, readonly strin
   aiTitle: ["AI titles"],
   aiMeta: ["AI meta"],
   aiUrl: ["AI URL paths"],
-  optimizeAll: ["Full-page batch optimize"],
+  optimizeAll: CONTENT_OPTIMIZE_PIPELINE_TITLES,
   loadSitemap: ["Loading sitemap"],
   inventoryHydrate: ["Applying WordPress inventory"],
 };
@@ -100,10 +112,15 @@ const MICRO_KEY_ACTIVE_ROW_STATUS: Partial<Record<MetaBulkActionKey, RowStatus>>
   aiUrl: "ai-url",
 };
 
-function resolveMicroRowPipelineTitle(key: MetaBulkActionKey): string {
+function resolveMicroRowPipelineTitles(key: MetaBulkActionKey): readonly string[] {
+  if (key === "aiFeaturedImage") return FEATURED_IMAGE_PIPELINE_TITLES;
   const single = MICRO_ACTION_SINGLE_STEP[key];
-  if (single?.[0]) return single[0];
-  return META_BULK_MICRO_LABELS[key] ?? "Processing";
+  if (single?.length) return single;
+  return [META_BULK_MICRO_LABELS[key] ?? "Processing"];
+}
+
+function resolveMicroRowPipelineTitle(key: MetaBulkActionKey): string {
+  return resolveMicroRowPipelineTitles(key)[0] ?? "Processing";
 }
 
 function microRowHarnessStatus(
@@ -127,19 +144,115 @@ function microRowHarnessStatus(
   return "waiting";
 }
 
+function microActionFilesByRow(
+  scopedEntries: Array<{ row: OverviewRow; index: number }>,
+  bulkState: BulkOptimizationState | undefined,
+): Map<number, BulkGeneratedFile[]> {
+  const map = new Map<number, BulkGeneratedFile[]>();
+  if (!bulkState?.urlGeneratedFiles) return map;
+  const runKind = bulkState.runKind;
+  scopedEntries.forEach(({ row }, displayIndex) => {
+    const url = row.url?.trim();
+    if (!url) return;
+    const persisted = generatedFilesForUrl(bulkState.urlGeneratedFiles, url);
+    if (!persisted.length) return;
+    const rowFiles = isAiseoFileSlotRunKind(runKind)
+      ? filterAiseoRowDisplayFiles(runKind, persisted)
+      : persisted;
+    if (!rowFiles.length) return;
+    const csvRow = overviewRowToCsvRowFromOverview(row, bulkState);
+    map.set(
+      displayIndex,
+      rowFiles.map((file, fileIndex) => {
+        const fileName = generatedFileName(file);
+        return {
+        id: `micro-${displayIndex}-${fileIndex}-${fileName}`,
+        fileName,
+        content: file.content,
+        mimeType: file.mimeType,
+        status: "completed" as const,
+        timestamp: Date.now() + fileIndex,
+        rowData: {
+          keyword: csvRow.keyword,
+          entity: csvRow.entity,
+          title: csvRow.title,
+          meta_description: csvRow.meta_description,
+        },
+      };
+      }),
+    );
+  });
+  return map;
+}
+
+function resolveMicroActionRunKind(
+  bulkState: BulkOptimizationState | undefined,
+  filesByRow: Map<number, BulkGeneratedFile[]>,
+): BulkOptimizationState["runKind"] | undefined {
+  if (bulkState?.runKind === "aiFeaturedImage") return "aiFeaturedImage";
+  if (isAiseoFileSlotRunKind(bulkState?.runKind)) return bulkState.runKind;
+  for (const files of filesByRow.values()) {
+    if (files.some((file) => file.fileName === "wordpress.json")) return "wpUpload";
+  }
+  return undefined;
+}
+
+function featuredImageSectionStatus(
+  files: BulkGeneratedFile[] | undefined,
+  displayIndex: number,
+  isProcessing: boolean,
+  slice: BulkProgressSlice,
+  sectionIndex: number,
+): BulkHarnessSectionUi["status"] {
+  const names = (files ?? []).map((file) => file.fileName);
+  const hasGoogle = names.includes("google-image.png");
+  const hasOpenRouter = names.some((name) => name.startsWith("openrouter-image."));
+  const hasWp = names.includes("wordpress.json");
+  if (sectionIndex === 0 && hasGoogle) return "done";
+  if (sectionIndex === 1 && hasOpenRouter) return "done";
+  if (sectionIndex === 2 && hasWp) return "done";
+  const completed = Math.min(slice.completed, slice.total);
+  if (!isProcessing) return hasWp ? "done" : "waiting";
+  if (displayIndex < completed) return "done";
+  if (displayIndex === completed) {
+    if (sectionIndex === 0 && !hasGoogle) return "generating";
+    if (sectionIndex === 1 && hasGoogle && !hasOpenRouter) return "generating";
+    if (sectionIndex === 2 && hasOpenRouter && !hasWp) return "generating";
+  }
+  return "waiting";
+}
+
 function buildMicroHarnessByRow(
   scopedEntries: Array<{ row: OverviewRow; index: number }>,
   microKey: MetaBulkActionKey,
   isProcessing: boolean,
   slice: BulkProgressSlice,
+  filesByRow?: Map<number, BulkGeneratedFile[]>,
 ): Map<number, BulkHarnessSectionUi[]> {
-  const title = resolveMicroRowPipelineTitle(microKey);
+  const titles = resolveMicroRowPipelineTitles(microKey);
   const map = new Map<number, BulkHarnessSectionUi[]>();
   scopedEntries.forEach(({ row }, displayIndex) => {
+    if (microKey === "aiFeaturedImage") {
+      map.set(
+        displayIndex,
+        titles.map((title, sectionIndex) => ({
+          sectionIndex,
+          title,
+          status: featuredImageSectionStatus(
+            filesByRow?.get(displayIndex),
+            displayIndex,
+            isProcessing,
+            slice,
+            sectionIndex,
+          ),
+        })),
+      );
+      return;
+    }
     map.set(displayIndex, [
       {
         sectionIndex: 0,
-        title,
+        title: titles[0] ?? "Processing",
         status: microRowHarnessStatus(row, microKey, isProcessing, displayIndex, slice),
       },
     ]);
@@ -180,7 +293,9 @@ export function resolveOverviewBulkPipelineTitles(
     const rowHarness =
       (currentUrl ? bulkState.urlHarnessSections?.[currentUrl] : undefined) ??
       Object.values(bulkState.urlHarnessSections ?? {})[0];
-    const rowFiles = currentUrl ? bulkState.urlGeneratedFiles?.[currentUrl] : undefined;
+    const rowFiles = currentUrl
+      ? generatedFilesForUrl(bulkState.urlGeneratedFiles, currentUrl)
+      : undefined;
     const articleTitle =
       sanitizeHarnessArticleTitle(
         overviewRows?.find((row) => row.url?.trim() === currentUrl)?.title?.trim() ?? "",
@@ -192,6 +307,9 @@ export function resolveOverviewBulkPipelineTitles(
       articleTitle,
       currentUrl,
       bulkState.urlKeywords?.[currentUrl ?? ""],
+      currentUrl && typeof bulkState.urlEntities?.[currentUrl] === "string"
+        ? bulkState.urlEntities[currentUrl]
+        : undefined,
     );
     return [...resolveContentOptimizePipelineTitlesForRow(mergedHarness, rowFiles)];
   }
@@ -207,6 +325,12 @@ export function resolveOverviewBulkPipelineTitles(
       return [...HEADERS_HARNESS_SECTION_TITLES];
     case "aiLinks":
       return [...LINKS_PIPELINE_TITLES];
+    case "aiTitle":
+    case "aiMeta":
+    case "aiUrl":
+    case "contentKw":
+    case "entityKw":
+      return undefined;
     case "aiAnswer":
       return ["Answer"];
     case "aiOverview":
@@ -215,6 +339,8 @@ export function resolveOverviewBulkPipelineTitles(
       return ["Scenario"];
     case "aiInContentImage":
       return [...IN_CONTENT_IMAGE_HARNESS_SECTION_TITLES];
+    case "aiFeaturedImage":
+      return [...FEATURED_IMAGE_PIPELINE_TITLES];
     case "wpUpload":
       return [...WP_UPLOAD_HARNESS_SECTION_TITLES];
     case "contentCleanup":
@@ -276,6 +402,7 @@ export function buildOverviewMicroActionDetailsProps(
     OverviewBulkDetailsBindingsInput,
     | "siteId"
     | "batchKey"
+    | "bulkState"
     | "overviewRows"
     | "isOptimizingContent"
     | "optimizationFileManagers"
@@ -292,10 +419,18 @@ export function buildOverviewMicroActionDetailsProps(
 ): BulkGeneratorDetailsPanelProps {
   const scopeKeys = input.bulkScopeUrlKeys ?? new Set<string>();
   const scopedEntries = overviewBulkRowEntries(input.overviewRows, scopeKeys);
-  const displayRows = scopedEntries.map(({ row }) => overviewRowToCsvRowFromOverview(row));
-  const pipelineSectionTitles = [resolveMicroRowPipelineTitle(microKey)];
+  const displayRows = scopedEntries.map(({ row }) => overviewRowToCsvRowFromOverview(row, input.bulkState));
+  const pipelineSectionTitles = [...resolveMicroRowPipelineTitles(microKey)];
   const isProcessing = isActiveMicroSlice(slice);
-  const harnessByRow = buildMicroHarnessByRow(scopedEntries, microKey, isProcessing, slice);
+  const filesByRow = microActionFilesByRow(scopedEntries, input.bulkState);
+  const runKind = resolveMicroActionRunKind(input.bulkState, filesByRow);
+  const harnessByRow = buildMicroHarnessByRow(
+    scopedEntries,
+    microKey,
+    isProcessing,
+    slice,
+    filesByRow,
+  );
   const currentRow =
     typeof slice.currentRow === "number" && slice.currentRow >= 0
       ? slice.currentRow
@@ -309,6 +444,7 @@ export function buildOverviewMicroActionDetailsProps(
     headerProgress: null,
     isProcessing,
     status,
+    runKind,
     harnessSections: [],
     harnessByRow,
     batchPrepHarnessSections: [],
@@ -321,9 +457,9 @@ export function buildOverviewMicroActionDetailsProps(
     sitemapInventoryLinks: input.sitemapInventoryLinks,
     siteKwHostedLink: input.siteKwHostedLink ?? null,
     sitemapInventoryLoading: input.sitemapInventoryLoading ?? false,
-    pipelineSectionTitles: [...pipelineSectionTitles],
+    pipelineSectionTitles: isAiseoFileSlotRunKind(runKind) ? [] : [...pipelineSectionTitles],
     entitySapRowDisplay: input.sitemapSource === "sap",
-    filesByRow: new Map(),
+    filesByRow,
     downloadFile: (file) => {
       downloadManager.downloadFile({
         name: file.fileName,
@@ -360,9 +496,16 @@ export function buildOverviewWarmInventoryDetailsProps(
     | "sitemapInventoryLoading"
     | "sitemapSource"
     | "overviewRows"
+    | "gridPageIndex"
   >,
 ): BulkGeneratorDetailsPanelProps {
-  const displayRows = input.overviewRows.map((row) => overviewRowToCsvRowFromOverview(row));
+  const allRows = input.overviewRows;
+  const paginate = input.gridPageIndex != null && contentOptimizerBulkUsesPagination(allRows.length);
+  const pageStart = paginate ? Math.max(0, input.gridPageIndex ?? 0) * CONTENT_OPTIMIZER_BULK_PAGE_SIZE : 0;
+  const pageRows = paginate
+    ? allRows.slice(pageStart, pageStart + CONTENT_OPTIMIZER_BULK_PAGE_SIZE)
+    : allRows;
+  const displayRows = pageRows.map((row) => overviewRowToCsvRowFromOverview(row));
   return {
     variant: "csv",
     workspaceBusy: Boolean(input.sitemapInventoryLoading),
@@ -374,8 +517,9 @@ export function buildOverviewWarmInventoryDetailsProps(
     batchPrepHarnessSections: [],
     harnessPlannedSectionCount: null,
     currentRow: -1,
-    totalRows: displayRows.length,
+    totalRows: allRows.length,
     displayRows,
+    detailsPageStart: pageStart,
     postDestination: "wordpress",
     wpConfig: null,
     sitemapInventoryLinks: input.sitemapInventoryLinks,
@@ -390,6 +534,22 @@ export function buildOverviewBulkGeneratorDetailsProps(
   input: OverviewBulkDetailsBindingsInput,
   workspaceBusy: boolean,
 ): BulkGeneratorDetailsPanelProps | null {
+  if (input.bulkState?.runKind === "wpUpload") {
+    return attachInventoryProps(
+      buildOverviewWpUploadBatchDetailsProps(input, workspaceBusy),
+      input,
+    );
+  }
+
+  if (input.bulkState?.runKind === "aiFeaturedImage") {
+    const slice = input.bulkActionProgress?.aiFeaturedImage ?? {
+      total: input.bulkState.urls.length,
+      completed: input.bulkState.urls.length,
+      statusMessage: META_BULK_MICRO_LABELS.aiFeaturedImage,
+    };
+    return buildOverviewMicroActionDetailsProps(input, "aiFeaturedImage", slice);
+  }
+
   const researchSlice = input.bulkActionProgress?.research;
   const researchProgressActive = Boolean(
     researchSlice && researchSlice.total > 0 && researchSlice.completed < researchSlice.total,
@@ -398,9 +558,15 @@ export function buildOverviewBulkGeneratorDetailsProps(
     overviewBatchIsResearchContext(input.bulkState, input.overviewRows) ||
     researchProgressActive;
   const microKey = activeMicroActionKey(input.bulkActionProgress);
+  const bodyFileSlotBatch =
+    isOverviewBulkDetailsRun(input.bulkState) &&
+    isAiseoFileSlotRunKind(input.bulkState.runKind);
+  const optimizeAllUsesBlogPipeline =
+    microKey === "optimizeAll" && isOverviewBulkDetailsRun(input.bulkState);
   if (
     !researchBatchActive &&
-    !isOverviewBulkDetailsRun(input.bulkState) &&
+    !bodyFileSlotBatch &&
+    !optimizeAllUsesBlogPipeline &&
     microKey &&
     input.bulkActionProgress?.[microKey]
   ) {

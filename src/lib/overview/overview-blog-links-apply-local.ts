@@ -1,8 +1,10 @@
 import type { BlogLinksPlanResult } from "@/lib/overview/overview-blog-links-agent";
 import {
   countInternalLinksInHtml,
+  extractAllSectionLinkEditSpans,
   extractInternalLinksFromHtml,
   extractInternalLinkRangesFromHtml,
+  extractInternalLinkEditSpans,
   findPhraseOutsideTags,
   listHtmlParagraphBlocksForAddLinks,
   type BlogInternalLinkSpan,
@@ -23,6 +25,62 @@ export type BlogLinksAddResult = {
   paragraphIndex: number;
   ok: boolean;
 };
+
+export function appendInternalLinkToHtml(html: string, anchor: string, href: string): string {
+  const safeHref = href.trim();
+  const linkHtml = `<a href="${safeHref}">${anchor}</a>`;
+  const trimmed = (html ?? "").trim();
+  if (!trimmed) return `<p>${linkHtml}</p>`;
+  return `${trimmed}\n<p>${linkHtml}</p>`;
+}
+
+export function patchSectionLinkAtIndex(
+  html: string,
+  linkIndex: number,
+  patch: { anchor?: string; href?: string },
+): string {
+  const spans = extractAllSectionLinkEditSpans(html);
+  const span = spans[linkIndex];
+  if (!span) return html;
+
+  let out = html;
+  if (patch.href != null) {
+    out = out.slice(0, span.hrefStart) + patch.href.trim() + out.slice(span.hrefEnd);
+  }
+  if (patch.anchor != null) {
+    const refreshed = extractAllSectionLinkEditSpans(out);
+    const inner = refreshed[linkIndex];
+    if (inner) {
+      out = out.slice(0, inner.innerStart) + patch.anchor + out.slice(inner.innerEnd);
+    }
+  }
+  return out;
+}
+
+export function patchInternalLinkAtIndex(
+  html: string,
+  linkIndex: number,
+  patch: { anchor?: string; href?: string },
+  siteBaseUrl: string,
+  pageUrl?: string,
+): string {
+  const spans = extractInternalLinkEditSpans(html, siteBaseUrl, pageUrl);
+  const span = spans[linkIndex];
+  if (!span) return html;
+
+  let out = html;
+  if (patch.href != null) {
+    out = out.slice(0, span.hrefStart) + patch.href.trim() + out.slice(span.hrefEnd);
+  }
+  if (patch.anchor != null) {
+    const refreshed = extractInternalLinkEditSpans(out, siteBaseUrl, pageUrl);
+    const inner = refreshed[linkIndex];
+    if (inner) {
+      out = out.slice(0, inner.innerStart) + patch.anchor + out.slice(inner.innerEnd);
+    }
+  }
+  return out;
+}
 
 function replaceNthInternalLinkHref(
   html: string,

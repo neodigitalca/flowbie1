@@ -1,54 +1,42 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
+import type { AiseoCacheWriteAccumulator } from "@/lib/overview/overview-aiseo-cache-write";
+import type { AiseoAfterRowWriteFn } from "@/lib/overview/overview-aiseo-after-upload";
 import {
   mergeHarnessProgressSiteAndBatch,
   setOptimizingState,
 } from "@/hooks/content-optimization/optimization-helpers-a";
 import { mergeOptimizationProgress } from "@/hooks/content-optimization/optimization-helpers";
 import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
-import { ensureMasterInstructionsInMemory } from "@/lib/master-instructions-storage";
-import {
-  initOverviewBulkHarnessPagination,
-  setOverviewBulkHarnessPageState,
-} from "@/lib/overview/overview-bulk-page-state";
+import { initOverviewBulkHarnessPagination, setOverviewBulkHarnessPageState } from "@/lib/overview/overview-bulk-page-state";
+import { mapOverviewAiCopyWithConcurrency } from "@/lib/overview/overview-ai-copy-concurrency";
 import { overviewBulkPageRanges } from "@/lib/overview/overview-bulk-page-size";
+import { resolveHarnessRowHtmlFromSources } from "@/lib/overview/overview-harness-page-catalog";
+import { resolveOverviewPlaceEntityForRow } from "@/lib/overview/resolve-overview-place-entity";
+import type { OverviewSitemapSource } from "@/lib/overview/overview-sitemap-source";
 import {
-  markScenarioRowDone,
-  markScenarioRowError,
-  markScenarioRowOptimizing,
-  markScenarioRowSkipped,
+  emitScenarioHarnessPayload,
+  finishScenarioRowHarness,
+  markScenarioRowActive,
   setScenarioHarnessMessage,
   type ScenarioHarnessSetters,
 } from "@/lib/overview/overview-blog-scenario-harness-mutations";
 import {
-  generateAndReplaceScenarioSectionHtml,
-  extractIllustrativeSectionHtml,
-} from "@/lib/overview/overview-blog-scenario-section";
-import { resolveOverviewSourceHtml, type OverviewHarnessPageKind } from "@/lib/overview/overview-blog-overview-prepend";
+  buildScenarioJsonGeneratedFile,
+  makeScenarioHarnessDonePayload,
+  makeScenarioHarnessStartPayload,
+} from "@/lib/overview/overview-blog-scenario-harness-sections";
+import { aiseoRowFilesForUpload } from "@/lib/overview/overview-aiseo-row-artifacts";
+import { generateAndReplaceScenarioSectionHtml } from "@/lib/overview/overview-blog-scenario-section";
 
 type SetBulkState = Dispatch<SetStateAction<Record<string, BulkOptimizationState>>>;
 type SetOptProgress = Dispatch<SetStateAction<Record<string, unknown>>>;
 type SetIsOptimizing = Dispatch<SetStateAction<Record<string, boolean>>>;
 
-function isMissingBodyHtmlMessage(message: string): boolean {
-  return /no html body/i.test(message);
-}
-
-export type BlogScenarioCatalogRow = {
-  index: number;
-  url: string;
-  title: string;
-  focusKeyword: string;
-  html: string;
-  entity?: string;
-  pageKind?: OverviewHarnessPageKind;
-  seoResearchBrief?: string;
-};
-
-export function initOverviewBlogScenarioHarnessBatchState(params: {
+export function initOverviewScenarioHarnessBatchState(params: {
   site: WordPressSite;
-  catalog: BlogScenarioCatalogRow[];
+  rows: OverviewRow[];
   setBulkOptimizationState: SetBulkState;
   setOptimizationProgress: SetOptProgress;
   setIsOptimizingContent: SetIsOptimizing;
@@ -56,29 +44,28 @@ export function initOverviewBlogScenarioHarnessBatchState(params: {
 }): string {
   const {
     site,
-    catalog,
+    rows,
     setBulkOptimizationState,
     setOptimizationProgress,
     setIsOptimizingContent,
-    prepMessage = "Preparing Scenario batch…",
+    prepMessage = "Preparing Case scenario batch…",
   } = params;
 
   const batchKey = `${site.id}-batch`;
-  const urls = catalog.map((c) => c.url.trim()).filter(Boolean);
+  const urls = rows.map((row) => row.url.trim()).filter(Boolean);
   const urlKeywords: Record<string, string> = {};
-  const initialUrlStatuses: BulkOptimizationState["urlStatuses"] = {};
 
-  for (const entry of catalog) {
-    const url = entry.url.trim();
+  for (const row of rows) {
+    const url = row.url?.trim();
     if (!url) continue;
-    if (entry.focusKeyword) urlKeywords[url] = entry.focusKeyword;
-    initialUrlStatuses[url] = "pending";
+    const kw = row.focusKeyword?.trim();
+    if (kw) urlKeywords[url] = kw;
   }
 
   setOptimizingState(setIsOptimizingContent, batchKey, true);
   setOptimizationProgress((prev) =>
     mergeOptimizationProgress(prev as Record<string, unknown>, site.id, {
-      step: "Scenario",
+      step: "Case scenario",
       progress: 2,
       message: prepMessage,
       harnessSections: [],
@@ -90,15 +77,16 @@ export function initOverviewBlogScenarioHarnessBatchState(params: {
     [batchKey]: {
       urls,
       currentIndex: 0,
-      urlStatuses: initialUrlStatuses,
-      currentStep: "Scenario",
+      urlStatuses: {},
+      currentStep: "Case scenario",
       currentUrl: urls[0],
       urlKeywords,
       runKind: "aiScenario",
       harnessStartedAt: Date.now(),
+      urlHarnessSections: {},
       urlGeneratedFiles: {},
       currentStepProgress: {
-        step: "Scenario",
+        step: "Case scenario",
         progress: 2,
         message: prepMessage,
         harnessSections: [],
@@ -111,7 +99,59 @@ export function initOverviewBlogScenarioHarnessBatchState(params: {
   return batchKey;
 }
 
-export function finalizeOverviewBlogScenarioHarnessBatch(
+export function initOverviewScenarioHarnessRowState(params: {
+  site: WordPressSite;
+  row: OverviewRow;
+  setBulkOptimizationState: SetBulkState;
+  setOptimizationProgress: SetOptProgress;
+  setIsOptimizingContent: SetIsOptimizing;
+}): string {
+  const { site, row, setBulkOptimizationState, setOptimizationProgress, setIsOptimizingContent } =
+    params;
+
+  const batchKey = `${site.id}-batch`;
+  const url = row.url.trim();
+  const urlKeywords: Record<string, string> = {};
+  const kw = row.focusKeyword?.trim();
+  if (kw) urlKeywords[url] = kw;
+
+  setOptimizingState(setIsOptimizingContent, batchKey, true);
+  setOptimizationProgress((prev) =>
+    mergeOptimizationProgress(prev as Record<string, unknown>, site.id, {
+      step: "Case scenario",
+      progress: 5,
+      message: "Case scenario…",
+      harnessSections: [],
+      harnessPlannedSectionCount: 1,
+    }),
+  );
+  setBulkOptimizationState((prev) => ({
+    ...prev,
+    [batchKey]: {
+      urls: [url],
+      currentIndex: 0,
+      urlStatuses: { [url]: "optimizing" },
+      currentStep: "Case scenario",
+      currentUrl: url,
+      urlKeywords,
+      runKind: "aiScenario",
+      harnessStartedAt: Date.now(),
+      urlHarnessSections: {},
+      urlGeneratedFiles: {},
+      currentStepProgress: {
+        step: "Case scenario",
+        progress: 5,
+        message: "Case scenario…",
+        harnessSections: [],
+        harnessPlannedSectionCount: 1,
+      },
+    },
+  }));
+
+  return batchKey;
+}
+
+export function finalizeOverviewScenarioHarnessBatch(
   batchKey: string,
   siteId: string,
   setIsOptimizingContent: SetIsOptimizing,
@@ -124,37 +164,160 @@ export function finalizeOverviewBlogScenarioHarnessBatch(
     mergeHarnessProgressSiteAndBatch(next, siteId, {
       step: "Complete",
       progress: 100,
-      message: "Scenario batch finished",
+      message: "Case scenario batch finished",
     });
     return next;
   });
 }
 
-export type RunOverviewBlogScenarioHarnessBatchParams = {
-  catalog: BlogScenarioCatalogRow[];
+export type RunOverviewScenarioHarnessBatchParams = {
   site: WordPressSite;
+  rows: OverviewRow[];
+  rowIndices: number[];
+  sitemapSource: OverviewSitemapSource;
   apiKey: string;
   model?: string;
   harnessSetters: ScenarioHarnessSetters;
+  cacheWrite: AiseoCacheWriteAccumulator;
   updateRow: (index: number, patch: Partial<OverviewRow>) => void;
-  onRowOk?: (url: string, html: string) => void;
+  getInventoryMatchForUrl: (
+    site: WordPressSite | null,
+    url: string,
+  ) => import("@/lib/overview/overview-row-scrape").OverviewInventoryUrlMatch | undefined;
+  uploadAfterRowWrite?: AiseoAfterRowWriteFn;
 };
 
-export async function runOverviewBlogScenarioHarnessBatch(
-  params: RunOverviewBlogScenarioHarnessBatchParams,
+export type RunOverviewScenarioHarnessRowParams = {
+  site: WordPressSite;
+  row: OverviewRow;
+  rowIndex: number;
+  sitemapSource: OverviewSitemapSource;
+  apiKey: string;
+  model?: string;
+  harnessSetters: ScenarioHarnessSetters;
+  cacheWrite: AiseoCacheWriteAccumulator;
+  updateRow: (index: number, patch: Partial<OverviewRow>) => void;
+  getInventoryMatchForUrl: RunOverviewScenarioHarnessBatchParams["getInventoryMatchForUrl"];
+  uploadAfterRowWrite?: AiseoAfterRowWriteFn;
+};
+
+export async function runOverviewScenarioHarnessRow(
+  params: RunOverviewScenarioHarnessRowParams,
+): Promise<void> {
+  const {
+    site,
+    row,
+    rowIndex,
+    sitemapSource,
+    apiKey,
+    model,
+    harnessSetters,
+    cacheWrite,
+    updateRow,
+    getInventoryMatchForUrl,
+    uploadAfterRowWrite,
+  } = params;
+
+  const url = row.url.trim();
+  const pageKind = sitemapSource === "sap" ? "entity" : "post";
+  const html = resolveHarnessRowHtmlFromSources({
+    row,
+    site,
+    sitemapSource,
+    getInventoryMatchForUrl,
+    index: rowIndex,
+  }).trim();
+
+  markScenarioRowActive(url, rowIndex, harnessSetters);
+  emitScenarioHarnessPayload(url, makeScenarioHarnessStartPayload(rowIndex), harnessSetters);
+
+  const entity =
+    sitemapSource === "sap"
+      ? await resolveOverviewPlaceEntityForRow({ row, site, sitemapSource })
+      : undefined;
+
+  const result = await generateAndReplaceScenarioSectionHtml({
+    sourceHtml: html,
+    articleTitle: (row.title || "").trim(),
+    focusKeyword: (row.focusKeyword || "").trim(),
+    pageUrl: url,
+    site,
+    entity,
+    pageKind,
+    seoResearchBrief: row.seoResearch?.trim() || undefined,
+    apiKey,
+    model,
+  });
+
+  emitScenarioHarnessPayload(
+    url,
+    makeScenarioHarnessDonePayload(rowIndex, result.scenarioHtml),
+    harnessSetters,
+  );
+
+  finishScenarioRowHarness(
+    url,
+    rowIndex,
+    {
+      h2Title: result.illustrativeH2Title,
+      html: result.scenarioHtml,
+    },
+    harnessSetters,
+    cacheWrite,
+    updateRow,
+    result.html,
+  );
+
+  const rowFiles = aiseoRowFilesForUpload({
+    runKind: "aiScenario",
+    url,
+    elementFiles: (() => {
+      const scenarioFile = buildScenarioJsonGeneratedFile({
+        h2Title: result.illustrativeH2Title,
+        html: result.scenarioHtml,
+      });
+      return scenarioFile ? [scenarioFile] : [];
+    })(),
+    postHtml: result.html,
+  });
+  if (uploadAfterRowWrite) {
+    await uploadAfterRowWrite({
+      index: rowIndex,
+      url,
+      html: result.html,
+      rowFiles: rowFiles.length ? rowFiles : undefined,
+    });
+  }
+}
+
+export async function runOverviewScenarioHarnessBatch(
+  params: RunOverviewScenarioHarnessBatchParams,
 ): Promise<{ ok: number; failed: number }> {
-  const { catalog, site, apiKey, model, harnessSetters, updateRow, onRowOk } = params;
-  if (!catalog.length) return { ok: 0, failed: 0 };
+  const {
+    site,
+    rows,
+    rowIndices,
+    sitemapSource,
+    apiKey,
+    model,
+    harnessSetters,
+    cacheWrite,
+    updateRow,
+    getInventoryMatchForUrl,
+    uploadAfterRowWrite,
+  } = params;
 
-  await ensureMasterInstructionsInMemory(site.id ?? null);
+  const eligible = rowIndices
+    .map((index) => ({ row: rows[index], index }))
+    .filter((entry): entry is { row: OverviewRow; index: number } => Boolean(entry.row?.url?.trim()));
 
-  const pageRanges = overviewBulkPageRanges(catalog.length);
+  if (!eligible.length) return { ok: 0, failed: 0 };
+
+  const pageRanges = overviewBulkPageRanges(eligible.length);
   let ok = 0;
-  let failed = 0;
-  let globalRowNum = 0;
 
   for (const { start, end, page, pageCount } of pageRanges) {
-    const pageCatalog = catalog.slice(start, end);
+    const pageEligible = eligible.slice(start, end);
     setOverviewBulkHarnessPageState({
       batchKey: harnessSetters.batchKey,
       siteId: harnessSetters.siteId,
@@ -162,89 +325,32 @@ export async function runOverviewBlogScenarioHarnessBatch(
       pageCount,
       start,
       end,
-      total: catalog.length,
+      total: eligible.length,
       setBulkOptimizationState: harnessSetters.setBulkOptimizationState,
       setOptimizationProgress: harnessSetters.setOptimizationProgress,
-      step: "Scenario",
+      step: "Case scenario",
     });
 
-    for (const row of pageCatalog) {
-      globalRowNum += 1;
-      const url = row.url.trim();
-      try {
-        markScenarioRowOptimizing(
-          url,
-          row.index,
-          harnessSetters,
-          updateRow,
-          globalRowNum,
-          catalog.length,
-          row.title || url,
-        );
-
-        const sourceHtml = resolveOverviewSourceHtml({ postContentOptimized: row.html }, row.html);
-        if (!sourceHtml.trim()) {
-          markScenarioRowSkipped(url, row.index, harnessSetters, updateRow);
-          continue;
-        }
-
-        if (!extractIllustrativeSectionHtml(sourceHtml).trim()) {
-          markScenarioRowSkipped(url, row.index, harnessSetters, updateRow);
-          continue;
-        }
-
-        if (row.pageKind === "entity" && !row.entity?.trim()) {
-          failed += 1;
-          markScenarioRowError(
-            url,
-            row.index,
-            harnessSetters,
-            updateRow,
-            "Could not resolve place entity for this SAP page",
-          );
-          continue;
-        }
-
-        const result = await generateAndReplaceScenarioSectionHtml({
-          sourceHtml,
-          articleTitle: row.title,
-          focusKeyword: row.focusKeyword,
-          pageUrl: url,
-          site,
-          entity: row.entity,
-          pageKind: row.pageKind,
-          seoResearchBrief: row.seoResearchBrief,
-          apiKey,
-          model,
-        });
-
-        if (!result) {
-          markScenarioRowSkipped(url, row.index, harnessSetters, updateRow);
-          continue;
-        }
-
-        const scenarioHtml =
-          extractIllustrativeSectionHtml(result.html) || result.scenarioHtml;
-        markScenarioRowDone(url, row.index, harnessSetters, updateRow, result.html, scenarioHtml);
-        onRowOk?.(url, result.html);
-        ok += 1;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (isMissingBodyHtmlMessage(message)) {
-          markScenarioRowSkipped(url, row.index, harnessSetters, updateRow);
-          continue;
-        }
-        failed += 1;
-        markScenarioRowError(url, row.index, harnessSetters, updateRow, message);
-      }
-    }
+    await mapOverviewAiCopyWithConcurrency(pageEligible, async ({ row, index }) => {
+      updateRow(index, { status: "ai-scenario" });
+      await runOverviewScenarioHarnessRow({
+        site,
+        row,
+        rowIndex: index,
+        sitemapSource,
+        apiKey,
+        model,
+        harnessSetters,
+        cacheWrite,
+        updateRow,
+        getInventoryMatchForUrl,
+        uploadAfterRowWrite,
+      });
+      ok += 1;
+    });
   }
 
-  setScenarioHarnessMessage(
-    harnessSetters,
-    `Scenario finished: ${ok} ok, ${failed} failed`,
-    100,
-  );
+  setScenarioHarnessMessage(harnessSetters, `Case scenario finished: ${ok} ok`, 100);
 
-  return { ok, failed };
+  return { ok, failed: 0 };
 }

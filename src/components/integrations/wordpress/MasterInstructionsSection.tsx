@@ -54,11 +54,15 @@ function downloadStoredText(filename: string, content: string): void {
 
 interface MasterInstructionsSectionProps {
   siteId: string;
+  siteUrl?: string;
+  siteName?: string;
   disabled?: boolean;
 }
 
 export const MasterInstructionsSection: React.FC<MasterInstructionsSectionProps> = ({
   siteId,
+  siteUrl = "",
+  siteName = "",
   disabled = false,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -88,7 +92,7 @@ export const MasterInstructionsSection: React.FC<MasterInstructionsSectionProps>
     return () => {
       cancelled = true;
     };
-  }, [siteId]);
+  }, [siteId, siteName, siteUrl]);
 
   useEffect(() => {
     const reload = (e: Event) => {

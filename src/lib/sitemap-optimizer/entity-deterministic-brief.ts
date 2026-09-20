@@ -1,4 +1,3 @@
-import { SAP_DEFAULT_COMBINED_OUTLINE } from "@/lib/prompt-builders/sap-page-template";
 import type { BlogDestinationPolicy } from "@/lib/sitemap-optimizer/blog-destination-policy";
 import { resolveEntityLockedDestination } from "@/lib/sitemap-optimizer/entity-locked-destination";
 import {
@@ -19,7 +18,7 @@ function entityOutlineForMembers(
   _members: readonly SitemapOptimizerPostRow[],
   _keyword: string,
 ): string[] {
-  return [...SAP_DEFAULT_COMBINED_OUTLINE];
+  return [];
 }
 
 /** Deterministic entity brief for service-area consolidation clusters. */

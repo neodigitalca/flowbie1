@@ -627,6 +627,7 @@
         var a = document.createElement('a');
         a.href = item.url;
         a.className = 'fbs__result';
+        dropdown.setAttribute('role', 'listbox');
         a.setAttribute('role', 'option');
 
         a.addEventListener('click', function (url, title, r) {

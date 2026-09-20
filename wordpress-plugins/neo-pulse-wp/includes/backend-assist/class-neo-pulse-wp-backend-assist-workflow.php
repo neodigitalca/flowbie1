@@ -28,7 +28,9 @@ class Neo_Pulse_Wp_Backend_Assist_Workflow {
 			'outline'               => isset( $built['outline'] ) ? $built['outline'] : array(),
 			'last_post_id'          => 0,
 			'last_block_id'         => 0,
+			'last_block_ids'        => array(),
 			'last_block_manifest'   => null,
+			'last_elementor_sections' => array(),
 			'step_results'          => array(),
 			'focus_keyword'         => isset( $built['focus_keyword'] ) ? $built['focus_keyword'] : '',
 			'post_title'            => isset( $built['post_title'] ) ? $built['post_title'] : '',
@@ -80,6 +82,11 @@ class Neo_Pulse_Wp_Backend_Assist_Workflow {
 		);
 	}
 	public static function execute_workflow_step( string $workflow_id, int $step_index, string $message, array $history ): array {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 300 );
+		}
+		Neo_Pulse_Wp_OpenRouter::maybe_extend_time_limit();
+
 		$workflow = self::load_workflow( $workflow_id );
 		if ( null === $workflow ) {
 			return array(
@@ -119,11 +126,16 @@ class Neo_Pulse_Wp_Backend_Assist_Workflow {
 
 		$params = is_array( $step_def['params'] ) ? $step_def['params'] : array();
 
-		if ( empty( $params['post_id'] ) && ! empty( $workflow['last_post_id'] ) ) {
+		$new_page = Neo_Pulse_Wp_Backend_Assist_Pipeline_Content_Prep::message_requests_new_page_or_post( $message );
+		if ( $new_page && ! empty( $workflow['last_post_id'] ) ) {
+			$params['post_id'] = (int) $workflow['last_post_id'];
+		} elseif ( empty( $params['post_id'] ) && ! empty( $workflow['last_post_id'] ) ) {
 			$params['post_id'] = (int) $workflow['last_post_id'];
 		}
 
-		if ( empty( $params['block_id'] ) && ! empty( $workflow['last_block_id'] ) ) {
+		$new_block = ! empty( $params['new_block'] )
+			|| Neo_Pulse_Wp_Backend_Assist_Pipeline_Content_Prep::message_requests_new_page_or_post( $message );
+		if ( empty( $params['block_id'] ) && ! empty( $workflow['last_block_id'] ) && ( $tool !== 'compose_seo_block' || ! $new_block ) ) {
 			$params['block_id'] = (int) $workflow['last_block_id'];
 		}
 
@@ -136,14 +148,20 @@ class Neo_Pulse_Wp_Backend_Assist_Workflow {
 			}
 		}
 
+		if ( $tool === 'duplicate_seo_block' ) {
+			if ( empty( $params['block_id'] ) && ! empty( $params['title'] ) ) {
+				$params['title'] = sanitize_text_field( (string) $params['title'] );
+			}
+		}
+
 		if ( $tool === 'compose_seo_block' ) {
-			if ( empty( $params['current_block'] ) || ! is_array( $params['current_block'] ) ) {
+			if ( $new_block || empty( $params['current_block'] ) || ! is_array( $params['current_block'] ) ) {
 				$params['current_block'] = array();
 			}
 			if ( ! empty( $workflow['last_post_id'] ) ) {
 				$params['current_block']['primary_post_id'] = (int) $workflow['last_post_id'];
 			}
-			if ( ! empty( $workflow['last_block_id'] ) && empty( $params['current_block']['id'] ) ) {
+			if ( ! $new_block && ! empty( $workflow['last_block_id'] ) && empty( $params['current_block']['id'] ) ) {
 				$params['current_block']['id'] = (int) $workflow['last_block_id'];
 			}
 			if ( empty( $params['page_context'] ) && ! empty( $workflow['last_post_id'] ) ) {
@@ -156,6 +174,12 @@ class Neo_Pulse_Wp_Backend_Assist_Workflow {
 					$params['current_block']
 				);
 			}
+			if ( empty( $params['prompt'] ) && ! empty( $workflow['message'] ) ) {
+				$params['prompt'] = (string) $workflow['message'];
+			}
+		}
+
+		if ( $tool === 'compose_elementor_page_sections' ) {
 			if ( empty( $params['prompt'] ) && ! empty( $workflow['message'] ) ) {
 				$params['prompt'] = (string) $workflow['message'];
 			}
@@ -196,9 +220,23 @@ class Neo_Pulse_Wp_Backend_Assist_Workflow {
 		}
 		if ( ! empty( $result['block_id'] ) ) {
 			$workflow['last_block_id'] = (int) $result['block_id'];
+			$ids                       = isset( $workflow['last_block_ids'] ) && is_array( $workflow['last_block_ids'] )
+				? $workflow['last_block_ids']
+				: array();
+			$ids[]                     = (int) $result['block_id'];
+			$workflow['last_block_ids'] = array_values( array_unique( array_filter( array_map( 'absint', $ids ) ) ) );
 		}
 		if ( ! empty( $result['block_manifest'] ) && is_array( $result['block_manifest'] ) ) {
 			$workflow['last_block_manifest'] = $result['block_manifest'];
+		}
+		if ( ! empty( $result['sections'] ) && is_array( $result['sections'] ) ) {
+			$existing = isset( $workflow['last_elementor_sections'] ) && is_array( $workflow['last_elementor_sections'] )
+				? $workflow['last_elementor_sections']
+				: array();
+			$workflow['last_elementor_sections'] = Neo_Pulse_Wp_Backend_Assist_Tools_Elementor_Sections::merge_sections(
+				$existing,
+				$result['sections']
+			);
 		}
 		if ( ! empty( $result['focus_keyword'] ) ) {
 			$workflow['focus_keyword'] = sanitize_text_field( $result['focus_keyword'] );
@@ -314,6 +352,82 @@ class Neo_Pulse_Wp_Backend_Assist_Workflow {
 
 		return Neo_Pulse_Wp_Backend_Assist_Cards::enrich_card( $card, 'workflow', $final_result );
 	}
+	/**
+	 * @param array<int, array<string, mixed>> $history
+	 */
+	public static function workflow_id_from_history( array $history ): string {
+		for ( $i = count( $history ) - 1; $i >= 0; $i-- ) {
+			$turn = $history[ $i ];
+			if ( ! is_array( $turn ) ) {
+				continue;
+			}
+			$card = isset( $turn['card'] ) && is_array( $turn['card'] ) ? $turn['card'] : array();
+			$id   = isset( $card['workflow_id'] ) ? sanitize_text_field( (string) $card['workflow_id'] ) : '';
+			if ( $id !== '' ) {
+				return $id;
+			}
+		}
+		return '';
+	}
+
+	/**
+	 * Bind a newly created page onto a saved plan and run remaining steps (compose, save, apply).
+	 *
+	 * @param array<int, array<string, mixed>> $history
+	 * @return array<string, mixed>
+	 */
+	public static function bind_new_page_and_run( string $workflow_id, int $post_id, string $title, string $keyword, string $message, array $history ): array {
+		$workflow = self::load_workflow( $workflow_id );
+		if ( ! is_array( $workflow ) ) {
+			return array(
+				'error' => __( 'Workflow expired or not found. Please send your request again.', 'neo-pulse-wp' ),
+			);
+		}
+
+		$workflow['last_post_id'] = $post_id;
+		$workflow['post_title']   = $title;
+		if ( $keyword !== '' ) {
+			$workflow['focus_keyword'] = $keyword;
+		}
+		$steps = isset( $workflow['steps'] ) && is_array( $workflow['steps'] ) ? $workflow['steps'] : array();
+		foreach ( $steps as $index => $step ) {
+			$tool = sanitize_key( (string) ( $step['tool'] ?? '' ) );
+			if ( ! in_array( $tool, array( 'create_page', 'create_post' ), true ) ) {
+				continue;
+			}
+			$workflow['steps'][ $index ]['status'] = 'done';
+			$workflow['step_results'][ $index ]    = array(
+				'success' => true,
+				'post_id' => $post_id,
+				'title'   => $title,
+				'skipped' => true,
+			);
+		}
+		self::persist_workflow( $workflow_id, $workflow );
+
+		$last = null;
+		foreach ( array_keys( $workflow['steps'] ) as $index ) {
+			$tool = sanitize_key( (string) ( $workflow['steps'][ $index ]['tool'] ?? '' ) );
+			if ( in_array( $tool, array( 'create_page', 'create_post' ), true ) ) {
+				continue;
+			}
+			$last = self::execute_workflow_step( $workflow_id, (int) $index, $message, $history );
+			if ( ! empty( $last['error'] ) ) {
+				return $last;
+			}
+			if ( empty( $last['skipped'] ) && empty( $last['result']['success'] ) ) {
+				return $last;
+			}
+			if ( ! empty( $last['workflow_complete'] ) ) {
+				return $last;
+			}
+		}
+
+		return is_array( $last ) ? $last : array(
+			'error' => __( 'Build did not apply the SEO block.', 'neo-pulse-wp' ),
+		);
+	}
+
 	public static function optional_post_workflow_actions( array $result ): array {
 		$actions = array();
 		if ( ! empty( $result['edit_url'] ) ) {

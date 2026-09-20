@@ -8,7 +8,11 @@ import {
   mergeEnabledSiteClientGroups,
   type AgentRunClientGroup,
 } from "@/lib/agent-runs/agent-run-grouping";
-import { resolveDefaultAgentsSiteFilter } from "@/lib/agent-runs/agent-runs-site-filter";
+import {
+  AGENT_RUNS_ALL_SITES_ID,
+  isAgentsAllSitesFilter,
+  resolveDefaultAgentsSiteFilter,
+} from "@/lib/agent-runs/agent-runs-site-filter";
 
 export function useAgentRunsSiteFilterModel() {
   const { runs, agentsSiteFilter, setAgentsSiteFilter, sidebarOpen, sidebarPanel } =
@@ -37,31 +41,41 @@ export function useAgentRunsSiteFilterModel() {
     return map;
   }, [allSiteGroups]);
 
-  const siteFilterOptions = useMemo(
-    () =>
-      wpSites.map((site) => ({
-        id: site.id,
-        label: site.name?.trim() || site.siteUrl || site.id,
-        activeCount: activeCountBySiteId.get(site.id) ?? 0,
-      })),
-    [activeCountBySiteId, wpSites],
-  );
+  const siteFilterOptions = useMemo(() => {
+    const clients = wpSites.map((site) => ({
+      id: site.id,
+      label: site.name?.trim() || site.siteUrl || site.id,
+      activeCount: activeCountBySiteId.get(site.id) ?? 0,
+    }));
+    if (wpSites.length <= 1) return clients;
+    const allActive = clients.reduce((sum, site) => sum + site.activeCount, 0);
+    return [
+      { id: AGENT_RUNS_ALL_SITES_ID, label: "All clients", activeCount: allActive },
+      ...clients,
+    ];
+  }, [activeCountBySiteId, wpSites]);
 
   const resolvedSiteFilter = useMemo(
     () =>
-      allSiteIds.includes(agentsSiteFilter)
-        ? agentsSiteFilter
-        : resolveDefaultAgentsSiteFilter(activeWordPressSiteId, allSiteIds),
+      isAgentsAllSitesFilter(agentsSiteFilter)
+        ? AGENT_RUNS_ALL_SITES_ID
+        : allSiteIds.includes(agentsSiteFilter)
+          ? agentsSiteFilter
+          : resolveDefaultAgentsSiteFilter(activeWordPressSiteId, allSiteIds),
     [activeWordPressSiteId, agentsSiteFilter, allSiteIds],
   );
 
   const selectedClient: AgentRunClientGroup | undefined = useMemo(
-    () => allSiteGroups.find((group) => group.siteId === resolvedSiteFilter) ?? allSiteGroups[0],
+    () =>
+      isAgentsAllSitesFilter(resolvedSiteFilter)
+        ? undefined
+        : allSiteGroups.find((group) => group.siteId === resolvedSiteFilter) ?? allSiteGroups[0],
     [allSiteGroups, resolvedSiteFilter],
   );
 
   useEffect(() => {
     if (!sidebarOpen || sidebarPanel !== "agents") return;
+    if (isAgentsAllSitesFilter(agentsSiteFilter)) return;
     if (allSiteIds.includes(agentsSiteFilter)) return;
     setAgentsSiteFilter(resolveDefaultAgentsSiteFilter(activeWordPressSiteId, allSiteIds));
   }, [
@@ -76,6 +90,7 @@ export function useAgentRunsSiteFilterModel() {
   const selectSite = useCallback(
     (siteId: string) => {
       setAgentsSiteFilter(siteId);
+      if (isAgentsAllSitesFilter(siteId)) return;
       setActiveWordPressSiteId(siteId);
       const site = wpSites.find((s) => s.id === siteId);
       if (site) void handleConnectSite(site);
@@ -87,6 +102,7 @@ export function useAgentRunsSiteFilterModel() {
     allSiteIds,
     allSiteGroups,
     resolvedSiteFilter,
+    isAllClientsFilter: isAgentsAllSitesFilter(resolvedSiteFilter),
     selectedClient,
     setAgentsSiteFilter: selectSite,
     siteFilterOptions,

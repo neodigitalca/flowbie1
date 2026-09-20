@@ -101,23 +101,25 @@ describe("matchInternalLinkQueriesToCatalog", () => {
     expect(call.system).toContain("Example: 3,7,12,1,5");
     expect(call.system).toContain("Brand, product, service");
     expect(call.system).toContain("rank [PAGE] rows only");
+    expect(call.system).toContain("Never return 0");
+    expect(call.system).not.toContain("If no row in the allowed bucket is relevant, return 0");
     expect(call.user).toContain("Highlighted text: \"Hunter Douglas\"");
     expect(call.user).toContain('[PAGE] "Hunter Douglas"');
+    expect(call.user).toContain("Never return 0");
     expect(call.maxTokens).toBe(30);
   });
 
-  it("leaves a slot unmatched when Gemini returns 0", async () => {
-    vi.mocked(callOpenRouterChatCompletion)
-      .mockResolvedValueOnce({ raw: {}, content: "0" })
-      .mockResolvedValueOnce({ raw: {}, content: "0" });
+  it("sends the query bucket so page slots rank PAGE rows", async () => {
+    vi.mocked(callOpenRouterChatCompletion).mockResolvedValue({ raw: {}, content: "1" });
 
-    const out = await matchInternalLinkQueriesToCatalog({
-      queries,
+    await matchInternalLinkQueriesToCatalog({
+      queries: [{ id: "page-1", query: "CRA mail policy", anchor: "CRA mail policy", bucket: "PAGE" }],
       catalog,
       apiKey: "test-key",
     });
 
-    expect(out.has("1")).toBe(false);
-    expect(out.has("2")).toBe(false);
+    const call = vi.mocked(callOpenRouterChatCompletion).mock.calls[0]![0];
+    expect(call.user).toContain("Allowed bucket: [PAGE]");
+    expect(call.user).toContain("Must return 1 to 5 inventory numbers");
   });
 });

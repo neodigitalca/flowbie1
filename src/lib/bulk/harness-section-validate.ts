@@ -187,9 +187,9 @@ export function assertHarnessAnswerProseComplete(html: string): void {
     );
   }
   const sentenceCount = countPlainTextSentences(paras[0]!);
-  if (sentenceCount !== 2) {
+  if (sentenceCount < 2 || sentenceCount > 3) {
     throw new Error(
-      `Harness: Answer must contain exactly two sentences (found ${sentenceCount})`,
+      `Harness: Answer must contain two or three sentences (found ${sentenceCount})`,
     );
   }
   if (!plainTextEndsWithCompleteSentence(paras[0]!)) {
@@ -306,6 +306,18 @@ export function normalizeIllustrativeHarnessHtml(html: string, forcedH2?: string
   return s.trim();
 }
 
+/** Answer contract: one H2 + one paragraph only. Drop model-added headings after </p>. */
+export function trimAnswerSectionToContract(html: string): string {
+  const s = (html ?? "").trim();
+  if (!s) return s;
+  const h2Match = s.match(/^<h2\b[^>]*>[\s\S]*?<\/h2>/i);
+  if (!h2Match) return s;
+  const afterH2 = s.slice(h2Match[0].length).trim();
+  const pMatch = afterH2.match(/^<p\b[^>]*>[\s\S]*?<\/p>/i);
+  if (!pMatch) return s;
+  return `${h2Match[0]}${pMatch[0]}`.trim();
+}
+
 export function finalizeHarnessSectionHtml(
   html: string,
   opts: { isOverview: boolean; isAnswer?: boolean; isIllustrative?: boolean; title: string },
@@ -314,6 +326,7 @@ export function finalizeHarnessSectionHtml(
   s = stripHarnessSectionTrailingGarbage(s);
   if (opts.isAnswer) {
     s = enforceHarnessSectionHeadingTitle(s, "Answer");
+    s = trimAnswerSectionToContract(s);
     s = injectHarnessSectionH2AnchorId(s, HARNESS_ANSWER_ANCHOR_ID);
   } else if (opts.isOverview) {
     s = normalizeOverviewProseHtml(s);

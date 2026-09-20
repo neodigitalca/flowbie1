@@ -2,7 +2,7 @@ import type { AgentRunArtifactRecord } from "@/lib/agent-runs-api";
 import { formatAgentRunTimeOnly, formatAgentRunTimestamp } from "@/lib/edmonton-time";
 import type { AgentRun, AgentRunStep, AgentRunStepArtifact, AgentRunUploadedPost } from "@/lib/agent-runs-types";
 import { AGENT_RUN_STATUS_LABELS } from "@/lib/agent-runs-types";
-import { agentRunSourceLine } from "@/lib/agent-runs/agent-run-display";
+import { agentRunSourceLine, isAgentRunNodeDiagnosticLabel } from "@/lib/agent-runs/agent-run-display";
 import { driveFolderDisplayName } from "@/lib/google-drive/google-drive-folder-hierarchy";
 import { dedupeAgentRunLogLines } from "@/lib/agent-runs/agent-run-log-download";
 
@@ -14,6 +14,35 @@ export type AgentRunLogTimelineRow = {
   isActive?: boolean;
   artifacts?: AgentRunStepArtifact[];
 };
+
+export type AgentRunLogLabelUrlParts = {
+  before: string;
+  url: string;
+  after: string;
+};
+
+export function splitAgentRunLogLabelUrl(label: string): AgentRunLogLabelUrlParts | null {
+  const httpsAt = label.indexOf("https://");
+  const httpAt = label.indexOf("http://");
+  const start = httpsAt >= 0 ? httpsAt : httpAt;
+  if (start < 0) return null;
+  let end = start;
+  while (end < label.length && label[end] !== " " && label[end] !== "\t") {
+    end += 1;
+  }
+  const url = label.slice(start, end);
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+  } catch {
+    return null;
+  }
+  return {
+    before: label.slice(0, start),
+    url,
+    after: label.slice(end),
+  };
+}
 
 function isResumeNoiseLabel(label: string): boolean {
   const trimmed = label.trim();
@@ -53,7 +82,12 @@ function compareAgentRunStepsChronological(a: AgentRunStep, b: AgentRunStep): nu
 export function normalizeAgentRunStepsForDisplay(steps: AgentRunStep[]): AgentRunStep[] {
   const filtered = steps.filter((step) => {
     const label = step.label.trim();
-    return label && !isResumeNoiseLabel(label) && !isTerminalNoiseLabel(label);
+    return (
+      label &&
+      !isResumeNoiseLabel(label) &&
+      !isTerminalNoiseLabel(label) &&
+      !isAgentRunNodeDiagnosticLabel(label)
+    );
   });
 
   const keyed = filtered.filter((s) => s.stepKey?.trim());
@@ -343,6 +377,7 @@ export type AgentRunLogJsonExport = {
   };
   plan?: {
     clientRunContract?: {
+      forceNewResearch?: boolean;
       sendAutomationEmail?: boolean;
       automationEmailTo?: string;
       saveToGoogleDrive?: boolean;
@@ -399,6 +434,10 @@ function exportEmailContractFromPlan(
   const c = merged as Record<string, unknown>;
   return {
     clientRunContract: {
+      forceNewResearch:
+        c.forceNewResearch === true
+        || (c.optimizationOptions as { forceNewResearch?: boolean } | undefined)?.forceNewResearch
+          === true,
       sendAutomationEmail: c.sendAutomationEmail === true,
       automationEmailTo:
         typeof c.automationEmailTo === "string" ? c.automationEmailTo : undefined,

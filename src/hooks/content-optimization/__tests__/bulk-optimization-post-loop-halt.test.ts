@@ -14,6 +14,7 @@ const site: WordPressSite = {
   siteUrl: "https://example.com",
   username: "u",
   appPassword: "p",
+  connectedAt: 1,
 };
 
 function makePending(url: string) {
@@ -30,7 +31,7 @@ function makePending(url: string) {
 }
 
 describe("bulkOptimizationRunPostLoop halt on failure", () => {
-  it("halts after prefetch miss when inline prefetch does not populate cache", async () => {
+  it("skips a prefetch miss and still runs the next cached URL", async () => {
     vi.mocked(bulkOptimizationDoPrefetch).mockResolvedValue(undefined);
     const urls = ["https://example.com/a/", "https://example.com/b/"];
     const prefetchedPendingCache = new Map<number, ReturnType<typeof makePending>>([
@@ -77,7 +78,7 @@ describe("bulkOptimizationRunPostLoop halt on failure", () => {
       },
     });
 
-    expect(continueFn).not.toHaveBeenCalled();
+    expect(continueFn).toHaveBeenCalledTimes(1);
     expect(bulkOptimizationDoPrefetch).toHaveBeenCalledWith(0, expect.any(Object));
   });
 
@@ -128,6 +129,139 @@ describe("bulkOptimizationRunPostLoop halt on failure", () => {
       },
     });
 
+    expect(continueFn).toHaveBeenCalled();
+  });
+
+  it("stores generated files on the URL after a successful continue", async () => {
+    const url = "https://example.com/113-114-street-edmonton/";
+    const urls = [url];
+    const prefetchedPendingCache = new Map<number, ReturnType<typeof makePending>>([
+      [0, makePending(url)],
+    ]);
+    const optimizationFileManagers: Record<string, { addFile: (n: string, c: string, m: string) => void; getFiles: () => unknown[] }> = {};
+    const continueFn = vi.fn().mockImplementation(async () => {
+      const fm = optimizationFileManagers[site.id];
+      fm?.addFile("content-edmonton.html", "<h2>Answer</h2>", "text/html");
+      fm?.addFile("content-edmonton.md", "## Answer", "text/markdown");
+      fm?.addFile("checklist-edmonton.json", "1. Sunlight", "text/plain");
+    });
+    let store: Record<string, { urls: string[]; urlStatuses?: Record<string, string>; urlGeneratedFiles?: Record<string, Array<{ name: string }>> }> = {
+      "site-1-batch": { urls, urlStatuses: {}, urlGeneratedFiles: {} },
+    };
+    const setBulkOptimizationState = vi.fn((updater: (prev: typeof store) => typeof store) => {
+      store = updater(store);
+      return store;
+    });
+
+    await bulkOptimizationRunPostLoop({
+      urls,
+      skipUrlSet: new Set(),
+      batchKey: "site-1-batch",
+      site,
+      muteToasts: true,
+      isAcfKeywordMode: true,
+      prefetchedPendingCache,
+      prefetchedAcfFieldsCache: new Map(),
+      pendingOptimizationData: {},
+      optimizationFileManagers: optimizationFileManagers as never,
+      bulkContinueOptimizationRef: { current: continueFn },
+      bulkContextRef: { current: null },
+      setBulkOptimizationState,
+      setOptimizationProgress: vi.fn((fn) => fn({})),
+      recordGeneratedFilesForUrl: vi.fn(),
+      serpWarmup: {
+        maintainBuffer: vi.fn(),
+        ensureReady: vi.fn(),
+        seedReadyFromAcf: vi.fn(),
+        clearWarmingIndices: vi.fn(),
+        isIndexReady: vi.fn(() => true),
+      },
+      prefetchArgs: {
+        site,
+        urls,
+        batchKey: "site-1-batch",
+        isAcfKeywordMode: true,
+        updateMode: "draft",
+        optimizationOptions: { optimizeContent: true, hasEntity: true },
+        inContentImageRequest: null,
+        wordPressPostsForRun: [],
+        siteServiceContext: null,
+        prefetchedAcfFieldsCache: new Map(),
+        prefetchedPostPayloadByUrlIndex: new Map(),
+        prefetchedPendingCache,
+        setBulkOptimizationState: vi.fn(),
+        bulkInventorySnapshot: null,
+      },
+    });
+
     expect(continueFn).toHaveBeenCalledTimes(1);
+    expect(store["site-1-batch"]?.urlStatuses?.[url]).toBe("completed");
+    const stored = store["site-1-batch"]?.urlGeneratedFiles?.[url] ?? [];
+    expect(stored.map((file) => file.name)).toEqual([
+      "content-edmonton.html",
+      "content-edmonton.md",
+      "checklist-edmonton.json",
+    ]);
+  });
+
+  it("does not mark the URL completed when continue throws", async () => {
+    const url = "https://example.com/113-114-street-edmonton/";
+    const urls = [url];
+    const prefetchedPendingCache = new Map<number, ReturnType<typeof makePending>>([
+      [0, makePending(url)],
+    ]);
+    const continueFn = vi.fn().mockRejectedValue(new Error("WordPress upload failed"));
+    let store: Record<string, { urls: string[]; urlStatuses?: Record<string, string> }> = {
+      "site-1-batch": { urls, urlStatuses: {} },
+    };
+    const setBulkOptimizationState = vi.fn((updater: (prev: typeof store) => typeof store) => {
+      store = updater(store);
+      return store;
+    });
+
+    await bulkOptimizationRunPostLoop({
+      urls,
+      skipUrlSet: new Set(),
+      batchKey: "site-1-batch",
+      site,
+      muteToasts: true,
+      isAcfKeywordMode: true,
+      prefetchedPendingCache,
+      prefetchedAcfFieldsCache: new Map(),
+      pendingOptimizationData: {},
+      optimizationFileManagers: {},
+      bulkContinueOptimizationRef: { current: continueFn },
+      bulkContextRef: { current: null },
+      setBulkOptimizationState,
+      setOptimizationProgress: vi.fn((fn) => fn({})),
+      recordGeneratedFilesForUrl: vi.fn(),
+      serpWarmup: {
+        maintainBuffer: vi.fn(),
+        ensureReady: vi.fn(),
+        seedReadyFromAcf: vi.fn(),
+        clearWarmingIndices: vi.fn(),
+        isIndexReady: vi.fn(() => true),
+      },
+      prefetchArgs: {
+        site,
+        urls,
+        batchKey: "site-1-batch",
+        isAcfKeywordMode: true,
+        updateMode: "draft",
+        optimizationOptions: { optimizeContent: true, hasEntity: true },
+        inContentImageRequest: null,
+        wordPressPostsForRun: [],
+        siteServiceContext: null,
+        prefetchedAcfFieldsCache: new Map(),
+        prefetchedPostPayloadByUrlIndex: new Map(),
+        prefetchedPendingCache,
+        setBulkOptimizationState: vi.fn(),
+        bulkInventorySnapshot: null,
+      },
+    });
+
+    expect(continueFn).toHaveBeenCalledTimes(1);
+    expect(store["site-1-batch"]?.urlStatuses?.[url]).toBe("error");
+    expect(store["site-1-batch"]?.urlStatuses?.[url]).not.toBe("completed");
   });
 });

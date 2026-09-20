@@ -15,10 +15,18 @@ describe("restAcfFromFullPost", () => {
     expect(fields.seo_research).toBe("brief");
   });
 
-  it("prefers acf over neo_pulse_fields when both present", () => {
+  it("prefers neo_pulse_fields over stale acf when plugin value is set", () => {
+    const post = {
+      acf: { keyword_focus: "elementor experts" },
+      neo_pulse_fields: { keyword_focus: "what is national seo" },
+    };
+    expect(restAcfFromFullPost(post).keyword_focus).toBe("what is national seo");
+  });
+
+  it("keeps acf when neo_pulse_fields keyword is empty", () => {
     const post = {
       acf: { keyword_focus: "from acf" },
-      neo_pulse_fields: { keyword_focus: "from neo-pulse" },
+      neo_pulse_fields: { keyword_focus: "" },
     };
     expect(restAcfFromFullPost(post).keyword_focus).toBe("from acf");
   });

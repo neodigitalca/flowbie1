@@ -27,8 +27,10 @@ import {
   clearPulseAssistHistory,
   loadPulseAssistHistory,
   readSubmode,
+  readPageContentMode,
   readTargetScope,
   savePulseAssistHistory,
+  writePageContentMode,
   writeSubmode,
   writeTargetScope,
 } from "@/lib/pulse-assist/storage";
@@ -39,6 +41,7 @@ import type {
   AssistCardStep,
   AssistHistoryMessage,
   AssistSubmode,
+  PageContentMode,
   AssistStreamEvent,
   AssistTargetScope,
 } from "@/lib/pulse-assist/types";
@@ -101,6 +104,9 @@ export function PulseAssistChatPanel({
   }, [activeTeam?.id]);
 
   const [submode, setSubmodeState] = useState<AssistSubmode>(() => readSubmode());
+  const [pageContentMode, setPageContentModeState] = useState<PageContentMode>(() =>
+    readPageContentMode(),
+  );
   const [targetScope, setTargetScopeState] = useState<AssistTargetScope>(
     () => defaultTargetScope ?? readTargetScope(),
   );
@@ -115,6 +121,11 @@ export function PulseAssistChatPanel({
   const setSubmode = useCallback((next: AssistSubmode) => {
     setSubmodeState(next);
     writeSubmode(next);
+  }, []);
+
+  const setPageContentMode = useCallback((next: PageContentMode) => {
+    setPageContentModeState(next);
+    writePageContentMode(next);
   }, []);
 
   const setTargetScope = useCallback(
@@ -218,6 +229,7 @@ export function PulseAssistChatPanel({
         expandedPageTitle: overview.expandedPageTitle,
         postId: overview.postId,
         submode: effectiveSubmode,
+        pageContentMode,
         targetScope,
         message: trimmed,
         history,
@@ -649,6 +661,8 @@ export function PulseAssistChatPanel({
         onChange={setInput}
         submode={submode}
         onSubmodeChange={setSubmode}
+        pageContentMode={pageContentMode}
+        onPageContentModeChange={setPageContentMode}
         onSend={() => void sendMessage(input)}
         disabled={loading}
         autoFocus={sidebarOpen}

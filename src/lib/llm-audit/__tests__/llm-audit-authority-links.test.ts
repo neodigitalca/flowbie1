@@ -142,14 +142,15 @@ describe("classifyLlmAuditAuthorityLinksOpenRouter", () => {
 });
 
 describe("injectLlmAuditAuthorityLinksIntoChecklist", () => {
-  it("adds [LLM_AUDIT_AUTHORITY_LINK] lines not already present", () => {
-    const checklist = ["1. Intro"];
+  it("attaches [LLM_AUDIT_AUTHORITY_LINK] to an existing topical item", () => {
+    const checklist = ["1. CRA Online Mail for Individuals And Businesses [STRUCTURE]: 2 paragraphs."];
     const out = injectLlmAuditAuthorityLinksIntoChecklist(checklist, [
       { url: "https://www.edmonton.ca/", anchorText: "City of Edmonton", category: "municipal" },
     ]);
-    expect(out).toHaveLength(2);
-    expect(out[1]).toContain("[LLM_AUDIT_AUTHORITY_LINK]");
-    expect(out[1]).toContain("https://www.edmonton.ca/");
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("CRA Online Mail for Individuals And Businesses");
+    expect(out[0]).toContain("[LLM_AUDIT_AUTHORITY_LINK]");
+    expect(out[0]).toContain("https://www.edmonton.ca/");
   });
 
   it("skips duplicate URL already in checklist", () => {
@@ -158,6 +159,15 @@ describe("injectLlmAuditAuthorityLinksIntoChecklist", () => {
       { url: "https://www.edmonton.ca/", anchorText: "City of Edmonton" },
     ]);
     expect(out).toHaveLength(1);
+    expect(out[0]).not.toMatch(/\[LLM_AUDIT_AUTHORITY_LINK\][\s\S]*\[LLM_AUDIT_AUTHORITY_LINK\]/);
+  });
+
+  it("does not create a new item when the checklist is empty", () => {
+    expect(
+      injectLlmAuditAuthorityLinksIntoChecklist([], [
+        { url: "https://www.edmonton.ca/", anchorText: "City of Edmonton" },
+      ]),
+    ).toEqual([]);
   });
 });
 

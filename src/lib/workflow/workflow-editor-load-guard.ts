@@ -17,6 +17,14 @@ export function shouldInitializeNewWorkflowDraft(options: {
   return options.draftScopeKey !== options.nextScopeKey;
 }
 
+/** Full-page spinner only when this workflow is not already on screen. */
+export function shouldShowWorkflowLoadSpinner(options: {
+  loadedWorkflowId: number | null | undefined;
+  nextWorkflowId: number;
+}): boolean {
+  return options.loadedWorkflowId !== options.nextWorkflowId;
+}
+
 export function newWorkflowDraftScopeKey(teamId: number): string {
   return `new:${teamId}`;
 }

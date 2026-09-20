@@ -158,7 +158,7 @@ class Neo_Pulse_Wp_Speed_Cache {
 	 * @param array<string, mixed> $config Settings.
 	 */
 	public static function build_hash( string $source_key, string $type, array $config ): string {
-		return md5( $type . '|' . NEO_PULSE_WP_VERSION . '|' . wp_json_encode( $config ) . '|' . $source_key );
+		return md5( $type . '|' . wp_json_encode( $config ) . '|' . $source_key );
 	}
 
 	/**

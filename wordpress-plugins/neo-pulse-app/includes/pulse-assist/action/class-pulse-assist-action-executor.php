@@ -18,10 +18,11 @@ class Neo_Pulse_App_Pulse_Assist_Action_Executor {
 		Neo_Pulse_App_Pulse_Assist_Action_Registry::register_defaults();
 
 		$results            = array();
-		$created_ids        = array();
-		$created_project_ids = array();
-		$project_id         = 0;
-		$errors             = array();
+		$created_ids          = array();
+		$created_project_ids  = array();
+		$created_workflow_ids = array();
+		$project_id           = 0;
+		$errors               = array();
 
 		$active_project_id = 0;
 
@@ -59,11 +60,7 @@ class Neo_Pulse_App_Pulse_Assist_Action_Executor {
 				);
 			}
 
-			$result = Neo_Pulse_App_Pulse_Assist_Action_Tools_Recipes::is_recipe_tool( $tool_id )
-				? Neo_Pulse_App_Pulse_Assist_Action_Tools_Recipes::run( $tool_id, $args, $body, $user_id )
-				: ( Neo_Pulse_App_Pulse_Assist_Action_Tools_Executions::is_execution_tool( $tool_id )
-					? Neo_Pulse_App_Pulse_Assist_Action_Tools_Executions::run( $tool_id, $args, $body, $user_id )
-					: Neo_Pulse_App_Pulse_Assist_Action_Tools_Tasks::run( $tool_id, $args, $body, $user_id ) );
+			$result = self::run_tool( $tool_id, $args, $body, $user_id );
 			$ok     = ! empty( $result['ok'] );
 			$results[] = array(
 				'tool'   => $tool_id,
@@ -87,6 +84,12 @@ class Neo_Pulse_App_Pulse_Assist_Action_Executor {
 			if ( $ok && ! empty( $result['projectId'] ) ) {
 				$project_id = (int) $result['projectId'];
 			}
+			if ( $ok && ! empty( $result['workflowId'] ) ) {
+				$created_workflow_ids[] = (int) $result['workflowId'];
+			}
+			if ( $ok && ! empty( $result['workflow']['id'] ) ) {
+				$created_workflow_ids[] = (int) $result['workflow']['id'];
+			}
 			if ( ! $ok ) {
 				$errors[] = (string) ( $result['error'] ?? "Tool {$tool_id} failed." );
 			}
@@ -108,9 +111,28 @@ class Neo_Pulse_App_Pulse_Assist_Action_Executor {
 			'results'            => $results,
 			'createdTaskIds'     => array_values( array_unique( array_filter( $created_ids ) ) ),
 			'createdProjectIds'  => array_values( array_unique( array_filter( $created_project_ids ) ) ),
+			'createdWorkflowIds' => array_values( array_unique( array_filter( $created_workflow_ids ) ) ),
 			'projectId'          => $project_id,
 			'errors'             => $errors,
 		);
+	}
+
+	/**
+	 * @param array<string,mixed> $args
+	 * @param array<string,mixed> $body
+	 * @return array<string,mixed>
+	 */
+	private static function run_tool( string $tool_id, array $args, array $body, int $user_id ): array {
+		if ( Neo_Pulse_App_Pulse_Assist_Action_Tools_Forge::is_forge_tool( $tool_id ) ) {
+			return Neo_Pulse_App_Pulse_Assist_Action_Tools_Forge::run( $tool_id, $args, $body, $user_id );
+		}
+		if ( Neo_Pulse_App_Pulse_Assist_Action_Tools_Recipes::is_recipe_tool( $tool_id ) ) {
+			return Neo_Pulse_App_Pulse_Assist_Action_Tools_Recipes::run( $tool_id, $args, $body, $user_id );
+		}
+		if ( Neo_Pulse_App_Pulse_Assist_Action_Tools_Executions::is_execution_tool( $tool_id ) ) {
+			return Neo_Pulse_App_Pulse_Assist_Action_Tools_Executions::run( $tool_id, $args, $body, $user_id );
+		}
+		return Neo_Pulse_App_Pulse_Assist_Action_Tools_Tasks::run( $tool_id, $args, $body, $user_id );
 	}
 
 	/**
@@ -124,11 +146,7 @@ class Neo_Pulse_App_Pulse_Assist_Action_Executor {
 			if ( $tool_id === '' || Neo_Pulse_App_Pulse_Assist_Action_Registry::is_write_tool( $tool_id ) ) {
 				continue;
 			}
-			$payload[ $tool_id ] = Neo_Pulse_App_Pulse_Assist_Action_Tools_Recipes::is_recipe_tool( $tool_id )
-				? Neo_Pulse_App_Pulse_Assist_Action_Tools_Recipes::run( $tool_id, array(), $body, $user_id )
-				: ( Neo_Pulse_App_Pulse_Assist_Action_Tools_Executions::is_execution_tool( $tool_id )
-					? Neo_Pulse_App_Pulse_Assist_Action_Tools_Executions::run( $tool_id, array(), $body, $user_id )
-					: Neo_Pulse_App_Pulse_Assist_Action_Tools_Tasks::run( $tool_id, array(), $body, $user_id ) );
+			$payload[ $tool_id ] = self::run_tool( $tool_id, array(), $body, $user_id );
 		}
 		return $payload;
 	}

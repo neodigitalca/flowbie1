@@ -17,6 +17,7 @@ import { buildPortfolioBlockedHosts } from "@/lib/portfolio-link-blocklist";
 import { generateOptimizedContent } from "@/lib/content-generation/content-generator";
 import { handleFeaturedImage } from "@/lib/content-generation/featured-image-handler";
 import { uploadToWordPress } from "@/lib/content-generation/wordpress-uploader";
+import { updateWordPressPost } from "@/lib/wordpress-api";
 import { optimizeMetaFields } from "@/lib/content-generation/meta-optimizer";
 import { updateACFOriginField } from "@/lib/content-generation/acf-origin-updater";
 import { cleanTitleForNonEntity } from "@/lib/content-optimization-helpers";
@@ -53,6 +54,12 @@ import {
   type ContentPrepHarnessBridge,
   pipelineIndexForHarnessTitle,
 } from "@/lib/overview/overview-content-prep-harness-run";
+import { rowUrlMatchesWordPressSite } from "@/lib/overview/overview-aiseo-after-upload";
+import {
+  attachWordPressUploadProofToFileManager,
+} from "@/lib/overview/overview-wp-upload-harness-artifacts";
+import type { OverviewBulkSeoApiItem } from "@/lib/overview/overview-bulk-seo-payload";
+import { restCollectionEndpointForSubtype } from "@/lib/overview/overview-bulk-seo-payload";
 
 /** WordPress REST API can return content/excerpt as { raw, rendered }. Normalize to string. */
 function toStringContent(value: unknown): string {
@@ -384,12 +391,14 @@ export async function generateAndUploadContent(
 
     markdownContent = contentResult.markdownContent;
     htmlContent = contentResult.htmlContent;
-    excerpt = contentResult.excerpt ?? '';
+    if (!contentOnlyUpload) {
+      excerpt = contentResult.excerpt ?? "";
+    }
     preservedMediaUrls = contentResult.preservedMediaUrls ?? [];
 
     if (contentPrepHarnessBridge) {
       const bridge = contentPrepHarnessBridge;
-      const contentHtmlIndex = pipelineIndexForHarnessTitle("Content HTML", bridge.pipelineTitles);
+      const contentHtmlIndex = pipelineIndexForHarnessTitle("Post content", bridge.pipelineTitles);
       const contentMdIndex = pipelineIndexForHarnessTitle("Content Markdown", bridge.pipelineTitles);
       if (contentHtmlIndex >= 0) {
         markContentPrepHarnessSection(
@@ -535,7 +544,33 @@ export async function generateAndUploadContent(
 
   let uploadResult: Awaited<ReturnType<typeof uploadToWordPress>>;
 
+  const wpUploadHarnessIndex = contentPrepHarnessBridge
+    ? pipelineIndexForHarnessTitle("WordPress upload", contentPrepHarnessBridge.pipelineTitles)
+    : -1;
+  const markWpUploadHarness = (
+    phase: "start" | "done" | "error",
+    markdownSlice?: string,
+  ) => {
+    if (!contentPrepHarnessBridge || wpUploadHarnessIndex < 0) return;
+    markContentPrepHarnessSection(
+      contentPrepHarnessBridge.url,
+      wpUploadHarnessIndex,
+      phase,
+      contentPrepHarnessBridge.setters,
+      0,
+      markdownSlice,
+      contentPrepHarnessBridge.pipelineTitles,
+    );
+    contentPrepHarnessBridge.flushGeneratedFiles?.();
+  };
+
+  markWpUploadHarness("start");
   setProgress("publish", 0.05, "Uploading to WordPress…");
+
+  const basicWordPressContentUpdate =
+    context.updateMode === "update" &&
+    contentOnlyUpload &&
+    !seoExtraTextFieldOnly;
 
   if (skipMediaPipeline) {
     if (shouldOptimizeContent && strippedHtml?.trim()) {
@@ -547,6 +582,45 @@ export async function generateAndUploadContent(
       setProgress(filesPatch.stepId!, filesPatch.subProgress!, filesPatch.message, filesPatch);
     }
 
+    if (basicWordPressContentUpdate) {
+      const postIdNum = Number(context.existingPost?.id ?? 0);
+      if (!Number.isFinite(postIdNum) || postIdNum <= 0) {
+        throw new Error("WordPress update blocked: missing postId");
+      }
+      const postTypeEndpoint =
+        (context.existingPost?.postTypeEndpoint as string | undefined)?.trim() ||
+        (context.resolved?.subtype === "page" ? "pages" : "posts");
+      const postStatus = (context.existingPost?.status as string | undefined)?.trim() || "publish";
+      const originalSlug = context.existingPost?.slug || context.resolved?.slug;
+      const wpResult = await updateWordPressPost(
+        site.siteUrl,
+        site.username,
+        site.appPassword,
+        postIdNum,
+        cleanedExistingTitle,
+        strippedHtml,
+        undefined,
+        postStatus as "draft" | "publish",
+        (context.existingPost?.post_type as string | undefined) || "post",
+        undefined,
+        undefined,
+        undefined,
+        originalSlug,
+        postTypeEndpoint,
+      );
+      if (!wpResult.success) {
+        throw new Error(wpResult.error || "WordPress update-post failed");
+      }
+      if (wpResult.contentSaveWarning) {
+        throw new Error(String(wpResult.contentSaveWarning));
+      }
+      uploadResult = {
+        result: wpResult,
+        postId: wpResult.postId ?? postIdNum,
+        link: wpResult.link || context.url,
+        finalTitle: cleanedExistingTitle,
+      };
+    } else {
     uploadResult = await uploadToWordPress({
       context,
       blueprintResult,
@@ -572,6 +646,7 @@ export async function generateAndUploadContent(
       seoExtraTextFieldOnly: false,
       faqSchemaOverride: optimizeFaqBundle?.faqForAcf,
     });
+    }
   } else {
     const featuredImageType = opts.featuredImageType || "ai-generated";
 
@@ -734,6 +809,60 @@ export async function generateAndUploadContent(
 
   const { result, postId, link, finalTitle } = uploadResult;
 
+  const postIdNum = Number(postId ?? context.existingPost?.id ?? 0);
+  const subtype =
+    (context.resolved?.subtype as string | undefined)?.trim() ||
+    (context.existingPost?.postType as string | undefined)?.trim() ||
+    "post";
+  const postTypeEndpoint =
+    (context.existingPost?.postTypeEndpoint as string | undefined)?.trim() ||
+    restCollectionEndpointForSubtype(subtype);
+  const plainExcerptForProof = excerpt
+    ? excerpt.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim()
+    : "";
+  const proofItem: OverviewBulkSeoApiItem = {
+    postId: postIdNum,
+    postType: subtype,
+    postTypeEndpoint,
+    ...(basicWordPressContentUpdate
+      ? {}
+      : finalTitle?.trim()
+        ? { postTitle: finalTitle.trim() }
+        : {}),
+    ...(basicWordPressContentUpdate || !plainExcerptForProof
+      ? {}
+      : { postExcerpt: plainExcerptForProof }),
+    ...(strippedHtml?.trim() ? { postContent: strippedHtml.trim() } : {}),
+    acf: {},
+  };
+  const siteMismatch = !rowUrlMatchesWordPressSite(context.url, site);
+  const uploadOk = result?.success === true && !!postId && !!link && !siteMismatch;
+  attachWordPressUploadProofToFileManager({
+    fileManager,
+    site,
+    pageUrl: context.url,
+    item: proofItem,
+    ok: uploadOk,
+    skipped: siteMismatch,
+    error: siteMismatch
+      ? `Row URL is not on connected site ${site.name?.trim() || site.siteUrl}. Upload blocked.`
+      : uploadOk
+        ? undefined
+        : String(result?.error ?? "WordPress upload failed"),
+    apiResult: {
+      postId: postIdNum,
+      ok: uploadOk,
+      error: result?.error,
+      link: link ?? undefined,
+    },
+    flushGeneratedFiles: contentPrepHarnessBridge?.flushGeneratedFiles,
+  });
+  const wpProofFile = fileManager.getFiles().find((f) => f.name === "wordpress.json");
+  markWpUploadHarness(
+    uploadOk ? "done" : "error",
+    wpProofFile ? `\`\`\`json\n${wpProofFile.content}\n\`\`\`` : undefined,
+  );
+
   try {
     const { storeOverviewOptimizedHtml } = await import("@/lib/overview/overview-content-opt-html-store");
     storeOverviewOptimizedHtml(context.url, strippedHtml, link || undefined);
@@ -752,36 +881,17 @@ export async function generateAndUploadContent(
     throw new Error(`WordPress upload failed: ${String(result.contentSaveWarning)}`);
   }
 
-  const uploadConfirmationFileName = OptimizationFileManager.generateFilename(
-    'wordpress-post-upload',
-    postId.toString(),
-    'json'
-  );
-  fileManager.addFile(
-    uploadConfirmationFileName,
-    JSON.stringify({
-      success: true,
-      postId,
-      link,
-      finalTitle,
-      status: result.status || 'published',
-      updateMode: context.updateMode,
-      url: context.url,
-      uploadedAt: new Date().toISOString(),
-      wordpressSite: site?.url || site?.name || null,
-      result,
-    }, null, 2),
-    'application/json'
-  );
-
-  // Track what was actually changed - compare with original values
-  const existingExcerptClean = toStringContent(context.existingExcerpt).replace(/<[^>]*>/g, '').trim();
-  const excerptClean = excerpt ? excerpt.replace(/<[^>]*>/g, '').trim() : '';
-  
-  const titleChanged = shouldOptimizeTitle && finalTitle !== existingTitle && finalTitle.trim() !== existingTitle.trim();
-  const metaChanged = shouldOptimizeMeta && excerptClean !== existingExcerptClean && excerptClean.length > 0;
+  const existingExcerptClean = toStringContent(context.existingExcerpt).replace(/<[^>]*>/g, "").trim();
+  const excerptClean = excerpt ? excerpt.replace(/<[^>]*>/g, "").trim() : "";
+  const titleChanged =
+    shouldOptimizeTitle && finalTitle !== existingTitle && finalTitle.trim() !== existingTitle.trim();
+  const metaChanged =
+    shouldOptimizeMeta && excerptClean !== existingExcerptClean && excerptClean.length > 0;
   const existingContentStrForCompare = toStringContent(context.existingContent);
-  const contentChanged = shouldOptimizeContent && markdownContent !== existingContentStrForCompare && markdownContent.trim() !== existingContentStrForCompare.trim();
+  const contentChanged =
+    shouldOptimizeContent &&
+    markdownContent !== existingContentStrForCompare &&
+    markdownContent.trim() !== existingContentStrForCompare.trim();
 
   const changes = {
     titleChanged,

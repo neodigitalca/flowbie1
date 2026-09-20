@@ -15,4 +15,21 @@ describe("buildOptimizedMetaFromKeywordResearch entity SAP titles", () => {
     expect(meta.rank_math_title).toBe(postTitle);
     expect(meta.rank_math_title).not.toContain(":");
   });
+
+  it("does not stitch the keyword onto the title agent headline", () => {
+    const postTitle = "Blackout Blinds For Homes In Mediterra Naples Florida";
+    const meta = buildOptimizedMetaFromKeywordResearch(
+      {
+        seoTitle: "Blackout Blinds Mediterra Naples Florida: Guide",
+        focusKeyword: "blackout blinds mediterra naples florida",
+      },
+      postTitle,
+      "Blackout blinds for homes in Mediterra.",
+      "blackout blinds mediterra naples florida",
+      "https://example.com/mediterra/",
+      "https://example.com",
+    );
+    expect(meta.rank_math_title).toBe(postTitle);
+    expect(meta.rank_math_title).not.toContain(":");
+  });
 });

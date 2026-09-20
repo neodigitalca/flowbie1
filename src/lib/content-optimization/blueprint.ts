@@ -2,7 +2,7 @@ import { notify } from "@/lib/app-notifications";
 import { NOTIFY_GENERATING_OPTIMIZED_BLUEPRINT_THIS_STEP, notifyBlueprintCreatedXSectionsStartingCo, notifyChecklistCreatedXItemsBuildingBluep } from "@/lib/notify-messages";
 import { getMuteOptimizationToasts } from "@/hooks/content-optimization/optimization-toast-mute";
 import { loadApiKey } from "@/lib/api";
-import { generateChecklistFromSelections, generateBlueprintFromTemplate, buildBlueprintFromChecklistRows, type BlogTemplateContext } from "@/lib/blog-template-builder";
+import { generateChecklistFromSelections, generateBlueprintFromTemplate, type BlogTemplateContext } from "@/lib/blog-template-builder";
 import {
   enforceForbiddenWordsOnBlueprint,
   formatBlueprintFileContent,
@@ -31,7 +31,6 @@ import {
 } from "@/lib/bulk/modifier-external-links";
 import type { ExternalLinkPair } from "@/lib/content-generation/external-link-placeholders";
 
-/** Blog optimize only. SAP optimize uses generateBlueprintAndContent via runOptimizeViaBulkGenerate. */
 export async function generateOptimizedBlueprint(
   selectedKeywords: string[],
   selectedH2Sections: string[],
@@ -187,10 +186,7 @@ export async function generateOptimizedBlueprint(
   } as any);
 
   if (!blueprintResult.agents?.length) {
-    Object.assign(
-      blueprintResult,
-      buildBlueprintFromChecklistRows(pipelineChecklist, blueprintContext),
-    );
+    throw new Error("Blueprint contract failed: no agents");
   }
 
   const enforcedBlueprint = enforceForbiddenWordsOnBlueprint(blueprintResult);

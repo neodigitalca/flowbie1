@@ -37,6 +37,10 @@ describe("overview-content-link-targets-harness-run", () => {
     expect(queries.some((q) => q.id === "section-0-blog")).toBe(true);
     expect(queries.some((q) => q.id === "section-0-related")).toBe(true);
     expect(queries.some((q) => q.id === "global-page")).toBe(true);
+    expect(queries.find((q) => q.id === "section-0-page")?.bucket).toBe("PAGE");
+    expect(queries.find((q) => q.id === "section-0-blog")?.bucket).toBe("BLOG");
+    expect(queries.find((q) => q.id === "global-page")?.query).toBe("Smart Blinds");
+    expect(queries.some((q) => q.query.includes("product service"))).toBe(false);
     expect(queries.length).toBe(7);
   });
 
@@ -55,7 +59,7 @@ describe("overview-content-link-targets-harness-run", () => {
     expect(plan.pageTargets[0]?.suggestedAnchor).toBe("PowerView Automation");
   });
 
-  it("throws when pages exist but no page targets matched", () => {
+  it("maps a blog-only match URL into blogTargets", () => {
     const queries = buildLinkTargetQueries({
       primaryKeyword: "Smart Blinds",
       bodySectionTitles: ["Compare Features"],
@@ -63,8 +67,8 @@ describe("overview-content-link-targets-harness-run", () => {
     const urlByQueryId = new Map<string, string>([
       ["section-0-blog", "https://example.com/blog/motorized-blinds-vs-manual/"],
     ]);
-    expect(() => buildLinkTargetsPlanFromMatches({ catalog, queries, urlByQueryId })).toThrow(
-      /no page targets/i,
-    );
+    const plan = buildLinkTargetsPlanFromMatches({ catalog, queries, urlByQueryId });
+    expect(plan.blogTargets).toHaveLength(1);
+    expect(plan.blogTargets[0]?.url).toContain("/blog/motorized-blinds-vs-manual/");
   });
 });

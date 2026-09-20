@@ -4,6 +4,7 @@ import type { BulkHarnessSectionPayload } from "@/lib/bulk-auto-generate";
 import type { HarnessSectionListItem } from "@/lib/bulk/harness-sections-reducer";
 import type { OptimizationFileManager } from "@/lib/optimization-file-manager";
 import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
+import { AISEO_POST_CONTENT_SLOT_TITLE } from "@/lib/overview/overview-aiseo-row-artifacts";
 
 /** True when a harness label looks like a raw URL, not a human title. */
 export function isUrlLikeHarnessTitle(value: string): boolean {
@@ -46,14 +47,43 @@ export const CONTENT_OPTIMIZE_PIPELINE_PREFIX = [
 ] as const;
 
 export const CONTENT_OPTIMIZE_PIPELINE_SUFFIX = [
-  "Content HTML",
+  AISEO_POST_CONTENT_SLOT_TITLE,
   "Content Markdown",
+  "WordPress upload",
 ] as const;
 
 export const CONTENT_OPTIMIZE_PIPELINE_TITLES = [
   ...CONTENT_OPTIMIZE_PIPELINE_PREFIX,
   ...CONTENT_OPTIMIZE_PIPELINE_SUFFIX,
 ] as const;
+
+export const GOOGLE_IMAGE_PIPELINE_TITLE = "Google Image" as const;
+
+/** Entity SAP / google-maps featured image: Google Image is always step 1 in Details. */
+export const GOOGLE_IMAGE_ENTITY_SAP_PIPELINE_TITLES = [
+  GOOGLE_IMAGE_PIPELINE_TITLE,
+  ...CONTENT_OPTIMIZE_PIPELINE_TITLES,
+] as const;
+
+export function rowUsesGoogleImageFeatured(
+  row?: { featuredImage?: string },
+  featuredImageType?: string,
+): boolean {
+  if (row?.featuredImage === "n") return false;
+  if (row?.featuredImage === "google-maps") return true;
+  return featuredImageType === "google-maps";
+}
+
+export function withGoogleImagePipelineFirst(titles: readonly string[]): readonly string[] {
+  if (!titles.length || titles[0] === GOOGLE_IMAGE_PIPELINE_TITLE) return [...titles];
+  return [GOOGLE_IMAGE_PIPELINE_TITLE, ...titles];
+}
+
+export function buildGoogleImageEntitySapPipelineTitles(
+  bodyHarnessTitles?: readonly string[],
+): readonly string[] {
+  return withGoogleImagePipelineFirst(buildContentOptimizePipelineTitles(bodyHarnessTitles));
+}
 
 export const CONTENT_OPTIMIZE_PIPELINE_TOTAL = CONTENT_OPTIMIZE_PIPELINE_TITLES.length;
 
@@ -133,20 +163,24 @@ export const CONTENT_OPTIMIZE_ARTIFACT_SLUGS: Partial<
   Checklist: "checklist",
   Blueprint: "blueprint",
   "Link targets": "link-targets",
-  "Content HTML": "content-",
+  [AISEO_POST_CONTENT_SLOT_TITLE]: "content-",
   "Content Markdown": "content-",
+  "WordPress upload": "wordpress.json",
 };
 
 export function isContentOptimizePipelineTitles(
   titles: readonly string[] | undefined,
 ): boolean {
-  if (!titles?.length || titles.length < CONTENT_OPTIMIZE_PIPELINE_TOTAL) return false;
+  if (!titles?.length) return false;
+  const offset = titles[0] === GOOGLE_IMAGE_PIPELINE_TITLE ? 1 : 0;
+  const sliced = titles.slice(offset);
+  if (sliced.length < CONTENT_OPTIMIZE_PIPELINE_TOTAL) return false;
   for (let i = 0; i < CONTENT_OPTIMIZE_PIPELINE_PREFIX.length; i++) {
-    if (titles[i] !== CONTENT_OPTIMIZE_PIPELINE_PREFIX[i]) return false;
+    if (sliced[i] !== CONTENT_OPTIMIZE_PIPELINE_PREFIX[i]) return false;
   }
-  const suffixStart = titles.length - CONTENT_OPTIMIZE_PIPELINE_SUFFIX.length;
+  const suffixStart = sliced.length - CONTENT_OPTIMIZE_PIPELINE_SUFFIX.length;
   for (let i = 0; i < CONTENT_OPTIMIZE_PIPELINE_SUFFIX.length; i++) {
-    if (titles[suffixStart + i] !== CONTENT_OPTIMIZE_PIPELINE_SUFFIX[i]) return false;
+    if (sliced[suffixStart + i] !== CONTENT_OPTIMIZE_PIPELINE_SUFFIX[i]) return false;
   }
   return true;
 }
@@ -169,67 +203,40 @@ export function buildWaitingContentOptimizeHarnessSections(
   }));
 }
 
-/** Short topic label for intro H2 harness titles (avoid full comparison slug in UI). */
-export function topicLabelForIntroHarness(
-  articleTitle: string,
-  options?: { pageUrl?: string; keyword?: string },
-): string {
-  const keyword = options?.keyword?.trim();
-  if (keyword && !isUrlLikeHarnessTitle(keyword)) {
-    const fromKeyword = sanitizeHarnessArticleTitle(keyword, { pageUrl: options?.pageUrl, keyword });
-    if (fromKeyword) {
-      const vsFromKeyword = fromKeyword.split(/\s+vs\.?\s+/i)[0]?.trim();
-      return vsFromKeyword || fromKeyword;
-    }
-  }
-  const trimmed = sanitizeHarnessArticleTitle(articleTitle, options);
-  if (!trimmed) return "";
-  const vsSplit = trimmed.split(/\s+vs\.?\s+/i);
-  if (vsSplit.length >= 2 && vsSplit[0]!.trim()) {
-    return vsSplit[0]!.trim();
-  }
-  return trimmed;
-}
+export type PredeterminedBodyHarnessOptions = {
+  pageUrl?: string;
+  keyword?: string;
+  entity?: string;
+  isSap?: boolean;
+};
 
-/** Intro H2 agent title matching blog checklist item 1. */
-export function blogIntroHarnessTitle(articleTitle: string, pageUrl?: string, keyword?: string): string {
-  const topic = topicLabelForIntroHarness(articleTitle, { pageUrl, keyword });
-  if (!topic) return "Introduction";
-  return `How ${topic} works`;
-}
-
-/** Predetermined body harness titles (intro + SERP outline sections or init placeholders). */
+/** Body harness titles from the outline only. Never invents or pins titles. */
 export function buildPredeterminedBlogBodyHarnessTitles(
-  articleTitle: string,
+  _articleTitle: string,
   h2Titles?: readonly string[],
-  options?: { pageUrl?: string; keyword?: string },
+  options?: PredeterminedBodyHarnessOptions,
 ): string[] {
-  const outline = (h2Titles ?? []).map((title) => title.trim()).filter(Boolean);
-  if (outline.length >= 5) {
-    const intro = blogIntroHarnessTitle(articleTitle, options?.pageUrl, options?.keyword);
-    return [intro, ...outline.slice(0, 6)];
-  }
-  return ["Section 1", "Section 2", "Section 3", "Section 4", "Section 5", "Section 6"];
+  return (h2Titles ?? []).map((title) => title.trim()).filter(Boolean);
 }
 
 export function buildPredeterminedBlogBodyHarnessTitlesFromOutline(
   articleTitle: string,
   h2Titles: readonly string[],
-  options?: { pageUrl?: string; keyword?: string },
+  options?: PredeterminedBodyHarnessOptions,
 ): string[] {
   return buildPredeterminedBlogBodyHarnessTitles(articleTitle, h2Titles, options);
 }
 
 type HarnessTitleSection = { title?: string | null };
 
-/** Body harness step titles between Blueprint and Content HTML. */
+/** Body harness step titles between Blueprint and Post content. */
 export function extractBodyHarnessTitlesFromSections(
   sections: readonly HarnessTitleSection[] | undefined,
 ): string[] {
   if (!sections?.length) return [];
   const titles = sections.map((s) => s.title?.trim()).filter(Boolean) as string[];
   const blueprintIndex = titles.indexOf("Blueprint");
-  const contentHtmlIndex = titles.indexOf("Content HTML");
+  const contentHtmlIndex = titles.indexOf(AISEO_POST_CONTENT_SLOT_TITLE);
   if (blueprintIndex >= 0 && contentHtmlIndex > blueprintIndex) {
     let startIndex = blueprintIndex + 1;
     const linkTargetsIndex = titles.indexOf("Link targets");
@@ -369,6 +376,8 @@ export function resolveContentOptimizePipelineTitlesForRow(
   sections: readonly HarnessTitleSection[] | undefined,
   rowFiles?: readonly RowFileLike[],
   articleTitle?: string,
+  googleImageFirst = false,
 ): readonly string[] {
-  return resolveContentOptimizePipelineTitlesFromHarness(sections, rowFiles, articleTitle);
+  const titles = resolveContentOptimizePipelineTitlesFromHarness(sections, rowFiles, articleTitle);
+  return googleImageFirst ? withGoogleImagePipelineFirst(titles) : titles;
 }

@@ -12,6 +12,7 @@ export interface BulkImportClient {
   siteUrl: string;
   username: string;
   appPassword: string;
+  googleAdsCustomerId?: string;
 }
 
 interface BulkImportClientRowProps {

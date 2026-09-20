@@ -353,6 +353,59 @@ const FEATURE_PLAYBOOKS = [
     ["sections", "task sections", "kanban columns"],
   ),
 
+  // pulse-forge
+  pb(
+    "pulse-forge/dashboard",
+    "pulse-forge",
+    "My Forge",
+    "How do I open the Forge dashboard?",
+    "pulse:nav/pulse-forge/forge",
+    [
+      "Open [Teams → Pulse Forge](pulse:nav/pulse-forge/forge).",
+      "Select **My Forge** in the left sidebar to see installed automations and recent runs.",
+    ],
+    ["forge dashboard", "my forge", "pulse forge dashboard"],
+  ),
+  pb(
+    "pulse-forge/recipes",
+    "pulse-forge",
+    "Agents",
+    "How do I browse or install a recipe?",
+    "pulse:nav/pulse-forge/recipes",
+    [
+      "Open [Teams → Pulse Forge](pulse:nav/pulse-forge/forge).",
+      "Select **Agents** in the left sidebar to open the recipe library.",
+      "Open a recipe, then install it as an automation or as a workflow.",
+    ],
+    ["recipe library", "install recipe", "agents recipes", "recipe builder"],
+  ),
+  pb(
+    "pulse-forge/workflows",
+    "pulse-forge",
+    "Workflows",
+    "How do I create or open a workflow?",
+    "pulse:nav/pulse-forge/workflows",
+    [
+      "Open [Teams → Pulse Forge](pulse:nav/pulse-forge/workflows).",
+      "Select **Workflows** in the left sidebar.",
+      "Click **New workflow** or open an existing workflow tile to edit the canvas.",
+    ],
+    ["create workflow", "open workflow", "workflow canvas"],
+  ),
+  pb(
+    "pulse-forge/publish-run",
+    "pulse-forge",
+    "Publish and run",
+    "How do I publish or run a workflow?",
+    "pulse:nav/pulse-forge/workflows",
+    [
+      "Open [Teams → Pulse Forge → Workflows](pulse:nav/pulse-forge/workflows).",
+      "Open the workflow.",
+      "Use **Publish** to make it live, then **Test** to start a run.",
+    ],
+    ["publish workflow", "run workflow", "start workflow", "test workflow"],
+  ),
+
   // generator/opt
   pb(
     "generator/opt/sitemap-pills",
@@ -595,7 +648,21 @@ const FEATURE_PLAYBOOKS = [
       "Select a connected property with GSC configured.",
       "Browse performance reporting tabs and date ranges.",
     ],
-    ["gsc report", "reporting", "gsc reporting"],
+    ["gsc report", "gsc reporting", "search console report"],
+  ),
+  pb(
+    "generator/report/ppc",
+    "generator/report",
+    "PPC reporting",
+    "How do I generate a Google Ads PPC report?",
+    "pulse:nav/generator/report",
+    [
+      "Open [SEO → Generator → Report](pulse:nav/generator/report).",
+      "Select the **PPC** mode pill.",
+      "Use a property with a 10-digit Google Ads customer ID on Dashboard → Properties.",
+      "Click **Generate** on the black toolbar, or install ads-monthly-mom-report / ads-monthly-yoy-report on Pulse Forge.",
+    ],
+    ["ppc report", "ads report", "google ads report", "monthly ppc", "ppc mom", "ppc yoy"],
   ),
 
   // sitemap-optimizer
@@ -611,19 +678,6 @@ const FEATURE_PLAYBOOKS = [
       "Cluster and plan URL groups before running optimization.",
     ],
     ["plan mode", "sitemap plan"],
-  ),
-  pb(
-    "sitemap-optimizer/legacy-redirects",
-    "sitemap-optimizer",
-    "Legacy redirects",
-    "How do I match legacy redirects?",
-    "pulse:nav/sitemap-optimizer",
-    [
-      "Open [SEO → Sitemap](pulse:nav/sitemap-optimizer).",
-      "Open the **Legacy redirects** section.",
-      "Import or match old URLs to new sitemap URLs.",
-    ],
-    ["legacy redirects", "redirect match"],
   ),
   pb(
     "sitemap-optimizer/url-optimizer",

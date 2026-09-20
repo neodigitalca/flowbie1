@@ -1,5 +1,133 @@
 [
   {
+    "keyword": "ads-monthly-mom-report",
+    "name": "Ads Monthly MoM Report",
+    "description": "Generate a full Google Ads month-over-month report on the 1st of each month. Deliver via workflow Then steps (Google Drive, email, or local archive).",
+    "notes": [
+      "Runs on a calendar schedule (1st of each month, 9:00 Edmonton time).",
+      "Compare preset: last full calendar month vs the prior month.",
+      "Fetches the Ads bundle and runs the PPC reporting pipeline. Add Then steps for delivery.",
+      "Requires Google Ads (MCC + developer token + Connect), a 10-digit customer ID on the property, and an OpenRouter key."
+    ],
+    "isAutomation": true,
+    "category": "reporting",
+    "verticals": [
+      "general"
+    ],
+    "tags": [
+      "ads",
+      "ppc",
+      "reporting",
+      "mom",
+      "monthly"
+    ],
+    "prerequisites": [
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "ads_reporting"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "ads-mom-report",
+        "title": "Generate PPC month-over-month report",
+        "status": "todo",
+        "assignPulse": true,
+        "executionKind": "ads_reporting",
+        "executionPayload": {
+          "comparePreset": "mom"
+        },
+        "scheduleMode": "calendar",
+        "dueDate": "2026-09-01",
+        "dueTime": "09:00",
+        "recurrenceRule": "monthly"
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-monthly",
+      "kind": "calendar",
+      "frequency": "monthly",
+      "startDate": "2026-09-01",
+      "time": "09:00"
+    },
+    "actionBlock": {
+      "keyword": "ads-report-mom",
+      "executionKind": "ads_reporting",
+      "executionPayload": {
+        "comparePreset": "mom"
+      },
+      "title": "Generate PPC month-over-month report"
+    },
+    "kind": "template"
+  },
+  {
+    "keyword": "ads-monthly-yoy-report",
+    "name": "Ads Monthly YoY Report",
+    "description": "Generate a full Google Ads year-over-year report on the 1st of each month. Deliver via workflow Then steps (Google Drive, email, or local archive).",
+    "notes": [
+      "Runs on a calendar schedule (1st of each month, 9:00 Edmonton time).",
+      "Compare preset: last full calendar month vs the same month last year.",
+      "Fetches the Ads bundle and runs the PPC reporting pipeline. Add Then steps for delivery.",
+      "Requires Google Ads (MCC + developer token + Connect), a 10-digit customer ID on the property, and an OpenRouter key."
+    ],
+    "isAutomation": true,
+    "category": "reporting",
+    "verticals": [
+      "general"
+    ],
+    "tags": [
+      "ads",
+      "ppc",
+      "reporting",
+      "yoy",
+      "monthly"
+    ],
+    "prerequisites": [
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "ads_reporting"
+      ],
+      "actionCount": 1
+    },
+    "defaultTasks": [
+      {
+        "keyword": "ads-yoy-report",
+        "title": "Generate PPC year-over-year report",
+        "status": "todo",
+        "assignPulse": true,
+        "executionKind": "ads_reporting",
+        "executionPayload": {
+          "comparePreset": "yoy"
+        },
+        "scheduleMode": "calendar",
+        "dueDate": "2026-09-01",
+        "dueTime": "09:00",
+        "recurrenceRule": "monthly"
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-monthly",
+      "kind": "calendar",
+      "frequency": "monthly",
+      "startDate": "2026-09-01",
+      "time": "09:00"
+    },
+    "actionBlock": {
+      "keyword": "ads-report-yoy",
+      "executionKind": "ads_reporting",
+      "executionPayload": {
+        "comparePreset": "yoy"
+      },
+      "title": "Generate PPC year-over-year report"
+    },
+    "kind": "template"
+  },
+  {
     "keyword": "blog-freshness-radar",
     "name": "Blog Freshness Radar",
     "description": "Full AISEO on blog posts when total search clicks decline.",
@@ -1768,6 +1896,158 @@
       "title": "Meta + extra text on local pages on position drop"
     },
     "kind": "template"
+  },
+  {
+    "keyword": "missing-template-aiseo",
+    "name": "Missing template Full AISEO",
+    "description": "Download the posts audit CSV, then Full AISEO adjusts posts that do not fit the new template.",
+    "notes": [
+      "Client is Posh. Posts only. No schedule. Page audit loads posts automatically.",
+      "CSV rows downloads the missing-template audit CSV into this run RAG.",
+      "Full AISEO only gets posts that still lack an H2 titled Answer."
+    ],
+    "isAutomation": true,
+    "category": "maintenance",
+    "verticals": [
+      "general",
+      "local-seo",
+      "editorial"
+    ],
+    "tags": [
+      "optimize",
+      "aiseo",
+      "posts",
+      "template"
+    ],
+    "prerequisites": [
+      "wordpress"
+    ],
+    "filters": {
+      "executionKinds": [
+        "csv_rows",
+        "content_optimizer"
+      ],
+      "targetBuckets": [
+        "posts"
+      ],
+      "actionCount": 2
+    },
+    "defaultTasks": [
+      {
+        "keyword": "csv-rows-posts",
+        "title": "Page audit",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "calendar",
+        "dueDate": "2026-09-01",
+        "dueTime": "09:00",
+        "recurrenceRule": "none",
+        "executionKind": "csv_rows",
+        "executionPayload": {
+          "csvInputSource": "site",
+          "targetBucket": "posts",
+          "csvHeaders": [
+            "url",
+            "H2"
+          ],
+          "csvColumnMap": {
+            "url": "url",
+            "research": "H2"
+          }
+        }
+      },
+      {
+        "keyword": "missing-template-posts",
+        "title": "Full AISEO",
+        "status": "todo",
+        "assignPulse": true,
+        "scheduleMode": "calendar",
+        "dueDate": "2026-09-01",
+        "dueTime": "09:00",
+        "recurrenceRule": "none",
+        "executionKind": "content_optimizer",
+        "executionPayload": {
+          "targetBucket": "posts",
+          "updateMode": "update",
+          "optimizationOptions": {
+            "optimizeTitle": true,
+            "optimizeMeta": true,
+            "optimizeExcerpt": true,
+            "optimizeContent": true,
+            "optimizeExtraText": false,
+            "optimizeFeaturedImage": false,
+            "useAcfKeyword": true,
+            "forceNewResearch": true
+          },
+          "optionalPrompt": "Adjust posts that do not fit the new live template. Published HTML must include an H2 titled Answer. Skip posts that already have that H2."
+        }
+      }
+    ],
+    "triggerBlock": {
+      "keyword": "schedule-once",
+      "kind": "calendar",
+      "frequency": "once",
+      "startDate": "2026-09-01",
+      "time": "09:00",
+      "targetBucket": "posts"
+    },
+    "actionBlock": {
+      "keyword": "csv-rows",
+      "executionKind": "csv_rows",
+      "executionPayload": {
+        "csvInputSource": "site",
+        "targetBucket": "posts",
+        "csvHeaders": [
+          "url",
+          "H2"
+        ],
+        "csvColumnMap": {
+          "url": "url",
+          "research": "H2"
+        }
+      },
+      "title": "Page audit"
+    },
+    "actionBlocks": [
+      {
+        "keyword": "csv-rows",
+        "executionKind": "csv_rows",
+        "executionPayload": {
+          "csvInputSource": "site",
+          "targetBucket": "posts",
+          "csvHeaders": [
+            "url",
+            "H2"
+          ],
+          "csvColumnMap": {
+            "url": "url",
+            "research": "H2"
+          }
+        },
+        "title": "Page audit"
+      },
+      {
+        "keyword": "content-optimizer-full",
+        "executionKind": "content_optimizer",
+        "executionPayload": {
+          "targetBucket": "posts",
+          "updateMode": "update",
+          "optimizationOptions": {
+            "optimizeTitle": true,
+            "optimizeMeta": true,
+            "optimizeExcerpt": true,
+            "optimizeContent": true,
+            "optimizeExtraText": false,
+            "optimizeFeaturedImage": false,
+            "useAcfKeyword": true,
+            "forceNewResearch": true
+          },
+          "optionalPrompt": "Adjust posts that do not fit the new live template. Published HTML must include an H2 titled Answer. Skip posts that already have that H2."
+        },
+        "title": "Full AISEO"
+      }
+    ],
+    "kind": "workflow_template"
   },
   {
     "keyword": "monthly-3-posts-editorial",

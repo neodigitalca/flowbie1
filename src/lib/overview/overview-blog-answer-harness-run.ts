@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { WordPressSite } from "@/components/integrations/types";
-import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
+import type { AiseoCacheWriteAccumulator } from "@/lib/overview/overview-aiseo-cache-write";
 import {
   mergeHarnessProgressSiteAndBatch,
   setOptimizingState,
@@ -9,32 +9,30 @@ import { mergeOptimizationProgress } from "@/hooks/content-optimization/optimiza
 import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
 import { ensureMasterInstructionsInMemory } from "@/lib/master-instructions-storage";
 import {
-  initOverviewBulkHarnessPagination,
-  setOverviewBulkHarnessPageState,
-} from "@/lib/overview/overview-bulk-page-state";
-import { overviewBulkPageRanges } from "@/lib/overview/overview-bulk-page-size";
+  overviewBulkPageCount,
+  overviewBulkPageRanges,
+  OVERVIEW_BULK_PAGE_SIZE,
+} from "@/lib/overview/overview-bulk-page-size";
+import { mapOverviewAiCopyWithConcurrency } from "@/lib/overview/overview-ai-copy-concurrency";
+import { setOverviewBulkHarnessPageState } from "@/lib/overview/overview-bulk-page-state";
 import {
   markAnswerRowDone,
   markAnswerRowError,
   markAnswerRowOptimizing,
-  markAnswerRowSkipped,
   setAnswerHarnessMessage,
   type AnswerHarnessSetters,
 } from "@/lib/overview/overview-blog-answer-harness-mutations";
+import type { AiseoAfterRowWriteFn } from "@/lib/overview/overview-aiseo-after-upload";
+import { aiseoRowFilesForUpload } from "@/lib/overview/overview-aiseo-row-artifacts";
 import {
-  extractAnswerSectionHtml,
   generateAndPrependAnswerHtml,
-  resolveOverviewSourceHtml,
+  stripLeadingAnswerSection,
   type OverviewHarnessPageKind,
 } from "@/lib/overview/overview-blog-overview-prepend";
 
 type SetBulkState = Dispatch<SetStateAction<Record<string, BulkOptimizationState>>>;
 type SetOptProgress = Dispatch<SetStateAction<Record<string, unknown>>>;
 type SetIsOptimizing = Dispatch<SetStateAction<Record<string, boolean>>>;
-
-function isMissingBodyHtmlMessage(message: string): boolean {
-  return /no html body/i.test(message);
-}
 
 export type BlogAnswerCatalogRow = {
   index: number;
@@ -61,22 +59,21 @@ export function initOverviewBlogAnswerHarnessBatchState(params: {
     setBulkOptimizationState,
     setOptimizationProgress,
     setIsOptimizingContent,
-    prepMessage = "Preparing Answer batch…",
+    prepMessage = "Writing Answer…",
   } = params;
 
   const batchKey = `${site.id}-batch`;
   const urls = catalog.map((c) => c.url.trim()).filter(Boolean);
   const urlKeywords: Record<string, string> = {};
-  const initialUrlStatuses: BulkOptimizationState["urlStatuses"] = {};
 
   for (const entry of catalog) {
     const url = entry.url.trim();
     if (!url) continue;
     if (entry.focusKeyword) urlKeywords[url] = entry.focusKeyword;
-    initialUrlStatuses[url] = "pending";
   }
 
   setOptimizingState(setIsOptimizingContent, batchKey, true);
+  const pageCount = Math.max(1, overviewBulkPageCount(urls.length));
   setOptimizationProgress((prev) =>
     mergeOptimizationProgress(prev as Record<string, unknown>, site.id, {
       step: "Answer",
@@ -91,13 +88,16 @@ export function initOverviewBlogAnswerHarnessBatchState(params: {
     [batchKey]: {
       urls,
       currentIndex: 0,
-      urlStatuses: initialUrlStatuses,
+      urlStatuses: {},
       currentStep: "Answer",
       currentUrl: urls[0],
       urlKeywords,
       runKind: "aiAnswer",
       harnessStartedAt: Date.now(),
       urlGeneratedFiles: {},
+      bulkPageSize: OVERVIEW_BULK_PAGE_SIZE,
+      currentBulkPage: 1,
+      totalBulkPages: pageCount,
       currentStepProgress: {
         step: "Answer",
         progress: 2,
@@ -107,7 +107,6 @@ export function initOverviewBlogAnswerHarnessBatchState(params: {
       },
     },
   }));
-  initOverviewBulkHarnessPagination(batchKey, urls.length, setBulkOptimizationState);
 
   return batchKey;
 }
@@ -137,14 +136,14 @@ export type RunOverviewBlogAnswerHarnessBatchParams = {
   apiKey: string;
   model?: string;
   harnessSetters: AnswerHarnessSetters;
-  updateRow: (index: number, patch: Partial<OverviewRow>) => void;
-  onRowOk?: (url: string, html: string) => void;
+  cacheWrite: AiseoCacheWriteAccumulator;
+  uploadAfterRowWrite?: AiseoAfterRowWriteFn;
 };
 
 export async function runOverviewBlogAnswerHarnessBatch(
   params: RunOverviewBlogAnswerHarnessBatchParams,
 ): Promise<{ ok: number; failed: number }> {
-  const { catalog, site, apiKey, model, harnessSetters, updateRow, onRowOk } = params;
+  const { catalog, site, apiKey, model, harnessSetters, cacheWrite, uploadAfterRowWrite } = params;
   if (!catalog.length) return { ok: 0, failed: 0 };
 
   await ensureMasterInstructionsInMemory(site.id ?? null);
@@ -152,7 +151,6 @@ export async function runOverviewBlogAnswerHarnessBatch(
   const pageRanges = overviewBulkPageRanges(catalog.length);
   let ok = 0;
   let failed = 0;
-  let globalRowNum = 0;
 
   for (const { start, end, page, pageCount } of pageRanges) {
     const pageCatalog = catalog.slice(start, end);
@@ -169,40 +167,36 @@ export async function runOverviewBlogAnswerHarnessBatch(
       step: "Answer",
     });
 
-    for (const row of pageCatalog) {
-      globalRowNum += 1;
+    await mapOverviewAiCopyWithConcurrency(
+      pageCatalog.map((row, localIndex) => ({
+        row,
+        globalRowNum: start + localIndex + 1,
+      })),
+      async ({ row, globalRowNum }) => {
       const url = row.url.trim();
       try {
         markAnswerRowOptimizing(
           url,
           row.index,
           harnessSetters,
-          updateRow,
           globalRowNum,
           catalog.length,
           row.title || url,
         );
 
-        const sourceHtml = resolveOverviewSourceHtml({ postContentOptimized: row.html }, row.html);
-        if (!sourceHtml.trim()) {
-          markAnswerRowSkipped(url, row.index, harnessSetters, updateRow);
-          continue;
-        }
-
-        if (row.pageKind === "entity" && !row.entity?.trim()) {
-          failed += 1;
+        const sourceBody = stripLeadingAnswerSection(row.html ?? "").trim();
+        if (!sourceBody) {
           markAnswerRowError(
             url,
-            row.index,
             harnessSetters,
-            updateRow,
-            "Could not resolve place entity for this SAP page",
+            "No post HTML in inventory. Load sitemap with content, then retry Answer.",
           );
-          continue;
+          failed += 1;
+          return;
         }
 
         const result = await generateAndPrependAnswerHtml({
-          sourceHtml,
+          sourceHtml: row.html ?? "",
           articleTitle: row.title,
           focusKeyword: row.focusKeyword,
           pageUrl: url,
@@ -215,28 +209,41 @@ export async function runOverviewBlogAnswerHarnessBatch(
           model,
         });
 
-        if (!result) {
-          markAnswerRowSkipped(url, row.index, harnessSetters, updateRow);
-          continue;
+        cacheWrite.push(url, result.html);
+        markAnswerRowDone(url, row.index, harnessSetters, {
+          answerHtml: result.answerHtml,
+          postHtml: result.html,
+        });
+        const rowFiles = aiseoRowFilesForUpload({
+          runKind: "aiAnswer",
+          url,
+          elementFiles: result.answerHtml?.trim()
+            ? [
+                {
+                  name: "answer.html",
+                  content: result.answerHtml.trim(),
+                  mimeType: "text/html;charset=utf-8",
+                },
+              ]
+            : [],
+          postHtml: result.html,
+        });
+        if (uploadAfterRowWrite) {
+          await uploadAfterRowWrite({
+            index: row.index,
+            url,
+            html: result.html,
+            rowFiles: rowFiles.length ? rowFiles : undefined,
+          });
         }
-
-        const answerHtml =
-          extractAnswerSectionHtml(result.html) ||
-          result.answerHtml ||
-          extractAnswerSectionHtml(result.html.slice(0, 4000));
-        markAnswerRowDone(url, row.index, harnessSetters, updateRow, result.html, answerHtml);
-        onRowOk?.(url, result.html);
         ok += 1;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        if (isMissingBodyHtmlMessage(message)) {
-          markAnswerRowSkipped(url, row.index, harnessSetters, updateRow);
-          continue;
-        }
         failed += 1;
-        markAnswerRowError(url, row.index, harnessSetters, updateRow, message);
+        markAnswerRowError(url, harnessSetters, message);
       }
-    }
+    },
+    );
   }
 
   setAnswerHarnessMessage(

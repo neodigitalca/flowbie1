@@ -87,6 +87,7 @@ class Neo_Pulse_App_Workflow_Trigger_Agent_Done {
 			'overview_pages_meta_batch' => 'content_optimizer_meta',
 			'content_optimizer_bulk'    => 'content_optimizer',
 			'gsc_reporting'             => 'gsc_reporting',
+			'ads_reporting'             => 'ads_reporting',
 			'post_creator'              => 'post_creator',
 			'local_dominator_export'    => 'local_dominator_export',
 			'chatgpt_website_audit'     => 'chatgpt_website_audit',

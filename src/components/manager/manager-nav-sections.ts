@@ -149,13 +149,13 @@ export const MANAGER_NAV_SECTIONS: ManagerNavSection[] = [
       {
         value: "generator",
         label: "Generator",
-        description: "Opt, CSV, prompt, import, PR, entity, flow, image, research, and report",
+        description: "Opt, CSV, prompt, import, PR, entity, pages, flow, image, research, and report",
         icon: TrendingUp,
       },
       {
         value: "sitemap-optimizer",
         label: "Sitemap",
-        description: "Cluster, merge, publish overlapping URLs, legacy redirects, and URL optimization",
+        description: "Cluster, merge, publish overlapping URLs, and URL optimization",
         icon: GitMerge,
       },
       {
@@ -239,10 +239,5 @@ export function isManagerNavItemSelected(
     return managerTab === "dashboard" && dashboardCluster === item.dashboardCluster;
   }
   if (managerTab === "generator" && item.value === "generator") return true;
-  if (managerTab === "blog-generator" && item.value === "generator") return true;
-  if (managerTab === "sap-generator" && item.value === "generator") return true;
-  if (managerTab === "free-flow" && item.value === "generator") return true;
-  if (managerTab === "research" && item.value === "generator") return true;
-  if (managerTab === "gsc-reporting" && item.value === "generator") return true;
   return managerTab === item.value;
 }

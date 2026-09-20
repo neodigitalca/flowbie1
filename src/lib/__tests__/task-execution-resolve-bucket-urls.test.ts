@@ -1,6 +1,9 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { ensureBulkOptimizerInventoryForRun } from "@/hooks/content-optimization/bulk-optimization-load-inventory-snapshot";
-import { resolveTaskExecutionBucketInventory } from "@/lib/task-execution-resolve-bucket-urls";
+import {
+  resolveTaskExecutionBucketInventory,
+  workUrlsFromExplicitTargets,
+} from "@/lib/task-execution-resolve-bucket-urls";
 import { buildInventoryLookupMaps } from "@/lib/wordpress-api/inventory-match";
 import {
   clearBulkInventorySessionSnapshot,
@@ -101,6 +104,69 @@ describe("resolveTaskExecutionBucketInventory warm cache", () => {
     expect(resolved.urls).toEqual(["https://example.com/post-a"]);
     expect(fetchOverviewInventoryForSource).not.toHaveBeenCalled();
   });
+
+  it("fetches posts when includeContent is set even if warm cache is ready", async () => {
+    getWarmMock.mockReturnValue({
+      siteId: "site-warm-resolve",
+      counts: { inventoryTotal: 1, pages: 0, posts: 1, sap: 0, gscQueries: 0 },
+      bulkInventoryRows: [
+        {
+          id: 1,
+          collection: "posts",
+          url: "https://example.com/post-a/",
+          slug: "post-a",
+          fields: { title: "Post A", content: "", excerpt: "" },
+        },
+      ],
+    });
+    fetchOverviewInventoryForSource.mockResolvedValue({
+      rows: [
+        {
+          collection: "posts",
+          id: 1,
+          slug: "post-a",
+          url: "https://example.com/post-a/",
+          fields: { title: "Post A", content: "<h2>Answer</h2>", excerpt: "" },
+        },
+      ],
+      errors: {},
+    });
+
+    const resolved = await resolveTaskExecutionBucketInventory(site, "posts", undefined, {
+      includeContent: true,
+    });
+
+    expect(fetchOverviewInventoryForSource).toHaveBeenCalled();
+    expect(resolved.urls).toEqual(["https://example.com/post-a/"]);
+  });
+});
+
+describe("workUrlsFromExplicitTargets", () => {
+  it("maps CSV URLs onto inventory links when slash or www differs", () => {
+    const snapshot = {
+      postsMaps: buildInventoryLookupMaps(
+        [
+          {
+            id: 1,
+            slug: "post-a",
+            url: "https://example.com/post-a/",
+            fields: { title: "Post A", content: "", excerpt: "" },
+          },
+        ],
+        "https://example.com",
+      ),
+      pagesMaps: buildInventoryLookupMaps([], "https://example.com"),
+    };
+
+    expect(
+      workUrlsFromExplicitTargets(
+        ["https://www.example.com/post-a", "https://missing.test/nope/"],
+        snapshot,
+        "https://example.com",
+        "posts",
+      ),
+    ).toEqual(["https://example.com/post-a/", "https://missing.test/nope/"]);
+  });
 });
 
 describe("ensureBulkOptimizerInventoryForRun live-fetch fallback", () => {
@@ -116,6 +182,8 @@ describe("ensureBulkOptimizerInventoryForRun live-fetch fallback", () => {
   beforeEach(() => {
     clearBulkInventorySessionSnapshot("site-fallback");
     fetchOverviewInventoryForSource.mockReset();
+    getWarmMock.mockReset();
+    getWarmMock.mockReturnValue(null);
     fetchOverviewInventoryForSource.mockResolvedValue({
       rows: [
         {

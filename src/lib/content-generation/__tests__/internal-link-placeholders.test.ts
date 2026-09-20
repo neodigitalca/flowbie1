@@ -74,6 +74,7 @@ describe("INTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK", () => {
     expect(INTERNAL_LINK_PLACEHOLDER_FEATURE_SUFFIX).toContain("2-3");
     expect(INTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK).toContain("table cells");
     expect(INTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK).toContain("[text](https://...)");
+    expect(INTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK).toContain(". durable window coverings");
     expect(INTERNAL_LINK_PLACEHOLDER_PROMPT_BLOCK).not.toMatch(/\bEnergy Efficiency\b/);
   });
 });
@@ -257,6 +258,41 @@ describe("resolveInternalLinkPlaceholdersInHtml", () => {
     expect(out).not.toContain("/service-area/");
     expect(out).toContain('href="https://lindseyblindsetc.com/hunter-douglas/"');
     expect(out).toContain('href="https://lindseyblindsetc.com/blog/powerview-guide/"');
+  });
+
+  it("resolves an exact service-area page title inside a blockquote", async () => {
+    const mixed = [
+      {
+        id: 10,
+        slug: "park-shore",
+        title: "Park Shore Window Treatments",
+        excerpt: "City landing",
+        link: "https://lindseyblindsetc.com/service-area/park-shore/",
+        date_gmt: "2026-01-01",
+        collection: "sap",
+        postType: "service-area" as const,
+      },
+      {
+        id: 11,
+        slug: "hunter-douglas",
+        title: "Hunter Douglas",
+        excerpt: "Main product page",
+        link: "https://lindseyblindsetc.com/hunter-douglas/",
+        date_gmt: "2026-01-01",
+        collection: "pages",
+        postType: "page" as const,
+      },
+    ];
+    const html =
+      "<blockquote><p>Eleanor is redecorating her [[LINK:Park Shore Window Treatments|Park Shore]] condo.</p></blockquote>";
+    const out = await resolveInternalLinkPlaceholdersInHtml(html, {
+      siteUrl: "https://lindseyblindsetc.com",
+      wordPressPosts: mixed,
+      matchQueriesToUrls: async () => new Map(),
+    });
+    expect(out).toContain('href="https://lindseyblindsetc.com/service-area/park-shore/"');
+    expect(out).toContain(">Park Shore<");
+    expect(out).not.toContain("[[LINK:");
   });
 
   it("maps Hunter Douglas and Energy Efficiency to page-sitemap URLs", async () => {

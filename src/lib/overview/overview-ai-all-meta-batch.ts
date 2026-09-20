@@ -2,6 +2,7 @@ import pLimit from "p-limit";
 import type { BulkHarnessSectionPayload } from "@/lib/bulk-auto-generate";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
+import type { OverviewInventoryUrlMatch } from "@/lib/overview/overview-row-scrape";
 import type { AiAllMetaCatalogRow } from "@/lib/overview/overview-ai-all-meta-batch-catalog";
 import type { AiAllMetaRowPatch } from "@/lib/overview/overview-ai-all-meta-batch-parse";
 import { normalizeOverviewKeywordUrlKey } from "@/lib/overview/overview-keyword-batch-parse";
@@ -32,6 +33,7 @@ import {
 import type { FaqHarnessSetters } from "@/lib/overview/overview-faq-harness-mutations";
 import { overviewBulkPageRanges } from "@/lib/overview/overview-bulk-page-size";
 import { setOverviewBulkHarnessPageState } from "@/lib/overview/overview-bulk-page-state";
+import type { OverviewSitemapSource } from "@/lib/overview/overview-sitemap-source";
 
 export type AiAllMetaEligibleRow = {
   index: number;
@@ -48,6 +50,11 @@ export type AiAllMetaRowResult = {
 
 export type RunOverviewAiAllMetaBatchParams = {
   site: WordPressSite;
+  sitemapSource: OverviewSitemapSource;
+  getInventoryMatchForUrl: (
+    site: WordPressSite | null,
+    url: string,
+  ) => OverviewInventoryUrlMatch | undefined;
   eligible: AiAllMetaEligibleRow[];
   harnessSetters: MetaHarnessSetters;
   batchKey: string;
@@ -120,6 +127,8 @@ export async function runOverviewAiAllMetaBatch(
 ): Promise<{ results: AiAllMetaRowResult[]; applied: number; failed: number }> {
   const {
     site,
+    sitemapSource,
+    getInventoryMatchForUrl,
     eligible,
     harnessSetters,
     batchKey,
@@ -272,6 +281,9 @@ export async function runOverviewAiAllMetaBatch(
           try {
             const workingRow = { ...row, ...item.patch };
             const faqOk = await runFaqPairsForRow({
+              site,
+              sitemapSource,
+              getInventoryMatchForUrl,
               row: workingRow,
               rowIndex: index,
               bulkAiFaqSeedCount,

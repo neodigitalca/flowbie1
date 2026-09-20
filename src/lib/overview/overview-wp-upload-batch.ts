@@ -17,19 +17,17 @@ import {
 import {
   applyWpUploadBatchProgress,
   finalizeWpUploadHarnessSections,
-  finishWpUploadBatchHarness,
   setWpUploadBatchPrepMessage,
   type WpUploadHarnessSetters,
 } from "@/lib/overview/overview-wp-upload-harness-run";
 import type { OverviewWordPressUploadFailureRow } from "@/lib/overview/overview-wordpress-export-csv";
 import { overviewRowInBulkScope } from "@/lib/overview/overview-bulk-row-scope";
 import { semrushIssueLabelFromFilename } from "@/lib/overview/parse-semrush-error-csv";
-import { overviewBulkPageRanges } from "@/lib/overview/overview-bulk-page-size";
-import { OVERVIEW_WP_API_BATCH_SIZE } from "@/lib/overview/overview-batch-pipeline-progress";
 import {
-  initOverviewBulkHarnessPagination,
-  setOverviewBulkHarnessPageState,
-} from "@/lib/overview/overview-bulk-page-state";
+  OVERVIEW_WP_API_BATCH_SIZE,
+  overviewWpApiBatchCount,
+} from "@/lib/overview/overview-batch-pipeline-progress";
+import { initOverviewBulkHarnessPagination } from "@/lib/overview/overview-bulk-page-state";
 
 export type WpUploadEligibleRow = {
   index: number;
@@ -164,7 +162,6 @@ async function uploadPreparedChunk(
   wpBatch: number,
   wpBatchCount: number,
 ): Promise<{ results: WpUploadRowResult[]; failures: OverviewWordPressUploadFailureRow[] }> {
-  const urls = chunkPrepared.map((p) => p.url);
   const localIndexToUrl: Record<number, string> = {};
   for (let localIdx = 0; localIdx < chunkPrepared.length; localIdx += 1) {
     localIndexToUrl[localIdx] = chunkPrepared[localIdx]!.url;
@@ -177,50 +174,32 @@ async function uploadPreparedChunk(
   });
 
   const items = chunkPrepared.map(({ entry }) => entry.bundle.item);
-  let bulkRes: BulkOverviewSeoResponse;
-  try {
-    bulkRes = await bulkUpdateOverviewSeo(
-      site.siteUrl,
-      site.username!,
-      site.appPassword!,
-      items,
-      {
-        onProgress: (event) => {
-          applyWpUploadBatchProgress(harnessSetters, {
-            done: wpBatch,
-            total: wpBatchCount,
-            wpBatch,
-            wpBatchCount,
-            batchResults: event.batchResults,
-            localIndexToUrl,
-          });
-        },
-      },
-    );
-  } catch (err) {
-    const error = err instanceof Error ? err.message : "WordPress upload failed.";
-    bulkRes = {
-      success: false,
-      results: chunkPrepared.map(({ entry }, localIdx) => ({
-        postId: entry.bundle.item.postId,
-        index: localIdx,
-        ok: false,
-        error,
-        method: "direct_put",
-      })),
-      okCount: 0,
-      total: chunkPrepared.length,
-      error,
-    };
-  }
+  const first = chunkPrepared[0];
+  console.info("[WP upload] POST", `${wpBatch}/${wpBatchCount}`, {
+    postId: first?.entry.bundle.item.postId ?? null,
+    url: first?.url ?? "",
+  });
+  applyWpUploadBatchProgress(harnessSetters, {
+    done: wpBatch - 1,
+    total: wpBatchCount,
+    wpBatch,
+    wpBatchCount,
+    batchResults: [],
+    localIndexToUrl,
+    phase: "start",
+  });
+  const bulkRes = await bulkUpdateOverviewSeo(
+    site.siteUrl,
+    site.username!,
+    site.appPassword!,
+    items,
+  );
 
   const mergedResults = bulkRes.results ?? [];
 
   const { resultByIndex, resultByPostId } = mapBulkResults(bulkRes);
   const results: WpUploadRowResult[] = [];
   const failures: OverviewWordPressUploadFailureRow[] = [];
-  const successByUrl: Record<string, boolean> = {};
-  const errorByUrl: Record<string, string | undefined> = {};
 
   for (let localIdx = 0; localIdx < chunkPrepared.length; localIdx += 1) {
     const { entry } = chunkPrepared[localIdx]!;
@@ -228,8 +207,6 @@ async function uploadPreparedChunk(
       resultByIndex.get(localIdx) ?? resultByPostId.get(entry.bundle.item.postId);
     const rowResult = rowResultFromBulk(entry, localIdx, uploadResult);
     results.push(rowResult);
-    successByUrl[rowResult.url] = rowResult.ok;
-    errorByUrl[rowResult.url] = rowResult.error;
     if (!rowResult.ok) {
       failures.push({
         postId: rowResult.postId,
@@ -240,7 +217,6 @@ async function uploadPreparedChunk(
     }
   }
 
-  // One progress tick per WP batch (one bulk-update-overview-seo call), not per row.
   applyWpUploadBatchProgress(harnessSetters, {
     done: wpBatch,
     total: wpBatchCount,
@@ -248,9 +224,8 @@ async function uploadPreparedChunk(
     wpBatchCount,
     batchResults: mergedResults,
     localIndexToUrl,
+    phase: "done",
   });
-  finishWpUploadBatchHarness(urls, successByUrl, errorByUrl, harnessSetters);
-  finalizeWpUploadHarnessSections(harnessSetters, failures);
 
   flushSync(() => {
     for (let localIdx = 0; localIdx < results.length; localIdx += 1) {
@@ -274,12 +249,12 @@ export async function runOverviewWpUploadBatch(
     return { results: [], stats: { okCount: 0, failCount: 0, failures } };
   }
 
-  const uploadChunkSize = OVERVIEW_WP_API_BATCH_SIZE;
   const prepared = eligible.map((entry) => ({
     entry,
     url: entry.row.url?.trim() ?? "",
   }));
   const total = prepared.length;
+  const wpBatchCount = overviewWpApiBatchCount(total);
 
   initOverviewBulkHarnessPagination(batchKey, total, harnessSetters.setBulkOptimizationState);
   setWpUploadBatchPrepMessage(
@@ -289,52 +264,33 @@ export async function runOverviewWpUploadBatch(
     harnessSetters,
   );
 
-  const pageRanges = overviewBulkPageRanges(total, uploadChunkSize);
-  const resultByIndex = new Map<number, WpUploadRowResult>();
-
-  for (let pageIdx = 0; pageIdx < pageRanges.length; pageIdx += 1) {
-    const { start, end, page, pageCount } = pageRanges[pageIdx]!;
-    const chunkPrepared = prepared.slice(start, end);
-
-    if (pageCount > 1) {
-      setOverviewBulkHarnessPageState({
-        batchKey,
-        siteId: harnessSetters.siteId,
-        page,
-        pageCount,
-        start,
-        end,
-        total,
-        setBulkOptimizationState: harnessSetters.setBulkOptimizationState,
-        setOptimizationProgress: harnessSetters.setOptimizationProgress,
-        step: "Uploading to WordPress",
-      });
-      setWpUploadBatchPrepMessage(
-        batchKey,
-        harnessSetters.siteId,
-        `Uploading batch ${page}/${pageCount} (${chunkPrepared.length} rows)…`,
-        harnessSetters,
-      );
-    }
-
+  const results: WpUploadRowResult[] = [];
+  for (let start = 0; start < prepared.length; start += OVERVIEW_WP_API_BATCH_SIZE) {
+    const chunk = prepared.slice(start, start + OVERVIEW_WP_API_BATCH_SIZE);
+    const wpBatch = Math.floor(start / OVERVIEW_WP_API_BATCH_SIZE) + 1;
     const outcome = await uploadPreparedChunk(
       site,
-      chunkPrepared,
+      chunk,
       harnessSetters,
       onRowStart,
       onRowComplete,
-      page,
-      pageCount,
+      wpBatch,
+      wpBatchCount,
     );
-    for (const rowResult of outcome.results) {
-      resultByIndex.set(rowResult.index, rowResult);
-    }
+    const row = outcome.results[0];
+    console.info("[WP upload]", `${wpBatch}/${wpBatchCount}`, {
+      postId: row?.postId ?? null,
+      url: row?.url ?? chunk[0]?.url ?? "",
+    });
+    results.push(...outcome.results);
     failures.push(...outcome.failures);
   }
 
-  const results = Array.from(resultByIndex.values()).sort((a, b) => a.index - b.index);
-  const okCount = results.filter((r) => r.ok).length;
-  const failCount = results.filter((r) => !r.ok).length;
+  finalizeWpUploadHarnessSections(harnessSetters, failures);
 
-  return { results, stats: { okCount, failCount, failures } };
+  const sorted = results.slice().sort((a, b) => a.index - b.index);
+  const okCount = sorted.filter((r) => r.ok).length;
+  const failCount = sorted.filter((r) => !r.ok).length;
+
+  return { results: sorted, stats: { okCount, failCount, failures } };
 }

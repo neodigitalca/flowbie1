@@ -152,6 +152,53 @@ describe("workflow-then-runner", () => {
     expect(thenConfig(driveNode).inputMode).toBe("single");
   });
 
+  it("uploads Google Drive once per client", async () => {
+    const { resolveDriveUploadDeliverables, uploadDeliverableToGoogleDriveIfConfigured } = await import(
+      "@/lib/automation-google-drive-delivery"
+    );
+    vi.mocked(resolveDriveUploadDeliverables).mockClear();
+    vi.mocked(uploadDeliverableToGoogleDriveIfConfigured).mockClear();
+    const driveNode = createWorkflowNode("then_google_drive", "Google Drive");
+    driveNode.config = {
+      inputVariableKey: "step_a1",
+      inputNodeId: "a1",
+      executionPayload: { saveToGoogleDrive: true, googleDriveFolderId: "folder" },
+    };
+    const outA: WorkflowStepOutput = {
+      id: 1,
+      runId: 1,
+      nodeId: "a1",
+      variableKey: "step_a1",
+      scope: "run",
+      label: "Agent",
+      textPreview: "Done",
+      fileRefs: [],
+      agentRunId: 10,
+      siteId: "site-a",
+      createdAt: "",
+    };
+    const outB: WorkflowStepOutput = { ...outA, id: 2, agentRunId: 11, siteId: "site-b" };
+    const workflow = baseWorkflow([driveNode]);
+    const [first, second] = await Promise.all([
+      executeWorkflowThenStep(driveNode, [outA], {
+        workflow,
+        siteId: "site-a",
+        siteName: "Acme",
+        siteUrl: "https://acme.test",
+      }),
+      executeWorkflowThenStep(driveNode, [outB], {
+        workflow,
+        siteId: "site-b",
+        siteName: "Blinds West",
+        siteUrl: "https://blindswest.test",
+      }),
+    ]);
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    expect(resolveDriveUploadDeliverables).toHaveBeenCalledTimes(2);
+    expect(uploadDeliverableToGoogleDriveIfConfigured).toHaveBeenCalledTimes(2);
+  });
+
   it("uploads agent deliverables on then_google_drive", async () => {
     const agentOutput: WorkflowStepOutput = {
       id: 1,

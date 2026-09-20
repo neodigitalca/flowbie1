@@ -33,8 +33,10 @@ export const SitePropertyEditPanel: React.FC<SitePropertyEditPanelProps> = ({
   layout,
   formGbpLocationId,
   formGa4PropertyId,
+  formGoogleAdsCustomerId,
   onFormGbpLocationIdChange,
   onFormGa4PropertyIdChange,
+  onFormGoogleAdsCustomerIdChange,
   onPatchSite,
   ...formProps
 }) => {
@@ -61,6 +63,7 @@ export const SitePropertyEditPanel: React.FC<SitePropertyEditPanelProps> = ({
 
       const gbp = row.gbpLocationId?.trim() ?? "";
       const ga4 = row.ga4PropertyId?.trim() ?? "";
+      const ads = row.googleAdsCustomerId?.trim() ?? "";
 
       if (gbp) {
         onPatchSite?.(site.id, { gbpLocationId: gbp });
@@ -74,6 +77,13 @@ export const SitePropertyEditPanel: React.FC<SitePropertyEditPanelProps> = ({
           onFormGa4PropertyIdChange(ga4);
         }
       }
+      if (ads) {
+        const adsId = ads.replace(/\D/g, "");
+        onPatchSite?.(site.id, { googleAdsCustomerId: adsId || ads });
+        if (formGoogleAdsCustomerId.replace(/\D/g, "") !== adsId) {
+          onFormGoogleAdsCustomerIdChange(adsId || ads);
+        }
+      }
     })();
 
     return () => {
@@ -84,13 +94,16 @@ export const SitePropertyEditPanel: React.FC<SitePropertyEditPanelProps> = ({
     site,
     formGbpLocationId,
     formGa4PropertyId,
+    formGoogleAdsCustomerId,
     onFormGbpLocationIdChange,
     onFormGa4PropertyIdChange,
+    onFormGoogleAdsCustomerIdChange,
     onPatchSite,
   ]);
 
   const persistedGbp = site.gbpLocationId?.trim() || "";
   const persistedGa4 = site.ga4PropertyId?.trim() || "";
+  const persistedAds = site.googleAdsCustomerId?.trim() || "";
 
   return (
     <div
@@ -110,11 +123,14 @@ export const SitePropertyEditPanel: React.FC<SitePropertyEditPanelProps> = ({
             settingsSubSectionId={settingsSubSectionId}
             formGbpLocationId={formGbpLocationId}
             formGa4PropertyId={formGa4PropertyId}
+            formGoogleAdsCustomerId={formGoogleAdsCustomerId}
             onFormGbpLocationIdChange={onFormGbpLocationIdChange}
             onFormGa4PropertyIdChange={onFormGa4PropertyIdChange}
+            onFormGoogleAdsCustomerIdChange={onFormGoogleAdsCustomerIdChange}
             onPatchSite={onPatchSite}
             persistedGbpLocationId={persistedGbp}
             persistedGa4PropertyId={persistedGa4}
+            persistedGoogleAdsCustomerId={persistedAds}
             chrome={isModalFlat ? "dark" : "light"}
             className="py-0"
           />

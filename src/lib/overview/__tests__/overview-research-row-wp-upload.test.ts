@@ -64,7 +64,9 @@ describe("uploadOverviewResearchedRowToWordPress", () => {
       getInventoryMatchForUrl: () => makeMatch(42),
     });
 
-    expect(result).toEqual({ ok: false, skipped: true });
+    expect(result.ok).toBe(false);
+    expect(result.skipped).toBe(true);
+    expect(result.generatedFiles.some((f) => f.name === "wordpress.json")).toBe(true);
     expect(uploadOverviewRowSeoToWordPress).not.toHaveBeenCalled();
   });
 
@@ -76,7 +78,9 @@ describe("uploadOverviewResearchedRowToWordPress", () => {
       getInventoryMatchForUrl: () => undefined,
     });
 
-    expect(result).toEqual({ ok: false, skipped: true });
+    expect(result.ok).toBe(false);
+    expect(result.skipped).toBe(true);
+    expect(result.generatedFiles.some((f) => f.name === "wordpress.json")).toBe(true);
     expect(uploadOverviewRowSeoToWordPress).not.toHaveBeenCalled();
   });
 
@@ -92,7 +96,11 @@ describe("uploadOverviewResearchedRowToWordPress", () => {
       getInventoryMatchForUrl: () => undefined,
     });
 
-    expect(result).toEqual({ ok: true, skipped: false, postId: 99 });
+    expect(result.ok).toBe(true);
+    expect(result.skipped).toBe(false);
+    expect(result.postId).toBe(99);
+    expect(result.generatedFiles.some((f) => f.name === "wordpress.json")).toBe(true);
+    expect(result.generatedFiles.some((f) => f.name.startsWith("upload-payload-"))).toBe(true);
     expect(uploadOverviewRowSeoToWordPress).toHaveBeenCalledTimes(1);
     const [, uploadedRow, uploadedBinding] = vi.mocked(uploadOverviewRowSeoToWordPress).mock.calls[0]!;
     expect(uploadedRow.seoResearch).toBe('{"keyword":"window shades"}');
@@ -116,5 +124,6 @@ describe("uploadOverviewResearchedRowToWordPress", () => {
     expect(result.skipped).toBe(false);
     expect(result.error).toBe("WordPress rejected the update.");
     expect(result.postId).toBe(7);
+    expect(result.generatedFiles.some((f) => f.name === "wordpress.json")).toBe(true);
   });
 });

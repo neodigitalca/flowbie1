@@ -59,7 +59,9 @@ export function mergeOverviewRowScrapeFields(
     nextPageHeading = downloaded.pageHeading ?? nextPageHeading;
     nextMeta = downloaded.metaDescription ?? "";
     nextSchema = downloaded.schemaJson ?? nextSchema;
-    nextFocus = downloaded.focusKeyword ?? nextFocus;
+    if (downloaded.focusKeyword?.trim()) {
+      nextFocus = downloaded.focusKeyword.trim();
+    }
     nextFaq = downloaded.faq !== undefined ? downloaded.faq : nextFaq;
     nextDateModifier = downloaded.dateModifier ?? nextDateModifier;
     nextSeoResearch = downloaded.seoResearch ?? nextSeoResearch;

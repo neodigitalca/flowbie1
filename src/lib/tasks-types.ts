@@ -26,6 +26,7 @@ export type TaskExecutionKind =
   | "content_optimizer"
   | "content_optimizer_meta"
   | "gsc_reporting"
+  | "ads_reporting"
   | "post_creator"
   | "entity_page_creator"
   | "entity_generator"
@@ -35,6 +36,7 @@ export type TaskExecutionKind =
   | "dfs_llm_article_audit"
   | "browser_automation"
   | "content_gap_check"
+  | "csv_rows"
   | "";
 
 export type ContentGapSitemapSource = "posts" | "sap";
@@ -118,6 +120,8 @@ export type TaskExecutionPayload = {
   targetBucket?: TaskExecutionTargetBucket;
   /** Set by trigger evaluator; only these URLs are optimized in trigger mode. */
   targetUrls?: string[];
+  /** When missing_new_template, bulk Full AISEO keeps URLs that lack an Answer H2. */
+  urlFilter?: "missing_new_template";
   postId?: number | null;
   updateMode?: "update" | "draft";
   comparePreset?: GscReportingComparePreset;
@@ -179,7 +183,7 @@ export type TaskExecutionPayload = {
   /** CSV step: optimizer research keyed by URL. */
   prefilledUrlResearch?: Record<string, string>;
   /** CSV step file source. */
-  csvInputSource?: "upload" | "workflow";
+  csvInputSource?: "upload" | "workflow" | "site";
   csvBase64?: string;
   csvFileName?: string;
   csvHeaders?: string[];
@@ -235,6 +239,9 @@ export type TaskExecutionPayload = {
     dfsArticleAuditBlock?: string;
     workflowContextBlock?: string;
     workflowAuditOutputs?: import("@/lib/workflow/workflow-types").WorkflowStepOutput[];
+    optionalPrompt?: string;
+    /** When true, run live SERP research even if ACF already has a brief. */
+    forceNewResearch?: boolean;
   };
 };
 
@@ -267,6 +274,7 @@ export type TaskExecutionClientRunContract = {
   scope?: "single" | "all";
   targetBucket?: TaskExecutionTargetBucket;
   targetUrls?: string[];
+  urlFilter?: "missing_new_template";
   updateMode?: "update" | "draft";
   optimizationOptions?: NonNullable<TaskExecutionPayload["optimizationOptions"]>;
   comparePreset?: GscReportingComparePreset;

@@ -236,21 +236,29 @@ export function buildGscKeywordsBlock(gscExactKeywords: string[], n: number, flo
 === GSC KEYWORDS ===
 ${list}
 ${intentOverride}
-These passed inventory review. Use only when they still do not overlap site inventory intent. Skip any that match existing post topics; pick a different line from SITE_KW_JSON instead. ${n} ideas.
+These passed inventory review. Use only when they still do not overlap site inventory intent. Skip any that match existing post topics; pick a different line from SITE_KW_JSON instead. ${n} ideas. If USER KEYWORD SLOTS are present, assign GSC phrases to empty rows only. Never replace a locked user Keyword.
 For the Keyword column: use each selected phrase as written only when it is already a clean short-tail commercial keyword. Distill longer commercial/question phrases into **complete 2–3 word intent keywords** and drop near-me / city / neighborhood proximity language. Examples: "how much do solar panels cost in alberta" -> "solar panels cost"; "how much does it cost to install solar panels" -> "solar panel installation cost". Never output broken fragments like "how much do solar panels" or "how much do solar energy". **Exception - government / policy / incentives / grants / rebates / regulations / tax credits:** keep jurisdiction (country and federal/provincial/state) already present in the selected keyword - do not strip it. The article body can still address the full query.
 Never copy an existing inventory title. Write original titles for every row.
 === END GSC KEYWORDS ===`;
 }
 
-function buildSiteKwJsonStepBlock(siteKwJsonText: string, selectedKeywords: string[] | undefined): string {
+function buildSiteKwJsonStepBlock(
+  siteKwJsonText: string,
+  selectedKeywords: string[] | undefined,
+  filledUserSlotCount = 0,
+): string {
   const hasSelected = Boolean(selectedKeywords?.length);
   const selected = hasSelected
     ? selectedKeywords!.map((kw, i) => `${i + 1}. "${kw}"`).join("\n")
     : "(none — you must pick from SITE_KW_JSON below)";
+  const slotOverride =
+    filledUserSlotCount > 0
+      ? `USER KEYWORD SLOTS override this block. Do not assign a SITE_KW_JSON or SELECTED_LOW_HANGING_KEYWORDS phrase to any row that already has a user Keyword. Use this list only for empty slots.\n`
+      : "";
   const selectionRules = hasSelected
-    ? `Each idea's Keyword should use SELECTED_LOW_HANGING_KEYWORDS when they pass inventory review, but the displayed Keyword must be the cleaned short-tail form. Skip any selected keyword that still overlaps inventory intent; pick another line from SITE_KW_JSON instead.\n`
+    ? `Each empty-slot idea's Keyword should use SELECTED_LOW_HANGING_KEYWORDS when they pass inventory review, but the displayed Keyword must be the cleaned short-tail form. Skip any selected keyword that still overlaps inventory intent; pick another line from SITE_KW_JSON instead.\n`
     : `Before generating ideas, read SITE INVENTORY in this message. Then read SITE_KW_JSON below.\n` +
-      `For each idea, pick ONE gsc or semrush line whose search intent is NOT already covered in inventory.\n` +
+      `For each empty-slot idea, pick ONE gsc or semrush line whose search intent is NOT already covered in inventory.\n` +
       `- SKIP lines that match existing topics (example: skip "national seo" when inventory has national-seo-canada).\n` +
       `- SKIP lines that overlap any published post title or slug intent.\n` +
       `- Distill each chosen line to a clean 2-3 word short-tail keyword.\n` +
@@ -258,6 +266,7 @@ function buildSiteKwJsonStepBlock(siteKwJsonText: string, selectedKeywords: stri
   return (
     `STEP 0 - READ SITE_KW_JSON (mandatory before ideas):\n` +
     `This JSON contains scraped Semrush and GSC keyword lists for the target site. Metrics were used to sort them locally, then removed to save tokens. Prioritize Semrush first, then GSC. Read it before generating ideas.\n` +
+    slotOverride +
     selectionRules +
     `Distill question/long-tail entries into complete noun/intent keywords, not broken fragments. Preserve jurisdiction on government/policy/incentives/grants keywords.\n` +
     `Invented keywords: informational or transactional intent only; 2-3 words for commercial keywords (no near-me / city proximity spam); government/policy inventions must include jurisdiction inferred from the connected site context; no cannibalization with other ideas or the site inventory.\n\n` +
@@ -320,16 +329,25 @@ function buildExampleFormat(
   return `Example:\n1. Keyword: "${kwVal}", Entity: "${entityVal}", Title: "Web Scraping Vs API Which Should You Choose?", MetaDescription: "Web scraping vs API: pros, cons, and when to use each. Make the right integration choice for your project.", Modifier: "${optionalPrompt || "versus"}", FeaturedImage: "${featuredImage ? "y" : "n"}"${optionalPrompt ? ', Rationale: "..."' : ""}\n2. Keyword: "api integration", Entity: "...", Title: "...", MetaDescription: "...", ...\n3. ...`;
 }
 
+function countFilledSlotKeywords(slotKeywords?: string[]): number {
+  return slotKeywords?.filter((kw) => kw.trim()).length ?? 0;
+}
+
 function buildSlotKeywordsBlock(slotKeywords: string[]): string {
   if (!slotKeywords.length) return "";
+  const filled = countFilledSlotKeywords(slotKeywords);
   const lines = slotKeywords.map((kw, i) => {
     const trimmed = kw.trim();
     const row = i + 1;
     return trimmed
-      ? `Row ${row}: use exactly "${trimmed}" as Keyword (preserve as written if it is a government/policy keyword with jurisdiction; otherwise 2–3 words if already short; distill if longer; strip near-me / city proximity spam only).`
-      : `Row ${row}: no user keyword — pick one unique 2–3 word short-tail intent keyword (no near-me / city spam; government/policy inventions must include jurisdiction).`;
+      ? `Row ${row}: Keyword is locked to exactly "${trimmed}". Copy it verbatim into the Keyword field only. Do not distill, shorten, reorder, or replace it. Do not paste this Keyword as Title. Title is a separate editorial headline written by the title agent from this topic.`
+      : `Row ${row}: no user keyword — pick one unique 2–3 word short-tail intent keyword (no near-me / city spam; government/policy inventions must include jurisdiction). GSC / SITE_KW_JSON may fill this row only.`;
   });
-  return `\n=== USER KEYWORD SLOTS (${slotKeywords.length} rows) ===\n${lines.join("\n")}\n=== END USER KEYWORD SLOTS ===\n`;
+  const lockRule =
+    filled > 0
+      ? `\nLocked-slot rule: short-tail / distill / GSC / low-hanging instructions apply ONLY to empty Keyword rows. A filled user Keyword stays in Keyword only. Title is never the Keyword string.`
+      : "";
+  return `\n=== USER KEYWORD SLOTS (${slotKeywords.length} rows, ${filled} locked) ===\n${lines.join("\n")}${lockRule}\n=== END USER KEYWORD SLOTS ===\n`;
 }
 
 function buildSlotModifiersBlock(slotModifiers: string[]): string {
@@ -421,7 +439,7 @@ export const buildBulkBlogIdeasSystemPrompt = (
   const slotModifiersBlock = hasSlotModifiers ? buildSlotModifiersBlock(slotModifiers!) : "";
 
   const keywordReq = hasSlotKeywords
-    ? "Follow USER KEYWORD SLOTS: use the exact Keyword where the user provided one; for blogs with no user keyword, pick one unique 2–3 word short-tail intent keyword (different each), no near-me / city spam; government/policy inventions must include jurisdiction."
+    ? "Follow USER KEYWORD SLOTS. Filled rows: copy the user Keyword verbatim into Keyword only. Do not use that string as Title. Empty rows only: pick one unique 2–3 word short-tail intent keyword (different each), no near-me / city spam; government/policy inventions must include jurisdiction."
     : isSap
       ? "One unique row per local geo landing: follow " + GEO_LANDING_KEYWORD_INTENT_RULES + " Distinct geography per row when possible."
       : keywordMode === "gsc-keywords" && gscExactKeywords?.length
@@ -544,10 +562,13 @@ export const buildBulkBlogIdeasUserPrompt = (
   contentKind: BulkBlogIdeasContentKind = "content_blog",
   siteInventoryBuckets?: PromptBulkSitemapInventoryBuckets,
   siteKwJsonText?: string,
+  slotKeywords?: string[],
 ): string => {
   const n = numberOfBlogs;
   const isSap = contentKind === "service_area_sap";
   const hasInv = hasSitemapInventory(siteInventoryBuckets, siteInventoryJson);
+  const filledUserSlots = countFilledSlotKeywords(slotKeywords);
+  const slotKeywordsBlock = slotKeywords?.length ? buildSlotKeywordsBlock(slotKeywords) : "";
   const generalIntentBlock = flowPurpose?.trim()
     ? `CONTENT TOPIC (MANDATORY FOR EVERY IDEA): All ${n} ideas must be about "${flowPurpose.trim()}". Do not copy titles or keywords from the site inventory; use it only to avoid cannibalization.\n\n`
     : "";
@@ -584,19 +605,26 @@ export const buildBulkBlogIdeasUserPrompt = (
 
   if (gscExactKeywords && gscExactKeywords.length > 0) {
     parts.push(
-      flowPurpose?.trim()
-        ? "\nUse GSC keywords from the system prompt ONLY when each fits the content topic and passes inventory exclusion."
-        : "\nUse GSC keywords from the system prompt only when they do not overlap site inventory intent.",
+      filledUserSlots > 0
+        ? "\nUse GSC keywords from the system prompt ONLY for empty USER KEYWORD SLOTS, and only when each fits the content topic and passes inventory exclusion."
+        : flowPurpose?.trim()
+          ? "\nUse GSC keywords from the system prompt ONLY when each fits the content topic and passes inventory exclusion."
+          : "\nUse GSC keywords from the system prompt only when they do not overlap site inventory intent.",
     );
   }
 
   parts.push(
-    `\nOutput: Checklist of exactly ${n} ideas per system format (machine checklist lines: N. then Keyword/Title with straight quotes, no fences, no indent). Maximum title variety; different format per title. Every Title: keyword first, natural word join, zero colons.`,
+    `\nOutput: Checklist of exactly ${n} ideas per system format (machine checklist lines: N. then Keyword/Title with straight quotes, no fences, no indent). Maximum title variety; different format per title. Every Title: a fresh editorial headline about the row topic, not the Keyword pasted as the title. Zero colons.`,
   );
+  if (slotKeywordsBlock) {
+    parts.push(
+      `\nMUST FOLLOW LAST: ${slotKeywordsBlock}Filled user Keywords are locked in the Keyword field only. Do not paste a locked Keyword as Title. Do not replace a locked Keyword with GSC, SITE_KW_JSON, or a distilled short-tail.`,
+    );
+  }
 
   let out = "";
   if (siteKwJsonText?.trim()) {
-    out += buildSiteKwJsonStepBlock(siteKwJsonText, gscExactKeywords);
+    out += buildSiteKwJsonStepBlock(siteKwJsonText, gscExactKeywords, filledUserSlots);
   }
   if (hasInv && siteInventoryBuckets) {
     out +=

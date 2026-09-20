@@ -7,6 +7,7 @@ type ActionNodeConfig = WorkflowActionConfig;
 
 const EXECUTION_KIND_RECIPE_KEYWORDS: Partial<Record<TaskExecutionKind, string>> = {
   gsc_reporting: "gsc-monthly-mom-report",
+  ads_reporting: "ads-monthly-mom-report",
   local_dominator_export: "research-local-dominator-grid-export",
   chatgpt_website_audit: "chatgpt-website-audit",
   dfs_llm_article_audit: "dfs-llm-article-audit",
@@ -61,6 +62,8 @@ function triggerRoute(
       recipeKeywordFromExecutionKind(config.executionKind) ??
       (config.recipeKey === "gsc_reporting"
         ? "gsc-monthly-mom-report"
+        : config.recipeKey === "ads_reporting"
+          ? "ads-monthly-mom-report"
         : config.recipeKey === "local_dominator_export"
           ? "research-local-dominator-grid-export"
           : config.recipeKey === "chatgpt_website_audit"

@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { buildSitemapLegacyBulkGeneratorDetailsProps } from "@/lib/sitemap-optimizer/sitemap-legacy-bulk-details-bindings";
 import {
   buildSitemapMergePublishBulkGeneratorDetailsProps,
 } from "@/lib/sitemap-optimizer/sitemap-merge-publish-bulk-details-bindings";
@@ -85,58 +84,6 @@ describe("buildSitemapPlanBulkGeneratorDetailsProps", () => {
   });
 });
 
-describe("buildSitemapLegacyBulkGeneratorDetailsProps", () => {
-  it("maps batch progress to display rows", () => {
-    const props = buildSitemapLegacyBulkGeneratorDetailsProps({
-      generating: true,
-      progressSnapshot: null,
-      headerProgress: {
-        phase: "Match redirects",
-        completed: 1,
-        total: 2,
-      },
-      canOpenDetails: true,
-      hasSheet: true,
-      sheetName: "redirects.csv",
-      sheetLineCount: 20,
-      matchedCount: 8,
-      processedCount: 8,
-      batchProgress: [
-        {
-          batchIndex: 0,
-          batchTotal: 2,
-          lineCount: 10,
-          matchedCount: 5,
-          status: "done",
-        },
-        {
-          batchIndex: 1,
-          batchTotal: 2,
-          lineCount: 10,
-          matchedCount: 3,
-          status: "running",
-        },
-      ],
-      catalogSize: 100,
-      inventoryFilename: "inventory.json",
-      inventoryRowCount: 100,
-      inventoryHref: "blob:inventory",
-      error: null,
-      onUploadClick: () => {},
-      onGenerate: () => {},
-      onCancel: () => {},
-      onDownloadCsv: () => {},
-      canDownloadCsv: false,
-    });
-
-    expect(props.displayRows).toHaveLength(2);
-    expect(props.harnessSections).toEqual([]);
-    expect(props.harnessByRow?.get(1)?.[0]?.status).toBe("generating");
-    expect(props.sitemapInventoryLinks).toHaveLength(1);
-    expect(props.headerProgress?.phase).toBe("Match redirects");
-  });
-});
-
 describe("buildUrlOptimizerBulkGeneratorDetailsProps", () => {
   it("maps running URL optimizer to generating harness on row 0", () => {
     const props = buildUrlOptimizerBulkGeneratorDetailsProps({
@@ -196,7 +143,7 @@ describe("buildSitemapMergePublishBulkGeneratorDetailsProps", () => {
     });
 
     expect(props?.displayRows.length).toBeGreaterThan(0);
-    expect(props?.harnessSections).toEqual([]);
+    expect(props?.harnessSections).toEqual([{ sectionIndex: 0, title: "Upload", status: "generating" }]);
     expect(props?.entitySapRowDisplay).toBe(true);
   });
 });

@@ -744,7 +744,6 @@ const files = e.detail?.files as StoredFile[] | undefined;
   
   // Listen for kb-files-updated events
   window.addEventListener('kb-files-updated', handleKBFilesUpdate as EventListener);
-console.log('[Knowledge Graph] NAP auto-trigger listener initialized');
 }
 
 /**
@@ -797,9 +796,5 @@ try {
 // Initialize on module load
 if (typeof window !== 'undefined') {
   initializeNAPAutoTrigger();
-  // Check existing NAP files after a short delay to ensure everything is loaded
-  setTimeout(() => {
-    checkExistingNAPFiles();
-  }, 2000);
 }
 

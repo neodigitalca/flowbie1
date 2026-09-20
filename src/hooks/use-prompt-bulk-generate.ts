@@ -25,6 +25,7 @@ import {
 } from '@/lib/bulk/prompt-bulk-kw-research-agent';
 import { aiRejectBrandOrBlockedTexts } from '@/lib/content-brand-ai-gate';
 import { mergePromptBulkIdeaSlots } from '@/lib/bulk/merge-prompt-bulk-idea-slots';
+import { fillPromptBulkIdeaTitlesFromAgent } from '@/lib/bulk/fill-prompt-bulk-idea-titles';
 
 export interface UsePromptBulkGenerateProps {
   apiKey?: string;
@@ -124,6 +125,9 @@ export function usePromptBulkGenerate({
     const allSlotModifiers = generatedRows
       .slice(0, numberOfBlogs)
       .map((r) => r.modifier?.trim() ?? "");
+    const allSlotTitles = generatedRows
+      .slice(0, numberOfBlogs)
+      .map((r) => r.title?.trim() ?? "");
     
     // Calculate how many new blogs to generate
     const keptCount = keepIndices ? keepIndices.length : 0;
@@ -138,6 +142,14 @@ export function usePromptBulkGenerate({
       keepIndices && keepIndices.length > 0
         ? allSlotModifiers.filter((_, i) => !keepIndices.includes(i))
         : allSlotModifiers.slice(0, blogsToGenerate);
+
+    const slotTitlesForGeneration =
+      keepIndices && keepIndices.length > 0
+        ? allSlotTitles.filter((_, i) => !keepIndices.includes(i))
+        : allSlotTitles.slice(0, blogsToGenerate);
+
+    const filledUserSlotCount = slotKeywordsForGeneration.filter((kw) => kw.trim()).length;
+    const emptySlotCount = Math.max(0, blogsToGenerate - filledUserSlotCount);
     
     if (blogsToGenerate <= 0) {
       notify.error(NOTIFY_ALL_BLOG_IDEAS_ARE_ALREADY_SELECTED_PLEA);
@@ -213,14 +225,14 @@ export function usePromptBulkGenerate({
         setSiteKwHostedLink(kwScrape.hostedLink);
 
         const hasSiteKwRows = kwScrape.json.gsc.length > 0 || kwScrape.json.semrush.length > 0;
-        if (hasSiteKwRows) {
+        if (hasSiteKwRows && emptySlotCount > 0) {
           siteKwJsonText = kwScrape.keywordsJsonText;
           onProgress?.('Research agent selecting low-hanging keywords...', 24);
           lowHangingKeywords = await selectPromptBulkLowHangingKeywords({
             apiKey: effectiveOpenRouterKey,
             siteId: wordPressSite.id,
             keywordsJsonText: kwScrape.keywordsJsonText,
-            numberOfBlogs: blogsToGenerate,
+            numberOfBlogs: emptySlotCount,
             topic: flowPurpose,
             modifier: optionalPrompt,
             inventoryUrlCount: inventory.totalRows,
@@ -254,11 +266,13 @@ export function usePromptBulkGenerate({
           : activeKnowledgeBaseText;
 
       const effectiveGscKeywords =
-        lowHangingKeywords.length > 0
-          ? lowHangingKeywords
-          : keywordMode === 'gsc-keywords'
-            ? gscExactKeywords
-            : [];
+        emptySlotCount <= 0
+          ? []
+          : lowHangingKeywords.length > 0
+            ? lowHangingKeywords
+            : keywordMode === 'gsc-keywords'
+              ? gscExactKeywords
+              : [];
       const effectiveKeywordMode =
         effectiveGscKeywords.length > 0 ? 'gsc-keywords' : keywordMode;
 
@@ -291,7 +305,8 @@ export function usePromptBulkGenerate({
         flowPurpose || undefined,
         'content_blog',
         siteInventoryBuckets,
-        siteKwJsonText,
+        emptySlotCount > 0 ? siteKwJsonText : undefined,
+        slotKeywordsForGeneration,
       );
 
       let inventoryUrlCountForAi: number | null = null;
@@ -400,6 +415,15 @@ export function usePromptBulkGenerate({
         slotModifiers: slotModifiersForGeneration,
         keepIndices,
       });
+
+      if (!(titleTemplate && titleTemplate.trim())) {
+        onProgress?.('Writing titles…', 80);
+        await fillPromptBulkIdeaTitlesFromAgent({
+          rows: cappedParsedRows,
+          apiKey: effectiveOpenRouterKey,
+          preservedSlotTitles: slotTitlesForGeneration,
+        });
+      }
 
       // Helper function to parse list strings (split by newlines or commas)
       const parseListString = (list: string): string[] => {

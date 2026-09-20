@@ -16,6 +16,7 @@ import {
 import { OVERVIEW_BULK_AI_FAQ_SEED_COUNT } from "@/components/overview/overview-tab-constants";
 import { mergeOverviewRowsForSitemapLoad } from "@/lib/overview/overview-rows-session-cache";
 import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
+import { focusKeywordFromWordPressSources } from "@/lib/overview/focus-keyword-from-wp-sources";
 import {
   fetchOverviewPageContentBatch,
   sliceOverviewRowsByPage,
@@ -25,8 +26,12 @@ import { OVERVIEW_BULK_PAGE_SIZE } from "@/lib/overview/overview-bulk-page-size"
 function inventoryRowDisplayKeyword(row: OverviewInventoryRow): string {
   const acf =
     row.acf && typeof row.acf === "object" ? (row.acf as Record<string, unknown>) : {};
-  const fromAcf = typeof acf.keyword_focus === "string" ? acf.keyword_focus.trim() : "";
-  return fromAcf || (row.fields?.keyword ?? "").trim();
+  return focusKeywordFromWordPressSources({
+    acf,
+    fieldsKeyword: row.fields?.keyword,
+    title: (row.fields?.title || row.fields?.pageHeading || "").trim(),
+    collection: row.collection,
+  });
 }
 
 function inventoryRowDisplayDate(row: OverviewInventoryRow): string {

@@ -117,15 +117,15 @@ Neo_Pulse_Wp_Ai_Widget_Design::clear_resolve_cache();
 
 // ── Defaults ─────────────────────────────────────────────────
 $defaults = Neo_Pulse_Wp_Ai_Widget_Design::get_settings();
-neo-pulse_assert( $defaults['color_source'] === 'site_branding', 'default color_source is site_branding' );
-neo-pulse_assert( $defaults['style_scope'] === 'both', 'default style_scope is both' );
-neo-pulse_assert( ! empty( $defaults['chat_ui']['header'] ), 'chat visibility defaults true' );
-neo-pulse_assert( ! empty( $defaults['search_ui']['powered_by'] ), 'search visibility defaults true' );
+neo_pulse_assert( $defaults['color_source'] === 'site_branding', 'default color_source is site_branding' );
+neo_pulse_assert( $defaults['style_scope'] === 'both', 'default style_scope is both' );
+neo_pulse_assert( ! empty( $defaults['chat_ui']['header'] ), 'chat visibility defaults true' );
+neo_pulse_assert( ! empty( $defaults['search_ui']['powered_by'] ), 'search visibility defaults true' );
 
 // ── Color sanitize ───────────────────────────────────────────
-neo-pulse_assert( Neo_Pulse_Wp_Ai_Widget_Design::sanitize_color_value( '#3b82f6' ) === '#3b82f6', 'hex sanitize' );
-neo-pulse_assert( Neo_Pulse_Wp_Ai_Widget_Design::sanitize_color_value( 'rgba(1,2,3,0.5)' ) === 'rgba(1,2,3,0.5)', 'rgba sanitize' );
-neo-pulse_assert( Neo_Pulse_Wp_Ai_Widget_Design::sanitize_color_value( 'not-a-color' ) === '', 'reject junk color' );
+neo_pulse_assert( Neo_Pulse_Wp_Ai_Widget_Design::sanitize_color_value( '#3b82f6' ) === '#3b82f6', 'hex sanitize' );
+neo_pulse_assert( Neo_Pulse_Wp_Ai_Widget_Design::sanitize_color_value( 'rgba(1,2,3,0.5)' ) === 'rgba(1,2,3,0.5)', 'rgba sanitize' );
+neo_pulse_assert( Neo_Pulse_Wp_Ai_Widget_Design::sanitize_color_value( 'not-a-color' ) === '', 'reject junk color' );
 
 // ── Elementor kit → palette ──────────────────────────────────
 $GLOBALS['neo-pulse_test_options']['elementor_active_kit'] = 42;
@@ -142,17 +142,31 @@ $GLOBALS['neo-pulse_test_post_meta'][42]['_elementor_page_settings'] = array(
 );
 
 $branded = Neo_Pulse_Wp_Ai_Widget_Design::palette_from_elementor_kit();
-neo-pulse_assert( ( $branded['accent'] ?? '' ) === '#112233', 'kit primary maps to accent' );
-neo-pulse_assert( ( $branded['bg_elevated'] ?? '' ) === '#445566', 'kit secondary maps to bg_elevated' );
-neo-pulse_assert( ( $branded['highlight'] ?? '' ) === '#778899', 'kit accent maps to highlight' );
-neo-pulse_assert( ( $branded['text'] ?? '' ) === '#101010', 'kit text maps to text' );
+neo_pulse_assert( ( $branded['accent'] ?? '' ) === '#112233', 'kit primary maps to accent' );
+neo_pulse_assert( ( $branded['bg_elevated'] ?? '' ) === '#445566', 'kit secondary maps to bg_elevated' );
+neo_pulse_assert( ( $branded['highlight'] ?? '' ) === '#778899', 'kit accent maps to highlight' );
+neo_pulse_assert( ( $branded['text'] ?? '' ) === '#101010', 'kit text maps to text' );
 
 $swatches = Neo_Pulse_Wp_Ai_Widget_Design::elementor_color_swatches();
-neo-pulse_assert( count( $swatches ) === 5, 'swatches include system + custom' );
+neo_pulse_assert( count( $swatches ) === 5, 'swatches include system + custom' );
 
+Neo_Pulse_Wp_Ai_Widget_Design::save(
+	array(
+		'color_source' => 'site_branding',
+		'style_scope'  => 'both',
+		'shared'       => array_merge(
+			Neo_Pulse_Wp_Ai_Widget_Design::fallback_palette(),
+			array(
+				'accent'      => '#ff6600',
+				'bg_elevated' => '#112200',
+			)
+		),
+	)
+);
 Neo_Pulse_Wp_Ai_Widget_Design::clear_resolve_cache();
 $resolved = Neo_Pulse_Wp_Ai_Widget_Design::resolve( 'chat' );
-neo-pulse_assert( $resolved['accent'] === '#112233', 'resolve overlays Site Branding accent' );
+neo_pulse_assert( $resolved['accent'] === '#ff6600', 'site branding keeps saved accent' );
+neo_pulse_assert( $resolved['bg_elevated'] === '#112200', 'site branding keeps saved surface' );
 
 // ── Custom color source ──────────────────────────────────────
 Neo_Pulse_Wp_Ai_Widget_Design::save(
@@ -167,8 +181,8 @@ Neo_Pulse_Wp_Ai_Widget_Design::save(
 );
 Neo_Pulse_Wp_Ai_Widget_Design::clear_resolve_cache();
 $custom = Neo_Pulse_Wp_Ai_Widget_Design::resolve( 'search' );
-neo-pulse_assert( $custom['accent'] === '#ff0000', 'custom source uses stored accent' );
-neo-pulse_assert( (int) $custom['radius'] === 12, 'custom radius preserved' );
+neo_pulse_assert( $custom['accent'] === '#ff0000', 'custom source uses stored accent' );
+neo_pulse_assert( (int) $custom['radius'] === 12, 'custom radius preserved' );
 
 // ── Individual scope ─────────────────────────────────────────
 Neo_Pulse_Wp_Ai_Widget_Design::save(
@@ -181,8 +195,8 @@ Neo_Pulse_Wp_Ai_Widget_Design::save(
 Neo_Pulse_Wp_Ai_Widget_Design::clear_resolve_cache();
 $chat_t   = Neo_Pulse_Wp_Ai_Widget_Design::resolve( 'chat' );
 $search_t = Neo_Pulse_Wp_Ai_Widget_Design::resolve( 'search' );
-neo-pulse_assert( $chat_t['accent'] === '#00ff00', 'individual chat accent' );
-neo-pulse_assert( $search_t['accent'] === '#0000ff', 'individual search accent' );
+neo_pulse_assert( $chat_t['accent'] === '#00ff00', 'individual chat accent' );
+neo_pulse_assert( $search_t['accent'] === '#0000ff', 'individual search accent' );
 
 // ── Visibility sanitize from admin post ──────────────────────
 Neo_Pulse_Wp_Ai_Widget_Design::save_from_admin_post(
@@ -195,8 +209,8 @@ Neo_Pulse_Wp_Ai_Widget_Design::save_from_admin_post(
 	'chat'
 );
 $after = Neo_Pulse_Wp_Ai_Widget_Design::get_settings();
-neo-pulse_assert( ! empty( $after['chat_ui']['header'] ), 'posted header visible' );
-neo-pulse_assert( empty( $after['chat_ui']['mic_button'] ), 'unposted mic hidden' );
+neo_pulse_assert( ! empty( $after['chat_ui']['header'] ), 'posted header visible' );
+neo_pulse_assert( empty( $after['chat_ui']['mic_button'] ), 'unposted mic hidden' );
 
 // ── Sidebar config sanitize ───────────────────────────────────
 $search_sidebar = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
@@ -210,11 +224,11 @@ $search_sidebar = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
 	),
 	'search'
 );
-neo-pulse_assert( $search_sidebar['display_mode'] === 'sidebar', 'search sidebar display mode' );
-neo-pulse_assert( $search_sidebar['sidebar_side'] === 'left', 'search sidebar side' );
-neo-pulse_assert( $search_sidebar['sidebar_transition'] === 'fade', 'search sidebar transition' );
-neo-pulse_assert( (int) $search_sidebar['sidebar_width'] === 420, 'search sidebar width' );
-neo-pulse_assert( $search_sidebar['sidebar_heading'] === 'Search KWB', 'search sidebar heading' );
+neo_pulse_assert( $search_sidebar['display_mode'] === 'sidebar', 'search sidebar display mode' );
+neo_pulse_assert( $search_sidebar['sidebar_side'] === 'left', 'search sidebar side' );
+neo_pulse_assert( $search_sidebar['sidebar_transition'] === 'fade', 'search sidebar transition' );
+neo_pulse_assert( (int) $search_sidebar['sidebar_width'] === 420, 'search sidebar width' );
+neo_pulse_assert( $search_sidebar['sidebar_heading'] === 'Search KWB', 'search sidebar heading' );
 
 $discovery_sidebar = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
 	array(
@@ -226,47 +240,47 @@ $discovery_sidebar = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
 	),
 	'search'
 );
-neo-pulse_assert( $discovery_sidebar['panel_layout'] === 'discovery', 'panel_layout discovery' );
-neo-pulse_assert( $discovery_sidebar['sidebar_subtitle'] === 'Looking for financial advice?', 'sidebar_subtitle sanitize' );
-neo-pulse_assert( (int) $discovery_sidebar['panel_offset_top'] === 20, 'panel_offset_top default' );
-neo-pulse_assert( $discovery_sidebar['panel_offset_top_unit'] === 'vh', 'panel_offset_top_unit default' );
-neo-pulse_assert( in_array( 'popular_topics', $discovery_sidebar['sidebar_layout'], true ), 'sidebar layout accepts popular_topics' );
+neo_pulse_assert( $discovery_sidebar['panel_layout'] === 'discovery', 'panel_layout discovery' );
+neo_pulse_assert( $discovery_sidebar['sidebar_subtitle'] === 'Looking for financial advice?', 'sidebar_subtitle sanitize' );
+neo_pulse_assert( (int) $discovery_sidebar['panel_offset_top'] === 20, 'panel_offset_top default' );
+neo_pulse_assert( $discovery_sidebar['panel_offset_top_unit'] === 'vh', 'panel_offset_top_unit default' );
+neo_pulse_assert( in_array( 'popular_topics', $discovery_sidebar['sidebar_layout'], true ), 'sidebar layout accepts popular_topics' );
 
 $offset_px = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
 	array( 'panel_offset_top' => 999, 'panel_offset_top_unit' => 'px' ),
 	'search'
 );
-neo-pulse_assert( (int) $offset_px['panel_offset_top'] === 400, 'panel_offset_top px clamp' );
+neo_pulse_assert( (int) $offset_px['panel_offset_top'] === 400, 'panel_offset_top px clamp' );
 
 $default_offset = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
 	array( 'display_mode' => 'sidebar' ),
 	'search'
 );
-neo-pulse_assert( (int) $default_offset['panel_offset_top'] === 64, 'panel_offset_top default 64' );
-neo-pulse_assert( $default_offset['panel_offset_top_unit'] === 'px', 'panel_offset_top_unit default px' );
-neo-pulse_assert( $default_offset['panel_content_align'] === 'left', 'panel_content_align default left' );
+neo_pulse_assert( (int) $default_offset['panel_offset_top'] === 64, 'panel_offset_top default 64' );
+neo_pulse_assert( $default_offset['panel_offset_top_unit'] === 'px', 'panel_offset_top_unit default px' );
+neo_pulse_assert( $default_offset['panel_content_align'] === 'left', 'panel_content_align default left' );
 
 $align_center = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
 	array( 'panel_content_align' => 'center' ),
 	'search'
 );
-neo-pulse_assert( $align_center['panel_content_align'] === 'center', 'panel_content_align center' );
+neo_pulse_assert( $align_center['panel_content_align'] === 'center', 'panel_content_align center' );
 
 $align_invalid = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
 	array( 'panel_content_align' => 'right' ),
 	'search'
 );
-neo-pulse_assert( $align_invalid['panel_content_align'] === 'left', 'panel_content_align invalid to left' );
+neo_pulse_assert( $align_invalid['panel_content_align'] === 'left', 'panel_content_align invalid to left' );
 
 $backdrop_sidebar = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
 	array( 'backdrop_opacity' => 150 ),
 	'search'
 );
-neo-pulse_assert( (int) $backdrop_sidebar['backdrop_opacity'] === 100, 'backdrop_opacity clamp' );
-neo-pulse_assert( strpos( Neo_Pulse_Wp_Ai_Widget_Design::build_sidebar_css_vars( $backdrop_sidebar ), '--fbs-backdrop-opacity:100%' ) !== false, 'sidebar css vars include backdrop opacity' );
+neo_pulse_assert( (int) $backdrop_sidebar['backdrop_opacity'] === 100, 'backdrop_opacity clamp' );
+neo_pulse_assert( strpos( Neo_Pulse_Wp_Ai_Widget_Design::build_sidebar_css_vars( $backdrop_sidebar ), '--fbs-backdrop-opacity:100%' ) !== false, 'sidebar css vars include backdrop opacity' );
 
 $sidebar_css = Neo_Pulse_Wp_Ai_Widget_Design::build_sidebar_css_vars( $discovery_sidebar );
-neo-pulse_assert( strpos( $sidebar_css, '--fbs-panel-offset-top:20vh' ) !== false, 'sidebar css vars include panel offset' );
+neo_pulse_assert( strpos( $sidebar_css, '--fbs-panel-offset-top:20vh' ) !== false, 'sidebar css vars include panel offset' );
 
 $icon_sidebar = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
 	array(
@@ -278,23 +292,31 @@ $icon_sidebar = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
 	),
 	'search'
 );
-neo-pulse_assert( $icon_sidebar['display_mode'] === 'icon_only', 'icon_only display mode' );
-neo-pulse_assert( $icon_sidebar['launcher_icon'] === 'sparkles', 'launcher icon slug' );
-neo-pulse_assert( $icon_sidebar['icon_open_as'] === 'modal_center', 'icon open as modal' );
-neo-pulse_assert( (int) $icon_sidebar['modal_max_width'] === 600, 'modal max width' );
-neo-pulse_assert( $icon_sidebar['launcher_label'] === 'Find answers', 'launcher label' );
+neo_pulse_assert( $icon_sidebar['display_mode'] === 'icon_only', 'icon_only display mode' );
+neo_pulse_assert( $icon_sidebar['launcher_icon'] === 'sparkles', 'launcher icon slug' );
+neo_pulse_assert( $icon_sidebar['icon_open_as'] === 'modal_center', 'icon open as modal' );
+neo_pulse_assert( (int) $icon_sidebar['modal_max_width'] === 600, 'modal max width' );
+neo_pulse_assert( $icon_sidebar['launcher_label'] === 'Find answers', 'launcher label' );
 
 $icon_left = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
 	array( 'display_mode' => 'icon_only', 'icon_open_as' => 'sidebar_left' ),
 	'search'
 );
-neo-pulse_assert( $icon_left['sidebar_side'] === 'left', 'icon sidebar left sets side' );
+neo_pulse_assert( $icon_left['sidebar_side'] === 'left', 'icon sidebar left sets side' );
+
+$header_off = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config( array(), 'search' );
+neo_pulse_assert( empty( $header_off['header_search_opens_sidebar'] ), 'header search trigger defaults off' );
+$header_on = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
+	array( 'header_search_opens_sidebar' => '1' ),
+	'search'
+);
+neo_pulse_assert( ! empty( $header_on['header_search_opens_sidebar'] ), 'header search trigger stores on' );
 
 foreach ( Neo_Pulse_Wp_Search_Icons::ids() as $icon_id ) {
 	$svg = Neo_Pulse_Wp_Search_Icons::render( $icon_id );
-	neo-pulse_assert( strpos( $svg, '<svg' ) !== false, 'icon renders svg: ' . $icon_id );
+	neo_pulse_assert( strpos( $svg, '<svg' ) !== false, 'icon renders svg: ' . $icon_id );
 }
-neo-pulse_assert( Neo_Pulse_Wp_Search_Icons::sanitize_id( 'invalid' ) === 'search', 'invalid icon falls back to search' );
+neo_pulse_assert( Neo_Pulse_Wp_Search_Icons::sanitize_id( 'invalid' ) === 'search', 'invalid icon falls back to search' );
 
 $insights_layout = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
 	array(
@@ -302,9 +324,9 @@ $insights_layout = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
 	),
 	'search'
 );
-neo-pulse_assert( in_array( 'popular_terms', $insights_layout['sidebar_layout'], true ), 'sidebar layout accepts popular_terms' );
-neo-pulse_assert( ! in_array( 'popular_pages_overseer', $insights_layout['sidebar_layout'], true ), 'sidebar layout strips popular_pages_overseer' );
-neo-pulse_assert( ! in_array( 'popular_pages_search', $insights_layout['sidebar_layout'], true ), 'sidebar layout strips popular_pages_search' );
+neo_pulse_assert( in_array( 'popular_terms', $insights_layout['sidebar_layout'], true ), 'sidebar layout accepts popular_terms' );
+neo_pulse_assert( ! in_array( 'popular_pages_overseer', $insights_layout['sidebar_layout'], true ), 'sidebar layout strips popular_pages_overseer' );
+neo_pulse_assert( ! in_array( 'popular_pages_search', $insights_layout['sidebar_layout'], true ), 'sidebar layout strips popular_pages_search' );
 
 $insights = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_search_insights_config(
 	array(
@@ -314,29 +336,29 @@ $insights = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_search_insights_config(
 		'popular_terms_limit'         => 8,
 	)
 );
-neo-pulse_assert( ! empty( $insights['show_popular_terms'] ), 'insights popular terms on' );
-neo-pulse_assert( empty( $insights['show_popular_pages_overseer'] ), 'insights overseer pages off' );
-neo-pulse_assert( (int) $insights['insights_days'] === 14, 'insights days clamped' );
-neo-pulse_assert( (int) $insights['popular_terms_limit'] === 8, 'insights terms limit' );
+neo_pulse_assert( ! empty( $insights['show_popular_terms'] ), 'insights popular terms on' );
+neo_pulse_assert( empty( $insights['show_popular_pages_overseer'] ), 'insights overseer pages off' );
+neo_pulse_assert( (int) $insights['insights_days'] === 14, 'insights days clamped' );
+neo_pulse_assert( (int) $insights['popular_terms_limit'] === 8, 'insights terms limit' );
 
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-search-logs.php';
 
 $resolved_insights = Neo_Pulse_Wp_Ai_Widget_Design::resolve_search_insights(
 	array( 'show_popular_terms' => 'no', 'insights_days' => 7 )
 );
-neo-pulse_assert( empty( $resolved_insights['show_popular_terms'] ), 'instance overrides popular terms off' );
-neo-pulse_assert( (int) $resolved_insights['insights_days'] === 7, 'instance overrides insights days' );
+neo_pulse_assert( empty( $resolved_insights['show_popular_terms'] ), 'instance overrides popular terms off' );
+neo_pulse_assert( (int) $resolved_insights['insights_days'] === 7, 'instance overrides insights days' );
 
 $overseer_on = Neo_Pulse_Wp_Ai_Widget_Design::resolve_search_insights(
 	array( 'show_popular_pages_overseer' => 'yes' )
 );
-neo-pulse_assert( ! empty( $overseer_on['show_popular_pages_overseer'] ), 'insights overseer pages honor instance on' );
+neo_pulse_assert( ! empty( $overseer_on['show_popular_pages_overseer'] ), 'insights overseer pages honor instance on' );
 
-neo-pulse_assert(
+neo_pulse_assert(
 	Neo_Pulse_Wp_Search_Logs::normalize_query( '  Hello   World  ') === 'hello world',
 	'search log normalize query'
 );
-neo-pulse_assert(
+neo_pulse_assert(
 	! Neo_Pulse_Wp_Search_Logs::insert( array( 'session_id' => 'bad', 'query' => 'test' ) )['ok'],
 	'search log rejects invalid session'
 );
@@ -345,19 +367,24 @@ $empty_layout = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
 	array( 'sidebar_layout' => array() ),
 	'chat'
 );
-neo-pulse_assert( $empty_layout['sidebar_layout'] === array( 'chat' ), 'empty chat layout falls back to chat' );
+neo_pulse_assert( $empty_layout['sidebar_layout'] === array( 'chat' ), 'empty chat layout falls back to chat' );
 
 $contact_human_layout = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
 	array( 'sidebar_layout' => array( 'contact_human', 'chat' ) ),
 	'chat'
 );
-neo-pulse_assert( in_array( 'contact_human', $contact_human_layout['sidebar_layout'], true ), 'sidebar layout accepts contact_human' );
+neo_pulse_assert( in_array( 'contact_human', $contact_human_layout['sidebar_layout'], true ), 'sidebar layout accepts contact_human' );
 
+$sidebar_text = Neo_Pulse_Wp_Ai_Widget_Design::build_sidebar_css_vars(
+	array( 'sidebar_width' => 400 ),
+	array( 'launcher_text' => '#111111', 'accent_text' => '#ffffff' )
+);
+neo_pulse_assert( strpos( $sidebar_text, '--fai-sidebar-launcher-text:#111111' ) !== false, 'sidebar css vars use docker text not accent text' );
 $sidebar_vars = Neo_Pulse_Wp_Ai_Widget_Design::build_sidebar_css_vars(
 	array( 'sidebar_width' => 400 ),
 	Neo_Pulse_Wp_Ai_Widget_Design::fallback_palette()
 );
-neo-pulse_assert( strpos( $sidebar_vars, '--fai-sidebar-width:400px' ) !== false, 'sidebar css vars width' );
+neo_pulse_assert( strpos( $sidebar_vars, '--fai-sidebar-width:400px' ) !== false, 'sidebar css vars width' );
 
 Neo_Pulse_Wp_Ai_Widget_Design::save_from_admin_post(
 	array(
@@ -373,39 +400,86 @@ Neo_Pulse_Wp_Ai_Widget_Design::save_from_admin_post(
 	'chat'
 );
 $with_sidebar = Neo_Pulse_Wp_Ai_Widget_Design::get_settings();
-neo-pulse_assert( $with_sidebar['chat_sidebar']['sidebar_heading'] === 'Ask NEO Pulse', 'admin post saves chat sidebar' );
-neo-pulse_assert( (int) $with_sidebar['chat_sidebar']['sidebar_width'] === 380, 'admin post saves chat sidebar width' );
+neo_pulse_assert( $with_sidebar['chat_sidebar']['sidebar_heading'] === 'Ask NEO Pulse', 'admin post saves chat sidebar' );
+neo_pulse_assert( (int) $with_sidebar['chat_sidebar']['sidebar_width'] === 380, 'admin post saves chat sidebar width' );
 
 $chat_sidebar_bubble = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
 	array( 'display_mode' => 'bubble', 'sidebar_side' => 'left' ),
 	'chat'
 );
-neo-pulse_assert( ! isset( $chat_sidebar_bubble['display_mode'] ), 'chat sidebar drops display_mode' );
-neo-pulse_assert( $chat_sidebar_bubble['sidebar_side'] === 'left', 'chat sidebar keeps side' );
+neo_pulse_assert( ! isset( $chat_sidebar_bubble['display_mode'] ), 'chat sidebar drops display_mode' );
+neo_pulse_assert( $chat_sidebar_bubble['sidebar_side'] === 'left', 'chat sidebar keeps side' );
+
+$chat_defaults = Neo_Pulse_Wp_Ai_Widget_Design::default_chat_sidebar_config();
+neo_pulse_assert( $chat_defaults['launcher_style'] === 'circle', 'chat launcher style default is circle' );
+neo_pulse_assert( empty( $chat_defaults['header_search_opens_sidebar'] ), 'chat header search trigger defaults off' );
+$chat_header_on = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
+	array( 'header_search_opens_sidebar' => '1' ),
+	'chat'
+);
+neo_pulse_assert( ! empty( $chat_header_on['header_search_opens_sidebar'] ), 'chat header search trigger stores on' );
+
+$chat_edge = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
+	array( 'launcher_style' => 'edge_tab', 'launcher_label' => 'Ask' ),
+	'chat'
+);
+neo_pulse_assert( $chat_edge['launcher_style'] === 'edge_tab', 'chat accepts edge_tab' );
+neo_pulse_assert( $chat_edge['launcher_label'] === 'Ask', 'chat launcher label' );
+
+$chat_none = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
+	array( 'launcher_style' => 'none' ),
+	'chat'
+);
+neo_pulse_assert( $chat_none['launcher_style'] === 'none', 'chat accepts none launcher style' );
+
+$chat_legacy_label = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
+	array( 'launcher_label' => 'Open Flow Assist' ),
+	'chat'
+);
+neo_pulse_assert( $chat_legacy_label['launcher_label'] === '', 'legacy Open Flow Assist label clears' );
+
+$chat_junk_style = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_sidebar_config(
+	array( 'launcher_style' => 'bubble' ),
+	'chat'
+);
+neo_pulse_assert( $chat_junk_style['launcher_style'] === 'circle', 'invalid launcher_style becomes circle' );
 
 // ── CSS var builders ─────────────────────────────────────────
 $chat_vars = Neo_Pulse_Wp_Ai_Widget_Design::build_chat_css_vars( Neo_Pulse_Wp_Ai_Widget_Design::fallback_palette() );
-neo-pulse_assert( strpos( $chat_vars, '--fcw-accent:' ) !== false, 'chat css vars include accent' );
-neo-pulse_assert( strpos( $chat_vars, '--fcw-powered:' ) !== false, 'chat css vars include powered' );
-neo-pulse_assert( strpos( $chat_vars, '--fcw-icon:' ) !== false, 'chat css vars include icon' );
-neo-pulse_assert( strpos( $chat_vars, '--fcw-button-border:' ) !== false, 'chat css vars include button-border' );
+neo_pulse_assert( strpos( $chat_vars, '--fcw-accent:' ) !== false, 'chat css vars include accent' );
+neo_pulse_assert( strpos( $chat_vars, '--fcw-powered:' ) !== false, 'chat css vars include powered' );
+neo_pulse_assert( strpos( $chat_vars, '--fcw-icon:' ) !== false, 'chat css vars include icon' );
+neo_pulse_assert( strpos( $chat_vars, '--fcw-button-border:' ) !== false, 'chat css vars include button-border' );
+neo_pulse_assert( strpos( $chat_vars, '--fcw-launcher-glow:' ) !== false, 'chat css vars include launcher-glow' );
+neo_pulse_assert( strpos( $chat_vars, '--fcw-launcher-text:' ) !== false, 'chat css vars include launcher-text' );
+neo_pulse_assert( strpos( $chat_vars, '--fcw-panel-max-height:' ) !== false, 'chat css vars include panel-max-height' );
 $search_vars = Neo_Pulse_Wp_Ai_Widget_Design::build_search_css_vars( Neo_Pulse_Wp_Ai_Widget_Design::fallback_palette() );
-neo-pulse_assert( strpos( $search_vars, '--fbs-primary:' ) !== false, 'search css vars include primary' );
-neo-pulse_assert( strpos( $search_vars, '--fbs-powered:' ) !== false, 'search css vars include powered' );
-neo-pulse_assert( strpos( $search_vars, '--fbs-powered-icon:' ) !== false, 'search css vars include powered-icon' );
-neo-pulse_assert( strpos( $search_vars, '--fbs-icon:' ) !== false, 'search css vars include icon' );
-neo-pulse_assert( strpos( $search_vars, '--fbs-button-border:' ) !== false, 'search css vars include button-border' );
-neo-pulse_assert( strpos( $search_vars, '--fbs-form-border:' ) !== false, 'search css vars include form-border' );
-neo-pulse_assert( strpos( $search_vars, '--fbs-input-text:' ) !== false, 'search css vars include input-text' );
+neo_pulse_assert( strpos( $search_vars, '--fbs-primary:' ) !== false, 'search css vars include primary' );
+neo_pulse_assert( strpos( $search_vars, '--fbs-powered:' ) !== false, 'search css vars include powered' );
+neo_pulse_assert( strpos( $search_vars, '--fbs-powered-icon:' ) !== false, 'search css vars include powered-icon' );
+neo_pulse_assert( strpos( $search_vars, '--fbs-icon:' ) !== false, 'search css vars include icon' );
+neo_pulse_assert( strpos( $search_vars, '--fbs-button-border:' ) !== false, 'search css vars include button-border' );
+neo_pulse_assert( strpos( $search_vars, '--fbs-form-border:' ) !== false, 'search css vars include form-border' );
+neo_pulse_assert( strpos( $search_vars, '--fbs-input-text:' ) !== false, 'search css vars include input-text' );
 
 $palette = Neo_Pulse_Wp_Ai_Widget_Design::fallback_palette();
-neo-pulse_assert( ( $palette['powered_text'] ?? '' ) === '#64748b', 'fallback powered_text' );
-neo-pulse_assert( ( $palette['powered_icon'] ?? '' ) === '#3b82f6', 'fallback powered_icon' );
-neo-pulse_assert( ( $palette['icon_color'] ?? '' ) === '#3b82f6', 'fallback icon_color' );
-neo-pulse_assert( ( $palette['button_border'] ?? '' ) === '#cbd5e1', 'fallback button_border' );
-neo-pulse_assert( ( $palette['form_border'] ?? '' ) === '#cbd5e1', 'fallback form_border' );
-neo-pulse_assert( ( $palette['input_text'] ?? '' ) === '#1e293b', 'fallback input_text' );
-neo-pulse_assert( in_array( 'powered_text', Neo_Pulse_Wp_Ai_Widget_Design::color_token_keys(), true ), 'powered_text is a color token' );
+neo_pulse_assert( ( $palette['powered_text'] ?? '' ) === '#64748b', 'fallback powered_text' );
+neo_pulse_assert( ( $palette['powered_icon'] ?? '' ) === '#3b82f6', 'fallback powered_icon' );
+neo_pulse_assert( ( $palette['icon_color'] ?? '' ) === '#3b82f6', 'fallback icon_color' );
+neo_pulse_assert( ( $palette['button_border'] ?? '' ) === '#cbd5e1', 'fallback button_border' );
+neo_pulse_assert( ( $palette['form_border'] ?? '' ) === '#cbd5e1', 'fallback form_border' );
+neo_pulse_assert( ( $palette['input_text'] ?? '' ) === '#1e293b', 'fallback input_text' );
+neo_pulse_assert( ( $palette['launcher_glow'] ?? '' ) === '#3b82f6', 'fallback launcher_glow' );
+neo_pulse_assert( ( $palette['launcher_text'] ?? '' ) === '#ffffff', 'fallback launcher_text' );
+neo_pulse_assert( in_array( 'powered_text', Neo_Pulse_Wp_Ai_Widget_Design::color_token_keys(), true ), 'powered_text is a color token' );
+neo_pulse_assert( in_array( 'launcher_glow', Neo_Pulse_Wp_Ai_Widget_Design::color_token_keys(), true ), 'launcher_glow is a color token' );
+neo_pulse_assert( in_array( 'launcher_text', Neo_Pulse_Wp_Ai_Widget_Design::color_token_keys(), true ), 'launcher_text is a color token' );
+
+$tall_panel = Neo_Pulse_Wp_Ai_Widget_Design::sanitize_token_bag(
+	array( 'panel_max_height' => 1200 ),
+	Neo_Pulse_Wp_Ai_Widget_Design::fallback_palette()
+);
+neo_pulse_assert( (int) ( $tall_panel['panel_max_height'] ?? 0 ) === 1200, 'panel height accepts 1200' );
 
 // ── Site Branding preserves part tokens ──────────────────────
 Neo_Pulse_Wp_Ai_Widget_Design::save(
@@ -427,13 +501,36 @@ Neo_Pulse_Wp_Ai_Widget_Design::save(
 );
 Neo_Pulse_Wp_Ai_Widget_Design::clear_resolve_cache();
 $brand_part = Neo_Pulse_Wp_Ai_Widget_Design::resolve( 'search' );
-neo-pulse_assert( $brand_part['powered_text'] === '#abcdef', 'site branding keeps powered_text from bag' );
-neo-pulse_assert( $brand_part['powered_icon'] === '#fedcba', 'site branding keeps powered_icon from bag' );
-neo-pulse_assert( $brand_part['icon_color'] === '#112233', 'site branding keeps icon_color from bag' );
-neo-pulse_assert( $brand_part['button_border'] === '#445566', 'site branding keeps button_border from bag' );
-neo-pulse_assert( $brand_part['form_border'] === '#778899', 'site branding keeps form_border from bag' );
-neo-pulse_assert( $brand_part['input_text'] === '#101010', 'site branding keeps input_text from bag' );
-neo-pulse_assert( $brand_part['accent'] === '#112233', 'site branding still overlays kit accent' );
+neo_pulse_assert( $brand_part['powered_text'] === '#abcdef', 'site branding keeps powered_text from bag' );
+neo_pulse_assert( $brand_part['powered_icon'] === '#fedcba', 'site branding keeps powered_icon from bag' );
+neo_pulse_assert( $brand_part['icon_color'] === '#112233', 'site branding keeps icon_color from bag' );
+neo_pulse_assert( $brand_part['button_border'] === '#445566', 'site branding keeps button_border from bag' );
+neo_pulse_assert( $brand_part['form_border'] === '#778899', 'site branding keeps form_border from bag' );
+neo_pulse_assert( $brand_part['input_text'] === '#101010', 'site branding keeps input_text from bag' );
+neo_pulse_assert( $brand_part['accent'] === Neo_Pulse_Wp_Ai_Widget_Design::fallback_palette()['accent'], 'site branding does not overlay kit accent' );
+
+Neo_Pulse_Wp_Ai_Widget_Design::save(
+	array(
+		'color_source' => 'site_branding',
+		'style_scope'  => 'both',
+		'shared'       => array_merge(
+			Neo_Pulse_Wp_Ai_Widget_Design::fallback_palette(),
+			array(
+				'launcher_bg'   => '#9eaf43',
+				'launcher_glow' => '#ff00aa',
+				'launcher_text' => '#111111',
+			)
+		),
+	)
+);
+Neo_Pulse_Wp_Ai_Widget_Design::clear_resolve_cache();
+$docker_kept = Neo_Pulse_Wp_Ai_Widget_Design::resolve( 'chat' );
+neo_pulse_assert( $docker_kept['launcher_bg'] === '#9eaf43', 'site branding keeps saved docker color' );
+neo_pulse_assert( $docker_kept['launcher_glow'] === '#ff00aa', 'site branding keeps saved docker glow' );
+neo_pulse_assert( $docker_kept['launcher_text'] === '#111111', 'site branding keeps saved docker text' );
+neo_pulse_assert( ! in_array( 'launcher_bg', Neo_Pulse_Wp_Ai_Widget_Design::site_branding_token_keys(), true ), 'docker fill is not a site branding overlay' );
+neo_pulse_assert( ! in_array( 'launcher_glow', Neo_Pulse_Wp_Ai_Widget_Design::site_branding_token_keys(), true ), 'docker glow is not a site branding overlay' );
+neo_pulse_assert( ! in_array( 'launcher_text', Neo_Pulse_Wp_Ai_Widget_Design::site_branding_token_keys(), true ), 'docker text is not a site branding overlay' );
 
 // ── Legacy migration ─────────────────────────────────────────
 $GLOBALS['neo-pulse_test_options'] = array(
@@ -447,13 +544,13 @@ $GLOBALS['neo-pulse_test_options'] = array(
 );
 Neo_Pulse_Wp_Ai_Widget_Design::clear_resolve_cache();
 Neo_Pulse_Wp_Ai_Widget_Design::maybe_migrate();
-neo-pulse_assert( get_option( Neo_Pulse_Wp_Ai_Widget_Design::MIGRATION_KEY ) === '1', 'migration flag set' );
+neo_pulse_assert( get_option( Neo_Pulse_Wp_Ai_Widget_Design::MIGRATION_KEY ) === '1', 'migration flag set' );
 $migrated = get_option( Neo_Pulse_Wp_Ai_Widget_Design::OPTION_KEY );
-neo-pulse_assert( is_array( $migrated ), 'migration wrote design option' );
-neo-pulse_assert( ( $migrated['shared']['accent'] ?? '' ) === '#3b82f6' || ( $migrated['shared']['accent'] ?? '' ) === '#84BC00', 'migration mapped accent' );
-neo-pulse_assert( (int) ( $migrated['shared']['radius'] ?? 0 ) === 10, 'migration mapped radius' );
-neo-pulse_assert( (int) ( $migrated['shared']['font_size'] ?? 0 ) === 18, 'migration mapped font_size' );
-neo-pulse_assert( ( $migrated['color_source'] ?? '' ) === 'site_branding', 'migration keeps site_branding default' );
+neo_pulse_assert( is_array( $migrated ), 'migration wrote design option' );
+neo_pulse_assert( ( $migrated['shared']['accent'] ?? '' ) === '#3b82f6' || ( $migrated['shared']['accent'] ?? '' ) === '#84BC00', 'migration mapped accent' );
+neo_pulse_assert( (int) ( $migrated['shared']['radius'] ?? 0 ) === 10, 'migration mapped radius' );
+neo_pulse_assert( (int) ( $migrated['shared']['font_size'] ?? 0 ) === 18, 'migration mapped font_size' );
+neo_pulse_assert( ( $migrated['color_source'] ?? '' ) === 'site_branding', 'migration keeps site_branding default' );
 
 echo "\nAll AI widget design tests passed.\n";
 exit( 0 );

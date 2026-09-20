@@ -1,17 +1,12 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { WordPressSite } from "@/components/integrations/types";
 import { createEmptyOverviewRow } from "@/lib/overview/overview-row-helpers";
 import {
   applyHarnessHtmlPatchesToRows,
+  buildOverviewAnswerCatalogFromCache,
   buildOverviewHarnessCatalogWithHtml,
+  resolveHarnessRowHtmlFromSources,
 } from "@/lib/overview/overview-harness-page-catalog";
-
-vi.mock("@/lib/overview/overview-page-content-batch", () => ({
-  fetchOverviewPageContentBatch: vi.fn(),
-  sliceOverviewRowsByPage: vi.fn((rows: unknown[]) => [rows]),
-}));
-
-import { fetchOverviewPageContentBatch } from "@/lib/overview/overview-page-content-batch";
 import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
 
 const site = {
@@ -22,29 +17,17 @@ const site = {
   appPassword: "p",
 } as WordPressSite;
 
-beforeEach(() => {
-  vi.mocked(fetchOverviewPageContentBatch).mockReset();
-});
-
 describe("buildOverviewHarnessCatalogWithHtml", () => {
-  it("loads SAP entity HTML from page content batch patches", async () => {
+  it("loads SAP entity HTML from row cache", async () => {
     const url = "https://example.com/plumbing-edmonton/";
     const rows = [
       {
         ...createEmptyOverviewRow(url),
         title: "Plumbing Edmonton",
         focusKeyword: "plumbing edmonton",
+        postContentOptimized: "<h2>Services</h2><p>Body</p>",
       },
     ];
-
-    vi.mocked(fetchOverviewPageContentBatch).mockResolvedValueOnce({
-      ok: true,
-      contentRows: [],
-      includeIds: [],
-      patches: new Map([
-        [normalizePageUrlKey(url), { postContentOptimized: "<h2>Services</h2><p>Body</p>" }],
-      ]),
-    });
 
     const { catalog, rowHtmlByIndex } = await buildOverviewHarnessCatalogWithHtml({
       site,
@@ -56,9 +39,6 @@ describe("buildOverviewHarnessCatalogWithHtml", () => {
       bulkScopeUrlKeys: new Set([normalizePageUrlKey(url)]),
     });
 
-    expect(fetchOverviewPageContentBatch).toHaveBeenCalledWith(
-      expect.objectContaining({ sitemapSource: "sap" }),
-    );
     expect(rowHtmlByIndex[0]).toContain("Services");
     expect(catalog).toHaveLength(1);
     expect(catalog[0]?.pageKind).toBe("entity");
@@ -91,7 +71,68 @@ describe("buildOverviewHarnessCatalogWithHtml", () => {
     });
 
     expect(catalog[0]?.pageKind).toBe("post");
-    expect(fetchOverviewPageContentBatch).not.toHaveBeenCalled();
+  });
+
+  it("keeps a cache row even when HTML is empty", async () => {
+    const url = "https://example.com/blog/empty/";
+    const rows = [createEmptyOverviewRow(url)];
+    const catalog = buildOverviewAnswerCatalogFromCache({
+      site,
+      rows,
+      indices: [0],
+      sitemapSource: "posts",
+      getInventoryMatchForUrl: () => undefined,
+      bulkScopeUrlKeys: new Set([normalizePageUrlKey(url)]),
+    });
+    expect(catalog).toHaveLength(1);
+    expect(catalog[0]?.html).toBe("");
+  });
+
+  it("prefers grid postContent over FAQ-only inventory snapshot", () => {
+    const url = "https://example.com/cra-mail-in/";
+    const html = resolveHarnessRowHtmlFromSources({
+      row: {
+        ...createEmptyOverviewRow(url),
+        postContent: "<h2>Cost factors</h2><p>Full CRA article body.</p>",
+        postContentOptimized: `<h2 id="answer">Answer</h2><p>Answer only.</p>`,
+      },
+      site,
+      sitemapSource: "posts",
+      getInventoryMatchForUrl: () => ({
+        row: {
+          id: 1,
+          url,
+          fields: {
+            content: `<h2 id="answer">Answer</h2><div class="flo-faq"><h2 id="faq">FAQ</h2></div>`,
+          },
+        },
+        subtype: "post" as const,
+      }),
+      index: 0,
+    });
+    expect(html).toContain("Full CRA article body");
+    expect(html).toContain("Cost factors");
+  });
+
+  it("prefers scraped postContent over answer-only postContentOptimized", () => {
+    const url = "https://example.com/blog/repair/";
+    const rows = [
+      {
+        ...createEmptyOverviewRow(url),
+        postContent: "<h2>Cost Factors</h2><p>Full original post.</p>",
+        postContentOptimized: `<h2 id="answer">Answer</h2><p>Only answer.</p>`,
+      },
+    ];
+    const catalog = buildOverviewAnswerCatalogFromCache({
+      site,
+      rows,
+      indices: [0],
+      sitemapSource: "posts",
+      getInventoryMatchForUrl: () => undefined,
+      bulkScopeUrlKeys: new Set([normalizePageUrlKey(url)]),
+    });
+    expect(catalog[0]?.html).toContain("Full original post");
+    expect(catalog[0]?.html).toContain("Cost Factors");
   });
 });
 

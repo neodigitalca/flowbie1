@@ -1,0 +1,93 @@
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import type { WordPressSite } from "@/components/integrations/types";
+import { createEmptyOverviewRow } from "@/lib/overview/overview-row-helpers";
+import { OVERVIEW_AISEO_ROW_CONCURRENCY_MAX } from "@/lib/overview/overview-ai-copy-concurrency";
+import { runOverviewAiMetaHarnessBatch } from "@/lib/overview/overview-ai-meta-harness-run";
+
+vi.mock("@/lib/overview/overview-aiseo-source-html", () => ({
+  resolveAiseoHarnessSourceHtml: vi.fn(async () => ({
+    html: "<p>Body</p>",
+    cachedHtml: "<p>Body</p>",
+  })),
+}));
+
+vi.mock("@/lib/overview/overview-aiseo-after-upload", () => ({
+  uploadAiseoRowAfterWrite: vi.fn(),
+}));
+
+const site = {
+  id: "wp-1",
+  name: "Test",
+  siteUrl: "https://example.com",
+  username: "u",
+  appPassword: "p",
+} as WordPressSite;
+
+function makeHarnessSetters() {
+  const bulkState: Record<string, unknown> = {
+    "wp-1-batch": {
+      urls: [],
+      currentIndex: 0,
+      urlStatuses: {},
+      currentStep: "AI meta",
+      runKind: "aiMeta",
+      urlGeneratedFiles: {},
+    },
+  };
+  return {
+    siteId: "wp-1",
+    batchKey: "wp-1-batch",
+    setBulkOptimizationState: (updater: (prev: typeof bulkState) => typeof bulkState) => {
+      Object.assign(bulkState, typeof updater === "function" ? updater(bulkState) : updater);
+    },
+    setOptimizationProgress: vi.fn(),
+  };
+}
+
+describe("runOverviewAiMetaHarnessBatch", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("processes multiple rows concurrently up to the row limit", async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const optimizeMeta = vi.fn(async () => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      inFlight -= 1;
+      return "Optimized meta description for the page.";
+    });
+
+    const rows = Array.from({ length: 8 }, (_, index) =>
+      createEmptyOverviewRow(`https://example.com/post-${index}/`),
+    );
+    const catalog = rows.map((row, index) => ({
+      index,
+      url: row.url!,
+      metaDescription: `Meta ${index}`,
+      focusKeyword: `kw-${index}`,
+    }));
+
+    const stats = await runOverviewAiMetaHarnessBatch({
+      site,
+      sitemapSource: "posts",
+      rowsRef: { current: rows },
+      catalog,
+      deps: {
+        optimizeMeta,
+        resolveSentimentSource: vi.fn(async () => undefined),
+        resolveGscQuickWinsContext: vi.fn(async () => undefined),
+      },
+      harnessSetters: makeHarnessSetters(),
+      getInventoryMatchForUrl: () => undefined,
+      updateRow: vi.fn(),
+    });
+
+    expect(optimizeMeta).toHaveBeenCalledTimes(8);
+    expect(stats.ok).toBe(8);
+    expect(maxInFlight).toBeGreaterThan(1);
+    expect(maxInFlight).toBeLessThanOrEqual(OVERVIEW_AISEO_ROW_CONCURRENCY_MAX);
+  });
+});

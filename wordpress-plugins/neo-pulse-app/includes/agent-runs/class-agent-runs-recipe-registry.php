@@ -23,6 +23,10 @@ class Neo_Pulse_App_Agent_Runs_Recipe_Registry {
 			'title'       => 'GSC reporting',
 			'managerTabs' => array( 'generator' ),
 		),
+		'ads_reporting'             => array(
+			'title'       => 'PPC reporting',
+			'managerTabs' => array( 'generator' ),
+		),
 		'post_creator'              => array(
 			'title'       => 'Post creator',
 			'managerTabs' => array( 'generator' ),

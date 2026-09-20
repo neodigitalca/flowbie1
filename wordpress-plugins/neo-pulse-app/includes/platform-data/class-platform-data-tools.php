@@ -72,6 +72,8 @@ class Neo_Pulse_App_Platform_Data_Tools {
 		self::register_tool( 'gsc_performance_summary', array( __CLASS__, 'tool_gsc_performance_summary' ), 'GSC period summary with comparison.' );
 		self::register_tool( 'gsc_reporting_status', array( __CLASS__, 'tool_gsc_reporting_status' ), 'GSC reporting connection status for a siteUrl.' );
 		self::register_tool( 'gsc_reporting_compare_summary', array( __CLASS__, 'tool_gsc_reporting_compare_summary' ), 'GSC MoM or YoY compare summary from reporting bundle. Params: comparePreset (mom|yoy).' );
+		self::register_tool( 'ads_reporting_status', array( __CLASS__, 'tool_ads_reporting_status' ), 'Google Ads reporting connection status for the active property. Requires a 10-digit googleAdsCustomerId.' );
+		self::register_tool( 'ads_reporting_compare_summary', array( __CLASS__, 'tool_ads_reporting_compare_summary' ), 'PPC MoM or YoY compare summary from the Ads reporting bundle. Params: comparePreset (mom|yoy).' );
 		self::register_tool( 'post_creator_status', array( __CLASS__, 'tool_post_creator_status' ), 'Post creator readiness for a WordPress site (credentials, scheduling hints).' );
 		self::register_tool( 'ga_organic_summary', array( __CLASS__, 'tool_ga_organic_summary' ), 'GA4 organic traffic and conversions vs comparison period.' );
 	}
@@ -97,6 +99,17 @@ class Neo_Pulse_App_Platform_Data_Tools {
 
 		if ( self::gsc_configured() ) {
 			foreach ( array( 'gsc_status', 'gsc_top_queries', 'gsc_top_pages', 'gsc_blog_performers', 'gsc_page_queries', 'gsc_performance_summary', 'gsc_reporting_status', 'gsc_reporting_compare_summary' ) as $id ) {
+				if ( isset( self::$descriptions[ $id ] ) ) {
+					$tools[] = array(
+						'id'          => $id,
+						'description' => self::$descriptions[ $id ],
+					);
+				}
+			}
+		}
+
+		if ( self::ads_configured() ) {
+			foreach ( array( 'ads_reporting_status', 'ads_reporting_compare_summary' ) as $id ) {
 				if ( isset( self::$descriptions[ $id ] ) ) {
 					$tools[] = array(
 						'id'          => $id,
@@ -159,6 +172,9 @@ class Neo_Pulse_App_Platform_Data_Tools {
 		}
 		if ( self::gsc_configured() ) {
 			$sources[] = 'gsc';
+		}
+		if ( self::ads_configured() ) {
+			$sources[] = 'ads';
 		}
 		if ( self::ga_configured( $body ) ) {
 			$sources[] = 'ga';
@@ -732,6 +748,14 @@ class Neo_Pulse_App_Platform_Data_Tools {
 		return Neo_Pulse_App_Platform_Data_Gsc_Reporting_Tools::tool_gsc_reporting_compare_summary( $body, $params, $message );
 	}
 
+	public static function tool_ads_reporting_status( array $body, array $params, string $message ): array {
+		return Neo_Pulse_App_Platform_Data_Ads_Reporting_Tools::tool_ads_reporting_status( $body, $params, $message );
+	}
+
+	public static function tool_ads_reporting_compare_summary( array $body, array $params, string $message ): array {
+		return Neo_Pulse_App_Platform_Data_Ads_Reporting_Tools::tool_ads_reporting_compare_summary( $body, $params, $message );
+	}
+
 	public static function tool_post_creator_status( array $body, array $params, string $message ): array {
 		return Neo_Pulse_App_Platform_Data_Post_Creator_Tools::tool_post_creator_status( $body, $params, $message );
 	}
@@ -777,6 +801,10 @@ class Neo_Pulse_App_Platform_Data_Tools {
 
 	private static function gsc_configured(): bool {
 		return Neo_Pulse_App_Platform_Data_Gsc_Tools::configured();
+	}
+
+	private static function ads_configured(): bool {
+		return Neo_Pulse_App_Google_Ads_Oauth::is_configured();
 	}
 
 	/** @param array<string,mixed> $body */

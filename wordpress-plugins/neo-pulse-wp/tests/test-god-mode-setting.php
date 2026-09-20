@@ -46,6 +46,25 @@ god_mode_assert(
 );
 
 god_mode_assert(
+	str_contains( $admin_render, 'neo_pulse_chat_disable_backend' )
+		&& str_contains( $admin_render, 'Disable chat widget on the WordPress admin' )
+		&& str_contains( $admin_save, 'neo_pulse_chat_disable_backend' )
+		&& str_contains( $admin_save, "'disable_backend'" ),
+	'Chat General can disable the widget on wp-admin'
+);
+
+god_mode_assert(
+	str_contains( $chat, "'disable_backend'" ) && str_contains( $chat, 'should_show_on_current_screen' ),
+	'admin screen gate includes disable_backend'
+);
+
+god_mode_assert(
+	str_contains( $chat, 'is_page_builder_editing_context' )
+		&& str_contains( $chat, 'should_show_on_current_screen' ),
+	'page builder screens hide the chat widget'
+);
+
+god_mode_assert(
 	str_contains( $admin_render, 'neo_pulse_chat_admin_only' )
 		&& str_contains( $admin_save, "'admin_only'" ),
 	'Chat General can restrict the widget to administrators'

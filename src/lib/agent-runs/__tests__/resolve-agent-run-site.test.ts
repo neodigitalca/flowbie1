@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WordPressSite } from "@/components/integrations/types";
+import * as storage from "@/components/integrations/storage";
 import type { AgentRun } from "@/lib/agent-runs-types";
 import {
+  loadSitesForAgentRun,
+  mergeAgentRunSiteFromSeed,
+  pinAgentRunSiteId,
   resolveAgentRunSiteIds,
   resolveAgentRunWordPressSite,
   resolveGscReportingSite,
@@ -76,6 +80,18 @@ describe("resolveAgentRunWordPressSite", () => {
       resolveAgentRunWordPressSite(run({ context: {} }), [site("ridgeline", "Ridgeline Solar")]),
     ).toThrow(/WordPress site not found for this task/);
   });
+
+  it("pins a workflow client onto a run that lost its site id", () => {
+    const ridgeline = site("ridgeline", "Ridgeline Solar");
+    const seeded = pinAgentRunSiteId(run({ context: {} }), "ridgeline");
+    const fetched = run({
+      id: 99,
+      context: {},
+      plan: { clientRunContract: { siteId: "" } as never },
+    });
+    const merged = mergeAgentRunSiteFromSeed(fetched, seeded);
+    expect(resolveAgentRunWordPressSite(merged, [ridgeline]).id).toBe("ridgeline");
+  });
 });
 
 describe("resolveGscReportingSite", () => {
@@ -118,5 +134,34 @@ describe("resolveGscReportingSite", () => {
     const found = resolveGscReportingSite(run({ context: { siteId: "ridgeline" } }), [ridgeline]);
     expect(found).toBe(ridgeline);
     expect(found.productionSiteUrl).toBe("https://ridgelinesolar.ca");
+  });
+});
+
+describe("loadSitesForAgentRun", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("keeps the connected list when the run site is already there", async () => {
+    const ridgeline = site("wp-1786635952128-13", "Ridgeline Solar");
+    const mirror = vi.spyOn(storage, "fetchWordPressSitesMirror");
+    const pool = await loadSitesForAgentRun(
+      run({ context: { siteId: "wp-1786635952128-13" } }),
+      [ridgeline],
+    );
+    expect(pool.some((row) => row.id === "wp-1786635952128-13")).toBe(true);
+    expect(mirror).not.toHaveBeenCalled();
+  });
+
+  it("loads the server mirror when the run site is missing from the browser list", async () => {
+    const ridgeline = site("wp-1786635952128-13", "Ridgeline Solar");
+    vi.spyOn(storage, "getStoredSites").mockReturnValue([]);
+    vi.spyOn(storage, "restoreSitesFromServerMirrorIfEmpty").mockResolvedValue([]);
+    vi.spyOn(storage, "fetchWordPressSitesMirror").mockResolvedValue([ridgeline]);
+    const pool = await loadSitesForAgentRun(
+      run({ context: { siteId: "wp-1786635952128-13" } }),
+      [],
+    );
+    expect(pool.find((row) => row.id === "wp-1786635952128-13")?.name).toBe("Ridgeline Solar");
   });
 });

@@ -13,6 +13,7 @@ import {
   newWorkflowDraftScopeKey,
   shouldApplyFetchedWorkflow,
   shouldInitializeNewWorkflowDraft,
+  shouldShowWorkflowLoadSpinner,
 } from "@/lib/workflow/workflow-editor-load-guard";
 import { emptyWorkflowDraft, ensureWorkflowClientNode } from "@/lib/workflow/workflow-migrate-from-planner";
 import {
@@ -73,6 +74,8 @@ import {
 } from "@/lib/content-gap/resolve-content-gap-count";
 import type { WorkflowActionConfig } from "@/lib/workflow/workflow-types";
 import { thenConfig } from "@/lib/workflow/workflow-then-utils";
+import { workflowClientSiteIds } from "@/components/manager/workflow/forge-workflow-styles";
+import { AGENT_RUNS_ALL_SITES_ID } from "@/lib/agent-runs/agent-runs-site-filter";
 
 async function testContentGapAgentNode(
   workflow: WorkflowDefinition,
@@ -152,8 +155,14 @@ export function WorkflowEditorView({
   onNameChange,
   onSaveErrorChange,
 }: WorkflowEditorViewProps): React.ReactElement {
-  const { openSidebar, dispatchWorkflowRun, refreshRuns, setAgentsSiteFilter } =
-    useAgentRunsContext();
+  const {
+    openSidebar,
+    seedOptimisticWorkflowAgent,
+    patchOptimisticWorkflowAgentProgress,
+    dispatchWorkflowRun,
+    refreshRuns,
+    setAgentsSiteFilter,
+  } = useAgentRunsContext();
   const { setActiveWordPressSiteId } = useActiveWordPressSite();
   const [workflow, setWorkflow] = useState<WorkflowDefinition | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -172,7 +181,11 @@ export function WorkflowEditorView({
   const dirtyRef = useRef(false);
   const namePersistTimerRef = useRef<number | null>(null);
   const newDraftScopeRef = useRef<string | null>(null);
+  const defaultSiteIdRef = useRef(defaultSiteId);
+  const onNameChangeRef = useRef(onNameChange);
   const workflowRef = useRef(workflow);
+  defaultSiteIdRef.current = defaultSiteId;
+  onNameChangeRef.current = onNameChange;
   workflowRef.current = workflow;
 
   const markDirty = useCallback(() => {
@@ -197,17 +210,24 @@ export function WorkflowEditorView({
     newDraftScopeRef.current = scopeKey;
     clearDirty();
     setSaveError(null);
-    const next = buildLocalDraft(teamId, defaultSiteId ?? null);
+    const next = buildLocalDraft(teamId, defaultSiteIdRef.current ?? null);
     setWorkflow(next);
-    onNameChange?.(next.name);
+    onNameChangeRef.current?.(next.name);
     setLoading(false);
-  }, [clearDirty, defaultSiteId, onNameChange, teamId, workflowId]);
+  }, [clearDirty, teamId, workflowId]);
 
   useEffect(() => {
     if (!workflowId) return;
     newDraftScopeRef.current = null;
     const seq = ++loadSeqRef.current;
-    setLoading(true);
+    if (
+      shouldShowWorkflowLoadSpinner({
+        loadedWorkflowId: workflowRef.current?.id,
+        nextWorkflowId: workflowId,
+      })
+    ) {
+      setLoading(true);
+    }
     setSaveError(null);
     let cancelled = false;
     void (async () => {
@@ -223,7 +243,7 @@ export function WorkflowEditorView({
         setLoading(false);
         return;
       }
-      const withClient = existing ? ensureWorkflowClientNode(existing, defaultSiteId ?? null) : existing;
+      const withClient = existing ? ensureWorkflowClientNode(existing, defaultSiteIdRef.current ?? null) : existing;
       const migrated = withClient ? applyThenMigrationIfNeeded(withClient) : withClient;
       const synced = migrated
         ? {
@@ -235,14 +255,14 @@ export function WorkflowEditorView({
           }
         : migrated;
       setWorkflow(synced);
-      if (synced?.name) onNameChange?.(synced.name);
+      if (synced?.name) onNameChangeRef.current?.(synced.name);
       clearDirty();
       setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [clearDirty, defaultSiteId, onNameChange, teamId, workflowId]);
+  }, [clearDirty, teamId, workflowId]);
 
   useEffect(() => {
     if (!defaultSiteId) return;
@@ -252,10 +272,18 @@ export function WorkflowEditorView({
     });
   }, [defaultSiteId]);
 
-  const workflowClientSiteId = useMemo(() => {
-    const clientNode = workflow?.nodes.find((item) => item.kind === "workflow_client");
-    return ((clientNode?.config ?? {}) as WorkflowClientConfig).siteIds?.[0]?.trim() ?? "";
-  }, [workflow?.nodes]);
+  const workflowTestSiteIds = useMemo(() => {
+    if (!workflow) return [];
+    return workflowClientSiteIds(
+      workflow,
+      sites.map((site) => site.id),
+    );
+  }, [sites, workflow]);
+
+  const workflowClientSiteId = workflowTestSiteIds[0] ?? "";
+
+  const workflowTestAgentsFilter =
+    workflowTestSiteIds.length > 1 ? AGENT_RUNS_ALL_SITES_ID : workflowTestSiteIds[0] || undefined;
 
   useEffect(() => {
     onSaveErrorChange?.(saveError);
@@ -270,13 +298,13 @@ export function WorkflowEditorView({
   }, []);
 
   useEffect(() => {
-    if (!workflowClientSiteId) return;
-    // Selecting/deselecting in the Clients menu updates siteIds[0]; do not sync the
-    // global active site until the menu closes or this remounts the inspector.
     if (clientsMenuOpen) return;
-    setActiveWordPressSiteId(workflowClientSiteId);
-    setAgentsSiteFilter(workflowClientSiteId);
-  }, [clientsMenuOpen, workflowClientSiteId, setActiveWordPressSiteId, setAgentsSiteFilter]);
+    if (workflowTestSiteIds.length !== 1) return;
+    const siteId = workflowTestSiteIds[0];
+    if (!siteId) return;
+    setActiveWordPressSiteId(siteId);
+    setAgentsSiteFilter(siteId);
+  }, [clientsMenuOpen, workflowTestSiteIds, setActiveWordPressSiteId, setAgentsSiteFilter]);
 
   const selectedNode = useMemo(
     () => workflow?.nodes.find((node) => node.id === selectedNodeId) ?? null,
@@ -585,18 +613,29 @@ export function WorkflowEditorView({
     setSaveError(null);
     setInspectorNote(null);
     setTestingRun(true);
-    openSidebar();
+    const agentTitle =
+      workflow.nodes.find((node) => node.kind === "action_agent")?.label?.trim() || "Full AISEO";
+    if (workflowTestAgentsFilter) {
+      setAgentsSiteFilter(workflowTestAgentsFilter);
+    }
+    seedOptimisticWorkflowAgent(
+      agentTitle,
+      workflowTestSiteIds.length > 0 ? workflowTestSiteIds : workflowClientSiteId || undefined,
+    );
+    patchOptimisticWorkflowAgentProgress("Saving workflow…");
 
     try {
       const ready = await persistWorkflowForRun(workflow);
       if (!ready?.id) {
         const message = "Could not save workflow before test run.";
+        patchOptimisticWorkflowAgentProgress(message);
         setSaveError(message);
         return;
       }
 
       const validation = validateWorkflowForRun(ready);
       if (!validation.ok) {
+        patchOptimisticWorkflowAgentProgress(validation.error);
         setSaveError(validation.error);
         return;
       }
@@ -604,6 +643,7 @@ export function WorkflowEditorView({
       const result = await startWorkflowRun(teamId, ready.id, { simulated: true });
       if (!result.ok || !result.run?.id) {
         const message = result.error ?? "Could not start workflow test run.";
+        patchOptimisticWorkflowAgentProgress(message);
         setSaveError(message);
         return;
       }
@@ -612,19 +652,17 @@ export function WorkflowEditorView({
       setFocusRagOnRunId(workflowRunId);
       setActiveRunId(workflowRunId);
 
-      if (workflowClientSiteId) {
-        setAgentsSiteFilter(workflowClientSiteId);
-      }
-
       const testDispatchOptions = {
         openAgentSidebar: true,
-        clientSiteId: workflowClientSiteId ?? undefined,
+        clientSiteId: workflowTestAgentsFilter,
         skipSetupSteps: true,
       };
 
+      patchOptimisticWorkflowAgentProgress("Page audit…");
       const dispatch = await dispatchWorkflowRun(ready.id, workflowRunId, testDispatchOptions);
       if (!dispatch.ok) {
         const message = dispatch.error ?? "Workflow test failed.";
+        patchOptimisticWorkflowAgentProgress(message);
         setSaveError(message);
         return;
       }
@@ -645,6 +683,7 @@ export function WorkflowEditorView({
       await refreshRuns();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Workflow test failed.";
+      patchOptimisticWorkflowAgentProgress(message);
       setSaveError(message);
     } finally {
       setTestingRun(false);
@@ -652,12 +691,16 @@ export function WorkflowEditorView({
   }, [
     dispatchWorkflowRun,
     openSidebar,
+    seedOptimisticWorkflowAgent,
+    patchOptimisticWorkflowAgentProgress,
     persistWorkflowForRun,
     refreshRuns,
     setAgentsSiteFilter,
     teamId,
     workflow,
     workflowClientSiteId,
+    workflowTestAgentsFilter,
+    workflowTestSiteIds,
   ]);
 
   const handleTestStep = useCallback(
@@ -676,6 +719,13 @@ export function WorkflowEditorView({
             setStepTestResult(await testContentGapAgentNode(workflow, nodeId));
             return;
           }
+          if (workflowTestAgentsFilter) {
+            setAgentsSiteFilter(workflowTestAgentsFilter);
+          }
+          seedOptimisticWorkflowAgent(
+            node.label?.trim() || "Full AISEO",
+            workflowTestSiteIds.length > 0 ? workflowTestSiteIds : workflowClientSiteId || undefined,
+          );
         }
 
         if (node?.kind === "csv_rows") {
@@ -755,9 +805,9 @@ export function WorkflowEditorView({
 
         const workflowRunId = result.run.id;
         const dispatch = await dispatchWorkflowRun(ready.id, workflowRunId, {
-          openAgentSidebar: false,
+          openAgentSidebar: node?.kind === "action_agent",
           stopAfterNodeId: nodeId,
-          clientSiteId: workflowClientSiteId ?? undefined,
+          clientSiteId: workflowTestAgentsFilter,
         });
 
         await refreshRuns();
@@ -813,7 +863,18 @@ export function WorkflowEditorView({
         setTestingStepId(null);
       }
     },
-    [dispatchWorkflowRun, persistWorkflowForRun, refreshRuns, teamId, workflow, workflowClientSiteId],
+    [
+      dispatchWorkflowRun,
+      persistWorkflowForRun,
+      refreshRuns,
+      seedOptimisticWorkflowAgent,
+      setAgentsSiteFilter,
+      teamId,
+      workflow,
+      workflowClientSiteId,
+      workflowTestAgentsFilter,
+      workflowTestSiteIds,
+    ],
   );
 
   if (loading) {

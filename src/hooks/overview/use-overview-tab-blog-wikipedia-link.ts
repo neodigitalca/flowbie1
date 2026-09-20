@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import { flushSync } from "react-dom";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { OverviewBinding } from "@/hooks/overview/use-overview-wordpress-binding";
@@ -20,61 +19,28 @@ import {
   runWikipediaLinkForCatalogRow,
   type WikipediaLinkHarnessSetters,
 } from "@/lib/overview/overview-blog-wikipedia-link-harness-run";
-import {
-  fetchOverviewPageContentBatch,
-  sliceOverviewRowsByPage,
-} from "@/lib/overview/overview-page-content-batch";
-import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
-import { getWordPressPostContent } from "@/lib/wordpress-api/posts";
+import { cacheRowHtmlByIndex } from "@/lib/overview/overview-harness-page-catalog";
+import type { OverviewInventoryUrlMatch } from "@/lib/overview/overview-row-scrape";
+import type { AiseoAfterRowWriteFn } from "@/lib/overview/overview-aiseo-after-upload";
+import { createAiseoCacheWriteAccumulator } from "@/lib/overview/overview-aiseo-cache-write";
 
-async function fetchRowHtmlByIndex(
+function fetchRowHtmlByIndex(
   site: WordPressSite,
   indices: number[],
   rows: OverviewRow[],
-  bindings: Record<string, OverviewBinding | undefined>,
+  sitemapSource: OverviewSitemapSource,
   getInventoryMatchForUrl?: (
     site: WordPressSite | null,
     url: string,
-  ) => import("@/lib/overview/overview-row-scrape").OverviewInventoryUrlMatch | undefined,
-): Promise<Record<number, string>> {
-  if (!site.username?.trim() || !site.appPassword?.trim()) return {};
-
-  const idToIndices = new Map<number, number[]>();
-
-  for (const index of indices) {
-    const row = rows[index];
-    const url = row?.url?.trim();
-    if (!url) continue;
-    if (row.postContentOptimized?.trim() || row.postContent?.trim()) continue;
-    let postId = bindings[url]?.postId;
-    if (!postId && getInventoryMatchForUrl) {
-      postId = getInventoryMatchForUrl(site, url)?.row?.id;
-    }
-    if (!postId) continue;
-    const list = idToIndices.get(postId) ?? [];
-    list.push(index);
-    idToIndices.set(postId, list);
-  }
-
-  const postIds = [...idToIndices.keys()];
-  if (!postIds.length) return {};
-
-  const result = await getWordPressPostContent(
-    site.siteUrl,
-    site.username,
-    site.appPassword,
-    postIds,
-  );
-
-  const out: Record<number, string> = {};
-  for (const post of result.posts ?? []) {
-    const content = post.content?.trim();
-    if (!content) continue;
-    for (const index of idToIndices.get(post.id) ?? []) {
-      out[index] = content;
-    }
-  }
-  return out;
+  ) => OverviewInventoryUrlMatch | undefined,
+): Record<number, string> {
+  return cacheRowHtmlByIndex({
+    site,
+    rows,
+    indices,
+    sitemapSource,
+    getInventoryMatchForUrl: getInventoryMatchForUrl ?? (() => undefined),
+  });
 }
 
 function applyLocalRowPatch(
@@ -107,6 +73,7 @@ type Args = Pick<
     site: WordPressSite | null,
     url: string,
   ) => import("@/lib/overview/overview-row-scrape").OverviewInventoryUrlMatch | undefined;
+  uploadAfterRowWrite?: AiseoAfterRowWriteFn;
 };
 
 export function useOverviewTabBlogWikipediaLink(args: Args) {
@@ -123,6 +90,7 @@ export function useOverviewTabBlogWikipediaLink(args: Args) {
     getInventoryMatchForUrl,
     prefetchOverviewInventory,
     mergeInventoryContentForSource,
+    uploadAfterRowWrite,
   } = args;
 
   const makeHarnessSetters = useCallback(
@@ -169,11 +137,9 @@ export function useOverviewTabBlogWikipediaLink(args: Args) {
 
       const pageTitle = row.title || url;
 
-      flushSync(() => {
-        updateRow(index, {
-          status: "ai-wikipedia-link",
-          blogWikiLinkSummary: "Wikipedia link…",
-        });
+      updateRow(index, {
+        status: "ai-wikipedia-link",
+        blogWikiLinkSummary: "Wikipedia link…",
       });
 
       if (!site.username?.trim() || !site.appPassword?.trim()) {
@@ -294,45 +260,17 @@ export function useOverviewTabBlogWikipediaLink(args: Args) {
         return;
       }
 
-      flushSync(() => {
-        setOptimizingState(opt.setIsOptimizingContent, batchKey, true);
-        initOverviewWikipediaLinkHarnessBatchState({
-          site,
-          catalog: stubCatalog,
-          setBulkOptimizationState: opt.setBulkOptimizationState,
-          setOptimizationProgress: opt.setOptimizationProgress,
-          setIsOptimizingContent: opt.setIsOptimizingContent,
-          prepMessage: `Loading post HTML for Wikipedia link (${stubCatalog.length})…`,
-        });
+      setOptimizingState(opt.setIsOptimizingContent, batchKey, true);
+      initOverviewWikipediaLinkHarnessBatchState({
+        site,
+        catalog: stubCatalog,
+        setBulkOptimizationState: opt.setBulkOptimizationState,
+        setOptimizationProgress: opt.setOptimizationProgress,
+        setIsOptimizingContent: opt.setIsOptimizingContent,
+        prepMessage: `Loading post HTML for Wikipedia link (${stubCatalog.length})…`,
       });
 
       try {
-        if (!site.username?.trim() || !site.appPassword?.trim()) {
-          opt.setBulkOptimizationState((prev) => {
-            const current = prev[batchKey];
-            if (!current) return prev;
-            return {
-              ...prev,
-              [batchKey]: {
-                ...current,
-                currentStepProgress: {
-                  ...(current.currentStepProgress || {}),
-                  step: "Wikipedia link",
-                  progress: 0,
-                  message: "WordPress credentials required",
-                },
-              },
-            };
-          });
-          return;
-        }
-
-        await prefetchOverviewInventory(site, {
-          includeContent: true,
-          source: sitemapSource,
-          silent: true,
-        });
-
         const subset = scopedIndices.map((i) => localRows[i]).filter(Boolean) as OverviewRow[];
         const urls = subset.map((r) => r.url);
         const mergedBindings: Record<string, OverviewBinding | undefined> = {
@@ -340,44 +278,11 @@ export function useOverviewTabBlogWikipediaLink(args: Args) {
           ...(await resolveBindings(urls, site, undefined, { inventoryOnly: true })),
         };
 
-        let rowHtmlByIndex: Record<number, string> = {};
-
-        for (const pageRows of sliceOverviewRowsByPage(subset)) {
-          const batch = await fetchOverviewPageContentBatch({
-            site,
-            sitemapSource,
-            pageRows,
-            bindings: mergedBindings,
-            getInventoryMatchForUrl,
-          });
-          if (!batch.ok) {
-            markBatchUrlsError(
-              batchKey,
-              pageRows.map((r) => r.url.trim()).filter(Boolean),
-            );
-            continue;
-          }
-          if (batch.contentRows.length) {
-            mergeInventoryContentForSource(site, sitemapSource, batch.contentRows);
-          }
-          for (const pageRow of pageRows) {
-            const patch = batch.patches.get(normalizePageUrlKey(pageRow.url));
-            if (!patch) continue;
-            const index = scopedIndices.find(
-              (i) =>
-                normalizePageUrlKey(localRows[i]?.url ?? "") === normalizePageUrlKey(pageRow.url),
-            );
-            if (index != null) {
-              applyLocalRowPatch(localRows, index, patch, updateRow);
-            }
-          }
-        }
-
-        rowHtmlByIndex = await fetchRowHtmlByIndex(
+        const rowHtmlByIndex = fetchRowHtmlByIndex(
           site,
           scopedIndices,
           localRows,
-          mergedBindings,
+          sitemapSource,
           getInventoryMatchForUrl,
         );
         for (const [indexStr, html] of Object.entries(rowHtmlByIndex)) {
@@ -397,6 +302,7 @@ export function useOverviewTabBlogWikipediaLink(args: Args) {
 
         const batchState = opt.bulkOptimizationState[batchKey];
         const urlEntities = batchState?.urlEntities;
+        const cacheWrite = createAiseoCacheWriteAccumulator();
 
         await runOverviewWikipediaLinkHarnessBatch({
           catalog,
@@ -407,6 +313,8 @@ export function useOverviewTabBlogWikipediaLink(args: Args) {
           rows: localRows,
           harnessSetters,
           updateRow,
+          cacheWrite,
+          uploadAfterRowWrite,
         });
       } finally {
         finalizeOverviewWikipediaLinkHarnessBatch(

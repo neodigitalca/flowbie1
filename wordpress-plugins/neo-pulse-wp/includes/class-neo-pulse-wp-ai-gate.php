@@ -32,12 +32,8 @@ class Neo_Pulse_Wp_Ai_Gate {
 	 */
 	public static function allowed_post_types(): array {
 		$from_sitemap = Neo_Pulse_Wp_Sitemap_Settings::content_optimizer_post_types();
-		if ( ! empty( $from_sitemap ) ) {
-			return apply_filters( 'neo_pulse_wp_ai_allowed_post_types', $from_sitemap, self::get_client() );
-		}
-
-		$types  = array( 'post' );
-		$client = self::get_client();
+		$types        = array_values( array_unique( array_merge( array( 'post', 'page' ), $from_sitemap ) ) );
+		$client       = self::get_client();
 		if ( is_array( $client ) ) {
 			$entity = Neo_Pulse_Wp_Site_Progress::resolve_entity_post_type_for_client( $client );
 			if ( null !== $entity && ! in_array( $entity, $types, true ) ) {

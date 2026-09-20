@@ -26,6 +26,7 @@ import { mergeOptimizationProgress } from "@/hooks/content-optimization/optimiza
 import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
 import {
   buildWpUploadBatchPipelineSteps,
+  overviewWpApiBatchCount,
   setBatchStepStatus,
   wpUploadBatchStepsAfterProgress,
 } from "@/lib/overview/overview-batch-pipeline-progress";
@@ -94,14 +95,12 @@ export function initOverviewWpUploadHarnessBatchState(params: {
   const batchKey = `${site.id}-batch`;
   const urls = rows.map((r) => r.url.trim()).filter(Boolean);
   const urlKeywords: Record<string, string> = {};
-  const initialUrlStatuses: Record<string, BulkOptimizationState["urlStatuses"][string]> = {};
 
   for (const row of rows) {
     const url = row.url?.trim();
     if (!url) continue;
     const kw = row.focusKeyword?.trim();
     if (kw) urlKeywords[url] = kw;
-    initialUrlStatuses[url] = "pending";
   }
 
   const uploadCsv = buildOverviewWordPressExportCsv(rows, bindings);
@@ -118,6 +117,7 @@ export function initOverviewWpUploadHarnessBatchState(params: {
     0,
     "running",
   );
+  const plannedBatchCount = overviewWpApiBatchCount(urls.length);
 
   setOptimizingState(setIsOptimizingContent, batchKey, true);
   setOptimizationProgress((prev) =>
@@ -126,7 +126,7 @@ export function initOverviewWpUploadHarnessBatchState(params: {
       progress: 2,
       message: prepMessage,
       harnessSections: wpUploadBatchHarnessSections,
-      harnessPlannedSectionCount: 1,
+      harnessPlannedSectionCount: plannedBatchCount,
     }),
   );
   setBulkOptimizationState((prev) => ({
@@ -134,7 +134,7 @@ export function initOverviewWpUploadHarnessBatchState(params: {
     [batchKey]: {
       urls,
       currentIndex: 0,
-      urlStatuses: initialUrlStatuses,
+      urlStatuses: {},
       currentStep: "Uploading to WordPress",
       currentUrl: urls[0],
       urlKeywords,
@@ -148,7 +148,7 @@ export function initOverviewWpUploadHarnessBatchState(params: {
         progress: 2,
         message: prepMessage,
         harnessSections: wpUploadBatchHarnessSections,
-        harnessPlannedSectionCount: 1,
+        harnessPlannedSectionCount: plannedBatchCount,
       },
     },
   }));
@@ -289,7 +289,7 @@ export function setWpUploadUrlStatus(
   });
 }
 
-/** Apply NDJSON progress after each WordPress upload batch (max 25 parallel PUTs). */
+/** Apply batch progress after one Pulse JSON response (25 posts). */
 export function applyWpUploadBatchProgress(
   setters: WpUploadHarnessSetters,
   params: {
@@ -299,13 +299,25 @@ export function applyWpUploadBatchProgress(
     wpBatchCount: number;
     batchResults: BulkOverviewSeoResultRow[];
     localIndexToUrl: Record<number, string>;
+    phase?: "start" | "done";
   },
 ): void {
   const { batchKey, siteId, setBulkOptimizationState, setOptimizationProgress } = setters;
-  const message = `WordPress batch ${params.wpBatch}/${params.wpBatchCount}`;
+  const phase = params.phase ?? (params.batchResults.length ? "done" : "start");
+  const message =
+    phase === "start"
+      ? `Uploading WordPress post ${params.wpBatch}/${params.wpBatchCount}…`
+      : `WordPress post ${params.wpBatch}/${params.wpBatchCount}`;
   const progressPct =
     params.wpBatchCount > 0
-      ? Math.min(99, Math.round((params.wpBatch / params.wpBatchCount) * 100))
+      ? Math.min(
+          99,
+          Math.round(
+            ((phase === "start" ? Math.max(0, params.wpBatch - 1) : params.wpBatch) /
+              params.wpBatchCount) *
+              100,
+          ),
+        )
       : 0;
 
   setBulkOptimizationState((prev) => {
@@ -326,6 +338,7 @@ export function applyWpUploadBatchProgress(
       baseSteps,
       params.wpBatch,
       params.wpBatchCount,
+      phase,
     );
     return {
       ...prev,
@@ -340,7 +353,7 @@ export function applyWpUploadBatchProgress(
           step: "Uploading to WordPress",
           progress: progressPct,
           message,
-          harnessPlannedSectionCount: 1,
+          harnessPlannedSectionCount: params.wpBatchCount,
         },
       },
     };
@@ -351,7 +364,7 @@ export function applyWpUploadBatchProgress(
       step: "Uploading to WordPress",
       progress: progressPct,
       message,
-      harnessPlannedSectionCount: 1,
+      harnessPlannedSectionCount: params.wpBatchCount,
     }),
   );
 }
@@ -422,7 +435,7 @@ export function finishWpUploadBatchHarness(
         step: "Uploading to WordPress",
         progress: 100,
         message: "Upload batch complete",
-        harnessPlannedSectionCount: 1,
+        harnessPlannedSectionCount: current.batchPipelineSteps?.length ?? 1,
       },
     };
     return {
@@ -504,7 +517,6 @@ export function finalizeOverviewWpUploadHarnessBatch(
       step: "Upload complete",
       progress: 100,
       message: summaryMessage,
-      harnessPlannedSectionCount: 1,
     }),
   );
   setBulkOptimizationState((prev) => {
@@ -526,7 +538,7 @@ export function finalizeOverviewWpUploadHarnessBatch(
           step: "Upload complete",
           progress: 100,
           message: summaryMessage,
-          harnessPlannedSectionCount: 1,
+          harnessPlannedSectionCount: batchPipelineSteps.length,
         },
       },
     };

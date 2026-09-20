@@ -11,6 +11,8 @@
     input_bg: '--fcw-input-bg',
     header_bg: '--fcw-header-bg',
     launcher_bg: '--fcw-launcher-bg',
+    launcher_glow: '--fcw-launcher-glow',
+    launcher_text: '--fcw-launcher-text',
     text: '--fcw-text',
     text_secondary: '--fcw-text-secondary',
     text_muted: '--fcw-text-muted',
@@ -109,6 +111,7 @@
     font_size: true,
     launcher_size: true,
     panel_width: true,
+    panel_max_height: true,
     offset_x: true,
     offset_y: true
   };
@@ -187,6 +190,50 @@
     if (heading && sidebar.sidebar_heading !== undefined) {
       heading.textContent = sidebar.sidebar_heading;
     }
+    if (isChat) {
+      var launcher = document.getElementById('neo-pulse-chat-mobile-launcher')
+        || el.querySelector('.fcw-launcher');
+      if (launcher) {
+        var hideCta = sidebar.launcher_style === 'none';
+        launcher.hidden = hideCta;
+        launcher.style.display = hideCta ? 'none' : '';
+        launcher.style.visibility = hideCta ? 'hidden' : '';
+        if (hideCta) {
+          return;
+        }
+        var isEdge = sidebar.launcher_style === 'edge_tab';
+        launcher.classList.toggle('fcw-launcher--edge-tab', isEdge);
+        launcher.classList.toggle('fcw-launcher--side-left', sidebar.sidebar_side === 'left');
+        var label = launcher.querySelector('.fcw-launcher__label');
+        if (isEdge) {
+          if (!label) {
+            label = document.createElement('span');
+            label.className = 'fcw-launcher__label';
+            launcher.appendChild(label);
+          }
+          if (sidebar.launcher_label) {
+            label.textContent = sidebar.launcher_label;
+          }
+          launcher.style.removeProperty('bottom');
+          launcher.style.removeProperty('width');
+          launcher.style.removeProperty('height');
+          launcher.style.removeProperty('border-radius');
+          launcher.style.removeProperty('transform');
+          launcher.style.top = 'max(96px, calc(var(--wp-admin--admin-bar--height, 0px) + 16px + 5vh))';
+          launcher.style.bottom = 'calc(72px + 5vh)';
+          launcher.style.height = 'auto';
+          if (sidebar.sidebar_side === 'left') {
+            launcher.style.left = '0';
+            launcher.style.right = 'auto';
+          } else {
+            launcher.style.right = '0';
+            launcher.style.left = 'auto';
+          }
+        } else if (label) {
+          label.remove();
+        }
+      }
+    }
   }
 
   function applyVars(el, map, tokens) {
@@ -210,6 +257,9 @@
     }
     if (tokens.panel_width) {
       el.style.setProperty('--fcw-panel-width', tokens.panel_width + 'px');
+    }
+    if (tokens.panel_max_height) {
+      el.style.setProperty('--fcw-panel-max-height', tokens.panel_max_height + 'px');
     }
   }
 
@@ -267,6 +317,13 @@
 
   $(document).on('neo-pulse-design-color-change', refresh);
   $(document).on('input change', '.neo-pulse-ai-widget-design', refresh);
+  $(document).on('click', '[data-neo-pulse-test-peek]', function (evt) {
+    evt.preventDefault();
+    refresh();
+    if (typeof window.NeoPulseChatTestPeek === 'function') {
+      window.NeoPulseChatTestPeek();
+    }
+  });
   $(function () {
     refresh();
   });

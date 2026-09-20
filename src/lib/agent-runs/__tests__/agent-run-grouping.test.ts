@@ -6,6 +6,7 @@ import {
   buildAgentRunSiteNameMap,
   buildAutoExpandedAgentRunFolderKeys,
   buildAutoExpandedAgentRunClientKeys,
+  flattenAgentRunClientRuns,
   mergeEnabledSiteClientGroups,
   resolveAgentRunBucketTabSelections,
   AGENT_RUN_UNASSIGNED_CLIENT_ID,
@@ -404,6 +405,30 @@ describe("buildAutoExpandedAgentRunClientKeys", () => {
     expect(keys.has("client:site-a")).toBe(true);
     expect(keys.has("client:site-b")).toBe(true);
     expect([...keys].some((k) => k.startsWith("bucket:"))).toBe(false);
+  });
+});
+
+describe("flattenAgentRunClientRuns", () => {
+  it("lists every client run newest first", () => {
+    const siteNameById = new Map([
+      ["site-a", "Alpha"],
+      ["site-b", "Beta"],
+    ]);
+    const groups = buildAgentRunGroups(
+      [
+        makeRun({
+          id: 11,
+          plan: { clientRunContract: { siteId: "site-a", targetBucket: "posts" } as never },
+        }),
+        makeRun({
+          id: 22,
+          plan: { clientRunContract: { siteId: "site-b", targetBucket: "posts" } as never },
+        }),
+      ],
+      siteNameById,
+    );
+
+    expect(flattenAgentRunClientRuns(groups).map((row) => row.run.id)).toEqual([22, 11]);
   });
 });
 

@@ -5,6 +5,7 @@ import {
 } from "@/lib/agent-runs/harness-registry";
 import type { AgentRunHarnessContext } from "@/lib/agent-runs/harness-registry";
 import { runGscReportingDirectHarness } from "@/lib/agent-runs/run-gsc-reporting-client-harness";
+import { runAdsReportingDirectHarness } from "@/lib/agent-runs/run-ads-reporting-client-harness";
 import { runDfsArticleAuditDirectHarness } from "@/lib/agent-runs/run-dfs-article-audit-client-harness";
 import { runChatGptAuditDirectHarness } from "@/lib/agent-runs/run-chatgpt-audit-client-harness";
 import { runBrowserAutomationDirectHarness } from "@/lib/agent-runs/run-browser-automation-client-harness";
@@ -27,6 +28,7 @@ export function useDefaultAgentRunHarnesses(): void {
     registerAgentRunHarness("overview_pages_meta_batch", stubHarness);
     registerAgentRunHarness("content_optimizer_bulk", stubHarness);
     registerAgentRunHarness("gsc_reporting", runGscReportingDirectHarness);
+    registerAgentRunHarness("ads_reporting", runAdsReportingDirectHarness);
     registerAgentRunHarness("post_creator", runPostCreatorDirectHarness);
     registerAgentRunHarness("entity_page_creator", runEntityPageCreatorDirectHarness);
     registerAgentRunHarness("entity_generator", runEntityGeneratorDirectHarness);
@@ -39,6 +41,7 @@ export function useDefaultAgentRunHarnesses(): void {
       unregisterAgentRunHarness("overview_pages_meta_batch");
       unregisterAgentRunHarness("content_optimizer_bulk");
       unregisterAgentRunHarness("gsc_reporting");
+      unregisterAgentRunHarness("ads_reporting");
       unregisterAgentRunHarness("post_creator");
       unregisterAgentRunHarness("entity_page_creator");
       unregisterAgentRunHarness("entity_generator");

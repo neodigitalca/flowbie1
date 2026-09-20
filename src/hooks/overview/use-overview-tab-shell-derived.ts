@@ -14,8 +14,10 @@ import {
   buildOverviewBulkMicroSnapshot,
   isOverviewBulkDetailsRun,
 } from "@/lib/overview/overview-bulk-details-bindings";
-import { isOverviewResearchBatchInFlight } from "@/components/overview/overview-tab/overview-bulk-run-helpers";
 import type { OverviewTabController } from "@/hooks/overview/use-overview-tab-controller";
+import { hasActiveBulkActionProgress } from "@/lib/overview/overview-bulk-inline-status";
+import { isOverviewBatchAllComplete } from "@/components/overview/overview-tab/overview-bulk-run-helpers";
+import { isOverviewKeywordRunKind } from "@/lib/overview/overview-keywords-harness-run";
 
 export function useOverviewTabShellDerived(ctrl: OverviewTabController) {
   const { scope } = useAgentRunOptimizerScope();
@@ -55,27 +57,7 @@ export function useOverviewTabShellDerived(ctrl: OverviewTabController) {
   }, [combinedError]);
 
   const metaOptBulkStripBusy = useMemo(() => {
-    const p = ctrl.bulkActionProgress;
-    return !!(
-      ctrl.overviewSitemapLoadBusy ||
-      p.scrape ||
-      p.dates ||
-      p.entityKw ||
-      p.contentKw ||
-      p.aiTitle ||
-      p.aiMeta ||
-      p.aiUrl ||
-      p.aiHeaders ||
-      p.aiLinks ||
-      p.aiAnswer ||
-      p.aiOverview ||
-      p.aiScenario ||
-      p.aiInContentImage ||
-      p.contentCleanup ||
-      p.research ||
-      p.optimizeAll ||
-      p.wpUpload
-    );
+    return ctrl.overviewSitemapLoadBusy || hasActiveBulkActionProgress(ctrl.bulkActionProgress);
   }, [ctrl.bulkActionProgress, ctrl.overviewSitemapLoadBusy]);
 
   const defaultBulkBatchKey = ctrl.site ? `${ctrl.site.id}-batch` : "";
@@ -113,10 +95,13 @@ export function useOverviewTabShellDerived(ctrl: OverviewTabController) {
       ? ctrl.opt.pendingOptimization[siteId]?.url ?? ctrl.opt.optimizationProgress[siteId]?.pageUrl
       : undefined;
   const isBatchContentRunning =
-    bulkBatchKey && !suppressMainOptAgentBleed
-      ? Boolean(ctrl.opt.isOptimizingContent[bulkBatchKey]) ||
-        isOverviewResearchBatchInFlight(batchBulkState)
-      : false;
+    Boolean(
+      bulkBatchKey &&
+        !suppressMainOptAgentBleed &&
+        ctrl.opt.isOptimizingContent[bulkBatchKey] &&
+        !isOverviewKeywordRunKind(batchBulkState?.runKind) &&
+        !isOverviewBatchAllComplete(batchBulkState),
+    );
   const siteProgress = siteId ? ctrl.opt.optimizationProgress[siteId] : undefined;
   const batchProgress = bulkBatchKey ? ctrl.opt.optimizationProgress[bulkBatchKey] : undefined;
   const overviewBulkMicroSnapshot = useMemo(() => {
@@ -191,7 +176,7 @@ export function useOverviewTabShellDerived(ctrl: OverviewTabController) {
     ) {
       return overviewBulkMicroSnapshot ?? contentOptimizerMicroSnapshot ?? batchSnapshot ?? singleSnapshot;
     }
-    if (isSinglePageOptimizing || singleSnapshot) {
+    if (isSinglePageOptimizing) {
       return singleSnapshot;
     }
     return batchSnapshot;
@@ -207,28 +192,8 @@ export function useOverviewTabShellDerived(ctrl: OverviewTabController) {
     overviewBulkMicroSnapshot,
   ]);
   const bulkWorkspaceBusy = useMemo(() => {
-    const p = ctrl.bulkActionProgress;
-    const exclusiveBulkRunning = !!(
-      p.scrape ||
-      p.dates ||
-      p.entityKw ||
-      p.contentKw ||
-      p.aiTitle ||
-      p.aiMeta ||
-      p.aiUrl ||
-      p.aiHeaders ||
-      p.aiLinks ||
-      p.aiAnswer ||
-      p.aiOverview ||
-      p.aiScenario ||
-      p.aiInContentImage ||
-      p.contentCleanup ||
-      p.research ||
-      p.optimizeAll ||
-      p.wpUpload
-    );
     return (
-      exclusiveBulkRunning ||
+      hasActiveBulkActionProgress(ctrl.bulkActionProgress) ||
       isBatchContentRunning ||
       Boolean(ctrl.site && ctrl.opt.isOptimizingContent[ctrl.site.id]) ||
       ctrl.bulkSeoCsvExportBusy

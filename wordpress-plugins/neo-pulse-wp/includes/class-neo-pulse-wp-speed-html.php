@@ -23,6 +23,8 @@ class Neo_Pulse_Wp_Speed_Html {
 
 		$config = Neo_Pulse_Wp_Speed_Gate::config_for_html( $config, $html );
 		$html   = Neo_Pulse_Wp_Speed_Front::process( $html, $config );
+		$html   = Neo_Pulse_Wp_A11y_Front::process( $html );
+		$html   = Neo_Pulse_Wp_Frontend_Seo::process( $html );
 		$html   = Neo_Pulse_Wp_Speed_Assets::process( $html, $config );
 
 		if ( ! empty( $config['minify_html'] ) && ! Neo_Pulse_Wp_Speed_Gate::html_uses_elementor( $html ) ) {

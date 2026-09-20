@@ -37,6 +37,8 @@ export function buildContentPrepUrlHarnessMap(
   urls: string[],
   articleTitleByUrl?: Record<string, string | undefined>,
   keywordByUrl?: Record<string, string | undefined>,
+  entityByUrl?: Record<string, string | undefined>,
+  isSap?: boolean,
 ): Record<string, HarnessSectionListItem[]> {
   const map: Record<string, HarnessSectionListItem[]> = {};
   for (const raw of urls) {
@@ -47,6 +49,8 @@ export function buildContentPrepUrlHarnessMap(
       buildPredeterminedBlogBodyHarnessTitles(articleTitle, undefined, {
         pageUrl: url,
         keyword: keywordByUrl?.[url],
+        entity: entityByUrl?.[url],
+        isSap,
       }),
     );
   }

@@ -14,7 +14,7 @@ import { getResearchModel } from "@/lib/optimization-settings-storage";
 import {
   type GoogleImagesSerpItem,
 } from "@/lib/overview/overview-local-image-dfs-normalize";
-import { BACKEND_API_BASE } from "@/lib/wordpress-api/connection";
+import { BACKEND_API_BASE, backendApiUrl } from "@/lib/wordpress-api/connection";
 import { openRouterWebAppHeaders } from "@/lib/openrouter-attribution";
 import { postOpenRouterAppChatFetch } from "@/lib/openrouter-app-api";
 
@@ -1050,12 +1050,15 @@ async function fetchGoogleImagesForQuery(
   return capGoogleImagesCandidates(Array.isArray(data.items) ? data.items : []);
 }
 
-async function prefetchImageDataUrl(imageUrl: string): Promise<string | null> {
+async function prefetchImageDataUrl(imageUrl: string, referer?: string): Promise<string | null> {
   try {
-    const res = await fetch(`${BACKEND_API_BASE}/api/images/fetch-data-url`, {
+    const res = await fetch(backendApiUrl("/images/fetch-data-url"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: imageUrl }),
+      body: JSON.stringify({
+        url: imageUrl,
+        referer: (referer || "").trim() || "https://www.google.com/",
+      }),
     });
     const data = (await res.json().catch(() => ({}))) as {
       dataUrl?: string;
@@ -1067,23 +1070,6 @@ async function prefetchImageDataUrl(imageUrl: string): Promise<string | null> {
   } catch {
     return null;
   }
-}
-
-async function prepareReferenceDataUrl(dataUrl: string): Promise<string> {
-  try {
-    const res = await fetch(`${BACKEND_API_BASE}/api/images/prepare-local-image`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dataUrl }),
-    });
-    const data = (await res.json().catch(() => ({}))) as { dataUrl?: string };
-    if (res.ok && typeof data.dataUrl === "string" && data.dataUrl.startsWith("data:image/")) {
-      return data.dataUrl;
-    }
-  } catch {
-    // optional prepare
-  }
-  return dataUrl;
 }
 
 async function pickTopReferencesForTarget(params: {
@@ -1099,7 +1085,7 @@ async function pickTopReferencesForTarget(params: {
   const capped = capGoogleImagesCandidates(params.candidates);
   const usable: Array<{ item: GoogleImagesSerpItem; dataUrl: string }> = [];
   for (const item of capped) {
-    const dataUrl = await prefetchImageDataUrl(item.image_url);
+    const dataUrl = await prefetchImageDataUrl(item.image_url, item.source_url);
     if (dataUrl) usable.push({ item, dataUrl });
   }
   if (!usable.length) return [];
@@ -1210,7 +1196,6 @@ ${pickInstructions}`,
     if (!softPickPasses(pick)) continue;
     if (pick.chosenIndex < 0 || pick.chosenIndex >= usable.length) continue;
     const chosen = usable[pick.chosenIndex]!;
-    const prepared = await prepareReferenceDataUrl(chosen.dataUrl);
     const remoteImage = (chosen.item.image_url || "").trim();
     if (!remoteImage.startsWith("http://") && !remoteImage.startsWith("https://")) {
       continue;
@@ -1223,7 +1208,7 @@ ${pickInstructions}`,
         : undefined;
 
     out.push({
-      dataUrl: prepared,
+      dataUrl: chosen.dataUrl,
       imageUrl: remoteImage,
       sourceUrl,
       query: params.target.query,

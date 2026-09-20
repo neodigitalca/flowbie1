@@ -1,6 +1,12 @@
-import type { AssistHistoryMessage, AssistSubmode, AssistTargetScope } from "./types";
+import type {
+  AssistHistoryMessage,
+  AssistSubmode,
+  AssistTargetScope,
+  PageContentMode,
+} from "./types";
 
 const SUBMODE_KEY = "neo_pulse_chat_admin_submode";
+const PAGE_CONTENT_MODE_KEY = "neo_pulse_page_content_mode";
 const SCOPE_KEY = "neo_pulse_chat_target_scope";
 const OPEN_KEY = "neo_pulse_pulse_assist_open";
 const PANEL_KEY = "neo_pulse_sidebar_panel";
@@ -34,6 +40,28 @@ export function cycleSubmode(current: AssistSubmode): AssistSubmode {
   if (current === "ask") return "plan";
   if (current === "plan") return "build";
   return "ask";
+}
+
+export function readPageContentMode(): PageContentMode {
+  try {
+    const v = sessionStorage.getItem(PAGE_CONTENT_MODE_KEY);
+    if (v === "seo_blocks" || v === "elementor_widgets") return v;
+  } catch {
+    /* ignore */
+  }
+  return "seo_blocks";
+}
+
+export function writePageContentMode(mode: PageContentMode): void {
+  try {
+    sessionStorage.setItem(PAGE_CONTENT_MODE_KEY, mode);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function togglePageContentMode(current: PageContentMode): PageContentMode {
+  return current === "seo_blocks" ? "elementor_widgets" : "seo_blocks";
 }
 
 export function readTargetScope(): AssistTargetScope {

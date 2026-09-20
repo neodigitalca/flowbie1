@@ -165,6 +165,19 @@ export function localWpApiProxyPlugin() {
           }
 
           if (upstream.status >= 300 && upstream.status < 400) {
+            const locationRaw = upstream.headers.location;
+            const locationHref = locationRaw
+              ? new URL(Array.isArray(locationRaw) ? locationRaw[0] : locationRaw, targetOrigin).href
+              : "";
+            const locationHost = locationHref ? new URL(locationHref).host : "";
+            const targetHost = new URL(targetOrigin).host;
+            if (locationHref && locationHost !== targetHost) {
+              res.statusCode = upstream.status;
+              res.setHeader("cache-control", "no-store");
+              res.setHeader("location", locationHref);
+              res.end();
+              return;
+            }
             res.statusCode = 502;
             res.setHeader("content-type", "application/json; charset=utf-8");
             res.end(

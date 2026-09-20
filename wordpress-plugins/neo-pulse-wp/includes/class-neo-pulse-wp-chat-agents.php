@@ -98,7 +98,7 @@ class Neo_Pulse_Wp_Chat_Agents {
 	public static function phase_ack( string $message, string $site_name, array $training = array(), array $history = array(), array $settings = array() ) {
 		$assistant = isset( $training['assistant_name'] ) && $training['assistant_name'] !== ''
 			? (string) $training['assistant_name']
-			: 'Flow Assist';
+			: 'Pulse Assist';
 
 		$greeting_style = isset( $training['greeting_style'] ) ? (string) $training['greeting_style'] : 'friendly';
 		$tone_map       = array(
@@ -501,7 +501,7 @@ PROMPT;
 
 RULE;
 
-		$assistant_name = isset( $training['assistant_name'] ) && $training['assistant_name'] !== '' ? $training['assistant_name'] : 'Flow Assist';
+		$assistant_name = isset( $training['assistant_name'] ) && $training['assistant_name'] !== '' ? $training['assistant_name'] : 'Pulse Assist';
 		$custom_prompt  = isset( $training['system_prompt'] ) && $training['system_prompt'] !== '' ? $training['system_prompt'] : '';
 		$greeting_style = isset( $training['greeting_style'] ) ? $training['greeting_style'] : 'friendly';
 

@@ -175,6 +175,7 @@ export function PulseForgePostSchedulePanel({
   useEffect(() => {
     if (
       executionKind !== "gsc_reporting" &&
+      executionKind !== "ads_reporting" &&
       executionKind !== "local_dominator_export" &&
       executionKind !== "chatgpt_website_audit" &&
       executionKind !== "browser_automation"

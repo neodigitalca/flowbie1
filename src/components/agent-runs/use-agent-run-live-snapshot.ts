@@ -3,7 +3,7 @@ import { useWordPressOptimization } from "@/contexts/wordpress-optimization-cont
 import { humanizeSlugFromUrl } from "@/hooks/content-optimization/bulk-optimization-constants";
 import { computeBatchProgress } from "@/lib/content-optimization/content-optimizer-run-progress";
 import { resolveAgentRunBatchKey } from "@/lib/agent-runs/agent-run-batch-key";
-import { buildAgentRunProgressLabel } from "@/lib/agent-runs/agent-run-display";
+import { buildAgentRunProgressLabel, isAgentRunNodeDiagnosticLabel } from "@/lib/agent-runs/agent-run-display";
 import { readAgentRunCheckpoint } from "@/lib/agent-runs/agent-run-checkpoint";
 import { resolveAgentRunRecipeKey } from "@/lib/agent-runs/agent-run-navigation";
 import type { AgentRun, AgentRunCheckpoint } from "@/lib/agent-runs-types";
@@ -39,8 +39,17 @@ function agentRunSiteId(run: AgentRun): string {
 
 function lastStepLabel(run: AgentRun): string | null {
   const steps = run.steps ?? [];
-  if (steps.length === 0) return null;
-  return steps[steps.length - 1]?.label?.trim() || null;
+  for (let i = steps.length - 1; i >= 0; i -= 1) {
+    const label = steps[i]?.label?.trim() || "";
+    if (label && !isAgentRunNodeDiagnosticLabel(label)) return label;
+  }
+  return null;
+}
+
+function usefulProgressMessage(message: string | null | undefined): string {
+  const trimmed = message?.trim() ?? "";
+  if (!trimmed || isAgentRunNodeDiagnosticLabel(trimmed)) return "";
+  return trimmed;
 }
 
 function normalizeGeneratedFiles(
@@ -246,7 +255,7 @@ function snapshotFromCheckpoint(run: AgentRun, checkpoint: AgentRunCheckpoint): 
     isLive: true,
     currentUrl: resolvedCurrentUrl,
     postTitle,
-    progressLabel: checkpoint.lastMessage || lastStepLabel(run),
+    progressLabel: usefulProgressMessage(checkpoint.lastMessage) || lastStepLabel(run),
     positionLabel,
     percent: percentFromCheckpoint(checkpoint),
     generatedFiles: [],
@@ -308,9 +317,9 @@ export function useAgentRunLiveSnapshot(run: AgentRun): AgentRunLiveSnapshot | n
       const progress = batchProgress ?? siteProgress;
       const step = bulkState?.currentStep || progress?.step || "";
       const message =
-        progress?.message ||
-        bulkState?.currentStepProgress?.message ||
-        checkpoint.lastMessage ||
+        usefulProgressMessage(progress?.message) ||
+        usefulProgressMessage(bulkState?.currentStepProgress?.message) ||
+        usefulProgressMessage(checkpoint.lastMessage) ||
         "";
       const progressLabel = buildAgentRunProgressLabel(step, message);
 

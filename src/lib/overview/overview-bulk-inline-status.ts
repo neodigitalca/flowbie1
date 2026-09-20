@@ -11,17 +11,45 @@ export type SetBulkActionProgress = Dispatch<
   SetStateAction<Partial<Record<MetaBulkActionKey, BulkProgressSlice>>>
 >;
 
-/** First active bulk slice in UI priority order. */
+export function isActiveBulkProgressSlice(
+  slice: BulkProgressSlice | undefined,
+): slice is BulkProgressSlice {
+  if (!slice || slice.total <= 0) return false;
+  return slice.completed < slice.total;
+}
+
+export function hasActiveBulkActionProgress(
+  bulkActionProgress: Partial<Record<MetaBulkActionKey, BulkProgressSlice>>,
+): boolean {
+  return META_BULK_MICRO_ORDER.some((key) => {
+    if (key === "loadSitemap" || key === "inventoryHydrate") return false;
+    return isActiveBulkProgressSlice(bulkActionProgress[key]);
+  });
+}
+
+/** First in-progress bulk slice in UI priority order. Completed slices are idle. */
 export function pickActiveBulkProgressSlice(
   bulkActionProgress: Partial<Record<MetaBulkActionKey, BulkProgressSlice>>,
 ): { key: MetaBulkActionKey; slice: BulkProgressSlice } | null {
   for (const key of META_BULK_MICRO_ORDER) {
     const slice = bulkActionProgress[key];
-    if (slice && slice.total > 0) {
+    if (isActiveBulkProgressSlice(slice)) {
       return { key, slice };
     }
   }
   return null;
+}
+
+export function clearBulkActionSlice(
+  setBulkActionProgress: SetBulkActionProgress,
+  key: MetaBulkActionKey,
+): void {
+  setBulkActionProgress((p) => {
+    if (!p[key]) return p;
+    const next = { ...p };
+    delete next[key];
+    return next;
+  });
 }
 
 export function bulkInlineStatusForKey(key: MetaBulkActionKey): string {

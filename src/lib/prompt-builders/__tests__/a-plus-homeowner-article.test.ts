@@ -16,8 +16,9 @@ describe("A_PLUS_HOMEOWNER_ARTICLE_RULE", () => {
   it("covers all four A+ requirements without hardcoded client names", () => {
     expect(A_PLUS_HOMEOWNER_ARTICLE_RULE).toContain("Numbers that mean something");
     expect(A_PLUS_HOMEOWNER_ARTICLE_RULE).toContain("Cost/ROI/savings H2s");
-    expect(A_PLUS_HOMEOWNER_ARTICLE_RULE).toContain("When ARTICLE CONTENT TYPE is cost or how_to");
+    expect(A_PLUS_HOMEOWNER_ARTICLE_RULE).toContain("THIS connected site's trade");
     expect(A_PLUS_HOMEOWNER_ARTICLE_RULE).toContain("skip a dedicated climate H2");
+    expect(A_PLUS_HOMEOWNER_ARTICLE_RULE).toContain("product-trends");
     expect(A_PLUS_HOMEOWNER_ARTICLE_RULE).toContain("Worth-the-extra-cost H2");
     expect(A_PLUS_HOMEOWNER_ARTICLE_RULE).toContain("No generic filler");
     expect(A_PLUS_HOMEOWNER_ARTICLE_RULE).toContain("explicit currency");
@@ -37,6 +38,8 @@ describe("A_PLUS_KEYWORD_AUTHORITY_RULE", () => {
     expect(A_PLUS_KEYWORD_AUTHORITY_RULE).toContain("writing keyword");
     expect(A_PLUS_KEYWORD_AUTHORITY_RULE).toContain("2-3 concrete searcher questions");
     expect(A_PLUS_KEYWORD_AUTHORITY_RULE).toContain("Never from a hardcoded vertical");
+    expect(A_PLUS_KEYWORD_AUTHORITY_RULE).toContain("Trade + keyword (topic contract)");
+    expect(A_PLUS_KEYWORD_AUTHORITY_RULE).toContain("The only chrome titles are Answer and Overview");
     expect(A_PLUS_KEYWORD_AUTHORITY_RULE).toContain("If no place entity is present, skip this item");
     for (const banned of HARDCODED_VERTICALS) {
       expect(A_PLUS_KEYWORD_AUTHORITY_RULE).not.toContain(banned);
@@ -46,13 +49,16 @@ describe("A_PLUS_KEYWORD_AUTHORITY_RULE", () => {
 
 describe("AUTHENTICITY rules extended for A+", () => {
   it("checklist requires regional climate, worth-extra-cost tradeoff, and [NUMBERS] slots", () => {
-    expect(AUTHENTICITY_CHECKLIST_RULE).toContain("connected service area's climate");
+    expect(AUTHENTICITY_CHECKLIST_RULE).toContain("THIS connected site's trade");
     expect(AUTHENTICITY_CHECKLIST_RULE).toContain("worth the extra cost");
     expect(AUTHENTICITY_CHECKLIST_RULE).toContain("[NUMBERS]");
     expect(AUTHENTICITY_CHECKLIST_RULE).toContain("peopleAlsoAsk");
-    expect(AUTHENTICITY_CHECKLIST_RULE).toContain("For guide, what_is, and vs");
+    expect(AUTHENTICITY_CHECKLIST_RULE).toContain("SERP H2 OUTLINE");
     expect(AUTHENTICITY_CHECKLIST_RULE).toContain("SAP PAGE TEMPLATE");
     expect(AUTHENTICITY_CHECKLIST_RULE).toContain("Product | Best for | Budget | Reason");
+    expect(AUTHENTICITY_CHECKLIST_RULE).toContain("[WRITING DATE]");
+    expect(AUTHENTICITY_CHECKLIST_RULE).toContain("post generation date");
+    expect(AUTHENTICITY_CHECKLIST_RULE).toContain("never call a past year");
   });
 
   it("writer rule uses section budget for sourced detail", () => {

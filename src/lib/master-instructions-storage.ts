@@ -1,4 +1,18 @@
+import {
+  PROFILE_BRAND_NAMING_FILENAME,
+  profileMasterRuleSourcesForSite,
+} from "@/lib/profile-master-rules";
+
 const STORAGE_KEY_PREFIX = "neo_pulse_wp_master_instructions_";
+const NEO_PULSE_MASTER_INSTRUCTIONS_CHANGED_EVENT = "neo-pulse-master-instructions-changed";
+const profileMasterRulesSeededSiteIds = new Set<string>();
+
+function notifyProfileMasterRulesChanged(siteId: string): void {
+  if (typeof window === "undefined" || typeof window.dispatchEvent !== "function") return;
+  window.dispatchEvent(
+    new CustomEvent(NEO_PULSE_MASTER_INSTRUCTIONS_CHANGED_EVENT, { detail: { siteId } }),
+  );
+}
 
 export interface MasterInstructionsFileMeta {
   name: string;
@@ -153,6 +167,7 @@ export function seedMasterInstructionsForTests(siteId: string, payload: MasterIn
 /** @internal Unit tests */
 export function clearMasterInstructionsTestCache(): void {
   clearAllMasterInstructionsMemory();
+  profileMasterRulesSeededSiteIds.clear();
 }
 
 /** No-op with local persistence (kept for callers). */
@@ -173,11 +188,49 @@ export async function ensureMasterInstructionsInMemory(_siteId: string | null | 
   /* local reads need no prefetch */
 }
 
-export function getMasterInstructionsPayload(siteId: string | undefined | null): MasterInstructionsPayload {
-  if (!siteId || typeof window === "undefined") return emptyPayload();
+function readMasterInstructionsPayloadRaw(siteId: string): MasterInstructionsPayload {
   const mem = memoryBySite.get(siteId);
   if (mem) return mem;
   return readFromLocalStorage(siteId);
+}
+
+/** @internal Sync persist for profile rule seeding. */
+export function persistMasterInstructionsPayload(siteId: string, data: MasterInstructionsPayload): void {
+  writeToLocalStorage(siteId, { sources: normalizeSources(data.sources) });
+  memoryBySite.delete(siteId);
+}
+
+function withProfileMasterRules(siteId: string, payload: MasterInstructionsPayload): MasterInstructionsPayload {
+  const profileSources = profileMasterRuleSourcesForSite({ siteId });
+  if (!profileSources.length) return payload;
+
+  const canonical = profileSources[0];
+  if (!canonical) return payload;
+
+  const existingIndex = payload.sources.findIndex((s) => s.name === PROFILE_BRAND_NAMING_FILENAME);
+  if (existingIndex >= 0) {
+    const existing = payload.sources[existingIndex]!;
+    if (existing.content.trim() === canonical.content.trim()) return payload;
+    const nextSources = [...payload.sources];
+    nextSources[existingIndex] = { ...canonical, uploadedAt: Date.now() };
+    const next = { sources: nextSources };
+    persistMasterInstructionsPayload(siteId, next);
+    notifyProfileMasterRulesChanged(siteId);
+    return next;
+  }
+
+  const next = { sources: [...payload.sources, canonical] };
+  if (!profileMasterRulesSeededSiteIds.has(siteId)) {
+    profileMasterRulesSeededSiteIds.add(siteId);
+    persistMasterInstructionsPayload(siteId, next);
+    notifyProfileMasterRulesChanged(siteId);
+  }
+  return next;
+}
+
+export function getMasterInstructionsPayload(siteId: string | undefined | null): MasterInstructionsPayload {
+  if (!siteId || typeof window === "undefined") return emptyPayload();
+  return withProfileMasterRules(siteId, readMasterInstructionsPayloadRaw(siteId));
 }
 
 export function getMasterInstructionsText(siteId: string | undefined | null): string {

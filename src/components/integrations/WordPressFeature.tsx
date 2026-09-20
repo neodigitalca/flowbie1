@@ -160,6 +160,7 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
   const [formUsername, setFormUsername] = useState("");
   const [formAppPassword, setFormAppPassword] = useState("");
   const [formGa4PropertyId, setFormGa4PropertyId] = useState("");
+  const [formGoogleAdsCustomerId, setFormGoogleAdsCustomerId] = useState("");
   const [formGbpLocationId, setFormGbpLocationId] = useState("");
   const [formSemrushSiteAuditProjectId, setFormSemrushSiteAuditProjectId] = useState("");
   const [formEditorialCountsPeriodStartYmd, setFormEditorialCountsPeriodStartYmd] = useState("");
@@ -225,6 +226,7 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
       setFormUsername(formData.username);
       setFormAppPassword(formData.appPassword);
       setFormGa4PropertyId(formData.ga4PropertyId ?? "");
+      setFormGoogleAdsCustomerId(formData.googleAdsCustomerId ?? "");
       setFormGbpLocationId(formData.gbpLocationId ?? "");
       setFormSemrushSiteAuditProjectId(formData.semrushSiteAuditProjectId ?? "");
       setFormEditorialCountsPeriodStartYmd(formData.editorialCountsPeriodStartYmd ?? "");
@@ -276,7 +278,7 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
     }
     const site = sites.find((s) => s.id === profileSiteId);
     if (!site) return;
-    const syncKey = `${profileSiteId}:${site.gbpLocationId ?? ""}:${site.ga4PropertyId ?? ""}`;
+    const syncKey = `${profileSiteId}:${site.gbpLocationId ?? ""}:${site.ga4PropertyId ?? ""}:${site.googleAdsCustomerId ?? ""}`;
     if (lastProfileSyncedRef.current === syncKey) return;
     lastProfileSyncedRef.current = syncKey;
     populateFormFromSite(site);
@@ -302,13 +304,14 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
     setFormProductionSiteUrl(formData.productionSiteUrl ?? "");
     setFormUsername(formData.username);
     setFormAppPassword(formData.appPassword);
-    setFormGa4PropertyId(formData.ga4PropertyId ?? "");
-    setFormGbpLocationId(formData.gbpLocationId ?? "");
-    setFormSemrushSiteAuditProjectId(formData.semrushSiteAuditProjectId ?? "");
-    setFormEditorialCountsPeriodStartYmd(formData.editorialCountsPeriodStartYmd ?? "");
-    setFormOptimizationPackage(formData.optimizationPackage ?? "");
-    setFormBenchmarkCustomTag(formData.benchmarkCustomTag ?? "");
-    setFormServiceCity("");
+      setFormGa4PropertyId(formData.ga4PropertyId ?? "");
+      setFormGoogleAdsCustomerId(formData.googleAdsCustomerId ?? "");
+      setFormGbpLocationId(formData.gbpLocationId ?? "");
+      setFormSemrushSiteAuditProjectId(formData.semrushSiteAuditProjectId ?? "");
+      setFormEditorialCountsPeriodStartYmd(formData.editorialCountsPeriodStartYmd ?? "");
+      setFormOptimizationPackage(formData.optimizationPackage ?? "");
+      setFormBenchmarkCustomTag(formData.benchmarkCustomTag ?? "");
+      setFormServiceCity("");
     setFormServiceState("");
     setFormServiceCountry("");
     setIsDialogOpen(true);
@@ -335,6 +338,8 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
       normalizeGbpLocationIdInput(formGbpLocationId).trim();
     const ga4ForSave =
       formGa4PropertyId.trim() || liveEdit?.ga4PropertyId?.trim() || "";
+    const adsForSave =
+      formGoogleAdsCustomerId.trim() || liveEdit?.googleAdsCustomerId?.trim() || "";
     const saved = handleSaveSite(
       formName,
       formSiteUrl,
@@ -351,6 +356,7 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
       formServiceCity,
       formServiceState,
       formServiceCountry,
+      adsForSave,
     );
     if (saved) {
       setIsDialogOpen(false);
@@ -361,7 +367,10 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
       if (saved.ga4PropertyId?.trim()) {
         setFormGa4PropertyId(saved.ga4PropertyId.trim());
       }
-      lastProfileSyncedRef.current = `${saved.id}:${gbp}:${saved.ga4PropertyId ?? ""}`;
+      if (saved.googleAdsCustomerId?.trim()) {
+        setFormGoogleAdsCustomerId(saved.googleAdsCustomerId.trim());
+      }
+      lastProfileSyncedRef.current = `${saved.id}:${gbp}:${saved.ga4PropertyId ?? ""}:${saved.googleAdsCustomerId ?? ""}`;
       if (!activeEdit) {
         void (async () => {
           const r = await applyGbpPropertyWand(saved, {
@@ -378,6 +387,7 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
     formUsername,
     formAppPassword,
     formGa4PropertyId,
+    formGoogleAdsCustomerId,
     formGbpLocationId,
     formSemrushSiteAuditProjectId,
     formEditorialCountsPeriodStartYmd,
@@ -405,6 +415,7 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
       formUsername={formUsername}
       formAppPassword={formAppPassword}
       formGa4PropertyId={formGa4PropertyId}
+      formGoogleAdsCustomerId={formGoogleAdsCustomerId}
       formGbpLocationId={formGbpLocationId}
       formSemrushSiteAuditProjectId={formSemrushSiteAuditProjectId}
       formEditorialCountsPeriodStartYmd={formEditorialCountsPeriodStartYmd}
@@ -419,6 +430,7 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
       onFormUsernameChange={setFormUsername}
       onFormAppPasswordChange={setFormAppPassword}
       onFormGa4PropertyIdChange={setFormGa4PropertyId}
+      onFormGoogleAdsCustomerIdChange={setFormGoogleAdsCustomerId}
       onFormGbpLocationIdChange={setFormGbpLocationId}
       onFormSemrushSiteAuditProjectIdChange={setFormSemrushSiteAuditProjectId}
       onFormEditorialCountsPeriodStartYmdChange={setFormEditorialCountsPeriodStartYmd}
@@ -811,6 +823,7 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
         formUsername={formUsername}
         formAppPassword={formAppPassword}
         formGa4PropertyId={formGa4PropertyId}
+        formGoogleAdsCustomerId={formGoogleAdsCustomerId}
         formGbpLocationId={formGbpLocationId}
         formSemrushSiteAuditProjectId={formSemrushSiteAuditProjectId}
         formEditorialCountsPeriodStartYmd={formEditorialCountsPeriodStartYmd}
@@ -825,6 +838,7 @@ export const WordPressFeature: React.FC<WordPressFeatureProps> = ({
         onFormUsernameChange={setFormUsername}
         onFormAppPasswordChange={setFormAppPassword}
         onFormGa4PropertyIdChange={setFormGa4PropertyId}
+        onFormGoogleAdsCustomerIdChange={setFormGoogleAdsCustomerId}
         onFormGbpLocationIdChange={setFormGbpLocationId}
         onFormSemrushSiteAuditProjectIdChange={setFormSemrushSiteAuditProjectId}
         onFormEditorialCountsPeriodStartYmdChange={setFormEditorialCountsPeriodStartYmd}

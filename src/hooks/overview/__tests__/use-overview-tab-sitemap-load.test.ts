@@ -43,8 +43,9 @@ describe("useOverviewTabSitemapLoad contract", () => {
     expect(src).not.toMatch(/hydrateOverviewContentInBackground/);
     expect(src).not.toMatch(/buildOverviewRowsFromWarmPrefetchInventory/);
     expect(src).not.toMatch(/force:\s*sourceChanged/);
-    expect(src).toMatch(/includeContent:\s*false/);
-    expect(src).toMatch(/if \(cachedRows\?\.length\)/);
+    expect(src).not.toMatch(/loadOverviewRowBodyContent/);
+    expect(src).not.toMatch(/ensureOverviewInventoryIncludesContent/);
+    expect(src).toMatch(/includeContent:\s*true/);
   });
 
   it("session cache hit returns rows without clearing grid", () => {

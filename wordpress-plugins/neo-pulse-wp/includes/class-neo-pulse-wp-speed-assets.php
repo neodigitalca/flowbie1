@@ -44,12 +44,110 @@ class Neo_Pulse_Wp_Speed_Assets {
 	}
 
 	/**
+	 * Rewrite an enqueued script or stylesheet URL to a Speed cache file.
+	 *
+	 * @param string $src  Enqueued URL.
+	 * @param string $type css|js.
+	 */
+	public static function rewrite_enqueued_src( string $src, string $type ): string {
+		if ( $src === '' || is_admin() ) {
+			return $src;
+		}
+		if ( self::is_speed_cache_url( $src ) ) {
+			return $src;
+		}
+		if ( ! Neo_Pulse_Wp_Speed_Gate::should_optimize() ) {
+			return $src;
+		}
+		$config = Neo_Pulse_Wp_Speed_Settings::get_config();
+		if ( 'css' === $type && empty( $config['optimize_css'] ) ) {
+			return $src;
+		}
+		if ( 'js' === $type && empty( $config['optimize_js'] ) ) {
+			return $src;
+		}
+		if ( Neo_Pulse_Wp_Speed_Excludes::is_excluded( $src, $type, $config ) ) {
+			return $src;
+		}
+		$path = self::resolve_local_path( $src );
+		if ( $path === null ) {
+			return $src;
+		}
+		$cached = self::minify_file_to_cache( $path, $type, $config, $src );
+		return null !== $cached ? $cached : $src;
+	}
+
+	/**
+	 * @param string $src    Enqueued script URL.
+	 * @param string $handle Script handle.
+	 */
+	public static function filter_script_loader_src( string $src, string $handle = '' ): string {
+		unset( $handle );
+		return self::rewrite_enqueued_src( $src, 'js' );
+	}
+
+	/**
+	 * @param string $src    Enqueued style URL.
+	 * @param string $handle Style handle.
+	 */
+	public static function filter_style_loader_src( string $src, string $handle = '' ): string {
+		unset( $handle );
+		return self::rewrite_enqueued_src( $src, 'css' );
+	}
+
+	/**
+	 * Keep Speed cache CSS off Nitro's font rewriter (origin urls stay valid).
+	 *
+	 * @param string $tag    Link tag.
+	 * @param string $handle Style handle.
+	 * @param string $href   Stylesheet URL.
+	 */
+	public static function filter_style_loader_tag( string $tag, string $handle = '', string $href = '' ): string {
+		unset( $handle );
+		if ( ! self::is_speed_cache_url( $href ) && ! self::is_speed_cache_url( $tag ) ) {
+			return $tag;
+		}
+		return self::with_nitro_exclude( $tag );
+	}
+
+	/**
+	 * @param string $tag HTML link or script tag.
+	 */
+	public static function with_nitro_exclude( string $tag ): string {
+		if ( $tag === '' || stripos( $tag, 'nitro-exclude' ) !== false ) {
+			return $tag;
+		}
+		$pos = stripos( $tag, '<link' );
+		if ( $pos === false ) {
+			return $tag;
+		}
+		return substr( $tag, 0, $pos ) . '<link nitro-exclude' . substr( $tag, $pos + 5 );
+	}
+
+	/**
+	 * Cached Speed output must not be remminified (wrong url() base).
+	 *
+	 * @param string $url Asset URL.
+	 */
+	public static function is_speed_cache_url( string $url ): bool {
+		return strpos( $url, '/cache/neo-pulse-speed/' ) !== false;
+	}
+
+	/**
 	 * @param string $url URL from tag.
 	 */
 	public static function resolve_local_path( string $url ): ?string {
 		$url = trim( $url );
 		if ( $url === '' || 0 === strpos( $url, 'data:' ) ) {
 			return null;
+		}
+		$qpos = strpos( $url, '?' );
+		if ( false !== $qpos ) {
+			$url = substr( $url, 0, $qpos );
+		}
+		$hpos = strpos( $url, '#' );
+		if ( false !== $hpos ) {
+			$url = substr( $url, 0, $hpos );
 		}
 		if ( 0 === strpos( $url, '//' ) ) {
 			$url = ( is_ssl() ? 'https:' : 'http:' ) . $url;
@@ -91,12 +189,13 @@ class Neo_Pulse_Wp_Speed_Assets {
 	}
 
 	/**
-	 * @param string $path Local file path.
-	 * @param string $type css|js.
+	 * @param string $path       Local file path.
+	 * @param string $type       css|js.
 	 * @param array<string, mixed> $config Settings.
+	 * @param string $source_url Original public URL (used to fix relative CSS urls).
 	 * @return string|null Cached public URL.
 	 */
-	public static function minify_file_to_cache( string $path, string $type, array $config ): ?string {
+	public static function minify_file_to_cache( string $path, string $type, array $config, string $source_url = '' ): ?string {
 		$mtime = (int) filemtime( $path );
 		$key   = Neo_Pulse_Wp_Speed_Cache::build_hash( $path . ':' . $mtime, $type, $config );
 		$url   = Neo_Pulse_Wp_Speed_Cache::get_url( $type, $key );
@@ -109,6 +208,9 @@ class Neo_Pulse_Wp_Speed_Assets {
 			return null;
 		}
 		$min = 'css' === $type ? Neo_Pulse_Wp_Speed_Minify::css( $raw ) : Neo_Pulse_Wp_Speed_Minify::js( $raw );
+		if ( 'css' === $type && $source_url !== '' ) {
+			$min = Neo_Pulse_Wp_Speed_Minify::rewrite_relative_urls( $min, $source_url );
+		}
 		if ( 'css' === $type && ! empty( $config['font_display_swap'] ) ) {
 			$min = Neo_Pulse_Wp_Speed_Minify::ensure_font_display_swap( $min );
 		}
@@ -130,6 +232,9 @@ class Neo_Pulse_Wp_Speed_Assets {
 				if ( stripos( $full, 'stylesheet' ) === false ) {
 					return $full;
 				}
+				if ( self::is_speed_cache_url( $url ) ) {
+					return self::with_nitro_exclude( $full );
+				}
 				if ( Neo_Pulse_Wp_Speed_Excludes::is_excluded( $url, 'css', $config ) ) {
 					return $full;
 				}
@@ -137,11 +242,11 @@ class Neo_Pulse_Wp_Speed_Assets {
 				if ( $path === null ) {
 					return $full;
 				}
-				$cached = self::minify_file_to_cache( $path, 'css', $config );
+				$cached = self::minify_file_to_cache( $path, 'css', $config, $url );
 				if ( $cached === null ) {
 					return $full;
 				}
-				return '<link' . $before . 'href="' . esc_url( $cached ) . '"' . $after . '>';
+				return self::with_nitro_exclude( '<link' . $before . 'href="' . esc_url( $cached ) . '"' . $after . '>' );
 			},
 			$html
 		);
@@ -158,6 +263,9 @@ class Neo_Pulse_Wp_Speed_Assets {
 				$before = $m[1];
 				$url    = $m[3];
 				$after  = $m[4];
+				if ( self::is_speed_cache_url( $url ) ) {
+					return $m[0];
+				}
 				if ( Neo_Pulse_Wp_Speed_Excludes::is_excluded( $url, 'js', $config ) ) {
 					return $m[0];
 				}

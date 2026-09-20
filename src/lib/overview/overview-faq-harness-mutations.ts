@@ -1,11 +1,11 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { BulkHarnessSectionPayload } from "@/lib/bulk-auto-generate";
 import { reduceHarnessSectionList, type HarnessSectionListItem } from "@/lib/bulk/harness-sections-reducer";
+import { mergeAiseoRowFinishFiles } from "@/lib/overview/overview-aiseo-row-artifacts";
 import {
-  faqHarnessGeneratedFiles,
+  buildFaqJsonGeneratedFile,
   formatFaqPairMarkdown,
 } from "@/lib/overview/overview-faq-harness-sections";
-import { extractH2TextsFromHtml } from "@/lib/overview/overview-blog-headers-extract";
 import {
   mergeHarnessProgressSiteAndBatch,
 } from "@/hooks/content-optimization/optimization-helpers-a";
@@ -13,6 +13,12 @@ import type { BulkOptimizationState } from "@/hooks/content-optimization/use-opt
 import type { FaqEntry } from "@/lib/faq-entries";
 import { serializeFaqEntriesPlain } from "@/lib/faq-entries";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
+import type { AiseoCacheWriteAccumulator } from "@/lib/overview/overview-aiseo-cache-write";
+import {
+  generatedFilesForUrl,
+  storageKeyForUrlGeneratedFiles,
+} from "@/lib/content-optimization/content-optimizer-bulk-generator-bindings";
+import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
 
 type SetBulkState = Dispatch<SetStateAction<Record<string, BulkOptimizationState>>>;
 type SetOptProgress = Dispatch<SetStateAction<Record<string, unknown>>>;
@@ -45,6 +51,31 @@ export function computeFaqBatchProgress(batch: BulkOptimizationState): number {
     doneSlots += countDoneSections(batch.urlHarnessSections?.[url]);
   }
   return Math.min(99, Math.round((doneSlots / Math.max(slotTotal, 1)) * 100));
+}
+
+export function markFaqRowActive(
+  url: string,
+  rowIndex: number,
+  setters: FaqHarnessSetters,
+): void {
+  setters.setBulkOptimizationState((prev) => {
+    const current = prev[setters.batchKey];
+    if (!current) return prev;
+    const urls = current.urls ?? [];
+    const urlIndex = urls.findIndex(
+      (candidate) => normalizePageUrlKey(candidate) === normalizePageUrlKey(url),
+    );
+    const currentIndex = urlIndex >= 0 ? urlIndex : rowIndex;
+    return {
+      ...prev,
+      [setters.batchKey]: {
+        ...current,
+        urlStatuses: { ...(current.urlStatuses || {}), [url]: "optimizing" },
+        currentUrl: url,
+        currentIndex,
+      },
+    };
+  });
 }
 
 export function setFaqUrlStatus(
@@ -137,6 +168,7 @@ export function finishFaqRowHarness(
   rowIndex: number,
   entries: FaqEntry[],
   setters: FaqHarnessSetters,
+  cacheWrite?: AiseoCacheWriteAccumulator,
   updateRow: (index: number, patch: Partial<OverviewRow>) => void,
   options?: {
     postHtml?: string;
@@ -146,25 +178,24 @@ export function finishFaqRowHarness(
   const { batchKey, setBulkOptimizationState } = setters;
   const faq = serializeFaqEntriesPlain(entries);
   const postHtml = options?.postHtml?.trim() || "";
-  const faqSectionHtml = options?.faqSectionHtml?.trim() || "";
 
   setBulkOptimizationState((prev) => {
     const current = prev[batchKey];
     if (!current) return prev;
-    const urlSections = current.urlHarnessSections?.[url] ?? [];
-    const faqFiles = faqHarnessGeneratedFiles(urlSections, url);
-    const existingFiles = current.urlGeneratedFiles?.[url] ?? [];
-    const bodyFaqFile =
-      faqSectionHtml
-        ? [
-            {
-              name: "faq.html",
-              content: faqSectionHtml,
-              mimeType: "text/html;charset=utf-8",
-            },
-          ]
-        : [];
-    const files = [...existingFiles, ...faqFiles, ...bodyFaqFile];
+    const storageKey = storageKeyForUrlGeneratedFiles(
+      current.urlGeneratedFiles,
+      url,
+      current.urls,
+    );
+    const existingFiles = generatedFilesForUrl(current.urlGeneratedFiles, url);
+    const faqFile = buildFaqJsonGeneratedFile(entries);
+    const files = mergeAiseoRowFinishFiles({
+      runKind: "aiFaq",
+      url,
+      existingFiles,
+      elementFiles: faqFile ? [faqFile] : [],
+      postHtml,
+    });
     const nextBatch: BulkOptimizationState = {
       ...current,
       urlStatuses: {
@@ -173,7 +204,7 @@ export function finishFaqRowHarness(
       },
       urlGeneratedFiles: {
         ...(current.urlGeneratedFiles || {}),
-        [url]: files,
+        [storageKey]: files,
       },
     };
     const progress = computeFaqBatchProgress(nextBatch);
@@ -193,10 +224,8 @@ export function finishFaqRowHarness(
   });
 
   const rowPatch: Partial<OverviewRow> = { faq, status: "idle" };
-  if (postHtml) {
-    rowPatch.postContent = postHtml;
-    rowPatch.postContentOptimized = postHtml;
-    rowPatch.blogH2List = extractH2TextsFromHtml(postHtml);
+  if (postHtml && cacheWrite) {
+    cacheWrite.push(url, postHtml);
   }
   updateRow(rowIndex, rowPatch);
 }

@@ -351,6 +351,198 @@ describe("buildContentOptimizerBulkGeneratorDetailsProps", () => {
     expect(props.harnessByRow.get(0)?.[0]?.title).toBe("Keyword research");
     expect(props.harnessByRow.get(0)?.[2]?.title).toBe("SERP research brief");
   });
+
+  it("keeps completed-row files in filesByRow", () => {
+    const url = "https://example.com/113-114-street-edmonton";
+    const props = buildContentOptimizerBulkGeneratorDetailsProps(
+      {
+        siteId: "site-1",
+        batchKey: "site-1-batch",
+        bulkState: {
+          urls: [url],
+          currentIndex: 0,
+          currentUrl: url,
+          urlStatuses: { [url]: "completed" },
+          currentStep: "done",
+          runKind: "content",
+          urlEntities: { [url]: "113/114 Street, Edmonton" },
+          urlGeneratedFiles: {
+            [url]: [
+              {
+                name: "checklist-edmonton.json",
+                content: "1. Sunlight",
+                mimeType: "text/plain",
+              },
+              {
+                name: "content-edmonton.html",
+                content: "<h2>Answer</h2>",
+                mimeType: "text/html",
+              },
+              {
+                name: "content-edmonton.md",
+                content: "## Answer",
+                mimeType: "text/markdown",
+              },
+            ],
+          },
+        },
+        overviewRows: [
+          {
+            url,
+            title: "Edmonton Window Treatment SEO Near 113/114 Street, Edmonton",
+            metaDescription: "",
+            aiTitle: "",
+            aiMeta: "",
+            status: "idle",
+          },
+        ],
+        isOptimizingContent: {},
+        optimizationFileManagers: {},
+      },
+      false,
+    );
+    const rowFiles = props.filesByRow.get(0) ?? [];
+    expect(rowFiles.map((file) => file.fileName)).toEqual([
+      "checklist-edmonton.json",
+      "content-edmonton.html",
+      "content-edmonton.md",
+    ]);
+  });
+});
+
+describe("FAQ bulk current row", () => {
+  it("does not keep details on the first completed FAQ row", () => {
+    const props = buildContentOptimizerBulkGeneratorDetailsProps(
+      {
+        siteId: "site-1",
+        batchKey: "site-1-batch",
+        bulkState: {
+          urls: ["https://example.com/a", "https://example.com/b"],
+          currentIndex: 0,
+          currentUrl: "https://example.com/a",
+          urlStatuses: {
+            "https://example.com/a": "completed",
+            "https://example.com/b": "optimizing",
+          },
+          currentStep: "AI FAQs",
+          runKind: "aiFaq",
+        },
+        overviewRows: [],
+        isOptimizingContent: { "site-1-batch": true },
+        optimizationFileManagers: {},
+      },
+      true,
+    );
+    expect(props.currentRow).toBe(1);
+  });
+
+  it("uses FAQ harness titles only, not content optimize slots", () => {
+    const url = "https://example.com/a";
+    const props = buildContentOptimizerBulkGeneratorDetailsProps(
+      {
+        siteId: "site-1",
+        batchKey: "site-1-batch",
+        bulkState: {
+          urls: [url],
+          currentIndex: 0,
+          currentUrl: url,
+          urlStatuses: { [url]: "optimizing" },
+          currentStep: "AI FAQs",
+          runKind: "aiFaq",
+          urlHarnessSections: {
+            [url]: [
+              { sectionIndex: 0, title: "FAQ 1", status: "done" },
+              { sectionIndex: 1, title: "FAQ 2", status: "generating" },
+              { sectionIndex: 2, title: "FAQ 3", status: "waiting" },
+              { sectionIndex: 3, title: "FAQ 4", status: "waiting" },
+            ],
+          },
+          urlGeneratedFiles: {
+            [url]: [
+              {
+                name: "faq.json",
+                content: '[{"question":"Q1","answer":"A1"}]',
+                mimeType: "application/json",
+              },
+              {
+                name: "content-a.html",
+                content: "<h2>Article</h2><div class=\"flo-faq\"></div>",
+                mimeType: "text/html",
+              },
+              {
+                name: "wordpress.json",
+                content: '{"ok":true}',
+                mimeType: "application/json",
+              },
+            ],
+          },
+        },
+        overviewRows: [
+          {
+            url,
+            title: "Tariffs",
+            metaDescription: "",
+            aiTitle: "",
+            aiMeta: "",
+            status: "ai-faq",
+            focusKeyword: "tariffs",
+          },
+        ],
+        isOptimizingContent: { "site-1-batch": true },
+        optimizationFileManagers: {},
+      },
+      true,
+    );
+    expect(props.pipelineSectionTitles).toEqual([]);
+    expect(props.filesByRow.get(0)?.map((file) => file.fileName)).toEqual([
+      "faq.json",
+      "content-a.html",
+      "wordpress.json",
+    ]);
+  });
+
+  it("resolves urlGeneratedFiles when batch url and stored key differ by trailing slash", () => {
+    const batchUrl = "https://example.com/cra-mail-in";
+    const storedUrl = "https://example.com/cra-mail-in/";
+    const props = buildContentOptimizerBulkGeneratorDetailsProps(
+      {
+        siteId: "site-1",
+        batchKey: "site-1-batch",
+        bulkState: {
+          urls: [batchUrl],
+          currentIndex: 0,
+          currentUrl: batchUrl,
+          urlStatuses: { [batchUrl]: "completed" },
+          currentStep: "AI FAQs",
+          runKind: "aiFaq",
+          urlGeneratedFiles: {
+            [storedUrl]: [
+              { name: "faq.json", content: "[]", mimeType: "application/json" },
+              { name: "wordpress.json", content: "{}", mimeType: "application/json" },
+            ],
+          },
+        },
+        overviewRows: [
+          {
+            url: batchUrl,
+            title: "CRA Mail In",
+            metaDescription: "",
+            aiTitle: "",
+            aiMeta: "",
+            status: "idle",
+            focusKeyword: "cra mail in",
+          },
+        ],
+        isOptimizingContent: {},
+        optimizationFileManagers: {},
+      },
+      false,
+    );
+    expect(props.filesByRow.get(0)?.map((file) => file.fileName)).toEqual([
+      "faq.json",
+      "wordpress.json",
+    ]);
+  });
 });
 
 describe("buildContentOptimizerBulkMicroSnapshot", () => {

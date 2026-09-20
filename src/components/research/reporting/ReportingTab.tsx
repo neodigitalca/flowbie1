@@ -16,6 +16,8 @@ import { useWordPressOptimization } from "@/contexts/wordpress-optimization-cont
 import { notify } from "@/lib/app-notifications";
 import { NOTIFY_COULD_NOT_COPY, NOTIFY_DOWNLOADED_MARKDOWN_FILE, NOTIFY_DOWNLOADED_OUTLINE_JSON, NOTIFY_DOWNLOADED_OUTLINE_POST_BODY, NOTIFY_GENERATE_A_REPORT_FIRST, NOTIFY_GSC_REPORT_GENERATED, NOTIFY_MARKDOWN_COPIED, NOTIFY_REPORT_ADDED_TO_KNOWLEDGE_BASE, NOTIFY_REPORT_CANCELLED, NOTIFY_SET_A_PUBLIC_SITE_URL_FOR_THIS_PROPERTY_ } from "@/lib/notify-messages";
 import { runGscReportingAgentHarness } from "@/lib/gsc-reporting/gsc-reporting-agent-harness";
+import { runAdsReportingAgentHarness } from "@/lib/ads-reporting/ads-reporting-agent-harness";
+import { ReportingModePills, type ReportingWorkspaceMode } from "@/components/research/reporting/ReportingModePills";
 import { getPublicSiteUrl } from "@/lib/wordpress-site-public-url";
 import type {
   GscReportingOutlineResult,
@@ -123,6 +125,8 @@ export function ReportingTab({ activeSection, onSectionChange }: ReportingTabPro
   const [progress, setProgress] = useState<GscReportingPipelineProgress | null>(null);
   const [gscFetchRange, setGscFetchRange] = useState<GscFetchDateRange | null>(null);
   const [gscCompareFetchRange, setGscCompareFetchRange] = useState<GscFetchDateRange | null>(null);
+  const [reportMode, setReportMode] = useState<ReportingWorkspaceMode>("seo");
+  const [runError, setRunError] = useState<string | null>(null);
   const [gscFetchPreset, setGscFetchPreset] = useState<GscReportingComparePresetId>("mom");
   const [compareRangeDraft, setCompareRangeDraft] = useState<GscCompareRanges>(() =>
     computeCompareRangesForPreset("mom"),
@@ -152,44 +156,86 @@ export function ReportingTab({ activeSection, onSectionChange }: ReportingTabPro
     setOutlinePostJson(null);
     setSectionMap({});
     setGeneratingSectionIndex(null);
+    setFiles([]);
   }, []);
 
+  const handleReportModeChange = useCallback(
+    (mode: ReportingWorkspaceMode) => {
+      if (mode === reportMode || busy) return;
+      setReportMode(mode);
+      setRunError(null);
+      resetReportArtifacts();
+    },
+    [busy, reportMode, resetReportArtifacts],
+  );
+
   const handleRun = useCallback(async () => {
-    if (!site) return;
+    if (!site) {
+      setRunError("Select a site in the header.");
+      return;
+    }
     abortRef.current?.abort();
     abortRef.current = new AbortController();
     setBusy(true);
+    setRunError(null);
     setProgress({ step: 0, total: 1, label: "Starting…" });
     resetReportArtifacts();
     try {
       const comparePreset = gscFetchPreset === "yoy" ? "yoy" : "mom";
       if (!reportingPublicSiteUrl.trim()) {
+        setRunError(NOTIFY_SET_A_PUBLIC_SITE_URL_FOR_THIS_PROPERTY_);
         notify.error(NOTIFY_SET_A_PUBLIC_SITE_URL_FOR_THIS_PROPERTY_);
         return;
       }
       const check = validateGscCompareFetchRanges(compareRangeDraft.primary, compareRangeDraft.compare);
       if (!check.ok) {
+        setRunError(check.error);
         notify.error(check.error);
         return;
       }
+      if (reportMode === "ppc" && (site.googleAdsCustomerId ?? "").replace(/\D/g, "").length !== 10) {
+        const msg = "Set the Google Ads customer ID on this property in Dashboard, then click Generate.";
+        setRunError(msg);
+        notify.error(msg);
+        return;
+      }
 
-      const result = await runGscReportingAgentHarness({
-        site,
-        comparePreset,
-        compareRanges: compareRangeDraft,
-        signal: abortRef.current.signal,
-        onProgress,
-        onOutlineReady: ({ outline, outlineRequestBodyJson }) => {
-          setLastOutline(outline);
-          setOutlinePostJson(outlineRequestBodyJson);
-        },
-        onSectionStart: (index) => {
-          setGeneratingSectionIndex(index);
-        },
-        onSectionReady: (row) => {
-          setSectionMap((m) => ({ ...m, [row.index]: row }));
-        },
-      });
+      const result =
+        reportMode === "ppc"
+          ? await runAdsReportingAgentHarness({
+              site,
+              comparePreset,
+              compareRanges: compareRangeDraft,
+              signal: abortRef.current.signal,
+              onProgress,
+              onOutlineReady: ({ outline, outlineRequestBodyJson }) => {
+                setLastOutline(outline as unknown as GscReportingOutlineResult);
+                setOutlinePostJson(outlineRequestBodyJson);
+              },
+              onSectionStart: (index) => {
+                setGeneratingSectionIndex(index);
+              },
+              onSectionReady: (row) => {
+                setSectionMap((m) => ({ ...m, [row.index]: row as unknown as GscReportingSectionResult }));
+              },
+            })
+          : await runGscReportingAgentHarness({
+              site,
+              comparePreset,
+              compareRanges: compareRangeDraft,
+              signal: abortRef.current.signal,
+              onProgress,
+              onOutlineReady: ({ outline, outlineRequestBodyJson }) => {
+                setLastOutline(outline);
+                setOutlinePostJson(outlineRequestBodyJson);
+              },
+              onSectionStart: (index) => {
+                setGeneratingSectionIndex(index);
+              },
+              onSectionReady: (row) => {
+                setSectionMap((m) => ({ ...m, [row.index]: row }));
+              },
+            });
 
       setFiles(result.files);
       setGscFetchRange(result.fetchRange);
@@ -199,12 +245,13 @@ export function ReportingTab({ activeSection, onSectionChange }: ReportingTabPro
       setLastOutline(result.outline);
       setOutlinePostJson(result.outlineRequestBodyJson);
       setSectionMap(Object.fromEntries(result.sectionResults.map((r) => [r.index, r])));
-      notify.success(NOTIFY_GSC_REPORT_GENERATED);
+      notify.success(reportMode === "ppc" ? "PPC report generated" : NOTIFY_GSC_REPORT_GENERATED);
     } catch (e) {
       if ((e as Error).name === "AbortError") {
         notify.info(NOTIFY_REPORT_CANCELLED);
       } else {
         const msg = e instanceof Error ? e.message : String(e);
+        setRunError(msg);
         notify.error(msg);
       }
     } finally {
@@ -220,6 +267,7 @@ export function ReportingTab({ activeSection, onSectionChange }: ReportingTabPro
     gscFetchPreset,
     onProgress,
     resetReportArtifacts,
+    reportMode,
   ]);
 
   const copyMarkdown = useCallback(async () => {
@@ -240,17 +288,18 @@ export function ReportingTab({ activeSection, onSectionChange }: ReportingTabPro
       notify.error(NOTIFY_GENERATE_A_REPORT_FIRST);
       return;
     }
-    const slug = (site?.name || "gsc-report").replace(/\s+/g, "-");
-    triggerBlobDownload(reportMd.trim(), `gsc-report-${slug}-${Date.now()}.md`, "text/markdown;charset=utf-8");
+    const prefix = reportMode === "ppc" ? "ppc-report" : "gsc-report";
+    const slug = (site?.name || prefix).replace(/\s+/g, "-");
+    triggerBlobDownload(reportMd.trim(), `${prefix}-${slug}-${Date.now()}.md`, "text/markdown;charset=utf-8");
     notify.success(NOTIFY_DOWNLOADED_MARKDOWN_FILE);
-  }, [reportMd, site?.name]);
+  }, [reportMd, site?.name, reportMode]);
 
   const handleExportKb = useCallback(() => {
     if (!reportMd?.trim() || !site) return;
     const ts = Date.now();
     const safe = site.name.replace(/[^a-zA-Z0-9-_]/g, "-").toLowerCase();
     const newFile: StoredFile = {
-      name: `gsc-report-${safe}-${ts}.md`,
+      name: `${reportMode === "ppc" ? "ppc-report" : "gsc-report"}-${safe}-${ts}.md`,
       size: reportMd.length,
       content: reportMd,
       starred: false,
@@ -262,7 +311,7 @@ export function ReportingTab({ activeSection, onSectionChange }: ReportingTabPro
     localStorage.setItem(KB_FILES_STORAGE_KEY, JSON.stringify(all));
     window.dispatchEvent(new CustomEvent("kb-files-updated", { detail: { files: all } }));
     notify.success(NOTIFY_REPORT_ADDED_TO_KNOWLEDGE_BASE);
-  }, [reportMd, site]);
+  }, [reportMd, site, reportMode]);
 
   const downloadOutlineJson = useCallback(() => {
     if (!lastOutline) return;
@@ -353,6 +402,9 @@ export function ReportingTab({ activeSection, onSectionChange }: ReportingTabPro
             <GscReportingWorkspaceHeader
               activeSection={activeSection}
               onSectionChange={onSectionChange}
+              titleRowMenu={
+                <ReportingModePills mode={reportMode} onModeChange={handleReportModeChange} disabled={busy} />
+              }
               onDetailsOpenChange={setDetailsDrawerOpen}
               busy={busy}
               progress={progress}
@@ -396,6 +448,17 @@ export function ReportingTab({ activeSection, onSectionChange }: ReportingTabPro
             {detailsDrawerOpen ? (
               <div className={WORKSPACE_DETAILS_DIM_OVERLAY_CLASS} aria-hidden />
             ) : null}
+          <div className="min-h-8 px-2 py-2 text-base leading-normal sm:px-3">
+            {runError ? (
+              <p className="text-red-400">{runError}</p>
+            ) : !busy && !reportMd?.trim() && !outlineSections?.length ? (
+              <p className="text-muted-foreground">
+                {reportMode === "ppc"
+                  ? "Set the Google Ads customer ID on this property in Dashboard, then click Generate."
+                  : "Click Generate (green, right of the black bar) to build this report."}
+              </p>
+            ) : null}
+          </div>
           {outlineSections && outlineSections.length > 0 ? (
             <GscReportingSectionsPanel
               plans={outlineSections}

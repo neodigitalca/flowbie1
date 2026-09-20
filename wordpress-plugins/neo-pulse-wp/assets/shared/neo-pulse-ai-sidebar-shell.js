@@ -97,7 +97,15 @@
     var self = this;
     var entry = { el: el, opts: opts || {} };
     this.extraLaunchers.push(entry);
+    if (el._fcwBound || el._faiLauncherBound) {
+      return;
+    }
+    el._faiLauncherBound = true;
     el.addEventListener('click', function () {
+      if (self.isOpen && el.classList.contains('fcw-launcher--edge-tab')) {
+        self.toggle(false);
+        return;
+      }
       if (typeof entry.opts.onBeforeOpen === 'function') {
         entry.opts.onBeforeOpen();
       } else if (typeof self.opts.onBeforeOpen === 'function') {
@@ -109,8 +117,13 @@
 
   NeoPulseAiSidebarShell.prototype.bind = function () {
     var self = this;
-    if (this.launcher) {
+    if (this.launcher && !this.launcher._fcwBound && !this.launcher._faiLauncherBound) {
+      this.launcher._faiLauncherBound = true;
       this.launcher.addEventListener('click', function () {
+        if (self.isOpen && self.launcher.classList.contains('fcw-launcher--edge-tab')) {
+          self.toggle(false);
+          return;
+        }
         if (typeof self.opts.onBeforeOpen === 'function') {
           self.opts.onBeforeOpen();
         }
@@ -200,26 +213,38 @@
     this.isOpen = false;
     this.root.classList.remove(this.openClass);
     this.root.classList.remove('fai-sidebar-root--open');
-    if (this.backdrop) {
-      this.backdrop.setAttribute('hidden', '');
-      this.backdrop.classList.remove('fai-sidebar-backdrop--visible');
-    }
-    if (this.panel) {
-      this.panel.setAttribute('hidden', '');
-      this.panel.classList.remove('fai-sidebar-panel--visible');
-      clearMobileFullscreenPanel(this.panel);
-    }
     unlockPageScroll();
     document.removeEventListener('keydown', this.onKeyDown);
     this.setLauncherExpanded(false);
     if (typeof this.opts.onClose === 'function') {
       this.opts.onClose();
     }
-    if (isMobileViewport()) {
-      hideChatMobileRoot(this.root);
-    }
     if (this.launcher) {
       this.launcher.focus();
+    }
+    var self = this;
+    var finish = function () {
+      if (self.isOpen) return;
+      if (self.backdrop) {
+        self.backdrop.setAttribute('hidden', '');
+        self.backdrop.classList.remove('fai-sidebar-backdrop--visible');
+      }
+      if (self.panel) {
+        if (!self.root.classList.contains('fai-sidebar-root--edge-tab')) {
+          self.panel.setAttribute('hidden', '');
+        }
+        self.panel.classList.remove('fai-sidebar-panel--visible');
+        clearMobileFullscreenPanel(self.panel);
+      }
+      if (isMobileViewport() && !self.root.classList.contains('fai-sidebar-root--edge-tab')) {
+        hideChatMobileRoot(self.root);
+      }
+    };
+    var slide = this.root.classList.contains('fai-sidebar-root--transition-slide') && !prefersReducedMotion() && !isMobileViewport();
+    if (slide) {
+      window.setTimeout(finish, 500);
+    } else {
+      finish();
     }
   };
 

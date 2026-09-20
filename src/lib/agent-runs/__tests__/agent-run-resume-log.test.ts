@@ -365,4 +365,36 @@ describe("agent-run-log-format", () => {
       }),
     ]);
   });
+
+  it("hides Node TLS process warnings from the progress log", () => {
+    const steps = [
+      {
+        id: 1,
+        stepIndex: 0,
+        label: "Post creator server job started",
+        status: "running" as const,
+        createdAt: "2026-09-14T17:58:00.000Z",
+      },
+      {
+        id: 2,
+        stepIndex: 1,
+        label:
+          "(node:30860) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.",
+        status: "running" as const,
+        createdAt: "2026-09-14T17:58:01.000Z",
+      },
+      {
+        id: 3,
+        stepIndex: 2,
+        label: "1 post URLs loaded, KW JSON (496 keywords)",
+        status: "running" as const,
+        createdAt: "2026-09-14T17:58:02.000Z",
+      },
+    ];
+    const normalized = normalizeAgentRunStepsForDisplay(steps);
+    expect(normalized.map((step) => step.label)).toEqual([
+      "Post creator server job started",
+      "1 post URLs loaded, KW JSON (496 keywords)",
+    ]);
+  });
 });

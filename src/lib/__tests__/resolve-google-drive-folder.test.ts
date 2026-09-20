@@ -3,7 +3,13 @@ import {
   appendDriveDateSegments,
   formatDriveMonthSegment,
   formatDriveYearSegment,
+  googleDriveDeliveryFolderIsMonthLeaf,
+  googleDrivePurposeFolderLabel,
   inferGoogleDriveDeliveryPath,
+  listDrivePurposeSelectOptions,
+  normalizeCustomDrivePurposeName,
+  presetPurposeValueFromName,
+  rememberCustomDrivePurposePreset,
   resolveWorkflowDriveFolderPath,
   normalizeClientFolderName,
   driveFolderNamesMatch,
@@ -96,6 +102,7 @@ describe("google-drive-folder-hierarchy", () => {
 
   it("infers Drive folder from the workflow agent kind", () => {
     expect(inferGoogleDriveDeliveryPath("gsc_reporting")).toBe("reporting");
+    expect(inferGoogleDriveDeliveryPath("ads_reporting")).toBe("reporting");
     expect(inferGoogleDriveDeliveryPath("chatgpt_website_audit")).toBe("audits");
     expect(inferGoogleDriveDeliveryPath("chatgpt_audit")).toBe("audits");
     expect(inferGoogleDriveDeliveryPath("dfs_llm_article_audit")).toBe("audits");
@@ -128,6 +135,31 @@ describe("google-drive-folder-hierarchy", () => {
         "gsc_reporting",
       ),
     ).toBe("reporting");
+    expect(
+      resolveWorkflowDriveFolderPath(
+        { googleDriveFolderPath: "PPC", googleDriveFolderPathManual: true },
+        "ads_reporting",
+      ),
+    ).toBe("PPC");
+  });
+
+  it("keeps a custom purpose name and maps known aliases", () => {
+    expect(normalizeCustomDrivePurposeName(" PPC / extra ")).toBe("PPC");
+    expect(presetPurposeValueFromName("Reports")).toBe("reporting");
+    expect(presetPurposeValueFromName("PPC")).toBeNull();
+    expect(googleDrivePurposeFolderLabel("PPC")).toBe("PPC");
+    expect(resolvePathSegments("PPC")).toEqual(["PPC"]);
+    expect(rememberCustomDrivePurposePreset("PPC")).toBe("PPC");
+    expect(listDrivePurposeSelectOptions("PPC").some((item) => item.value === "PPC")).toBe(true);
+  });
+
+  it("treats any purpose year month path as a delivery month folder", () => {
+    expect(googleDriveDeliveryFolderIsMonthLeaf("NEO Pulse / Acme / Reporting / 2026 / September")).toBe(
+      true,
+    );
+    expect(googleDriveDeliveryFolderIsMonthLeaf("NEO Pulse / Acme / PPC / 2026 / September")).toBe(true);
+    expect(googleDriveDeliveryFolderIsMonthLeaf("NEO Pulse / Acme")).toBe(false);
+    expect(googleDriveDeliveryFolderIsMonthLeaf("NEO Pulse / Acme / PPC")).toBe(false);
   });
 });
 

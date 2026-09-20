@@ -10,6 +10,7 @@ import {
   TITLE_WELL_KNOWN_ACRONYMS_RULE,
   AUTHENTICITY_CHECKLIST_RULE,
 } from "./prompt-builders";
+import { formatResearchAsOfLabel } from "@/lib/content-optimization/topic-research-fanout";
 import { TABLE_NO_LINK_ONLY_COLUMN_RULE } from "@/lib/prompt-builders/table-prompt-rules";
 import { getResearchModel } from "./optimization-settings-storage";
 import {
@@ -63,16 +64,35 @@ import {
 } from "@/lib/post-creator/post-creator-checklist-post-process";
 import {
   FORBIDDEN_H2_PLACEHOLDER_PROMPT_LINE,
-  isGenericHarnessHeadingTitle,
+  isLlmAuditAuthorityDumpChecklistItem,
+  isLlmAuditAuthorityDumpTitle,
 } from "@/lib/content-optimization/harness-heading-titles";
 import { AISO_CHECKLIST_KEYWORD_RULE } from "@/lib/content-optimization/first-party-authority-prompt";
 import {
-  connectedSiteChecklistMarkerSuffixes,
   ensureConnectedSiteHarnessMarkers,
 } from "@/lib/bulk/connected-site-harness-markers";
 import { buildPredeterminedBlogBodyHarnessTitlesFromOutline } from "@/lib/overview/overview-content-optimize-pipeline";
 
 const LINK_FEATURE_PLACEHOLDER = `[LINK]: ${INTERNAL_LINK_PLACEHOLDER_FEATURE_SUFFIX}`;
+
+function agentFromChecklistRow(item: string, index: number): AgentConfig {
+  const extracted = sanitizeForbiddenHeadingTitle(extractChecklistItemTitle(item)).trim();
+  const afterNumber = item.replace(/^\d+\.\s*/, "").trim();
+  const beforeMarker = afterNumber.split("[")[0]?.trim() ?? "";
+  const title = extracted || beforeMarker || afterNumber.slice(0, 80).trim();
+  return {
+    id: `agent-${index + 1}`,
+    step: index + 1,
+    title,
+    description: `Section scope: ${title}.`,
+    features: ["[STRUCTURE]: 2-3 paragraphs.", LINK_FEATURE_PLACEHOLDER],
+    h2Count: 1,
+    h3Count: 0,
+    h3Enabled: false,
+    headingLevel: 1,
+    maxTokens: 2000,
+  };
+}
 
 /** One harness agent per checklist row (same contract the blueprint LLM returns). */
 export function buildBlueprintFromChecklistRows(
@@ -80,21 +100,9 @@ export function buildBlueprintFromChecklistRows(
   context: BlogTemplateContext,
   sapEntity?: string,
 ): { title: string; purpose: string; agents: AgentConfig[] } {
-  const agents: AgentConfig[] = checklist.map((item, index) => {
-    const title = sanitizeForbiddenHeadingTitle(extractChecklistItemTitle(item));
-    return {
-      id: `agent-${index + 1}`,
-      step: index + 1,
-      title: title || `Section ${index + 1}`,
-      description: `Section scope: ${title || "this topic"}.`,
-      features: ["[STRUCTURE]: 2-3 paragraphs.", LINK_FEATURE_PLACEHOLDER],
-      h2Count: 1,
-      h3Count: 0,
-      h3Enabled: false,
-      headingLevel: 1,
-      maxTokens: 2000,
-    };
-  });
+  const agents = checklist
+    .filter((item) => !isLlmAuditAuthorityDumpChecklistItem(item))
+    .map((item, index) => agentFromChecklistRow(item, index));
   return enforceForbiddenWordsOnBlueprint(
     {
       title: truncateTitleForSEO(context.flowTitle?.trim() || "Untitled Article", 50),
@@ -700,6 +708,8 @@ export async function generateChecklistFromSelections(
     serpResearchBriefJson?: string;
     /** Precomputed SERP H2 outline (5-6 titles). */
     serpH2Outline?: string[];
+    /** Blog import body H2s. When set, these titles are the outline (no SERP rewrite, no 5-6 cap). */
+    importedH2Outline?: string[];
     /** Live post H2s forbidden on optimize. */
     forbiddenLiveH2s?: string[];
     /** Fires when SERP H2 outline is resolved, before checklist LLM. */
@@ -716,9 +726,15 @@ export async function generateChecklistFromSelections(
 
   const hasSapEntity = Boolean(options.entity?.trim());
   const isServiceArea = hasSapEntity;
+  const importedH2Outline = (options.importedH2Outline ?? [])
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const useImportedH2Outline = !isServiceArea && importedH2Outline.length > 0;
 
   let resolvedH2Sections = [...selectedH2Sections];
-  if (!isServiceArea) {
+  if (useImportedH2Outline) {
+    resolvedH2Sections = importedH2Outline;
+  } else if (!isServiceArea) {
     if (options.serpH2Outline?.length) {
       resolvedH2Sections = validateSerpH2OutlineTitles(
         options.serpH2Outline,
@@ -1225,21 +1241,31 @@ ${options.semrushScatterContext}
   const llmAuditAuthorityLinksPolicy = hasLlmAuditAuthorityLinks
     ? `
 **LLM AUDIT AUTHORITY EXTERNAL LINKS (MANDATORY)**:
-- Include EVERY URL from the "LLM AUDIT AUTHORITY LINKS" block below in the checklist using \`[LLM_AUDIT_AUTHORITY_LINK]\` with exact \`[[EXTERNAL:url|anchor]]\` placeholders.
+- Attach \`[LLM_AUDIT_AUTHORITY_LINK]\` with exact \`[[EXTERNAL:url|anchor]]\` to existing topical H2 checklist items only.
 - These are government, municipal, news, weather, or BBB sources from stored research — not competitors.
 - Weave each authority link mid-sentence in a paragraph (same rules as [[LINK:query|anchor]] internal links). Forbidden: bare domain anchors, "for more"/"here", or links after the final period.
-- Spread authority links across body sections where topically relevant.
+- Spread authority links across existing body sections where topically relevant.
+- NEVER create a new checklist item, H2, or agent for an authority link. Forbidden titles: "LLM Audit Authority Link", "Further Links", "Section".
 `
     : "";
 
-  const checklistCountInstruction = `Create a checklist (5-6 items for blog, 6-7 for service area SAP) based on selected H2 sections.`;
+  const blogChecklistCountLabel = useImportedH2Outline
+    ? String(importedH2Outline.length)
+    : "5-6";
+  const importedOutlineOverride = useImportedH2Outline
+    ? `
+**IMPORTED H2 OUTLINE OVERRIDES THE 5-6 COUNT**: Create exactly ${importedH2Outline.length} checklist items, one per imported title. Do not add extra H2s. Forbidden titles: LLM Audit Authority Link, Further Links, Section.
+`
+    : "";
+
+  const checklistCountInstruction = `Create a checklist (${isServiceArea ? "6-7" : blogChecklistCountLabel} items${isServiceArea ? " for service area SAP" : useImportedH2Outline ? " from the imported H2 outline" : " for blog"}) based on selected H2 sections.`;
 
   const serpH2OutlinePromptBlock = isServiceArea
     ? formatSapPageChecklistBlock(options.entity!.trim())
     : formatSerpH2OutlineBlock(resolvedH2Sections);
 
   const checklistStructureRequirements = `Requirements:
-1. Create ${isServiceArea ? "6-7" : "5-6"} checklist items. ${isServiceArea ? "Follow SAP PAGE TEMPLATE (local problem, sourced local conditions, What We Offer, Local Recommendation table, Next Steps). Do not emit ARTICLE CONTENT TYPE encyclopedia jobs. Put [ILLUSTRATIVE] on exactly one item (item 4). Forbidden: a second row or H2 titled A Local Homeowner Example." : "Use the SERP H2 OUTLINE titles exactly as the first words on each checklist line (one H2 per item). Each title must match the outline verbatim."} **DEPTH IN FEWER H2s**: Cover main topics in fewer, tighter sections. One H2 per major topic when essential - NOT nested as H3s. Meet SEO with concise copy, not extra sections.
+1. Create ${isServiceArea ? "6-7" : blogChecklistCountLabel} checklist items. ${isServiceArea ? "Follow SAP PAGE TEMPLATE (local problem, sourced local conditions, What We Offer, Local Recommendation table, Next Steps). Do not emit encyclopedia how-it-works, vs-adjacent, or cost-guide jobs. Put [ILLUSTRATIVE] on exactly one item (item 4). Write a unique topical H2 for that item. Forbidden: Section N. Forbidden: a second homeowner or example H2." : useImportedH2Outline ? "Use the IMPORTED H2 OUTLINE titles exactly as the first words on each checklist line (one H2 per imported title). Do not add extra H2s. Put [ILLUSTRATIVE] on exactly one item. Forbidden: Section N. Forbidden: LLM Audit Authority Link. Forbidden: a second homeowner or example H2." : "Use the SERP H2 OUTLINE titles exactly as the first words on each checklist line (one H2 per item). Each title must match the outline verbatim. Put [ILLUSTRATIVE] on exactly one item. Forbidden: Section N. Forbidden: a second homeowner or example H2."} **DEPTH IN FEWER H2s**: Cover main topics in fewer, tighter sections. One H2 per major topic when essential - NOT nested as H3s. Meet SEO with concise copy, not extra sections.
 2. Each checklist item must include:
    - [STRUCTURE]: Unmarked H2s: 1-2 paragraphs. Marked H2s ([LIST]/[TABLE]/[DECISION]/[TRADEOFF]/[NUMBERS]/[ILLUSTRATIVE]/[RECOMMENDATION]): 2-3 paragraphs plus the required table or list (each paragraph **moderately short**: **~2–3 sentences**; split long blocks). If more content is needed, use H3 subheadings: "[STRUCTURE]: Include at most 2 H3 subheadings with 1-2 short paragraphs under each covering [specific subtopics]"
    - **DEPTH**: Main topics = H2 agents when essential. H3 = only for minor subtopics under an H2. **MAX 2 H3s** per H2.
@@ -1279,10 +1305,12 @@ ${importedLinksSection}${modifierLinksSection}${llmAuditAuthorityLinksSection}${
 ${buildArticleLengthChecklistBlock(isServiceArea)}
 
 ${AUTHENTICITY_CHECKLIST_RULE}
+${importedOutlineOverride}
 
 ${checklistCountInstruction} Each item must include:
 
 **Harness contract (mandatory)**:
+- Post generation date: ${formatResearchAsOfLabel(new Date())}. Every checklist item must include **[WRITING DATE]**: all section prose is published on this date.
 - Each checklist line starts with the **exact published H2 heading text**, then [STRUCTURE] and other markers on the same line.
 - Each checklist item becomes **exactly one H2** written in a **separate harness pass**. State: "Output is ONLY this H2 block (~${Math.floor(ARTICLE_MAX_WORDS / 6)} words)." **Never** instruct writing other H2 sections in the same pass.
 - **FORBIDDEN checklist phrasing**: Never write "Create an agent", "Create a first section agent", "Create an H2 section agent", or similar meta-instructions. The H2 title is always the first words on the line.
@@ -1355,12 +1383,19 @@ Example format (NOTE: H2 title first on every line):
 ${
   isServiceArea
       ? formatSapChecklistExample(options.entity!.trim(), title)
-    : `1. How ${title || "this topic"} works [STRUCTURE]: 2-3 paragraphs. [LIST]: components. Opener leads with a sourced fact, then the topic (not keyword-first, not "{keyword} offers", not a dictionary definition). **[FIRST-PARTY AUTHORITY]**. **[EXACT PRIMARY PER H2]**: exact Primary Keyword once later in the intro body. **[FOCUS KEYWORD DENSITY]**: ~1%+ across article. ${entityWikiUrl && entityName ? `[EXTERNAL_WIKI]: Link "${entityName}" to ${entityWikiUrl}. ` : ""}[LINK]: minimal in opener.
-2. ${resolvedH2Sections[0] || "First SERP outline section"} [STRUCTURE]: 2-3 paragraphs. [TABLE] or [DECISION]: criteria. **[EXACT PRIMARY PER H2]**. ${LINK_FEATURE_PLACEHOLDER}.
-3. ${resolvedH2Sections[1] || "Second SERP outline section"} [STRUCTURE]: 1 intro paragraph, then scenario in body (not in the H2). [ILLUSTRATIVE]: labeled hypothetical worked example. [BLOCKQUOTE]: scenario in the quote, not in the heading. Short H2 (3-8 words). No links in H2 or H3. **[EXACT PRIMARY PER H2]**. ${LINK_FEATURE_PLACEHOLDER}.
-4. ${resolvedH2Sections[2] || "Third SERP outline section"} [STRUCTURE]: 1-2 paragraphs. [LIST]: numbered steps. **[EXACT PRIMARY PER H2]**. ${LINK_FEATURE_PLACEHOLDER}.
-5. ${resolvedH2Sections[3] || "Fourth SERP outline section"} [STRUCTURE]: 1-2 paragraphs. [NUMBERS] or [TRADEOFF]: when it fails. **[EXACT PRIMARY PER H2]**. ${LINK_FEATURE_PLACEHOLDER}.
-6. ${resolvedH2Sections[4] || "Fifth SERP outline section"} [STRUCTURE]: 1-2 paragraphs. [RECOMMENDATION]: site-first recommendation for whom and when. **[EXACT PRIMARY PER H2]**. ${LINK_FEATURE_PLACEHOLDER}.`
+    : useImportedH2Outline
+      ? importedH2Outline
+          .map(
+            (h2, i) =>
+              `${i + 1}. ${h2} [STRUCTURE]: 1-2 paragraphs. **[EXACT PRIMARY PER H2]**. ${LINK_FEATURE_PLACEHOLDER}.`,
+          )
+          .join("\n")
+    : `1. ${resolvedH2Sections[0] || "First SERP outline section"} [STRUCTURE]: 2-3 paragraphs. [LIST]: components. Opener leads with a sourced fact, then the topic (not keyword-first, not "{keyword} offers", not a dictionary definition). **[FIRST-PARTY AUTHORITY]**. **[EXACT PRIMARY PER H2]**: exact Primary Keyword once later in the intro body. **[FOCUS KEYWORD DENSITY]**: ~1%+ across article. ${entityWikiUrl && entityName ? `[EXTERNAL_WIKI]: Link "${entityName}" to ${entityWikiUrl}. ` : ""}[LINK]: minimal in opener.
+2. ${resolvedH2Sections[1] || "Second SERP outline section"} [STRUCTURE]: 2-3 paragraphs. [TABLE] or [DECISION]: criteria. **[EXACT PRIMARY PER H2]**. ${LINK_FEATURE_PLACEHOLDER}.
+3. ${resolvedH2Sections[2] || "Third SERP outline section"} [STRUCTURE]: 1 intro paragraph, then scenario in body (not in the H2). [ILLUSTRATIVE]: labeled hypothetical worked example. [BLOCKQUOTE]: scenario in the quote, not in the heading. Short H2 (3-8 words). No links in H2 or H3. **[EXACT PRIMARY PER H2]**. ${LINK_FEATURE_PLACEHOLDER}.
+4. ${resolvedH2Sections[3] || "Fourth SERP outline section"} [STRUCTURE]: 1-2 paragraphs. [LIST]: numbered steps. **[EXACT PRIMARY PER H2]**. ${LINK_FEATURE_PLACEHOLDER}.
+5. ${resolvedH2Sections[4] || "Fifth SERP outline section"} [STRUCTURE]: 1-2 paragraphs. [NUMBERS] or [TRADEOFF]: when it fails. **[EXACT PRIMARY PER H2]**. ${LINK_FEATURE_PLACEHOLDER}.
+6. ${resolvedH2Sections[5] || resolvedH2Sections[4] || "Last SERP outline section"} [STRUCTURE]: 1-2 paragraphs. [RECOMMENDATION]: site-first recommendation for whom and when. **[EXACT PRIMARY PER H2]**. ${LINK_FEATURE_PLACEHOLDER}.`
 }
 
 Output ONLY the numbered checklist items, no additional text or explanations.`;
@@ -1372,6 +1407,7 @@ ${serpH2OutlinePromptBlock}
 ${buildArticleLengthChecklistBlock(isServiceArea)}
 
 ${AUTHENTICITY_CHECKLIST_RULE}
+${importedOutlineOverride}
 
 ${FORBIDDEN_H2_PLACEHOLDER_PROMPT_LINE}
 
@@ -1450,7 +1486,11 @@ ${pageLines}
 
   const allKeywords = [keywordData.keyword, ...selectedKeywords].filter(Boolean);
   const MAX_CHECKLIST_ATTEMPTS = 3;
-  const MIN_CHECKLIST_ITEMS = isServiceArea ? 6 : 5;
+  const MIN_CHECKLIST_ITEMS = useImportedH2Outline
+    ? importedH2Outline.length
+    : isServiceArea
+      ? 6
+      : 5;
 
   for (let attempt = 1; attempt <= MAX_CHECKLIST_ATTEMPTS; attempt++) {
     let fullResponse = "";
@@ -1476,7 +1516,9 @@ ${pageLines}
         },
       });
 
-      const parsed = parseBlogTemplateChecklist(fullResponse, allKeywords);
+      const parsed = parseBlogTemplateChecklist(fullResponse, allKeywords).filter(
+        (item) => !isLlmAuditAuthorityDumpChecklistItem(item),
+      );
 
       const effectiveFinish = checklistFinishReason || streamResult.finishReason;
       if (parsed.length >= MIN_CHECKLIST_ITEMS) {
@@ -1524,6 +1566,7 @@ export async function generateBlueprintFromTemplate(
     maxTokens?: number;
     topP?: number;
     connectedSite?: { name: string; siteUrl: string };
+    entity?: string;
     wordPressPosts?: Array<{ id: number; slug: string; title: string; excerpt: string; link: string; date_gmt: string }>;
     currentPageUrl?: string; // URL of the page currently being optimized
     semrushKeywordsContext?: string;
@@ -1704,6 +1747,11 @@ ${options.semrushScatterContext}
     options.llmAuditAuthorityLinks ?? [],
   );
   const hasLlmAuditAuthorityBlueprint = (options.llmAuditAuthorityLinks?.length ?? 0) > 0;
+  const llmAuditAuthorityBlueprintPolicy = hasLlmAuditAuthorityBlueprint
+    ? `
+**LLM AUDIT AUTHORITY LINKS**: Attach [LLM_AUDIT_AUTHORITY_LINK] features to existing agents only. NEVER add an agent or H2 titled "LLM Audit Authority Link", "Further Links", or "Section".
+`
+    : "";
 
   const llmAuditBlueprintSection = options.llmAuditSummary?.trim()
     ? `
@@ -1743,7 +1791,7 @@ ${options.dfsArticleAuditBlock.trim()}
 Title: ${context.flowTitle || "Untitled Article"}
 Purpose: ${context.flowPurpose || "Not specified"}
 ${context.keywordData ? `Primary Keyword: ${context.keywordData.keyword.trim()}` : ""}
-${targetSiteContext}${wordPressPostsContext}${currentPageContextForBlueprint}${userPromptSection}${prefilledRowContractSection}${importedLinksBlueprintSection}${modifierLinksBlueprintSection}${llmAuditAuthorityBlueprintSection}${llmAuditBlueprintSection}${firstPartyAuthorityBlueprintSection}${dfsArticleAuditBlueprintSection}${semrushKeywordsBlueprintBlock}${semrushScatterBlueprintBlock}${semrushPartsBlueprint.semrushExactBlock}
+${targetSiteContext}${wordPressPostsContext}${currentPageContextForBlueprint}${userPromptSection}${prefilledRowContractSection}${importedLinksBlueprintSection}${modifierLinksBlueprintSection}${llmAuditAuthorityBlueprintSection}${llmAuditAuthorityBlueprintPolicy}${llmAuditBlueprintSection}${firstPartyAuthorityBlueprintSection}${dfsArticleAuditBlueprintSection}${semrushKeywordsBlueprintBlock}${semrushScatterBlueprintBlock}${semrushPartsBlueprint.semrushExactBlock}
 
 ${FORBIDDEN_H2_PLACEHOLDER_PROMPT_LINE}
 
@@ -1797,7 +1845,7 @@ Every agent object MUST have the following exact structure:
   "maxTokens": 1000
 }
 
-- **headingLevel FIELD (CRITICAL)**: headingLevel: 1 = H2 tag (main section). headingLevel: 2 = H3 tag (subordinate subsection ONLY). ALL main topic agents MUST have headingLevel: 1. This includes: introduction-style first H2, Local Recommendation, "What We Offer", how to choose, cost factors, process, conclusion - ALL headingLevel: 1. NEVER set headingLevel: 2 for a main topic. headingLevel: 2 is ONLY for agents that are true sub-sections nested under a parent H2 (extremely rare in blueprints).
+- **headingLevel FIELD (CRITICAL)**: headingLevel: 1 = H2 tag (main section). headingLevel: 2 = H3 tag (subordinate subsection ONLY). ALL main topic agents MUST have headingLevel: 1, including the one [ILLUSTRATIVE] section. NEVER set headingLevel: 2 for a main topic. headingLevel: 2 is ONLY for agents that are true sub-sections nested under a parent H2 (extremely rare in blueprints). Every agent.title is a unique topical H2. Forbidden: Section N or a second homeowner-example title.
 
 CRITICAL REQUIREMENTS:
 - Use "title" NOT "name" for the agent title field
@@ -1873,7 +1921,7 @@ Note: In every agent, use "headingLevel": 1 (1 = H2 main section; ALWAYS 1 for m
 
 Output ONLY valid JSON. Do not include markdown code blocks, explanations, or any text outside the JSON structure.`;
 
-  let userPrompt = `Generate the complete blueprint JSON structure based on the checklist above. Include a title, purpose, and agents array with exactly one agent per checklist item (same count as the checklist). REQUIRED: Every agent must have a [LINK] feature with ${INTERNAL_LINK_PLACEHOLDER_FEATURE_SUFFIX} - no exceptions. Every features[] entry must be a plain JSON string (never an object). Output valid JSON only.`;
+  let userPrompt = `Generate the complete blueprint JSON structure based on the checklist above. Include a title, purpose, and agents array with exactly ${checklist.length} agents (one agent per checklist row, same order). REQUIRED: Every agent must have a [LINK] feature with ${INTERNAL_LINK_PLACEHOLDER_FEATURE_SUFFIX} - no exceptions. Every features[] entry must be a plain JSON string (never an object). Output valid JSON only. The agents array MUST have exactly ${checklist.length} items.`;
   if ((options.importedDraftLinks?.length ?? 0) > 0) {
     userPrompt += ` REQUIRED: Every [IMPORTED_DRAFT_LINK] from the checklist must appear as a blueprint agent feature with the exact markdown [anchor](url) shown — do not change href or anchor text.`;
   }
@@ -1889,16 +1937,10 @@ Output ONLY valid JSON. Do not include markdown code blocks, explanations, or an
     userPrompt += `\n\nPlease incorporate the following requirements: ${context.userPrompt.trim()}. The blueprint title MUST clearly reflect this focus. Section content should stay on-theme; do not repeat the modifier phrase in every section heading (avoid keyword stuffing - vary headings).`;
   }
 
-  const MAX_BLUEPRINT_ATTEMPTS = 3;
-
   const blueprintMessages = injectBlacklistRagIntoMessages([
     { role: "system" as const, content: appendUniversalContentRulesToSystemPrompt(systemPrompt) },
     { role: "user" as const, content: userPrompt },
   ]);
-
-  for (let bpAttempt = 1; bpAttempt <= MAX_BLUEPRINT_ATTEMPTS; bpAttempt++) {
-  let fullResponse = "";
-  let streamFinishReason: string | undefined;
 
   try {
     const jsonResult = await postOpenRouterAppChat({
@@ -1911,126 +1953,103 @@ Output ONLY valid JSON. Do not include markdown code blocks, explanations, or an
       responseFormat: { type: "json_object" },
     });
 
-    fullResponse = jsonResult.content;
-    streamFinishReason = jsonResult.finishReason;
-
-    if (streamFinishReason === "length") {
-      console.warn(
-        `[Blueprint] finish_reason=length (${fullResponse.length} chars) — building from checklist rows`,
-      );
-      return buildBlueprintFromChecklistRows(checklist, context, sapEntity);
-    }
-    if (streamFinishReason === "error") {
-      console.warn("[Blueprint] finish_reason=error — building from checklist rows");
-      return buildBlueprintFromChecklistRows(checklist, context, sapEntity);
-    }
-
-    // Clean the response - extract JSON from markdown code fences or raw text
-    let cleanedResponse = fullResponse.trim();
-    // Strip any markdown code fences (```json ... ```, ``` ... ```, or variants with trailing whitespace/newlines)
-    cleanedResponse = cleanedResponse.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?\s*```\s*$/, '');
-    // If still not starting with {, try to find the first { and last }
-    if (!cleanedResponse.trimStart().startsWith('{')) {
-      const firstBrace = cleanedResponse.indexOf('{');
-      const lastBrace = cleanedResponse.lastIndexOf('}');
+    let cleanedResponse = jsonResult.content.trim();
+    cleanedResponse = cleanedResponse.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?\s*```\s*$/, "");
+    if (!cleanedResponse.trimStart().startsWith("{")) {
+      const firstBrace = cleanedResponse.indexOf("{");
+      const lastBrace = cleanedResponse.lastIndexOf("}");
       if (firstBrace >= 0 && lastBrace > firstBrace) {
         cleanedResponse = cleanedResponse.slice(firstBrace, lastBrace + 1);
       }
     }
 
-    // Parse JSON response (repair truncated / malformed model output)
     const { parsed } = parseJsonWithRepair<{
       title?: string;
       purpose?: string;
       agents?: unknown[];
     }>(cleanedResponse, { targetKeys: ["agents", "title", "purpose"] });
 
-    // Validate and structure the response
     let agents: AgentConfig[] = Array.isArray(parsed.agents)
-      ? sanitizeBlueprintAgentsForPipeline(parsed.agents.map((agent: any, index: number) => {
-          const features = (Array.isArray(agent.features) ? agent.features : []).filter(
-            (f): f is string => typeof f === "string",
-          );
-          
-          const hasLinkFeature = features.some((f: string) =>
-            typeof f === "string" && f.toLowerCase().trim().startsWith("[link]")
-          );
-          if (!hasLinkFeature) {
-            features.push(LINK_FEATURE_PLACEHOLDER);
-          }
-          
-          let agentTitle = checklist[index]?.trim()
-            ? extractChecklistItemTitle(checklist[index])
-            : extractChecklistItemTitle(String(agent.title ?? "").trim());
+      ? sanitizeBlueprintAgentsForPipeline(
+          parsed.agents.map((agent: any, index: number) => {
+            const features = (Array.isArray(agent.features) ? agent.features : []).filter(
+              (f): f is string => typeof f === "string",
+            );
 
-          agentTitle = sanitizeForbiddenHeadingTitle(agentTitle);
+            const hasLinkFeature = features.some(
+              (f: string) => typeof f === "string" && f.toLowerCase().trim().startsWith("[link]"),
+            );
+            if (!hasLinkFeature) {
+              features.push(LINK_FEATURE_PLACEHOLDER);
+            }
 
-          const isFAQ = features?.some((f: string) =>
-            typeof f === 'string' && (f.toLowerCase().includes('[faq]') || f.toLowerCase().includes('faq'))
-          ) ?? false;
-          return {
-            id: agent.id || `agent-${index + 1}`,
-            step: agent.step || index + 1,
-            title: agentTitle,
-            description: agent.description || "",
-            features: features,
-            h2Count: agent.h2Count ?? 1,
-            h3Count: isFAQ ? 0 : Math.min(agent.h3Count ?? 0, 5),
-            h3Enabled: isFAQ ? false : (agent.h3Enabled ?? false),
-            headingLevel: agent.headingLevel ?? 1,
-            maxTokens: agent.maxTokens ?? 2000,
-          };
-        }), { allowFaqAgents: isGSCReport })
+            const modelTitle = sanitizeForbiddenHeadingTitle(
+              extractChecklistItemTitle(String(agent.title ?? "").trim()),
+            ).trim();
+            const checklistLine = checklist[index]?.trim() ?? "";
+            const checklistTitle = checklistLine
+              ? sanitizeForbiddenHeadingTitle(extractChecklistItemTitle(checklistLine)).trim()
+              : "";
+            const afterNumber = checklistLine.replace(/^\d+\.\s*/, "").trim();
+            const beforeMarker = afterNumber.split("[")[0]?.trim() ?? "";
+            const agentTitle =
+              modelTitle || checklistTitle || beforeMarker || afterNumber.slice(0, 80).trim();
+
+            const isFAQ =
+              features?.some(
+                (f: string) =>
+                  typeof f === "string" &&
+                  (f.toLowerCase().includes("[faq]") || f.toLowerCase().includes("faq")),
+              ) ?? false;
+            return {
+              id: agent.id || `agent-${index + 1}`,
+              step: agent.step || index + 1,
+              title: agentTitle,
+              description: agent.description || "",
+              features: features,
+              h2Count: agent.h2Count ?? 1,
+              h3Count: isFAQ ? 0 : Math.min(agent.h3Count ?? 0, 5),
+              h3Enabled: isFAQ ? false : (agent.h3Enabled ?? false),
+              headingLevel: agent.headingLevel ?? 1,
+              maxTokens: agent.maxTokens ?? 2000,
+            };
+          }),
+          { allowFaqAgents: isGSCReport },
+        )
       : [];
 
-    // CRITICAL: On entity/service-area pages, ALL agents should be H2 (headingLevel: 1).
-    // The blueprint AI sometimes incorrectly sets headingLevel: 2 (H3) for main topics.
-    const isEntityPage = !!(options as any).entity;
-    if (isEntityPage) {
-      const invalidAgents = agents.filter((agent) => agent.headingLevel && agent.headingLevel > 1);
-      if (invalidAgents.length > 0) {
-        invalidAgents.forEach((agent) => {
-          agent.headingLevel = 1;
-        });
-        console.warn(`[Blueprint Validation] Entity page: repaired ${invalidAgents.length} agents from headingLevel 2+ to 1 (H2). Main topics must be H2.`);
-      }
+    if (agents.length < checklist.length) {
+      const extra = checklist
+        .slice(agents.length)
+        .filter((item) => !isLlmAuditAuthorityDumpChecklistItem(item));
+      agents = [...agents, ...extra.map((item, i) => agentFromChecklistRow(item, agents.length + i))];
+    }
+    agents = agents.filter((agent) => !isLlmAuditAuthorityDumpTitle(agent.title));
+
+    if (agents.length === 0) {
+      return buildBlueprintFromChecklistRows(checklist, context, sapEntity);
     }
 
-    // General check: if majority of agents have headingLevel > 1, it's likely an error
-    if (!isEntityPage) {
+    const isEntityPage = !!options.entity;
+    if (isEntityPage) {
+      agents.forEach((agent) => {
+        if (agent.headingLevel && agent.headingLevel > 1) agent.headingLevel = 1;
+      });
+    } else {
       const h3Agents = agents.filter((a) => a.headingLevel && a.headingLevel > 1);
       if (agents.length > 0 && h3Agents.length > agents.length * 0.6) {
         h3Agents.forEach((a) => {
           a.headingLevel = 1;
         });
-        console.warn(`[Blueprint Validation] ${h3Agents.length}/${agents.length} agents had headingLevel > 1. Promoted all to H2 (headingLevel: 1).`);
       }
     }
 
-    if (agents.length === 0 || agents.length < checklist.length) {
-      console.warn(
-        `[Blueprint] Agent count ${agents.length}/${checklist.length} — completing from checklist rows`,
-      );
-      return buildBlueprintFromChecklistRows(checklist, context, sapEntity);
-    }
-
-    // Update step numbers to be sequential
     agents.forEach((agent, index) => {
       agent.step = index + 1;
     });
 
-    // CRITICAL: Enforce 50 character limit for Content Optimizer module (optimized content)
     let finalTitle = parsed.title || context.flowTitle || "Untitled Article";
-    const originalTitleLength = finalTitle.length;
     finalTitle = truncateTitleForSEO(finalTitle, 50);
-    if (originalTitleLength > 50) {
-      console.log('[Blog Template Builder] Truncated blueprint title to 50 characters (Content Optimizer module requirement):', {
-        original: parsed.title || context.flowTitle || "Untitled Article",
-        truncated: finalTitle,
-        originalLength: originalTitleLength,
-        truncatedLength: finalTitle.length
-      });
-    }
 
     return enforceForbiddenWordsOnBlueprint(
       {
@@ -2040,15 +2059,8 @@ Output ONLY valid JSON. Do not include markdown code blocks, explanations, or an
       },
       { sapEntity },
     );
-  } catch (error) {
-    console.warn(`[Blueprint] Attempt ${bpAttempt}/${MAX_BLUEPRINT_ATTEMPTS}:`, error);
-    if (bpAttempt === MAX_BLUEPRINT_ATTEMPTS) {
-      return buildBlueprintFromChecklistRows(checklist, context, sapEntity);
-    }
-    await new Promise(r => setTimeout(r, 2000 * bpAttempt));
+  } catch {
+    return buildBlueprintFromChecklistRows(checklist, context, sapEntity);
   }
-  } // end for retry loop
-
-  return buildBlueprintFromChecklistRows(checklist, context, sapEntity);
 }
 

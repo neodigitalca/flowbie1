@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 import { computeBlogLinksBudget, WORDS_PER_LINK_ADD } from "@/lib/overview/overview-blog-links-budget";
 import {
   applyBlogLinksPlanLocally,
+  appendInternalLinkToHtml,
+  patchInternalLinkAtIndex,
+  patchSectionLinkAtIndex,
   verifyLocalLinksApply,
 } from "@/lib/overview/overview-blog-links-apply-local";
 import {
   countVisibleWordsInHtml,
+  extractAllSectionLinkRowsFromHtml,
   extractInternalLinksFromHtml,
   paragraphHtmlForInternalLink,
 } from "@/lib/overview/overview-blog-links-extract";
@@ -177,5 +181,52 @@ describe("applyBlogLinksPlanLocally", () => {
     );
     expect(replacements).toHaveLength(0);
     expect(updatedHtml).toBe(html);
+  });
+});
+
+describe("patchInternalLinkAtIndex", () => {
+  it("updates anchor and href on a single section link", () => {
+    const html = '<p><a href="https://example.com/old/">old anchor</a></p>';
+    const patched = patchInternalLinkAtIndex(
+      html,
+      0,
+      { anchor: "new anchor", href: "https://example.com/new/" },
+      SITE,
+    );
+    expect(patched).toContain('href="https://example.com/new/"');
+    expect(patched).toContain(">new anchor</a>");
+  });
+});
+
+describe("appendInternalLinkToHtml", () => {
+  it("appends a link paragraph to section body", () => {
+    const html = "<p>Intro copy.</p>";
+    const next = appendInternalLinkToHtml(html, "Contact us", "https://example.com/contact/");
+    expect(next).toContain("Intro copy.");
+    expect(next).toContain('<a href="https://example.com/contact/">Contact us</a>');
+  });
+
+  it("appends empty anchor and href when adding a draft row", () => {
+    const html = "<p>Intro copy.</p>";
+    const next = appendInternalLinkToHtml(html, "", "");
+    expect(next).toContain('<a href=""></a>');
+  });
+});
+
+describe("extractAllSectionLinkRowsFromHtml", () => {
+  it("includes anchors with empty href", () => {
+    const html = '<p>Intro <a href="">New link</a> end.</p>';
+    expect(extractAllSectionLinkRowsFromHtml(html)).toEqual([{ href: "", anchor: "New link" }]);
+  });
+});
+
+describe("patchSectionLinkAtIndex", () => {
+  it("patches empty href links by index", () => {
+    const html = '<p>Text <a href="">New link</a></p>';
+    const patched = patchSectionLinkAtIndex(html, 0, {
+      anchor: "Repairs",
+      href: "https://example.com/repairs/",
+    });
+    expect(patched).toContain('<a href="https://example.com/repairs/">Repairs</a>');
   });
 });

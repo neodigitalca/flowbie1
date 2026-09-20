@@ -7,6 +7,7 @@ import {
   parseBulkRowSitemapCell,
   pickSitemapTypeFromRow,
   resolveRowSitemapType,
+  defaultBulkSitemapMode,
   resolveSiteSitemapMode,
   resolveUploadSitemapType,
   seedCustomRowSitemaps,
@@ -61,9 +62,21 @@ describe("resolveRowSitemapType", () => {
   });
 });
 
+describe("defaultBulkSitemapMode", () => {
+  it("defaults to posts until a CSV with entities is uploaded", () => {
+    expect(defaultBulkSitemapMode()).toBe("post");
+  });
+});
+
 describe("resolveSiteSitemapMode", () => {
   it("defaults to posts when sitemap type is unset", () => {
     expect(resolveSiteSitemapMode({}, new Set(["s1"]), true)).toBe("post");
+  });
+
+  it("keeps an explicit site config", () => {
+    expect(resolveSiteSitemapMode({ s1: { sitemapType: "entity" } }, new Set(["s1"]))).toBe(
+      "entity",
+    );
   });
 });
 
@@ -87,25 +100,40 @@ describe("applyRowSitemapToPosting", () => {
 });
 
 describe("inferBulkSitemapModeFromRows", () => {
-  it("returns post when no explicit column", () => {
+  it("returns post when no explicit column and no entities", () => {
     expect(inferBulkSitemapModeFromRows([{ keyword: "a", title: "A" }])).toEqual({
       mode: "post",
       rows: [{ keyword: "a", title: "A" }],
     });
   });
 
-  it("returns unified mode when all rows match", () => {
+  it("returns entity when rows have entity values and no sitemap column", () => {
+    expect(
+      inferBulkSitemapModeFromRows([{ keyword: "a", title: "A", entity: "Old Naples" }]).mode,
+    ).toBe("entity");
+  });
+
+  it("returns post when entity cells are empty or N/A", () => {
+    expect(
+      inferBulkSitemapModeFromRows([
+        { keyword: "a", title: "A", entity: "" },
+        { keyword: "b", title: "B", entity: "N/A" },
+      ]).mode,
+    ).toBe("post");
+  });
+
+  it("returns entity when all rows have entities even if sitemap says post", () => {
     const rows = [
-      { keyword: "a", title: "A", sitemap_type: "entity" as const },
-      { keyword: "b", title: "B", sitemap_type: "entity" as const },
+      { keyword: "a", title: "A", entity: "Old Naples", sitemap_type: "post" as const },
+      { keyword: "b", title: "B", entity: "Park Shore", sitemap_type: "post" as const },
     ];
     expect(inferBulkSitemapModeFromRows(rows).mode).toBe("entity");
   });
 
-  it("returns custom when mixed", () => {
+  it("returns custom when mixed sitemap types and rows have entities", () => {
     const rows = [
-      { keyword: "a", title: "A", sitemap_type: "entity" as const },
-      { keyword: "b", title: "B", sitemap_type: "post" as const },
+      { keyword: "a", title: "A", entity: "Old Naples", sitemap_type: "entity" as const },
+      { keyword: "b", title: "B", entity: "Park Shore", sitemap_type: "post" as const },
     ];
     expect(inferBulkSitemapModeFromRows(rows).mode).toBe("custom");
   });

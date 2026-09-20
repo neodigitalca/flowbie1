@@ -88,6 +88,8 @@ export type BulkGeneratorDetailsPanelProps = {
   liveMessage?: string | null;
   entitySapRowDisplay?: boolean;
   urlStatuses?: BulkOptimizationState["urlStatuses"];
+  /** Global row index of first visible row when details are paginated (default 0). */
+  detailsPageStart?: number;
 };
 
 export function bulkGeneratorDetailsCanOpen(

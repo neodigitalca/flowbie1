@@ -22,6 +22,7 @@ function isDeliverableArtifact(name: string, mime?: string, stepKey?: string): b
     stepKey === "entity_wiki_picks" ||
     stepKey === "entity_hydrated_rows" ||
     stepKey === "gsc_reporting" ||
+    stepKey === "ads_reporting" ||
     stepKey === "gsc-deliverables" ||
     stepKey === "gscdeliverables" ||
     stepKey === "entity_bulk_csv" ||

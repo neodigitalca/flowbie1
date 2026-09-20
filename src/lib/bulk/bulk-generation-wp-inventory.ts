@@ -8,7 +8,7 @@ import { overviewSitemapSourcesForSite, pageSitemapXmlUrlForPlay } from "@/lib/o
 import { parseSitemap } from "@/lib/wordpress-api/connection";
 import type { SiteInventoryBulkRow } from "@/lib/wordpress-api/types";
 import { fetchAllOverviewInventoriesParallel } from "@/lib/overview/overview-parallel-inventory-fetch";
-import { ensureEntitySiteWarmCache } from "@/lib/local-analysis/entity-site-warm-cache";
+import { ensureEntitySiteWarmInventory } from "@/lib/local-analysis/entity-site-warm-cache";
 import {
   clearBulkGenerationWpInventoryCache,
   getBulkGenerationWpInventoryEntry,
@@ -70,6 +70,34 @@ export function isServiceAreaUrl(link: string): boolean {
     n.includes("/service-areas") ||
     n.includes("service-area-sitemap")
   );
+}
+
+export function isServiceAreaInventoryRow(input: {
+  link?: string;
+  collection?: string;
+  postType?: string;
+}): boolean {
+  if (isServiceAreaUrl(input.link ?? "")) return true;
+  const bucket = (input.collection || input.postType || "").toLowerCase();
+  return bucket === "sap" || bucket.includes("service-area") || bucket.includes("service_area");
+}
+
+export function findServiceAreaPageForPlace<
+  T extends { title: string; link: string; collection?: string; postType?: string },
+>(posts: T[], place: string): { title: string; link: string; anchor: string } | undefined {
+  const raw = place.trim();
+  if (!raw || !posts.length) return undefined;
+  const sap = posts.filter((p) => p.link?.trim() && isServiceAreaInventoryRow(p));
+  if (!sap.length) return undefined;
+  const placeLower = raw.toLowerCase();
+  const short = raw.split(",")[0]?.trim() ?? raw;
+  const shortLower = short.toLowerCase();
+  const exact =
+    sap.find((p) => p.title.trim().toLowerCase() === placeLower)
+    || sap.find((p) => p.title.trim().toLowerCase() === shortLower)
+    || sap.find((p) => p.title.toLowerCase().includes(shortLower));
+  if (!exact) return undefined;
+  return { title: exact.title.trim(), link: exact.link.trim(), anchor: short };
 }
 
 export function isBlogPlayLinkTarget(input: {
@@ -296,8 +324,8 @@ export async function ensureBulkGenerationWpInventory(
   const force = options?.force === true;
   if (!force) {
     const existing = getBulkGenerationWpInventoryEntry(site.id);
-    if (existing && !existing.error) {
-      return existing;
+    if (existing && (existing.rows?.length ?? 0) > 0) {
+      return { ...existing, error: undefined };
     }
   } else {
     clearBulkGenerationWpInventory(site.id);
@@ -327,37 +355,25 @@ export async function ensureBulkGenerationWpInventory(
     });
     seedBulkGenerationWpInventoryFromParallel(site, parallel);
     const forced = getBulkGenerationWpInventoryEntry(site.id);
-    if (forced && !forced.error) {
-      return forced;
+    if (forced && (forced.rows?.length ?? 0) > 0) {
+      return { ...forced, error: undefined };
     }
   }
 
-  const prefetch = await ensureEntitySiteWarmCache(site);
+  await ensureEntitySiteWarmInventory(site);
   const cached = getBulkGenerationWpInventoryEntry(site.id);
-  if (cached && !cached.error) {
-    return cached;
+  if (cached && (cached.rows?.length ?? 0) > 0) {
+    return { ...cached, error: undefined };
   }
 
-  if (prefetch.error) {
-    const failed: BulkGenerationWpInventory = {
-      siteId: site.id,
-      rows: [],
-      fetchedAt: prefetch.fetchedAt,
-      error: prefetch.error,
-    };
-    setBulkGenerationWpInventoryEntry(failed);
-    return failed;
-  }
-
-  const rows = prefetch.bulkInventoryRows ?? [];
-  const result: BulkGenerationWpInventory = {
+  const failed: BulkGenerationWpInventory = {
     siteId: site.id,
-    rows,
-    fetchedAt: prefetch.fetchedAt,
-    ...(rows.length === 0 ? { error: "No inventory rows returned." } : {}),
+    rows: [],
+    fetchedAt: cached?.fetchedAt ?? Date.now(),
+    error: cached?.error ?? "No inventory rows returned.",
   };
-  setBulkGenerationWpInventoryEntry(result);
-  return result;
+  setBulkGenerationWpInventoryEntry(failed);
+  return failed;
 }
 
 /** Re-export for callers seeding from overview parallel fetch. */

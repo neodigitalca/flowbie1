@@ -80,9 +80,6 @@ class Neo_Pulse_Wp_Speed_Diagnostics {
 		if ( ! Neo_Pulse_Wp_Speed_Gate::config_has_active_transforms( $config ) ) {
 			return false;
 		}
-		if ( ! empty( $config['bypass_elementor'] ) && Neo_Pulse_Wp_Speed_Gate::is_elementor_built_page() ) {
-			return false;
-		}
 		return true;
 	}
 
@@ -93,9 +90,6 @@ class Neo_Pulse_Wp_Speed_Diagnostics {
 	 */
 	public static function buffer_would_run_for_guest_on_elementor_home( array $config ): bool {
 		if ( empty( $config['enabled'] ) || ! Neo_Pulse_Wp_Speed_Gate::config_has_active_transforms( $config ) ) {
-			return false;
-		}
-		if ( ! empty( $config['bypass_elementor'] ) ) {
 			return false;
 		}
 		return true;
@@ -160,18 +154,14 @@ class Neo_Pulse_Wp_Speed_Diagnostics {
 			? __( 'Logged-in visitors: Speed buffer CAN run', 'neo-pulse-wp' )
 			: __( 'Logged-in visitors: Speed buffer will NOT run', 'neo-pulse-wp' );
 
-		if ( ! empty( $status['bypass_elementor'] ) && ! empty( $status['current_is_elementor'] ) ) {
-			$lines[] = __( 'Guests on this Elementor page: Speed buffer will NOT run (Elementor bypass is on)', 'neo-pulse-wp' );
-		} elseif ( ! empty( $status['buffer_guest'] ) ) {
+		if ( ! empty( $status['buffer_guest'] ) ) {
 			$lines[] = __( 'Guests (incognito): Speed buffer CAN run on typical pages', 'neo-pulse-wp' );
 		} else {
 			$lines[] = __( 'Guests (incognito): Speed buffer will NOT run', 'neo-pulse-wp' );
 		}
 
-		if ( ! empty( $status['bypass_elementor'] ) ) {
-			$lines[] = __( 'Elementor bypass: ON — turn off or save General again after update', 'neo-pulse-wp' );
-		} elseif ( ! empty( $status['elementor_active'] ) && ! empty( $status['buffer_guest_home'] ) ) {
-			$lines[] = __( 'Elementor bypass: OFF — per-file CSS/JS minify allowed on builder pages', 'neo-pulse-wp' );
+		if ( ! empty( $status['elementor_active'] ) ) {
+			$lines[] = __( 'Elementor pages: per-file CSS/JS minify runs; combine and HTML minify stay off', 'neo-pulse-wp' );
 		}
 
 		if ( ! empty( $status['last_write_time'] ) ) {

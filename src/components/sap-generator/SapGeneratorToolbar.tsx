@@ -100,6 +100,9 @@ export type SapGeneratorToolbarProps = {
   showTempUrl?: boolean;
   tempSeedUrl?: string;
   onTempSeedUrlChange?: (v: string) => void;
+  showBlindMagicKeywords?: boolean;
+  useBlindMagicKeywords?: boolean;
+  onUseBlindMagicKeywordsChange?: (v: boolean) => void;
 };
 
 export function SapGeneratorToolbar({
@@ -126,6 +129,9 @@ export function SapGeneratorToolbar({
   showTempUrl = false,
   tempSeedUrl = "",
   onTempSeedUrlChange,
+  showBlindMagicKeywords = false,
+  useBlindMagicKeywords = false,
+  onUseBlindMagicKeywordsChange,
 }: SapGeneratorToolbarProps) {
   const focusSelectValue =
     entityTypeFocus.find((t) => entityTypesForLevel(entityGeographicLevel).includes(t)) ?? "__none__";
@@ -215,6 +221,24 @@ export function SapGeneratorToolbar({
         </>
       }
       options={
+        <>
+        {showBlindMagicKeywords && onUseBlindMagicKeywordsChange ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={cn(
+              useBlindMagicKeywords ? BULK_HEADER_UPLOAD_READY_BTN : BULK_HEADER_TOOL_BTN,
+            )}
+            disabled={workspaceBusy}
+            aria-pressed={useBlindMagicKeywords}
+            aria-label="Use Blind Magic keywords"
+            title="Use Blind Magic GSC keywords"
+            onClick={() => onUseBlindMagicKeywordsChange(!useBlindMagicKeywords)}
+          >
+            Blind Magic
+          </Button>
+        ) : null}
         <Select
           value={focusSelectValue}
           onValueChange={(v) => {
@@ -239,6 +263,7 @@ export function SapGeneratorToolbar({
             ))}
           </SelectContent>
         </Select>
+        </>
       }
       actions={
         <>

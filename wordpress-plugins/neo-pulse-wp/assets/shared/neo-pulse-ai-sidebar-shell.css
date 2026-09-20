@@ -251,8 +251,8 @@ body.fai-sidebar-scroll-lock {
 		visibility: visible !important;
 	}
 
-	#neo-pulse-chat-widget-root.neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher .fai-sidebar-launcher.fcw-launcher,
-	.neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher .fai-sidebar-launcher.fcw-launcher {
+	#neo-pulse-chat-widget-root.neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher .fai-sidebar-launcher.fcw-launcher:not(.fcw-launcher--edge-tab),
+	.neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher .fai-sidebar-launcher.fcw-launcher:not(.fcw-launcher--edge-tab) {
 		position: fixed !important;
 		top: auto !important;
 		bottom: 16px !important;
@@ -263,8 +263,8 @@ body.fai-sidebar-scroll-lock {
 		pointer-events: auto !important;
 	}
 
-	#neo-pulse-chat-widget-root.neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher.fai-sidebar-root--left .fai-sidebar-launcher.fcw-launcher,
-	.neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher.fai-sidebar-root--left .fai-sidebar-launcher.fcw-launcher {
+	#neo-pulse-chat-widget-root.neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher.fai-sidebar-root--left .fai-sidebar-launcher.fcw-launcher:not(.fcw-launcher--edge-tab),
+	.neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher.fai-sidebar-root--left .fai-sidebar-launcher.fcw-launcher:not(.fcw-launcher--edge-tab) {
 		left: 16px !important;
 		right: auto !important;
 	}

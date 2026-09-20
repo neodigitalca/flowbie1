@@ -28,6 +28,7 @@ describe("resolveBulkWordPressPostTitle", () => {
     const result = await resolveBulkWordPressPostTitle({
       apiKey: "test-key",
       focusKeyword: "hunter douglas vs alta",
+      entity: "Mediterra, Naples, Florida",
       candidates: {
         researchSeoTitle: "Hunter Douglas vs. Alta Shades",
         csvTitle: "Hunter Douglas Vs Alta",
@@ -40,12 +41,50 @@ describe("resolveBulkWordPressPostTitle", () => {
     const call = mockCall.mock.calls[0]![0];
     expect(call.user).toContain("hunter douglas vs alta");
     expect(call.user).toContain("do not paste as the title");
+    expect(call.user).toContain("PLACE / ENTITY");
+    expect(call.user).toContain("Mediterra, Naples, Florida");
     expect(call.user).toContain("research_seo_title:");
     expect(call.user).toContain("csv_title:");
     expect(call.user).toContain("blueprint_title:");
     expect(call.system).toContain("WORDPRESS POST TITLE");
     expect(call.system).toContain("Keyword is the topic signal, not the title");
+    expect(call.system).toContain("Blackout Blinds Mediterra Naples Florida: Blackout Blinds For Homes In Mediterra Naples Florida");
+    expect(call.system).toContain("JSON contract");
     expect(call.system).not.toContain("Front-load naturally");
+    expect(call.responseFormat).toEqual({
+      type: "json_schema",
+      json_schema: {
+        name: "bulk_wordpress_post_title",
+        strict: true,
+        schema: expect.objectContaining({
+          required: ["wordpress_title"],
+        }),
+      },
+    });
+  });
+
+  it("fails when OpenRouter returns invalid JSON", async () => {
+    mockCall.mockResolvedValue({ content: "{wordpress_title: Bad}" });
+
+    await expect(
+      resolveBulkWordPressPostTitle({
+        apiKey: "test-key",
+        focusKeyword: "blinds old naples florida",
+        candidates: { csvTitle: "Blinds In Old Naples" },
+      }),
+    ).rejects.toThrow(/invalid JSON/);
+  });
+
+  it("fails when wordpress_title is empty", async () => {
+    mockCall.mockResolvedValue({ content: JSON.stringify({ wordpress_title: "   " }) });
+
+    await expect(
+      resolveBulkWordPressPostTitle({
+        apiKey: "test-key",
+        focusKeyword: "blinds old naples florida",
+        candidates: { csvTitle: "Blinds In Old Naples" },
+      }),
+    ).rejects.toThrow(/empty wordpress_title/);
   });
 
   it("returns the full OpenRouter title without truncating", async () => {

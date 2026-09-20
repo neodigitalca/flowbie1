@@ -98,8 +98,9 @@ export const TARGET_INTERNAL_LINKS_PER_BODY_H2 = 3;
 
 export const INTERNAL_LINKS_PER_SECTION_RULE = `**INTERNAL LINKS PER SECTION (NON-NEGOTIABLE)**:
 - Every body H2 section (not Overview, not FAQ) MUST include at least **${MIN_INTERNAL_LINKS_PER_BODY_H2}** distinct [[LINK:query|anchor]] placeholders; target **${TARGET_INTERNAL_LINKS_PER_BODY_H2}** when the section has a table or 3+ paragraphs.
-- Spread links across prose paragraphs and table cells — never one link-only paragraph at the end.
+- Spread links across prose paragraphs and table cells. Weave each [[LINK]] mid-sentence with words before and after the token.
 - When LINK TARGETS PLAN lists entries with sectionHints for this H2, use a different plan query for each link slot before reusing queries.
+- Forbidden: a leftover keyword, page title, or [[LINK]] after the last period (". durable window coverings"). If you cannot weave a remaining link inside a sentence you are already writing, STOP. Do not append it.
 - Forbidden: shipping a body H2 with only zero or one internal link when PAGES or BLOG POSTS inventory exists.`;
 
 function isMixedCaseBrand(word: string): boolean {

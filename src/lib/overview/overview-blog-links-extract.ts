@@ -43,6 +43,119 @@ function readInternalLinkMatch(
   };
 }
 
+export type InternalLinkEditSpan = {
+  index: number;
+  hrefStart: number;
+  hrefEnd: number;
+  innerStart: number;
+  innerEnd: number;
+};
+
+export type SectionLinkRow = {
+  anchor: string;
+  href: string;
+};
+
+/** Every `<a href="...">` in document order (including empty href), for section link fields. */
+export function extractAllSectionLinkRowsFromHtml(html: string): SectionLinkRow[] {
+  const trimmed = (html ?? "").trim();
+  if (!trimmed) return [];
+  const out: SectionLinkRow[] = [];
+  const anchorRe = /<a\s+[^>]*href\s*=\s*["']([^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = anchorRe.exec(trimmed)) !== null) {
+    out.push({
+      href: (m[1] ?? "").trim(),
+      anchor: plainAnchorFromInnerHtml(m[2] ?? ""),
+    });
+  }
+  return out;
+}
+
+/** Edit spans for every `<a href="...">` in document order (including empty href). */
+export function extractAllSectionLinkEditSpans(html: string): InternalLinkEditSpan[] {
+  const trimmed = (html ?? "").trim();
+  if (!trimmed) return [];
+  const out: InternalLinkEditSpan[] = [];
+  const anchorRe = /<a\s+[^>]*href\s*=\s*["']([^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = anchorRe.exec(trimmed)) !== null) {
+    const openTag = m[0].slice(0, m[0].indexOf(">") + 1);
+    const hrefMatch = /href\s*=\s*["']([^"']*)["']/i.exec(openTag);
+    if (!hrefMatch) continue;
+    const hrefValue = hrefMatch[1] ?? "";
+    const hrefAttrStart = openTag.indexOf(hrefMatch[0]);
+    const hrefValueStartInAttr = hrefMatch[0].search(/["']/u) + 1;
+    const hrefStart = m.index + hrefAttrStart + hrefValueStartInAttr;
+    const hrefEnd = hrefStart + hrefValue.length;
+    const innerStart = m.index + openTag.length;
+    const innerEnd = innerStart + (m[2]?.length ?? 0);
+    out.push({
+      index: out.length,
+      hrefStart,
+      hrefEnd,
+      innerStart,
+      innerEnd,
+    });
+  }
+  return out;
+}
+
+/** Internal link spans with href and anchor (inner) character ranges for in-place edits. */
+export function extractInternalLinkEditSpans(
+  html: string,
+  siteBaseUrl: string,
+  pageUrl?: string,
+): InternalLinkEditSpan[] {
+  const trimmed = (html ?? "").trim();
+  if (!trimmed) return [];
+  const site = siteHostFromBase(siteBaseUrl);
+  if (!site) return [];
+
+  const selfNorm = pageUrl?.trim() ? normalizeInternalUrl(siteBaseUrl, pageUrl) : "";
+  const out: InternalLinkEditSpan[] = [];
+  const anchorRe = /<a\s+[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = anchorRe.exec(trimmed)) !== null) {
+    const link = readInternalLinkMatch(m, site, siteBaseUrl, selfNorm);
+    if (!link) continue;
+    const openTag = m[0].slice(0, m[0].indexOf(">") + 1);
+    const innerStart = m.index + openTag.length;
+    const innerEnd = innerStart + (m[2]?.length ?? 0);
+    out.push({
+      index: out.length,
+      hrefStart: link.hrefStart,
+      hrefEnd: link.hrefEnd,
+      innerStart,
+      innerEnd,
+    });
+  }
+  return out;
+}
+
+/** Full `<a>...</a>` tags for internal links in document order (for copy-preserve prompts). */
+export function extractExactInternalLinkTagsFromHtml(
+  html: string,
+  siteBaseUrl: string,
+  pageUrl?: string,
+): string[] {
+  const trimmed = (html ?? "").trim();
+  if (!trimmed) return [];
+  const site = siteHostFromBase(siteBaseUrl);
+  if (!site) return [];
+
+  const selfNorm = pageUrl?.trim() ? normalizeInternalUrl(siteBaseUrl, pageUrl) : "";
+  const out: string[] = [];
+  const anchorRe = /<a\s+[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = anchorRe.exec(trimmed)) !== null) {
+    const link = readInternalLinkMatch(m, site, siteBaseUrl, selfNorm);
+    if (!link) continue;
+    out.push(m[0]);
+  }
+  return out;
+}
+
 /** Internal link spans with source href character ranges (aligned with extractInternalLinksFromHtml). */
 export function extractInternalLinkRangesFromHtml(
   html: string,

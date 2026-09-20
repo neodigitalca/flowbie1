@@ -16,14 +16,16 @@ class Neo_Pulse_Wp_Seo_Blocks_Agent {
 	 * @return array<string,mixed>
 	 */
 	public static function tool_handler( array $params ): array {
-		$result = self::compose(
-			array(
-				'prompt'        => (string) ( $params['prompt'] ?? '' ),
-				'mode'          => (string) ( $params['mode'] ?? 'generate_full' ),
-				'current_block' => isset( $params['current_block'] ) && is_array( $params['current_block'] ) ? $params['current_block'] : array(),
-				'page_context'  => (string) ( $params['page_context'] ?? '' ),
-			)
+		$compose = array(
+			'prompt'        => (string) ( $params['prompt'] ?? '' ),
+			'mode'          => (string) ( $params['mode'] ?? 'generate_full' ),
+			'current_block' => isset( $params['current_block'] ) && is_array( $params['current_block'] ) ? $params['current_block'] : array(),
+			'page_context'  => (string) ( $params['page_context'] ?? '' ),
 		);
+		if ( array_key_exists( 'user_copy', $params ) ) {
+			$compose['user_copy'] = (string) $params['user_copy'];
+		}
+		$result = self::compose( $compose );
 
 		if ( is_wp_error( $result ) ) {
 			return array(
@@ -40,9 +42,10 @@ class Neo_Pulse_Wp_Seo_Blocks_Agent {
 	 * @return array<string,mixed>|WP_Error
 	 */
 	public static function compose( array $params ) {
-		$prompt = sanitize_textarea_field( (string) ( $params['prompt'] ?? '' ) );
-		$mode   = sanitize_key( (string) ( $params['mode'] ?? 'generate_full' ) );
-		$block  = isset( $params['current_block'] ) && is_array( $params['current_block'] ) ? $params['current_block'] : array();
+		$prompt     = sanitize_textarea_field( (string) ( $params['prompt'] ?? '' ) );
+		$user_copy  = trim( (string) ( $params['user_copy'] ?? '' ) );
+		$mode       = sanitize_key( (string) ( $params['mode'] ?? 'generate_full' ) );
+		$block      = isset( $params['current_block'] ) && is_array( $params['current_block'] ) ? $params['current_block'] : array();
 		$page_context = sanitize_textarea_field( (string) ( $params['page_context'] ?? '' ) );
 		if ( $page_context === '' ) {
 			$page_context = Neo_Pulse_Wp_Seo_Blocks_Context::prompt_for_block(
@@ -54,6 +57,14 @@ class Neo_Pulse_Wp_Seo_Blocks_Agent {
 
 		if ( ! in_array( $mode, array( 'generate_full', 'optimize', 'analyze' ), true ) ) {
 			$mode = 'generate_full';
+		}
+
+		$has_slots = ! empty( $block['slots'] ) && is_array( $block['slots'] );
+		if ( $mode === 'generate_full' && ! $has_slots && array_key_exists( 'user_copy', $params ) && $user_copy === '' ) {
+			return new WP_Error( 'neo-pulse_seo_agent_user_copy', __( 'user_copy is required to create a new SEO block.', 'neo-pulse-wp' ) );
+		}
+		if ( $user_copy !== '' && $prompt === '' ) {
+			$prompt = $user_copy;
 		}
 
 		if ( $prompt === '' && $mode !== 'analyze' ) {
@@ -79,7 +90,7 @@ class Neo_Pulse_Wp_Seo_Blocks_Agent {
 		}
 
 		$system = self::system_prompt( $mode, $page_context !== '' );
-		$user   = self::user_prompt( $prompt, $mode, $block, $page_context );
+		$user   = self::user_prompt( $prompt, $mode, $block, $page_context, $user_copy );
 
 		$result = Neo_Pulse_Wp_OpenRouter::complete_chat( $system, $user, 8192, 0.65 );
 		if ( is_wp_error( $result ) ) {
@@ -149,6 +160,119 @@ class Neo_Pulse_Wp_Seo_Blocks_Agent {
 	}
 
 	/**
+	 * Map pasted copy onto existing slot ids only.
+	 *
+	 * @param array<string,mixed> $block
+	 * @return array<string,mixed>|WP_Error
+	 */
+	public static function fill_slots_from_user_copy( array $block, string $user_copy ) {
+		$user_copy = trim( $user_copy );
+		if ( $user_copy === '' ) {
+			return new WP_Error( 'neo-pulse_seo_fill_copy', __( 'user_copy is required to fill template slots.', 'neo-pulse-wp' ) );
+		}
+
+		$slots = isset( $block['slots'] ) && is_array( $block['slots'] ) ? $block['slots'] : array();
+		if ( empty( $slots ) ) {
+			return new WP_Error( 'neo-pulse_seo_fill_slots', __( 'Template has no slots to fill.', 'neo-pulse-wp' ) );
+		}
+
+		$catalog = array();
+		foreach ( $slots as $slot ) {
+			if ( ! is_array( $slot ) || empty( $slot['_id'] ) ) {
+				continue;
+			}
+			$catalog[] = array(
+				'_id'  => (string) $slot['_id'],
+				'type' => (string) ( $slot['type'] ?? '' ),
+			);
+		}
+		if ( empty( $catalog ) ) {
+			return new WP_Error( 'neo-pulse_seo_fill_slots', __( 'Template slots are missing ids.', 'neo-pulse-wp' ) );
+		}
+
+		$system = "You map user copy onto an existing SEO block slot list.\n"
+			. "Return ONLY a JSON object: {\"slots\":[{\"_id\":\"existing-id\",\"text\":\"\",\"html\":\"\",\"label\":\"\",\"url\":\"\",\"items\":[]}]}\n"
+			. "Rules:\n"
+			. "- Use only _id values from the provided slot catalog. Do not invent ids or types.\n"
+			. "- Put the user's copy into the matching slot fields (h2=text, paragraph=html, list=items or html, cta=label/url).\n"
+			. "- Do not add slots. Omit a slot if the copy has nothing for it.\n"
+			. "- At least one slot update is required.";
+		$user   = "Slot catalog:\n" . wp_json_encode( $catalog, JSON_PRETTY_PRINT )
+			. "\n\nVerbatim user copy:\n{$user_copy}\n\nReturn the JSON object only.";
+
+		$result = Neo_Pulse_Wp_OpenRouter::complete_chat( $system, $user, 2048, 0.1 );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		$parsed = self::parse_manifest_json( (string) ( $result['content'] ?? '' ) );
+		if ( is_wp_error( $parsed ) ) {
+			return $parsed;
+		}
+
+		$updates = isset( $parsed['slots'] ) && is_array( $parsed['slots'] ) ? $parsed['slots'] : array();
+		return self::apply_mapped_slot_updates( $block, $updates );
+	}
+
+	/**
+	 * @param array<string,mixed>      $block
+	 * @param array<int,array<string,mixed>> $updates
+	 * @return array<string,mixed>|WP_Error
+	 */
+	public static function apply_mapped_slot_updates( array $block, array $updates ) {
+		if ( empty( $updates ) ) {
+			return new WP_Error( 'neo-pulse_seo_fill_empty', __( 'No slot updates were mapped from user_copy.', 'neo-pulse-wp' ) );
+		}
+
+		$known = array();
+		foreach ( isset( $block['slots'] ) && is_array( $block['slots'] ) ? $block['slots'] : array() as $slot ) {
+			if ( is_array( $slot ) && ! empty( $slot['_id'] ) ) {
+				$known[ (string) $slot['_id'] ] = true;
+			}
+		}
+
+		$applied = 0;
+		foreach ( $updates as $update ) {
+			if ( ! is_array( $update ) ) {
+				continue;
+			}
+			$sid = (string) ( $update['_id'] ?? $update['slot_id'] ?? '' );
+			if ( $sid === '' ) {
+				return new WP_Error( 'neo-pulse_seo_fill_id', __( 'Slot update is missing _id.', 'neo-pulse-wp' ) );
+			}
+			if ( empty( $known[ $sid ] ) ) {
+				return new WP_Error( 'neo-pulse_seo_fill_unknown', __( 'Slot update targeted an id that is not on the template.', 'neo-pulse-wp' ) );
+			}
+
+			$patch = array();
+			foreach ( array( 'text', 'html', 'label', 'url', 'alt', 'style' ) as $field ) {
+				if ( array_key_exists( $field, $update ) ) {
+					$patch[ $field ] = $update[ $field ];
+				}
+			}
+			if ( isset( $update['items'] ) && is_array( $update['items'] ) ) {
+				$patch['items'] = $update['items'];
+			}
+			if ( empty( $patch ) ) {
+				continue;
+			}
+
+			$updated = Neo_Pulse_Wp_Seo_Blocks_Mutation::update_slot( $block, $sid, $patch );
+			if ( is_wp_error( $updated ) ) {
+				return $updated;
+			}
+			$block = $updated;
+			++$applied;
+		}
+
+		if ( $applied < 1 ) {
+			return new WP_Error( 'neo-pulse_seo_fill_empty', __( 'No slot updates were mapped from user_copy.', 'neo-pulse-wp' ) );
+		}
+
+		return $block;
+	}
+
+	/**
 	 * @param array<string,mixed> $raw
 	 * @return array<string,mixed>
 	 */
@@ -199,7 +323,8 @@ class Neo_Pulse_Wp_Seo_Blocks_Agent {
 		if ( $mode === 'optimize' ) {
 			$base .= "Mode: optimize — improve copy and SEO while preserving slot IDs and image attachment_id values when present.\n";
 		} else {
-			$base .= "Mode: generate_full — produce a complete block from the user prompt.\n";
+			$base .= "Mode: generate_full — produce a complete block from the user prompt.\n"
+				. "When VERBATIM USER COPY is present, put that copy into slots. Do not replace it with invented text.\n";
 		}
 
 		if ( $has_linked_page ) {
@@ -212,7 +337,7 @@ class Neo_Pulse_Wp_Seo_Blocks_Agent {
 	/**
 	 * @param array<string,mixed> $block
 	 */
-	private static function user_prompt( string $prompt, string $mode, array $block, string $page_context = '' ): string {
+	private static function user_prompt( string $prompt, string $mode, array $block, string $page_context = '', string $user_copy = '' ): string {
 		$block_json = wp_json_encode( $block, JSON_PRETTY_PRINT );
 		$instruction = $mode === 'optimize'
 			? 'Optimize this SEO block manifest for stronger SEO and clarity.'
@@ -222,6 +347,9 @@ class Neo_Pulse_Wp_Seo_Blocks_Agent {
 		}
 
 		$out = "{$instruction}\n\nUser request:\n{$prompt}\n\n";
+		if ( $user_copy !== '' ) {
+			$out .= "=== VERBATIM USER COPY (required in slots) ===\n{$user_copy}\n=== END ===\n\n";
+		}
 		if ( $page_context !== '' ) {
 			$out .= "=== LINKED PAGE CONTEXT ===\n{$page_context}\n=== END ===\n\n";
 		}

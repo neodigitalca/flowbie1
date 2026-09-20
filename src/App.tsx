@@ -6,7 +6,6 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Register from "./pages/Register";
 import Index from "./pages/Index";
-import { DocsHashRedirect } from "@/components/api-docs/DocsHashRedirect";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import HuddlePopupPage from "./pages/HuddlePopupPage";
@@ -96,14 +95,6 @@ const App = () => {
                             <div className="flex h-dvh max-h-dvh min-h-0 flex-1 flex-col overflow-hidden">
                               <Index />
                             </div>
-                          </ProtectedRoute>
-                        }
-                      />
-                      <Route
-                        path="/docs/*"
-                        element={
-                          <ProtectedRoute>
-                            <DocsHashRedirect />
                           </ProtectedRoute>
                         }
                       />

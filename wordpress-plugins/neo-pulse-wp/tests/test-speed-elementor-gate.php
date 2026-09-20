@@ -42,9 +42,12 @@ function assert_true( bool $cond, string $msg ): void {
 }
 
 $config = array(
+	'optimize_css'  => true,
+	'optimize_js'   => true,
 	'aggregate_css' => true,
 	'aggregate_js'  => true,
 	'defer_js'      => true,
+	'minify_html'   => true,
 );
 
 $elementor_html = '<html><body class="elementor-page"><div data-elementor-type="wp-page"></div><script src="/elementor-frontend.min.js"></script></body></html>';
@@ -54,7 +57,11 @@ assert_true( Neo_Pulse_Wp_Speed_Gate::html_uses_elementor( $elementor_html ), 'd
 assert_true( ! Neo_Pulse_Wp_Speed_Gate::html_uses_elementor( $plain_html ), 'plain HTML is not elementor' );
 
 $safe = Neo_Pulse_Wp_Speed_Gate::config_for_html( $config, $elementor_html );
-assert_true( empty( $safe['aggregate_css'] ) && empty( $safe['aggregate_js'] ) && empty( $safe['defer_js'] ), 'elementor config disables risky flags' );
+assert_true( empty( $safe['aggregate_css'] ) && empty( $safe['aggregate_js'] ) && empty( $safe['defer_js'] ) && empty( $safe['minify_html'] ), 'elementor config disables risky flags' );
+assert_true( ! empty( $safe['optimize_css'] ) && ! empty( $safe['optimize_js'] ), 'elementor config keeps per-file minify' );
+
+$gate_src = (string) file_get_contents( NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-speed-gate.php' );
+assert_true( ! str_contains( $gate_src, 'is_elementor_built_page() ) {' ), 'should_optimize does not skip Elementor pages' );
 
 $unchanged = Neo_Pulse_Wp_Speed_Gate::config_for_html( $config, $plain_html );
 assert_true( ! empty( $unchanged['aggregate_css'] ), 'non-elementor config unchanged' );
@@ -62,6 +69,18 @@ assert_true( ! empty( $unchanged['aggregate_css'] ), 'non-elementor config uncha
 assert_true(
 	Neo_Pulse_Wp_Speed_Excludes::is_defer_excluded( 'https://example.test/wp-content/plugins/elementor/assets/js/frontend.min.js', array() ),
 	'elementor-frontend script URL is excluded from defer'
+);
+assert_true(
+	Neo_Pulse_Wp_Speed_Excludes::is_excluded( 'https://example.test/wp-content/plugins/elementor/assets/js/frontend.min.js', 'js', array() ),
+	'elementor js is excluded from minify'
+);
+assert_true(
+	Neo_Pulse_Wp_Speed_Excludes::is_excluded( 'https://example.test/wp-content/plugins/elementor/assets/css/frontend.min.css', 'css', array() ),
+	'elementor css is excluded from minify'
+);
+assert_true(
+	Neo_Pulse_Wp_Speed_Excludes::is_excluded( 'https://example.test/wp-content/themes/ygency/assets/js/jquery.waypoints.min.js', 'js', array() ),
+	'waypoint js is excluded from minify'
 );
 
 echo $failed > 0 ? "\n{$failed} test(s) failed.\n" : "\nAll speed elementor gate smoke tests passed.\n";

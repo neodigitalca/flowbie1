@@ -1,5 +1,7 @@
 /** Shared H2 title guards for checklist, AI Headers, and post-creator. */
 
+import { extractChecklistItemTitle } from "@/lib/checklist-item-title";
+
 const GENERIC_H2_EXACT = new Set([
   "section",
   "intro",
@@ -10,6 +12,22 @@ const GENERIC_H2_EXACT = new Set([
   "summary",
 ]);
 
+/** Internal research tags must never become published H2s. */
+export function isLlmAuditAuthorityDumpTitle(title: string | null | undefined): boolean {
+  const trimmed = title?.trim() ?? "";
+  if (!trimmed) return false;
+  return /^(llm audit authority link(\s+\d+)?|further links(\s+\d+)?)$/i.test(trimmed);
+}
+
+/** True when a checklist row exists only to dump an authority URL as its own H2. */
+export function isLlmAuditAuthorityDumpChecklistItem(item: string): boolean {
+  const stripped = item.replace(/^\d+\.\s*/, "").trim();
+  if (/^\[LLM_AUDIT_AUTHORITY_LINK\]/i.test(stripped)) return true;
+  const title = extractChecklistItemTitle(item);
+  if (isLlmAuditAuthorityDumpTitle(title)) return true;
+  return !title.trim() && /\[LLM_AUDIT_AUTHORITY_LINK\]/i.test(item);
+}
+
 /** True when title is a placeholder, not a publishable H2. */
 export function isGenericHarnessHeadingTitle(title: string | null | undefined): boolean {
   const trimmed = title?.trim();
@@ -18,11 +36,20 @@ export function isGenericHarnessHeadingTitle(title: string | null | undefined): 
   if (GENERIC_H2_EXACT.has(key)) return true;
   if (/^section\s+\d+$/i.test(trimmed)) return true;
   if (/^create an (agent|h2)/i.test(trimmed)) return true;
+  if (isLlmAuditAuthorityDumpTitle(trimmed)) return true;
   return false;
 }
 
 export const FORBIDDEN_H2_PLACEHOLDER_PROMPT_LINE =
-  "**FORBIDDEN H2 PLACEHOLDERS (NON-NEGOTIABLE)**: Never use Section, Intro, Introduction, Content, Overview (body sections), Getting Started, or Section N as published H2 text. Every checklist line, blueprint agent title, and harness ## must be a specific, reader-facing topic title copied from the assigned heading contract.";
+  "**FORBIDDEN H2 PLACEHOLDERS (NON-NEGOTIABLE)**: Never use Section, Intro, Introduction, Content, Overview (body sections), Getting Started, Section N, LLM Audit Authority Link, or Further Links as published H2 text. Authority URLs go mid-sentence in existing topical sections. Every checklist line, blueprint agent title, and harness H2 must be a unique, specific, reader-facing topic title written from the writing keyword. Never pin a stock body title. Never repeat an H2. Exactly one [ILLUSTRATIVE] section. Forbidden: a second H2 titled A Local Homeowner Example or any second homeowner or example heading.";
+
+/** Body H2s are written per keyword. Answer and Overview are the only chrome titles. */
+export const UNIQUE_DYNAMIC_BODY_H2_RULE = `**UNIQUE DYNAMIC BODY H2s (NON-NEGOTIABLE)**:
+- Write every body H2 from the writing keyword and this connected site's trade. Each title is unique.
+- Forbidden as published H2 text: "Section", "Section 1", "Section 2", any "Section N", Introduction, Content, Getting Started, "LLM Audit Authority Link", "Further Links".
+- Do not pin any body H2. Never force "A Local Homeowner Example" or any other stock label onto a section the planner did not write with that title.
+- Exactly one [ILLUSTRATIVE] item on the whole article. That item keeps the unique 3-8 word topical H2 the planner wrote. Forbidden: a second homeowner, example, or scenario H2.
+- Answer and Overview are the only chrome titles. Never invent other fixed H2 titles.`;
 
 /** Shared OpenRouter system prompt for Overview AI Headers plan. */
 export function buildBlogHeadersPlanSystemPrompt(): string {

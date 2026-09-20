@@ -1,6 +1,17 @@
 import type { BulkHarnessSectionPayload } from "@/lib/bulk-auto-generate";
 import { reduceHarnessSectionList, type HarnessSectionListItem } from "@/lib/bulk/harness-sections-reducer";
 import type { FaqEntry } from "@/lib/faq-entries";
+import {
+  AISEO_POST_CONTENT_SLOT_TITLE,
+  AISEO_WP_UPLOAD_SLOT_TITLE,
+  aiseoPostContentFileSlug,
+  buildAiseoPostContentHtmlFile,
+  buildAiseoRowDisplaySections,
+  filterAiseoRowDisplayFiles,
+  findAiseoPostContentFile,
+  generatedFileName,
+  isAiseoPostContentFileName,
+} from "@/lib/overview/overview-aiseo-row-artifacts";
 
 export type PlannedFaqPairSection = {
   title: string;
@@ -71,20 +82,53 @@ function sanitizeFaqFilePart(value: string): string {
   return value.replace(/[^a-z0-9._-]+/gi, "_").slice(0, 60) || "pair";
 }
 
-export function faqHarnessGeneratedFiles(
-  sections: HarnessSectionListItem[],
-  url: string,
-): Array<{ name: string; content: string; mimeType: string }> {
-  const slug = sanitizeFaqFilePart(
-    url.replace(/^https?:\/\//i, "").replace(/\/+$/, "").split("/").pop() || "page",
-  );
-  return sections
-    .filter((s) => s.status === "done" && s.markdown?.trim())
-    .map((s) => ({
-      name: `faq-${slug}-${sanitizeFaqFilePart(s.title || `section-${s.sectionIndex + 1}`)}.md`,
-      content: s.markdown!.trim(),
-      mimeType: "text/markdown",
-    }));
+/** Overview FAQ batch: one JSON artifact for the row (not per-pair markdown files). */
+export function buildFaqJsonGeneratedFile(
+  entries: FaqEntry[],
+): { name: string; content: string; mimeType: string } | null {
+  const cleaned = entries
+    .map((entry) => ({
+      question: entry.question.trim(),
+      answer: entry.answer.trim(),
+    }))
+    .filter((entry) => entry.question || entry.answer);
+  if (!cleaned.length) return null;
+  return {
+    name: "faq.json",
+    content: JSON.stringify(cleaned, null, 2),
+    mimeType: "application/json;charset=utf-8",
+  };
+}
+
+export const faqPostContentFileSlug = aiseoPostContentFileSlug;
+export const isFaqPostContentFileName = isAiseoPostContentFileName;
+export const buildFaqPostContentHtmlFile = buildAiseoPostContentHtmlFile;
+export const FAQ_ROW_PIPELINE_TITLES = [
+  "FAQ",
+  AISEO_POST_CONTENT_SLOT_TITLE,
+  AISEO_WP_UPLOAD_SLOT_TITLE,
+] as const;
+export const findFaqPostContentFile = findAiseoPostContentFile;
+export const faqGeneratedFileName = generatedFileName;
+
+export function faqRowPipelineFileName(title: string): string | null {
+  if (title === "FAQ") return "faq.json";
+  if (title === AISEO_POST_CONTENT_SLOT_TITLE) return null;
+  if (title === AISEO_WP_UPLOAD_SLOT_TITLE) return "wordpress.json";
+  return null;
+}
+
+export function buildFaqRowDisplaySections(
+  pairHarness: Array<{ status?: string }> | undefined,
+  files: Array<{ name: string }>,
+): Array<{ sectionIndex: number; title: string; status: "waiting" | "generating" | "done" }> {
+  return buildAiseoRowDisplaySections("aiFaq", pairHarness, files);
+}
+
+export function filterFaqRowDisplayFiles<
+  T extends { name?: string; fileName?: string },
+>(files: T[]): T[] {
+  return filterAiseoRowDisplayFiles("aiFaq", files);
 }
 
 export function buildDoneFaqHarnessSections(

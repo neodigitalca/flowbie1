@@ -60,6 +60,8 @@ export interface WordPressSite {
   napInfo?: NAPInfo;
   /** GA4 Property ID for this site (numeric). Used by Test GA and future report integration. */
   ga4PropertyId?: string;
+  /** Google Ads customer ID for this site (10 digits, hyphens optional). Used by PPC reporting. */
+  googleAdsCustomerId?: string;
   /** Google Business Profile location ID for this site. From business.google.com profile URL (e.g. fid=... or the numeric ID). Used by Pull GMB stats to skip account/location discovery and avoid quota. */
   gbpLocationId?: string;
   /** Semrush Site Audit project ID (from semrush.com/projects/{id}). Used by Meta Optimizer AUDIT fetch. */

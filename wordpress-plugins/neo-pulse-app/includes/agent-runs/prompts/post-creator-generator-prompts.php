@@ -73,16 +73,40 @@ class Neo_Pulse_App_Agent_Run_Generator_Prompts {
 			. "=== END INTERNAL LINK TARGETS ===\n";
 	}
 
+	private static function sap_checklist_example( string $entity ): string {
+		$place = trim( $entity ) !== '' ? trim( $entity ) : '[Location]';
+		return "1. Local problem for this trade in {$place} [STRUCTURE]: 2-3 paragraphs. Opener leads with a sourced local constraint. **[EXACT PRIMARY PER H2]**. [LINK]: at least 1 [[LINK:PAGES title words|anchor]] mid-sentence.\n"
+			. "2. Local conditions that change the job [STRUCTURE]: 1-2 paragraphs. [LIST]: sourced facts for this trade. **[EXACT PRIMARY PER H2]**. [LINK]: at least 1 [[LINK:PAGES title words|anchor]] mid-sentence.\n"
+			. "3. Options that fit those conditions [STRUCTURE]: 2-3 paragraphs. [DECISION]: Situation | Importance list. **[EXACT PRIMARY PER H2]**. [LINK]: at least 1 [[LINK:PAGES title words|anchor]] mid-sentence.\n"
+			. "4. A Local Homeowner Example [STRUCTURE]: 1 intro paragraph, then scenario in body. [ILLUSTRATIVE]. [BLOCKQUOTE]. **[EXACT PRIMARY PER H2]**. [LINK]: in body only.\n"
+			. "5. What this site offers [STRUCTURE]: 1-2 short paragraphs. [TABLE]: Product/Service Name (Pages link) | Description. **[EXACT PRIMARY PER H2]**. [LINK]: in table names.\n"
+			. "6. Recommendation in {$place} [STRUCTURE]: 1-2 paragraphs. [RECOMMENDATION]. [TABLE]: Product | Best for | Budget | Reason. **[EXACT PRIMARY PER H2]**.\n"
+			. "7. Next steps [STRUCTURE]: 1-2 paragraphs. [LIST]: numbered booking steps. **[EXACT PRIMARY PER H2]**. [LINK]: at least 1 [[LINK:PAGES title words|anchor]] mid-sentence.";
+	}
+
+	private static function sap_page_checklist_block( string $entity ): string {
+		$place = trim( $entity ) !== '' ? trim( $entity ) : '[Location]';
+		return "--- SAP PAGE TEMPLATE (NON-NEGOTIABLE) ---\n"
+			. "This is a service-area (SAP) landing page. Do NOT emit encyclopedia how-it-works, vs-adjacent, or cost-guide jobs. Spine = location + specific customer problem for THIS connected site's trade + sourced local information + evidence + Local Recommendation table.\n"
+			. "Output exactly 7 numbered checklist items. Write each H2 title from the writing keyword and this connected site's trade. The only forced body title is A Local Homeowner Example on item 4. Do not pin any other H2.\n"
+			. "Place entity: {$place}\n"
+			. "Required checklist items (write the H2 title, then [STRUCTURE] and markers):\n"
+			. self::sap_checklist_example( $place ) . "\n"
+			. "Article [TABLE] cap: What We Offer + Local Recommendation only.\n"
+			. "--- END SAP PAGE TEMPLATE ---";
+	}
+
 	private static function checklist_format_example( string $h2_sample ): string {
-		$sample = $h2_sample !== '' ? $h2_sample : 'Core Benefits';
+		$sample = $h2_sample !== '' ? $h2_sample : 'Section Topic';
 		return "CRITICAL FORMAT REQUIREMENT:\n"
 			. "Format your response as a numbered list, one item per line. Do NOT use ## markdown headings in checklist items.\n\n"
-			. "Example (NOTE: numbered lines only — no ##):\n"
-			. "1. Why Smart Blinds Matter for Modern Homes [STRUCTURE]: 2 short paragraphs. [EXACT PRIMARY PER H2]: exact primary once in body. [FOCUS KEYWORD DENSITY]: ~1%+ across article. [LINK]: 3-5 [[LINK:query|anchor]] placeholders.\n"
-			. "2. {$sample} [STRUCTURE]: 2-3 paragraphs. [DECISION]: If you have / choose table. [EXACT PRIMARY PER H2]. [LINK]: 3-5 internal links.\n"
-			. "3. Installation Steps [LIST]: number step-by-step process. [TRADEOFF]: when this option is not worth it. [EXACT PRIMARY PER H2]. [LINK]: 3-5 internal links.\n"
-			. "4. Cost Factors [LIST]: bullet cost drivers. [EXACT PRIMARY PER H2]. [LINK]: 3-5 internal links.\n"
-			. "5. Conclusion and Next Steps [EXACT PRIMARY PER H2]. [LINK]: CTA internal links.\n\n"
+			. "Example (NOTE: numbered lines only — no ##). Use SERP H2 OUTLINE titles when present (never \"What is X\" or \"Your Guide to X\"):\n"
+			. "1. {$sample} [STRUCTURE]: 2-3 paragraphs. [LIST]: components. Opener leads with a sourced fact, then the topic (not keyword-first, not a dictionary definition). [FIRST-PARTY AUTHORITY]. [EXACT PRIMARY PER H2]: exact primary once later in the intro body. [FOCUS KEYWORD DENSITY]: ~1%+ across article. [LINK]: 3-5 [[LINK:query|anchor]] placeholders.\n"
+			. "2. Next SERP outline H2 [STRUCTURE]: 2-3 paragraphs. [TABLE] or [DECISION]: criteria. [EXACT PRIMARY PER H2]. [LINK]: 3-5 internal links.\n"
+			. "3. A Local Homeowner Example [STRUCTURE]: 1 intro paragraph, then scenario in body (not in the H2). [ILLUSTRATIVE]: labeled hypothetical. [BLOCKQUOTE]. Short H2. No links in H2 or H3. [EXACT PRIMARY PER H2]. [LINK]: 3-5 in body only.\n"
+			. "4. Next SERP outline H2 [LIST]: numbered steps. [EXACT PRIMARY PER H2]. [LINK]: 3-5 internal links.\n"
+			. "5. Next SERP outline H2 [NUMBERS] or [TRADEOFF]: when it fails. [EXACT PRIMARY PER H2]. [LINK]: 3-5 internal links.\n"
+			. "6. What we recommend [STRUCTURE]: 1-2 paragraphs. [RECOMMENDATION]: site-first recommendation. [EXACT PRIMARY PER H2]. [LINK]: CTA internal links.\n\n"
 			. 'Output ONLY the numbered checklist items, no additional text.';
 	}
 
@@ -102,6 +126,8 @@ class Neo_Pulse_App_Agent_Run_Generator_Prompts {
 		$paa               = is_array( $ctx['paaQuestions'] ?? null ) ? $ctx['paaQuestions'] : array();
 		$bucket_block      = trim( (string) ( $ctx['bucketReadFirstBlock'] ?? '' ) );
 		$keyword_data      = is_array( $ctx['keywordData'] ?? null ) ? $ctx['keywordData'] : array( 'keyword' => $keyword );
+		$entity            = trim( (string) ( $ctx['entity'] ?? '' ) );
+		$is_service_area   = $entity !== '';
 
 		$h2_block = '';
 		if ( ! empty( $h2_sections ) ) {
@@ -130,9 +156,12 @@ class Neo_Pulse_App_Agent_Run_Generator_Prompts {
 		}
 
 		$modifier = $user_prompt !== '' ? "\n--- PROMPT MODIFIER (PRIMARY FOCUS) ---\n{$user_prompt}\n--- END ---\n" : '';
-		$article  = Neo_Pulse_App_Agent_Run_Article_Length_Policy::build_article_length_checklist_block( false );
+		$article  = Neo_Pulse_App_Agent_Run_Article_Length_Policy::build_article_length_checklist_block( $is_service_area );
 		$per_h2   = (int) floor( Neo_Pulse_App_Agent_Run_Article_Length_Policy::ARTICLE_MAX_WORDS / 6 );
 		$h2_sample = ! empty( $h2_sections ) ? (string) $h2_sections[0] : 'Section Topic';
+		$example   = $is_service_area
+			? self::sap_checklist_example( $entity )
+			: self::checklist_format_example( $h2_sample );
 
 		$system = 'You are an expert blog content strategist and blueprint architect. Create a detailed checklist for generating a blog template blueprint.' . "\n\n"
 			. self::keyword_section( $primary, $selected_keywords, $keyword_data ) . "\n\n"
@@ -144,17 +173,26 @@ class Neo_Pulse_App_Agent_Run_Generator_Prompts {
 			. "Each item must include [STRUCTURE], [EXACT PRIMARY PER H2], [FOCUS KEYWORD DENSITY], [PARAGRAPH LENGTH], and [LINK]: 3-5 [[LINK:query|anchor]].\n"
 			. "Include at least one [TABLE], one [LIST]: bullet, and one [LIST]: number across the article.\n"
 			. "Put [DECISION] on exactly one item and [TRADEOFF] on exactly one item.\n"
-			. "Prefer H2 titles that help the reader choose (how to choose / vs / cost factors / process / when not worth it), not What is X or Benefits of X.\n"
 			. "First H2: NEVER title it Introduction or Intro — use SEO-friendly active title.\n"
-			. "Conclusion H2 with exact primary keyword once in body.\n"
-			. "**AUTHENTICITY CHECKLIST**: Prefer H2 titles that help the reader choose (how to choose / vs / cost factors / process / when not worth it), not What is X or Benefits of X. Still 5-6 items. Put [DECISION] on exactly one item. Put [TRADEOFF] on exactly one item. Prefer a decision-criteria table over a second catalog table. Do not add H2s. Do not pad to the word cap.\n\n"
-			. self::checklist_format_example( $h2_sample );
+			. "FORBIDDEN: Never start a checklist line with \"Create an agent\", \"Create a first section agent\", or similar. Each line begins with the exact H2 heading text.\n\n"
+			. $example;
+
+		$req_one = $is_service_area
+			? '1. Create 6-7 checklist items. Follow SAP PAGE TEMPLATE (local problem, sourced local conditions, What We Offer, Local Recommendation table, Next Steps). Do not emit encyclopedia how-it-works jobs.'
+			: '1. Create 5-6 checklist items. Use the SERP H2 OUTLINE titles exactly as the first words on each checklist line. First H2 is never Introduction/Intro/What is X/Your Guide to X.';
+		$req_three = $is_service_area
+			? '3. Include at least one [TABLE], one [LIST]: bullet, and one [LIST]: number (max 2 [TABLE] total). The two tables are What We Offer and Local Recommendation (Product | Best for | Budget | Reason).'
+			: '3. Include at least one [TABLE], one [LIST]: bullet, and one [LIST]: number (max 2 [TABLE] total). Put [DECISION] on one item, [TRADEOFF] on one item, [ILLUSTRATIVE] on one item, and [RECOMMENDATION] on the last item.';
+		$req_four = $is_service_area
+			? '4. Local Recommendation H2: four-column table plus connected business name.'
+			: '4. Last H2: site-first [RECOMMENDATION] with exact primary keyword once in body.';
 
 		$user = '';
 		if ( $bucket_block !== '' ) {
 			$user .= $bucket_block . "\n\n";
 		}
 		$user .= "Generate a focused checklist for creating a blog template blueprint.\n\n"
+			. ( $is_service_area ? self::sap_page_checklist_block( $entity ) . "\n\n" : '' )
 			. $article . "\n\n"
 			. "Blog Details:\n"
 			. "- Title: \"{$title}\"\n"
@@ -162,10 +200,10 @@ class Neo_Pulse_App_Agent_Run_Generator_Prompts {
 			. "- Primary Keyword: \"{$keyword}\"\n"
 			. '- Related Keywords: ' . implode( ', ', array_slice( $selected_keywords, 0, 5 ) ) . "\n\n"
 			. "Requirements:\n"
-			. "1. Create 5-6 checklist items maximum: introduction-style first H2, 3-4 body topics, conclusion.\n"
+			. $req_one . "\n"
 			. "2. Each item must include mandatory markers: [STRUCTURE], [EXACT PRIMARY PER H2], [FOCUS KEYWORD DENSITY], [PARAGRAPH LENGTH], [LINK].\n"
-			. "3. Include at least one [TABLE], one [LIST]: bullet, and one [LIST]: number (max 2 [TABLE] total). Put [DECISION] on one item and [TRADEOFF] on one item.\n"
-			. "4. First H2: active SEO title (never Introduction/Intro). Conclusion H2 with exact primary keyword.\n"
+			. $req_three . "\n"
+			. $req_four . "\n"
 			. "5. Output ONLY numbered checklist lines. Do NOT use ## markdown headings in items.";
 		if ( $user_prompt !== '' ) {
 			$user .= "\n\n--- CRITICAL: USER-SPECIFIED REQUIREMENTS ---\n{$user_prompt}";

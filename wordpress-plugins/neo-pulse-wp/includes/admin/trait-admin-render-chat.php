@@ -105,6 +105,16 @@ trait Neo_Pulse_Wp_Admin_Trait_Render_Chat {
 				! empty( $chat_settings['enabled'] )
 			);
 			self::panel_form_toggle(
+				'neo_pulse_chat_disable_backend',
+				__( 'Disable chat widget on the WordPress admin', 'neo-pulse-wp' ),
+				! empty( $chat_settings['disable_backend'] )
+			);
+			?>
+			<p class="neo-pulse-field__note neo-pulse-schema-cell neo-pulse-schema-cell--full">
+				<?php esc_html_e( 'The chat widget is also hidden automatically in page builders (Elementor, block editor, Divi, Beaver Builder, etc.) so it does not cover the canvas.', 'neo-pulse-wp' ); ?>
+			</p>
+			<?php
+			self::panel_form_toggle(
 				'neo_pulse_chat_logged_in_only',
 				__( 'Show chat on the frontend for logged-in WordPress users only', 'neo-pulse-wp' ),
 				! empty( $chat_settings['logged_in_only'] )
@@ -278,7 +288,7 @@ trait Neo_Pulse_Wp_Admin_Trait_Render_Chat {
 	private static function render_chat_section_training( array $chat_settings ): void {
 		$form_id = 'neo-pulse-wp-chat-training-form';
 
-		$assistant_name    = isset( $chat_settings['assistant_name'] ) ? $chat_settings['assistant_name'] : 'Flow Assist';
+		$assistant_name    = isset( $chat_settings['assistant_name'] ) ? $chat_settings['assistant_name'] : 'Pulse Assist';
 		$system_prompt     = isset( $chat_settings['system_prompt'] ) ? $chat_settings['system_prompt'] : '';
 		$greeting_style    = isset( $chat_settings['greeting_style'] ) ? $chat_settings['greeting_style'] : 'friendly';
 		$indexed_types     = isset( $chat_settings['indexed_post_types'] ) && is_array( $chat_settings['indexed_post_types'] ) ? $chat_settings['indexed_post_types'] : array( 'post', 'page' );
@@ -326,7 +336,7 @@ trait Neo_Pulse_Wp_Admin_Trait_Render_Chat {
 						'text',
 						false,
 						__( 'Shown in the chat header and used in responses.', 'neo-pulse-wp' ),
-						' placeholder="Flow Assist"'
+						' placeholder="Pulse Assist"'
 					);
 					self::panel_form_field_textarea(
 						'neo-pulse-chat-system-prompt',

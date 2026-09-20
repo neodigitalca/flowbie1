@@ -150,10 +150,8 @@ export function OverviewContentHeader({
         ? `answer-${bulkBatchKey}-${batchBulkState.harnessStartedAt}`
       : batchBulkState?.runKind === "aiOverview" && batchBulkState.harnessStartedAt
         ? `${bulkBatchKey}-${batchBulkState.harnessStartedAt}`
-      : batchBulkState?.runKind === "aiScenario" && batchBulkState.harnessStartedAt
-        ? `scenario-${bulkBatchKey}-${batchBulkState.harnessStartedAt}`
-        : site && isSinglePageOptimizing
-          ? `single-opt-${site.id}`
+        : batchBulkState?.runKind === "aiFaq" && batchBulkState.harnessStartedAt
+          ? `ai-faq-${bulkBatchKey}-${batchBulkState.harnessStartedAt}`
           : null;
 
   const researchWorkerActive = site
@@ -218,19 +216,28 @@ export function OverviewContentHeader({
     </>
   );
 
-  const progressLeading =
-    bulkPostTicker && batchBulkState ? (
-      <BulkPostProgressLeading batchState={batchBulkState} className={CONTENT_PAGINATION_SLOT_CLASS} />
-    ) : (
-      <OverviewGridPagination
-        pageIndex={c.gridPageIndex}
-        totalCount={c.displayRows.length}
-        layoutTotalCount={c.gridPaginationLayoutTotal}
-        pageSize={OVERVIEW_GRID_VISIBLE_ROW_COUNT}
-        onPageChange={c.setGridPageIndex}
-        className={CONTENT_PAGINATION_SLOT_CLASS}
-      />
-    );
+  const progressLeading = (
+    <div className="flex min-h-0 items-center gap-3">
+      <span
+        className="inline-block min-w-[12ch] shrink-0 text-left text-base tabular-nums text-muted-foreground"
+        aria-live="polite"
+      >
+        <span className="text-foreground">{c.selectedCount}</span> selected
+      </span>
+      {bulkPostTicker && batchBulkState ? (
+        <BulkPostProgressLeading batchState={batchBulkState} className={CONTENT_PAGINATION_SLOT_CLASS} />
+      ) : (
+        <OverviewGridPagination
+          pageIndex={c.gridPageIndex}
+          totalCount={c.displayRows.length}
+          layoutTotalCount={c.gridPaginationLayoutTotal}
+          pageSize={OVERVIEW_GRID_VISIBLE_ROW_COUNT}
+          onPageChange={c.setGridPageIndex}
+          className={CONTENT_PAGINATION_SLOT_CLASS}
+        />
+      )}
+    </div>
+  );
 
   const detailsPanel = site ? (
     <OverviewContentDetailsPanel

@@ -4,6 +4,7 @@ export const TASK_EXECUTION_KIND_OPTIONS: { value: TaskExecutionKind; label: str
   { value: "content_optimizer", label: "Content optimizer" },
   { value: "content_optimizer_meta", label: "Meta optimizer only" },
   { value: "gsc_reporting", label: "GSC reporting" },
+  { value: "ads_reporting", label: "PPC reporting" },
   { value: "local_dominator_export", label: "Research export" },
   { value: "chatgpt_website_audit", label: "ChatGPT website audit" },
   { value: "dfs_llm_article_audit", label: "DFS LLM article audit" },

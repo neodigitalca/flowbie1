@@ -7,6 +7,41 @@ import {
   resolveSerpBriefDownloadable,
 } from "@/components/shared/bulk-details-tile-sections";
 import { RESEARCH_HARNESS_SECTION_TITLES } from "@/lib/overview/overview-research-harness-sections";
+import { buildContentOptimizePipelineTitles } from "@/lib/overview/overview-content-optimize-pipeline";
+
+const CONTENT_OPTIMIZE_DOWNLOAD_OPTIONS = {
+  noFallback: true as const,
+  requireDoneStatus: true as const,
+};
+
+function sapOptimizePipelineTitles(): string[] {
+  return [...buildContentOptimizePipelineTitles(["Local SEO Fit", "What This Agency Offers"])];
+}
+
+function sapOptimizeSections() {
+  return sapOptimizePipelineTitles().map((title, sectionIndex) => ({
+    sectionIndex,
+    title,
+    status: "waiting" as const,
+  }));
+}
+
+function resolveReadyDownloads(
+  sections: ReturnType<typeof sapOptimizeSections>,
+  files: Array<{ name: string; content: string; mimeType: string }>,
+) {
+  const claimed = new Set<string>();
+  return sections.map((section, index) =>
+    resolvePipelineSectionDownloadable(
+      section,
+      index,
+      files,
+      claimed,
+      null,
+      CONTENT_OPTIMIZE_DOWNLOAD_OPTIONS,
+    ),
+  );
+}
 
 describe("isSerpBriefGeneratedFileName", () => {
   it("matches SERP brief artifacts and not keyword-research", () => {
@@ -155,7 +190,7 @@ describe("resolveDetailsPipelineSections", () => {
     ).toBe(selectedFile.name);
   });
 
-  it("marks Play content steps done from generated files", () => {
+  it("marks artifact-backed pipeline steps done from generated files", () => {
     const sections = resolveDetailsPipelineSections(
       undefined,
       undefined,
@@ -163,34 +198,78 @@ describe("resolveDetailsPipelineSections", () => {
         "SERP research brief",
         "Checklist",
         "Blueprint",
-        "Content HTML",
+        "Post content",
         "Content Markdown",
       ],
       [
-        { name: "serp-research-brief-hunter-douglas.json" },
-        { name: "checklist-hunter-douglas.json" },
-        { name: "blueprint-hunter-douglas.json" },
+        { name: "serp-research-brief-hunter-douglas.json", content: "{}", mimeType: "application/json" },
+        { name: "blog-checklist-hunter-douglas.json", content: "{}", mimeType: "application/json" },
+        { name: "blueprint-hunter-douglas.json", content: "{}", mimeType: "application/json" },
       ],
     );
     expect(sections).toHaveLength(5);
-    expect(sections.map((section) => section.title)).toEqual([
-      "SERP research brief",
-      "Checklist",
-      "Blueprint",
-      "Content HTML",
-      "Content Markdown",
-    ]);
-    expect(sections.filter((section) => section.status === "waiting")).toHaveLength(5);
+    expect(sections.filter((section) => section.status === "done")).toHaveLength(3);
+    expect(sections[3]?.status).toBe("waiting");
+    expect(sections[4]?.status).toBe("waiting");
   });
 
-  it("does not auto-mark content optimize steps done from files alone", () => {
+  it("marks matched pipeline steps done when artifact files exist", () => {
     const sections = resolveDetailsPipelineSections(
       undefined,
       undefined,
       ["Keyword research", "Blueprint"],
-      [{ name: "keyword-research-x.json" }, { name: "blueprint-x.json" }],
+      [
+        { name: "keyword-research-x.json", content: "{}", mimeType: "application/json" },
+        { name: "blueprint-x.json", content: "{}", mimeType: "application/json" },
+      ],
     );
-    expect(sections.every((section) => section.status === "waiting")).toBe(true);
+    expect(sections.every((section) => section.status === "done")).toBe(true);
+  });
+});
+
+describe("SAP content optimize downloads", () => {
+  const sapFiles = [
+    { name: "keyword-research-edmonton.json", content: "{}", mimeType: "application/json" },
+    { name: "selected-keyword-edmonton.json", content: "{}", mimeType: "application/json" },
+    { name: "serp-research-brief-edmonton.json", content: "{}", mimeType: "application/json" },
+    { name: "checklist-edmonton.json", content: "1. Sunlight", mimeType: "text/plain" },
+    { name: "blueprint-edmonton.json", content: "{}", mimeType: "application/json" },
+    { name: "link-targets-edmonton.json", content: "{}", mimeType: "application/json" },
+    { name: "content-edmonton.html", content: "<h2>Answer</h2>", mimeType: "text/html" },
+    { name: "content-edmonton.md", content: "## Answer", mimeType: "text/markdown" },
+  ];
+
+  it("enables File for artifact slots and Download all when files exist", () => {
+    const titles = sapOptimizePipelineTitles();
+    expect(titles).toContain("Local SEO Fit");
+    expect(titles).toContain("What This Agency Offers");
+    expect(titles).not.toContain("Sunlight And Privacy Challenges");
+    expect(titles[titles.length - 3]).toBe("Post content");
+    expect(titles[titles.length - 2]).toBe("Content Markdown");
+    expect(titles[titles.length - 1]).toBe("WordPress upload");
+
+    const ready = resolveReadyDownloads(sapOptimizeSections(), [
+      ...sapFiles,
+      { name: "wordpress.json", content: '{"success":true}', mimeType: "application/json" },
+    ]);
+    const enabled = ready.filter((file) => file != null);
+    expect(enabled.map((file) => file!.name)).toEqual([
+      "keyword-research-edmonton.json",
+      "selected-keyword-edmonton.json",
+      "serp-research-brief-edmonton.json",
+      "checklist-edmonton.json",
+      "blueprint-edmonton.json",
+      "link-targets-edmonton.json",
+      "content-edmonton.html",
+      "content-edmonton.md",
+      "wordpress.json",
+    ]);
+    expect(enabled.length).toBeGreaterThan(0);
+  });
+
+  it("keeps File disabled on every SAP pipeline slot when no files exist", () => {
+    const ready = resolveReadyDownloads(sapOptimizeSections(), []);
+    expect(ready.every((file) => file == null)).toBe(true);
   });
 });
 
@@ -217,6 +296,38 @@ describe("content optimize download gating", () => {
     ).toBe(file.name);
   });
 
+  it("enables Google Image download as soon as the maps file exists", () => {
+    const file = {
+      name: "east-marietta-ga-google-maps.jpg",
+      content: "data:image/jpeg;base64,abc",
+      mimeType: "image/jpeg",
+    };
+    const waiting = { sectionIndex: 0, title: "Google Image", status: "waiting" as const };
+    expect(
+      resolvePipelineSectionDownloadable(waiting, 0, [file], new Set(), null, {
+        noFallback: true,
+        requireDoneStatus: true,
+      })?.name,
+    ).toBe(file.name);
+  });
+
+  it("marks Google Image done when the maps file exists", () => {
+    const sections = resolveDetailsPipelineSections(
+      undefined,
+      undefined,
+      ["Google Image", "Keyword research"],
+      [
+        {
+          name: "east-marietta-ga-google-maps.jpg",
+          content: "data:image/jpeg;base64,abc",
+          mimeType: "image/jpeg",
+        },
+      ],
+    );
+    expect(sections[0]?.status).toBe("done");
+    expect(sections[1]?.status).toBe("waiting");
+  });
+
   it("allows download when artifact exists even if harness is still waiting", () => {
     const file = {
       name: "keyword-research-smart-blinds.json",
@@ -226,6 +337,59 @@ describe("content optimize download gating", () => {
     const waiting = { sectionIndex: 0, title: "Keyword research", status: "waiting" as const };
     expect(
       resolvePipelineSectionDownloadable(waiting, 0, [file], new Set(), null, {
+        noFallback: true,
+        requireDoneStatus: true,
+      })?.name,
+    ).toBe(file.name);
+  });
+
+  it("marks pipeline steps done when artifact files exist", () => {
+    const files = [
+      {
+        name: "keyword-research-dfs-smart-blinds-123.json",
+        content: "{}",
+        mimeType: "application/json",
+      },
+      {
+        name: "blog-checklist-smart-blinds-456.json",
+        content: "{}",
+        mimeType: "application/json",
+      },
+    ];
+    const sections = resolveDetailsPipelineSections(
+      undefined,
+      undefined,
+      ["Google Image", "Keyword research", "Checklist"],
+      files,
+    );
+    expect(sections[1]?.status).toBe("done");
+    expect(sections[2]?.status).toBe("done");
+  });
+
+  it("blocks harness markdown download for artifact-only steps when noFallback", () => {
+    const section = {
+      sectionIndex: 1,
+      title: "Selected keyword",
+      status: "done" as const,
+      markdown: "## Selected keyword\n\n```json\n{}\n```",
+    };
+    expect(
+      resolvePipelineSectionDownloadable(section, 1, [], new Set(), null, {
+        noFallback: true,
+        requireDoneStatus: true,
+      }),
+    ).toBeNull();
+  });
+
+  it("allows Selected keyword download when artifact exists even if harness is waiting", () => {
+    const file = {
+      name: "selected-keyword-smart-blinds-1788537869792.json",
+      content: "{}",
+      mimeType: "application/json",
+    };
+    const waiting = { sectionIndex: 1, title: "Selected keyword", status: "waiting" as const };
+    expect(
+      resolvePipelineSectionDownloadable(waiting, 1, [file], new Set(), null, {
         noFallback: true,
         requireDoneStatus: true,
       })?.name,
@@ -347,5 +511,48 @@ describe("research pipeline downloads", () => {
       null,
     );
     expect(llm?.name).toBe("research-solar-llm-audit.json");
+  });
+
+  it("maps featured image steps to Google Image, OpenRouter Image, and wordpress.json", () => {
+    const files = [
+      { name: "google-image.png", content: "data:image/png;base64,aa", mimeType: "image/png" },
+      { name: "openrouter-image.png", content: "data:image/png;base64,bb", mimeType: "image/png" },
+      {
+        name: "wordpress.json",
+        content: JSON.stringify({ url: "https://cdn.example.com/maps.png", mediaId: 9 }),
+        mimeType: "application/json",
+      },
+    ];
+    const claimed = new Set<string>();
+    expect(
+      resolvePipelineSectionDownloadable(
+        { sectionIndex: 0, title: "Google Image", status: "done" },
+        0,
+        files,
+        claimed,
+        null,
+        { noFallback: true },
+      )?.name,
+    ).toBe("google-image.png");
+    expect(
+      resolvePipelineSectionDownloadable(
+        { sectionIndex: 1, title: "OpenRouter Image", status: "done" },
+        1,
+        files,
+        claimed,
+        null,
+        { noFallback: true },
+      )?.name,
+    ).toBe("openrouter-image.png");
+    expect(
+      resolvePipelineSectionDownloadable(
+        { sectionIndex: 2, title: "WordPress upload", status: "done" },
+        2,
+        files,
+        claimed,
+        null,
+        { noFallback: true },
+      )?.name,
+    ).toBe("wordpress.json");
   });
 });

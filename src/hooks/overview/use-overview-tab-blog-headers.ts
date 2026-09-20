@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import { flushSync } from "react-dom";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { OverviewBinding } from "@/hooks/overview/use-overview-wordpress-binding";
@@ -21,10 +20,12 @@ import {
   runOverviewHeadersHarnessBatch,
 } from "@/lib/overview/overview-blog-headers-harness-run";
 import type { OverviewInventoryUrlMatch } from "@/lib/overview/overview-row-scrape";
-import { fetchOverviewPageContentBatch } from "@/lib/overview/overview-page-content-batch";
 import type { OverviewInventoryRow } from "@/lib/overview/overview-inventory-csv";
+import { resolveHarnessRowHtmlFromSources } from "@/lib/overview/overview-harness-page-catalog";
 import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
 import { setOptimizingState } from "@/hooks/content-optimization/optimization-helpers-a";
+import type { AiseoAfterRowWriteFn } from "@/lib/overview/overview-aiseo-after-upload";
+import { createAiseoCacheWriteAccumulator, finalizeAiseoCacheWriteForUpload } from "@/lib/overview/overview-aiseo-cache-write";
 
 type Args = Pick<
   OverviewTabBase,
@@ -33,6 +34,7 @@ type Args = Pick<
   | "resolveBindings"
   | "updateRow"
   | "opt"
+  | "rowsRef"
 > & {
   site: WordPressSite | undefined;
   sitemapSource: OverviewSitemapSource;
@@ -48,6 +50,9 @@ type Args = Pick<
     source: OverviewSitemapSource,
     contentRows: OverviewInventoryRow[],
   ) => void;
+  /** Skip rows that use a different harness (e.g. Elementor pages). */
+  shouldSkipRow?: (row: OverviewRow) => boolean;
+  uploadAfterRowWrite?: AiseoAfterRowWriteFn;
 };
 
 export function useOverviewTabBlogHeaders({
@@ -63,6 +68,9 @@ export function useOverviewTabBlogHeaders({
   bulkScopeUrlKeys,
   getInventoryMatchForUrl,
   mergeInventoryContentForSource,
+  shouldSkipRow,
+  rowsRef,
+  uploadAfterRowWrite,
 }: Args) {
   const makeHarnessSetters = useCallback(
     (batchKey: string): HeadersHarnessSetters | null => {
@@ -86,9 +94,12 @@ export function useOverviewTabBlogHeaders({
       const harnessSetters = makeHarnessSetters(batchKey);
       if (!harnessSetters) return;
 
-      const scopedIndices = indices.filter((i) =>
-        overviewRowInBulkScope(rows[i]?.url ?? "", bulkScopeUrlKeys),
-      );
+      const scopedIndices = indices.filter((i) => {
+        const row = rows[i];
+        if (!row) return false;
+        if (shouldSkipRow?.(row)) return false;
+        return overviewRowInBulkScope(row.url ?? "", bulkScopeUrlKeys);
+      });
       const subset = scopedIndices.map((i) => rows[i]).filter(Boolean) as OverviewRow[];
       const urls = subset.map((r) => r.url);
       const stubCatalog = scopedIndices.map((index) => {
@@ -107,34 +118,31 @@ export function useOverviewTabBlogHeaders({
         };
       });
 
-      flushSync(() => {
-        setOptimizingState(opt.setIsOptimizingContent, batchKey, true);
+      setOptimizingState(opt.setIsOptimizingContent, batchKey, true);
+      initOverviewHeadersHarnessBatchState({
+        site,
+        catalog: stubCatalog,
+        setBulkOptimizationState: opt.setBulkOptimizationState,
+        setOptimizationProgress: opt.setOptimizationProgress,
+        setIsOptimizingContent: opt.setIsOptimizingContent,
+        prepMessage: "Starting Headers batch…",
+      });
+      setHeadersHarnessMessage(harnessSetters, "Binding rows from inventory…", 3);
+
+      try {
+        const cacheWrite = createAiseoCacheWriteAccumulator(site);
+        const mergedBindings: Record<string, OverviewBinding | undefined> = {
+          ...bindings,
+          ...(await resolveBindings(urls, site, undefined, { inventoryOnly: true })),
+        };
+
         initOverviewHeadersHarnessBatchState({
           site,
           catalog: stubCatalog,
           setBulkOptimizationState: opt.setBulkOptimizationState,
           setOptimizationProgress: opt.setOptimizationProgress,
           setIsOptimizingContent: opt.setIsOptimizingContent,
-          prepMessage: "Starting Headers batch…",
-        });
-        setHeadersHarnessMessage(harnessSetters, "Binding rows from inventory…", 3);
-      });
-
-      try {
-        const mergedBindings: Record<string, OverviewBinding | undefined> = {
-          ...bindings,
-          ...(await resolveBindings(urls, site, undefined, { inventoryOnly: true })),
-        };
-
-        flushSync(() => {
-          initOverviewHeadersHarnessBatchState({
-            site,
-            catalog: stubCatalog,
-            setBulkOptimizationState: opt.setBulkOptimizationState,
-            setOptimizationProgress: opt.setOptimizationProgress,
-            setIsOptimizingContent: opt.setIsOptimizingContent,
-            prepMessage: `Headers: page batches (${scopedIndices.length} rows)…`,
-          });
+          prepMessage: `Headers: page batches (${scopedIndices.length} rows)…`,
         });
 
         await runOverviewHeadersHarnessBatch({
@@ -146,46 +154,28 @@ export function useOverviewTabBlogHeaders({
             siteUrl: site.siteUrl,
           },
           harnessSetters,
-          updateRow,
+          cacheWrite,
+          uploadAfterRowWrite,
           preparePage: async ({ page, pageCount, pageCatalog }) => {
             setHeadersHarnessMessage(
               harnessSetters,
-              `Fetching content page ${page}/${pageCount}…`,
+              `Headers page ${page}/${pageCount}: using cache…`,
               5 + Math.round(((page - 1) / Math.max(pageCount, 1)) * 10),
             );
 
-            const pageRows = pageCatalog
-              .map((c) => rows[c.index])
-              .filter(Boolean) as OverviewRow[];
-
-            const batch = await fetchOverviewPageContentBatch({
-              site,
-              sitemapSource,
-              pageRows,
-              bindings: mergedBindings,
-              getInventoryMatchForUrl,
-            });
-
-            if (!batch.ok) {
-              for (const entry of pageCatalog) {
-                markHeadersRowError(
-                  entry.url,
-                  entry.index,
-                  harnessSetters,
-                  updateRow,
-                  batch.error || "Page content inventory fetch failed",
-                );
-              }
-              return [];
-            }
-
-            if (batch.contentRows.length) {
-              mergeInventoryContentForSource(site, sitemapSource, batch.contentRows);
-            }
-
             for (const entry of pageCatalog) {
-              const patch = batch.patches.get(normalizePageUrlKey(entry.url));
-              if (patch) updateRow(entry.index, { ...patch, status: "idle" });
+              const row = rows[entry.index];
+              if (!row) continue;
+              const html = resolveHarnessRowHtmlFromSources({
+                row,
+                site,
+                sitemapSource,
+                getInventoryMatchForUrl,
+                index: entry.index,
+              });
+              if (html) {
+                /* body stays in warm cache; catalog reads via resolveHarnessRowHtmlFromSources */
+              }
             }
 
             setHeadersHarnessMessage(
@@ -211,7 +201,6 @@ export function useOverviewTabBlogHeaders({
                 entry.url,
                 entry.index,
                 harnessSetters,
-                updateRow,
                 "No HTML body in inventory cache for this URL",
               );
             }
@@ -225,6 +214,8 @@ export function useOverviewTabBlogHeaders({
             return eligible;
           },
         });
+
+        finalizeAiseoCacheWriteForUpload(cacheWrite, rowsRef);
       } finally {
         finalizeOverviewHeadersHarnessBatch(
           batchKey,
@@ -245,6 +236,7 @@ export function useOverviewTabBlogHeaders({
       getInventoryMatchForUrl,
       mergeInventoryContentForSource,
       bulkScopeUrlKeys,
+      shouldSkipRow,
       updateRow,
       makeHarnessSetters,
       opt.setBulkOptimizationState,
@@ -256,9 +248,11 @@ export function useOverviewTabBlogHeaders({
   const handleAiHeadersRow = useCallback(
     async (index: number) => {
       if (!site || index < 0 || index >= rows.length) return;
+      const row = rows[index];
+      if (row && shouldSkipRow?.(row)) return;
       await runHeadersForIndices([index]);
     },
-    [site, rows.length, runHeadersForIndices],
+    [site, rows, shouldSkipRow, runHeadersForIndices],
   );
 
   const handleAiHeadersAll = useCallback(async () => {

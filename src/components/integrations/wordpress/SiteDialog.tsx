@@ -21,6 +21,7 @@ interface SiteDialogProps {
   formUsername: string;
   formAppPassword: string;
   formGa4PropertyId: string;
+  formGoogleAdsCustomerId: string;
   formGbpLocationId: string;
   formSemrushSiteAuditProjectId: string;
   formEditorialCountsPeriodStartYmd: string;
@@ -35,6 +36,7 @@ interface SiteDialogProps {
   onFormUsernameChange: (value: string) => void;
   onFormAppPasswordChange: (value: string) => void;
   onFormGa4PropertyIdChange: (value: string) => void;
+  onFormGoogleAdsCustomerIdChange: (value: string) => void;
   onFormGbpLocationIdChange: (value: string) => void;
   onFormSemrushSiteAuditProjectIdChange: (value: string) => void;
   onFormEditorialCountsPeriodStartYmdChange: (value: string) => void;
@@ -57,6 +59,7 @@ export const SiteDialog: React.FC<SiteDialogProps> = ({
   formUsername,
   formAppPassword,
   formGa4PropertyId,
+  formGoogleAdsCustomerId,
   formGbpLocationId,
   formSemrushSiteAuditProjectId,
   formEditorialCountsPeriodStartYmd,
@@ -71,6 +74,7 @@ export const SiteDialog: React.FC<SiteDialogProps> = ({
   onFormUsernameChange,
   onFormAppPasswordChange,
   onFormGa4PropertyIdChange,
+  onFormGoogleAdsCustomerIdChange,
   onFormGbpLocationIdChange,
   onFormSemrushSiteAuditProjectIdChange,
   onFormEditorialCountsPeriodStartYmdChange,
@@ -101,6 +105,7 @@ export const SiteDialog: React.FC<SiteDialogProps> = ({
           formUsername={formUsername}
           formAppPassword={formAppPassword}
           formGa4PropertyId={formGa4PropertyId}
+          formGoogleAdsCustomerId={formGoogleAdsCustomerId}
           formGbpLocationId={formGbpLocationId}
           formSemrushSiteAuditProjectId={formSemrushSiteAuditProjectId}
           formEditorialCountsPeriodStartYmd={formEditorialCountsPeriodStartYmd}
@@ -115,6 +120,7 @@ export const SiteDialog: React.FC<SiteDialogProps> = ({
           onFormUsernameChange={onFormUsernameChange}
           onFormAppPasswordChange={onFormAppPasswordChange}
           onFormGa4PropertyIdChange={onFormGa4PropertyIdChange}
+          onFormGoogleAdsCustomerIdChange={onFormGoogleAdsCustomerIdChange}
           onFormGbpLocationIdChange={onFormGbpLocationIdChange}
           onFormSemrushSiteAuditProjectIdChange={onFormSemrushSiteAuditProjectIdChange}
           onFormEditorialCountsPeriodStartYmdChange={onFormEditorialCountsPeriodStartYmdChange}

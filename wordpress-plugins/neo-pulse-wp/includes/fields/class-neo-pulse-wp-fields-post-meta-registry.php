@@ -20,9 +20,6 @@ class Neo_Pulse_Wp_Fields_Post_Meta_Registry {
 	);
 
 	public static function init(): void {
-		if ( Neo_Pulse_Wp_Fields::acf_is_active() ) {
-			return;
-		}
 		add_action( 'init', array( __CLASS__, 'register_field_meta' ), 20 );
 	}
 

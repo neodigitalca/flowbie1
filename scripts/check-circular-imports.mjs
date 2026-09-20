@@ -14,8 +14,6 @@ const root = join(__dirname, "..");
 const LEAF_ENTRIES = [
   "src/lib/content-optimization/illustrative-h2.ts",
   "src/lib/content-generation/internal-link-routing-rules.ts",
-  "src/lib/prompt-builders/sap-h2-constants.ts",
-  "src/lib/prompt-builders/sap-checklist-pin.ts",
   "src/lib/prompt-builders/title-rules.ts",
   "src/lib/prompt-builders/sap-page-template.ts",
   "src/lib/content-word-blocklist.ts",

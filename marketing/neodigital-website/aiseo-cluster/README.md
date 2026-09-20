@@ -5,6 +5,8 @@ Paste-ready page copy for [neodigital.ca](https://neodigital.ca/). Publish as **
 **Contact CTA:** [https://neodigital.ca/contact/](https://neodigital.ca/contact/) (service dropdown already includes SEO / AI SEO)  
 **Product CTA:** [https://neodigital.ca/neo-pulse/](https://neodigital.ca/neo-pulse/)
 
+Agency-wide slug map (Shopify, Webflow, Google Ads, Graphic Design, Edmonton SEO, Home links): [../agency-ia/README.md](../agency-ia/README.md). Do not create a WordPress page at `/neo-pulse/`.
+
 ## Information architecture
 
 ```

@@ -121,8 +121,10 @@ export function AgentRunsDetailsDrawer({
                 target="_blank"
                 rel="noopener noreferrer"
                 className={cn(
-                  "text-base font-semibold [overflow-wrap:anywhere] hover:text-cyan-300 hover:underline",
-                  isRunning ? CONTENT_OPTIMIZER_ACTIVE_ROW_TEXT_CLASS : "text-zinc-100",
+                  "text-base font-semibold underline [overflow-wrap:anywhere]",
+                  isRunning
+                    ? CONTENT_OPTIMIZER_ACTIVE_ROW_TEXT_CLASS
+                    : "text-cyan-300 hover:text-cyan-200",
                 )}
                 onClick={(e) => e.stopPropagation()}
               >

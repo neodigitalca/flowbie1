@@ -129,6 +129,7 @@ function main() {
   const siteUrl = String(local.siteUrl || "https://neopulse.local").replace(/\/+$/, "");
   const frontendUrl = String(local.viteDevUrl || "http://localhost:8080/").replace(/(?<!\/)$/, "/");
   const googleMcpRedirectUri = `${frontendUrl.replace(/\/+$/, "")}/api/google-mcp/callback`;
+  const googleAdsRedirectUri = `${frontendUrl.replace(/\/+$/, "")}/api/google-ads/callback`;
 
   const gscJson = resolveGscServiceAccountJson(dotenv);
   const openRouterKey = resolveOpenRouterApiKey(dotenv, local);
@@ -193,6 +194,9 @@ function main() {
     "}",
     `if ( ! defined( 'NEO_PULSE_APP_GOOGLE_MCP_REDIRECT_URI' ) ) {`,
     `\tdefine( 'NEO_PULSE_APP_GOOGLE_MCP_REDIRECT_URI', ${phpString(googleMcpRedirectUri)} );`,
+    "}",
+    `if ( ! defined( 'NEO_PULSE_APP_GOOGLE_ADS_REDIRECT_URI' ) ) {`,
+    `\tdefine( 'NEO_PULSE_APP_GOOGLE_ADS_REDIRECT_URI', ${phpString(googleAdsRedirectUri)} );`,
     "}",
     `if ( ! defined( 'NEO_PULSE_APP_FRONTEND_URL' ) ) {`,
     `\tdefine( 'NEO_PULSE_APP_FRONTEND_URL', ${phpString(frontendUrl)} );`,

@@ -24,6 +24,7 @@ import { TaskCommentComposer } from "@/components/manager/tasks/TaskCommentCompo
 import { TaskFileUpload } from "@/components/manager/tasks/TaskFileUpload";
 import { TaskTriggerFields } from "@/components/manager/tasks/TaskTriggerFields";
 import { GscReportingExecutionFields } from "@/components/manager/tasks/GscReportingExecutionFields";
+import { AdsReportingExecutionFields } from "@/components/manager/tasks/AdsReportingExecutionFields";
 import { LocalDominatorExportExecutionFields } from "@/components/manager/tasks/LocalDominatorExportExecutionFields";
 import { PostCreatorExecutionFields } from "@/components/manager/tasks/PostCreatorExecutionFields";
 import { EntityPageCreatorExecutionFields } from "@/components/manager/tasks/EntityPageCreatorExecutionFields";
@@ -333,7 +334,7 @@ export function TaskDetailPane({
             });
             return;
           }
-          if (kind === "gsc_reporting") {
+          if (kind === "gsc_reporting" || kind === "ads_reporting") {
             onUpdate({
               executionKind: kind,
               scheduleMode: "calendar",
@@ -445,6 +446,14 @@ export function TaskDetailPane({
       ) : null}
       {executionKind === "gsc_reporting" ? (
         <GscReportingExecutionFields
+          layout="stack"
+          executionPayload={executionPayload}
+          disabled={saving}
+          onChange={(nextPayload) => onUpdate({ executionPayload: nextPayload })}
+        />
+      ) : null}
+      {executionKind === "ads_reporting" ? (
+        <AdsReportingExecutionFields
           layout="stack"
           executionPayload={executionPayload}
           disabled={saving}

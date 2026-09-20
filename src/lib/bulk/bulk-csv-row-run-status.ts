@@ -11,11 +11,12 @@ export function bulkCsvRowRunStatus(args: {
 }): BulkCsvRowRunStatus {
   const { rowIndex, currentRow, isProcessing, filesByRow, failedRowIndices } = args;
   if (failedRowIndices?.has(rowIndex)) return "error";
-  const files = filesByRow.get(rowIndex);
-  const hasCompleted = files?.some((f) => f.status === "completed") ?? false;
-  if (hasCompleted) return "done";
   if (isProcessing && rowIndex === currentRow) return "generating";
   if (rowIndex < currentRow) return "done";
+  if (!isProcessing) {
+    const files = filesByRow.get(rowIndex);
+    if (files?.some((f) => f.status === "completed")) return "done";
+  }
   return "waiting";
 }
 

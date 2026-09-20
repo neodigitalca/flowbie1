@@ -424,6 +424,19 @@ export function regionFullNameFromPostalCode(code: string): string | undefined {
 
 const US_STATE_CODES = new Set(Object.keys(US_STATE_CODE_TO_NAME));
 
+/** Map "Florida" / "Manitoba" to FL / MB. */
+export function regionCodeFromFullName(name: string): string | undefined {
+  const needle = name.trim().toLowerCase();
+  if (!needle) return undefined;
+  for (const [code, full] of Object.entries(CA_PROVINCE_CODE_TO_NAME)) {
+    if (full.toLowerCase() === needle) return code;
+  }
+  for (const [code, full] of Object.entries(US_STATE_CODE_TO_NAME)) {
+    if (full.toLowerCase() === needle) return code;
+  }
+  return undefined;
+}
+
 const CA_PROVINCE_CODE_TO_NAME: Record<string, string> = {
   AB: "Alberta",
   BC: "British Columbia",

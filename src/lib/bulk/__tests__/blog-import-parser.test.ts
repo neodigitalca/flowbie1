@@ -6,6 +6,8 @@ import {
   importedDraftToCsvRow,
   validateImportedBlogDraft,
   findImportedSectionBody,
+  importedBodyH2Outline,
+  stripImportedHeadingMarks,
   SECTION_BODY_MAX_CHARS,
 } from "../blog-import-parser";
 import { parseImportedSectionsJson } from "../bulk-csv-parser";
@@ -107,6 +109,33 @@ describe("findImportedSectionBody", () => {
     const row = importedDraftToCsvRow(draft);
     const body = findImportedSectionBody(row, "Regional economic impact");
     expect(body).toContain("territories");
+  });
+
+  it("matches titles after stripping markdown bold", () => {
+    const draft = parseImportedBlogMarkdown(
+      "## **Key Documents And Notifications Online**\n\nNOAs confirm the return.\n\n## **FAQ**\n\nQuestions here.\n",
+      "cra.md",
+    );
+    const row = importedDraftToCsvRow(draft);
+    const body = findImportedSectionBody(row, "Key Documents And Notifications Online");
+    expect(body).toContain("NOAs confirm");
+  });
+});
+
+describe("importedBodyH2Outline", () => {
+  it("strips bold and skips Answer, Overview, and FAQ", () => {
+    const titles = importedBodyH2Outline([
+      { h2: "**Answer**", body: "lead" },
+      { h2: "**Overview**", body: "toc" },
+      { h2: "**CRA Online Mail for Individuals And Businesses**", body: "body" },
+      { h2: "**Key Documents And Notifications Online**", body: "docs" },
+      { h2: "**FAQ**", body: "q" },
+    ]);
+    expect(titles).toEqual([
+      "CRA Online Mail for Individuals And Businesses",
+      "Key Documents And Notifications Online",
+    ]);
+    expect(stripImportedHeadingMarks("**Answer**")).toBe("Answer");
   });
 });
 

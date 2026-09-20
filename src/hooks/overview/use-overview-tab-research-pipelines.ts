@@ -8,11 +8,19 @@ import { isProductionBackendMisconfigured } from "@/lib/mcp-tools";
 import { runOverviewResearchBatch, resolveResearchBatchEligibleRows, type OverviewResearchRowResult } from "@/lib/overview/overview-research-batch";
 import { overviewDateModifierTodayIso } from "@/lib/overview/overview-bulk-seo-payload";
 import { uploadOverviewResearchedRowToWordPress } from "@/lib/overview/overview-research-row-wp-upload";
-import { initBulkSliceWithStatus, patchActiveBulkSlice } from "@/lib/overview/overview-bulk-inline-status";
+import { attachAiseoUploadGeneratedFiles } from "@/lib/overview/overview-aiseo-after-upload";
+import {
+  clearBulkActionSlice,
+  initBulkSliceWithStatus,
+  patchActiveBulkSlice,
+} from "@/lib/overview/overview-bulk-inline-status";
 import { needsOverviewResearchRefresh } from "@/lib/overview/overview-ensure-focus-keyword";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
 import { buildPrefilledTargetsFromOverviewRows } from "@/hooks/content-optimization/bulk-seo-extra-text-fast-path";
-import { overviewInventoryCollectionsFromSource } from "@/lib/overview/overview-sitemap-source";
+import {
+  overviewInventoryCollectionsFromSource,
+  type OverviewSitemapSource,
+} from "@/lib/overview/overview-sitemap-source";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { OverviewTabBase } from "@/hooks/overview/use-overview-tab-base";
 import { overviewTitleOptimizationExcluded } from "@/lib/overview/overview-page-bucket";
@@ -48,6 +56,17 @@ import {
   overviewRowInBulkScope,
   overviewRowsInBulkScope,
 } from "@/lib/overview/overview-bulk-row-scope";
+import { loadApiKey } from "@/lib/api";
+import { fetchGoogleMapsImageForEntity } from "@/lib/content-generation/google-maps-image-api";
+import { sapMapsImageFileName, sapMapsMediaTitleAlt } from "@/lib/bulk/sap-maps-media-bank";
+import { resolveLocalImagePlaceEntity } from "@/lib/overview/overview-local-image-dfs-normalize";
+import { postBodyHtmlFromInventoryRow } from "@/lib/overview/overview-inventory-seo-fields";
+import { updateWordPressPost, uploadWordPressMedia } from "@/lib/wordpress-api";
+import {
+  generatedFilesForUrl,
+  storageKeyForUrlGeneratedFiles,
+} from "@/lib/content-optimization/content-optimizer-bulk-generator-bindings";
+import { mergeGeneratedFilesByName } from "@/lib/overview/overview-peer-csv-details";
 
 type Args = Pick<
   OverviewTabBase,
@@ -182,9 +201,6 @@ export function useOverviewTabResearchPipelines({
       let serpOnly = 0;
       let failed = 0;
       let researchTotal = 0;
-      let wpUploaded = 0;
-      let wpFailed = 0;
-      let wpSkipped = 0;
 
       try {
         const currentRows = rowsRef.current;
@@ -244,10 +260,6 @@ export function useOverviewTabResearchPipelines({
             setOptimizationFileManagers: opt.setOptimizationFileManagers,
             prepMessage,
           });
-          setBulkActionProgress((p) => ({
-            ...p,
-            research: initBulkSliceWithStatus("research", researchTotal, 0, prepMessage),
-          }));
           for (const { index } of eligible) {
             updateRow(index, {
               status: "research-faq",
@@ -380,7 +392,6 @@ export function useOverviewTabResearchPipelines({
             const baseRow =
               live ?? researchEligible.find((e) => e.index === r.index)?.row;
             if (!baseRow) {
-              wpSkipped += 1;
               updateRow(r.index, { status: "idle" });
               return;
             }
@@ -392,13 +403,20 @@ export function useOverviewTabResearchPipelines({
                 bindings,
                 getInventoryMatchForUrl,
               });
+              if (url && wp.generatedFiles.length) {
+                attachAiseoUploadGeneratedFiles(
+                  batchKey,
+                  opt.setBulkOptimizationState,
+                  url,
+                  wp.generatedFiles,
+                  wp.ok,
+                );
+              }
               if (wp.skipped) {
-                wpSkipped += 1;
                 updateRow(r.index, { status: "idle" });
                 return;
               }
               if (wp.ok) {
-                wpUploaded += 1;
                 updateRow(r.index, {
                   status: "idle",
                   dateModifier: overviewDateModifierTodayIso(),
@@ -406,10 +424,8 @@ export function useOverviewTabResearchPipelines({
                 });
                 return;
               }
-              wpFailed += 1;
               updateRow(r.index, { status: "error" });
             } catch {
-              wpFailed += 1;
               updateRow(r.index, { status: "error" });
             }
           },
@@ -454,17 +470,6 @@ export function useOverviewTabResearchPipelines({
           opt.setOptimizationProgress,
           opt.setIsOptimizingContent,
         );
-        let researchStatusMessage = `Research finished: ${briefUpdated}/${researchTotal} updated`;
-        if (wpUploaded > 0 || wpFailed > 0 || wpSkipped > 0) {
-          researchStatusMessage += `, ${wpUploaded} uploaded to WordPress`;
-          if (wpFailed > 0) researchStatusMessage += `, ${wpFailed} WP failed`;
-          if (wpSkipped > 0) researchStatusMessage += `, ${wpSkipped} skipped`;
-        }
-        patchActiveBulkSlice(setBulkActionProgress, "research", {
-          completed: researchTotal,
-          statusMessage: researchStatusMessage,
-        });
-
         if (site.siteUrl && BACKEND_API_BASE && !gscQuickWinsFile) {
           try {
             const exportRes = await fetch(`${BACKEND_API_BASE}/api/gsc/export-overview-quick-wins`, {
@@ -514,10 +519,6 @@ export function useOverviewTabResearchPipelines({
             opt.setOptimizationProgress,
             opt.setIsOptimizingContent,
           );
-          patchActiveBulkSlice(setBulkActionProgress, "research", {
-            completed: researchTotal || rowsRef.current.length,
-            statusMessage: msg,
-          });
         }
       }
     },
@@ -572,6 +573,7 @@ export function useOverviewTabResearchPipelines({
         batchKey,
         urls,
         "WordPress inventory",
+        { isSap: sitemapSource === "sap" },
       );
       const prepHarnessSetters: ContentPrepHarnessSetters = {
         siteId: site.id,
@@ -658,6 +660,203 @@ export function useOverviewTabResearchPipelines({
     bindings,
     getInventoryMatchForUrl,
   ]);
+
+  const handleAiFeaturedImageAll = useCallback(async () => {
+    if (!site) {
+      notify.error(NOTIFY_CONNECT_A_WORDPRESS_SITE_FIRST_IN_THE_IN);
+      return;
+    }
+    const scopeKeys = bulkScopeUrlKeysRef.current;
+    const scoped = overviewBulkRowEntries(rowsRef.current, scopeKeys);
+    if (scoped.length === 0) {
+      throw new Error("No posts in the current grid.");
+    }
+    const apiKey = loadApiKey().trim();
+    if (!apiKey) {
+      throw new Error("OpenRouter API key is missing");
+    }
+
+    const batchKey = `${site.id}-batch`;
+    const urls = scoped.map((entry) => entry.row.url.trim()).filter(Boolean);
+    opt.resetBulkBatch(batchKey);
+    opt.setBulkOptimizationState((prev) => ({
+      ...prev,
+      [batchKey]: {
+        urls,
+        currentIndex: 0,
+        urlStatuses: {},
+        currentStep: "Featured image",
+        currentUrl: urls[0],
+        runKind: "aiFeaturedImage",
+        harnessStartedAt: Date.now(),
+        urlGeneratedFiles: {},
+      },
+    }));
+
+    setBulkActionProgress((p) => {
+      const next = { ...p };
+      delete next.optimizeAll;
+      next.aiFeaturedImage = initBulkSliceWithStatus("aiFeaturedImage", scoped.length, 0);
+      return next;
+    });
+
+    const attachRowFiles = (
+      url: string,
+      files: Array<{ name: string; content: string; mimeType: string }>,
+    ) => {
+      opt.setBulkOptimizationState((prev) => {
+        const current = prev[batchKey];
+        if (!current) return prev;
+        const storageKey = storageKeyForUrlGeneratedFiles(
+          current.urlGeneratedFiles,
+          url,
+          current.urls,
+        );
+        const existing = generatedFilesForUrl(current.urlGeneratedFiles, url);
+        return {
+          ...prev,
+          [batchKey]: {
+            ...current,
+            currentUrl: url,
+            urlGeneratedFiles: {
+              ...(current.urlGeneratedFiles || {}),
+              [storageKey]: mergeGeneratedFilesByName(existing, files),
+            },
+          },
+        };
+      });
+    };
+
+    try {
+      for (let i = 0; i < scoped.length; i++) {
+        const row = scoped[i]!.row;
+        const inv = getInventoryMatchForUrl(site, row.url);
+        const postId = row.postId ?? inv?.row.id ?? null;
+        if (postId == null || postId <= 0) {
+          throw new Error(`Missing post id for featured image: ${row.url}`);
+        }
+        const title = (row.title || inv?.row.fields?.title || "").trim();
+        if (!title) {
+          throw new Error(`Missing title for featured image: ${row.url}`);
+        }
+        const content =
+          postBodyHtmlFromInventoryRow(inv?.row, postId) ||
+          row.postContentOptimized?.trim() ||
+          row.postContent?.trim() ||
+          "";
+        if (!content) {
+          throw new Error(`Missing post HTML for featured image: ${row.url}`);
+        }
+
+        patchActiveBulkSlice(setBulkActionProgress, "aiFeaturedImage", {
+          currentRow: i,
+          statusMessage: "Google Image",
+        });
+        const entity = await resolveLocalImagePlaceEntity({
+          url: row.url,
+          title,
+          apiKey,
+        });
+        const maps = await fetchGoogleMapsImageForEntity(entity);
+        const googleImage = maps.referenceImageBase64?.trim();
+        if (!googleImage) {
+          throw new Error(`Google Image screenshot missing for ${entity}`);
+        }
+        attachRowFiles(row.url, [
+          {
+            name: "google-image.png",
+            content: `data:image/png;base64,${googleImage}`,
+            mimeType: "image/png",
+          },
+        ]);
+
+        patchActiveBulkSlice(setBulkActionProgress, "aiFeaturedImage", {
+          currentRow: i,
+          statusMessage: "OpenRouter Image",
+        });
+        const mime = maps.mimeType || "image/jpeg";
+        const ext = mime.includes("png") ? "png" : "jpg";
+        attachRowFiles(row.url, [
+          {
+            name: `openrouter-image.${ext}`,
+            content: `data:${mime};base64,${maps.imageBase64}`,
+            mimeType: mime,
+          },
+        ]);
+
+        patchActiveBulkSlice(setBulkActionProgress, "aiFeaturedImage", {
+          currentRow: i,
+          statusMessage: "WordPress upload",
+        });
+        const uploaded = await uploadWordPressMedia(
+          site.siteUrl,
+          site.username,
+          site.appPassword,
+          maps.imageBase64,
+          sapMapsImageFileName(entity, ext),
+          sapMapsMediaTitleAlt(entity),
+        );
+        const imageUrl = uploaded.url || uploaded.link;
+        if (!uploaded.success || !uploaded.mediaId || !imageUrl) {
+          throw new Error(uploaded.error || `Featured image upload failed: ${row.url}`);
+        }
+        const subtype = inv?.subtype;
+        const postTypeEndpoint =
+          subtype === "post" ? "posts" : subtype === "page" ? "pages" : subtype || undefined;
+        const updated = await updateWordPressPost(
+          site.siteUrl,
+          site.username,
+          site.appPassword,
+          postId,
+          title,
+          content,
+          undefined,
+          (row.wpStatus as "draft" | "publish" | undefined) || undefined,
+          row.postType || "post",
+          uploaded.mediaId,
+          undefined,
+          undefined,
+          inv?.row.slug,
+          postTypeEndpoint,
+        );
+        if (!updated.success) {
+          throw new Error(updated.error || `Featured image apply failed: ${row.url}`);
+        }
+        attachRowFiles(row.url, [
+          {
+            name: "wordpress.json",
+            content: JSON.stringify(
+              {
+                url: imageUrl,
+                mediaId: uploaded.mediaId,
+                link: uploaded.link ?? imageUrl,
+              },
+              null,
+              2,
+            ),
+            mimeType: "application/json",
+          },
+        ]);
+        patchActiveBulkSlice(setBulkActionProgress, "aiFeaturedImage", {
+          completed: i + 1,
+          currentRow: i,
+          statusMessage: "Featured image",
+        });
+      }
+    } finally {
+      setBulkActionProgress((p) => {
+        const next = { ...p };
+        delete next.optimizeAll;
+        next.aiFeaturedImage = {
+          ...(next.aiFeaturedImage ?? initBulkSliceWithStatus("aiFeaturedImage", scoped.length, scoped.length)),
+          completed: scoped.length,
+          total: scoped.length,
+          statusMessage: "Featured image",
+        };
+        return next;
+      });
+    }
+  }, [bulkScopeUrlKeysRef, rowsRef, site, opt, setBulkActionProgress, getInventoryMatchForUrl]);
 
   const handleBulkSeoExtraText = useCallback(async () => {
     if (!site) {
@@ -817,6 +1016,8 @@ export function useOverviewTabResearchPipelines({
 
         await runOverviewAiAllMetaHarness({
           site,
+          sitemapSource,
+          getInventoryMatchForUrl,
           rows: [base],
           catalog: [entry],
           skippedNoBrief: [],
@@ -843,9 +1044,14 @@ export function useOverviewTabResearchPipelines({
       site,
       opt,
       sitemapSource,
+      getInventoryMatchForUrl,
       bulkAiFaqSeedCount,
       runAiAllMetaBatchForCatalog,
       updateRow,
+      optimizeFaq,
+      optimizeFaqQuestion,
+      optimizeFaqAnswer,
+      getDfsSerpContext,
     ],
   );
 
@@ -895,6 +1101,8 @@ export function useOverviewTabResearchPipelines({
 
       await runOverviewAiAllMetaHarness({
         site,
+        sitemapSource,
+        getInventoryMatchForUrl,
         rows: latestRows,
         catalog: scopedCatalog,
         skippedNoBrief: [],
@@ -925,6 +1133,7 @@ export function useOverviewTabResearchPipelines({
     bulkAiFaqSeedCount,
     runAiAllMetaBatchForCatalog,
     updateRow,
+    getInventoryMatchForUrl,
     optimizeFaq,
     optimizeFaqQuestion,
     optimizeFaqAnswer,
@@ -934,6 +1143,7 @@ export function useOverviewTabResearchPipelines({
   return {
     handleResearchAll,
     handleOptimizeAll,
+    handleAiFeaturedImageAll,
     handleBulkSeoExtraText,
     handleOptimizeAllSerpRow,
     handleAiAllMetaRow,

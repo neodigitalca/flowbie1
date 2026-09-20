@@ -257,6 +257,7 @@ class Neo_Pulse_App_Wp_Pulse_Assist {
 			'message',
 			'history',
 			'admin_submode',
+			'page_content_mode',
 			'target_scope',
 			'post_id',
 			'page_url',

@@ -1,5 +1,4 @@
 import {
-  META_BULK_MICRO_ORDER,
   type BulkProgressSlice,
   type MetaBulkActionKey,
 } from "@/components/overview/overview-tab-constants";
@@ -20,11 +19,13 @@ import {
   isOverviewBulkDetailsRun,
   overviewBulkDetailsCanOpenFromWarm,
 } from "@/lib/overview/overview-bulk-details-bindings";
+import { isAiseoFileSlotRunKind } from "@/lib/overview/overview-aiseo-row-artifacts";
 import type { BulkGscKeywordsHostedLink } from "@/lib/bulk/bulk-gsc-keywords-hosted-link";
 import type { PromptBulkSitemapInventoryLink } from "@/lib/bulk/prompt-bulk-sitemap-inventory";
 import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
 import type { OptimizationProgressState } from "@/hooks/content-optimization/use-optimization-state";
 import type { OptimizationFileManager } from "@/lib/optimization-file-manager";
+import { hasActiveBulkActionProgress } from "@/lib/overview/overview-bulk-inline-status";
 
 type Opt = ReturnType<typeof useWordPressOptimization>;
 
@@ -62,36 +63,10 @@ export type OverviewContentDetailsPanelProps = {
   sitemapInventoryLoading?: boolean;
 };
 
-function isActiveBulkSlice(slice: BulkProgressSlice): boolean {
-  if (slice.total <= 0) return false;
-  return slice.completed < slice.total;
-}
-
-function hasActiveMicroSlices(
-  bulkActionProgress: Partial<Record<MetaBulkActionKey, BulkProgressSlice>>,
-): boolean {
-  return META_BULK_MICRO_ORDER.some((key) => {
-    const slice = bulkActionProgress[key];
-    return slice && isActiveBulkSlice(slice);
-  });
-}
-
 function isOverviewBatchRunActive(
   batchBulkState: BulkOptimizationState | undefined,
-  bulkBatchKey: string,
-  isOptimizing: Record<string, boolean>,
-  siteId?: string,
 ): boolean {
   if (!batchBulkState?.urls?.length) return false;
-  if (bulkBatchKey && isOptimizing[bulkBatchKey]) return true;
-  if (siteId && isOptimizing[siteId]) return true;
-  if (
-    batchBulkState.runKind === "research" &&
-    batchBulkState.currentStep !== "Batch complete" &&
-    !isOverviewBatchAllComplete(batchBulkState)
-  ) {
-    return true;
-  }
   return !isOverviewBatchAllComplete(batchBulkState);
 }
 
@@ -106,7 +81,7 @@ export function hasOverviewContentDetailsActivity(
   },
 ): boolean {
   const hasBatch = Boolean(batchBulkState?.urls?.length);
-  const hasActiveSlices = hasActiveMicroSlices(bulkActionProgress);
+  const hasActiveSlices = hasActiveBulkActionProgress(bulkActionProgress);
   const hasWarmInventory = warmInventory
     ? overviewBulkDetailsCanOpenFromWarm(
         warmInventory.sitemapInventoryLinks,
@@ -128,11 +103,11 @@ export function isOverviewResearchWorkerActive(
   siteId: string,
   isOptimizing: Record<string, boolean>,
 ): boolean {
+  if (isOverviewBatchAllComplete(batchBulkState)) return false;
   if (isOptimizing[bulkBatchKey] || (siteId && isOptimizing[siteId])) return true;
   return (
     batchBulkState?.runKind === "research" &&
-    batchBulkState.currentStep !== "Batch complete" &&
-    !isOverviewBatchAllComplete(batchBulkState)
+    batchBulkState.currentStep !== "Batch complete"
   );
 }
 
@@ -171,22 +146,16 @@ export function OverviewContentDetailsPanel({
   );
 
   const singlePageUrl = opt.pendingOptimization[siteId]?.url;
-  const batchActive = isOverviewBatchRunActive(
-    effectiveBatchState,
-    effectiveBatchKey,
-    opt.isOptimizingContent,
-    siteId,
-  );
+  const batchActive = isOverviewBatchRunActive(effectiveBatchState);
   const showSinglePage = hasSinglePageOptimizationDetailsActivity(singlePageCtx);
   const keepCompletedBatch =
-    effectiveBatchState?.runKind === "research" ||
-    effectiveBatchState?.runKind === "aiInContentImage" ||
-    effectiveBatchState?.runKind === "aiWikipediaLink";
+    isAiseoFileSlotRunKind(effectiveBatchState?.runKind) ||
+    effectiveBatchState?.runKind === "research";
   const showBatch = Boolean(
     site && effectiveBatchState?.urls?.length && (batchActive || keepCompletedBatch),
   );
   const isSinglePageOptimizing = Boolean(site && opt.isOptimizingContent[siteId]);
-  const hasMicroActivity = hasActiveMicroSlices(c.bulkActionProgress);
+  const hasMicroActivity = hasActiveBulkActionProgress(c.bulkActionProgress);
   const researchWorkerActive = isOverviewResearchWorkerActive(
     effectiveBatchState,
     effectiveBatchKey,
@@ -209,7 +178,8 @@ export function OverviewContentDetailsPanel({
             bulkState: effectiveBatchState ?? { urls: [], currentIndex: 0, urlStatuses: {}, currentStep: "" },
             batchProgress,
             siteProgress: opt.optimizationProgress[siteId],
-            overviewRows: c.rows,
+            overviewRows: c.displayRows,
+            gridPageIndex: c.gridPageIndex,
             isOptimizingContent: opt.isOptimizingContent,
             optimizationFileManagers: opt.optimizationFileManagers,
             siteName: site.name,
@@ -230,7 +200,8 @@ export function OverviewContentDetailsPanel({
               bulkState: effectiveBatchState,
               batchProgress,
               siteProgress: opt.optimizationProgress[siteId],
-              overviewRows: c.rows,
+              overviewRows: c.displayRows,
+              gridPageIndex: c.gridPageIndex,
               isOptimizingContent: opt.isOptimizingContent,
               optimizationFileManagers: opt.optimizationFileManagers,
               siteName: site.name,
@@ -254,7 +225,8 @@ export function OverviewContentDetailsPanel({
 
   const warmOnlyProps = showWarmInventoryOnly
     ? buildOverviewWarmInventoryDetailsProps({
-        overviewRows: c.rows,
+        overviewRows: c.displayRows,
+        gridPageIndex: c.gridPageIndex,
         sitemapInventoryLinks,
         siteKwHostedLink: gscHostedLink,
         sitemapInventoryLoading,
@@ -272,13 +244,13 @@ export function OverviewContentDetailsPanel({
 
   return (
     <WorkspaceDetailsStack>
-      {showSinglePage && !hideSinglePageForResearch ? (
+      {showSinglePage && (!hideSinglePageForResearch || isSinglePageOptimizing) ? (
         <SinglePageOptimizationDetailsPanel
           siteId={siteId}
           opt={opt}
           pageUrl={singlePageUrl}
           stripeIndex={0}
-          hideRowBody={Boolean(batchActive && effectiveBatchState?.urls?.length)}
+          hideRowBody={Boolean(batchActive && effectiveBatchState?.urls?.length && !isSinglePageOptimizing)}
         />
       ) : null}
 

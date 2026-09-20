@@ -7,7 +7,6 @@ import {
   parseSeoResearchBrief,
   llmAuditSummaryFromSeoResearchBrief,
 } from "../seo-research-brief-for-optimize";
-import { sapSelectedH2OutlineTitles } from "@/lib/prompt-builders/sap-page-template";
 
 describe("seo-research-brief-for-optimize", () => {
   const briefJson = JSON.stringify({
@@ -93,7 +92,7 @@ describe("seo-research-brief-for-optimize", () => {
     expect(out.paaRawResponse).toBeNull();
   });
 
-  it("buildOptimizeSelectionsFromStoredBrief uses SAP template outline when sapEntity is set", () => {
+  it("buildOptimizeSelectionsFromStoredBrief does not pin SAP titles when sapEntity is set", () => {
     const entity = "Virginia Park, AB";
     const out = buildOptimizeSelectionsFromStoredBrief({
       primaryKeyword: "blinds",
@@ -102,8 +101,9 @@ describe("seo-research-brief-for-optimize", () => {
       seoResearchBrief: briefJson,
       sapEntity: entity,
     });
-    expect(out.selectedH2Sections).toEqual(sapSelectedH2OutlineTitles(entity));
+    expect(out.selectedH2Sections).toEqual([]);
     expect(out.selectedH2Sections).not.toContain("Your Guide to Blinds");
+    expect(out.selectedH2Sections).not.toContain("Sunlight And Privacy Challenges");
   });
 
   it("llmAuditSummaryFromSeoResearchBrief extracts platform facts", () => {

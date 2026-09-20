@@ -83,7 +83,6 @@ export function initOverviewResearchHarnessBatchState(
   const batchKey = `${site.id}-batch`;
   const urls = rows.map((r) => r.url.trim()).filter(Boolean);
   const urlKeywords: Record<string, string> = {};
-  const initialUrlStatuses: Record<string, BulkOptimizationState["urlStatuses"][string]> = {};
   const urlHarnessSections: BulkOptimizationState["urlHarnessSections"] = {};
 
   for (const row of rows) {
@@ -91,7 +90,6 @@ export function initOverviewResearchHarnessBatchState(
     if (!url) continue;
     const kw = row.focusKeyword?.trim();
     if (kw) urlKeywords[url] = kw;
-    initialUrlStatuses[url] = "pending";
     urlHarnessSections[url] = buildWaitingResearchHarnessSections() as BulkHarnessSectionUi[];
   }
 
@@ -126,7 +124,7 @@ export function initOverviewResearchHarnessBatchState(
     [batchKey]: {
       urls,
       currentIndex: 0,
-      urlStatuses: initialUrlStatuses,
+      urlStatuses: {},
       currentStep: "Researching…",
       currentProgress: 2,
       currentUrl: urls[0] ?? "",
@@ -499,7 +497,7 @@ export function finishResearchRowHarness(
     latestProgress = progress;
     const total = nextBatch.urls?.length ?? 0;
     const hasPending = researchBatchHasPendingRows(nextBatch);
-    batchStep = hasPending ? "Researching…" : success ? "Researching…" : "Research failed";
+    batchStep = hasPending ? "Researching…" : success ? "Batch complete" : "Research failed";
     message = hasPending
       ? total > 0
         ? `Research row ${(nextBatch.currentIndex ?? 0) + 1}/${total}…`

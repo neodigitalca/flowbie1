@@ -4,6 +4,7 @@ import type {
   WorkflowDefinition,
   WorkflowNode,
   WorkflowNodeKind,
+  WorkflowStepOutput,
   WorkflowThenStepConfig,
 } from "@/lib/workflow/workflow-types";
 import { isWorkflowThenKind } from "@/lib/workflow/workflow-types";
@@ -37,6 +38,27 @@ export function thenConfig(node: WorkflowNode): WorkflowThenStepConfig {
 
 export function defaultThenVariableKey(node: WorkflowNode): string {
   return `then_${node.id.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+}
+
+/** True when this Then node already saved a run output for this client. */
+export function workflowThenOutputExistsForSite(
+  outputs: WorkflowStepOutput[],
+  nodeId: string,
+  siteId?: string,
+  agentRunId?: number,
+): boolean {
+  const wantSite = String(siteId ?? "").trim();
+  const wantRun = agentRunId && agentRunId > 0 ? agentRunId : 0;
+  const matches = outputs.filter((output) => output.nodeId === nodeId && output.scope === "run");
+  if (matches.length === 0) return false;
+  if (!wantSite && wantRun === 0) return true;
+  return matches.some((output) => {
+    const outputSite = String(output.siteId ?? "").trim();
+    const outputRun = output.agentRunId && output.agentRunId > 0 ? output.agentRunId : 0;
+    if (wantSite && outputSite) return outputSite === wantSite;
+    if (wantRun > 0 && outputRun > 0) return outputRun === wantRun;
+    return false;
+  });
 }
 
 export function workflowHasThenSteps(workflow: Pick<WorkflowDefinition, "nodes">): boolean {

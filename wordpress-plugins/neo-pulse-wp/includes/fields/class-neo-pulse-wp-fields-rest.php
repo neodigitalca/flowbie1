@@ -62,6 +62,10 @@ class Neo_Pulse_Wp_Fields_Rest {
 				$out[ $name ] = Neo_Pulse_Wp_Fields_Values::get_value( $post_id, $field, true );
 			}
 		}
+		$focus = Neo_Pulse_Wp_Ai_Context::read_focus_keyword( $post_id );
+		if ( $focus !== '' ) {
+			$out['keyword_focus'] = $focus;
+		}
 		return $out;
 	}
 

@@ -6,6 +6,7 @@ import {
 } from "@/components/manager/tasks/TaskFormLayout";
 import { AutomationWhatAspectPills } from "@/components/manager/tasks/planner/AutomationWhatAspectPills";
 import { TaskExecutionTargetFields } from "@/components/manager/tasks/TaskExecutionTargetFields";
+import { Textarea } from "@/components/ui/textarea";
 import {
   ensureOptimizationOptions,
   inferOptimizerKindFromOptions,
@@ -52,7 +53,7 @@ export function ContentOptimizerExecutionFields({
 
   const scopePanel = (
     <TaskFormPanel title="Scope">
-      <TaskFormFlatGrid className="grid-cols-2">
+      <TaskFormFlatGrid className="grid-cols-3">
         <TaskExecutionTargetFields
           variant="flatPlaceholder"
           bucketLabel="Target bucket"
@@ -70,7 +71,39 @@ export function ContentOptimizerExecutionFields({
             { value: "draft", label: "Draft only" },
           ]}
         />
+        <TaskFormFlatSelectPlaceholder
+          placeholder="Research"
+          value={payload.optimizationOptions?.forceNewResearch === true ? "new" : "saved"}
+          onChange={(value) =>
+            handlePayloadChange({
+              ...payload,
+              optimizationOptions: {
+                ...(payload.optimizationOptions ?? {}),
+                forceNewResearch: value === "new",
+              },
+            })
+          }
+          disabled={disabled}
+          options={[
+            { value: "saved", label: "Saved brief" },
+            { value: "new", label: "New research" },
+          ]}
+        />
       </TaskFormFlatGrid>
+    </TaskFormPanel>
+  );
+
+  const instructionsPanel = (
+    <TaskFormPanel title="Instructions">
+      <Textarea
+        value={payload.optionalPrompt ?? ""}
+        disabled={disabled}
+        rows={3}
+        placeholder="Instructions"
+        aria-label="Instructions"
+        className="min-h-[4.5rem] resize-none rounded-none border-0 bg-zinc-900 px-3 py-2 text-base text-white shadow-none outline-none ring-0 placeholder:text-muted-foreground focus-visible:ring-2"
+        onChange={(event) => handlePayloadChange({ ...payload, optionalPrompt: event.target.value })}
+      />
     </TaskFormPanel>
   );
 
@@ -86,6 +119,7 @@ export function ContentOptimizerExecutionFields({
           />
         </TaskFormPanel>
         {scopePanel}
+        {instructionsPanel}
       </>
     );
   }
@@ -98,6 +132,7 @@ export function ContentOptimizerExecutionFields({
         onChange={handlePayloadChange}
       />
       {scopePanel}
+      {instructionsPanel}
     </>
   );
 }

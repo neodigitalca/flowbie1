@@ -9,15 +9,42 @@ export type BulkPostTitleCandidates = {
   blueprintTitle?: string;
 };
 
-const SYSTEM = `You are a WordPress post title editor. Return JSON only: {"wordpress_title":"..."}.
+export const BULK_WORDPRESS_TITLE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["wordpress_title"],
+  properties: {
+    wordpress_title: { type: "string", minLength: 1 },
+  },
+} as const;
+
+export const BULK_WORDPRESS_TITLE_RESPONSE_FORMAT = {
+  type: "json_schema" as const,
+  json_schema: {
+    name: "bulk_wordpress_post_title",
+    strict: true,
+    schema: BULK_WORDPRESS_TITLE_SCHEMA,
+  },
+};
+
+const SYSTEM = `You are a WordPress post title editor.
 
 ${BULK_WORDPRESS_POST_TITLE_RULE}
 
-The writing keyword in the user message is the topic to write about. It is not the title. Candidate titles are intent signals only. Write one fresh headline. Never concatenate, prefix-merge, or paste the keyword as a block.
+The writing keyword and place/entity in the user message are topic facts. They are not the title. Candidate titles are intent signals only. Write one fresh headline. Never concatenate, prefix-merge, or paste the keyword as a block.
 
-If any candidate contains ":", replace it with natural joins ("and", "for", "how to", "what", "why") — never keep the colon.
+The keyword appears once. The place appears once. Never restate the same service and place after a colon.
 
-Return the complete wordpress_title string. Never shorten, truncate, or cut off mid-word.`;
+Forbidden (do not produce this shape):
+"Blackout Blinds Mediterra Naples Florida: Blackout Blinds For Homes In Mediterra Naples Florida"
+"Window Blinds Coquina Sands Naples Florida: Window Blinds For Coquina Sands Naples Florida Homes"
+
+If any candidate contains ":", rewrite that candidate into natural joins ("and", "for", "how to", "what", "why", "near"). Never keep the colon in wordpress_title.
+
+Return the complete wordpress_title string. Never shorten, truncate, or cut off mid-word.
+
+JSON contract (mandatory, last): output one object only. Double-quoted keys and string values. No JavaScript object notation. No markdown fences. No extra keys. Exact shape:
+{"wordpress_title":"<complete Title Case headline>"}`;
 
 function titleCandidateLine(label: string, value: string | undefined): string | null {
   const t = value?.trim();
@@ -29,11 +56,13 @@ function titleCandidateLine(label: string, value: string | undefined): string | 
 export async function resolveBulkWordPressPostTitle(args: {
   apiKey: string;
   focusKeyword: string;
+  entity?: string;
   candidates: BulkPostTitleCandidates;
   model?: string;
   signal?: AbortSignal;
 }): Promise<string> {
   const kw = args.focusKeyword.trim();
+  const place = args.entity?.trim() ?? "";
   const apiKey = args.apiKey.trim();
   if (!apiKey) {
     throw new Error("Title agent requires an OpenRouter API key");
@@ -48,12 +77,13 @@ export async function resolveBulkWordPressPostTitle(args: {
     .join("\n");
 
   const user = `TOPIC KEYWORD (do not paste as the title): ${kw || "(none)"}
+PLACE / ENTITY (include once if it fits; do not repeat the keyword): ${place || "(none)"}
 ${kw ? buildKeywordPunctuationPromptBlock(kw) : ""}
 
 Candidate titles (intent only; write ONE new complete title):
 ${candidateLines || "(no candidates)"}
 
-Return JSON: {"wordpress_title":"..."}`;
+JSON contract: respond with one object only. Double-quoted key wordpress_title. Example shape: {"wordpress_title":"How To Choose Between Hunter Douglas And Alta Shades"}`;
 
   const { content } = await callOpenRouterChatCompletion({
     apiKey,
@@ -62,10 +92,21 @@ Return JSON: {"wordpress_title":"..."}`;
     user,
     maxTokens: 256,
     temperature: 0.25,
-    responseFormat: { type: "json_object" },
+    responseFormat: BULK_WORDPRESS_TITLE_RESPONSE_FORMAT,
     signal: args.signal,
   });
 
-  const parsed = JSON.parse(content) as { wordpress_title?: unknown };
-  return String(parsed.wordpress_title ?? "").trim();
+  let parsed: { wordpress_title?: unknown };
+  try {
+    parsed = JSON.parse(content) as { wordpress_title?: unknown };
+  } catch {
+    throw new Error(
+      `Title agent returned invalid JSON (expected {"wordpress_title":"..."}). Got: ${content.slice(0, 240)}`,
+    );
+  }
+  const title = typeof parsed.wordpress_title === "string" ? parsed.wordpress_title.trim() : "";
+  if (!title) {
+    throw new Error("Title agent returned empty wordpress_title");
+  }
+  return title;
 }

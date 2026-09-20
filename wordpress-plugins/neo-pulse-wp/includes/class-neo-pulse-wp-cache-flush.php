@@ -37,6 +37,7 @@ class Neo_Pulse_Wp_Cache_Flush {
 			'speed_files'     => 0,
 			'transients'      => 0,
 			'object_cache'    => false,
+			'html_caches'     => array(),
 			'flush_version'   => 0,
 			'nocache_seconds' => self::NOCACHE_SECONDS,
 		);
@@ -71,6 +72,8 @@ class Neo_Pulse_Wp_Cache_Flush {
 			wp_cache_flush_group( 'post_meta' );
 			wp_cache_flush_group( 'themes' );
 		}
+
+		$summary['html_caches'] = self::purge_html_caches();
 
 		$version = time();
 		update_option( self::VERSION_OPTION, $version, false );
@@ -118,6 +121,97 @@ class Neo_Pulse_Wp_Cache_Flush {
 			return;
 		}
 		nocache_headers();
+	}
+
+	/**
+	 * Drop HTML page caches so they cannot keep Speed asset URLs after disk files are gone.
+	 *
+	 * @return array<int, string>
+	 */
+	public static function purge_html_caches(): array {
+		$did = array();
+
+		foreach ( array( 'nitropack_sdk_purge_cache', 'nitropack_purge_cache', 'nitropack_invalidate_cache', 'nitropack_sdk_invalidate_cache' ) as $fn ) {
+			if ( function_exists( $fn ) ) {
+				$fn();
+				$did[] = $fn;
+			}
+		}
+		if ( function_exists( 'do_action' ) ) {
+			do_action( 'nitropack_integration_purge_all' );
+			do_action( 'nitropack_cache_invalidate' );
+			$did[] = 'nitropack_actions';
+		}
+
+		$nitro_class = 'NitroPack\\WordPress\\NitroPack';
+		if ( class_exists( $nitro_class, false ) && is_callable( array( $nitro_class, 'getInstance' ) ) ) {
+			$inst = $nitro_class::getInstance();
+			if ( is_object( $inst ) && is_callable( array( $inst, 'getSdk' ) ) ) {
+				$sdk = $inst->getSdk();
+				if ( is_object( $sdk ) && is_callable( array( $sdk, 'invalidateCache' ) ) ) {
+					$sdk->invalidateCache();
+					$did[] = 'nitropack_sdk_invalidate';
+				}
+				if ( is_object( $sdk ) && is_callable( array( $sdk, 'purgeCache' ) ) ) {
+					$sdk->purgeCache();
+					$did[] = 'nitropack_sdk_purge';
+				}
+			}
+		}
+
+		if ( defined( 'WP_CONTENT_DIR' ) ) {
+			$wiped = self::wipe_nitropack_cache_dirs();
+			if ( $wiped > 0 ) {
+				$did[] = 'nitropack_dirs:' . $wiped;
+			}
+		}
+
+		if ( class_exists( 'WpeCommon', false ) ) {
+			if ( is_callable( array( 'WpeCommon', 'purge_varnish_cache' ) ) ) {
+				WpeCommon::purge_varnish_cache();
+				$did[] = 'wpe_varnish';
+			}
+			if ( is_callable( array( 'WpeCommon', 'purge_memcached' ) ) ) {
+				WpeCommon::purge_memcached();
+				$did[] = 'wpe_memcached';
+			}
+		}
+
+		return $did;
+	}
+
+	/**
+	 * @return int NitroPack cache directories removed.
+	 */
+	private static function wipe_nitropack_cache_dirs(): int {
+		$cache = WP_CONTENT_DIR . '/cache';
+		if ( ! is_dir( $cache ) ) {
+			return 0;
+		}
+		$wiped = 0;
+		$items = scandir( $cache );
+		if ( ! is_array( $items ) ) {
+			return 0;
+		}
+		foreach ( $items as $name ) {
+			if ( $name === '.' || $name === '..' || stripos( $name, 'nitropack' ) === false ) {
+				continue;
+			}
+			$path = $cache . '/' . $name;
+			if ( ! is_dir( $path ) ) {
+				continue;
+			}
+			$it = new RecursiveIteratorIterator(
+				new RecursiveDirectoryIterator( $path, FilesystemIterator::SKIP_DOTS ),
+				RecursiveIteratorIterator::CHILD_FIRST
+			);
+			foreach ( $it as $file ) {
+				$file->isDir() ? @rmdir( $file->getPathname() ) : @unlink( $file->getPathname() );
+			}
+			@rmdir( $path );
+			++$wiped;
+		}
+		return $wiped;
 	}
 
 	/**

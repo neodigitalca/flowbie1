@@ -84,6 +84,18 @@ class Neo_Pulse_Wp_Backend_Assist_Registry {
 		);
 
 		self::register_tool(
+			'get_seo_block',
+			array( 'Neo_Pulse_Wp_Backend_Assist', 'tool_get_seo_block' ),
+			'Get one Agent Hub SEO block by block_id or exact title, including slots'
+		);
+
+		self::register_tool(
+			'duplicate_seo_block',
+			array( 'Neo_Pulse_Wp_Backend_Assist', 'tool_duplicate_seo_block' ),
+			'Duplicate an existing Agent Hub SEO block as a new row. Optional user_copy fills the copy slots. Never edits the source block.'
+		);
+
+		self::register_tool(
 			'create_seo_block',
 			array( 'Neo_Pulse_Wp_Backend_Assist', 'tool_create_seo_block' ),
 			'Create a new draft SEO block in Agent Hub'
@@ -105,6 +117,18 @@ class Neo_Pulse_Wp_Backend_Assist_Registry {
 			'apply_seo_block_to_page',
 			array( 'Neo_Pulse_Wp_Backend_Assist', 'tool_apply_seo_block_to_page' ),
 			'Insert a registry-linked neo-pulse_seo_section widget on an Elementor page (dynamic block + optional NEO Pulse Fields heading tag)'
+		);
+
+		self::register_tool(
+			'compose_elementor_page_sections',
+			array( 'Neo_Pulse_Wp_Backend_Assist_Tools_Elementor_Sections', 'tool_compose_elementor_page_sections' ),
+			'Generate H2 section copy for native Elementor widgets (no Agent Hub SEO block). Used when page content mode is Elementor.'
+		);
+
+		self::register_tool(
+			'design_page_with_novamira',
+			array( 'Neo_Pulse_Wp_Backend_Assist', 'tool_design_page_with_novamira' ),
+			'Design a new Elementor page with Novamira tokens and the homepage pattern. Requires post_id and saved SEO block slots. Publishes the page.'
 		);
 
 		Neo_Pulse_Wp_Backend_Assist_Tools_Analytics::register_tools();

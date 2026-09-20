@@ -6,6 +6,7 @@
 import { stitchHarnessSections } from "@/lib/bulk/bulk-harness-outline";
 import { isFaqStyleHeadingTitle } from "@/lib/content-generation/faq-heading-policy";
 import { repairFaqEntriesFromSchema, type FaqEntry } from "@/lib/faq-entries";
+import { plainTextFromH2InnerHtml } from "@/lib/overview/overview-blog-headers-extract";
 import { generateFaqIntroParagraph } from "@/lib/overview/overview-blog-faq-intro-agent";
 
 export const HARNESS_FAQ_ANCHOR_ID = "faq";
@@ -43,28 +44,6 @@ function findH2OpenPositions(html: string): number[] {
   return out;
 }
 
-function plainInnerFromH2Open(html: string, openAt: number): string {
-  const closeTag = "</h2>";
-  const gt = html.indexOf(">", openAt);
-  if (gt < 0) return "";
-  const close = html.toLowerCase().indexOf(closeTag, gt + 1);
-  const inner = close < 0 ? html.slice(gt + 1) : html.slice(gt + 1, close);
-  let out = "";
-  let inTag = false;
-  for (const ch of inner) {
-    if (ch === "<") {
-      inTag = true;
-      continue;
-    }
-    if (ch === ">") {
-      inTag = false;
-      continue;
-    }
-    if (!inTag) out += ch;
-  }
-  return out.replace(/\s+/g, " ").trim();
-}
-
 function headingOpenHasFaqId(html: string, openAt: number): boolean {
   const gt = html.indexOf(">", openAt);
   if (gt < 0) return false;
@@ -76,11 +55,6 @@ function headingOpenHasFaqId(html: string, openAt: number): boolean {
 
 export function isFaqHeadingTitle(title: string): boolean {
   return isFaqStyleHeadingTitle(title);
-}
-
-function isFaqHeadingAt(html: string, openAt: number): boolean {
-  if (headingOpenHasFaqId(html, openAt)) return true;
-  return isFaqHeadingTitle(plainInnerFromH2Open(html, openAt));
 }
 
 function faqSectionEndAt(html: string, openAt: number): number {
@@ -128,6 +102,34 @@ function findPrecedingFloFaqDivOpen(html: string, h2OpenAt: number): number {
   return -1;
 }
 
+/** Trailing FAQ replacement: exact FAQ titles and h2#faq only (not mid-article question headings). */
+function isTrailingFaqReplaceHeading(title: string): boolean {
+  const key = (title ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+  return key === "faq" || key === "frequently asked questions";
+}
+
+function h2TitleAt(html: string, openAt: number): string {
+  const gt = html.indexOf(">", openAt);
+  if (gt < 0) return "";
+  const low = html.toLowerCase();
+  const close = low.indexOf("</h2>", gt + 1);
+  const inner = close === -1 ? html.slice(gt + 1) : html.slice(gt + 1, close);
+  return plainTextFromH2InnerHtml(inner).trim();
+}
+
+/** Include Gutenberg `<!-- wp:heading -->` wrapper when it opens the FAQ section. */
+function faqBlockStartBeforeH2(html: string, h2OpenAt: number): number {
+  const slice = html.slice(0, h2OpenAt);
+  const wpHeading = slice.lastIndexOf("<!-- wp:heading");
+  if (wpHeading < 0) return h2OpenAt;
+  const between = slice.slice(wpHeading, h2OpenAt);
+  if (between.includes("<h2") || between.includes("<H2")) return wpHeading;
+  return h2OpenAt;
+}
+
 /** End index after a trailing `</div>` that closes flo-faq, else `from`. */
 function endAfterClosingDiv(html: string, from: number): number {
   const low = html.toLowerCase();
@@ -171,7 +173,8 @@ export function buildFaqSectionHtml(entries: FaqEntry[], introParagraph: string)
 }
 
 /**
- * Remove every FAQ / Frequently Asked Questions H2 section (and flo-faq wrapper) so re-runs replace instead of stacking.
+ * Remove previous FAQ blocks (flo-faq, h2#faq, trailing WordPress FAQ H2 + table) before re-append.
+ * Mid-article FAQ-style headings are kept; only trailing FAQ sections at the end are removed.
  */
 export function stripTrailingFaqSection(html: string): string {
   let src = (html ?? "").trim();
@@ -179,11 +182,14 @@ export function stripTrailingFaqSection(html: string): string {
 
   for (let guard = 0; guard < 20; guard += 1) {
     const positions = findH2OpenPositions(src);
+    if (!positions.length) break;
+
     let removed = false;
     for (let i = positions.length - 1; i >= 0; i -= 1) {
       const openAt = positions[i]!;
-      if (!isFaqHeadingAt(src, openAt)) continue;
       const divStart = findPrecedingFloFaqDivOpen(src, openAt);
+      const isHarnessFaq = headingOpenHasFaqId(src, openAt) || divStart >= 0;
+      if (!isHarnessFaq) continue;
       const start = divStart >= 0 ? divStart : openAt;
       let endAt = faqSectionEndAt(src, openAt);
       if (divStart >= 0) {
@@ -193,7 +199,16 @@ export function stripTrailingFaqSection(html: string): string {
       removed = true;
       break;
     }
-    if (!removed) break;
+    if (removed) continue;
+
+    const lastOpen = positions[positions.length - 1]!;
+    const lastTitle = h2TitleAt(src, lastOpen);
+    const isTrailingFaqHeading =
+      isTrailingFaqReplaceHeading(lastTitle) || headingOpenHasFaqId(src, lastOpen);
+    if (!isTrailingFaqHeading) break;
+
+    const start = faqBlockStartBeforeH2(src, lastOpen);
+    src = src.slice(0, start).trim();
   }
   return src;
 }
@@ -202,7 +217,7 @@ export function resolveFaqSourceHtml(row: {
   postContentOptimized?: string;
   postContent?: string;
 }): string {
-  return row.postContentOptimized?.trim() || row.postContent?.trim() || "";
+  return row.postContent?.trim() || row.postContentOptimized?.trim() || "";
 }
 
 export type AppendFaqResult = {

@@ -6,12 +6,17 @@ import {
   resolveOverviewBindingForRow,
   uploadOverviewRowSeoToWordPress,
 } from "@/lib/overview/overview-bulk-seo-payload";
+import {
+  buildOverviewRowWpUploadProofFiles,
+  type OverviewWpUploadProofFile,
+} from "@/lib/overview/overview-wp-upload-harness-artifacts";
 
 export type OverviewResearchRowWpUploadResult = {
   ok: boolean;
   skipped: boolean;
   error?: string;
   postId?: number;
+  generatedFiles: OverviewWpUploadProofFile[];
 };
 
 export type OverviewResearchRowWpUploadParams = {
@@ -28,13 +33,10 @@ export type OverviewResearchRowWpUploadParams = {
 export async function uploadOverviewResearchedRowToWordPress(
   params: OverviewResearchRowWpUploadParams,
 ): Promise<OverviewResearchRowWpUploadResult> {
-  const seoResearch = params.row.seoResearch?.trim() ?? "";
-  if (!seoResearch) {
-    return { ok: false, skipped: true };
-  }
-
+  const uploadedAt = new Date().toISOString();
   const url = params.row.url?.trim() ?? "";
   const invMatch = url ? params.getInventoryMatchForUrl(params.site, url) : undefined;
+  const inventoryContent = invMatch?.row?.fields?.content?.trim() ?? "";
   const invHit =
     invMatch?.row?.id != null && Number.isFinite(invMatch.row.id)
       ? {
@@ -43,27 +45,73 @@ export async function uploadOverviewResearchedRowToWordPress(
         }
       : undefined;
   const binding = resolveOverviewBindingForRow(params.row, params.bindings, invHit);
+
+  const proof = (opts: {
+    ok: boolean;
+    skipped: boolean;
+    error?: string;
+    link?: string;
+    apiResult?: { ok: boolean; error?: string; link?: string };
+  }): OverviewWpUploadProofFile[] =>
+    buildOverviewRowWpUploadProofFiles({
+      site: params.site,
+      row: params.row,
+      binding,
+      inventoryContent,
+      uploadedAt,
+      ...opts,
+    });
+
+  const seoResearch = params.row.seoResearch?.trim() ?? "";
+  if (!seoResearch) {
+    const error = "No research brief for this row.";
+    return { ok: false, skipped: true, error, generatedFiles: proof({ ok: false, skipped: true, error }) };
+  }
+
   if (!binding?.postId) {
-    return { ok: false, skipped: true };
+    const error = "No WordPress post binding for this row.";
+    return { ok: false, skipped: true, error, generatedFiles: proof({ ok: false, skipped: true, error }) };
   }
 
   try {
-    const result = await uploadOverviewRowSeoToWordPress(params.site, params.row, binding);
+    const result = await uploadOverviewRowSeoToWordPress(params.site, params.row, binding, {
+      inventoryContent,
+    });
     if (!result.ok) {
+      const error = result.error || "WordPress rejected the update.";
       return {
         ok: false,
         skipped: false,
-        error: result.error || "WordPress rejected the update.",
+        error,
         postId: binding.postId,
+        generatedFiles: proof({
+          ok: false,
+          skipped: false,
+          error,
+          link: result.link,
+          apiResult: result,
+        }),
       };
     }
-    return { ok: true, skipped: false, postId: binding.postId };
+    return {
+      ok: true,
+      skipped: false,
+      postId: binding.postId,
+      generatedFiles: proof({
+        ok: true,
+        skipped: false,
+        link: result.link,
+        apiResult: result,
+      }),
+    };
   } catch (err) {
+    const error = err instanceof Error ? err.message : "WordPress update failed.";
     return {
       ok: false,
       skipped: false,
-      error: err instanceof Error ? err.message : "WordPress update failed.",
+      error,
       postId: binding.postId,
+      generatedFiles: proof({ ok: false, skipped: false, error }),
     };
   }
 }

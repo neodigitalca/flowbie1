@@ -1,7 +1,6 @@
 import { useCallback } from "react";
-import { flushSync } from "react-dom";
 import { notify, notifyHeaderError } from "@/lib/app-notifications";
-import { NOTIFY_AI_META_FINISHED, NOTIFY_AI_TITLES_APPLY_TO_POSTS_ONLY_PAGES_BUCK, NOTIFY_BAD_URL, NOTIFY_FINISHED_AI_TITLE_OPTIMIZATION, NOTIFY_FINISHED_FOCUS_KEYWORD_URL_PATHS, NOTIFY_NO_ROWS_TO_EXPORT, notifyExportedXRowSToCsv, notifyPostBodiesXOfXFilledReloadTheSit } from "@/lib/notify-messages";
+import { NOTIFY_AI_TITLES_APPLY_TO_POSTS_ONLY_PAGES_BUCK, NOTIFY_BAD_URL, NOTIFY_FINISHED_FOCUS_KEYWORD_URL_PATHS, NOTIFY_NO_ROWS_TO_EXPORT, notifyExportedXRowSToCsv, notifyPostBodiesXOfXFilledReloadTheSit } from "@/lib/notify-messages";
 
 import { computeOverviewAiUrlSuggestion } from "@/lib/overview/overview-ai-url-suggest";
 import {
@@ -30,6 +29,8 @@ import {
   overviewBulkRowIndices,
   overviewRowsInBulkScope,
 } from "@/lib/overview/overview-bulk-row-scope";
+import { mapOverviewAiCopyWithConcurrency } from "@/lib/overview/overview-ai-copy-concurrency";
+import { hasValidGscDumpFilename } from "@/lib/overview/overview-research-row";
 
 type Args = Pick<
   OverviewTabBase,
@@ -141,24 +142,19 @@ export function useOverviewTabAiTitleMetaUrlCsv({
     let completed = 0;
     const bump = () => {
       completed += 1;
-      flushSync(() => {
-        setBulkActionProgress((p) => {
-          const cur = p.aiTitle;
-          if (!cur) return p;
-          return {
-            ...p,
-            aiTitle: advanceBulkSliceBatchProgress(cur, completed, total),
-          };
-        });
+      setBulkActionProgress((p) => {
+        const cur = p.aiTitle;
+        if (!cur) return p;
+        return {
+          ...p,
+          aiTitle: advanceBulkSliceBatchProgress(cur, completed, total),
+        };
       });
     };
     try {
-      await Promise.all(
-        eligible.map((i) =>
-          handleAiTitleRow(i, undefined, { skipOptimizeTitleLoading: true }).finally(bump),
-        ),
+      await mapOverviewAiCopyWithConcurrency(eligible, (i) =>
+        handleAiTitleRow(i, undefined, { skipOptimizeTitleLoading: true }).finally(bump),
       );
-      notify.success(NOTIFY_FINISHED_AI_TITLE_OPTIMIZATION);
     } finally {
       setBulkActionProgress((p) => {
         const next = { ...p };
@@ -194,13 +190,14 @@ export function useOverviewTabAiTitleMetaUrlCsv({
         }
       }
       const gscFilenameForMeta = row.gscQuickWinsCsvFilename ?? gscQuickWinsFile;
+      const pageUrlForGsc = row.url?.trim() ?? "";
       let gscQuickWinsContext: string | undefined;
-      if (gscFilenameForMeta && BACKEND_API_BASE) {
+      if (hasValidGscDumpFilename(gscFilenameForMeta) && pageUrlForGsc && BACKEND_API_BASE) {
         try {
           const ctxRes = await fetch(`${BACKEND_API_BASE}/api/gsc/quick-wins-context`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ filename: gscFilenameForMeta, pageUrl: row.url }),
+            body: JSON.stringify({ filename: gscFilenameForMeta, pageUrl: pageUrlForGsc }),
           });
           const ctxJson = await ctxRes.json().catch(() => null);
           if (ctxRes.ok && ctxJson?.context) gscQuickWinsContext = ctxJson.context;
@@ -217,7 +214,9 @@ export function useOverviewTabAiTitleMetaUrlCsv({
         sentimentSource,
         briefForMeta ? undefined : gscQuickWinsContext,
         briefForMeta || undefined,
-        options?.skipOptimizeMetaLoading ? { skipLoadingState: true } : undefined,
+        {
+          ...(options?.skipOptimizeMetaLoading ? { skipLoadingState: true } : {}),
+        },
       );
       if (!result) {
         updateRow(index, { status: "error" });
@@ -244,24 +243,19 @@ export function useOverviewTabAiTitleMetaUrlCsv({
     let completed = 0;
     const bump = () => {
       completed += 1;
-      flushSync(() => {
-        setBulkActionProgress((p) => {
-          const cur = p.aiMeta;
-          if (!cur) return p;
-          return {
-            ...p,
-            aiMeta: advanceBulkSliceBatchProgress(cur, completed, total),
-          };
-        });
+      setBulkActionProgress((p) => {
+        const cur = p.aiMeta;
+        if (!cur) return p;
+        return {
+          ...p,
+          aiMeta: advanceBulkSliceBatchProgress(cur, completed, total),
+        };
       });
     };
     try {
-      await Promise.all(
-        indices.map((i) =>
-          handleAiMetaRow(i, undefined, { skipOptimizeMetaLoading: true }).finally(bump),
-        ),
+      await mapOverviewAiCopyWithConcurrency(indices, (i) =>
+        handleAiMetaRow(i, undefined, { skipOptimizeMetaLoading: true }).finally(bump),
       );
-      notify.success(NOTIFY_AI_META_FINISHED);
     } finally {
       setBulkActionProgress((p) => {
         const next = { ...p };
@@ -303,15 +297,13 @@ export function useOverviewTabAiTitleMetaUrlCsv({
     const redirectRows: OverviewRedirectRow[] = [];
     const bump = () => {
       completed += 1;
-      flushSync(() => {
-        setBulkActionProgress((p) => {
-          const cur = p.aiUrl;
-          if (!cur) return p;
-          return {
-            ...p,
-            aiUrl: advanceBulkSliceBatchProgress(cur, completed, total),
-          };
-        });
+      setBulkActionProgress((p) => {
+        const cur = p.aiUrl;
+        if (!cur) return p;
+        return {
+          ...p,
+          aiUrl: advanceBulkSliceBatchProgress(cur, completed, total),
+        };
       });
     };
     try {

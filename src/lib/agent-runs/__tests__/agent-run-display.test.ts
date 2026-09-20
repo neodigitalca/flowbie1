@@ -5,6 +5,7 @@ import {
   agentRunInlineStatus,
   agentRunStatusHint,
   buildAgentRunProgressLabel,
+  isAgentRunNodeDiagnosticLabel,
   splitProgressLabel,
 } from "@/lib/agent-runs/agent-run-display";
 import type { AgentRun } from "@/lib/agent-runs-types";
@@ -28,6 +29,21 @@ describe("buildAgentRunProgressLabel", () => {
   });
 });
 
+describe("isAgentRunNodeDiagnosticLabel", () => {
+  it("detects NODE_TLS_REJECT_UNAUTHORIZED process warnings", () => {
+    expect(
+      isAgentRunNodeDiagnosticLabel(
+        "(node:30860) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification. (Use `node --trace-warnings ...` to show where the warning was created)",
+      ),
+    ).toBe(true);
+  });
+
+  it("leaves real progress labels alone", () => {
+    expect(isAgentRunNodeDiagnosticLabel("Post creator server job started")).toBe(false);
+    expect(isAgentRunNodeDiagnosticLabel("1 post URLs loaded, KW JSON (496 keywords)")).toBe(false);
+  });
+});
+
 describe("agentRunStatusHint", () => {
   it("prefers harness detail tail over stale step prefix", () => {
     expect(
@@ -37,6 +53,14 @@ describe("agentRunStatusHint", () => {
 
   it("falls back to single-line label", () => {
     expect(agentRunStatusHint("Starting optimization…")).toBe("Starting optimization…");
+  });
+
+  it("hides Node TLS process warnings", () => {
+    expect(
+      agentRunStatusHint(
+        "(node:30860) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.",
+      ),
+    ).toBeNull();
   });
 });
 
@@ -132,5 +156,68 @@ describe("agentRunCollapsedHint", () => {
     expect(
       agentRunCollapsedHint(run, { progressLabel: "Cancelled", progress: 0, stepLabel: "Cancelled" }, 0),
     ).toBe("");
+  });
+
+  it("skips Node TLS warnings and shows the recipe title instead", () => {
+    const run = {
+      id: 91,
+      recipeKey: "post_creator",
+      status: "running",
+      recipeTitle: "Post creator",
+      source: "workflow",
+      taskId: 0,
+      context: {},
+      plan: {},
+      createdAt: "",
+      updatedAt: "",
+    } as AgentRun;
+    expect(
+      agentRunCollapsedHint(
+        run,
+        {
+          isLive: true,
+          currentUrl: null,
+          postTitle: null,
+          progressLabel:
+            "(node:30860) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.",
+          positionLabel: null,
+          percent: null,
+          generatedFiles: [],
+          completedUrlFiles: [],
+        },
+        0,
+      ),
+    ).toBe("Post creator");
+  });
+
+  it("shows the URL the optimizer is working on", () => {
+    const run = {
+      id: 90,
+      recipeKey: "content_optimizer_bulk",
+      status: "running",
+      recipeTitle: "Full AISEO",
+      source: "workflow",
+      taskId: 1,
+      context: {},
+      plan: {},
+      createdAt: "",
+      updatedAt: "",
+    } as AgentRun;
+    expect(
+      agentRunCollapsedHint(
+        run,
+        {
+          isLive: true,
+          currentUrl: "https://poshoutdoors.com/glamping-tips/",
+          postTitle: "Glamping Tips",
+          progressLabel: "Working https://poshoutdoors.com/glamping-tips/ (1/12)",
+          positionLabel: "1/12",
+          percent: 0,
+          generatedFiles: [],
+          completedUrlFiles: [],
+        },
+        0,
+      ),
+    ).toBe("Glamping Tips");
   });
 });

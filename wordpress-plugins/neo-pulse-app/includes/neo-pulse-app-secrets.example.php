@@ -34,6 +34,15 @@ if ( ! defined( 'NEO_PULSE_APP_GMB_REDIRECT_URI' ) ) {
 if ( ! defined( 'NEO_PULSE_APP_FRONTEND_URL' ) ) {
 	define( 'NEO_PULSE_APP_FRONTEND_URL', 'https://neodigital.ca/app/' );
 }
+if ( ! defined( 'NEO_PULSE_APP_GOOGLE_ADS_DEVELOPER_TOKEN' ) ) {
+	define( 'NEO_PULSE_APP_GOOGLE_ADS_DEVELOPER_TOKEN', '' );
+}
+if ( ! defined( 'NEO_PULSE_APP_GOOGLE_ADS_MCC_ID' ) ) {
+	define( 'NEO_PULSE_APP_GOOGLE_ADS_MCC_ID', '' );
+}
+if ( ! defined( 'NEO_PULSE_APP_GOOGLE_ADS_REDIRECT_URI' ) ) {
+	define( 'NEO_PULSE_APP_GOOGLE_ADS_REDIRECT_URI', '' );
+}
 if ( ! defined( 'NEO_PULSE_APP_CHEKKIT_EVENTS_WEBHOOK_URL' ) ) {
 	define( 'NEO_PULSE_APP_CHEKKIT_EVENTS_WEBHOOK_URL', '' );
 }

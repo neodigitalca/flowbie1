@@ -118,6 +118,77 @@ class Neo_Pulse_Wp_Backend_Assist_Tools_Seo {
 			'edit_url' => admin_url( 'admin.php?page=neo-pulse-wp-agent-hub-edit&block_id=' . $id ),
 		);
 	}
+
+	public static function tool_get_seo_block( array $params ): array {
+		$row = self::resolve_block_row( $params );
+		if ( ! is_array( $row ) ) {
+			return array(
+				'success' => false,
+				'error'   => __( 'SEO block not found. Provide block_id or an exact Agent Hub title.', 'neo-pulse-wp' ),
+			);
+		}
+
+		$id = absint( $row['id'] ?? 0 );
+		return array(
+			'success'        => true,
+			'block_id'       => $id,
+			'title'          => (string) ( $row['title'] ?? '' ),
+			'focus_keyword'  => (string) ( $row['focus_keyword'] ?? '' ),
+			'status'         => (string) ( $row['status'] ?? '' ),
+			'slots'          => isset( $row['slots'] ) && is_array( $row['slots'] ) ? $row['slots'] : array(),
+			'layout_config'  => isset( $row['layout_config'] ) && is_array( $row['layout_config'] ) ? $row['layout_config'] : array(),
+			'block_manifest' => $row,
+			'summary'        => sprintf( __( 'Loaded SEO block "%s".', 'neo-pulse-wp' ), (string) ( $row['title'] ?? $id ) ),
+			'edit_url'       => admin_url( 'admin.php?page=neo-pulse-wp-agent-hub-edit&block_id=' . $id ),
+		);
+	}
+
+	public static function tool_duplicate_seo_block( array $params ): array {
+		$source = self::resolve_block_row( $params );
+		if ( ! is_array( $source ) ) {
+			return array(
+				'success' => false,
+				'error'   => __( 'SEO block template not found. Provide block_id or an exact Agent Hub title.', 'neo-pulse-wp' ),
+			);
+		}
+
+		$source_id = absint( $source['id'] ?? 0 );
+		if ( $source_id < 1 ) {
+			return array( 'success' => false, 'error' => __( 'block_id is required to duplicate.', 'neo-pulse-wp' ) );
+		}
+
+		$result = Neo_Pulse_Wp_Seo_Blocks_Storage::duplicate_block( $source_id );
+		if ( is_wp_error( $result ) ) {
+			return array( 'success' => false, 'error' => $result->get_error_message() );
+		}
+
+		$user_copy = isset( $params['user_copy'] ) ? trim( (string) $params['user_copy'] ) : '';
+		if ( $user_copy !== '' ) {
+			if ( ! class_exists( 'Neo_Pulse_Wp_Seo_Blocks_Agent', false ) ) {
+				require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/seo-builder/class-neo-pulse-wp-seo-blocks-agent.php';
+			}
+			$filled = Neo_Pulse_Wp_Seo_Blocks_Agent::fill_slots_from_user_copy( $result, $user_copy );
+			if ( is_wp_error( $filled ) ) {
+				return array( 'success' => false, 'error' => $filled->get_error_message() );
+			}
+			$saved = Neo_Pulse_Wp_Seo_Blocks_Storage::save( $filled );
+			if ( is_wp_error( $saved ) ) {
+				return array( 'success' => false, 'error' => $saved->get_error_message() );
+			}
+			$result = $saved;
+		}
+
+		$id = absint( $result['id'] ?? 0 );
+		return array(
+			'success'        => true,
+			'block_id'       => $id,
+			'source_block_id'=> $source_id,
+			'title'          => (string) ( $result['title'] ?? '' ),
+			'block_manifest' => $result,
+			'summary'        => sprintf( __( 'Created SEO block "%s" from template.', 'neo-pulse-wp' ), (string) ( $result['title'] ?? $id ) ),
+			'edit_url'       => admin_url( 'admin.php?page=neo-pulse-wp-agent-hub-edit&block_id=' . $id ),
+		);
+	}
 	public static function tool_delete_seo_block( array $params ): array {
 		$id = absint( $params['block_id'] ?? $params['id'] ?? 0 );
 		if ( $id < 1 ) {
@@ -179,7 +250,16 @@ class Neo_Pulse_Wp_Backend_Assist_Tools_Seo {
 			return array( 'success' => false, 'error' => __( 'post_id is required.', 'neo-pulse-wp' ) );
 		}
 		if ( $block_id < 1 ) {
-			return array( 'success' => false, 'error' => __( 'block_id is required.', 'neo-pulse-wp' ) );
+			return array( 'success' => false, 'error' => __( 'block_id is required. Create or duplicate an Agent Hub SEO block first.', 'neo-pulse-wp' ) );
+		}
+
+		$row = Neo_Pulse_Wp_Seo_Blocks_Storage::get( $block_id );
+		if ( ! is_array( $row ) ) {
+			return array( 'success' => false, 'error' => __( 'SEO block not found. Create or duplicate an Agent Hub block before apply.', 'neo-pulse-wp' ) );
+		}
+		$slots = isset( $row['slots'] ) && is_array( $row['slots'] ) ? $row['slots'] : array();
+		if ( empty( $slots ) ) {
+			return array( 'success' => false, 'error' => __( 'SEO block has no slots. Compose and save a block, or duplicate a template, before apply.', 'neo-pulse-wp' ) );
 		}
 
 		if ( ! class_exists( 'Neo_Pulse_Wp_Seo_Blocks_Page_Insert', false ) ) {
@@ -202,11 +282,71 @@ class Neo_Pulse_Wp_Backend_Assist_Tools_Seo {
 		);
 
 		if ( is_wp_error( $result ) ) {
-			return array( 'success' => false, 'error' => $result->get_error_message() );
+			return array(
+				'success' => false,
+				'post_id' => $post_id,
+				'error'   => sprintf(
+					/* translators: 1: page id, 2: error message */
+					__( 'Apply failed on page %1$d: %2$s', 'neo-pulse-wp' ),
+					$post_id,
+					$result->get_error_message()
+				),
+			);
 		}
 
 		return $result;
 	}
+
+	public static function tool_design_page_with_novamira( array $params ): array {
+		if ( ! class_exists( 'Neo_Pulse_Wp_Backend_Assist_Novamira_Page', false ) ) {
+			require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/backend-assist/class-neo-pulse-wp-backend-assist-novamira-page.php';
+		}
+		$post_id = absint( $params['post_id'] ?? 0 );
+		if ( $post_id < 1 ) {
+			return array( 'success' => false, 'error' => __( 'post_id is required.', 'neo-pulse-wp' ) );
+		}
+		if ( ! empty( $params['sync'] ) || ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+			return Neo_Pulse_Wp_Backend_Assist_Novamira_Page::design( $params );
+		}
+		$job_key = 'neo_pulse_novamira_design_' . $post_id;
+		update_option(
+			$job_key,
+			array(
+				'state'   => 'running',
+				'started' => time(),
+				'post_id' => $post_id,
+			),
+			false
+		);
+		$queued = Neo_Pulse_Wp_Backend_Assist_Novamira_Page::queue_design_cron( $post_id, $job_key );
+		if ( is_wp_error( $queued ) ) {
+			return array( 'success' => false, 'post_id' => $post_id, 'error' => $queued->get_error_message() );
+		}
+		$deadline = time() + 50;
+		while ( time() < $deadline ) {
+			sleep( 2 );
+			$job = get_option( $job_key );
+			if ( ! is_array( $job ) ) {
+				continue;
+			}
+			$state = (string) ( $job['state'] ?? '' );
+			if ( $state === 'done' && ! empty( $job['success'] ) ) {
+				delete_option( $job_key );
+				return $job;
+			}
+			if ( $state === 'error' ) {
+				delete_option( $job_key );
+				return $job;
+			}
+		}
+		return array(
+			'success' => false,
+			'post_id' => $post_id,
+			'queued'  => true,
+			'error'   => __( 'Novamira design is still running in the background. Reload the page in about a minute.', 'neo-pulse-wp' ),
+		);
+	}
+
 	public static function resolve_seo_block_manifest( array $params ): ?array {
 		if (
 			is_array( Neo_Pulse_Wp_Backend_Assist_Context::$builder_context )
@@ -226,6 +366,50 @@ class Neo_Pulse_Wp_Backend_Assist_Tools_Seo {
 			$row = Neo_Pulse_Wp_Seo_Blocks_Storage::get( $id );
 			return is_array( $row ) ? $row : null;
 		}
+		return self::resolve_block_row( $params );
+	}
+
+	/**
+	 * @param array<string,mixed> $params
+	 * @return array<string,mixed>|null
+	 */
+	public static function resolve_block_row( array $params ): ?array {
+		$id = absint( $params['block_id'] ?? $params['id'] ?? 0 );
+		if ( $id > 0 ) {
+			$row = Neo_Pulse_Wp_Seo_Blocks_Storage::get( $id );
+			return is_array( $row ) ? $row : null;
+		}
+
+		$title = sanitize_text_field( (string) ( $params['title'] ?? $params['block_title'] ?? '' ) );
+		if ( $title !== '' ) {
+			$matches = array();
+			foreach ( Neo_Pulse_Wp_Seo_Blocks_Storage::list_all() as $row ) {
+				if ( ! is_array( $row ) ) {
+					continue;
+				}
+				if ( strcasecmp( (string) ( $row['title'] ?? '' ), $title ) === 0 ) {
+					$matches[] = $row;
+				}
+			}
+			if ( count( $matches ) === 1 ) {
+				return $matches[0];
+			}
+			return null;
+		}
+
+		if (
+			is_array( Neo_Pulse_Wp_Backend_Assist_Context::$builder_context )
+			&& ! empty( Neo_Pulse_Wp_Backend_Assist_Context::$builder_context['block'] )
+			&& is_array( Neo_Pulse_Wp_Backend_Assist_Context::$builder_context['block'] )
+		) {
+			return Neo_Pulse_Wp_Backend_Assist_Context::$builder_context['block'];
+		}
+
 		return null;
 	}
+
+	/**
+	 * @param array<string,mixed> $source
+	 * @return array<string,mixed>
+	 */
 }

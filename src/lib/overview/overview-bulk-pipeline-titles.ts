@@ -4,9 +4,11 @@ import type { BulkHarnessSectionUi } from "@/hooks/use-bulk-auto-generate";
 import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
 import {
   CONTENT_OPTIMIZE_PIPELINE_TITLES,
+  GOOGLE_IMAGE_PIPELINE_TITLE,
   isContentOptimizePipelineTitles,
   resolveContentOptimizePipelineTitlesForRow,
   resolveContentOptimizePipelineTitlesFromHarness,
+  withGoogleImagePipelineFirst,
 } from "@/lib/overview/overview-content-optimize-pipeline";
 import {
   RESEARCH_HARNESS_PIPELINE_TITLES,
@@ -18,6 +20,49 @@ import {
 export const RESEARCH_PIPELINE_TITLES = RESEARCH_HARNESS_PIPELINE_TITLES;
 
 const BLUEPRINT_PIPELINE_TITLE = "Blueprint";
+
+/**
+ * Cache-only AISEO body harnesses: ignore stale research artifacts on grid rows.
+ * Runs in overview-aiseo-row-artifacts use fixed file slots (Element | Post content | WordPress upload) in Details.
+ */
+const AISEO_SIMPLE_HARNESS_RUN_KINDS = new Set<BulkOptimizationState["runKind"]>([
+  "aiTitle",
+  "aiAnswer",
+  "aiOverview",
+  "aiScenario",
+  "aiHeaders",
+  "aiLinks",
+  "aiWikipediaLink",
+  "aiFaq",
+  "contentCleanup",
+]);
+
+export function isAiseoSimpleHarnessRunKind(
+  runKind: BulkOptimizationState["runKind"] | undefined,
+): boolean {
+  return runKind != null && AISEO_SIMPLE_HARNESS_RUN_KINDS.has(runKind);
+}
+
+/** Batch-level pipeline titles for cache-only AISEO harness runs (Overview details drawer). */
+export function resolveSimpleAiseoBatchPipelineTitles(
+  runKind: BulkOptimizationState["runKind"] | undefined,
+): readonly string[] | undefined {
+  if (!isAiseoSimpleHarnessRunKind(runKind)) return undefined;
+  switch (runKind) {
+    case "aiAnswer":
+      return ["Answer"];
+    case "aiScenario":
+      return undefined; // FAQ-shaped: Case scenario + WordPress upload only
+    case "contentCleanup":
+      return ["Clean Up"];
+    case "aiWikipediaLink":
+      return ["Wikipedia link"];
+    case "aiFaq":
+      return undefined;
+    default:
+      return undefined;
+  }
+}
 
 export { CONTENT_OPTIMIZE_PIPELINE_TITLES, isContentOptimizePipelineTitles };
 
@@ -178,6 +223,26 @@ export function resolveBulkRowPipelineTitles(
   batchPipelineTitles?: readonly string[],
   bulkState?: ResearchBatchSignals | null,
 ): readonly string[] {
+  if (isAiseoSimpleHarnessRunKind(runKind)) {
+    if (batchPipelineTitles?.length && !isResearchHarnessPipelineTitles(batchPipelineTitles)) {
+      return [...batchPipelineTitles];
+    }
+    switch (runKind) {
+      case "aiAnswer":
+        return ["Answer"];
+      case "aiScenario":
+        return [];
+      case "contentCleanup":
+        return ["Clean Up"];
+      case "aiWikipediaLink":
+        return ["Wikipedia link"];
+      case "aiFaq":
+        return [];
+      default:
+        return batchPipelineTitles?.length ? [...batchPipelineTitles] : ["Answer"];
+    }
+  }
+
   if (isExplicitResearchPipeline(runKind, rowHarness, batchPipelineTitles, bulkState)) {
     return [...RESEARCH_HARNESS_PIPELINE_TITLES];
   }
@@ -194,7 +259,13 @@ export function resolveBulkRowPipelineTitles(
       return [...RESEARCH_HARNESS_PIPELINE_TITLES];
     }
     if (isContentOptimizePipelineTitles(batchPipelineTitles)) {
-      return resolveContentOptimizePipelineTitlesForRow(rowHarness, rowFiles);
+      const googleImageFirst = batchPipelineTitles[0] === GOOGLE_IMAGE_PIPELINE_TITLE;
+      return resolveContentOptimizePipelineTitlesForRow(
+        rowHarness,
+        rowFiles,
+        undefined,
+        googleImageFirst,
+      );
     }
     return [...batchPipelineTitles];
   }
@@ -204,4 +275,22 @@ export function resolveBulkRowPipelineTitles(
   }
 
   return resolveContentOptimizePipelineTitlesForRow(rowHarness, rowFiles);
+}
+
+export function resolveBulkRowPipelineTitlesWithGoogleImage(
+  runKind: BulkOptimizationState["runKind"] | undefined,
+  rowHarness: BulkHarnessSectionUi[] | undefined,
+  rowFiles: RowFileRef[] | undefined,
+  googleImageFirst: boolean,
+  batchPipelineTitles?: readonly string[],
+  bulkState?: ResearchBatchSignals | null,
+): readonly string[] {
+  const titles = resolveBulkRowPipelineTitles(
+    runKind,
+    rowHarness,
+    rowFiles,
+    batchPipelineTitles,
+    bulkState,
+  );
+  return googleImageFirst ? withGoogleImagePipelineFirst(titles) : titles;
 }

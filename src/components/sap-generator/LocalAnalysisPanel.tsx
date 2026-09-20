@@ -137,8 +137,16 @@ import type { CSVRow } from "@/lib/bulk/bulk-csv-parser";
 import {
   getPrimaryCityStateLabel,
   getPrimaryLocationLabel,
+  resolveEntityClusterLocationLabel,
   resolvePrimaryLocationLabel,
 } from "@/lib/primary-location-from-site";
+import { getStoredSites } from "@/components/integrations/storage";
+import { useWordPressSites } from "@/hooks/use-wordpress-sites";
+import {
+  canUseBlindMagicKeywordOption,
+  findBlindMagicPeerSite,
+  loadBlindMagicPeerGscQueries,
+} from "@/lib/local-analysis/blind-magic-peer-gsc";
 import { enrichSapRowsWithWikipediaLookupsInBatches, lookupEntityHintWikipedia, type EntityHintWikiLookup, type LookupEntityHintWikipediaOptions } from "@/lib/wikipedia-api";
 import { cn } from "@/lib/utils";
 import {
@@ -247,6 +255,7 @@ interface PersistedLocalAnalysisV1 {
   entityTypeFocus?: string[];
   entityAdGroupCountInput?: string;
   entityAdsPerGroupInput?: string;
+  useBlindMagicKeywords?: boolean;
   /** @deprecated Legacy single budget field; restored as ad groups with adsPerGroup=1. */
   sapPageBudgetInput?: string;
 }
@@ -558,7 +567,13 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
   );
   /** Optional: most suggested keywords will center on this theme (OpenRouter). */
   const [suggestFocusKeyword, setSuggestFocusKeyword] = useState("");
-  const [suggestFocusLocation, setSuggestFocusLocation] = useState("");
+  const [suggestFocusLocation, setSuggestFocusLocation] = useState(
+    () => getPrimaryCityStateLabel(site)?.trim() ?? "",
+  );
+  const { sites: portfolioSites } = useWordPressSites();
+  const [useBlindMagicKeywords, setUseBlindMagicKeywords] = useState(() =>
+    canUseBlindMagicKeywordOption(getStoredSites(), site),
+  );
   const [entityGeographicLevel, setEntityGeographicLevel] = useState<EntityGeographicLevel>(
     DEFAULT_ENTITY_GEOGRAPHIC_LEVEL
   );
@@ -576,6 +591,8 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
   );
   /** Canonical `###` titles from `buildWikipediaGranularEntityPool` for pool-first Wikipedia resolution. */
   const [granularPoolTitles, setGranularPoolTitles] = useState<string[]>([]);
+
+  const showBlindMagicKeywords = canUseBlindMagicKeywordOption(portfolioSites, site);
 
   const isTempWorkspace = workspace.mode === "temp";
   const researchModel = useMemo(
@@ -699,16 +716,45 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
 
   const loadSitePrepAndGsc = useCallback(async () => {
     const siteUrl = isTempWorkspace ? workspace.tempSeedUrl.trim() : (site.siteUrl?.trim() ?? "");
-    const warm = await ensureEntitySiteWarmCache(site, { requireGsc: true });
-    if (warm.error) {
+    const warm = await ensureEntitySiteWarmCache(site, { requireGsc: !useBlindMagicKeywords });
+    if (warm.error && !useBlindMagicKeywords) {
       throw new Error(warm.error);
     }
     const sources = applySitePrepFromWarm(warm, siteUrl);
+    if (useBlindMagicKeywords) {
+      const peer = findBlindMagicPeerSite(portfolioSites, site.id);
+      if (!peer) {
+        throw new Error("Connect Blind Magic in Integrations to use its keywords.");
+      }
+      setHeaderProgress({
+        kind: "suggest",
+        phase: "Loading Blind Magic keywords",
+        completed: 0,
+        total: 1,
+      });
+      const peerGsc = await loadBlindMagicPeerGscQueries(peer);
+      sources.gscQueries = peerGsc.queries;
+      sources.gscDateRange = peerGsc.dateRange;
+      entityKeywordSourcesRef.current = sources;
+      const peerUrl = peer.siteUrl?.trim() ?? "";
+      if (peerUrl && peerGsc.queries.length > 0) {
+        commitGscKeywordsHostedLink(peerUrl, peerGsc.queries, peerGsc.dateRange);
+      }
+      return sources;
+    }
     if (!sources.gscQueries?.length) {
       throw new Error("GSC keywords are unavailable. Connect GSC for this site.");
     }
     return sources;
-  }, [site, isTempWorkspace, workspace.tempSeedUrl, applySitePrepFromWarm]);
+  }, [
+    site,
+    isTempWorkspace,
+    workspace.tempSeedUrl,
+    applySitePrepFromWarm,
+    useBlindMagicKeywords,
+    commitGscKeywordsHostedLink,
+    portfolioSites,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -986,7 +1032,10 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
   useEffect(() => {
     let cancelled = false;
     void getPrimaryLabelForWikipediaAugment(site).then((label) => {
-      if (!cancelled && label?.trim()) setPrimaryWikiAugmentLabel(label.trim());
+      if (cancelled || !label?.trim()) return;
+      const trimmed = label.trim();
+      setPrimaryWikiAugmentLabel(trimmed);
+      setSuggestFocusLocation((prev) => (prev.trim() ? prev : trimmed));
     });
     return () => {
       cancelled = true;
@@ -994,9 +1043,17 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
   }, [site]);
 
   useEffect(() => {
-    setPrimaryWikiAugmentLabel(getPrimaryCityStateLabel(site)?.trim() || undefined);
+    const fromProfile = getPrimaryCityStateLabel(site)?.trim() ?? "";
+    setPrimaryWikiAugmentLabel(fromProfile || undefined);
     setGranularPoolTitles([]);
+    if (fromProfile) {
+      setSuggestFocusLocation((prev) => (prev.trim() ? prev : fromProfile));
+    }
   }, [site.id]); // eslint-disable-line react-hooks/exhaustive-deps -- `site` keyed by id only; avoid clearing pool on unrelated `site` reference churn
+
+  useEffect(() => {
+    setUseBlindMagicKeywords(canUseBlindMagicKeywordOption(portfolioSites, site));
+  }, [site.id, portfolioSites]); // eslint-disable-line react-hooks/exhaustive-deps -- availability keyed by site id + live portfolio list
 
   useEffect(() => {
     const allowed = new Set(entityTypesForLevel(entityGeographicLevel));
@@ -1107,7 +1164,12 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
         }
       }
       if (typeof p.suggestFocusKeyword === "string") setSuggestFocusKeyword(p.suggestFocusKeyword);
-      if (typeof p.suggestFocusLocation === "string") setSuggestFocusLocation(p.suggestFocusLocation);
+      if (typeof p.suggestFocusLocation === "string" && p.suggestFocusLocation.trim()) {
+        setSuggestFocusLocation(p.suggestFocusLocation);
+      } else {
+        const fromProfile = getPrimaryCityStateLabel(site)?.trim();
+        if (fromProfile) setSuggestFocusLocation(fromProfile);
+      }
       if (p.entityGeographicLevel === "national" || p.entityGeographicLevel === "provincial" || p.entityGeographicLevel === "city") {
         setEntityGeographicLevel(resolveEntityGeographicLevel(p.entityGeographicLevel));
       }
@@ -1121,6 +1183,11 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
       }
       if (typeof p.entityAdsPerGroupInput === "string") {
         setEntityAdsPerGroupInput(p.entityAdsPerGroupInput);
+      }
+      if (typeof p.useBlindMagicKeywords === "boolean") {
+        setUseBlindMagicKeywords(
+          p.useBlindMagicKeywords && canUseBlindMagicKeywordOption(portfolioSites, site),
+        );
       }
       if (
         typeof p.sapPageBudgetInput === "string" &&
@@ -1187,6 +1254,19 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
     entityAdsPerGroup,
   ]);
 
+  /** Reserve amount rows for the current budget when no grid preload exists yet. */
+  useEffect(() => {
+    if (sapRowsRef.current.some((r) => r.title?.trim() || r.entity?.trim())) return;
+    if (gridCsvFullText.trim()) return;
+    if (maxSapBudget <= 0) return;
+    if (sapRowsRef.current.length === maxSapBudget) return;
+    const seeded = finalizeEntitySapRowsForAdGroups(
+      syncPromptBlogRowsToCount(seedPromptBlogSlots(maxSapBudget), maxSapBudget),
+    );
+    setSapRows(seeded);
+    setEntitySelectedRowIndices(allRowIndicesSet(seeded.length));
+  }, [maxSapBudget, gridCsvFullText, site.id]);
+
   useEffect(() => {
     const hasPersistable =
       businessName.trim().length > 0 ||
@@ -1233,6 +1313,7 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
             entityAdsPerGroupInput !== String(DEFAULT_ENTITY_ADS_PER_GROUP)
               ? entityAdsPerGroupInput
               : undefined,
+          useBlindMagicKeywords: useBlindMagicKeywords || undefined,
         };
         sessionStorage.setItem(LA_SESSION_KEY(site.id), JSON.stringify(snap));
       } catch {
@@ -1258,6 +1339,7 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
     entityTypeFocus,
     entityAdGroupCountInput,
     entityAdsPerGroupInput,
+    useBlindMagicKeywords,
   ]);
 
   const resetAnalysisOutput = useCallback(() => {
@@ -1836,23 +1918,29 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
     assignUniqueEntitySapKeywords,
   ]);
 
+  const reportClustersBlocker = useCallback((message: string) => {
+    notify.error(message);
+    setPipelineErrorMessage(message);
+    setHeaderProgress({ kind: "suggest", phase: message, completed: 0, total: 0 });
+  }, []);
+
   const runClusters = useCallback(async () => {
     setPipelineErrorMessage(null);
     const adGroupsRaw = entityAdGroupCountInput.trim().replace(/[^\d]/g, "");
     const adsPerGroupRaw = entityAdsPerGroupInput.trim().replace(/[^\d]/g, "");
     if (!/^\d+$/.test(adGroupsRaw) || !/^\d+$/.test(adsPerGroupRaw)) {
-      notify.error(NOTIFY_ENTER_A_WHOLE_NUMBER_FOR_TOTAL_SAP_PAGES);
+      reportClustersBlocker(NOTIFY_ENTER_A_WHOLE_NUMBER_FOR_TOTAL_SAP_PAGES);
       return;
     }
     const adGroupCount = entityAdGroupCountFromInput(entityAdGroupCountInput);
     const adsPerGroup = entityAdsPerGroupFromInput(entityAdsPerGroupInput);
     const total = entitySapTotalFromParts(adGroupCount, adsPerGroup);
     if (!Number.isFinite(total) || total < LOCAL_ANALYSIS_SAP_MIN) {
-      notify.error(notifyEnterAValidTotalSapPagesValueAtL(LOCAL_ANALYSIS_SAP_MIN));
+      reportClustersBlocker(notifyEnterAValidTotalSapPagesValueAtL(LOCAL_ANALYSIS_SAP_MIN));
       return;
     }
     if (!openRouterKey) {
-      notify.error(NOTIFY_OPENROUTER_IN_SETTINGS);
+      reportClustersBlocker(NOTIFY_OPENROUTER_IN_SETTINGS);
       return;
     }
     const seedUrl = site.siteUrl?.trim() ?? "";
@@ -1860,19 +1948,22 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
       !isTempWorkspace &&
       Boolean(site.username?.trim() && site.appPassword?.trim() && seedUrl);
     if (!hasWpCreds) {
-      notify.error("Connect WordPress (username + app password) before Clusters.");
+      reportClustersBlocker("Connect WordPress (username + app password) before Clusters.");
       return;
     }
 
     const name = businessName.trim() || site.name?.trim() || "";
     if (!name) {
-      notify.error(NOTIFY_CONNECT_A_SITE_WITH_A_BUSINESS_NAME_IN_I);
+      reportClustersBlocker(NOTIFY_CONNECT_A_SITE_WITH_A_BUSINESS_NAME_IN_I);
       return;
     }
 
+    const clusterLocation = resolveEntityClusterLocationLabel(site, suggestFocusLocation);
     const gridText = gridCsvFullText.trim();
-    if (!gridText && !sapRows.some((r) => r.entity?.trim())) {
-      notify.error("Upload grid first.");
+    if (!gridText && !clusterLocation && !sapRows.some((r) => r.entity?.trim())) {
+      reportClustersBlocker(
+        "Type a Location, upload a Grid CSV, or add a city in Integrations for this site.",
+      );
       return;
     }
 
@@ -1880,7 +1971,11 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
     setSuggestLoading(true);
     setHeaderProgress({
       kind: "suggest",
-      phase: gridText ? "Clustering grid locations" : "Assigning unique keywords from GSC",
+      phase: gridText
+        ? "Clustering grid locations"
+        : clusterLocation
+          ? `Clustering ${clusterLocation}`
+          : "Assigning unique keywords from GSC",
       completed: 0,
       total,
     });
@@ -1946,6 +2041,47 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
         }
         setSapRows(rows);
         setEntitySelectedRowIndices(allRowIndicesSet(rows.length));
+      } else if (clusterLocation) {
+        const focusKw = suggestFocusKeyword.trim();
+        const clusterResult = await runEntityGridLocationClusterAgent({
+          apiKey: openRouterKey,
+          siteId: isTempWorkspace ? undefined : site.id,
+          gridRows: [],
+          gridKeywordWeights: [],
+          profileLocationLabel: clusterLocation,
+          profileSampleAddress: getPrimaryLocationLabel(site) ?? undefined,
+          gscQueries: keywordSources.gscQueries,
+          gridFallbackKeywordBases: focusKw ? [focusKw] : [],
+          gridLocations: [clusterLocation],
+          gridSummaryMarkdown: "",
+          wikipediaSearchAugment: mergedWikipediaSearchAugment,
+          totalSapBudget: total,
+          entityAdGroupCount: adGroupCount,
+          entityAdsPerGroup: adsPerGroup,
+          entityTypeFocus,
+          businessName: name,
+          siteName: site.name?.trim() || name,
+          ...(clientAudienceContextMarkdown.length > 0
+            ? { clientAudienceContextMarkdown }
+            : {}),
+          onClusterProgress: (_done, _clusterTotal, placeLabel, cumulativeSapRows) => {
+            setHeaderProgress({
+              kind: "suggest",
+              phase: `Clustering ${placeLabel}`,
+              completed: cumulativeSapRows,
+              total,
+            });
+          },
+        });
+        clusterWikipedia = clusterResult.clusterWikipedia;
+        rows = finalizeEntitySapRowsForAdGroups(
+          clusterResult.sapRows.slice(0, total).map((row) => ({ ...row })),
+        );
+        if (!rows.some((r) => r.entity?.trim())) {
+          throw new Error("Location clustering produced no neighbourhood rows.");
+        }
+        setSapRows(rows);
+        setEntitySelectedRowIndices(allRowIndicesSet(rows.length));
       } else {
         rows = finalizeEntitySapRowsForAdGroups(sapRows.slice(0, total).map((row) => ({ ...row })));
         setEntitySelectedRowIndices(allRowIndicesSet(rows.length));
@@ -1972,7 +2108,7 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
           buckets: keywordSources.buckets,
           gscQueries: keywordSources.gscQueries,
         },
-        gridLocations,
+        gridLocations: gridLocations.length > 0 ? gridLocations : clusterLocation ? [clusterLocation] : [],
         skipKeywordFill: false,
         ...(clusterWikipedia && clusterWikipedia.length > 0 ? { clusterWikipedia } : {}),
         ...(entityTypeFocus.length > 0 ? { entityTypeFocus } : {}),
@@ -2024,7 +2160,11 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
     gridCsvFullText,
     gridKeywordWeights,
     suggestFocusKeyword,
+    suggestFocusLocation,
+    mergedWikipediaSearchAugment,
     loadSitePrepAndGsc,
+    useBlindMagicKeywords,
+    reportClustersBlocker,
   ]);
 
   const hasSapRowsForCsv = sapRows.length > 0;
@@ -2127,9 +2267,11 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
       ),
     [headerProgress, workspaceBusy, entityListRows.length],
   );
-  /** Idle track off when placeholders/empty keywords remain; active run still shows bar. */
+  /** Idle track off when placeholders/empty keywords remain; keep visible for blockers and active runs. */
   const hideIdleProgressTrack =
-    !headerProgress && (!hasGeneratedSapRows || entityHasEmptyKeywordRow);
+    !headerProgress &&
+    !pipelineErrorMessage?.trim() &&
+    (!hasGeneratedSapRows || entityHasEmptyKeywordRow);
 
   const downloadLocalMarkdownFile = useCallback((content: string, baseName: string) => {
     const safe = baseName.replace(/[^\w-]+/g, "-").slice(0, 80) || "export";
@@ -2175,6 +2317,9 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
         onEntityTypeFocusChange={setEntityTypeFocus}
         hasSapRowsForCsv={hasSapRowsForCsv}
         onDownloadTargetsCsv={() => void downloadHeaderTargetsCsv()}
+        showBlindMagicKeywords={showBlindMagicKeywords}
+        useBlindMagicKeywords={useBlindMagicKeywords}
+        onUseBlindMagicKeywordsChange={setUseBlindMagicKeywords}
         onDetailsOpenChange={setDetailsDrawerOpen}
         detailsProps={{
           headerProgress,
@@ -2194,12 +2339,9 @@ export const LocalAnalysisPanel: React.FC<LocalAnalysisPanelProps> = ({
           harnessByRow: entityHarnessByRow,
           harnessPlannedSectionCount: null,
           pipelineSectionTitles:
-            suggestLoading ||
-            hasGeneratedSapRows ||
-            csvParsing ||
-            entityListRows.some((r) => r.keyword?.trim())
+            suggestLoading || csvParsing
               ? [...ENTITY_CLUSTER_PIPELINE_TITLES]
-              : ENTITY_DETAILS_PIPELINE_SECTION_TITLES,
+              : [...ENTITY_DETAILS_PIPELINE_SECTION_TITLES],
           liveMessage: entityDetailsLiveMessage,
           sitemapInventoryLinks,
           gscHostedLink: gscKeywordsHostedLink,

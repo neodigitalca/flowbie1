@@ -2,6 +2,14 @@ import type { OverviewRow } from "@/components/overview/overview-meta-row-types"
 import type { BulkDetailsDownloadable } from "@/components/shared/bulk-details-tile-sections";
 import type { BulkGeneratedFile } from "@/lib/bulk-file-manager";
 import type { CSVRow } from "@/lib/bulk-auto-generate";
+import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
+
+/** Stable drawer row id so refresh/reorder does not reuse the wrong expanded row. */
+export function detailsDrawerRowKey(row: CSVRow | undefined, index: number): string {
+  const url = row?.destination_url?.trim();
+  if (url) return normalizePageUrlKey(url) || url;
+  return `idx-${index}`;
+}
 
 export function rowFilesToDownloadables(files: BulkGeneratedFile[]): BulkDetailsDownloadable[] {
   return files
@@ -66,3 +74,4 @@ export function publishDateLabelForRow(
   if (draftOnly) return "Draft";
   return publishDateLabelByIndex?.[index]?.trim() || undefined;
 }
+

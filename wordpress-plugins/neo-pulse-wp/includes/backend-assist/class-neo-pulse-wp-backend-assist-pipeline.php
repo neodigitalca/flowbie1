@@ -25,7 +25,113 @@ class Neo_Pulse_Wp_Backend_Assist_Pipeline {
 			return Neo_Pulse_Wp_Backend_Assist_Cards::error_card( $classification->get_error_message() );
 		}
 
+		if ( Neo_Pulse_Wp_Backend_Assist_Pipeline_Content_Prep::message_requests_new_page_or_post( $message ) ) {
+			return self::run_create_page_build( $message, $history, $classification );
+		}
+
 		return self::run_from_classification( $classification, $message, $history );
+	}
+
+	/**
+	 * Build a new page/post pack and execute it. Never writes to the open editor post.
+	 *
+	 * @param array<string, mixed>             $classification
+	 * @param array<int, array<string, mixed>> $history
+	 * @return array<string, mixed>
+	 */
+	public static function run_create_page_build( string $message, array $history, array $classification ): array {
+		$tool = isset( $classification['tool'] ) ? sanitize_key( (string) $classification['tool'] ) : '';
+		if ( ! in_array( $tool, array( 'create_page', 'create_post' ), true ) ) {
+			$tool = str_contains( strtolower( $message ), 'post' ) ? 'create_post' : 'create_page';
+		}
+
+		$topic = Neo_Pulse_Wp_Backend_Assist_Pipeline_Content_Prep::create_page_title_from_message( $message, $classification );
+		$classification['tool'] = $tool;
+		if ( ! isset( $classification['params'] ) || ! is_array( $classification['params'] ) ) {
+			$classification['params'] = array();
+		}
+		if ( $topic['title'] !== '' ) {
+			$classification['params']['title'] = $topic['title'];
+		}
+		if ( $topic['keyword'] !== '' ) {
+			$classification['params']['focus_keyword'] = $topic['keyword'];
+		}
+
+		$workflow_id = Neo_Pulse_Wp_Backend_Assist_Workflow::workflow_id_from_history( $history );
+		$workflow    = $workflow_id !== '' ? Neo_Pulse_Wp_Backend_Assist_Workflow::load_workflow( $workflow_id ) : null;
+		if ( ! is_array( $workflow ) ) {
+			$decomposed = Neo_Pulse_Wp_Backend_Assist_Workflow_Builder::expand_create_to_full_page(
+				array(
+					'workflow' => false,
+					'steps'    => array(),
+				),
+				$message,
+				$classification
+			);
+			$decomposed = Neo_Pulse_Wp_Backend_Assist_Workflow_Builder::attach_heading_outline( $decomposed, $message, $history );
+			if ( is_wp_error( $decomposed ) ) {
+				return Neo_Pulse_Wp_Backend_Assist_Cards::error_card( $decomposed->get_error_message() );
+			}
+			$workflow_id = Neo_Pulse_Wp_Backend_Assist_Workflow::save_workflow( $message, $history, $decomposed );
+			if ( $workflow_id === '' ) {
+				return Neo_Pulse_Wp_Backend_Assist_Cards::error_card( __( 'Could not start the page workflow.', 'neo-pulse-wp' ) );
+			}
+		}
+
+		$create_card = self::execute_write_tool(
+			$message,
+			$history,
+			$tool,
+			array(
+				'title'         => $topic['title'],
+				'focus_keyword' => $topic['keyword'],
+				'status'        => 'draft',
+			)
+		);
+		$created = isset( $create_card['action_result'] ) && is_array( $create_card['action_result'] )
+			? $create_card['action_result']
+			: array();
+		if ( empty( $created['success'] ) || empty( $created['post_id'] ) ) {
+			$err = isset( $created['error'] ) ? (string) $created['error'] : __( 'Could not create the page.', 'neo-pulse-wp' );
+			return Neo_Pulse_Wp_Backend_Assist_Cards::error_card( $err );
+		}
+
+		$last = Neo_Pulse_Wp_Backend_Assist_Workflow::bind_new_page_and_run(
+			$workflow_id,
+			(int) $created['post_id'],
+			$topic['title'],
+			$topic['keyword'],
+			$message,
+			$history
+		);
+		return self::action_card_from_workflow_run( $last, (int) $created['post_id'], $topic['title'] );
+	}
+
+	/**
+	 * @param array<string, mixed> $last
+	 * @return array<string, mixed>
+	 */
+	private static function action_card_from_workflow_run( array $last, int $post_id, string $title ): array {
+		if ( ! empty( $last['error'] ) ) {
+			return Neo_Pulse_Wp_Backend_Assist_Cards::error_card( (string) $last['error'] );
+		}
+
+		$card   = isset( $last['card'] ) && is_array( $last['card'] ) ? $last['card'] : array();
+		$result = isset( $last['result'] ) && is_array( $last['result'] ) ? $last['result'] : array();
+		$exec   = isset( $card['action_result'] ) && is_array( $card['action_result'] ) ? $card['action_result'] : $result;
+		if ( empty( $exec['success'] ) ) {
+			$err = isset( $exec['error'] ) ? (string) $exec['error'] : __( 'Build did not apply the SEO block.', 'neo-pulse-wp' );
+			return Neo_Pulse_Wp_Backend_Assist_Cards::error_card( $err );
+		}
+
+		$exec['success']           = true;
+		$exec['post_id']           = $post_id;
+		$exec['title']             = $title;
+		$exec['build_executed']    = true;
+		$exec['build_executed_at'] = gmdate( 'c' );
+		$card['type']              = 'action';
+		$card['action_result']     = $exec;
+		return $card;
 	}
 
 	/**
@@ -53,7 +159,13 @@ class Neo_Pulse_Wp_Backend_Assist_Pipeline {
 			'run_seo_research_brief',
 			'restore_post_revision',
 			'compose_seo_block',
+			'compose_elementor_page_sections',
 			'modify_seo_block_slots',
+			'duplicate_seo_block',
+			'save_seo_block',
+			'apply_seo_block_to_page',
+			'design_page_with_novamira',
+			'get_seo_block',
 		);
 		if ( ! empty( $exec_result['success'] ) && in_array( $tool, $truthful_tools, true ) ) {
 			return Neo_Pulse_Wp_Backend_Assist_Cards::enrich_card(
@@ -102,7 +214,11 @@ class Neo_Pulse_Wp_Backend_Assist_Pipeline {
 	 * @return array<string, mixed>|null
 	 */
 	public static function try_execute_cached_plan( string $message, array $history ): ?array {
-		$post_id = Neo_Pulse_Wp_Backend_Assist_Pipeline_Content_Prep::resolve_effective_post_id( array() );
+		if ( Neo_Pulse_Wp_Backend_Assist_Pipeline_Content_Prep::message_requests_new_page_or_post( $message ) ) {
+			return null;
+		}
+
+		$post_id = Neo_Pulse_Wp_Backend_Assist_Pipeline_Content_Prep::resolve_effective_post_id( array(), $message );
 		$cached  = $post_id > 0 ? Neo_Pulse_Wp_Backend_Assist_Plan_Cache::load( $message, $post_id ) : null;
 		if ( ! is_array( $cached ) || empty( $cached['tool'] ) ) {
 			return null;
@@ -201,7 +317,14 @@ class Neo_Pulse_Wp_Backend_Assist_Pipeline {
 			return Neo_Pulse_Wp_Backend_Assist_Cards::needs_info_card( $tool, $missing );
 		}
 
-		if ( $intent === 'action' && Neo_Pulse_Wp_Backend_Assist_Meta_Compound::message_requests_meta_compound( $message ) ) {
+		if ( Neo_Pulse_Wp_Backend_Assist_Pipeline_Content_Prep::message_requests_new_page_or_post( $message ) ) {
+			return self::run_create_page_build( $message, $history, $classification );
+		}
+
+		if (
+			$intent === 'action'
+			&& Neo_Pulse_Wp_Backend_Assist_Meta_Compound::message_requests_meta_compound( $message )
+		) {
 			return Neo_Pulse_Wp_Backend_Assist_Meta_Compound::run( $message, $history, $params );
 		}
 
@@ -258,6 +381,12 @@ class Neo_Pulse_Wp_Backend_Assist_Pipeline {
 	}
 	public static function run_plan( string $message, array $history ): array {
 		$decomposed = Neo_Pulse_Wp_Backend_Assist_Pipeline_Classify::phase_decompose_workflow( $message, $history );
+		if ( is_wp_error( $decomposed ) ) {
+			return Neo_Pulse_Wp_Backend_Assist_Cards::error_card( $decomposed->get_error_message() );
+		}
+
+		$decomposed = Neo_Pulse_Wp_Backend_Assist_Workflow_Builder::expand_create_to_full_page( $decomposed, $message );
+		$decomposed = Neo_Pulse_Wp_Backend_Assist_Workflow_Builder::attach_heading_outline( $decomposed, $message, $history );
 		if ( is_wp_error( $decomposed ) ) {
 			return Neo_Pulse_Wp_Backend_Assist_Cards::error_card( $decomposed->get_error_message() );
 		}
@@ -326,6 +455,12 @@ class Neo_Pulse_Wp_Backend_Assist_Pipeline {
 			return Neo_Pulse_Wp_Backend_Assist_Cards::error_card( $decomposed->get_error_message() );
 		}
 
+		$decomposed = Neo_Pulse_Wp_Backend_Assist_Workflow_Builder::expand_create_to_full_page( $decomposed, $message, $classification );
+		$decomposed = Neo_Pulse_Wp_Backend_Assist_Workflow_Builder::attach_heading_outline( $decomposed, $message, $history );
+		if ( is_wp_error( $decomposed ) ) {
+			return Neo_Pulse_Wp_Backend_Assist_Cards::error_card( $decomposed->get_error_message() );
+		}
+
 		$is_workflow = ! empty( $decomposed['workflow'] )
 			&& ! empty( $decomposed['steps'] )
 			&& is_array( $decomposed['steps'] )
@@ -373,7 +508,7 @@ class Neo_Pulse_Wp_Backend_Assist_Pipeline {
 					'submode_switch'    => 'build',
 					'confidence'        => 'high',
 				),
-				Neo_Pulse_Wp_Backend_Assist_Pipeline_Content_Prep::resolve_effective_post_id( $params ),
+				Neo_Pulse_Wp_Backend_Assist_Pipeline_Content_Prep::resolve_effective_post_id( $params, $message ),
 				$tool,
 				$message
 			);
@@ -417,14 +552,14 @@ class Neo_Pulse_Wp_Backend_Assist_Pipeline {
 				'confidence'        => 'high',
 				'planned_tool'      => $tool,
 			),
-			Neo_Pulse_Wp_Backend_Assist_Pipeline_Content_Prep::resolve_effective_post_id( $params ),
+			Neo_Pulse_Wp_Backend_Assist_Pipeline_Content_Prep::resolve_effective_post_id( $params, $message ),
 			$tool,
 			$message
 		);
 	}
 
 	private static function cache_plan_for_build( string $message, string $tool, array $params ): void {
-		$post_id = Neo_Pulse_Wp_Backend_Assist_Pipeline_Content_Prep::resolve_effective_post_id( $params );
+		$post_id = Neo_Pulse_Wp_Backend_Assist_Pipeline_Content_Prep::resolve_effective_post_id( $params, $message );
 		if ( $post_id < 1 || $tool === '' ) {
 			return;
 		}

@@ -1,6 +1,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { loadApiKey, saveApiKey } from "@/lib/api";
-import { resolveOpenRouterApiKeyForHarness } from "@/lib/openrouter-api-key-resolve";
+import {
+  resolveOpenRouterApiKeyForHarness,
+  resolveOpenRouterApiKeyFromSettingsPlugin,
+} from "@/lib/openrouter-api-key-resolve";
 
 vi.mock("@/lib/api", () => ({
   loadApiKey: vi.fn(),
@@ -16,6 +19,26 @@ describe("resolveOpenRouterApiKeyForHarness", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("uses the Settings plugin key and ignores Dashboard localStorage", async () => {
+    vi.mocked(loadApiKey).mockReturnValue("client-key");
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, key: "plugin-key" }),
+    } as Response);
+    await expect(resolveOpenRouterApiKeyFromSettingsPlugin()).resolves.toBe("plugin-key");
+    expect(saveApiKey).not.toHaveBeenCalled();
+  });
+
+  it("throws when the Settings plugin key is empty", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, key: "" }),
+    } as Response);
+    await expect(resolveOpenRouterApiKeyFromSettingsPlugin()).rejects.toThrow(
+      "Add an OpenRouter API key in Settings.",
+    );
   });
 
   it("returns the client key when localStorage has one", async () => {

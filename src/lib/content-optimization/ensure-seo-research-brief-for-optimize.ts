@@ -39,6 +39,7 @@ export async function ensureSeoResearchBriefForOptimize(opts: {
   focusKeyword: string;
   gscQueries?: string[];
   muteToasts?: boolean;
+  forceNewResearch?: boolean;
   onProgress?: (message: string) => void;
 }): Promise<{
   seoResearchRaw: string;
@@ -53,7 +54,7 @@ export async function ensureSeoResearchBriefForOptimize(opts: {
   );
   let seoResearchRaw = String(acfContext?.seoResearch ?? "").trim();
 
-  if (hasSubstantiveSeoResearchBrief(seoResearchRaw)) {
+  if (!opts.forceNewResearch && hasSubstantiveSeoResearchBrief(seoResearchRaw)) {
     return { seoResearchRaw, acfContext, acfFields };
   }
 
@@ -64,14 +65,17 @@ export async function ensureSeoResearchBriefForOptimize(opts: {
     );
   }
 
-  opts.onProgress?.(`Running SERP research for "${keyword}"…`);
+  opts.onProgress?.(`Running live SERP and full audit for "${keyword}"…`);
 
   const merged = await fetchMergedSeoContentBriefLive({
     keyword,
     pageUrl: opts.url.trim(),
     site: opts.site,
     gscQueries: opts.gscQueries ?? [],
+    requireSerpDump: false,
+    onProgress: (message) => opts.onProgress?.(`New research: ${message}`),
   });
+  opts.onProgress?.("New live research ready");
   const briefJson = JSON.stringify(merged, null, 2);
 
   acfFields = {

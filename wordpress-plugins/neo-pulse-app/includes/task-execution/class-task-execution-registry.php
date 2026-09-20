@@ -15,6 +15,7 @@ class Neo_Pulse_App_Task_Execution_Registry {
 		'content_optimizer_meta' => 'Neo_Pulse_App_Task_Execution_Runner_Content_Optimizer',
 		'content_gap_check'      => 'Neo_Pulse_App_Task_Execution_Runner_Content_Gap_Check',
 		'gsc_reporting'          => 'Neo_Pulse_App_Task_Execution_Runner_Gsc_Reporting',
+		'ads_reporting'          => 'Neo_Pulse_App_Task_Execution_Runner_Ads_Reporting',
 		'post_creator'           => 'Neo_Pulse_App_Task_Execution_Runner_Post_Creator',
 		'entity_page_creator'    => 'Neo_Pulse_App_Task_Execution_Runner_Entity_Page_Creator',
 		'entity_generator'       => 'Neo_Pulse_App_Task_Execution_Runner_Entity_Generator',

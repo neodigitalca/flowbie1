@@ -23,6 +23,8 @@ trait Neo_Pulse_Wp_Ai_Widget_Design_Css {
 			'input_bg'             => '#ffffff',
 			'header_bg'            => '#f8fafc',
 			'launcher_bg'          => '#3b82f6',
+			'launcher_glow'        => '#3b82f6',
+			'launcher_text'        => '#ffffff',
 			'text'                 => '#1e293b',
 			'text_secondary'       => '#475569',
 			'text_muted'           => '#64748b',
@@ -74,7 +76,7 @@ trait Neo_Pulse_Wp_Ai_Widget_Design_Css {
 	 */
 	public static function color_token_keys(): array {
 		return array(
-			'bg', 'bg_elevated', 'card_bg', 'dropdown_bg', 'input_bg', 'header_bg', 'launcher_bg',
+			'bg', 'bg_elevated', 'card_bg', 'dropdown_bg', 'input_bg', 'header_bg', 'launcher_bg', 'launcher_glow', 'launcher_text',
 			'text', 'text_secondary', 'text_muted', 'link', 'placeholder',
 			'border', 'border_hover', 'focus_ring',
 			'accent', 'accent_text', 'highlight', 'button_bg', 'button_text', 'button_hover',
@@ -93,7 +95,7 @@ trait Neo_Pulse_Wp_Ai_Widget_Design_Css {
 	public static function site_branding_token_keys(): array {
 		return array(
 			'accent', 'accent_text', 'button_bg', 'button_text', 'button_hover',
-			'launcher_bg', 'send_bg', 'mic_idle', 'focus_ring', 'link',
+			'send_bg', 'mic_idle', 'focus_ring', 'link',
 			'user_bubble_bg', 'bg_elevated', 'header_bg', 'assistant_bubble_bg',
 			'result_hover', 'highlight', 'thinking_border', 'banner_bg', 'banner_text',
 			'text', 'assistant_bubble_text', 'text_secondary', 'text_muted',
@@ -175,6 +177,7 @@ trait Neo_Pulse_Wp_Ai_Widget_Design_Css {
 			'panel_offset_top_unit' => 'px',
 			'panel_content_align' => 'left',
 			'backdrop_opacity'    => 35,
+			'header_search_opens_sidebar' => false,
 		);
 	}
 
@@ -218,6 +221,9 @@ trait Neo_Pulse_Wp_Ai_Widget_Design_Css {
 			'sidebar_width'      => 400,
 			'sidebar_heading'    => '',
 			'sidebar_layout'     => array( 'contact_human', 'chat' ),
+			'launcher_style'     => 'circle',
+			'launcher_label'     => '',
+			'header_search_opens_sidebar' => false,
 		);
 	}
 
@@ -280,6 +286,20 @@ trait Neo_Pulse_Wp_Ai_Widget_Design_Css {
 		}
 		$out['sidebar_layout'] = array_values( array_unique( $layout ) );
 
+		if ( $widget === 'chat' ) {
+			$style = isset( $raw['launcher_style'] ) ? (string) $raw['launcher_style'] : (string) $defaults['launcher_style'];
+			$out['launcher_style'] = in_array( $style, array( 'edge_tab', 'none' ), true ) ? $style : 'circle';
+
+			$out['launcher_label'] = isset( $raw['launcher_label'] )
+				? sanitize_text_field( (string) $raw['launcher_label'] )
+				: (string) $defaults['launcher_label'];
+			if ( in_array( $out['launcher_label'], array( 'Open Flow Assist', 'Flow Assist' ), true ) ) {
+				$out['launcher_label'] = '';
+			}
+
+			$out['header_search_opens_sidebar'] = ! empty( $raw['header_search_opens_sidebar'] );
+		}
+
 		if ( $widget === 'search' ) {
 			$out['launcher_icon'] = class_exists( 'Neo_Pulse_Wp_Search_Icons' )
 				? Neo_Pulse_Wp_Search_Icons::sanitize_id( (string) ( $raw['launcher_icon'] ?? $defaults['launcher_icon'] ) )
@@ -329,6 +349,8 @@ trait Neo_Pulse_Wp_Ai_Widget_Design_Css {
 				? max( 0, min( 100, (int) $raw['backdrop_opacity'] ) )
 				: (int) $defaults['backdrop_opacity'];
 
+			$out['header_search_opens_sidebar'] = ! empty( $raw['header_search_opens_sidebar'] );
+
 			if ( $out['panel_layout'] === 'discovery' && ( ! isset( $raw['sidebar_width'] ) || (int) $raw['sidebar_width'] <= 400 ) ) {
 				$out['sidebar_width'] = max( 520, (int) $out['sidebar_width'] );
 			}
@@ -369,7 +391,7 @@ trait Neo_Pulse_Wp_Ai_Widget_Design_Css {
 			'--fai-sidebar-text-muted:' . esc_attr( (string) ( $tokens['text_muted'] ?? '#64748b' ) ),
 			'--fai-sidebar-hover:' . esc_attr( (string) ( $tokens['result_hover'] ?? '#f1f5f9' ) ),
 			'--fai-sidebar-launcher-bg:' . esc_attr( (string) ( $tokens['launcher_bg'] ?? $tokens['accent'] ?? '#3b82f6' ) ),
-			'--fai-sidebar-launcher-text:' . esc_attr( (string) ( $tokens['accent_text'] ?? '#ffffff' ) ),
+			'--fai-sidebar-launcher-text:' . esc_attr( (string) ( $tokens['launcher_text'] ?? $tokens['accent_text'] ?? '#ffffff' ) ),
 		);
 		return implode( ';', $parts ) . ';';
 	}
@@ -384,6 +406,7 @@ trait Neo_Pulse_Wp_Ai_Widget_Design_Css {
 		$map = array(
 			'bg' => 'bg', 'bg_elevated' => 'bg-elevated', 'card_bg' => 'card-bg',
 			'input_bg' => 'input-bg', 'header_bg' => 'header-bg', 'launcher_bg' => 'launcher-bg',
+			'launcher_glow' => 'launcher-glow', 'launcher_text' => 'launcher-text',
 			'text' => 'text', 'text_secondary' => 'text-secondary', 'text_muted' => 'text-muted',
 			'link' => 'link', 'placeholder' => 'placeholder',
 			'border' => 'border', 'border_hover' => 'border-hover', 'focus_ring' => 'focus-ring',

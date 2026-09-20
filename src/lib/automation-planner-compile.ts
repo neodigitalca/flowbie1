@@ -42,6 +42,7 @@ function inferGscTriggerKeyword(config: TaskTriggerConfig): string {
 }
 
 export function inferActionKeyword(kind: string, payload?: { targetBucket?: string }): string {
+  if (kind === "csv_rows") return "csv-rows";
   if (kind === "content_optimizer_meta") return "content-optimizer-meta";
   if (kind === "content_optimizer") return "content-optimizer-full";
   if (kind === "post_creator") return "post-creator-monthly";
@@ -52,6 +53,11 @@ export function inferActionKeyword(kind: string, payload?: { targetBucket?: stri
     return payload && "comparePreset" in payload && payload.comparePreset === "yoy"
       ? "gsc-report-yoy"
       : "gsc-report-mom";
+  }
+  if (kind === "ads_reporting") {
+    return payload && "comparePreset" in payload && payload.comparePreset === "yoy"
+      ? "ads-report-yoy"
+      : "ads-report-mom";
   }
   if (kind === "local_dominator_export") {
     return "local-dominator-grid-export";

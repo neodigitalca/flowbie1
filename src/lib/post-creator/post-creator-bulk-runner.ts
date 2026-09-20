@@ -33,10 +33,7 @@ import { generateSEOSlug } from "@/lib/seo-slug-generator";
 import type { KeywordAnalysisComplete, KeywordAnalysisOptions } from "@/lib/keyword-types";
 import type { ResolvedPostCreatorSchedule } from "@/lib/post-creator/post-creator-schedule";
 import { extractChecklistItemTitle } from "@/lib/post-creator/post-creator-checklist-post-process";
-import {
-  clearGoogleMapsImageSessionCache,
-  fetchGoogleMapsImageForEntity,
-} from "@/lib/content-generation/google-maps-image-api";
+import { clearGoogleMapsImageSessionCache } from "@/lib/content-generation/google-maps-image-api";
 import {
   countSapMapsRowsByEntity,
   createSapMapsMediaBank,
@@ -163,14 +160,6 @@ async function processPostCreatorRow(
     : "";
   const pageUrlEarly = baseUrl && slugEarly ? `${baseUrl}/${slugEarly}` : "";
 
-  const semrushPromise = shouldSkipPhase(resumeFromPhase, "keyword")
-    ? Promise.resolve(null)
-    : fetchSemrushBulkEnrichment({
-        pageUrl: pageUrlEarly,
-        seedKeyword: seedEarly,
-        portfolioBlockedHosts: options.portfolioBlockedHosts,
-      });
-
   let keywordResearchFromRow: Awaited<ReturnType<typeof generateRowOutputs>>["research"] | null = null;
   if (!shouldSkipPhase(resumeFromPhase, "keyword")) {
     reportPostPhaseProgress(options, rowIndex, totalRows, "keyword");
@@ -188,7 +177,13 @@ async function processPostCreatorRow(
   const stub = buildBlogImportKeywordResearchStub(row);
   let finalKeywordData = keywordResearchFromRow?.result?.keywordData ?? stub.keywordData;
   let finalAiAnalysis = keywordResearchFromRow?.aiAnalysis ?? stub.aiAnalysis;
-  const semrushResult = shouldSkipPhase(resumeFromPhase, "keyword") ? null : await semrushPromise;
+  const semrushResult = shouldSkipPhase(resumeFromPhase, "keyword")
+    ? null
+    : await fetchSemrushBulkEnrichment({
+        pageUrl: pageUrlEarly,
+        seedKeyword: seedEarly,
+        portfolioBlockedHosts: options.portfolioBlockedHosts,
+      });
 
   let keywordMergeResult: {
     merge: IntelligentKeywordResearchMergeResult;
@@ -347,6 +342,10 @@ export async function runPostCreatorBulkRows(args: {
     workflowDfsArticleAudit,
     onArtifact,
   } = args;
+  const featuredImageType = schedule.featuredImage ? "ai-generated" : "google-maps";
+  if (clearMapsCache) {
+    clearGoogleMapsImageSessionCache();
+  }
   const dataForSeoKey = loadDataForSEOApiKey()?.trim() || "";
   const openRouterKey = await resolveOpenRouterApiKeyForHarness();
   if (!dataForSeoKey) throw new Error("Add a DataForSEO API key in Settings.");
@@ -375,11 +374,6 @@ export async function runPostCreatorBulkRows(args: {
     linkPrefetchPromise = prefetchBulkWordPressLinkValidationForRun(sitesToPost);
   }
 
-  const featuredImageType = schedule.featuredImage ? "ai-generated" : "google-maps";
-
-  if (clearMapsCache) {
-    clearGoogleMapsImageSessionCache();
-  }
   const sapMapsMediaBank = createSapMapsMediaBank();
   const sapMapsEntityRowCounts = countSapMapsRowsByEntity(rows);
 
@@ -470,16 +464,6 @@ export async function runPostCreatorBulkRows(args: {
       });
     }
     try {
-      if (featuredImageType === "google-maps") {
-        const entity = rows[i]?.entity?.trim();
-        if (entity && entity !== "N/A") {
-          try {
-            await fetchGoogleMapsImageForEntity(entity);
-          } catch (error) {
-            console.warn("[Post creator] Google Maps image prefetch failed:", error);
-          }
-        }
-      }
       await processPostCreatorRow(
         i,
         rows.length,

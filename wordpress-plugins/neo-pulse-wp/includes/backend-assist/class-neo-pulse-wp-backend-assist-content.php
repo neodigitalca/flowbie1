@@ -34,13 +34,16 @@ Output ONLY valid JSON:
 }
 
 RULES:
-- Each section is a harness fragment: opening heading (h2/h3) PLUS body content (paragraphs, lists, tables) in one generation step—never heading-only.
+- Each H2 is one Agent Hub Block Builder block. Never one mega-block for the whole page.
+- Each section is a harness fragment: opening heading (h2/h3) PLUS body content (paragraphs, lists, tables) in one generation step. Never heading-only.
 - Match exact counts from the user (e.g. "5 h2s" → exactly 5 sections with type "h2").
 - Use type "table" for table sections; label like "Build section: Topic (table)".
-- Use type "h3" for H3 subsections when requested.
+- Use type "h3" for H3 subsections nested under the previous H2 only.
 - features: use [LIST], [TABLE], [FAQ], [LINK] from harness vocabulary when needed. Add [LINK] when the user wants internal links to other site posts.
-- Never invent URLs in labels or briefs—internal links are resolved from the WordPress post library at generation time.
+- Never invent URLs in labels or briefs. Internal links are resolved from the WordPress post library at generation time.
 - Each section needs a unique, specific title (not "Section 1").
+- For a service page SEO block, titles must name the page topic and focus keyword (city, service). Never generic Overview, Introduction, or Our Services.
+- Each H2 is a distinct subtopic for the focus keyword and page title.
 - label: short checklist text starting with "Build section: " plus the title (e.g. "Build section: Local SEO on Whyte Ave"). Never use "Write H2" or heading-only labels.
 - brief: 1-2 sentences the writer must follow for that section only.
 PROMPT;
@@ -68,6 +71,53 @@ PROMPT;
 
 		return $parsed;
 	}
+
+	/**
+	 * Related phrases from Semrush, then DataForSEO.
+	 *
+	 * @return array<int, string>
+	 */
+	public static function related_phrases_for_keyword( string $keyword ): array {
+		$keyword = trim( $keyword );
+		if ( $keyword === '' ) {
+			return array();
+		}
+
+		$out = array();
+		if ( class_exists( 'Neo_Pulse_Wp_Semrush', false ) ) {
+			foreach ( Neo_Pulse_Wp_Semrush::fetch_related_keywords( $keyword ) as $phrase ) {
+				$phrase = trim( (string) $phrase );
+				if ( $phrase !== '' ) {
+					$out[] = $phrase;
+				}
+			}
+		}
+		if ( $out === array() && class_exists( 'Neo_Pulse_Wp_Dataforseo', false ) ) {
+			$dfs = Neo_Pulse_Wp_Dataforseo::fetch_related_keywords( $keyword );
+			if ( ! is_wp_error( $dfs ) ) {
+				foreach ( $dfs as $phrase ) {
+					$phrase = trim( (string) $phrase );
+					if ( $phrase !== '' ) {
+						$out[] = $phrase;
+					}
+				}
+			}
+		}
+
+		$seen = array();
+		$uniq = array();
+		foreach ( $out as $phrase ) {
+			$key = strtolower( $phrase );
+			if ( isset( $seen[ $key ] ) ) {
+				continue;
+			}
+			$seen[ $key ] = true;
+			$uniq[]       = $phrase;
+		}
+
+		return array_slice( $uniq, 0, 20 );
+	}
+
 	public static function harness_feature_hint_suffix( array $features, string $type ): string {
 		$hints = array();
 		foreach ( $features as $f ) {

@@ -23,6 +23,14 @@ describe("extractClusterWikiGeo", () => {
       regionName: "Manitoba",
     });
   });
+
+  it("parses full US state names", () => {
+    expect(extractClusterWikiGeo("Naples, Florida")).toEqual({
+      city: "Naples",
+      regionCode: "FL",
+      regionName: "Florida",
+    });
+  });
 });
 
 describe("buildClusterWikiCandidateTiers", () => {
@@ -54,6 +62,22 @@ describe("buildClusterWikiCandidateTiers", () => {
     expect(tiers.neighbourhood.indexOf("Mill Woods, Edmonton")).toBeLessThan(
       tiers.neighbourhood.indexOf("Mill Woods"),
     );
+  });
+
+  it("city wiki for Old Naples stays Naples, Florida, not Old Naples", () => {
+    const tiers = buildClusterWikiCandidateTiers("Old Naples, Florida", {
+      ...bucket,
+      placeLabel: "Naples, Florida",
+      sampleAddresses: ["Naples, Florida"],
+    });
+    expect(tiers.neighbourhood[0]).toBe("Old Naples, Florida");
+    expect(tiers.city).toContain("Naples, Florida");
+    expect(tiers.city).not.toContain("Old Naples, Florida");
+    expect(tiers.geo).toEqual({
+      city: "Naples",
+      regionCode: "FL",
+      regionName: "Florida",
+    });
   });
 
   it("includes Ritchie, Edmonton before bare Ritchie", () => {
@@ -88,5 +112,12 @@ describe("isRejectedNeighbourhoodWikiTitle", () => {
     const geo = { city: "Altona", regionCode: "MB", regionName: "Manitoba" };
     expect(isCityLevelWikiTitle("Altona, Manitoba", geo)).toBe(true);
     expect(isCityLevelWikiTitle("Manitoba", geo)).toBe(false);
+  });
+
+  it("treats Naples, Florida as city content, not a neighbourhood page", () => {
+    const geo = { city: "Naples", regionCode: "FL", regionName: "Florida" };
+    expect(isCityLevelWikiTitle("Naples, Florida", geo)).toBe(true);
+    expect(isRejectedNeighbourhoodWikiTitle("Naples, Florida", geo)).toBe(true);
+    expect(isRejectedNeighbourhoodWikiTitle("Old Naples, Naples", geo)).toBe(false);
   });
 });

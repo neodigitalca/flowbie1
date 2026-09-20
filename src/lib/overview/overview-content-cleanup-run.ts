@@ -8,6 +8,7 @@ import {
 } from "@/hooks/content-optimization/optimization-helpers-a";
 import { mergeOptimizationProgress } from "@/hooks/content-optimization/optimization-helpers";
 import { initOverviewBulkHarnessPagination, setOverviewBulkHarnessPageState } from "@/lib/overview/overview-bulk-page-state";
+import { mapOverviewAiCopyWithConcurrency } from "@/lib/overview/overview-ai-copy-concurrency";
 import { overviewBulkPageRanges } from "@/lib/overview/overview-bulk-page-size";
 import { cleanupOverviewPostContent } from "@/lib/overview/overview-content-cleanup";
 import { resolveOverviewSourceHtml } from "@/lib/overview/overview-blog-overview-prepend";
@@ -15,7 +16,18 @@ import {
   postBodyHtmlFromInventoryRow,
 } from "@/lib/overview/overview-inventory-seo-fields";
 import type { OverviewInventoryUrlMatch } from "@/lib/overview/overview-row-scrape";
-import { normalizePageUrlKey } from "@/lib/sitemap-optimizer/normalize-page-url";
+import { overviewRowPatchWithoutBody } from "@/lib/overview/overview-aiseo-cache-write";
+import type { AiseoCacheWriteAccumulator } from "@/lib/overview/overview-aiseo-cache-write";
+import type { AiseoAfterRowWriteFn } from "@/lib/overview/overview-aiseo-after-upload";
+import {
+  aiseoRowFilesForUpload,
+  buildAiseoElementJsonFile,
+  mergeAiseoRowFinishFiles,
+} from "@/lib/overview/overview-aiseo-row-artifacts";
+import {
+  generatedFilesForUrl,
+  storageKeyForUrlGeneratedFiles,
+} from "@/lib/content-optimization/content-optimizer-bulk-generator-bindings";
 
 type SetBulkState = Dispatch<SetStateAction<Record<string, BulkOptimizationState>>>;
 type SetOptProgress = Dispatch<SetStateAction<Record<string, unknown>>>;
@@ -53,9 +65,7 @@ export function initOverviewContentCleanupBatchState(params: {
 
   const batchKey = `${site.id}-batch`;
   const urls = catalog.map((c) => c.url.trim()).filter(Boolean);
-  const initialUrlStatuses: BulkOptimizationState["urlStatuses"] = {};
   for (const url of urls) {
-    initialUrlStatuses[url] = "pending";
   }
 
   setOptimizingState(setIsOptimizingContent, batchKey, true);
@@ -73,7 +83,7 @@ export function initOverviewContentCleanupBatchState(params: {
     [batchKey]: {
       urls,
       currentIndex: 0,
-      urlStatuses: initialUrlStatuses,
+      urlStatuses: {},
       currentStep: "Clean Up",
       currentUrl: urls[0],
       urlKeywords: {},
@@ -145,7 +155,49 @@ function setCleanupMessage(
   });
 }
 
-function markCleanupRowDone(
+function writeCleanupRowFiles(
+  url: string,
+  setters: ContentCleanupSetters,
+  artifact: {
+    removedH1Count: number;
+    convertedTableCount: number;
+    postHtml: string;
+  },
+): void {
+  setters.setBulkOptimizationState((prev) => {
+    const current = prev[setters.batchKey];
+    if (!current) return prev;
+    const existingFiles = generatedFilesForUrl(current.urlGeneratedFiles, url);
+    const storageKey = storageKeyForUrlGeneratedFiles(
+      current.urlGeneratedFiles,
+      url,
+      current.urls,
+    );
+    const elementFile = buildAiseoElementJsonFile("cleanup.json", {
+      removedH1Count: artifact.removedH1Count,
+      convertedTableCount: artifact.convertedTableCount,
+    });
+    const mergedFiles = mergeAiseoRowFinishFiles({
+      runKind: "contentCleanup",
+      url,
+      existingFiles,
+      elementFiles: elementFile ? [elementFile] : [],
+      postHtml: artifact.postHtml,
+    });
+    return {
+      ...prev,
+      [setters.batchKey]: {
+        ...current,
+        urlGeneratedFiles: {
+          ...(current.urlGeneratedFiles || {}),
+          [storageKey]: mergedFiles,
+        },
+      },
+    };
+  });
+}
+
+function markCleanupRowStatus(
   url: string,
   setters: ContentCleanupSetters,
   status: "completed" | "error" | "skipped",
@@ -184,7 +236,9 @@ export function resolveCleanupSourceHtml(
 export type RunOverviewContentCleanupBatchParams = {
   catalog: ContentCleanupCatalogRow[];
   harnessSetters: ContentCleanupSetters;
+  cacheWrite: AiseoCacheWriteAccumulator;
   updateRow: (index: number, patch: Partial<OverviewRow>) => void;
+  uploadAfterRowWrite?: AiseoAfterRowWriteFn;
   preparePage?: (info: {
     page: number;
     pageCount: number;
@@ -197,14 +251,13 @@ export type RunOverviewContentCleanupBatchParams = {
 export async function runOverviewContentCleanupBatch(
   params: RunOverviewContentCleanupBatchParams,
 ): Promise<{ ok: number; failed: number; skipped: number }> {
-  const { catalog, harnessSetters, updateRow, preparePage } = params;
+  const { catalog, harnessSetters, cacheWrite, updateRow, preparePage, uploadAfterRowWrite } = params;
   if (!catalog.length) return { ok: 0, failed: 0, skipped: 0 };
 
   const pageRanges = overviewBulkPageRanges(catalog.length);
   let ok = 0;
   let failed = 0;
   let skipped = 0;
-  let globalRowNum = 0;
 
   for (const { start, end, page, pageCount } of pageRanges) {
     const stubPageCatalog = catalog.slice(start, end);
@@ -225,8 +278,12 @@ export async function runOverviewContentCleanupBatch(
       ? await preparePage({ page, pageCount, start, end, pageCatalog: stubPageCatalog })
       : stubPageCatalog;
 
-    for (const entry of pageCatalog) {
-      globalRowNum += 1;
+    await mapOverviewAiCopyWithConcurrency(
+      pageCatalog.map((entry, localIndex) => ({
+        entry,
+        globalRowNum: start + localIndex + 1,
+      })),
+      async ({ entry, globalRowNum }) => {
       const url = entry.url.trim();
       updateRow(entry.index, { status: "content-cleanup" });
       harnessSetters.setBulkOptimizationState((prev) => {
@@ -253,36 +310,61 @@ export async function runOverviewContentCleanupBatch(
         const source = entry.html.trim();
         if (!source) {
           skipped += 1;
-          markCleanupRowDone(url, harnessSetters, "skipped");
+          markCleanupRowStatus(url, harnessSetters, "skipped");
           updateRow(entry.index, { status: "idle", error: "No HTML body for Clean Up" });
-          continue;
+          return;
         }
 
         const cleaned = cleanupOverviewPostContent(source);
         if (cleaned.removedH1Count === 0 && cleaned.convertedTableCount === 0) {
           if (cleaned.html === source) {
             skipped += 1;
-            markCleanupRowDone(url, harnessSetters, "skipped");
+            markCleanupRowStatus(url, harnessSetters, "skipped");
             updateRow(entry.index, { status: "idle" });
-            continue;
+            return;
           }
         }
 
-        updateRow(entry.index, {
-          postContent: cleaned.html,
-          postContentOptimized: cleaned.html,
+        updateRow(entry.index, overviewRowPatchWithoutBody({
           status: "idle",
           error: undefined,
+        }));
+        cacheWrite.push(url, cleaned.html);
+        writeCleanupRowFiles(url, harnessSetters, {
+          removedH1Count: cleaned.removedH1Count,
+          convertedTableCount: cleaned.convertedTableCount,
+          postHtml: cleaned.html,
         });
-        markCleanupRowDone(url, harnessSetters, "completed");
+        const rowFiles = aiseoRowFilesForUpload({
+          runKind: "contentCleanup",
+          url,
+          elementFiles: (() => {
+            const elementFile = buildAiseoElementJsonFile("cleanup.json", {
+              removedH1Count: cleaned.removedH1Count,
+              convertedTableCount: cleaned.convertedTableCount,
+            });
+            return elementFile ? [elementFile] : [];
+          })(),
+          postHtml: cleaned.html,
+        });
+        if (uploadAfterRowWrite) {
+          await uploadAfterRowWrite({
+            index: entry.index,
+            url,
+            html: cleaned.html,
+            rowFiles: rowFiles.length ? rowFiles : undefined,
+          });
+        }
+        markCleanupRowStatus(url, harnessSetters, "completed");
         ok += 1;
       } catch (err) {
         failed += 1;
         const msg = err instanceof Error ? err.message : String(err);
-        markCleanupRowDone(url, harnessSetters, "error");
+        markCleanupRowStatus(url, harnessSetters, "error");
         updateRow(entry.index, { status: "error", error: msg });
       }
-    }
+    },
+    );
   }
 
   setCleanupMessage(harnessSetters, `Clean Up done: ${ok} fixed, ${skipped} clean, ${failed} failed`, 100);

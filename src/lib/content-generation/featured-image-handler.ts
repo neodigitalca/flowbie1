@@ -83,10 +83,6 @@ export async function handleFeaturedImage(
         setProgress({ step: 'Generating Google Maps featured image...', progress: 88, message: `Generating Google Maps screenshot for ${entity}...` });
 
         const mapsImage = await fetchGoogleMapsImageForEntity(entity.trim());
-        if (!mapsImage) {
-          throw new Error('No image data returned from Google Maps API');
-        }
-
         let imageBase64 = mapsImage.imageBase64;
         const mimeType = mapsImage.mimeType || 'image/jpeg';
         

@@ -93,6 +93,7 @@ function useWordPressSitesState() {
       username: "",
       appPassword: "",
       ga4PropertyId: "",
+      googleAdsCustomerId: "",
       gbpLocationId: "",
       semrushSiteAuditProjectId: "",
       editorialCountsPeriodStartYmd: "",
@@ -114,6 +115,7 @@ function useWordPressSitesState() {
       username: site.username,
       appPassword: site.appPassword,
       ga4PropertyId: site.ga4PropertyId ?? "",
+      googleAdsCustomerId: site.googleAdsCustomerId ?? "",
       gbpLocationId: site.gbpLocationId ?? "",
       semrushSiteAuditProjectId: site.semrushSiteAuditProjectId ?? "",
       editorialCountsPeriodStartYmd: site.editorialCountsPeriodStartYmd ?? "",
@@ -479,6 +481,7 @@ function useWordPressSitesState() {
     formServiceCity?: string,
     formServiceState?: string,
     formServiceCountry?: string,
+    formGoogleAdsCustomerId?: string,
   ): WordPressSite | false => {
     if (!formName.trim()) {
       notify.error(NOTIFY_ENTER_A_SITE_NAME);
@@ -507,6 +510,7 @@ function useWordPressSitesState() {
       enabled: editingSite?.enabled !== undefined ? editingSite.enabled : true,
       sitemaps: editingSite?.sitemaps,
       ga4PropertyId: formGa4PropertyId?.trim() || undefined,
+      googleAdsCustomerId: (formGoogleAdsCustomerId ?? "").replace(/\D/g, "") || undefined,
       gbpLocationId: (() => {
         const persisted = persistGbpLocationIdInput(formGbpLocationId);
         return persisted || undefined;
@@ -545,20 +549,24 @@ function useWordPressSitesState() {
   }, [runAutoSetupForNewSite]);
 
   const handleSaveSitesBulk = useCallback((
-    clients: Array<{ name: string; siteUrl: string; username: string; appPassword: string }>
+    clients: Array<{ name: string; siteUrl: string; username: string; appPassword: string; googleAdsCustomerId?: string }>
   ) => {
     if (clients.length === 0) return;
     const baseId = Date.now();
-    const newSites: WordPressSite[] = clients.map((c, i) => ({
-      id: `wp-${baseId}-${i}`,
-      name: c.name.trim(),
-      siteUrl: c.siteUrl.trim(),
-      username: c.username.trim(),
-      appPassword: c.appPassword.trim(),
-      connectedAt: Date.now(),
-      enabled: true,
-      postBankEnabled: true,
-    }));
+    const newSites: WordPressSite[] = clients.map((c, i) => {
+      const ads = (c.googleAdsCustomerId ?? "").replace(/\D/g, "");
+      return {
+        id: `wp-${baseId}-${i}`,
+        name: c.name.trim(),
+        siteUrl: c.siteUrl.trim(),
+        username: c.username.trim(),
+        appPassword: c.appPassword.trim(),
+        googleAdsCustomerId: ads || undefined,
+        connectedAt: Date.now(),
+        enabled: true,
+        postBankEnabled: true,
+      };
+    });
     const updated = [...sites, ...newSites];
     setSites(updated);
     saveSites(updated);

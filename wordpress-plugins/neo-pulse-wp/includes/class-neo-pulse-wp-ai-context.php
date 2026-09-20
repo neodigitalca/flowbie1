@@ -83,12 +83,101 @@ class Neo_Pulse_Wp_Ai_Context {
 	}
 
 	public static function read_focus_keyword( int $post_id ): string {
-		$kw = self::read_acf_or_meta( $post_id, array( 'keyword_focus' ) );
-		if ( $kw !== '' ) {
-			return $kw;
+		$candidates = array(
+			self::primary_focus_phrase( get_post_meta( $post_id, 'rank_math_focus_keyword', true ) ),
+			self::primary_focus_phrase( get_post_meta( $post_id, '_neo_pulse_focus_keyword', true ) ),
+			self::read_acf_or_meta( $post_id, array( 'keyword_focus' ) ),
+		);
+		$post  = get_post( $post_id );
+		$title = $post instanceof WP_Post ? trim( (string) $post->post_title ) : '';
+		$is_blog = $post instanceof WP_Post && $post->post_type === 'post';
+
+		if ( $is_blog && $title !== '' ) {
+			foreach ( $candidates as $candidate ) {
+				if ( $candidate !== '' && self::keyword_matches_title( $candidate, $title ) ) {
+					return $candidate;
+				}
+			}
+			return self::infer_keyword_from_title( $title );
 		}
-		$rm = get_post_meta( $post_id, 'rank_math_focus_keyword', true );
-		return is_string( $rm ) ? trim( $rm ) : '';
+
+		foreach ( $candidates as $candidate ) {
+			if ( $candidate !== '' ) {
+				return $candidate;
+			}
+		}
+		return $title !== '' ? self::infer_keyword_from_title( $title ) : '';
+	}
+
+	public static function keyword_matches_title( string $keyword, string $title ): bool {
+		$kw  = self::significant_tokens( $keyword );
+		$hay = self::significant_tokens( $title );
+		if ( ! $kw || ! $hay ) {
+			return false;
+		}
+		$hay_set = array_fill_keys( $hay, true );
+		$hits    = 0;
+		foreach ( $kw as $token ) {
+			if ( isset( $hay_set[ $token ] ) ) {
+				++$hits;
+			}
+		}
+		return $hits === count( $kw ) || $hits >= 2;
+	}
+
+	public static function infer_keyword_from_title( string $title ): string {
+		$primary = trim( explode( '|', $title )[0] ?? '' );
+		if ( $primary === '' ) {
+			return '';
+		}
+		$colon = strpos( $primary, ':' );
+		$base  = ( $colon !== false && $colon >= 8 ) ? trim( substr( $primary, 0, $colon ) ) : $primary;
+		$base  = rtrim( $base, '?' );
+		return strtolower( trim( preg_replace( '/\s+/', ' ', $base ) ) );
+	}
+
+	/**
+	 * @return array<int,string>
+	 */
+	private static function significant_tokens( string $text ): array {
+		$norm = strtolower( trim( preg_replace( '/[^a-z0-9\s]/i', ' ', $text ) ) );
+		$norm = trim( preg_replace( '/\s+/', ' ', $norm ) );
+		if ( $norm === '' ) {
+			return array();
+		}
+		$stop = array(
+			'a' => true, 'an' => true, 'the' => true, 'and' => true, 'or' => true, 'for' => true,
+			'to' => true, 'of' => true, 'in' => true, 'on' => true, 'how' => true, 'it' => true,
+			'its' => true, 'is' => true, 'does' => true, 'do' => true, 'what' => true, 'with' => true,
+			'your' => true, 'which' => true,
+		);
+		$out = array();
+		foreach ( explode( ' ', $norm ) as $token ) {
+			if ( strlen( $token ) > 1 && empty( $stop[ $token ] ) ) {
+				$out[] = $token;
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * Rank Math stores "primary, secondary". Use the primary phrase only.
+	 *
+	 * @param mixed $raw Meta value.
+	 */
+	public static function primary_focus_phrase( $raw ): string {
+		if ( ! is_string( $raw ) ) {
+			return '';
+		}
+		$text = trim( $raw );
+		if ( $text === '' ) {
+			return '';
+		}
+		$comma = strpos( $text, ',' );
+		if ( $comma !== false ) {
+			$text = trim( substr( $text, 0, $comma ) );
+		}
+		return $text;
 	}
 
 	/**

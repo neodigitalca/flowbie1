@@ -94,6 +94,59 @@ class Neo_Pulse_Wp_Dataforseo {
 	}
 
 	/**
+	 * Related keywords for an outline seed.
+	 *
+	 * @return array<int, string>|WP_Error
+	 */
+	public static function fetch_related_keywords( string $keyword, array $options = array() ) {
+		$keyword = trim( $keyword );
+		if ( $keyword === '' ) {
+			return new WP_Error( 'neo-pulse_dfs_keyword', __( 'Focus keyword is required for related phrases.', 'neo-pulse-wp' ) );
+		}
+
+		$task = array(
+			'keyword'       => $keyword,
+			'location_code' => isset( $options['location_code'] ) ? (int) $options['location_code'] : 2124,
+			'language_code' => isset( $options['language_code'] ) ? (string) $options['language_code'] : 'en',
+			'limit'         => isset( $options['limit'] ) ? (int) $options['limit'] : 20,
+		);
+
+		$data = self::post_live( 'dataforseo_labs/google/related_keywords/live', array( $task ), 60 );
+		if ( is_wp_error( $data ) ) {
+			return $data;
+		}
+
+		$out  = array();
+		$seen = array();
+		$items = $data['tasks'][0]['result'][0]['items'] ?? array();
+		if ( ! is_array( $items ) ) {
+			return array();
+		}
+		foreach ( $items as $item ) {
+			if ( ! is_array( $item ) ) {
+				continue;
+			}
+			$phrase = '';
+			if ( ! empty( $item['keyword_data']['keyword'] ) ) {
+				$phrase = trim( (string) $item['keyword_data']['keyword'] );
+			} elseif ( ! empty( $item['keyword'] ) ) {
+				$phrase = trim( (string) $item['keyword'] );
+			}
+			if ( $phrase === '' ) {
+				continue;
+			}
+			$key = strtolower( $phrase );
+			if ( isset( $seen[ $key ] ) ) {
+				continue;
+			}
+			$seen[ $key ] = true;
+			$out[]        = $phrase;
+		}
+
+		return $out;
+	}
+
+	/**
 	 * @param string               $title
 	 * @param array<string,string> $location One of location_name or location_coordinate.
 	 * @param int                  $limit

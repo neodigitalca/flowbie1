@@ -17,6 +17,9 @@ class Neo_Pulse_Wp_Fields_Storage {
 
 	const CPT_GROUP_LEGACY   = 'neo-pulse-field-group';
 	const CPT_OPTIONS_LEGACY = 'neo-pulse-options-page';
+	const CPT_GROUP_FLOWBIE  = 'flowbie-field-group';
+	const CPT_FIELD_FLOWBIE  = 'flowbie-field';
+	const STORAGE_SLUG_VER   = '3';
 
 	/** @var array<string, array<string, mixed>>|null */
 	private static $groups_cache = null;
@@ -94,16 +97,32 @@ class Neo_Pulse_Wp_Fields_Storage {
 	}
 
 	/**
+	 * Older plugin slugs still stored on disk / in wp_posts.
+	 *
+	 * @return array<string, string>
+	 */
+	public static function legacy_post_type_map(): array {
+		return array(
+			self::CPT_GROUP_LEGACY  => self::CPT_GROUP,
+			self::CPT_OPTIONS_LEGACY => self::CPT_OPTIONS,
+			self::CPT_GROUP_FLOWBIE => self::CPT_GROUP,
+			self::CPT_FIELD_FLOWBIE => self::CPT_FIELD,
+		);
+	}
+
+	/**
 	 * WordPress caps post type keys at 20 characters.
 	 */
 	private static function migrate_legacy_storage_post_types(): void {
-		if ( get_option( 'neo_pulse_wp_storage_cpt_slugs', '' ) === '2' ) {
+		if ( (string) get_option( 'neo_pulse_wp_storage_cpt_slugs', '' ) === self::STORAGE_SLUG_VER ) {
 			return;
 		}
 		global $wpdb;
-		$wpdb->update( $wpdb->posts, array( 'post_type' => self::CPT_GROUP ), array( 'post_type' => self::CPT_GROUP_LEGACY ) );
-		$wpdb->update( $wpdb->posts, array( 'post_type' => self::CPT_OPTIONS ), array( 'post_type' => self::CPT_OPTIONS_LEGACY ) );
-		update_option( 'neo_pulse_wp_storage_cpt_slugs', '2', true );
+		foreach ( self::legacy_post_type_map() as $from => $to ) {
+			$wpdb->update( $wpdb->posts, array( 'post_type' => $to ), array( 'post_type' => $from ) );
+		}
+		update_option( 'neo_pulse_wp_storage_cpt_slugs', self::STORAGE_SLUG_VER, true );
+		self::flush_cache();
 	}
 
 	public static function flush_cache(): void {

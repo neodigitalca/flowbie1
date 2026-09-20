@@ -22,8 +22,8 @@ import Papa from "papaparse";
 import { BulkImportClientRow, type BulkImportClient } from "./BulkImportClientRow";
 import { getCyberpunkTextClasses, getCyberpunkButtonClasses } from "./cyberpunk-theme";
 
-const TEMPLATE_CSV = `name,siteUrl,username,appPassword
-"My Client","https://example.com","admin","xxxx xxxx xxxx xxxx"`;
+const TEMPLATE_CSV = `name,siteUrl,username,appPassword,googleAdsCustomerId
+"My Client","https://example.com","admin","xxxx xxxx xxxx xxxx","1234567890"`;
 
 function normalizeHeader(h: string): string {
   const s = (h || "").trim().toLowerCase().replace(/\s+/g, "");
@@ -31,6 +31,7 @@ function normalizeHeader(h: string): string {
   if (s === "siteurl" || s === "url") return "siteUrl";
   if (s === "username" || s === "user") return "username";
   if (s === "apppassword" || s === "applicationpassword" || s === "apppass") return "appPassword";
+  if (s === "googleadscustomerid" || s === "adscustomerid" || s === "googleadsid") return "googleAdsCustomerId";
   return s;
 }
 
@@ -58,6 +59,7 @@ function parseClientCSV(file: File): Promise<{ clients: BulkImportClient[]; skip
         let siteUrl: string;
         let username: string;
         let appPassword: string;
+        let googleAdsCustomerId: string;
 
         if (hasHeaders && row && typeof row === "object" && !Array.isArray(row)) {
           const r = row as Record<string, string>;
@@ -66,12 +68,14 @@ function parseClientCSV(file: File): Promise<{ clients: BulkImportClient[]; skip
           siteUrl = get("siteUrl");
           username = get("username");
           appPassword = get("appPassword");
+          googleAdsCustomerId = get("googleAdsCustomerId").replace(/\D/g, "");
         } else {
           const arr = Array.isArray(row) ? row : Object.values(row as Record<string, unknown>);
           name = String(arr[0] ?? "").trim();
           siteUrl = String(arr[1] ?? "").trim();
           username = String(arr[2] ?? "").trim();
           appPassword = String(arr[3] ?? "").trim();
+          googleAdsCustomerId = "";
         }
 
         siteUrl = ensureHttps(siteUrl);
@@ -81,7 +85,13 @@ function parseClientCSV(file: File): Promise<{ clients: BulkImportClient[]; skip
           errors.push(`Row ${i + 2}: Missing required field (name, siteUrl, username, appPassword)`);
           continue;
         }
-        clients.push({ name, siteUrl, username, appPassword });
+        clients.push({
+          name,
+          siteUrl,
+          username,
+          appPassword,
+          googleAdsCustomerId: googleAdsCustomerId || undefined,
+        });
       }
       return { clients, skipped, errors };
     };
@@ -224,7 +234,7 @@ export const BulkImportClientsDialog: React.FC<BulkImportClientsDialogProps> = (
             Bulk Import Clients
           </DialogTitle>
           <DialogDescription className="text-foreground">
-            Upload a CSV with columns: name, siteUrl, username, appPassword. Review and approve, then add all.
+            Upload a CSV with columns: name, siteUrl, username, appPassword. Optional: googleAdsCustomerId. Review and approve, then add all.
           </DialogDescription>
         </DialogHeader>
 

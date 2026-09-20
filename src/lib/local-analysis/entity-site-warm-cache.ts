@@ -546,6 +546,7 @@ export async function ensureEntitySiteWarmCache(
 
   const cached = cacheBySiteId.get(site.id);
   if (!force && isUsableBundle(cached, credKey, site, requireGsc)) {
+    resolveInventoryLeg(site.id);
     if (isSitePrefetchStale(cached)) {
       startBackgroundRefresh(site);
     }
@@ -555,6 +556,7 @@ export async function ensureEntitySiteWarmCache(
   if (!force && !isUsableBundle(cached, credKey, site, requireGsc)) {
     const fromPersist = await hydrateSitePrefetchFromPersist(site);
     if (fromPersist && isUsableBundle(fromPersist, credKey, site, requireGsc)) {
+      resolveInventoryLeg(site.id);
       if (isSitePrefetchStale(fromPersist)) {
         startBackgroundRefresh(site);
       }
@@ -586,6 +588,9 @@ export async function ensureEntitySiteWarmCache(
  * Starts the warm fetch if it is not already running.
  */
 export function ensureEntitySiteWarmInventory(site: WordPressSite): Promise<void> {
+  if ((getBulkGenerationWpInventoryIfReady(site.id)?.length ?? 0) > 0) {
+    return Promise.resolve();
+  }
   const credKey = siteWarmCredentialsKey(site);
   const cached = cacheBySiteId.get(site.id);
   if (isUsableBundle(cached, credKey, site) && (cached.bulkInventoryRows?.length ?? 0) > 0) {

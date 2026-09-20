@@ -30,6 +30,7 @@ function isDeliverableArtifact(input: {
     || input.stepKey?.startsWith("serp_research_")
     || input.stepKey?.startsWith("dfs_article_audit_")
     || input.stepKey === "gsc_reporting"
+    || input.stepKey === "ads_reporting"
     || input.stepKey === "gsc-deliverables"
     || input.stepKey === "gscdeliverables"
     || input.stepKey === "entity_bulk_csv"

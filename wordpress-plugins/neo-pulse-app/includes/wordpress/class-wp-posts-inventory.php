@@ -355,7 +355,7 @@ class Neo_Pulse_App_Wp_Posts_Inventory {
 			'per_page' => $per_page,
 			'page'     => $page,
 			'_fields'  => $include_acf
-				? 'id,slug,title,date_gmt,excerpt,link,status,type,post_type,acf'
+				? 'id,slug,title,date_gmt,excerpt,link,status,type,post_type,acf,neo_pulse_fields'
 				: 'id,slug,title,date_gmt,excerpt,link,status,type,post_type',
 		);
 		if ( $include_acf ) {

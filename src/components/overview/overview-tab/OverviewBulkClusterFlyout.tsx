@@ -96,6 +96,10 @@ export function OverviewBulkClusterFlyout({
           )}
           aria-haspopup="menu"
           aria-expanded={open}
+          onClick={() => {
+            if (workspaceBusy) return;
+            setOpen((prev) => !prev);
+          }}
         >
           {cluster.label}
         </button>

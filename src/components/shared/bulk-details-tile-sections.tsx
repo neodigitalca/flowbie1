@@ -15,6 +15,10 @@ import {
 import { cn } from "@/lib/utils";
 import type { BulkHarnessSectionUi } from "@/hooks/use-bulk-auto-generate";
 import {
+  resolveAiseoPipelineDownloadFile,
+  type AiseoFileSlotRunKind,
+} from "@/lib/overview/overview-aiseo-row-artifacts";
+import {
   MetaAccordionStripeRow,
   META_FIELD_COUNT,
   META_FIELD_END_RAIL,
@@ -28,7 +32,10 @@ import {
   CONTENT_PREP_ENTITY_SAP_BATCH_SECTION_TITLES,
 } from "@/lib/overview/overview-content-prep-harness-sections";
 import {
+  CONTENT_OPTIMIZE_PIPELINE_PREFIX,
   CONTENT_OPTIMIZE_PIPELINE_TITLES,
+  GOOGLE_IMAGE_ENTITY_SAP_PIPELINE_TITLES,
+  GOOGLE_IMAGE_PIPELINE_TITLE,
   buildWaitingContentOptimizeHarnessSections,
   isContentOptimizePipelineTitles,
 } from "@/lib/overview/overview-content-optimize-pipeline";
@@ -41,10 +48,24 @@ import {
 
 export type BulkDetailsDownloadable = { name: string; content: string; mimeType: string };
 
+const ARTIFACT_ONLY_PIPELINE_TITLES = new Set<string>([
+  GOOGLE_IMAGE_PIPELINE_TITLE,
+  ...CONTENT_OPTIMIZE_PIPELINE_PREFIX,
+  "Post content",
+  "Content Markdown",
+  "WordPress upload",
+  "OpenRouter Image",
+]);
+
+function isArtifactOnlyPipelineTitle(title: string): boolean {
+  return ARTIFACT_ONLY_PIPELINE_TITLES.has(title.trim());
+}
+
 const PIPELINE_HARNESS_TITLES = new Set<string>([
   ...CONTENT_PREP_BATCH_SECTION_TITLES,
   ...CONTENT_PREP_ENTITY_SAP_BATCH_SECTION_TITLES,
   ...CONTENT_OPTIMIZE_PIPELINE_TITLES,
+  ...GOOGLE_IMAGE_ENTITY_SAP_PIPELINE_TITLES,
   ...RESEARCH_HARNESS_SECTION_TITLES,
 ]);
 
@@ -96,11 +117,21 @@ function sanitizeHarnessSectionForDrawer(section: BulkHarnessSectionUi): BulkHar
   return { ...section, markdown: undefined };
 }
 
+function pipelineSectionDoneFromArtifactFile(
+  title: string,
+  files: BulkDetailsDownloadable[] | undefined,
+): boolean {
+  if (!files?.length) return false;
+  return Boolean(
+    linkPipelineSectionToGeneratedFile({ sectionIndex: 0, title, status: "waiting" }, files),
+  );
+}
+
 function resolveDetailsPipelineSections(
   persisted: BulkHarnessSectionUi[] | undefined,
   live: BulkHarnessSectionUi[] | undefined,
   pipelineSectionTitles?: readonly string[],
-  files?: Array<{ name: string }>,
+  files?: BulkDetailsDownloadable[],
 ): BulkHarnessSectionUi[] {
   if (pipelineSectionTitles?.length) {
     const statusByTitle = new Map<string, BulkHarnessSectionUi>();
@@ -110,6 +141,9 @@ function resolveDetailsPipelineSections(
     }
     return pipelineSectionTitles.map((title, sectionIndex) => {
       const patch = statusByTitle.get(title);
+      if (pipelineSectionDoneFromArtifactFile(title, files)) {
+        return { sectionIndex, title, status: "done" as const };
+      }
       if (patch && patch.status !== "waiting") {
         return sanitizeHarnessSectionForDrawer({ ...patch, sectionIndex, title });
       }
@@ -120,6 +154,20 @@ function resolveDetailsPipelineSections(
       };
       return placeholder;
     });
+  }
+
+  const harnessOnly = [...(persisted ?? []), ...(live ?? [])].filter(
+    (section) => section.title?.trim(),
+  );
+  if (harnessOnly.length > 0) {
+    const byTitle = new Map<string, BulkHarnessSectionUi>();
+    for (const section of harnessOnly) {
+      const title = section.title!.trim();
+      byTitle.set(title, section);
+    }
+    return [...byTitle.values()].map((section, sectionIndex) =>
+      sanitizeHarnessSectionForDrawer({ ...section, sectionIndex }),
+    );
   }
 
   const waiting = buildWaitingContentOptimizeHarnessSections();
@@ -202,7 +250,7 @@ function linkResearchStepFile(
   );
 }
 
-function linkPipelineSectionToGeneratedFile(
+export function linkPipelineSectionToGeneratedFile(
   section: BulkHarnessSectionUi,
   files: BulkDetailsDownloadable[],
 ): BulkDetailsDownloadable | null {
@@ -211,6 +259,22 @@ function linkPipelineSectionToGeneratedFile(
 
   const title = section.title.trim().toLowerCase();
   if (!title) return null;
+  if (title === "google image") {
+    return (
+      files.find((file) => file.name.toLowerCase() === "google-image.png") ??
+      files.find((file) => file.name.toLowerCase().includes("-google-maps.")) ??
+      files.find(
+        (file) =>
+          file.mimeType?.startsWith("image/") &&
+          !file.name.toLowerCase().includes("featured-image-checklist") &&
+          !file.name.toLowerCase().startsWith("openrouter-image."),
+      ) ??
+      null
+    );
+  }
+  if (title === "openrouter image") {
+    return files.find((file) => file.name.toLowerCase().startsWith("openrouter-image.")) ?? null;
+  }
   if (title === "keyword research") {
     return files.find((file) => file.name.toLowerCase().startsWith("keyword-research")) ?? null;
   }
@@ -293,6 +357,19 @@ function linkPipelineSectionToGeneratedFile(
       ) ?? null
     );
   }
+  if (title === "post content") {
+    return (
+      files.find(
+        (file) =>
+          file.name.toLowerCase().startsWith("content-") && file.name.toLowerCase().endsWith(".html"),
+      ) ??
+      files.find(
+        (file) =>
+          file.name.toLowerCase().startsWith("content-") && file.name.toLowerCase().endsWith(".md"),
+      ) ??
+      null
+    );
+  }
   if (title.includes("content markdown")) {
     return (
       files.find(
@@ -300,6 +377,17 @@ function linkPipelineSectionToGeneratedFile(
           file.name.toLowerCase().startsWith("content-") && file.name.toLowerCase().endsWith(".md"),
       ) ?? null
     );
+  }
+  if (title.includes("wordpress upload")) {
+    return (
+      files.find((file) => file.name === "wordpress.json") ??
+      files.find((file) => file.name.startsWith("upload-payload-")) ??
+      files.find((file) => file.name.startsWith("wordpress-post-")) ??
+      null
+    );
+  }
+  if (title === "case scenario") {
+    return files.find((file) => file.name === "scenario.json") ?? null;
   }
   if (title.includes("content")) {
     return (
@@ -343,6 +431,14 @@ export function resolvePipelineSectionDownloadable(
 ): BulkDetailsDownloadable | null {
   const available = files.filter((file) => !claimedNames.has(file.name));
 
+  if (section.title.trim().toLowerCase() === "google image") {
+    const linkedGoogle = linkPipelineSectionToGeneratedFile(section, available);
+    if (linkedGoogle) {
+      claimedNames.add(linkedGoogle.name);
+      return linkedGoogle;
+    }
+  }
+
   if (options?.requireDoneStatus && section.status !== "done") {
     const linkedEarly = linkPipelineSectionToGeneratedFile(section, available);
     if (linkedEarly) {
@@ -363,7 +459,10 @@ export function resolvePipelineSectionDownloadable(
     return linked;
   }
 
-  if (!options?.researchArtifactsOnly) {
+  if (
+    !options?.researchArtifactsOnly &&
+    !(options?.noFallback && isArtifactOnlyPipelineTitle(section.title))
+  ) {
     const fromMarkdown = harnessSectionToDownloadable(section, orderIndex);
     if (fromMarkdown) {
       claimedNames.add(fromMarkdown.name);
@@ -429,6 +528,8 @@ export function BulkDetailsTileSections({
   pipelineSectionTitles,
   defaultFilesOpen,
   downloadsLocked = false,
+  filesOnly = false,
+  fileSlotRunKind,
 }: {
   harnessSections: BulkHarnessSectionUi[];
   files: BulkDetailsDownloadable[];
@@ -443,7 +544,17 @@ export function BulkDetailsTileSections({
   defaultFilesOpen?: boolean;
   /** @deprecated Row-level lock; per-step gating uses harness status === done. */
   downloadsLocked?: boolean;
+  /** FAQ-style runs: list generated files only (no harness pipeline rows). */
+  filesOnly?: boolean;
+  /** Registry runKind for fixed Element | Post content | WordPress upload slots. */
+  fileSlotRunKind?: AiseoFileSlotRunKind;
 }) {
+  const resolvedFileSlotRunKind = fileSlotRunKind;
+  const useFileSlotsOnly = Boolean(resolvedFileSlotRunKind);
+  const aiseoPipelineDownloadFile = (title: string): BulkDetailsDownloadable | undefined => {
+    if (!resolvedFileSlotRunKind) return undefined;
+    return resolveAiseoPipelineDownloadFile(resolvedFileSlotRunKind, title, files);
+  };
   const [filesOpen, setFilesOpen] = useState(defaultFilesOpen ?? false);
   useEffect(() => {
     if (defaultFilesOpen) setFilesOpen(true);
@@ -458,12 +569,12 @@ export function BulkDetailsTileSections({
     : isContentOptimizePipeline
       ? { noFallback: true as const, requireDoneStatus: true as const }
       : undefined;
-  const pipelineSections = useExplicitPipeline
-    ? resolveDetailsPipelineSections(harnessSections, undefined, pipelineSectionTitles, files)
+  const pipelineSections = useFileSlotsOnly
+    ? []
     : resolveDetailsPipelineSections(
         harnessSections,
         undefined,
-        [...CONTENT_OPTIMIZE_PIPELINE_TITLES],
+        useExplicitPipeline ? pipelineSectionTitles : harnessSections.length ? undefined : [...CONTENT_OPTIMIZE_PIPELINE_TITLES],
         files,
       );
   const pipelineDownloadables = buildPipelineSectionDownloadables(
@@ -481,21 +592,43 @@ export function BulkDetailsTileSections({
   const readyPipelineDownloadables = pipelineDownloadables.filter(
     (file): file is BulkDetailsDownloadable => file != null,
   );
+  const wpPayloadForDownloadAll = isContentOptimizePipeline
+    ? files.filter(
+        (file) =>
+          file.name.startsWith("upload-payload-") && !claimedPipelineNames.has(file.name),
+      )
+    : [];
   const allDownloadables = isContentOptimizePipeline
-    ? readyPipelineDownloadables
+    ? [...readyPipelineDownloadables, ...wpPayloadForDownloadAll]
     : buildAllDownloadables(pipelineSections, extraFiles, serpBriefDownload, pipelineDownloadOptions);
-  const downloadableCount =
-    pipelineDownloadables.filter((file) => file != null).length + extraFiles.length;
-  const headerItemCount = useExplicitPipeline ? pipelineSections.length : downloadableCount;
+  const fileSlotDisplaySections = useFileSlotsOnly ? harnessSections : [];
+  const downloadableCount = useFileSlotsOnly
+    ? fileSlotDisplaySections.filter((section) =>
+        Boolean(aiseoPipelineDownloadFile(section.title || "")),
+      ).length
+    : pipelineDownloadables.filter((file) => file != null).length + extraFiles.length;
+  const headerItemCount = useFileSlotsOnly
+    ? Math.max(fileSlotDisplaySections.length, 2)
+    : useExplicitPipeline
+      ? pipelineSections.length
+      : downloadableCount;
   const trimmedStatus = statusMessage?.trim();
   const trimmedProgress = progressLabel?.trim();
-  const activePipelineIndex = pipelineSections.reduce(
-    (acc, section, index) =>
-      section.status === "generating" || section.status === "start" ? index : acc,
-    -1,
-  );
+  const activePipelineIndex = useFileSlotsOnly
+    ? fileSlotDisplaySections.findIndex((section) => section.status === "generating")
+    : pipelineSections.reduce(
+        (acc, section, index) =>
+          section.status === "generating" || section.status === "start" ? index : acc,
+        -1,
+      );
 
-  if (pipelineSections.length === 0 && downloadableCount === 0 && !trimmedStatus && !trimmedProgress) {
+  if (
+    !useFileSlotsOnly &&
+    pipelineSections.length === 0 &&
+    downloadableCount === 0 &&
+    !trimmedStatus &&
+    !trimmedProgress
+  ) {
     return null;
   }
 
@@ -571,13 +704,60 @@ export function BulkDetailsTileSections({
           </div>
           <CollapsibleContent className="space-y-3 pt-3">
             <div className="space-y-2 text-base">
-              {pipelineSections.map((s, i) => {
+              {useFileSlotsOnly
+                ? fileSlotDisplaySections.map((s, i) => {
+                    const downloadable = aiseoPipelineDownloadFile(s.title || "");
+                    const isActiveStep = i === activePipelineIndex;
+                    const stepReady = Boolean(downloadable);
+                    return (
+                      <div
+                        key={`file-slot-${i}-${s.title}`}
+                        className={cn(
+                          "flex min-w-0 items-center gap-2 rounded-none px-1 py-0.5",
+                          isActiveStep && CONTENT_OPTIMIZER_ACTIVE_ROW_HIGHLIGHT_CLASS,
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "w-6 shrink-0 tabular-nums",
+                            isActiveStep ? CONTENT_OPTIMIZER_ACTIVE_ROW_TEXT_CLASS : "text-muted-foreground",
+                          )}
+                        >
+                          {i + 1}
+                        </span>
+                        <span
+                          className={cn(
+                            "min-w-0 flex-1",
+                            isActiveStep ? CONTENT_OPTIMIZER_ACTIVE_ROW_TEXT_CLASS : "text-white",
+                          )}
+                        >
+                          {s.title}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className={cn(
+                            "h-7 shrink-0 px-2 text-base hover:bg-white/10 hover:text-white",
+                            stepReady ? "text-white" : "text-muted-foreground",
+                          )}
+                          disabled={!stepReady}
+                          onClick={() => downloadable && onDownloadFile(downloadable)}
+                        >
+                          <Download className="mr-1 h-3 w-3" />
+                          File
+                        </Button>
+                      </div>
+                    );
+                  })
+                : null}
+              {!useFileSlotsOnly
+                ? pipelineSections.map((s, i) => {
                 const downloadable = pipelineDownloadables[i];
                 const isActiveStep = i === activePipelineIndex;
                 const stepReady = Boolean(downloadable);
                 return (
                   <div
-                    key={`${s.sectionIndex}-${s.title || "section"}`}
+                    key={`${i}-${s.sectionIndex}-${s.title || "section"}`}
                     className={cn(
                       "flex min-w-0 items-center gap-2 rounded-none px-1 py-0.5",
                       isActiveStep && CONTENT_OPTIMIZER_ACTIVE_ROW_HIGHLIGHT_CLASS,
@@ -614,8 +794,10 @@ export function BulkDetailsTileSections({
                     </Button>
                   </div>
                 );
-              })}
-              {extraFiles.map((file, idx) => (
+              })
+                : null}
+              {!filesOnly
+                ? extraFiles.map((file, idx) => (
                 <div key={`${file.name}-${idx}`} className="flex min-w-0 items-center gap-2">
                   <span className="w-6 shrink-0 tabular-nums text-muted-foreground">
                     {pipelineSections.length + idx + 1}
@@ -640,7 +822,8 @@ export function BulkDetailsTileSections({
                     File
                   </Button>
                 </div>
-              ))}
+              ))
+                : null}
             </div>
           </CollapsibleContent>
         </Collapsible>

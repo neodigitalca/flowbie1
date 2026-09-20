@@ -249,13 +249,24 @@ describe("prepareChecklistForPipeline", () => {
     expect(out[0]).toContain("Motorized Options");
   });
 
-  it("pins SAP headings and slices to exactly 7 items", () => {
+  it("drops LLM audit authority dump rows that would become their own H2", () => {
+    const out = prepareChecklistForPipeline([
+      "CRA Online Mail for Individuals And Businesses [STRUCTURE]: 2 paragraphs.",
+      "[LLM_AUDIT_AUTHORITY_LINK]: Weave [[EXTERNAL:https://www.edmonton.ca/|Edmonton]] mid-sentence.",
+      "LLM Audit Authority Link 3 [STRUCTURE]: 2 paragraphs.",
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("CRA Online Mail");
+  });
+
+  it("slices SAP checklists to 7 items without rewriting titles", () => {
     const entity = "Virginia Park, AB";
     const extraRows = Array.from({ length: 10 }, (_, i) => `Extra topic ${i + 1} [STRUCTURE]: paragraph.`);
     const out = prepareChecklistForPipeline(extraRows, { sapEntity: entity });
     expect(out).toHaveLength(7);
-    expect(out[0]).toMatch(/Sunlight And Privacy Challenges/i);
-    expect(out[6]).toMatch(/Next Steps/i);
+    expect(out[0]).toContain("Extra topic 1");
+    expect(out[6]).toContain("Extra topic 7");
+    expect(out.join("\n")).not.toMatch(/Sunlight And Privacy Challenges/i);
   });
 });
 

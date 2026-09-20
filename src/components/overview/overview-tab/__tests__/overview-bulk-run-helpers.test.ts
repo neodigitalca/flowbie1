@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   getOverviewBulkActiveRowUrl,
+  isBulkDetailsDrawerRowActive,
+  isOverviewBulkRunEngaged,
   isOverviewRowBulkActive,
 } from "@/components/overview/overview-tab/overview-bulk-run-helpers";
 import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
@@ -77,5 +79,43 @@ describe("isOverviewRowBulkActive research", () => {
     });
     expect(isOverviewRowBulkActive("https://example.com/b", batch, true)).toBe(true);
     expect(isOverviewRowBulkActive("https://example.com/a", batch, true)).toBe(false);
+  });
+});
+
+describe("isOverviewBulkRunEngaged", () => {
+  it("is idle when every url is finished", () => {
+    const batch = researchBatch({
+      urlStatuses: {
+        "https://example.com/a": "completed",
+        "https://example.com/b": "completed",
+      },
+      currentStep: "Batch complete",
+    });
+    expect(isOverviewBulkRunEngaged(batch, "site1-batch", "site1", { "site1-batch": true })).toBe(
+      false,
+    );
+  });
+});
+
+describe("isBulkDetailsDrawerRowActive", () => {
+  it("matches optimizing url when paginated currentRow is stale", () => {
+    expect(
+      isBulkDetailsDrawerRowActive(
+        "https://example.com/c",
+        true,
+        4,
+        -1,
+        { "https://example.com/c": "optimizing" },
+      ),
+    ).toBe(true);
+    expect(
+      isBulkDetailsDrawerRowActive(
+        "https://example.com/a",
+        true,
+        0,
+        -1,
+        { "https://example.com/c": "optimizing" },
+      ),
+    ).toBe(false);
   });
 });

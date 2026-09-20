@@ -25,6 +25,7 @@ export function getOverviewBulkPageTitle(
   if (runKind === "aiOverview") return `Overview - ${site.name}`;
   if (runKind === "aiScenario") return `Scenario - ${site.name}`;
   if (runKind === "aiInContentImage") return `In Content Image - ${site.name}`;
+  if (runKind === "aiFeaturedImage") return `Featured image - ${site.name}`;
   if (runKind === "wpUpload") return `WordPress upload - ${site.name}`;
   return `Content Optimizer - ${site.name}`;
 }
@@ -58,6 +59,7 @@ export function isOverviewBulkRunEngaged(
   siteId: string,
   isOptimizingContent: Record<string, boolean>,
 ): boolean {
+  if (isOverviewBatchAllComplete(batchBulkState)) return false;
   if (Boolean(isOptimizingContent[batchKey] || (siteId && isOptimizingContent[siteId]))) {
     return true;
   }
@@ -121,6 +123,20 @@ export function isOverviewRowBulkActive(
   return normalizePageUrlKey(rowUrl) === normalizePageUrlKey(active);
 }
 
+/** Details drawer row highlight: match optimizing URL, not only paginated index. */
+export function isBulkDetailsDrawerRowActive(
+  rowUrl: string | undefined,
+  isProcessing: boolean,
+  localIndex: number,
+  currentRow: number,
+  urlStatuses?: BulkOptimizationState["urlStatuses"],
+): boolean {
+  if (!isProcessing) return false;
+  const url = rowUrl?.trim();
+  if (url && urlStatuses?.[url] === "optimizing") return true;
+  return currentRow >= 0 && localIndex === currentRow;
+}
+
 export function getOverviewBulkActiveUrl(batchBulkState: BulkOptimizationState | undefined): string | null {
   return getOverviewBulkActiveRowUrl(batchBulkState, Boolean(batchBulkState?.urls?.length));
 }
@@ -179,13 +195,20 @@ export function seedOverviewBulkBatchPrelude(
   batchKey: string,
   urls: string[],
   currentStep: string,
+  options?: { entityByUrl?: Record<string, string | undefined>; isSap?: boolean },
 ): void {
   const initialUrlStatuses: BulkOptimizationState["urlStatuses"] = {};
   for (const url of urls) {
     initialUrlStatuses[url] = "pending";
   }
   const batchPrepHarnessSections = buildWaitingBatchPrepHarnessSections();
-  const urlHarnessSections = buildContentPrepUrlHarnessMap(urls);
+  const urlHarnessSections = buildContentPrepUrlHarnessMap(
+    urls,
+    undefined,
+    undefined,
+    options?.entityByUrl,
+    options?.isSap,
+  );
   setBulkOptimizationState((prev) => ({
     ...prev,
     [batchKey]: {

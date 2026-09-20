@@ -315,3 +315,28 @@ export function splitSlimCandidatesByBucket(candidates: BlogLinkCandidate[]): {
     page: slim.filter((c) => c.bucket === "page"),
   };
 }
+
+/** Absolute sitemap URLs for Elementor section copy and optimize prompts. */
+export function formatSitemapLinkTargetsList(
+  pool: BlogLinksSiteLinkPool,
+  siteUrl: string,
+  excludeUrl?: string,
+  limit = 60,
+): string {
+  const excludeNorm = excludeUrl ? normalizeInternalUrl(siteUrl, excludeUrl) : "";
+  const lines: string[] = [];
+  const seen = new Set<string>();
+
+  for (const item of [...pool.pageInventory, ...pool.postInventory]) {
+    const url = item.url?.trim();
+    if (!url) continue;
+    const norm = normalizeInternalUrl(siteUrl, url);
+    if (excludeNorm && linkUrlEqual(norm, excludeNorm)) continue;
+    if (seen.has(norm)) continue;
+    seen.add(norm);
+    lines.push(`- ${url} (${item.title.trim() || item.slug})`);
+    if (lines.length >= limit) break;
+  }
+
+  return lines.join("\n");
+}

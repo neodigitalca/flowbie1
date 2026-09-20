@@ -1,6 +1,8 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
+import type { AiseoCacheWriteAccumulator } from "@/lib/overview/overview-aiseo-cache-write";
+import type { AiseoAfterRowWriteFn } from "@/lib/overview/overview-aiseo-after-upload";
 import {
   mergeHarnessProgressSiteAndBatch,
   setOptimizingState,
@@ -12,6 +14,7 @@ import {
   initOverviewBulkHarnessPagination,
   setOverviewBulkHarnessPageState,
 } from "@/lib/overview/overview-bulk-page-state";
+import { mapOverviewAiCopyWithConcurrency } from "@/lib/overview/overview-ai-copy-concurrency";
 import { overviewBulkPageRanges } from "@/lib/overview/overview-bulk-page-size";
 import { extractH2TextsFromHtml } from "@/lib/overview/overview-blog-headers-extract";
 import { resolveOverviewSourceHtml } from "@/lib/overview/overview-blog-overview-prepend";
@@ -25,6 +28,15 @@ import {
   formatPeerSitesChecklistStatus,
   mergeGeneratedFilesByName,
 } from "@/lib/overview/overview-peer-csv-details";
+import {
+  aiseoRowFilesForUpload,
+  buildAiseoElementTextFile,
+  mergeAiseoRowFinishFiles,
+} from "@/lib/overview/overview-aiseo-row-artifacts";
+import {
+  generatedFilesForUrl,
+  storageKeyForUrlGeneratedFiles,
+} from "@/lib/content-optimization/content-optimizer-bulk-generator-bindings";
 import { resolveLocalImagePlaceEntity } from "@/lib/overview/overview-local-image-dfs-normalize";
 import {
   extractPreferredBodyImageFromHtml,
@@ -37,7 +49,6 @@ import {
   type LocalImageExistingScope,
 } from "@/lib/overview/local-image-existing-scope";
 import {
-  buildWaitingInContentImageHarnessSections,
   formatInContentAnalyzeMarkdown,
   formatInContentImageResultMarkdown,
   formatLocalImageChecklistMarkdown,
@@ -105,6 +116,42 @@ function setInContentImageHarnessMessage(
       message,
     });
     return next;
+  });
+}
+
+function writeInContentImageRowFiles(
+  url: string,
+  setters: OverviewHarnessSetters,
+  reportMd: string,
+  postHtml: string,
+): void {
+  setters.setBulkOptimizationState((prev) => {
+    const current = prev[setters.batchKey];
+    if (!current) return prev;
+    const storageKey = storageKeyForUrlGeneratedFiles(
+      current.urlGeneratedFiles,
+      url,
+      current.urls,
+    );
+    const existingFiles = generatedFilesForUrl(current.urlGeneratedFiles, url);
+    const elementFile = buildAiseoElementTextFile("in-content-image.md", reportMd);
+    const rowSlotFiles = mergeAiseoRowFinishFiles({
+      runKind: "aiInContentImage",
+      url,
+      existingFiles,
+      elementFiles: elementFile ? [elementFile] : [],
+      postHtml,
+    });
+    return {
+      ...prev,
+      [setters.batchKey]: {
+        ...current,
+        urlGeneratedFiles: {
+          ...(current.urlGeneratedFiles || {}),
+          [storageKey]: rowSlotFiles,
+        },
+      },
+    };
   });
 }
 
@@ -185,15 +232,11 @@ export function initOverviewBlogInContentImageHarnessBatchState(params: {
   const batchKey = `${site.id}-batch`;
   const urls = catalog.map((c) => c.url.trim()).filter(Boolean);
   const urlKeywords: Record<string, string> = {};
-  const initialUrlStatuses: BulkOptimizationState["urlStatuses"] = {};
-  const urlHarnessSections: NonNullable<BulkOptimizationState["urlHarnessSections"]> = {};
 
   for (const entry of catalog) {
     const url = entry.url.trim();
     if (!url) continue;
     if (entry.focusKeyword) urlKeywords[url] = entry.focusKeyword;
-    initialUrlStatuses[url] = "pending";
-    urlHarnessSections[url] = buildWaitingInContentImageHarnessSections();
   }
 
   setOptimizingState(setIsOptimizingContent, batchKey, true);
@@ -211,13 +254,13 @@ export function initOverviewBlogInContentImageHarnessBatchState(params: {
     [batchKey]: {
       urls,
       currentIndex: 0,
-      urlStatuses: initialUrlStatuses,
+      urlStatuses: {},
       currentStep: "In Content Image",
       currentUrl: urls[0],
       urlKeywords,
       runKind: "aiInContentImage",
       harnessStartedAt: Date.now(),
-      urlHarnessSections,
+      urlHarnessSections: {},
       urlGeneratedFiles: {},
       currentStepProgress: {
         step: "In Content Image",
@@ -278,8 +321,9 @@ export type RunOverviewBlogInContentImageHarnessBatchParams = {
   /** Connected Integration sites for Local Image cross-site reuse. */
   peerSites?: WordPressSite[];
   harnessSetters: OverviewHarnessSetters;
+  cacheWrite: AiseoCacheWriteAccumulator;
   updateRow: (index: number, patch: Partial<OverviewRow>) => void;
-  onRowOk?: (url: string, html: string) => void;
+  uploadAfterRowWrite?: AiseoAfterRowWriteFn;
 };
 
 export async function runOverviewBlogInContentImageHarnessBatch(
@@ -293,8 +337,9 @@ export async function runOverviewBlogInContentImageHarnessBatch(
     allowLocalImage = false,
     peerSites,
     harnessSetters,
+    cacheWrite,
     updateRow,
-    onRowOk,
+    uploadAfterRowWrite,
   } = params;
   if (!catalog.length) return { ok: 0, failed: 0 };
 
@@ -307,7 +352,6 @@ export async function runOverviewBlogInContentImageHarnessBatch(
   const pageRanges = overviewBulkPageRanges(catalog.length);
   let ok = 0;
   let failed = 0;
-  let globalRowNum = 0;
 
   for (const { start, end, page, pageCount } of pageRanges) {
     const pageCatalog = catalog.slice(start, end);
@@ -324,8 +368,12 @@ export async function runOverviewBlogInContentImageHarnessBatch(
       step: "In Content Image",
     });
 
-    for (const row of pageCatalog) {
-      globalRowNum += 1;
+    await mapOverviewAiCopyWithConcurrency(
+      pageCatalog.map((row, localIndex) => ({
+        row,
+        globalRowNum: start + localIndex + 1,
+      })),
+      async ({ row, globalRowNum }) => {
       const url = row.url.trim();
       try {
         updateRow(row.index, { status: "ai-in-content-image" });
@@ -370,7 +418,7 @@ export async function runOverviewBlogInContentImageHarnessBatch(
             harnessSetters,
             "No HTML body for in-content image",
           );
-          continue;
+          return;
         }
 
         const bodyH2Titles = extractH2TextsFromHtml(sourceHtml).filter(
@@ -406,7 +454,7 @@ export async function runOverviewBlogInContentImageHarnessBatch(
             };
           });
           setInContentImageHarnessMessage(harnessSetters, "No H2 sections for image placement");
-          continue;
+          return;
         }
 
         emitInContentImageHarnessPayload(
@@ -530,7 +578,7 @@ export async function runOverviewBlogInContentImageHarnessBatch(
               harnessSetters,
               `${gate.reason} ${row.title || url}`,
             );
-            continue;
+            return;
           }
 
           const htmlForGenerate = gate.stripExisting
@@ -751,10 +799,38 @@ export async function runOverviewBlogInContentImageHarnessBatch(
         );
 
         const blogH2List = extractH2TextsFromHtml(result.html);
+        cacheWrite.push(url, result.html);
+        const reportMd = formatInContentImageResultMarkdown({
+          sectionHeader: result.sectionHeader,
+          imageUrl: result.imageUrl,
+          alt: result.alt,
+          referenceImageUrl: result.referenceImageUrl,
+          referenceSourceUrl: result.sharedFromPageUrl || result.referenceSourceUrl,
+          action: result.reusedFromCrossSite ? "Reused peer image" : "Generated from reference",
+          entity: result.entity,
+          sourceSiteName: result.sharedFromSiteName,
+          sourcePageUrl: result.sharedFromPageUrl,
+        });
+        writeInContentImageRowFiles(url, harnessSetters, reportMd, result.html);
+        const rowFiles = aiseoRowFilesForUpload({
+          runKind: "aiInContentImage",
+          url,
+          elementFiles: (() => {
+            const elementFile = buildAiseoElementTextFile("in-content-image.md", reportMd);
+            return elementFile ? [elementFile] : [];
+          })(),
+          postHtml: result.html,
+        });
+        if (uploadAfterRowWrite) {
+          await uploadAfterRowWrite({
+            index: row.index,
+            url,
+            html: result.html,
+            rowFiles: rowFiles.length ? rowFiles : undefined,
+          });
+        }
         updateRow(row.index, {
           status: "idle",
-          postContent: result.html,
-          postContentOptimized: result.html,
           blogH2List,
           blogInContentImageUrl: result.imageUrl,
           blogInContentImageAlt: result.alt,
@@ -775,30 +851,6 @@ export async function runOverviewBlogInContentImageHarnessBatch(
         harnessSetters.setBulkOptimizationState((prev) => {
           const current = prev[harnessSetters.batchKey];
           if (!current) return prev;
-          const reportMd = formatInContentImageResultMarkdown({
-            sectionHeader: result.sectionHeader,
-            imageUrl: result.imageUrl,
-            alt: result.alt,
-            referenceImageUrl: result.referenceImageUrl,
-            referenceSourceUrl:
-              result.sharedFromPageUrl || result.referenceSourceUrl,
-            action: result.reusedFromCrossSite
-              ? "Reused peer image"
-              : "Generated from reference",
-            entity: result.entity,
-            sourceSiteName: result.sharedFromSiteName,
-            sourcePageUrl: result.sharedFromPageUrl,
-          });
-          const urlGeneratedFiles = {
-            ...(current.urlGeneratedFiles || {}),
-            [url]: mergeGeneratedFilesByName(current.urlGeneratedFiles?.[url] || [], [
-              {
-                name: "in-content-image.md",
-                content: reportMd,
-                mimeType: "text/markdown;charset=utf-8",
-              },
-            ]),
-          };
           const urlLocalImageOutcomes = {
             ...(current.urlLocalImageOutcomes || {}),
             [url]: result.reusedFromCrossSite
@@ -810,7 +862,7 @@ export async function runOverviewBlogInContentImageHarnessBatch(
             urlKeywords: current.urlKeywords,
             urlOutcomes: urlLocalImageOutcomes,
             urlSkipReasons: current.urlSkipReasons,
-            urlGeneratedFiles,
+            urlGeneratedFiles: current.urlGeneratedFiles,
           });
           return {
             ...prev,
@@ -827,12 +879,10 @@ export async function runOverviewBlogInContentImageHarnessBatch(
                   : current.batchPeerLibraryFiles || [],
                 [summaryFile],
               ),
-              urlGeneratedFiles,
             },
           };
         });
 
-        onRowOk?.(url, result.html);
         ok += 1;
       } catch (err) {
         failed += 1;
@@ -902,7 +952,8 @@ export async function runOverviewBlogInContentImageHarnessBatch(
         }
         setInContentImageHarnessMessage(harnessSetters, message);
       }
-    }
+    },
+    );
   }
 
   setInContentImageHarnessMessage(

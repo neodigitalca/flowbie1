@@ -70,6 +70,21 @@ describe("isResearchBatchState", () => {
   });
 });
 
+describe("resolveBulkRowPipelineTitles aiFaq", () => {
+  it("does not expose per-pair FAQ harness rows in generated files", () => {
+    expect(
+      resolveBulkRowPipelineTitles(
+        "aiFaq",
+        [
+          { sectionIndex: 0, title: "FAQ 1", status: "done" },
+          { sectionIndex: 1, title: "FAQ 2", status: "waiting" },
+        ],
+        [{ name: "wordpress.json" }],
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe("resolveBulkRowPipelineTitles", () => {
   const staleContentPrepHarness = [
     { sectionIndex: 0, title: "SERP research brief", status: "waiting" as const },
@@ -177,7 +192,7 @@ describe("resolveBulkRowPipelineTitles", () => {
       { sectionIndex: 2, title: "Blueprint", status: "generating" as const },
       { sectionIndex: 3, title: "Answer", status: "waiting" as const },
       { sectionIndex: 4, title: "Overview", status: "waiting" as const },
-      { sectionIndex: 5, title: "Content HTML", status: "waiting" as const },
+      { sectionIndex: 5, title: "Post content", status: "waiting" as const },
       { sectionIndex: 6, title: "Content Markdown", status: "waiting" as const },
     ];
     expect(resolveBulkRowPipelineTitles(undefined, harness, [])).toEqual([
@@ -189,8 +204,9 @@ describe("resolveBulkRowPipelineTitles", () => {
       "Link targets",
       "Answer",
       "Overview",
-      "Content HTML",
+      "Post content",
       "Content Markdown",
+      "WordPress upload",
     ]);
   });
 
@@ -206,6 +222,25 @@ describe("resolveBulkRowPipelineTitles", () => {
     expect(
       resolveBulkRowPipelineTitles("aiHeaders", [], [], ["AI headers"]),
     ).toEqual(["AI headers"]);
+  });
+
+  it("aiAnswer ignores stale research artifact files on the row", () => {
+    expect(
+      resolveBulkRowPipelineTitles(
+        "aiAnswer",
+        [{ sectionIndex: 0, title: "DataForSEO SERP", status: "done" }],
+        [{ name: "research-llm-audit-solar.json" }],
+        ["Answer"],
+      ),
+    ).toEqual(["Answer"]);
+  });
+
+  it("aiAnswer without batch titles still returns Answer only", () => {
+    expect(
+      resolveBulkRowPipelineTitles("aiAnswer", undefined, [
+        { name: "research-llm-audit-solar.json" },
+      ]),
+    ).toEqual(["Answer"]);
   });
 
   it("uses provided curate step titles instead of SERP research brief", () => {

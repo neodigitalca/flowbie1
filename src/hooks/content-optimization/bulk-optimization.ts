@@ -234,7 +234,13 @@ export async function handleOptimizeMultipleContent(
     const existing = prev[batchKey];
     const batchPrepHarnessSections = waitingBatchPrepHarnessSections();
     const articleTitleByUrl = articleTitleByUrlFromPosts(urls, wordPressPosts, prefilledUrlKeywords);
-    const urlHarnessSections = buildContentPrepUrlHarnessMap(urls, articleTitleByUrl, prefilledUrlKeywords);
+    const urlHarnessSections = buildContentPrepUrlHarnessMap(
+      urls,
+      articleTitleByUrl,
+      prefilledUrlKeywords,
+      existing?.urlEntities,
+      isEntitySapRun,
+    );
     const firstUrl = urls[0]?.trim() ?? "";
     return {
       ...prev,
@@ -384,7 +390,14 @@ export async function handleOptimizeMultipleContent(
       let batchPrepHarnessSections =
         current.batchPrepHarnessSections ?? waitingBatchPrepHarnessSections();
       let urlHarnessSections =
-        current.urlHarnessSections ?? buildContentPrepUrlHarnessMap(urls, articleTitleByUrlFromPosts(urls, wordPressPosts, current.urlKeywords), current.urlKeywords);
+        current.urlHarnessSections ??
+        buildContentPrepUrlHarnessMap(
+          urls,
+          articleTitleByUrlFromPosts(urls, wordPressPosts, current.urlKeywords),
+          current.urlKeywords,
+          current.urlEntities,
+          isEntitySapRun,
+        );
       if (stepId === "prepInventory" && opts?.batchSectionIndex !== undefined) {
         const sectionIndex = opts.batchSectionIndex;
         const existingSection = batchPrepHarnessSections.find((s) => s.sectionIndex === sectionIndex);

@@ -172,7 +172,13 @@ class Neo_Pulse_App_Task_Execution_Runner_Content_Optimizer {
 		);
 		$contract = array_merge( $contract, Neo_Pulse_App_Tasks_Store::automation_email_contract_fields( $payload ) );
 		$contract = array_merge( $contract, Neo_Pulse_App_Tasks_Store::google_drive_contract_fields( $payload ) );
-		if ( ! empty( $payload['targetUrls'] ) && is_array( $payload['targetUrls'] ) ) {
+		if ( ! empty( $payload['urlFilter'] ) && $payload['urlFilter'] === 'missing_new_template' ) {
+			$contract['urlFilter'] = 'missing_new_template';
+		}
+		if ( ! empty( $payload['optionalPrompt'] ) ) {
+			$contract['optionalPrompt'] = sanitize_textarea_field( (string) $payload['optionalPrompt'] );
+		}
+		if ( array_key_exists( 'targetUrls', $payload ) && is_array( $payload['targetUrls'] ) ) {
 			$urls = array();
 			foreach ( $payload['targetUrls'] as $url ) {
 				$url = esc_url_raw( (string) $url );
@@ -180,9 +186,7 @@ class Neo_Pulse_App_Task_Execution_Runner_Content_Optimizer {
 					$urls[] = $url;
 				}
 			}
-			if ( count( $urls ) > 0 ) {
-				$contract['targetUrls'] = array_values( array_unique( $urls ) );
-			}
+			$contract['targetUrls'] = array_values( array_unique( $urls ) );
 		}
 		if ( ! empty( $payload['prefilledUrlResearch'] ) && is_array( $payload['prefilledUrlResearch'] ) ) {
 			$research = array();

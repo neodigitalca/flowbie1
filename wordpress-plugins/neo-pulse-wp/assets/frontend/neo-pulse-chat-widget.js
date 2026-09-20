@@ -13,9 +13,13 @@
   var root = document.getElementById('neo-pulse-chat-widget-root');
   if (!root) return;
 
-  var ASSISTANT = cfg.assistantName || 'Flow Assist';
+  var ASSISTANT = cfg.assistantName || 'Pulse Assist';
   var UI = cfg.ui || {};
   var SIDEBAR_SIDE = cfg.sidebarSide === 'left' ? 'left' : 'right';
+  var LAUNCHER_STYLE = cfg.launcherStyle === 'edge_tab' || cfg.launcherStyle === 'none'
+    ? cfg.launcherStyle
+    : 'circle';
+  var HIDE_LAUNCHER = LAUNCHER_STYLE === 'none';
   var SIDEBAR_TRANSITION = cfg.sidebarTransition || 'slide';
   var SIDEBAR_LAYOUT = Array.isArray(cfg.sidebarLayout) ? cfg.sidebarLayout : ['chat'];
   var SHOW_SIDEBAR_HEADING = SIDEBAR_LAYOUT.indexOf('heading') !== -1 && cfg.sidebarHeading;
@@ -26,9 +30,7 @@
   var CAN_COPY_LOG = cfg.canCopyLog === true;
   var CAN_BACKEND_MODE = cfg.canBackendMode === true;
   var SITE_INVENTORY_URL = cfg.siteInventoryUrl || '';
-  var SITE_INVENTORY_CSV_URL = cfg.siteInventoryCsvUrl || '';
   var BACKEND_ASSIST_UNDO_URL = cfg.backendAssistUndoUrl || '';
-  var siteInventoryCount = 0;
   var SHOW_CHAT_BODY = SIDEBAR_LAYOUT.indexOf('chat') !== -1 || SIDEBAR_LAYOUT.length === 0;
   var sidebarShell = null;
   var isOpen = false;
@@ -38,6 +40,10 @@
 
   function isMobileViewport() {
     return window.matchMedia && window.matchMedia('(max-width:767px)').matches;
+  }
+
+  function isEdgeTabDesktop() {
+    return LAUNCHER_STYLE === 'edge_tab' && !isMobileViewport();
   }
 
   function lockMobileRootClosed() {
@@ -74,21 +80,77 @@
 
   lockMobileRootClosed();
 
+  function applyLauncherStyle(launcher) {
+    if (!launcher) return;
+    launcher.classList.toggle('fcw-launcher--edge-tab', isEdgeTabDesktop());
+    launcher.classList.toggle('fcw-launcher--side-left', SIDEBAR_SIDE === 'left' && isEdgeTabDesktop());
+    if (isEdgeTabDesktop()) {
+      var label = launcher.querySelector('.fcw-launcher__label');
+      if (!label) {
+        label = document.createElement('span');
+        label.className = 'fcw-launcher__label';
+        launcher.appendChild(label);
+      }
+      label.textContent = cfg.launcherLabel || ('Open ' + ASSISTANT);
+      var glow = root && window.getComputedStyle(root).getPropertyValue('--fcw-launcher-glow');
+      if (glow) {
+        launcher.style.setProperty('--fcw-launcher-glow', glow.trim());
+      }
+      var dockText = root && window.getComputedStyle(root).getPropertyValue('--fcw-launcher-text');
+      if (dockText) {
+        launcher.style.setProperty('--fcw-launcher-text', dockText.trim());
+        launcher.style.color = dockText.trim();
+      }
+      var panelH = root && window.getComputedStyle(root).getPropertyValue('--fcw-panel-max-height');
+      if (panelH) {
+        launcher.style.setProperty('--fcw-panel-max-height', panelH.trim());
+      }
+      var panelW = root && window.getComputedStyle(root).getPropertyValue('--fai-sidebar-width');
+      if (panelW) {
+        launcher.style.setProperty('--fai-sidebar-width', panelW.trim());
+      }
+    }
+  }
+
+  function removeFloatingLauncher() {
+    var nodes = document.querySelectorAll('#neo-pulse-chat-mobile-launcher, .fcw-launcher, .fai-sidebar-launcher.fcw-launcher');
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      if (node && node.parentNode) {
+        node.parentNode.removeChild(node);
+      }
+    }
+    root.classList.remove('neo-pulse-chat--standalone-launcher');
+  }
+
   function applyLauncherChrome() {
+    if (HIDE_LAUNCHER) {
+      removeFloatingLauncher();
+      return;
+    }
     var launcher = document.getElementById('neo-pulse-chat-mobile-launcher') || root.querySelector('.fcw-launcher');
     if (!launcher) return;
     launcher.id = 'neo-pulse-chat-mobile-launcher';
     launcher.classList.add('fcw-mobile-launcher', 'fai-sidebar-launcher', 'fcw-launcher');
     launcher.setAttribute('data-fcw-chat-launcher', '1');
     launcher.setAttribute('aria-controls', 'neo-pulse-chat-widget-root');
+    applyLauncherStyle(launcher);
     if (isMobileViewport()) {
+      launcher.classList.remove('fcw-launcher--edge-tab', 'fcw-launcher--side-left', 'fcw-launcher--docked');
       launcher.style.position = 'fixed';
       launcher.style.bottom = '20px';
       launcher.style.right = '16px';
+      launcher.style.left = 'auto';
+      launcher.style.top = 'auto';
       launcher.style.width = '56px';
       launcher.style.height = '56px';
+      launcher.style.minWidth = '56px';
+      launcher.style.maxWidth = '56px';
+      launcher.style.padding = '0';
+      launcher.style.borderRadius = '50%';
       launcher.style.zIndex = '999900';
       launcher.style.pointerEvents = 'auto';
+      launcher.style.transform = 'none';
     }
   }
 
@@ -118,6 +180,10 @@
   var ADMIN_SUBMODE_LABELS = { ask: 'Ask', plan: 'Plan', build: 'Build' };
   var adminSubmode = 'ask';
   var adminSubmodeBtn = null;
+  var PAGE_CONTENT_MODES = ['seo_blocks', 'elementor_widgets'];
+  var PAGE_CONTENT_MODE_LABELS = { seo_blocks: 'SEO blocks', elementor_widgets: 'Elementor' };
+  var pageContentMode = 'seo_blocks';
+  var pageContentModeBtn = null;
   var adminTargetScope = 'page';
   var scopeToggleWrap = null;
   var pendingBuildRerun = null;
@@ -384,6 +450,49 @@
     return isBackendMode() ? adminSubmode : '';
   }
 
+  function loadPageContentMode() {
+    if (!CAN_BACKEND_MODE) return;
+    try {
+      var stored = sessionStorage.getItem('neo_pulse_page_content_mode');
+      if (stored === 'seo_blocks' || stored === 'elementor_widgets') {
+        pageContentMode = stored;
+      }
+    } catch (_) {}
+  }
+
+  function savePageContentMode(mode) {
+    if (PAGE_CONTENT_MODES.indexOf(mode) < 0) {
+      mode = 'seo_blocks';
+    }
+    pageContentMode = mode;
+    try {
+      sessionStorage.setItem('neo_pulse_page_content_mode', pageContentMode);
+    } catch (_) {}
+  }
+
+  function getPageContentModeForApi() {
+    return isBackendMode() ? pageContentMode : 'seo_blocks';
+  }
+
+  function togglePageContentMode() {
+    savePageContentMode(pageContentMode === 'seo_blocks' ? 'elementor_widgets' : 'seo_blocks');
+    updatePageContentModeUi();
+  }
+
+  function updatePageContentModeUi() {
+    if (!pageContentModeBtn) return;
+    pageContentModeBtn.hidden = !isBackendMode();
+    pageContentModeBtn.textContent = PAGE_CONTENT_MODE_LABELS[pageContentMode] || 'SEO blocks';
+    pageContentModeBtn.classList.toggle(
+      'fcw-page-content-pill--elementor',
+      pageContentMode === 'elementor_widgets'
+    );
+    pageContentModeBtn.setAttribute(
+      'aria-label',
+      'Page content: ' + (PAGE_CONTENT_MODE_LABELS[pageContentMode] || 'SEO blocks') + '. Click to toggle.'
+    );
+  }
+
   function updateTargetScopeUi() {
     if (!scopeToggleWrap) return;
     scopeToggleWrap.hidden = !isBackendMode();
@@ -441,6 +550,7 @@
 
   loadAdminMode();
   loadAdminSubmode();
+  loadPageContentMode();
   loadAdminTargetScope();
 
   var GREETING_LINE = getGreetingLine();
@@ -463,6 +573,39 @@
       sessionStorage.setItem(key, id);
     }
     return id;
+  }
+
+  function mintConversationId() {
+    return 'conv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  }
+
+  function getConversationId() {
+    var key = 'neo_pulse_chat_conversation_id';
+    var id = sessionStorage.getItem(key);
+    if (!id) {
+      id = mintConversationId();
+      sessionStorage.setItem(key, id);
+    }
+    return id;
+  }
+
+  function rotateConversationId() {
+    var id = mintConversationId();
+    sessionStorage.setItem('neo_pulse_chat_conversation_id', id);
+    return id;
+  }
+
+  function initDebugLogSession() {
+    if (!window.NeoPulseChatDebugLog || !CAN_COPY_LOG) return;
+    NeoPulseChatDebugLog.createSession({
+      sessionId: getChatSessionId(),
+      conversationId: getConversationId(),
+      source: cfg.isWpAdmin ? 'wp-admin' : 'frontend',
+      pageUrl: window.location.href || '',
+      siteName: cfg.siteName || '',
+      godModePersist: useGodModeHistoryStorage(),
+      persistUserId: cfg.currentUserId || 0
+    });
   }
 
   var GODMODE_HISTORY_MAX = 20;
@@ -539,6 +682,19 @@
     }
     if (card.build_message) {
       snap.build_message = String(card.build_message).slice(0, 400);
+    }
+    if (card.workflow_id) {
+      snap.workflow_id = String(card.workflow_id).slice(0, 80);
+    }
+    if (Array.isArray(card.steps) && card.steps.length) {
+      snap.steps = card.steps.slice(0, 24).map(function (step) {
+        return {
+          label: step && step.label ? String(step.label).slice(0, 160) : '',
+          status: step && step.status ? String(step.status).slice(0, 20) : 'pending',
+          tool: step && step.tool ? String(step.tool).slice(0, 60) : '',
+          executable: step && step.executable !== false
+        };
+      });
     }
     return snap;
   }
@@ -835,16 +991,7 @@
     };
   }
 
-  if (window.NeoPulseChatDebugLog && CAN_COPY_LOG) {
-    NeoPulseChatDebugLog.createSession({
-      sessionId: getChatSessionId(),
-      source: cfg.isWpAdmin ? 'wp-admin' : 'frontend',
-      pageUrl: window.location.href || '',
-      siteName: cfg.siteName || '',
-      godModePersist: useGodModeHistoryStorage(),
-      persistUserId: cfg.currentUserId || 0
-    });
-  }
+  initDebugLogSession();
 
   function recordChatAccept(messageId, url, label, type) {
     if (!messageId || !cfg.acceptUrl) return;
@@ -979,6 +1126,9 @@
     if (keepOpen) {
       nextClass += ' fai-sidebar-root--open';
     }
+    if (isEdgeTabDesktop()) {
+      nextClass += ' fai-sidebar-root--edge-tab';
+    }
     if (isBackendMode()) {
       nextClass += ' fcw--super-admin-mode';
     }
@@ -998,11 +1148,24 @@
     }
   }
 
+  function attachEdgeTabToPanel() {
+    if (!isEdgeTabDesktop() || !panel) return;
+    var launcher = getStandaloneLauncher();
+    if (!launcher) return;
+    if (launcher.parentNode !== panel) {
+      panel.appendChild(launcher);
+    }
+    launcher.classList.add('fcw-launcher--docked');
+    root.classList.add('fai-sidebar-root--edge-tab');
+    panel.removeAttribute('hidden');
+  }
+
   function mountShellNodes() {
     if (shellNodesMounted) return;
     shellNodesMounted = true;
     if (backdrop && !backdrop.parentNode) root.appendChild(backdrop);
     if (panel && !panel.parentNode) root.appendChild(panel);
+    attachEdgeTabToPanel();
   }
 
   function unmountShellNodes() {
@@ -1048,13 +1211,11 @@
     });
   }
   var inventoryBtn = null;
-  if (SITE_INVENTORY_CSV_URL) {
-    inventoryBtn = el('a', {
+  if (CAN_COPY_LOG) {
+    inventoryBtn = el('button', {
+      type: 'button',
       className: 'fcw-toolbar-icon-btn fcw-inventory-download',
-      role: 'button',
-      'aria-label': 'Download site cache CSV',
-      href: SITE_INVENTORY_CSV_URL + (SITE_INVENTORY_CSV_URL.indexOf('?') >= 0 ? '&' : '?') + '_wpnonce=' + encodeURIComponent(cfg.nonce || ''),
-      download: '',
+      'aria-label': 'Download conversation log',
       innerHTML: SVG_DOWNLOAD
     });
   }
@@ -1091,7 +1252,7 @@
       });
       startersWrapEl.appendChild(chip);
     });
-    if (window.NeoPulseChatPrefetch && !isBackendMode()) {
+    if (window.NeoPulseChatPrefetch && !isBackendMode() && chatPrefetchAllowed()) {
       NeoPulseChatPrefetch.prefetchSuggestions(getActiveStarters(), prefetchOptions());
     }
   }
@@ -1100,6 +1261,7 @@
     saveAdminMode(mode);
     refreshEmptyState();
     updateAdminSubmodeUi();
+    updatePageContentModeUi();
     updateTargetScopeUi();
     syncRootShellState(root.classList.contains('fai-sidebar-root--open'));
     if (mode === 'backend') {
@@ -1183,22 +1345,13 @@
     });
   }
 
-  function inventoryMenuLabel(count) {
-    var total = typeof count === 'number' && count > 0 ? count : siteInventoryCount;
-    if (total > 0) {
-      return 'Download site cache CSV · ' + total.toLocaleString() + ' URLs';
-    }
-    return 'Download site cache CSV';
-  }
-
   function updateInventoryMenuUi() {
     if (!inventoryBtn) return;
     var show = isBackendMode();
     inventoryBtn.hidden = !show;
     inventoryBtn.style.display = show ? '' : 'none';
-    var label = inventoryMenuLabel(siteInventoryCount);
-    inventoryBtn.setAttribute('aria-label', label);
-    inventoryBtn.title = label;
+    inventoryBtn.setAttribute('aria-label', 'Download conversation log');
+    inventoryBtn.title = 'Download conversation log';
   }
 
   function warmSiteInventory() {
@@ -1210,10 +1363,6 @@
     }).then(function (res) {
       if (!res.ok) return null;
       return res.json();
-    }).then(function (data) {
-      if (!data || typeof data.count !== 'number') return;
-      siteInventoryCount = data.count;
-      updateInventoryMenuUi();
     }).catch(function () {});
   }
 
@@ -1233,6 +1382,15 @@
     adminSubmodeBtn.appendChild(submodeLabelEl);
     adminSubmodeBtn.addEventListener('click', function () {
       cycleAdminSubmode();
+    });
+    pageContentModeBtn = el('button', {
+      type: 'button',
+      className: 'fcw-submode-pill fcw-page-content-pill',
+      hidden: ''
+    });
+    pageContentModeBtn.textContent = PAGE_CONTENT_MODE_LABELS[pageContentMode];
+    pageContentModeBtn.addEventListener('click', function () {
+      togglePageContentMode();
     });
   }
 
@@ -1326,6 +1484,9 @@
   if (adminSubmodeBtn) {
     composerActions.appendChild(adminSubmodeBtn);
   }
+  if (pageContentModeBtn) {
+    composerActions.appendChild(pageContentModeBtn);
+  }
   if (contactHuman) {
     composerActions.classList.add('fcw-composer-actions--with-human');
     composerActions.appendChild(contactHuman.toolbarBtn);
@@ -1356,6 +1517,7 @@
   if (CAN_BACKEND_MODE) {
     setAdminMode(adminMode);
     updateAdminSubmodeUi();
+    updatePageContentModeUi();
   }
   if (savedLauncher) {
     if (!savedLauncher.innerHTML || !savedLauncher.innerHTML.trim()) {
@@ -1389,6 +1551,8 @@
     if (window.NeoPulseChatDebugLog) {
       NeoPulseChatDebugLog.clear();
     }
+    rotateConversationId();
+    initDebugLogSession();
     if (window.NeoPulseVoice && typeof window.NeoPulseVoice.updateSendMicVisibility === 'function') {
       NeoPulseVoice.updateSendMicVisibility(textarea, sendBtn);
     }
@@ -1398,7 +1562,14 @@
   if (copyLogBtn) {
     copyLogBtn.addEventListener('click', function () {
       if (window.NeoPulseChatDebugLog) {
-        NeoPulseChatDebugLog.copyToClipboard(copyLogBtn);
+        NeoPulseChatDebugLog.copyToClipboard(copyLogBtn, history);
+      }
+    });
+  }
+  if (inventoryBtn) {
+    inventoryBtn.addEventListener('click', function () {
+      if (window.NeoPulseChatDebugLog && typeof window.NeoPulseChatDebugLog.downloadFile === 'function') {
+        NeoPulseChatDebugLog.downloadFile(inventoryBtn, history);
       }
     });
   }
@@ -1976,25 +2147,140 @@
   function setLauncherVisible(visible) {
     var launcher = getStandaloneLauncher();
     if (!launcher) return;
-    if (visible) {
+    var keepEdge = isEdgeTabDesktop() && launcher.classList.contains('fcw-launcher--edge-tab');
+    if (visible || keepEdge) {
       launcher.removeAttribute('hidden');
       launcher.style.display = '';
       launcher.style.visibility = '';
       launcher.style.pointerEvents = '';
-      launcher.setAttribute('aria-expanded', 'false');
-    } else {
-      launcher.setAttribute('hidden', '');
-      launcher.style.display = 'none';
-      launcher.style.visibility = 'hidden';
-      launcher.style.pointerEvents = 'none';
-      launcher.setAttribute('aria-expanded', 'true');
+      launcher.setAttribute('aria-expanded', visible ? 'false' : 'true');
+      return;
     }
+    launcher.setAttribute('hidden', '');
+    launcher.style.display = 'none';
+    launcher.style.visibility = 'hidden';
+    launcher.style.pointerEvents = 'none';
+    launcher.setAttribute('aria-expanded', 'true');
   }
 
   var chekkitTeaser = null;
 
+  var peekTimer = null;
+  var peekOutTimer = null;
+  var PEEK_SLIDE_MS = 500;
+  var PEEK_HOLD_MS = 600;
+
+  function prefersReducedMotion() {
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function clearPeekTimers() {
+    if (peekTimer) {
+      clearTimeout(peekTimer);
+      peekTimer = null;
+    }
+    if (peekOutTimer) {
+      clearTimeout(peekOutTimer);
+      peekOutTimer = null;
+    }
+  }
+
+  function peekLauncher() {
+    return document.getElementById('neo-pulse-chat-mobile-launcher');
+  }
+
+  function peekPanelWidth() {
+    if (panel && panel.offsetWidth) return panel.offsetWidth;
+    var raw = root && window.getComputedStyle(root).getPropertyValue('--fai-sidebar-width');
+    var n = raw ? parseInt(raw, 10) : 0;
+    return n || 400;
+  }
+
+  function setDockerShift(px) {
+    var launcher = peekLauncher();
+    var value = px + 'px';
+    document.documentElement.style.setProperty('--fcw-docker-shift', value);
+    if (launcher) {
+      launcher.style.setProperty('--fcw-docker-shift', value);
+    }
+  }
+
+  function clearDockerShift() {
+    document.documentElement.style.removeProperty('--fcw-docker-shift');
+    var launcher = peekLauncher();
+    if (launcher) {
+      launcher.style.removeProperty('--fcw-docker-shift');
+    }
+  }
+
+  function finishPeekHide() {
+    root.classList.remove('fai-sidebar-root--peek');
+    root.classList.remove('fai-sidebar-root--peek-track');
+    clearDockerShift();
+    if (!isOpen && panel && !root.classList.contains('fai-sidebar-root--open') && !isEdgeTabDesktop()) {
+      panel.setAttribute('hidden', '');
+    }
+    if (!isOpen) {
+      lockMobileRootClosed();
+    }
+  }
+
+  function clearEdgeTabPeek() {
+    clearPeekTimers();
+    finishPeekHide();
+  }
+
+  var PEEK_SESSION_KEY = 'neo_pulse_edge_peek_session';
+
+  function startEdgeTabPeek(force) {
+    if (isOpen) return;
+    if (!force) {
+      if (!isEdgeTabDesktop() || prefersReducedMotion()) return;
+      try {
+        if (sessionStorage.getItem(PEEK_SESSION_KEY)) return;
+        sessionStorage.setItem(PEEK_SESSION_KEY, '1');
+      } catch (e) {
+        return;
+      }
+    }
+    clearPeekTimers();
+    mountShellNodes();
+    showMobileRootForPanel();
+    root.classList.remove('fai-sidebar-root--peek');
+    root.classList.add('fai-sidebar-root--peek-track');
+    if (panel) {
+      panel.removeAttribute('hidden');
+      void panel.offsetWidth;
+    }
+    attachEdgeTabToPanel();
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(function () {
+        if (isOpen) return;
+        root.classList.add('fai-sidebar-root--peek');
+        peekTimer = window.setTimeout(function () {
+          peekTimer = null;
+          root.classList.remove('fai-sidebar-root--peek');
+          peekOutTimer = window.setTimeout(function () {
+            peekOutTimer = null;
+            finishPeekHide();
+          }, PEEK_SLIDE_MS);
+        }, PEEK_HOLD_MS);
+      });
+    });
+  }
+
+  window.NeoPulseChatTestPeek = function () {
+    var launcher = getStandaloneLauncher();
+    applyLauncherStyle(launcher);
+    if (launcher) {
+      launcher.classList.add('fcw-launcher--edge-tab');
+    }
+    startEdgeTabPeek(true);
+  };
+
   function onSidebarOpen() {
     isOpen = true;
+    clearEdgeTabPeek();
     setLauncherVisible(false);
     if (chekkitTeaser) chekkitTeaser.onChatOpen();
     textarea.focus();
@@ -2015,14 +2301,18 @@
   }
 
   function getStandaloneLauncher() {
+    if (HIDE_LAUNCHER) return null;
     var mobileBtn = document.getElementById('neo-pulse-chat-mobile-launcher');
     if (mobileBtn) return mobileBtn;
     return ensureStandaloneLauncher();
   }
 
   function ensureStandaloneLauncher() {
-    var existing = root.querySelector('.fai-sidebar-launcher.fcw-launcher');
+    if (HIDE_LAUNCHER) return null;
+    var existing = document.getElementById('neo-pulse-chat-mobile-launcher')
+      || root.querySelector('.fai-sidebar-launcher.fcw-launcher');
     if (existing) {
+      applyLauncherStyle(existing);
       return existing;
     }
     root.classList.add('neo-pulse-chat--standalone-launcher');
@@ -2033,6 +2323,7 @@
       'aria-expanded': 'false',
       innerHTML: SVG_CHAT_LAUNCHER
     });
+    applyLauncherStyle(launcher);
     root.appendChild(launcher);
     return launcher;
   }
@@ -2075,22 +2366,61 @@
 
   function closeStandalonePanel() {
     root.classList.remove('fai-sidebar-root--open');
-    if (backdrop) {
-      backdrop.setAttribute('hidden', '');
-      backdrop.classList.remove('fai-sidebar-backdrop--visible');
-    }
-    if (panel) {
-      panel.setAttribute('hidden', '');
-      panel.classList.remove('fai-sidebar-panel--visible');
-    }
     onSidebarClose();
-    teardownShellIfMobile();
+    var finish = function () {
+      if (root.classList.contains('fai-sidebar-root--open')) return;
+      if (backdrop) {
+        backdrop.setAttribute('hidden', '');
+        backdrop.classList.remove('fai-sidebar-backdrop--visible');
+      }
+      if (panel && !isEdgeTabDesktop()) {
+        panel.setAttribute('hidden', '');
+        panel.classList.remove('fai-sidebar-panel--visible');
+      }
+      teardownShellIfMobile();
+    };
+    if (prefersReducedMotion() || isMobileViewport()) {
+      finish();
+      return;
+    }
+    window.setTimeout(finish, 500);
+  }
+
+  function chatPrefetchAllowed() {
+    return !!(root && (root.classList.contains('fai-sidebar-root--open') || (sidebarShell && sidebarShell.isOpen)));
+  }
+
+  function warmChatWhenOpened() {
+    if (!window.NeoPulseChatPrefetch) {
+      return;
+    }
+    if (cfg.pageContext && getTargetScopeForApi() !== 'site') {
+      NeoPulseChatPrefetch.warmPageContext(cfg.pageContext, prefetchOptions());
+    }
+    if (uiOn('suggestion_chips') && !isBackendMode()) {
+      NeoPulseChatPrefetch.prefetchSuggestions(getActiveStarters(), prefetchOptions());
+    }
   }
 
   function openChatFromLauncher() {
+    var alreadyOpen = (sidebarShell && sidebarShell.isOpen) || root.classList.contains('fai-sidebar-root--open');
+    if (alreadyOpen) {
+      clearEdgeTabPeek();
+      if (sidebarShell && typeof sidebarShell.toggle === 'function') {
+        sidebarShell.toggle(false);
+        return;
+      }
+      closeStandalonePanel();
+      return;
+    }
+    clearPeekTimers();
+    root.classList.remove('fai-sidebar-root--peek');
+    root.classList.remove('fai-sidebar-root--peek-track');
+    clearDockerShift();
     showMobileRootForPanel();
     mountShellNodes();
     syncRootShellState(true);
+    warmChatWhenOpened();
     if (isMobileViewport()) {
       openStandalonePanel();
       return;
@@ -2217,9 +2547,11 @@
   }
 
   function applyChekkitLauncherChrome() {
+    if (HIDE_LAUNCHER) return;
     if (!SHOW_CONTACT_HUMAN || !cfgFlagOn(cfg.chekkitTeaserEnabled)) return;
     var launcher = getStandaloneLauncher();
     if (!launcher) return;
+    if (isEdgeTabDesktop()) return;
     launcher.classList.add('fcw-launcher--chekkit');
     launcher.innerHTML = SVG_PHONE_LAUNCHER;
     launcher.style.setProperty('background', '#d8005f', 'important');
@@ -2228,6 +2560,7 @@
   }
 
   function initChekkitTeaser() {
+    if (HIDE_LAUNCHER || isEdgeTabDesktop()) return null;
     if (!SHOW_CONTACT_HUMAN || !cfgFlagOn(cfg.chekkitTeaserEnabled)) return null;
     if (typeof Element === 'undefined' || !Element.prototype.attachShadow) return null;
 
@@ -2252,6 +2585,9 @@
     if (SIDEBAR_SIDE === 'left') {
       host.classList.add('left');
     }
+    if (isEdgeTabDesktop()) {
+      host.classList.add('edge');
+    }
 
     var shadow = host.attachShadow({ mode: 'open' });
     var style = document.createElement('style');
@@ -2266,9 +2602,14 @@
       + '.line{display:block;font-size:1rem;line-height:1.35;color:#111;white-space:normal}'
       + '.dismiss{position:absolute;top:6px;right:6px;width:22px;height:22px;margin:0;padding:0;border:none;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.15);color:#666;font-size:1rem;line-height:1;cursor:pointer}'
       + '.dismiss:hover{background:#f3f4f6;color:#374151}'
-      + '.card::after{content:"";position:absolute;bottom:-8px;width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:8px solid #fff;filter:drop-shadow(0 2px 2px rgba(0,0,0,.06))}'
-      + ':host(.left) .card::after{left:20px;right:auto}'
-      + ':host(:not(.left)) .card::after{right:20px;left:auto}';
+      + '.card::after{content:"";position:absolute;top:50%;width:0;height:0;transform:translateY(-50%);filter:drop-shadow(0 2px 2px rgba(0,0,0,.06))}'
+      + ':host(.left) .card::after{left:-8px;right:auto;border-top:8px solid transparent;border-bottom:8px solid transparent;border-right:8px solid #fff;border-left:none}'
+      + ':host(:not(.left)) .card::after{right:-8px;left:auto;border-top:8px solid transparent;border-bottom:8px solid transparent;border-left:8px solid #fff;border-right:none}'
+      + ':host(.edge) .card{align-items:center;gap:8px;min-width:0;max-width:none;width:auto;padding:8px 28px 8px 12px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.12)}'
+      + ':host(.edge) .avatar{display:none}'
+      + ':host(.edge) .copy{flex:none}'
+      + ':host(.edge) .line + .line{display:none}'
+      + ':host(.edge) .dismiss{top:50%;right:6px;transform:translateY(-50%);box-shadow:none}';
 
     var card = document.createElement('div');
     card.className = 'card';
@@ -2303,9 +2644,14 @@
     dismissBtn.setAttribute('aria-label', 'Dismiss');
     dismissBtn.textContent = '\u00d7';
 
-    card.appendChild(avatar);
+    if (!isEdgeTabDesktop()) {
+      card.appendChild(avatar);
+    }
     card.appendChild(copy);
     card.appendChild(dismissBtn);
+    if (isEdgeTabDesktop()) {
+      line2.hidden = true;
+    }
     shadow.appendChild(style);
     shadow.appendChild(card);
     document.body.appendChild(host);
@@ -2313,14 +2659,16 @@
     function positionTeaser() {
       if (dismissed || !launcher) return;
       var rect = launcher.getBoundingClientRect();
-      var gap = 14;
-      host.style.bottom = (window.innerHeight - rect.top + gap) + 'px';
+      var gap = isEdgeTabDesktop() ? 8 : 14;
+      var hostH = host.offsetHeight || (isEdgeTabDesktop() ? 40 : 88);
+      var top = Math.max(16, rect.top + rect.height / 2 - hostH / 2);
+      host.style.top = top + 'px';
+      host.style.bottom = 'auto';
       if (SIDEBAR_SIDE === 'left') {
-        host.style.left = Math.max(16, rect.left) + 'px';
+        host.style.left = Math.max(16, rect.right + gap) + 'px';
         host.style.right = 'auto';
       } else {
-        var rightOffset = Math.max(16, window.innerWidth - rect.right);
-        host.style.right = rightOffset + 'px';
+        host.style.right = Math.max(16, window.innerWidth - rect.left + gap) + 'px';
         host.style.left = 'auto';
       }
     }
@@ -2407,13 +2755,26 @@
     syncRootShellState(true);
   };
 
+  window.NeoPulseChatOpen = function () {
+    var alreadyOpen = (sidebarShell && sidebarShell.isOpen) || root.classList.contains('fai-sidebar-root--open');
+    if (alreadyOpen) {
+      return;
+    }
+    openChatFromLauncher();
+  };
+
   bindUnifiedShell();
   if (!isMobileViewport()) {
     root.hidden = false;
+    root.removeAttribute('hidden');
     root.removeAttribute('aria-hidden');
     root.classList.remove('fcw-mobile-root-closed');
     if (cfg.cssVars) {
       root.setAttribute('style', cfg.cssVars);
+    }
+    if (isEdgeTabDesktop()) {
+      mountShellNodes();
+      syncRootShellState(false);
     }
   } else {
     lockMobileRootClosed();
@@ -2423,6 +2784,9 @@
     setLauncherVisible(true);
   }
   chekkitTeaser = initChekkitTeaser();
+  window.requestAnimationFrame(function () {
+    window.setTimeout(startEdgeTabPeek, 120);
+  });
   if (window.matchMedia) {
     window.matchMedia('(max-width:767px)').addEventListener('change', function () {
       applyLauncherChrome();
@@ -2509,12 +2873,6 @@
 
   if (window.NeoPulseChatPrefetch) {
     NeoPulseChatPrefetch.bindComposer(textarea, prefetchOptions());
-    if (cfg.pageContext && getTargetScopeForApi() !== 'site') {
-      NeoPulseChatPrefetch.warmPageContext(cfg.pageContext, prefetchOptions());
-    }
-    if (STARTERS.length && uiOn('suggestion_chips') && !isBackendMode()) {
-      NeoPulseChatPrefetch.prefetchSuggestions(STARTERS, prefetchOptions());
-    }
   }
 
   function sendMessage(text, inputOrigin, options) {
@@ -2537,7 +2895,7 @@
       }
       NeoPulseBuildHarness.runBuild({
         message: text,
-        history: historyForApi(),
+        history: history.slice(-6),
         cfg: cfg,
         root: root,
         thinkingSteps: resolveBuildThinkingSteps(text),
@@ -2665,6 +3023,7 @@
         source: 'frontend',
         admin_mode: getAdminModeForApi(),
         admin_submode: getAdminSubmodeForApi(),
+        page_content_mode: getPageContentModeForApi(),
         target_scope: getTargetScopeForApi(),
         page_url: window.location.href || (cfg.pageContext && cfg.pageContext.url) || '',
         post_id: getEffectivePostIdForApi(),

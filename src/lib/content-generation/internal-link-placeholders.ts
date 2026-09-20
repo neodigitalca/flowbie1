@@ -10,6 +10,7 @@ import {
 } from "@/lib/overview/overview-blog-overview-prepend";
 import { getSiteCache } from "@/lib/wordpress-site-cache";
 import {
+  isServiceAreaInventoryRow,
   keepBlogPlayLinkTargets,
 } from "@/lib/bulk/bulk-generation-wp-inventory";
 import { INTERNAL_LINK_INTENT_ROUTING_RULE } from "@/lib/content-generation/internal-link-routing-rules";
@@ -164,6 +165,19 @@ async function resolveQueryUrls(
   });
 }
 
+function resolveExactServiceAreaTitle(
+  query: string,
+  posts: LinkablePost[] | undefined,
+): string | undefined {
+  const q = query.trim().toLowerCase();
+  if (!q || !posts?.length) return undefined;
+  const hit = posts.find((p) => {
+    if (!isServiceAreaInventoryRow(p)) return false;
+    return p.title.trim().toLowerCase() === q;
+  });
+  return hit?.link.trim() || undefined;
+}
+
 function postByUrl(catalog: LinkablePost[], url: string): LinkablePost | null {
   const key = normalizeInternalLinkUrl(url);
   return catalog.find((post) => normalizeInternalLinkUrl(post.link) === key) ?? null;
@@ -227,7 +241,10 @@ async function resolveInternalLinkPlaceholdersCore(
     if (!anchor) return _full;
 
     slot += 1;
-    const url = urlBySlot.get(String(slot))?.trim();
+    const query = String(_rawQuery ?? "").trim();
+    const url =
+      urlBySlot.get(String(slot))?.trim()
+      || resolveExactServiceAreaTitle(query, opts.wordPressPosts);
     if (!url) return anchor;
 
     const post = postByUrl(catalog, url) ?? ({ link: url } as LinkablePost);
@@ -287,9 +304,10 @@ ${INTERNAL_LINK_INTENT_ROUTING_RULE}
 - informational [[LINK]] slots may use BLOG POSTS title words in addition to PAGES
 - anchor text must share at least one distinctive word from the destination page title
 - place each token in the middle of a sentence that already has words before and after it
-FORBIDDEN: raw same-site <a href="https://..."> in body sections — emit [[LINK:plan-query|anchor]] only
+FORBIDDEN: raw same-site <a href="https://..."> in body sections. Emit [[LINK:plan-query|anchor]] only
 FORBIDDEN: linking bold copy (**markdown**, <strong>, <b>)
-FORBIDDEN: a lone linked page title tacked on at the end of a paragraph
+FORBIDDEN: a leftover keyword, page title, or [[LINK]] after a finished sentence (". durable window coverings")
+FORBIDDEN: a lone linked page title tacked on at the end of a paragraph. If you cannot weave the next [[LINK]] mid-sentence, STOP. Do not append it.
 Format example: [[LINK:PAGES title words|short anchor]]
 FORBIDDEN: service-area pages, city landings, /service-area/ URLs.
 FORBIDDEN: {{LINK:...}}, {{EXTERNAL:...}}, {LINK:...}, template braces, or any syntax other than [[LINK:query|anchor]] and [[EXTERNAL:url|anchor]].

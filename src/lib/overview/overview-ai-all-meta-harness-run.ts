@@ -1,10 +1,10 @@
 import type { Dispatch, SetStateAction } from "react";
-import { flushSync } from "react-dom";
 import { notify } from "@/lib/app-notifications";
 import { notifyAiAllMetaFailedForAllXRowS, notifyAiAllMetaFinishedForXPageS, notifyAiAllMetaFinishedXXUpdatedSkipped } from "@/lib/notify-messages";
 import type { HarnessSectionListItem } from "@/lib/bulk/harness-sections-reducer";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
+import type { OverviewInventoryUrlMatch } from "@/lib/overview/overview-row-scrape";
 import { type AiAllMetaCatalogRow } from "@/lib/overview/overview-ai-all-meta-batch-catalog";
 import type { AiAllMetaRowPatch } from "@/lib/overview/overview-ai-all-meta-batch-parse";
 import { buildWaitingMetaHarnessSections } from "@/lib/overview/overview-ai-all-meta-harness-sections";
@@ -24,6 +24,7 @@ import {
 import { mergeOptimizationProgress } from "@/hooks/content-optimization/optimization-helpers";
 import type { BulkOptimizationState } from "@/hooks/content-optimization/use-optimization-state";
 import { initOverviewBulkHarnessPagination } from "@/lib/overview/overview-bulk-page-state";
+import type { OverviewSitemapSource } from "@/lib/overview/overview-sitemap-source";
 
 type SetBulkState = Dispatch<SetStateAction<Record<string, BulkOptimizationState>>>;
 type SetOptProgress = Dispatch<SetStateAction<Record<string, unknown>>>;
@@ -33,6 +34,11 @@ export type { MetaHarnessSetters } from "@/lib/overview/overview-ai-all-meta-har
 
 export type RunOverviewAiAllMetaHarnessParams = {
   site: WordPressSite;
+  sitemapSource: OverviewSitemapSource;
+  getInventoryMatchForUrl: (
+    site: WordPressSite | null,
+    url: string,
+  ) => OverviewInventoryUrlMatch | undefined;
   rows: OverviewRow[];
   catalog: AiAllMetaCatalogRow[];
   skippedNoBrief: number[];
@@ -79,20 +85,12 @@ export function initOverviewAiAllMetaHarnessBatchState(
   const batchKey = `${site.id}-batch`;
   const urls = rows.map((r) => r.url.trim()).filter(Boolean);
   const urlKeywords: Record<string, string> = {};
-  const urlHarnessSections: Record<string, HarnessSectionListItem[]> = {};
-  const initialUrlStatuses: Record<string, BulkOptimizationState["urlStatuses"][string]> = {};
 
   for (const row of rows) {
     const url = row.url?.trim();
     if (!url) continue;
     const kw = row.focusKeyword?.trim();
     if (kw) urlKeywords[url] = kw;
-    initialUrlStatuses[url] = "pending";
-  }
-
-  for (const entry of catalog) {
-    const url = entry.url.trim();
-    if (url) urlHarnessSections[url] = buildWaitingMetaHarnessSections(entry);
   }
 
   setOptimizingState(setIsOptimizingContent, batchKey, true);
@@ -110,12 +108,12 @@ export function initOverviewAiAllMetaHarnessBatchState(
     [batchKey]: {
       urls,
       currentIndex: 0,
-      urlStatuses: initialUrlStatuses,
+      urlStatuses: {},
       currentStep: "Generating meta...",
       currentUrl: urls[0],
       urlKeywords,
       runKind: "aiAllMeta",
-      urlHarnessSections,
+      urlHarnessSections: {},
       urlGeneratedFiles: {},
       currentStepProgress: {
         step: "Generating meta...",
@@ -174,6 +172,8 @@ export async function runOverviewAiAllMetaHarness(
 ): Promise<void> {
   const {
     site,
+    sitemapSource,
+    getInventoryMatchForUrl,
     rows,
     catalog,
     skippedNoBrief,
@@ -219,6 +219,8 @@ export async function runOverviewAiAllMetaHarness(
     const eligible = buildAiAllMetaEligibleRows(rows, catalog);
     const batchResult = await runOverviewAiAllMetaBatch({
       site,
+      sitemapSource,
+      getInventoryMatchForUrl,
       eligible,
       harnessSetters,
       batchKey,
@@ -230,9 +232,7 @@ export async function runOverviewAiAllMetaHarness(
       onRowStart: (index, row) => {
         const url = row.url?.trim();
         if (!url) return;
-        flushSync(() => {
-          setMetaUrlStatus(batchKey, url, "optimizing", setBulkOptimizationState);
-        });
+        setMetaUrlStatus(batchKey, url, "optimizing", setBulkOptimizationState);
       },
     });
     applied = batchResult.applied;
@@ -243,10 +243,8 @@ export async function runOverviewAiAllMetaHarness(
       const row = rows[index];
       if (!row?.url?.trim()) continue;
       const url = row.url.trim();
-      flushSync(() => {
-        updateRow(index, { status: "error" });
-        setMetaUrlStatus(batchKey, url, "skipped", setBulkOptimizationState, "Skipped (no SEO brief on row)");
-      });
+      updateRow(index, { status: "error" });
+      setMetaUrlStatus(batchKey, url, "skipped", setBulkOptimizationState, "Skipped (no SEO brief on row)");
       failed += 1;
     }
 
@@ -255,10 +253,8 @@ export async function runOverviewAiAllMetaHarness(
       const row = rows[index];
       if (!row?.url?.trim()) continue;
       const url = row.url.trim();
-      flushSync(() => {
-        updateRow(index, { status: "error" });
-        setMetaUrlStatus(batchKey, url, "skipped", setBulkOptimizationState, "Missing focus keyword");
-      });
+      updateRow(index, { status: "error" });
+      setMetaUrlStatus(batchKey, url, "skipped", setBulkOptimizationState, "Missing focus keyword");
       failed += 1;
     }
 

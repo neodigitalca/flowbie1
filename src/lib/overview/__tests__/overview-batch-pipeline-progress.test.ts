@@ -17,17 +17,25 @@ describe("buildKeywordBatchPipelineSteps", () => {
 });
 
 describe("buildWpUploadBatchPipelineSteps", () => {
-  it("matches terminal WP batch labels", () => {
-    const steps = buildWpUploadBatchPipelineSteps(491);
-    expect(steps).toHaveLength(20);
-    expect(steps[0]?.label).toBe("WP batch 1/20 (25 items)");
-    expect(steps[19]?.label).toBe("WP batch 20/20 (16 items)");
+  it("matches sequential WP post labels", () => {
+    const steps = buildWpUploadBatchPipelineSteps(4);
+    expect(steps).toHaveLength(4);
+    expect(steps[0]?.label).toBe("WP post 1/4");
+    expect(steps[3]?.label).toBe("WP post 4/4");
   });
 });
 
 describe("wpUploadBatchStepsAfterProgress", () => {
-  it("marks completed WP batches done and next running", () => {
-    const steps = buildWpUploadBatchPipelineSteps(74);
+  it("marks the current WP batch running on start", () => {
+    const steps = buildWpUploadBatchPipelineSteps(3);
+    const started = wpUploadBatchStepsAfterProgress(steps, 1, 3, "start");
+    expect(started[0]?.status).toBe("running");
+    expect(started[1]?.status).toBe("waiting");
+    expect(started[2]?.status).toBe("waiting");
+  });
+
+  it("marks completed WP posts done and next running", () => {
+    const steps = buildWpUploadBatchPipelineSteps(3);
     const afterFirst = wpUploadBatchStepsAfterProgress(steps, 1, 3);
     expect(afterFirst[0]?.status).toBe("done");
     expect(afterFirst[1]?.status).toBe("running");
@@ -35,7 +43,7 @@ describe("wpUploadBatchStepsAfterProgress", () => {
   });
 
   it("marks all done on final batch", () => {
-    const steps = buildWpUploadBatchPipelineSteps(25);
+    const steps = buildWpUploadBatchPipelineSteps(1);
     const done = wpUploadBatchStepsAfterProgress(steps, 1, 1);
     expect(done.every((s) => s.status === "done")).toBe(true);
   });

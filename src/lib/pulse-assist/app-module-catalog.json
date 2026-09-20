@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generatedAt": "2026-09-03T16:27:54.328Z",
+  "generatedAt": "2026-09-16T16:16:14.191Z",
   "modules": [
     {
       "id": "dashboard/properties",
@@ -216,23 +216,26 @@
       "label": "Pulse Forge",
       "menuPath": "Teams → Pulse Forge",
       "section": "teams",
-      "hash": "#pulse-forge",
-      "pulseNav": "pulse:nav/pulse-forge",
+      "hash": "#pulse-forge/forge",
+      "pulseNav": "pulse:nav/pulse-forge/forge",
       "managerTab": "pulse-forge",
-      "description": "WHEN/THEN SEO automations: recipe library, scheduling, GSC triggers, and installed automations.",
+      "description": "My Forge dashboard, Agents recipe library, and Workflows canvas: install recipes, create and run workflows.",
       "aliases": [
         "automations",
-        "automation planner",
+        "forge dashboard",
+        "my forge",
         "recipe library",
+        "recipe builder",
         "seo automations",
-        "pulse forge"
+        "pulse forge",
+        "workflows"
       ],
       "features": [
-        "recipe library",
-        "automation planner",
-        "scheduling",
-        "gsc triggers",
-        "installed automations"
+        "My Forge dashboard",
+        "Agents recipe library",
+        "Workflows canvas",
+        "publish workflow",
+        "run workflow"
       ],
       "relatedModules": [
         "tasks",
@@ -475,16 +478,14 @@
       "hash": "#sitemap-optimizer",
       "pulseNav": "pulse:nav/sitemap-optimizer",
       "managerTab": "sitemap-optimizer",
-      "description": "Sitemap cluster planning, legacy redirects, and URL optimization.",
+      "description": "Sitemap cluster planning and URL optimization.",
       "aliases": [
         "sitemap",
         "url optimizer",
-        "legacy redirects",
         "sitemap optimizer"
       ],
       "features": [
         "plan mode",
-        "legacy redirects",
         "url optimizer"
       ],
       "relatedModules": [
@@ -1083,6 +1084,75 @@
       ]
     },
     {
+      "id": "pulse-forge/dashboard",
+      "moduleId": "pulse-forge",
+      "label": "My Forge",
+      "question": "How do I open the Forge dashboard?",
+      "pulseNav": "pulse:nav/pulse-forge/forge",
+      "steps": [
+        "Open [Teams → Pulse Forge](pulse:nav/pulse-forge/forge).",
+        "Select **My Forge** in the left sidebar to see installed automations and recent runs."
+      ],
+      "aliases": [
+        "forge dashboard",
+        "my forge",
+        "pulse forge dashboard"
+      ]
+    },
+    {
+      "id": "pulse-forge/recipes",
+      "moduleId": "pulse-forge",
+      "label": "Agents",
+      "question": "How do I browse or install a recipe?",
+      "pulseNav": "pulse:nav/pulse-forge/recipes",
+      "steps": [
+        "Open [Teams → Pulse Forge](pulse:nav/pulse-forge/forge).",
+        "Select **Agents** in the left sidebar to open the recipe library.",
+        "Open a recipe, then install it as an automation or as a workflow."
+      ],
+      "aliases": [
+        "recipe library",
+        "install recipe",
+        "agents recipes",
+        "recipe builder"
+      ]
+    },
+    {
+      "id": "pulse-forge/workflows",
+      "moduleId": "pulse-forge",
+      "label": "Workflows",
+      "question": "How do I create or open a workflow?",
+      "pulseNav": "pulse:nav/pulse-forge/workflows",
+      "steps": [
+        "Open [Teams → Pulse Forge](pulse:nav/pulse-forge/workflows).",
+        "Select **Workflows** in the left sidebar.",
+        "Click **New workflow** or open an existing workflow tile to edit the canvas."
+      ],
+      "aliases": [
+        "create workflow",
+        "open workflow",
+        "workflow canvas"
+      ]
+    },
+    {
+      "id": "pulse-forge/publish-run",
+      "moduleId": "pulse-forge",
+      "label": "Publish and run",
+      "question": "How do I publish or run a workflow?",
+      "pulseNav": "pulse:nav/pulse-forge/workflows",
+      "steps": [
+        "Open [Teams → Pulse Forge → Workflows](pulse:nav/pulse-forge/workflows).",
+        "Open the workflow.",
+        "Use **Publish** to make it live, then **Test** to start a run."
+      ],
+      "aliases": [
+        "publish workflow",
+        "run workflow",
+        "start workflow",
+        "test workflow"
+      ]
+    },
+    {
       "id": "generator/opt/sitemap-pills",
       "moduleId": "generator/opt",
       "label": "Pages Posts SAP pills",
@@ -1387,8 +1457,29 @@
       ],
       "aliases": [
         "gsc report",
-        "reporting",
-        "gsc reporting"
+        "gsc reporting",
+        "search console report"
+      ]
+    },
+    {
+      "id": "generator/report/ppc",
+      "moduleId": "generator/report",
+      "label": "PPC reporting",
+      "question": "How do I generate a Google Ads PPC report?",
+      "pulseNav": "pulse:nav/generator/report",
+      "steps": [
+        "Open [SEO → Generator → Report](pulse:nav/generator/report).",
+        "Select the **PPC** mode pill.",
+        "Use a property with a 10-digit Google Ads customer ID on Dashboard → Properties.",
+        "Click **Generate** on the black toolbar, or install ads-monthly-mom-report / ads-monthly-yoy-report on Pulse Forge."
+      ],
+      "aliases": [
+        "ppc report",
+        "ads report",
+        "google ads report",
+        "monthly ppc",
+        "ppc mom",
+        "ppc yoy"
       ]
     },
     {
@@ -1405,22 +1496,6 @@
       "aliases": [
         "plan mode",
         "sitemap plan"
-      ]
-    },
-    {
-      "id": "sitemap-optimizer/legacy-redirects",
-      "moduleId": "sitemap-optimizer",
-      "label": "Legacy redirects",
-      "question": "How do I match legacy redirects?",
-      "pulseNav": "pulse:nav/sitemap-optimizer",
-      "steps": [
-        "Open [SEO → Sitemap](pulse:nav/sitemap-optimizer).",
-        "Open the **Legacy redirects** section.",
-        "Import or match old URLs to new sitemap URLs."
-      ],
-      "aliases": [
-        "legacy redirects",
-        "redirect match"
       ]
     },
     {

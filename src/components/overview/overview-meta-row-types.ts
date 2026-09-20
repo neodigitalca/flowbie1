@@ -87,4 +87,16 @@ export interface OverviewRow {
   blogInContentImageTargetHeading?: string;
   /** photo = section photo; local = DFS Google Images replicate (SAP only). */
   blogInContentImageKind?: "photo" | "local";
+  /** html = post_content harness; elementor = _elementor_data on WordPress pages. */
+  contentFormat?: "html" | "elementor";
+  /** Staged Elementor JSON string for optimize/upload. */
+  elementorDataJson?: string;
+  /** Design breakdown from runDesignBreakdownAgent. */
+  elementorDesignBreakdown?: string;
+  /** Top-level Elementor band headings for the Headers stripe. */
+  elementorSectionHeaders?: Array<{ id: string; title: string; depth: number; bodyText?: string; bodyHtml?: string }>;
+  /** Per-section optimize keywords keyed by Elementor band id. */
+  elementorSectionKeywords?: Record<string, string>;
+  /** Whether Answer/Overview/Scenario slots exist in Elementor widgets. */
+  elementorHarnessSlots?: { answer?: boolean; overview?: boolean; scenario?: boolean };
 }

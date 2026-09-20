@@ -47,13 +47,13 @@ class Neo_Pulse_Wp_Seo_Blocks_Page_Insert {
 			return new WP_Error( 'neo-pulse_elementor_missing', __( 'Elementor is required to apply SEO blocks to pages.', 'neo-pulse-wp' ) );
 		}
 
-		if ( ! Neo_Pulse_Wp_Ai_Gate::can_apply( $post_id ) ) {
-			return new WP_Error( 'neo-pulse_seo_block_gate', __( 'Apply is not allowed for this post.', 'neo-pulse-wp' ) );
-		}
-
 		$row = Neo_Pulse_Wp_Seo_Blocks_Storage::get( $block_id );
 		if ( ! is_array( $row ) ) {
 			return new WP_Error( 'neo-pulse_seo_block_missing', __( 'SEO block not found.', 'neo-pulse-wp' ) );
+		}
+		$existing_slots = isset( $row['slots'] ) && is_array( $row['slots'] ) ? $row['slots'] : array();
+		if ( empty( $existing_slots ) ) {
+			return new WP_Error( 'neo-pulse_seo_block_empty', __( 'SEO block has no slots. Create or duplicate a block with content before apply.', 'neo-pulse-wp' ) );
 		}
 
 		$row['primary_post_id'] = $post_id;
@@ -277,7 +277,30 @@ class Neo_Pulse_Wp_Seo_Blocks_Page_Insert {
 			return new WP_Error( 'neo-pulse_seo_block_json', __( 'Could not encode Elementor data.', 'neo-pulse-wp' ) );
 		}
 		update_post_meta( $post_id, '_elementor_data', wp_slash( $json ) );
-		delete_post_meta( $post_id, '_elementor_element_cache' );
+		self::after_write_elementor_data( $post_id );
 		return true;
+	}
+
+	public static function after_write_elementor_data( int $post_id ): void {
+		if ( $post_id < 1 ) {
+			return;
+		}
+		if ( defined( 'ELEMENTOR_VERSION' ) ) {
+			update_post_meta( $post_id, '_elementor_version', ELEMENTOR_VERSION );
+		}
+		update_post_meta( $post_id, '_elementor_template_type', 'wp-page' );
+		delete_post_meta( $post_id, '_elementor_element_cache' );
+		delete_post_meta( $post_id, '_elementor_css' );
+		self::flush_elementor_css_cache();
+	}
+
+	public static function flush_elementor_css_cache(): void {
+		if ( ! class_exists( '\Elementor\Plugin', false ) ) {
+			return;
+		}
+		$plugin = \Elementor\Plugin::$instance;
+		if ( isset( $plugin->files_manager ) && method_exists( $plugin->files_manager, 'clear_cache' ) ) {
+			$plugin->files_manager->clear_cache();
+		}
 	}
 }

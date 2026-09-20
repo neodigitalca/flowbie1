@@ -1,11 +1,10 @@
 import type { AssistCardLink, AssistNavigateTarget } from "./types";
+import { isPulseForgeHash, parsePulseForgeRouteFromHash } from "@/lib/pulse-forge/pulse-forge-hash";
 
 export const PULSE_NAV_PREFIX = "pulse:nav/";
 
 const HASH_TAB_ALIASES: Record<string, string> = {
   settings: "dashboard",
-  overview: "generator",
-  "content-optimizer": "generator",
 };
 
 export function isPulseAssistHref(href: string): boolean {
@@ -21,6 +20,9 @@ export function parsePulseAssistHref(href: string): AssistNavigateTarget | null 
   }
   if (parts[0] === "dashboard" && parts[1]) {
     return { kind: "dashboardCluster", cluster: parts[1] };
+  }
+  if (parts[0] === "pulse-forge") {
+    return { kind: "pulseForge", hash: parts.join("/") };
   }
   if (parts.length === 1) {
     return { kind: "managerTab", tab: parts[0] };
@@ -53,6 +55,9 @@ export function parseAppHref(href: string): AssistNavigateTarget | null {
   if (normalized === "generator") {
     return { kind: "managerTab", tab: "generator" };
   }
+  if (normalized === "pulse-forge" || isPulseForgeHash(hash)) {
+    return { kind: "pulseForge", hash: hash.replace(/^#/, "") };
+  }
   return { kind: "managerTab", tab: normalized };
 }
 
@@ -79,6 +84,7 @@ export type AssistNavigationHandlers = {
   onManagerTabChange: (tab: string) => void;
   onGeneratorSectionChange: (section: string) => void;
   onDashboardClusterChange: (cluster: string) => void;
+  onPulseForgeHash?: (hash: string) => void;
 };
 
 export function executeAssistNavigation(
@@ -97,5 +103,31 @@ export function executeAssistNavigation(
   if (target.kind === "dashboardCluster") {
     handlers.onManagerTabChange("dashboard");
     handlers.onDashboardClusterChange(target.cluster);
+    return;
   }
+  if (target.kind === "pulseForge") {
+    handlers.onManagerTabChange("pulse-forge");
+    handlers.onPulseForgeHash?.(target.hash);
+  }
+}
+
+export function forgeContextFromHash(rawHash?: string): {
+  forgeSection?: string;
+  forgeWorkflowId?: number;
+  forgeRecipeKeyword?: string;
+} {
+  if (!isPulseForgeHash(rawHash)) return {};
+  const route = parsePulseForgeRouteFromHash(rawHash);
+  const forgeSection = route.section;
+  if (route.section === "recipes" && "view" in route && route.view === "builder") {
+    return {
+      forgeSection,
+      forgeRecipeKeyword: route.recipeKeyword,
+      forgeWorkflowId: route.workflowId,
+    };
+  }
+  if (route.section === "workflows" && "view" in route && route.view === "edit") {
+    return { forgeSection, forgeWorkflowId: route.workflowId };
+  }
+  return { forgeSection };
 }

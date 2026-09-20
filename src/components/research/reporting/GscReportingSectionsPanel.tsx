@@ -2,22 +2,25 @@ import { FileText, Loader2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { reportingToolbarButtonData } from "@/components/research/reporting/reporting-toolbar-styles";
 import { cn } from "@/lib/utils";
-import type {
-  GscReportingSectionPlan,
-  GscReportingSectionResult,
-} from "@/lib/gsc-reporting/gsc-reporting-types";
+type ReportingSectionPlanView = { id: string; h2Title: string };
+type ReportingSectionResultView = {
+  index: number;
+  plan: { id: string };
+  markdownBlock: string;
+  requestBodyJson: string;
+};
 
 export interface GscReportingSectionsPanelProps {
-  plans: GscReportingSectionPlan[];
-  sectionMap: Record<number, GscReportingSectionResult>;
+  plans: ReportingSectionPlanView[];
+  sectionMap: Record<number, ReportingSectionResultView>;
   busy: boolean;
   generatingSectionIndex: number | null;
   outlineDownloadDisabled: boolean;
   outlinePostDisabled: boolean;
   onDownloadOutlineJson: () => void;
   onDownloadOutlinePostJson: () => void;
-  onDownloadSectionMd: (row: GscReportingSectionResult) => void;
-  onDownloadSectionPostJson: (row: GscReportingSectionResult) => void;
+  onDownloadSectionMd: (row: ReportingSectionResultView) => void;
+  onDownloadSectionPostJson: (row: ReportingSectionResultView) => void;
 }
 
 export function GscReportingSectionsPanel({

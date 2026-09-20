@@ -912,12 +912,12 @@ class Neo_Pulse_App_Google_Drive_Upload {
 				'body'       => array( 'success' => false, 'error' => 'Google Drive folder is required.' ),
 			);
 		}
-		if ( ! preg_match( '/\/ (Reporting|Audits|Grids) \/ \d{4} \/ /i', $folder_label ) ) {
+		if ( ! self::is_delivery_month_leaf_label( $folder_label ) ) {
 			return array(
 				'statusCode' => 502,
 				'body'       => array(
 					'success' => false,
-					'error'   => 'Google Drive test must upload to a Reporting/Audits/Grids month folder, not the client root.',
+					'error'   => 'Google Drive test must upload to a purpose/year/month folder, not the client root.',
 				),
 			);
 		}
@@ -1212,7 +1212,7 @@ class Neo_Pulse_App_Google_Drive_Upload {
 			return $path;
 		}
 		$execution_kind = sanitize_text_field( (string) ( $body['executionKind'] ?? '' ) );
-		if ( $execution_kind === 'gsc_reporting' ) {
+		if ( $execution_kind === 'gsc_reporting' || $execution_kind === 'ads_reporting' ) {
 			return 'reporting';
 		}
 		if ( $execution_kind === 'chatgpt_audit' ) {
@@ -1759,6 +1759,24 @@ class Neo_Pulse_App_Google_Drive_Upload {
 			return false;
 		}
 		return strtotime( $trimmed . ' 1, 2000' ) !== false;
+	}
+
+	private static function is_delivery_month_leaf_label( string $label ): bool {
+		$parts = array_values(
+			array_filter(
+				array_map( 'trim', explode( '/', $label ) ),
+				static function ( $part ) {
+					return $part !== '';
+				}
+			)
+		);
+		if ( count( $parts ) < 3 ) {
+			return false;
+		}
+		$month   = (string) $parts[ count( $parts ) - 1 ];
+		$year    = (string) $parts[ count( $parts ) - 2 ];
+		$purpose = (string) $parts[ count( $parts ) - 3 ];
+		return $purpose !== '' && preg_match( '/^\d{4}$/', $year ) === 1 && self::is_drive_month_segment( $month );
 	}
 
 	/**

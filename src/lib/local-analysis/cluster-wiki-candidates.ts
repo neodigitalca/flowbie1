@@ -1,5 +1,9 @@
 import type { GridLocationBucket } from "@/lib/local-analysis/grid-location-buckets";
-import { firstCityStateLabelFromAddress, regionFullNameFromPostalCode } from "@/lib/local-dominator-csv";
+import {
+  firstCityStateLabelFromAddress,
+  regionCodeFromFullName,
+  regionFullNameFromPostalCode,
+} from "@/lib/local-dominator-csv";
 
 const REGION_CODE =
   /^(AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT|AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)$/i;
@@ -45,8 +49,11 @@ export function extractClusterWikiGeo(label: string): ClusterWikiGeo | null {
     .map((s) => s.trim())
     .filter(Boolean);
   if (parts.length < 2) return null;
-  const regionCode = parts[parts.length - 1]!;
-  if (!REGION_CODE.test(regionCode)) return null;
+  const regionToken = parts[parts.length - 1]!;
+  const regionCode = REGION_CODE.test(regionToken)
+    ? regionToken.toUpperCase()
+    : regionCodeFromFullName(regionToken);
+  if (!regionCode) return null;
   const city = parts[parts.length - 2]!;
   if (!city) return null;
   const regionName = regionFullNameFromPostalCode(regionCode);
@@ -59,6 +66,8 @@ function cityFromBucket(bucket: GridLocationBucket): string | null {
     const city = firstCityStateLabelFromAddress(addr);
     if (city) return city;
   }
+  const fromLabel = extractClusterWikiGeo(bucket.placeLabel);
+  if (fromLabel) return `${fromLabel.city}, ${fromLabel.regionCode}`;
   return null;
 }
 
@@ -85,7 +94,8 @@ export function buildClusterWikiCandidateTiers(
   const parts = trimmed.split(",").map((s) => s.trim()).filter(Boolean);
   const geoFromEntity = extractClusterWikiGeo(trimmed);
   const geoFromBucket = extractClusterWikiGeo(cityFromBucket(bucket) ?? "");
-  const geo = geoFromEntity ?? geoFromBucket;
+  const parentGeo = geoFromBucket ?? extractClusterWikiGeo(bucket.placeLabel.trim());
+  const geo = parentGeo ?? geoFromEntity;
 
   pushUnique(neighbourhood, seenN, trimmed);
 
@@ -105,7 +115,7 @@ export function buildClusterWikiCandidateTiers(
     }
   }
 
-  for (const g of [geoFromEntity, geoFromBucket]) {
+  for (const g of [parentGeo, geoFromBucket]) {
     if (!g) continue;
     pushUnique(city, seenC, clusterCityWikiTitle(g));
     if (CA_PROVINCE.has(g.regionCode.toUpperCase())) {

@@ -38,6 +38,46 @@ describe("overview-inventory-seo-fields", () => {
     expect(d.focusKeyword).toBeTruthy();
   });
 
+  it("uses a title-matching keyword and drops a leftover fields.keyword", () => {
+    const d = downloadFieldsFromInventoryRow({
+      ...base,
+      acf: { keyword_focus: "what is national seo" },
+      fields: {
+        title: "What Is National SEO And How It Works",
+        keyword: "elementor experts",
+        meta: "",
+      },
+    });
+    expect(d.focusKeyword).toBe("what is national seo");
+  });
+
+  it("infers from the current title when Rank Math still has the old slug keyword", () => {
+    const d = downloadFieldsFromInventoryRow({
+      ...base,
+      acf: { keyword_focus: "elementor experts" },
+      fields: {
+        title: "What Is National SEO And How Does It Work?",
+        keyword: "elementor experts",
+        meta: "",
+      },
+    });
+    expect(d.focusKeyword).toBe("what is national seo and how does it work");
+  });
+
+  it("uses ACF keyword_focus when it matches the post even if fields.keyword is stale", () => {
+    const d = downloadFieldsFromInventoryRow({
+      ...base,
+      acf: { keyword_focus: "CRA tax payments changes" },
+      fields: {
+        title: "Upcoming Changes to Canadian Tax Payments: What Businesses Need to Know",
+        keyword: "canadian tax payments",
+        meta: "",
+        excerpt: "Excerpt line for meta.",
+      },
+    });
+    expect(d.focusKeyword).toBe("CRA tax payments changes");
+  });
+
   it("ignores fields.meta and ACF modifiers for metaDescription", () => {
     const d = downloadFieldsFromInventoryRow(base);
     expect(d.metaDescription).toBeUndefined();

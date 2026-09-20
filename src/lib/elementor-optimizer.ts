@@ -9,7 +9,7 @@ import { getResearchModel } from './optimization-settings-storage';
 import { appendMasterInstructionsToSystemPrompt, ensureMasterInstructionsInMemory } from './master-instructions-storage';
 
 const MAX_ELEMENTOR_CHARS = 80_000;
-const ELEMENTOR_STRUCTURE_DESC = `
+export const ELEMENTOR_STRUCTURE_DESC = `
 Elementor page data is a JSON array of elements. Each element has:
 - id: string (optional; preserve when editing)
 - elType: "section" | "column" | "widget"

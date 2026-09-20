@@ -23,7 +23,9 @@
   function storageKey() {
     if (useGodModePersist()) {
       var uid = session.persistUserId ? String(session.persistUserId) : '0';
-      return 'neo-pulse_godmode_debug_log_' + uid;
+      var conv = session.conversationId ? String(session.conversationId) : '';
+      if (!conv) return '';
+      return 'neo-pulse_godmode_debug_log_' + uid + '_' + conv;
     }
     return session && session.sessionId
       ? 'neo_pulse_chat_debug_log_' + session.sessionId
@@ -68,6 +70,20 @@
         formId: card.conversion.formId || 0
       };
     }
+    var steps = [];
+    if (Array.isArray(card.steps)) {
+      card.steps.forEach(function (step) {
+        if (!step || typeof step !== 'object') return;
+        var label = step.label || '';
+        var tool = step.tool || '';
+        if (!label && !tool) return;
+        steps.push({
+          label: label,
+          tool: tool,
+          status: step.status || ''
+        });
+      });
+    }
     return {
       type: card.type || '',
       title: card.title || '',
@@ -77,7 +93,8 @@
       links: card.links || [],
       relatedTopics: card.relatedTopics || [],
       cta: card.cta || null,
-      conversion: conversion
+      conversion: conversion,
+      steps: steps
     };
   }
 
@@ -85,13 +102,21 @@
     options = options || {};
     session = {
       sessionId: options.sessionId || '',
+      conversationId: options.conversationId || '',
       source: options.source || 'frontend',
       pageUrl: options.pageUrl || '',
       siteName: options.siteName || '',
       godModePersist: !!options.godModePersist,
       persistUserId: options.persistUserId || 0
     };
+    turns = [];
     pendingStreamEvents = [];
+    if (useGodModePersist()) {
+      try {
+        var legacy = 'neo-pulse_godmode_debug_log_' + (session.persistUserId ? String(session.persistUserId) : '0');
+        localStorage.removeItem(legacy);
+      } catch (_) {}
+    }
     loadStored(session.sessionId);
     return session;
   }
@@ -141,21 +166,64 @@
     persist();
   }
 
-  function buildExportPayload() {
+  function historyToExportTurns(visibleTurns) {
+    if (!Array.isArray(visibleTurns)) {
+      return turns.slice();
+    }
+    var out = [];
+    visibleTurns.forEach(function (turn) {
+      if (!turn || !turn.role) return;
+      var entry = {
+        role: turn.role,
+        content: turn.content || ''
+      };
+      if (turn.card) {
+        entry.card = sanitizeCard(turn.card);
+      }
+      out.push(entry);
+    });
+    return out;
+  }
+
+  function buildExportPayload(visibleTurns) {
     var stamp = nowStamp();
     return {
       exported_at: stamp.timestamp,
       exported_at_local: stamp.local_time,
       session_id: session ? session.sessionId : '',
+      conversation_id: session ? session.conversationId : '',
       source: session ? session.source : '',
       page_url: session ? session.pageUrl : '',
       site_name: session ? session.siteName : '',
-      turns: turns.slice()
+      turns: historyToExportTurns(visibleTurns)
     };
   }
 
-  function copyToClipboard(buttonEl) {
-    var text = JSON.stringify(buildExportPayload(), null, 2);
+  function downloadFile(buttonEl, visibleTurns) {
+    var payload = buildExportPayload(visibleTurns);
+    var text = JSON.stringify(payload, null, 2);
+    var blob = new Blob([text], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    var id = payload.conversation_id || payload.session_id || 'chat';
+    a.href = url;
+    a.download = 'neo-pulse-conversation-' + id + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    if (buttonEl) {
+      var prevLabel = buttonEl.getAttribute('aria-label') || 'Download conversation log';
+      buttonEl.setAttribute('aria-label', 'Downloaded');
+      setTimeout(function () {
+        buttonEl.setAttribute('aria-label', prevLabel);
+      }, 2000);
+    }
+    return true;
+  }
+
+  function copyToClipboard(buttonEl, visibleTurns) {
+    var text = JSON.stringify(buildExportPayload(visibleTurns), null, 2);
 
     function markCopied() {
       if (!buttonEl) return;
@@ -215,6 +283,7 @@
     patchLastAssistantRelatedTopics: patchLastAssistantRelatedTopics,
     buildExportPayload: buildExportPayload,
     copyToClipboard: copyToClipboard,
+    downloadFile: downloadFile,
     clear: clear
   };
 })(typeof window !== 'undefined' ? window : this);

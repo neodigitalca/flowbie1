@@ -1,7 +1,6 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import {
-  ArrowRightLeft,
   FileCode,
   LayoutDashboard,
   Loader2,
@@ -18,7 +17,6 @@ import type { WordPressSiteAdminSection } from "./WordPressSiteAdminLayout";
 import { openDashboardMasterRulesSettings } from "@/lib/open-master-rules-settings";
 import { MasterInstructionsSection } from "./MasterInstructionsSection";
 import { FunctionsUpdaterPanel } from "./FunctionsUpdaterPanel";
-import { RedirectMatcherPanel } from "./RedirectMatcherPanel";
 import { WpEnginePropertyPanel } from "./WpEnginePropertyPanel";
 
 export type BuildWordPressPropertySectionsParams = {
@@ -152,14 +150,6 @@ export function buildWordPressPropertySections(
       ),
     },
     {
-      id: "redirect-matcher",
-      label: "Redirect Matcher",
-      icon: ArrowRightLeft,
-      content: (
-        <RedirectMatcherPanel site={site} disabled={site.enabled === false} />
-      ),
-    },
-    {
       id: "master-instructions",
       label: "Master Rules",
       icon: ScrollText,
@@ -168,6 +158,8 @@ export function buildWordPressPropertySections(
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto pt-1">
             <MasterInstructionsSection
               siteId={site.id}
+              siteUrl={site.siteUrl}
+              siteName={site.name}
               disabled={site.enabled === false}
             />
           </div>

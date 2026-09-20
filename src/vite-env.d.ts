@@ -2,8 +2,6 @@
 
 interface Window {
   __NEO_PULSE_WP_LOGGED_IN__?: boolean;
-  /** @deprecated legacy Flowbie embed flag */
-  __FLOWBIE_WP_LOGGED_IN__?: boolean;
 }
 
 declare module "*.sql?raw" {

@@ -124,10 +124,21 @@ export function useOverviewTabBulkSeoWp({
   }, [site, rows, bulkScopeUrlKeys, bindings, resolveBindings, prefetchOverviewInventory, inventoryCollections, setBulkSeoCsvExportBusy]);
 
   const handleBulkUploadToWordPress = useCallback(async () => {
-    if (!site?.username || !site.appPassword) return;
+    console.info("[WP upload] click", {
+      site: site?.siteUrl ?? null,
+      hasCredentials: Boolean(site?.username && site?.appPassword),
+      scoped: overviewRowsInBulkScope(rows, bulkScopeUrlKeys).length,
+    });
+    if (!site?.username || !site.appPassword) {
+      console.info("[WP upload] aborted: missing WordPress credentials");
+      return;
+    }
 
     const scopedRows = overviewRowsInBulkScope(rows, bulkScopeUrlKeys);
-    if (!scopedRows.length) return;
+    if (!scopedRows.length) {
+      console.info("[WP upload] aborted: no scoped rows");
+      return;
+    }
 
     const mergedBindings = { ...bindings };
     const missingBindingUrls = scopedRows
@@ -143,6 +154,10 @@ export function useOverviewTabBulkSeoWp({
     const eligible = buildWpUploadEligibleRows(rows, mergedBindings, bulkScopeUrlKeys, null, {
       resolveBinding: (row) =>
         resolveOverviewBindingForRow(row, mergedBindings, getInventoryMatchForUrl(site, row.url)),
+    });
+    console.info("[WP upload] eligible", {
+      count: eligible.length,
+      scoped: scopedRows.length,
     });
 
     const batchKey = `${site.id}-batch`;
@@ -174,6 +189,7 @@ export function useOverviewTabBulkSeoWp({
     });
 
     if (!eligible.length) {
+      console.info("[WP upload] aborted: no rows with WordPress post IDs");
       finalizeOverviewWpUploadHarnessBatch(
         batchKey,
         site.id,
@@ -184,33 +200,22 @@ export function useOverviewTabBulkSeoWp({
       return;
     }
 
-    try {
-      const { stats } = await runOverviewWpUploadBatch({
-        site,
-        eligible,
-        harnessSetters,
-        batchKey,
-      });
+    const { stats } = await runOverviewWpUploadBatch({
+      site,
+      eligible,
+      harnessSetters,
+      batchKey,
+    });
 
-      const { okCount, failCount } = stats;
+    console.info("[WP upload] finished", { okCount: stats.okCount });
 
-      finalizeOverviewWpUploadHarnessBatch(
-        batchKey,
-        site.id,
-        harnessSetters,
-        opt.setIsOptimizingContent,
-        failCount > 0 ? `${okCount} uploaded, ${failCount} failed` : `${okCount} uploaded`,
-      );
-    } catch (e) {
-      finalizeOverviewWpUploadHarnessBatch(
-        batchKey,
-        site.id,
-        harnessSetters,
-        opt.setIsOptimizingContent,
-        "Upload failed",
-      );
-      notify.error(e instanceof Error ? e.message : "Bulk WordPress update failed.", { duration: 12000 });
-    }
+    finalizeOverviewWpUploadHarnessBatch(
+      batchKey,
+      site.id,
+      harnessSetters,
+      opt.setIsOptimizingContent,
+      `${stats.okCount} uploaded`,
+    );
   }, [
     site,
     rows,

@@ -8,7 +8,6 @@ const PROPERTY_NAV_COLLAPSED_KEY = "neo-pulse-property-admin-nav-collapsed";
 export type WordPressSiteAdminSectionId =
   | "overview"
   | "functions-updater"
-  | "redirect-matcher"
   | "master-instructions"
   | "sitemaps"
   | "site-settings"

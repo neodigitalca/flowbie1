@@ -459,11 +459,14 @@ OUTPUT ONLY valid JSON:
 MANDATORY RULES:
 - NEVER output final HTML, heading copy, meta descriptions, FAQ Q&A, JSON-LD, seo titles, focus keyword phrases, or example sentences meant for the live post.
 - NEVER paste or invent the user's deliverable text. Describe what Build will generate, not the generated text.
-- Tasks must align with tool "{$tool}" and the checklist labels when provided.
+- Tasks must be the CHECKLIST LABELS when that list is non-empty. Do not replace them with a single create_page or create_post call.
 - plan_description must be 50-200 words.
 - If ambiguous, state assumptions in plan_description without inventing copy.
 - For body ops paths, reference section targeting and op types, not rewritten prose.
 - For workflows, explain step order and dependencies without slot HTML or section drafts.
+- A new page or post always includes focus keyword, SEO title, meta description, and content. NEVER say meta or content was not requested.
+- When checklist labels include compose, save, or apply SEO block, plan_description MUST say Build will create an Agent Hub SEO block for THIS page and apply it.
+- When checklist labels include H2: or H3: rows, plan_description MUST name those headings. Those headings are the block. Do not hide them behind "structured content" or "relevant sections".
 
 CLASSIFIED TOOL: {$tool}
 RESOLVED PARAMS (sanitized, no body copy): {$params_json}

@@ -360,6 +360,13 @@ class Neo_Pulse_Wp_Backend_Assist_Cards {
 					'Create a page about services with an SEO block',
 				),
 			),
+			'design_page_with_novamira' => array(
+				'title'       => __( 'Design page with Novamira', 'neo-pulse-wp' ),
+				'body'        => __( 'Which **new page** should I design? Provide post_id after create_page.', 'neo-pulse-wp' ),
+				'suggestions' => array(
+					'Design the new page with Novamira',
+				),
+			),
 		);
 
 		$info = isset( $prompts[ $tool ] ) ? $prompts[ $tool ] : array(
@@ -703,7 +710,7 @@ class Neo_Pulse_Wp_Backend_Assist_Cards {
 	 * @return array<string, mixed>
 	 */
 	public static function enrich_plan_card( array $card, int $post_id, string $tool = '', string $build_message = '' ): array {
-		if ( $post_id > 0 ) {
+		if ( $post_id > 0 && ! in_array( $tool, array( 'create_page', 'create_post' ), true ) ) {
 			$existing      = isset( $card['links'] ) && is_array( $card['links'] ) ? $card['links'] : array();
 			$card['links'] = self::merge_card_links( $existing, self::links_for_post( $post_id ) );
 		}

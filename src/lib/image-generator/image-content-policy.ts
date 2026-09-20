@@ -31,10 +31,8 @@ export async function detectMatureImageRequest(args: {
     const { content } = await callOpenRouterChatCompletion({
       apiKey,
       model: args.model?.trim() || getResearchModel(),
-      messages: [
-        { role: "system", content: SYSTEM },
-        { role: "user", content: userPrompt },
-      ],
+      system: SYSTEM,
+      user: userPrompt,
       temperature: 0,
       maxTokens: 64,
     });

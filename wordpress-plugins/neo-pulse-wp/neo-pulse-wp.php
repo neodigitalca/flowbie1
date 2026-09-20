@@ -3,7 +3,7 @@
  * Plugin Name:       NEO Pulse WP
  * Plugin URI:        https://github.com/neo-pulse/neo-pulse
  * Description:       NEO Pulse AI tools for WordPress — chat, search, SEO, and editor wands.
- * Version:           0.9.134
+ * Version:           0.9.228
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            NEO Pulse
@@ -16,13 +16,12 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'NEO_PULSE_WP_VERSION', '0.9.134' );
+define( 'NEO_PULSE_WP_VERSION', '0.9.228' );
 define( 'NEO_PULSE_WP_PLUGIN_FILE', __FILE__ );
 define( 'NEO_PULSE_WP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-env.php';
 Neo_Pulse_Wp_Env::load();
-require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-migrate-from-flowbie.php';
 
 /** Set true in wp-config to re-enable optimization cap on Apply. */
 if ( ! defined( 'NEO_PULSE_WP_AI_CAP_ENFORCED' ) ) {
@@ -75,11 +74,14 @@ require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-ai-body-rest
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-editor.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-rest.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-global-css.php';
+require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-index-rules.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-sitemap-settings.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-sitemap-cache.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-sitemap-generator.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-sitemap.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-robots-txt.php';
+require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-frontend-seo.php';
+require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-llms-txt.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-redirects-csv.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-redirects.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-script-manager-rules.php';
@@ -99,6 +101,7 @@ require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-speed-cache.
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-speed-warm.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-speed-minify.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-speed-front.php';
+require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-a11y-front.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-speed-html.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-speed-assets.php';
 require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-speed-aggregator.php';
@@ -172,6 +175,7 @@ require_once NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-content-tool
 register_activation_hook(
 	NEO_PULSE_WP_PLUGIN_FILE,
 	static function () {
+		Neo_Pulse_Wp_Llms_Txt::register_rewrites();
 		Neo_Pulse_Wp_Sitemap::flush_rewrites();
 		Neo_Pulse_Wp_Redirects::install();
 		Neo_Pulse_Wp_Chat_Logs::install();
@@ -191,22 +195,38 @@ add_action(
 		load_plugin_textdomain( 'neo-pulse-wp', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
 		Neo_Pulse_Wp_Fields::init();
 		Neo_Pulse_Wp_Content_Tools::init();
-
-		$installed = (string) get_option( 'neo_pulse_wp_installed_version', '' );
-		if ( $installed !== NEO_PULSE_WP_VERSION ) {
-			update_option( 'neo_pulse_wp_installed_version', NEO_PULSE_WP_VERSION, false );
-			if ( class_exists( 'Neo_Pulse_Wp_Cache_Flush', false ) ) {
-				Neo_Pulse_Wp_Cache_Flush::flush_all();
-			}
-		}
 	},
 	4
 );
 
 add_action(
+	'init',
+	static function () {
+		$installed = (string) get_option( 'neo_pulse_wp_installed_version', '' );
+		if ( $installed === NEO_PULSE_WP_VERSION ) {
+			return;
+		}
+		update_option( 'neo_pulse_wp_installed_version', NEO_PULSE_WP_VERSION, false );
+		Neo_Pulse_Wp_Llms_Txt::register_rewrites();
+		Neo_Pulse_Wp_Sitemap::flush_rewrites();
+		if ( class_exists( 'Neo_Pulse_Wp_Cache_Flush', false ) ) {
+			Neo_Pulse_Wp_Cache_Flush::flush_all();
+		}
+		if ( class_exists( 'WpeCommon' ) ) {
+			if ( method_exists( 'WpeCommon', 'purge_memcached' ) ) {
+				WpeCommon::purge_memcached();
+			}
+			if ( method_exists( 'WpeCommon', 'purge_varnish_cache' ) ) {
+				WpeCommon::purge_varnish_cache();
+			}
+		}
+	},
+	20
+);
+
+add_action(
 	'plugins_loaded',
 	static function () {
-		Neo_Pulse_Wp_Migrate_From_Flowbie::maybe_run();
 		Neo_Pulse_Wp_Api::maybe_migrate_legacy_data();
 		Neo_Pulse_Wp_Admin::init();
 		$neo_pulse_welcome_file = NEO_PULSE_WP_PLUGIN_DIR . 'includes/class-neo-pulse-wp-welcome.php';
@@ -219,6 +239,10 @@ add_action(
 		Neo_Pulse_Wp_Global_Css::init();
 		Neo_Pulse_Wp_Sitemap::init();
 		Neo_Pulse_Wp_Robots_Txt::init();
+		Neo_Pulse_Wp_Index_Rules::init();
+		Neo_Pulse_Wp_Frontend_Seo::init();
+		Neo_Pulse_Wp_A11y_Front::init();
+		Neo_Pulse_Wp_Llms_Txt::init();
 		Neo_Pulse_Wp_Redirects::init();
 		Neo_Pulse_Wp_Script_Manager::init();
 		Neo_Pulse_Wp_Script_Manager_Output::init();

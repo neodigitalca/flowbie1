@@ -61,14 +61,12 @@ export async function checkWikipediaPageExists(
       const page = data.query.pages[0];
 
       if (page.missing !== undefined) {
-        console.log(`[Wikipedia API] Page missing for "${entityName}"`);
         return { exists: false };
       }
 
       const title = page.title || entityName;
       const url = `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/\s+/g, "_"))}`;
 
-      console.log(`[Wikipedia API] ✓ Page exists for "${entityName}": ${url}`);
       return { exists: true, url, title };
     } catch (error) {
       if (attempts < retries) {

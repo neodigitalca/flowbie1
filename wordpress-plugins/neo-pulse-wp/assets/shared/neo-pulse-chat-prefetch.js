@@ -63,6 +63,19 @@
           return String(topic || '').slice(0, 80);
         }).filter(Boolean);
       }
+      if (card.workflow_id) {
+        snap.workflow_id = String(card.workflow_id).slice(0, 80);
+      }
+      if (Array.isArray(card.steps) && card.steps.length) {
+        snap.steps = card.steps.slice(0, 24).map(function (step) {
+          return {
+            label: step && step.label ? String(step.label).slice(0, 160) : '',
+            status: step && step.status ? String(step.status).slice(0, 20) : 'pending',
+            tool: step && step.tool ? String(step.tool).slice(0, 60) : '',
+            executable: step && step.executable !== false
+          };
+        });
+      }
       if (Object.keys(snap).length) {
         out.card = snap;
       }

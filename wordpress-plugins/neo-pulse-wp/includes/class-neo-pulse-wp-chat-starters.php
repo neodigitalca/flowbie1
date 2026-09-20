@@ -68,7 +68,7 @@ class Neo_Pulse_Wp_Chat_Starters {
 	 * @param array<string,mixed>            $settings
 	 * @return array<int,string>|WP_Error
 	 */
-	public static function generate( array $site_index, string $site_name, array $settings = array() ): array {
+	public static function generate( array $site_index, string $site_name, array $settings = array() ): array|WP_Error {
 		if ( empty( $site_index ) ) {
 			return new WP_Error( 'neo_pulse_chat_starters_empty', __( 'Site index is empty.', 'neo-pulse-wp' ) );
 		}

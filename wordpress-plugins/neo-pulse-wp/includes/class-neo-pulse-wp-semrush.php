@@ -168,6 +168,39 @@ class Neo_Pulse_Wp_Semrush {
 	}
 
 	/**
+	 * Phrase-related keywords for an outline seed. Empty when the key or report is missing.
+	 *
+	 * @return array<int, string>
+	 */
+	public static function fetch_related_keywords( string $phrase, string $database = 'ca' ): array {
+		$phrase = trim( $phrase );
+		if ( $phrase === '' ) {
+			return array();
+		}
+
+		$key = Neo_Pulse_Wp_Research_Keys::semrush_api_key();
+		if ( $key === '' ) {
+			return array();
+		}
+
+		$csv = self::request_report(
+			$key,
+			array(
+				'type'           => 'phrase_related',
+				'database'       => $database !== '' ? $database : 'ca',
+				'phrase'         => $phrase,
+				'display_limit'  => self::DISPLAY_LIMIT,
+				'export_columns' => 'Ph',
+			)
+		);
+		if ( is_wp_error( $csv ) || ! is_string( $csv ) ) {
+			return array();
+		}
+
+		return self::keywords_from_csv( $csv );
+	}
+
+	/**
 	 * @param array<string,string|int> $params
 	 * @return string|WP_Error
 	 */

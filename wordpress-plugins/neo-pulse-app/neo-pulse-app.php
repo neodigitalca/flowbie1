@@ -25,9 +25,6 @@ if ( is_readable( $secrets_file ) ) {
 
 require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/class-neo-pulse-app-loader.php';
 
-require_once NEO_PULSE_APP_PLUGIN_DIR . 'includes/class-neo-pulse-app-migrate-from-flowbie.php';
-
-Neo_Pulse_App_Migrate_From_Flowbie::maybe_run();
 Neo_Pulse_App_Loader::init();
 
 register_activation_hook( __FILE__, array( 'Neo_Pulse_App_Loader', 'activate' ) );

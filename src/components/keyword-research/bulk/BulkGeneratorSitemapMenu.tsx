@@ -2,7 +2,7 @@ import { WorkspacePill } from "@/components/shared/WorkspacePill";
 import { getStoredSites, type WordPressSite } from "@/components/IntegrationsTab";
 import type { ConnectedSiteSummary } from "@/components/integrations/types";
 import type { WordPressPostDestination } from "@/lib/bulk-auto-generate";
-import type { BulkRowSitemapType, BulkSitemapMode } from "@/lib/bulk/bulk-sitemap-mode";
+import { defaultBulkSitemapMode, type BulkRowSitemapType, type BulkSitemapMode } from "@/lib/bulk/bulk-sitemap-mode";
 
 export type BulkGeneratorSitemapMenuProps = {
   postDestination: WordPressPostDestination;
@@ -53,8 +53,7 @@ export function BulkGeneratorSitemapMenu({
   const selectedId = Array.from(selectedWordPressSites)[0] ?? targetSite.id;
   const entityAvailable = Boolean(targetSite.entitySitemapUrl?.trim());
   const sitemapType =
-    siteConfigs[selectedId]?.sitemapType ??
-    "post";
+    siteConfigs[selectedId]?.sitemapType ?? defaultBulkSitemapMode();
 
   const setSitemapType = (value: BulkSitemapMode) => {
     if (isDisabled || value === sitemapType) return;

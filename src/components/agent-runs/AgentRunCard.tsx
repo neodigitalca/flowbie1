@@ -21,6 +21,7 @@ type AgentRunCardProps = {
   expanded: boolean;
   stripeIndex: number;
   clientLabel?: string | null;
+  showClientTag?: boolean;
   onToggle: () => void;
   onCancel: () => void;
   onResume?: () => void;
@@ -32,6 +33,7 @@ export function AgentRunCard({
   expanded,
   stripeIndex,
   clientLabel,
+  showClientTag = false,
   onToggle,
   onCancel,
   onResume,
@@ -64,6 +66,7 @@ export function AgentRunCard({
           "agent-runs-card__row",
           contentOptimizerRowStripeClass(stripeIndex, { isActiveOptimize: isActive }),
           expanded && "agent-runs-card__row--expanded",
+          showClientTag && clientLabel?.trim() && "agent-runs-card__row--with-client",
         )}
         role="button"
         tabIndex={0}
@@ -83,7 +86,12 @@ export function AgentRunCard({
             {statusDetail}
           </span>
         </div>
-        <span className={statusClass(run.status)}>{AGENT_RUN_STATUS_LABELS[run.status]}</span>
+        <span className="agent-runs-card__status-end">
+          {showClientTag && clientLabel?.trim() ? (
+            <span className="agent-runs-client-tag">{clientLabel.trim()}</span>
+          ) : null}
+          <span className={statusClass(run.status)}>{AGENT_RUN_STATUS_LABELS[run.status]}</span>
+        </span>
         <button
           type="button"
           className="agent-runs-card__chevron"

@@ -344,13 +344,15 @@ export async function processDirectBlogImportRow(args: {
         : "posts";
     const postTypeForAcf = sitemapType === "entity" ? entityEndpoint : "post";
     const featuredImageId = featuredImage
-      ? await uploadDirectFeaturedMedia({
-          site,
-          imageBase64: featuredImage.imageBase64,
-          filename: featuredImage.filename,
-          title,
-          keyword,
-        })
+      ? (
+          await uploadDirectFeaturedMedia({
+            site,
+            imageBase64: featuredImage.imageBase64,
+            filename: featuredImage.filename,
+            title,
+            keyword,
+          })
+        ).mediaId
       : undefined;
     const postResult = await createWordPressPost(
       site.siteUrl,

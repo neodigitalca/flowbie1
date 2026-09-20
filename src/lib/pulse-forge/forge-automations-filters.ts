@@ -65,6 +65,7 @@ export const FORGE_AUTOMATION_EXECUTION_KIND_LABELS: Record<string, string> = {
   entity_generator: "Entity generator",
   sap_generator: "SAP generator",
   gsc_reporting: "GSC reporting",
+  ads_reporting: "PPC reporting",
   local_dominator_export: "Research export",
   chatgpt_website_audit: "ChatGPT website audit",
   browser_automation: "Residential browser automation",
@@ -99,6 +100,7 @@ function matchesMultiFilter(selected: string[] | undefined, value: string): bool
 function inferDemoExecutionKind(title: string): TaskExecutionKind {
   const t = title.toLowerCase();
   if (t.includes("gsc")) return "gsc_reporting";
+  if (t.includes("ads") || t.includes("ppc")) return "ads_reporting";
   if (t.includes("post creator") || t.includes("posts editorial")) return "post_creator";
   if (t.includes("meta")) return "content_optimizer_meta";
   return "content_optimizer";
@@ -114,7 +116,7 @@ function inferDemoCategory(title: string): ForgeAutomationCategory {
 }
 
 function inferCategoryFromExecutionKind(kind: TaskExecutionKind): ForgeAutomationCategory {
-  if (kind === "gsc_reporting") return "reporting";
+  if (kind === "gsc_reporting" || kind === "ads_reporting") return "reporting";
   if (kind === "post_creator") return "editorial";
   if (kind === "entity_page_creator" || kind === "entity_generator" || kind === "sap_generator") return "local-seo";
   if (kind === "local_dominator_export") return "research";
@@ -201,6 +203,7 @@ export function buildForgeAutomationFilterOptions(
     "entity_generator",
     "sap_generator",
     "gsc_reporting",
+    "ads_reporting",
     "content_optimizer",
     "content_optimizer_meta",
   ];

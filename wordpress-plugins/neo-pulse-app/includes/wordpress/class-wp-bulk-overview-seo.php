@@ -9,8 +9,7 @@ defined( 'ABSPATH' ) || exit;
 
 class Neo_Pulse_App_Wp_Bulk_Overview_Seo {
 
-	const NEO_PULSE_BULK_ITEMS_MAX = 500;
-	const WP_REST_BATCH_V1_MAX   = 25;
+	const WP_REST_BATCH_V1_MAX = 25;
 
 	/**
 	 * @param array<string,mixed> $body Request body.
@@ -59,15 +58,17 @@ class Neo_Pulse_App_Wp_Bulk_Overview_Seo {
 				'ok'         => ! empty( $r['ok'] ),
 				'postId'     => $post_id,
 				'error'      => isset( $r['error'] ) ? $r['error'] : null,
-				'method'     => isset( $r['method'] ) ? $r['method'] : 'direct_put',
+				'method'     => isset( $r['method'] ) ? $r['method'] : 'batch_v1',
 				'httpStatus' => isset( $r['httpStatus'] ) ? $r['httpStatus'] : null,
 			),
 		);
 	}
 
 	/**
+	 * One JSON response for up to 25 posts (WordPress batch/v1 limit).
+	 *
 	 * @param array<string,mixed> $body Request body.
-	 * @return array{0:int,1:array<string,mixed>,2?:string} status, data, optional content-type hint.
+	 * @return array{0:int,1:array<string,mixed>}
 	 */
 	public static function bulk_update_overview_seo( $body ) {
 		$site_url     = isset( $body['siteUrl'] ) ? (string) $body['siteUrl'] : '';
@@ -80,6 +81,9 @@ class Neo_Pulse_App_Wp_Bulk_Overview_Seo {
 		}
 		if ( ! $items ) {
 			return array( 400, array( 'success' => false, 'error' => 'items array is empty' ) );
+		}
+		if ( count( $items ) > self::WP_REST_BATCH_V1_MAX ) {
+			return array( 400, array( 'success' => false, 'error' => 'items max is 25 (WordPress batch/v1 limit)' ) );
 		}
 
 		$normalized = Neo_Pulse_App_Wp_Url_Normalize::normalize_url( $site_url );
@@ -104,16 +108,7 @@ class Neo_Pulse_App_Wp_Bulk_Overview_Seo {
 			);
 		}
 
-		$progress_events = array();
-		$run_results     = self::bulk_write_items(
-			$normalized,
-			$username,
-			$app_password,
-			$to_run,
-			function ( $event ) use ( &$progress_events ) {
-				$progress_events[] = array_merge( array( 'type' => 'progress' ), $event );
-			}
-		);
+		$run_results = self::bulk_write_items( $normalized, $username, $app_password, $to_run );
 
 		$results = array();
 		foreach ( $skipped as $s ) {
@@ -143,96 +138,171 @@ class Neo_Pulse_App_Wp_Bulk_Overview_Seo {
 			)
 		);
 
-		$ndjson = $progress_events;
-		$ndjson[] = array(
-			'type'    => 'done',
-			'success' => $ok_count > 0 || ! $results,
-			'results' => $results,
-			'okCount' => $ok_count,
-			'total'   => count( $items ),
-		);
+		$first_error = isset( $results[0]['error'] ) ? (string) $results[0]['error'] : '';
+		if ( $results && $ok_count === 0 && $first_error === self::BATCH_V1_MISSING ) {
+			return array(
+				502,
+				array(
+					'success' => false,
+					'error'   => self::BATCH_V1_MISSING,
+					'results' => $results,
+					'okCount' => 0,
+					'total'   => count( $items ),
+				),
+			);
+		}
 
 		return array(
 			200,
 			array(
-				'ndjson'  => $ndjson,
 				'success' => $ok_count > 0 || ! $results,
 				'results' => $results,
 				'okCount' => $ok_count,
 				'total'   => count( $items ),
 			),
-			'application/x-ndjson',
+		);
+	}
+
+	const BATCH_V1_MISSING =
+		'WordPress REST batch/v1 is required (WordPress 5.6+). POST /wp-json/batch/v1 writes up to 25 posts in one request.';
+
+	/**
+	 * One WordPress core POST /wp-json/batch/v1 for this request (max 25 posts).
+	 *
+	 * @param string                         $normalized Site URL.
+	 * @param string                         $username User.
+	 * @param string                         $app_password Password.
+	 * @param array<int,array<string,mixed>> $to_run Items.
+	 * @return array<int,array<string,mixed>>
+	 */
+	public static function bulk_write_items( $normalized, $username, $app_password, $to_run ) {
+		if ( ! $to_run ) {
+			return array();
+		}
+
+		return self::write_batch_v1_slice(
+			$normalized . '/wp-json/batch/v1',
+			$username,
+			$app_password,
+			$to_run
 		);
 	}
 
 	/**
-	 * @param string                             $normalized Site URL.
-	 * @param string                             $username User.
-	 * @param string                             $app_password Password.
-	 * @param array<int,array<string,mixed>>     $to_run Items.
-	 * @param callable|null                      $on_batch Progress callback.
+	 * @param string                         $url batch/v1 URL.
+	 * @param string                         $username User.
+	 * @param string                         $app_password Password.
+	 * @param array<int,array<string,mixed>> $slice Items in this request.
 	 * @return array<int,array<string,mixed>>
 	 */
-	public static function bulk_write_items( $normalized, $username, $app_password, $to_run, $on_batch = null ) {
-		$run_results   = array();
-		$writable      = 0;
-		foreach ( $to_run as $item ) {
-			if ( Neo_Pulse_App_Wp_Overview_Seo_Item::build_core_put_body( $item ) || Neo_Pulse_App_Wp_Overview_Seo_Item::has_acf_payload( $item ) ) {
-				++$writable;
+	private static function write_batch_v1_slice( $url, $username, $app_password, $slice ) {
+		$requests = array();
+		$sent     = array();
+		$skipped  = array();
+		foreach ( $slice as $item ) {
+			$request = Neo_Pulse_App_Wp_Overview_Seo_Item::to_batch_v1_request( $item );
+			if ( ! $request ) {
+				$skipped[] = array(
+					'postId' => $item['postId'],
+					'index'  => $item['index'],
+					'ok'     => false,
+					'error'  => 'Nothing to update (empty title, excerpt, content, and acf)',
+					'method' => 'batch_v1',
+				);
+				continue;
 			}
+			$requests[] = $request;
+			$sent[]     = $item;
 		}
-		$cumulative = 0;
 
-		for ( $i = 0; $i < count( $to_run ); $i += self::WP_REST_BATCH_V1_MAX ) {
-			$slice = array_slice( $to_run, $i, self::WP_REST_BATCH_V1_MAX );
-			$batch_results = array();
+		if ( ! $requests ) {
+			return $skipped;
+		}
 
-			foreach ( $slice as $item ) {
-				$core = Neo_Pulse_App_Wp_Overview_Seo_Item::build_core_put_body( $item );
-				$acf  = Neo_Pulse_App_Wp_Overview_Seo_Item::has_acf_payload( $item );
+		$resp = Neo_Pulse_App_Wp_Rest_Client::request(
+			'POST',
+			$url,
+			$username,
+			$app_password,
+			array(
+				'timeout'      => Neo_Pulse_App_Wp_Overview_Seo_Item::WRITE_TIMEOUT,
+				'max_attempts' => 1,
+				'body'         => array( 'requests' => $requests ),
+			)
+		);
 
-				if ( ! $core && ! $acf ) {
-					$row = array(
-						'postId' => $item['postId'],
-						'index'  => $item['index'],
-						'ok'     => false,
-						'error'  => 'Nothing to update (empty title, excerpt, content, and acf)',
-						'method' => 'direct_put',
-					);
-				} elseif ( ! $core && $acf ) {
-					$acf_result = Neo_Pulse_App_Wp_Overview_Seo_Item::write_acf_via_post( $normalized, $username, $app_password, $item );
-					$row        = array(
-						'postId'     => $item['postId'],
-						'index'      => $item['index'],
-						'ok'         => ! empty( $acf_result['ok'] ),
-						'error'      => empty( $acf_result['ok'] ) ? ( $acf_result['error'] ?? 'ACF write failed' ) : null,
-						'method'     => 'acf_post',
-						'httpStatus' => $acf_result['httpStatus'] ?? null,
+		$mapped = self::map_batch_v1_response( $sent, $resp );
+		return array_merge( $skipped, $mapped );
+	}
+
+	/**
+	 * @param array<int,array<string,mixed>>                             $sent Items sent.
+	 * @param array{status:int,body:mixed,is_wp_error:bool,error:string} $resp Client response.
+	 * @return array<int,array<string,mixed>>
+	 */
+	private static function map_batch_v1_response( $sent, $resp ) {
+		$status = (int) $resp['status'];
+		if ( ! empty( $resp['is_wp_error'] ) || $status === 404 ) {
+			return self::fail_slice( $sent, self::BATCH_V1_MISSING, $status ?: null );
+		}
+		// 207 Multi-Status is the WordPress batch envelope success.
+		if ( $status !== 207 && ( $status < 200 || $status >= 300 ) ) {
+			$message = Neo_Pulse_App_Wp_Overview_Seo_Item::wp_put_error_message( $resp );
+			return self::fail_slice( $sent, $message, $status );
+		}
+
+		$body      = isset( $resp['body'] ) && is_array( $resp['body'] ) ? $resp['body'] : array();
+		$responses = isset( $body['responses'] ) && is_array( $body['responses'] ) ? $body['responses'] : array();
+
+		$mapped = array();
+		foreach ( $sent as $i => $item ) {
+			$entry     = isset( $responses[ $i ] ) && is_array( $responses[ $i ] ) ? $responses[ $i ] : null;
+			$http      = $entry && isset( $entry['status'] ) ? (int) $entry['status'] : null;
+			$ok        = $http !== null && $http >= 200 && $http < 300;
+			$error     = null;
+			if ( ! $ok ) {
+				if ( $entry && isset( $entry['body'] ) ) {
+					$error = Neo_Pulse_App_Wp_Overview_Seo_Item::wp_put_error_message(
+						array(
+							'status'      => $http ?? 0,
+							'body'        => $entry['body'],
+							'is_wp_error' => false,
+						)
 					);
 				} else {
-					$core_row = Neo_Pulse_App_Wp_Overview_Seo_Item::write_core_via_direct_put( $normalized, $username, $app_password, $item );
-					$row      = Neo_Pulse_App_Wp_Overview_Seo_Item::finalize_with_optional_acf( $normalized, $username, $app_password, $item, $core_row );
+					$error = 'WordPress batch/v1 returned no result for this row.';
 				}
-
-				$batch_results[] = $row;
-				$run_results[]   = $row;
 			}
-
-			$cumulative += count( $batch_results );
-			if ( is_callable( $on_batch ) ) {
-				call_user_func(
-					$on_batch,
-					array(
-						'done'          => $cumulative,
-						'total'         => $writable,
-						'wpBatch'       => (int) floor( $i / self::WP_REST_BATCH_V1_MAX ) + 1,
-						'wpBatchCount'  => (int) ceil( count( $to_run ) / self::WP_REST_BATCH_V1_MAX ),
-						'batchResults'  => $batch_results,
-					)
-				);
-			}
+			$mapped[] = array(
+				'postId'     => $item['postId'],
+				'index'      => $item['index'],
+				'ok'         => $ok,
+				'error'      => $error,
+				'method'     => 'batch_v1',
+				'httpStatus' => $http,
+			);
 		}
+		return $mapped;
+	}
 
-		return $run_results;
+	/**
+	 * @param array<int,array<string,mixed>> $payload Items sent.
+	 * @param string                         $error Error.
+	 * @param int|null                       $status HTTP status.
+	 * @return array<int,array<string,mixed>>
+	 */
+	private static function fail_slice( $payload, $error, $status ) {
+		$out = array();
+		foreach ( $payload as $item ) {
+			$out[] = array(
+				'postId'     => $item['postId'],
+				'index'      => $item['index'],
+				'ok'         => false,
+				'error'      => $error,
+				'method'     => 'batch_v1',
+				'httpStatus' => $status,
+			);
+		}
+		return $out;
 	}
 }

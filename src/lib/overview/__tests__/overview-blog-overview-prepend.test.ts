@@ -143,6 +143,29 @@ describe("stripLeadingOverviewSection", () => {
     const overviewCount = out.toLowerCase().split(">overview<").length - 1;
     expect(overviewCount).toBe(1);
   });
+
+  it("dedupeStackedOverviewSections keeps Answer first when Overview is restitched", async () => {
+    const { dedupeStackedOverviewSections } = await import(
+      "@/lib/overview/overview-blog-overview-prepend"
+    );
+    const html = [
+      `<h2 id="${HARNESS_ANSWER_ANCHOR_ID}">Answer</h2><p>Direct answer here.</p>`,
+      `<div class="${FLO_OVERVIEW_CLASS}">`,
+      `<h2 id="overview">Overview</h2><p>NEW</p><ul><li><strong>A</strong>: one</li></ul>`,
+      `</div>`,
+      `<h2>Overview</h2><p>OLD</p>`,
+      `<h2>Cost Factors</h2><p>body</p>`,
+    ].join("");
+    const out = dedupeStackedOverviewSections(html);
+    const answerPos = out.indexOf(`id="${HARNESS_ANSWER_ANCHOR_ID}"`);
+    const overviewPos = out.indexOf(`id="${HARNESS_OVERVIEW_ANCHOR_ID}"`);
+    expect(answerPos).toBeGreaterThanOrEqual(0);
+    expect(overviewPos).toBeGreaterThan(answerPos);
+    expect(out).toContain("Direct answer here");
+    expect(out).toContain("NEW");
+    expect(out).not.toContain("OLD");
+    expect(out).toContain("Cost Factors");
+  });
 });
 
 describe("extractOverviewSectionHtml", () => {

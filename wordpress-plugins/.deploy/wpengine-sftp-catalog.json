@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-08-17T14:36:13.460Z",
+  "updatedAt": "2026-09-16T16:11:27.893Z",
   "rows": [
     {
       "site": "advanceblindsanddrapery.com",
@@ -66,14 +66,6 @@
       "isStaging": false
     },
     {
-      "site": "heritagedentaledmonton.ca",
-      "host": "hdedmonton.sftp.wpengine.com",
-      "port": 2222,
-      "username": "hdedmonton-flowbiewp",
-      "password": "L8KpY{Hp",
-      "isStaging": false
-    },
-    {
       "site": "interiorsbylaura.com",
       "host": "interiorsbyla.sftp.wpengine.com",
       "port": 2222,
@@ -93,8 +85,8 @@
       "site": "kwbllp.com",
       "host": "kwbllp.sftp.wpengine.com",
       "port": 2222,
-      "username": "kwbllp-flowbiewp",
-      "password": "vy0a$xIp",
+      "username": "kwbllp-NEOPULSE",
+      "password": "NEOPulse2026!",
       "isStaging": false
     },
     {
@@ -130,14 +122,6 @@
       "isStaging": false
     },
     {
-      "site": "sunshadesblinds.ca",
-      "host": "sunshades.sftp.wpengine.com",
-      "port": 2222,
-      "username": "sunshades-flowbiewp",
-      "password": "Y&U;e*[e6",
-      "isStaging": false
-    },
-    {
       "site": "superiorblinds.com",
       "host": "superiorblinds.sftp.wpengine.com",
       "port": 2222,
@@ -170,5 +154,5 @@
       "isStaging": false
     }
   ],
-  "count": 21
+  "count": 19
 }

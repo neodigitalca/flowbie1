@@ -84,6 +84,8 @@
   --fcw-input-bg: #ffffff;
   --fcw-header-bg: #f8fafc;
   --fcw-launcher-bg: #3b82f6;
+  --fcw-launcher-glow: #3b82f6;
+  --fcw-launcher-text: #ffffff;
   --fcw-accent: #3b82f6;
   --fcw-accent-text: #ffffff;
   --fcw-highlight: #06b6d4;
@@ -279,7 +281,7 @@
 .fcw-ack-bubble {
   max-width: 100%;
   padding: 0 2px 10px;
-  color: var(--fcw-text, #1e293b);
+  color: var(--fcw-assistant-bubble-text, var(--fcw-text, #1e293b));
   font-size: 1em;
   line-height: 1.5;
   word-break: break-word;
@@ -326,10 +328,9 @@
   min-width: 0;
   border-radius: 12px;
   padding: 16px 18px;
-  background: var(--fcw-card-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--fcw-border);
+  background: var(--fcw-assistant-bubble-bg, var(--fcw-card-bg));
+  color: var(--fcw-assistant-bubble-text, var(--fcw-text));
+  border: none;
   animation: fcw-slideIn 0.3s ease;
 }
 
@@ -360,7 +361,7 @@
 .fcw-card__title {
   font-weight: 600;
   font-size: 1em;
-  color: #0f172a;
+  color: var(--fcw-assistant-bubble-text, #0f172a);
   line-height: 1.3;
   word-break: break-word;
   overflow-wrap: anywhere;
@@ -725,13 +726,13 @@
 
 .neo-pulse-chat-widget.neo-pulse-chat--sidebar .fai-sidebar-panel.fcw-panel--sidebar {
   position: fixed;
-  top: 0 !important;
+  top: var(--wp-admin--admin-bar--height, 0px) !important;
   bottom: 0 !important;
   margin: 0 !important;
-  width: var(--fai-sidebar-width, 400px) !important;
-  max-width: min(var(--fai-sidebar-width, 400px), 100vw) !important;
-  height: 100dvh !important;
-  max-height: 100dvh !important;
+  width: var(--fai-sidebar-width, var(--fcw-panel-width, 400px)) !important;
+  max-width: min(var(--fai-sidebar-width, var(--fcw-panel-width, 400px)), 100vw) !important;
+  height: auto !important;
+  max-height: none !important;
   border-radius: 0;
   background: var(--fcw-bg);
   border: 1px solid var(--fcw-border);
@@ -741,6 +742,7 @@
   flex-direction: column;
   overflow: hidden;
   box-sizing: border-box;
+  transition: transform 0.5s ease;
 }
 
 .neo-pulse-chat-widget.neo-pulse-chat--sidebar.fai-sidebar-root--open .fai-sidebar-panel.fcw-panel--sidebar {
@@ -826,7 +828,7 @@
 }
 
 /* Chat-only frontend launcher (corner bubble — not the edge tab launcher) */
-.neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher .fai-sidebar-launcher.fcw-launcher {
+.neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher .fai-sidebar-launcher.fcw-launcher:not(.fcw-launcher--edge-tab) {
   position: fixed;
   top: auto;
   bottom: var(--fcw-offset-y, 20px);
@@ -843,7 +845,7 @@
   border: none !important;
   outline: none !important;
   background: var(--fcw-launcher-bg, var(--fai-sidebar-launcher-bg, #3b82f6));
-  color: var(--fcw-accent-text, var(--fai-sidebar-launcher-text, #ffffff));
+  color: var(--fcw-launcher-text, var(--fai-sidebar-launcher-text, var(--fcw-accent-text, #ffffff)));
   box-shadow: var(--fcw-shadow, 0 4px 24px rgba(0, 0, 0, 0.12));
   pointer-events: auto;
   z-index: calc(var(--fai-sidebar-z-index, var(--fcw-z-index, 999999)) + 1);
@@ -857,8 +859,163 @@
   line-height: 0;
 }
 
-.neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher.fai-sidebar-root--open .fcw-launcher,
-.neo-pulse-chat-widget.fai-sidebar-root--open .fai-sidebar-launcher.fcw-launcher {
+#neo-pulse-chat-mobile-launcher.fcw-launcher--edge-tab,
+.neo-pulse-chat-widget .fai-sidebar-launcher.fcw-launcher.fcw-launcher--edge-tab {
+  position: fixed;
+  top: max(180px, calc(var(--wp-admin--admin-bar--height, 0px) + 20vh));
+  bottom: max(120px, 16vh);
+  right: 0;
+  left: auto;
+  transform: none;
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
+  height: auto;
+  min-height: 160px;
+  max-height: none;
+  transition: transform 0.5s ease;
+  aspect-ratio: auto;
+  padding: 16px 8px;
+  border: none;
+  border-radius: 8px 0 0 8px;
+  background: var(--fcw-launcher-bg, var(--fai-sidebar-launcher-bg, #3b82f6));
+  color: var(--fcw-launcher-text, var(--fai-sidebar-launcher-text, var(--fcw-accent-text, #ffffff)));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--fcw-launcher-glow, #3b82f6) 55%, transparent);
+  pointer-events: auto;
+  z-index: calc(var(--fai-sidebar-z-index, var(--fcw-z-index, 999999)) + 1);
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-sizing: border-box;
+  line-height: 1.2;
+  cursor: pointer;
+  animation: fcw-launcher-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes fcw-launcher-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 12px color-mix(in srgb, var(--fcw-launcher-glow, #3b82f6) 40%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 28px color-mix(in srgb, var(--fcw-launcher-glow, #3b82f6) 80%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #neo-pulse-chat-mobile-launcher.fcw-launcher--edge-tab,
+  .neo-pulse-chat-widget .fai-sidebar-launcher.fcw-launcher.fcw-launcher--edge-tab {
+    animation: none;
+    transition: none;
+  }
+}
+
+#neo-pulse-chat-mobile-launcher.fcw-launcher--edge-tab.fcw-launcher--side-left,
+.neo-pulse-chat-widget.fai-sidebar-root--left .fai-sidebar-launcher.fcw-launcher.fcw-launcher--edge-tab {
+  left: 0;
+  right: auto;
+  border-radius: 0 8px 8px 0;
+}
+
+.fcw-launcher--edge-tab .fcw-launcher__label {
+  font-family: "Lato", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+}
+
+.fcw-launcher--edge-tab svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.fai-sidebar-root--peek-track:not(.fai-sidebar-root--open),
+.neo-pulse-chat-widget.fai-sidebar-root--peek-track:not(.fai-sidebar-root--open),
+#neo-pulse-chat-widget-root.neo-pulse-chat-widget.fai-sidebar-root--peek-track:not(.fai-sidebar-root--open) {
+  pointer-events: none;
+  display: block !important;
+  visibility: visible !important;
+  position: fixed !important;
+  inset: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+.fai-sidebar-root--peek-track:not(.fai-sidebar-root--open) .fai-sidebar-panel,
+.neo-pulse-chat-widget.neo-pulse-chat--sidebar.fai-sidebar-root--peek-track:not(.fai-sidebar-root--open) .fai-sidebar-panel.fcw-panel--sidebar {
+  visibility: visible !important;
+  display: flex !important;
+  opacity: 1 !important;
+  pointer-events: none !important;
+  transition: transform 0.5s ease !important;
+}
+
+.fai-sidebar-root--peek-track.fai-sidebar-root--right:not(.fai-sidebar-root--open):not(.fai-sidebar-root--peek) .fai-sidebar-panel,
+.neo-pulse-chat-widget.neo-pulse-chat--sidebar.fai-sidebar-root--peek-track.fai-sidebar-root--right:not(.fai-sidebar-root--open):not(.fai-sidebar-root--peek) .fai-sidebar-panel.fcw-panel--sidebar {
+  transform: translateX(100%) !important;
+}
+
+.fai-sidebar-root--peek-track.fai-sidebar-root--left:not(.fai-sidebar-root--open):not(.fai-sidebar-root--peek) .fai-sidebar-panel,
+.neo-pulse-chat-widget.neo-pulse-chat--sidebar.fai-sidebar-root--peek-track.fai-sidebar-root--left:not(.fai-sidebar-root--open):not(.fai-sidebar-root--peek) .fai-sidebar-panel.fcw-panel--sidebar {
+  transform: translateX(-100%) !important;
+}
+
+.fai-sidebar-root--peek.fai-sidebar-root--right:not(.fai-sidebar-root--open) .fai-sidebar-panel,
+.neo-pulse-chat-widget.neo-pulse-chat--sidebar.fai-sidebar-root--peek.fai-sidebar-root--right:not(.fai-sidebar-root--open) .fai-sidebar-panel.fcw-panel--sidebar {
+  transform: translateX(75%) !important;
+}
+
+.fai-sidebar-root--peek.fai-sidebar-root--left:not(.fai-sidebar-root--open) .fai-sidebar-panel,
+.neo-pulse-chat-widget.neo-pulse-chat--sidebar.fai-sidebar-root--peek.fai-sidebar-root--left:not(.fai-sidebar-root--open) .fai-sidebar-panel.fcw-panel--sidebar {
+  transform: translateX(-75%) !important;
+}
+
+body:has(#neo-pulse-chat-widget-root.fai-sidebar-root--peek-track:not(.fai-sidebar-root--open):not(.fai-sidebar-root--peek)) #neo-pulse-chat-mobile-launcher.fcw-launcher--edge-tab {
+  right: 0 !important;
+  left: auto !important;
+  transform: none !important;
+  transition: transform 0.5s ease !important;
+}
+
+body:has(#neo-pulse-chat-widget-root.fai-sidebar-root--peek-track.fai-sidebar-root--left:not(.fai-sidebar-root--open):not(.fai-sidebar-root--peek)) #neo-pulse-chat-mobile-launcher.fcw-launcher--edge-tab {
+  left: 0 !important;
+  right: auto !important;
+}
+
+body:has(#neo-pulse-chat-widget-root.fai-sidebar-root--peek:not(.fai-sidebar-root--open)) #neo-pulse-chat-mobile-launcher.fcw-launcher--edge-tab {
+  right: 0 !important;
+  left: auto !important;
+  transform: translateX(calc(-1 * var(--fcw-docker-shift, 0px))) !important;
+  transition: transform 0.5s ease !important;
+}
+
+body:has(#neo-pulse-chat-widget-root.fai-sidebar-root--peek.fai-sidebar-root--left:not(.fai-sidebar-root--open)) #neo-pulse-chat-mobile-launcher.fcw-launcher--edge-tab {
+  left: 0 !important;
+  right: auto !important;
+  transform: translateX(var(--fcw-docker-shift, 0px)) !important;
+}
+
+@media (max-width: 767px) {
+  .neo-pulse-chat-widget.neo-pulse-chat--sidebar.fai-sidebar-root--open .fai-sidebar-panel.fcw-panel--sidebar {
+    top: 0 !important;
+    bottom: 0 !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+  }
+}
+
+.neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher.fai-sidebar-root--open .fcw-launcher:not(.fcw-launcher--edge-tab),
+.neo-pulse-chat-widget.fai-sidebar-root--open .fai-sidebar-launcher.fcw-launcher:not(.fcw-launcher--edge-tab) {
   display: none !important;
   opacity: 0 !important;
   visibility: hidden !important;
@@ -872,18 +1029,18 @@
   box-shadow: var(--fcw-shadow, 0 4px 24px rgba(0, 0, 0, 0.12));
 }
 
-.neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher.fai-sidebar-root--right .fai-sidebar-launcher.fcw-launcher {
+.neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher.fai-sidebar-root--right .fai-sidebar-launcher.fcw-launcher:not(.fcw-launcher--edge-tab) {
   right: var(--fcw-offset-x, 20px);
   left: auto;
 }
 
-.neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher.fai-sidebar-root--left .fai-sidebar-launcher.fcw-launcher {
+.neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher.fai-sidebar-root--left .fai-sidebar-launcher.fcw-launcher:not(.fcw-launcher--edge-tab) {
   left: var(--fcw-offset-x, 20px);
   right: auto;
 }
 
 @media (max-width: 767px) {
-  .neo-pulse-chat-widget.neo-pulse-chat--sidebar.neo-pulse-chat--standalone-launcher:not(.fai-sidebar-root--open) {
+  .neo-pulse-chat-widget.neo-pulse-chat--sidebar.neo-pulse-chat--standalone-launcher:not(.fai-sidebar-root--open):not(.fai-sidebar-root--peek):not(.fai-sidebar-root--peek-track) {
     position: fixed !important;
     top: auto !important;
     bottom: 0 !important;
@@ -902,7 +1059,7 @@
     transform: none !important;
   }
 
-  .neo-pulse-chat-widget.neo-pulse-chat--sidebar.fai-sidebar-root--transition-slide:not(.fai-sidebar-root--open) .fai-sidebar-panel.fcw-panel--sidebar {
+  .neo-pulse-chat-widget.neo-pulse-chat--sidebar.fai-sidebar-root--transition-slide:not(.fai-sidebar-root--open):not(.fai-sidebar-root--peek):not(.fai-sidebar-root--peek-track) .fai-sidebar-panel.fcw-panel--sidebar {
     transform: none !important;
     visibility: hidden !important;
     pointer-events: none !important;
@@ -912,7 +1069,7 @@
     visibility: visible !important;
   }
 
-  .neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher.fai-sidebar-root--right .fai-sidebar-launcher.fcw-launcher {
+  .neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher.fai-sidebar-root--right .fai-sidebar-launcher.fcw-launcher:not(.fcw-launcher--edge-tab) {
     right: 16px !important;
     left: auto !important;
     bottom: 16px !important;
@@ -921,7 +1078,7 @@
     transform: none !important;
   }
 
-  .neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher.fai-sidebar-root--left .fai-sidebar-launcher.fcw-launcher {
+  .neo-pulse-chat-widget.neo-pulse-chat--standalone-launcher.fai-sidebar-root--left .fai-sidebar-launcher.fcw-launcher:not(.fcw-launcher--edge-tab) {
     left: 16px !important;
     right: auto !important;
     bottom: 16px !important;
@@ -1643,23 +1800,30 @@ html body button.fcw-chekkit-teaser__dismiss:hover {
 html body .fcw-chekkit-teaser__card::after {
   content: '';
   position: absolute;
-  bottom: -8px;
+  top: 50%;
+  bottom: auto;
   width: 0;
   height: 0;
-  border-left: 8px solid transparent;
-  border-right: 8px solid transparent;
-  border-top: 8px solid #ffffff;
+  transform: translateY(-50%);
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.06));
 }
 
 .fcw-chekkit-teaser--right .fcw-chekkit-teaser__card::after {
-  right: 20px;
+  right: -8px;
   left: auto;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-left: 8px solid #ffffff;
+  border-right: none;
 }
 
 .fcw-chekkit-teaser--left .fcw-chekkit-teaser__card::after {
-  left: 20px;
+  left: -8px;
   right: auto;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-right: 8px solid #ffffff;
+  border-left: none;
 }
 
 html body .fcw-launcher--chekkit,

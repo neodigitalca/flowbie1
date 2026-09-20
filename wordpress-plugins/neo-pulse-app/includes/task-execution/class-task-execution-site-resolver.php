@@ -67,8 +67,9 @@ class Neo_Pulse_App_Task_Execution_Site_Resolver {
 			'name'              => (string) ( $site['name'] ?? '' ),
 			'siteUrl'           => rtrim( (string) ( $site['siteUrl'] ?? '' ), '/' ),
 			'productionSiteUrl' => isset( $site['productionSiteUrl'] ) ? (string) $site['productionSiteUrl'] : '',
-			'username'          => (string) ( $site['username'] ?? '' ),
-			'appPassword'       => (string) ( $site['appPassword'] ?? '' ),
+			'username'             => (string) ( $site['username'] ?? '' ),
+			'appPassword'          => (string) ( $site['appPassword'] ?? '' ),
+			'googleAdsCustomerId'  => (string) ( $site['googleAdsCustomerId'] ?? '' ),
 		);
 	}
 }

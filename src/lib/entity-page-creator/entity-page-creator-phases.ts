@@ -350,7 +350,7 @@ export async function hydrateAndPublishEntityPages(args: {
         syncPostCreatorProof(args.run.id, {
           postCount,
           files: [],
-          featuredImageEnabled: false,
+          featuredImageEnabled: true,
           uploadedPosts: p.uploadedPosts,
         });
       }

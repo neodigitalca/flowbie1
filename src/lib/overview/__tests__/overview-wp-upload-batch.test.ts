@@ -45,8 +45,8 @@ describe("runOverviewWpUploadBatch", () => {
     bulkUpdateOverviewSeo.mockReset();
   });
 
-  it("uploads rows in bulk-update-overview-seo batches of 25", async () => {
-    const rowCount = 30;
+  it("sends one row per Pulse request", async () => {
+    const rowCount = 3;
     const rows: OverviewRow[] = [];
     const bindings: Record<string, OverviewBinding> = {};
 
@@ -96,9 +96,10 @@ describe("runOverviewWpUploadBatch", () => {
       },
     });
 
-    expect(bulkUpdateOverviewSeo).toHaveBeenCalledTimes(2);
-    expect(bulkUpdateOverviewSeo.mock.calls[0]![3]).toHaveLength(25);
-    expect(bulkUpdateOverviewSeo.mock.calls[1]![3]).toHaveLength(5);
+    expect(bulkUpdateOverviewSeo).toHaveBeenCalledTimes(3);
+    expect(bulkUpdateOverviewSeo.mock.calls[0]![3]).toHaveLength(1);
+    expect(bulkUpdateOverviewSeo.mock.calls[1]![3]).toHaveLength(1);
+    expect(bulkUpdateOverviewSeo.mock.calls[2]![3]).toHaveLength(1);
     expect(stats.stats.okCount).toBe(rowCount);
     expect(stats.stats.failCount).toBe(0);
   });

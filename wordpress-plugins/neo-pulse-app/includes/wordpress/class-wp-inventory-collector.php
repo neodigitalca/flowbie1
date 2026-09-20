@@ -33,8 +33,8 @@ class Neo_Pulse_App_Wp_Inventory_Collector {
 		$use_ids   = is_array( $include_ids ) && count( $include_ids ) > 0;
 		$warm      = Neo_Pulse_App_Wp_Rest_Client::warm_origin_session( $normalized );
 		$fields    = ( $include_content || $include_page_heading )
-			? 'id,slug,title,link,acf,content,excerpt,date_gmt,featured_media'
-			: 'id,slug,title,link,acf,excerpt,date_gmt,featured_media';
+			? 'id,slug,title,link,acf,neo_pulse_fields,content,excerpt,date_gmt,featured_media'
+			: 'id,slug,title,link,acf,neo_pulse_fields,excerpt,date_gmt,featured_media';
 
 		while ( $has_more ) {
 			$params = array(
@@ -84,7 +84,7 @@ class Neo_Pulse_App_Wp_Inventory_Collector {
 				$wp_total = (int) ( $resp['headers']['x-wp-total'] ?? count( $posts ) );
 			}
 			foreach ( $posts as $post ) {
-				$row = self::map_inventory_row( $post, $normalized, $include_content, $include_raw_acf, $include_page_heading );
+				$row = self::map_inventory_row( $post, $normalized, $include_content, $include_raw_acf, $include_page_heading, $rest_collection );
 				if ( $row ) {
 					$inventory[] = $row;
 				}
@@ -202,17 +202,18 @@ class Neo_Pulse_App_Wp_Inventory_Collector {
 	 * @param bool                $include_page_heading Include H1.
 	 * @return array<string,mixed>|null
 	 */
-	private static function map_inventory_row( $post, $normalized, $include_content, $include_raw_acf, $include_page_heading ) {
+	private static function map_inventory_row( $post, $normalized, $include_content, $include_raw_acf, $include_page_heading, $rest_collection = 'posts' ) {
 		$link = self::resolve_permalink( $post, $normalized );
 		if ( $link === '' ) {
 			return null;
 		}
 		$acf    = Neo_Pulse_App_Wp_Url_Normalize::rest_acf_from_post( $post );
 		$acf    = is_array( $acf ) ? $acf : array();
+		$title  = trim( wp_strip_all_tags( Neo_Pulse_App_Wp_Url_Normalize::rendered_text( $post['title'] ?? '' ) ) );
 		$fields = array(
-			'title'   => trim( wp_strip_all_tags( Neo_Pulse_App_Wp_Url_Normalize::rendered_text( $post['title'] ?? '' ) ) ),
+			'title'   => $title,
 			'meta'    => self::meta_from_acf( $acf ),
-			'keyword' => isset( $acf['keyword_focus'] ) ? trim( (string) $acf['keyword_focus'] ) : '',
+			'keyword' => self::keyword_aligned_to_title( self::keyword_from_acf( $acf ), $title, $rest_collection ),
 		);
 		$excerpt = trim( wp_strip_all_tags( Neo_Pulse_App_Wp_Url_Normalize::rendered_text( $post['excerpt'] ?? '' ) ) );
 		if ( $excerpt !== '' ) {
@@ -257,6 +258,99 @@ class Neo_Pulse_App_Wp_Inventory_Collector {
 			}
 		}
 		return '';
+	}
+
+	/**
+	 * @param array<string,mixed> $acf Merged ACF / plugin fields.
+	 * @return string
+	 */
+	private static function keyword_from_acf( $acf ) {
+		foreach ( array( 'keyword_focus', 'rank_math_focus_keyword', 'focus_keyword' ) as $key ) {
+			if ( empty( $acf[ $key ] ) || ! is_string( $acf[ $key ] ) ) {
+				continue;
+			}
+			$text  = trim( (string) $acf[ $key ] );
+			$comma = strpos( $text, ',' );
+			if ( $comma !== false ) {
+				$text = trim( substr( $text, 0, $comma ) );
+			}
+			if ( $text !== '' ) {
+				return $text;
+			}
+		}
+		return '';
+	}
+
+	/**
+	 * Blog posts: drop leftover Rank Math / ACF keywords that describe a different title.
+	 *
+	 * @param string $keyword Stored keyword.
+	 * @param string $title   Post title.
+	 * @param string $collection REST collection.
+	 * @return string
+	 */
+	private static function keyword_aligned_to_title( $keyword, $title, $collection ) {
+		$coll = strtolower( trim( (string) $collection ) );
+		$is_blog = $coll === '' || $coll === 'post' || $coll === 'posts';
+		if ( ! $is_blog || trim( $title ) === '' ) {
+			return $keyword;
+		}
+		if ( $keyword !== '' && self::keyword_matches_title( $keyword, $title ) ) {
+			return $keyword;
+		}
+		return self::infer_keyword_from_title( $title );
+	}
+
+	private static function keyword_matches_title( $keyword, $title ) {
+		$kw  = self::significant_tokens( $keyword );
+		$hay = self::significant_tokens( $title );
+		if ( ! $kw || ! $hay ) {
+			return false;
+		}
+		$hay_set = array_fill_keys( $hay, true );
+		$hits    = 0;
+		foreach ( $kw as $token ) {
+			if ( isset( $hay_set[ $token ] ) ) {
+				++$hits;
+			}
+		}
+		return $hits === count( $kw ) || $hits >= 2;
+	}
+
+	private static function infer_keyword_from_title( $title ) {
+		$parts   = explode( '|', (string) $title );
+		$primary = trim( $parts[0] ?? '' );
+		if ( $primary === '' ) {
+			return '';
+		}
+		$colon = strpos( $primary, ':' );
+		$base  = ( $colon !== false && $colon >= 8 ) ? trim( substr( $primary, 0, $colon ) ) : $primary;
+		$base  = rtrim( $base, '?' );
+		return strtolower( trim( preg_replace( '/\s+/', ' ', $base ) ) );
+	}
+
+	/**
+	 * @return array<int,string>
+	 */
+	private static function significant_tokens( $text ) {
+		$norm = strtolower( trim( preg_replace( '/[^a-z0-9\s]/i', ' ', (string) $text ) ) );
+		$norm = trim( preg_replace( '/\s+/', ' ', $norm ) );
+		if ( $norm === '' ) {
+			return array();
+		}
+		$stop = array(
+			'a' => true, 'an' => true, 'the' => true, 'and' => true, 'or' => true, 'for' => true,
+			'to' => true, 'of' => true, 'in' => true, 'on' => true, 'how' => true, 'it' => true,
+			'its' => true, 'is' => true, 'does' => true, 'do' => true, 'what' => true, 'with' => true,
+			'your' => true, 'which' => true,
+		);
+		$out = array();
+		foreach ( explode( ' ', $norm ) as $token ) {
+			if ( strlen( $token ) > 1 && empty( $stop[ $token ] ) ) {
+				$out[] = $token;
+			}
+		}
+		return $out;
 	}
 
 	/**

@@ -19,7 +19,6 @@ import {
 } from "@/lib/sitemap-optimizer/entity-merge-prompts";
 import { gridMemberSourceUrl } from "@/lib/sitemap-optimizer/grid-member-url";
 import { displayPostTitle } from "@/lib/sitemap-optimizer/merge-results-display";
-import { SAP_DEFAULT_COMBINED_OUTLINE } from "@/lib/prompt-builders/sap-page-template";
 import { resolvedMemberRows } from "@/lib/sitemap-optimizer/resolved-cluster-members";
 import type { BlogDestinationPolicy } from "@/lib/sitemap-optimizer/blog-destination-policy";
 import type {
@@ -91,9 +90,6 @@ function fillEntitySapBriefGaps(
   members: readonly SitemapOptimizerPostRow[],
 ): ParsedEntitySapBrief {
   const out = { ...brief };
-  if (!out.combinedOutline.length) {
-    out.combinedOutline = [...SAP_DEFAULT_COMBINED_OUTLINE];
-  }
   if (!out.whatToKeepFromEach.length) {
     out.whatToKeepFromEach = members.map((row) => ({
       url: gridMemberSourceUrl(row),

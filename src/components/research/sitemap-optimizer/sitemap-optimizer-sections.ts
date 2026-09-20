@@ -5,7 +5,7 @@ export const SITEMAP_OPTIMIZER_SECTION_STORAGE_KEY = "neo-pulse-sitemap-optimize
 export function readStoredSitemapOptimizerSection(): SitemapOptimizerWorkspaceMode {
   try {
     const v = sessionStorage.getItem(SITEMAP_OPTIMIZER_SECTION_STORAGE_KEY);
-    if (v === "plan" || v === "legacy_redirects" || v === "url_optimizer") return v;
+    if (v === "plan" || v === "url_optimizer") return v;
   } catch {
     /* ignore */
   }

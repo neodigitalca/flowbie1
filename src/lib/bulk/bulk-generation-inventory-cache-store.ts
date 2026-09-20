@@ -72,6 +72,17 @@ export function seedBulkGenerationWpInventoryFromBundle(
   site: WordPressSite,
   bundle: { bulkInventoryRows?: SiteInventoryBulkRow[]; fetchedAt: number; error?: string },
 ): void {
+  const incoming = bundle.bulkInventoryRows ?? [];
+  if (incoming.length > 0) {
+    cacheBySiteId.set(site.id, {
+      siteId: site.id,
+      rows: incoming,
+      fetchedAt: bundle.fetchedAt,
+    });
+    return;
+  }
+  const prev = cacheBySiteId.get(site.id);
+  if (prev?.rows?.length) return;
   if (bundle.error) {
     cacheBySiteId.set(site.id, {
       siteId: site.id,
@@ -79,14 +90,7 @@ export function seedBulkGenerationWpInventoryFromBundle(
       fetchedAt: bundle.fetchedAt,
       error: bundle.error,
     });
-    return;
   }
-  if (!(bundle.bulkInventoryRows?.length ?? 0)) return;
-  cacheBySiteId.set(site.id, {
-    siteId: site.id,
-    rows: bundle.bulkInventoryRows!,
-    fetchedAt: bundle.fetchedAt,
-  });
 }
 
 export function clearBulkGenerationWpInventoryCache(siteId?: string): void {

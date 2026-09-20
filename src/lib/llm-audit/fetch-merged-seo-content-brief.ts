@@ -9,6 +9,8 @@ export type FetchMergedSeoContentBriefInput = {
   location?: string;
   gscQueries?: string[];
   semrushOverviewJson?: unknown | null;
+  requireSerpDump?: boolean;
+  onProgress?: (message: string) => void;
 };
 
 /** DataForSEO SERP dump + parallel LLM audit → merged `SeoContentBriefV1`. */
@@ -23,6 +25,8 @@ export async function fetchMergedSeoContentBriefLive(
     gscQueries: input.gscQueries,
     gscPageUrl: input.pageUrl,
     semrushOverviewJson: input.semrushOverviewJson,
+    requireSerpDump: input.requireSerpDump,
+    callbacks: input.onProgress ? { onProgress: input.onProgress } : undefined,
   });
   return brief;
 }

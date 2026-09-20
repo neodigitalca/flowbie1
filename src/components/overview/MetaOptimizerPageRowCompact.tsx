@@ -6,13 +6,17 @@ import {
   CONTENT_OPTIMIZER_PAGE_ROW_DATE_CELL,
   CONTENT_OPTIMIZER_PAGE_ROW_EXPANDED_GRID_CLASS,
   CONTENT_OPTIMIZER_PAGE_ROW_GRID_CLASS,
+  CONTENT_OPTIMIZER_PAGE_ROW_SELECT_CELL,
   CONTENT_OPTIMIZER_PAGE_ROW_TITLE_CELL,
   CONTENT_OPTIMIZER_PAGE_ROW_URL_CELL,
   CONTENT_OPTIMIZER_ACTIVE_ROW_TEXT_CLASS,
   contentOptimizerRowStripeClass,
 } from "@/components/overview/overview-tab/overview-tab-content-constants";
 import { metaDisplayTitle, overviewRowDateLabel } from "@/lib/overview/overview-tab-display";
+import { overviewGridFocusKeywordLabel } from "@/lib/overview/focus-keyword-from-wp-sources";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { DASHBOARD_LIST_CHECKBOX_CLASS } from "@/components/shared/workspace-checkbox-styles";
 import { cn } from "@/lib/utils";
 
 export interface MetaOptimizerPageRowCompactProps {
@@ -27,6 +31,8 @@ export interface MetaOptimizerPageRowCompactProps {
   isActiveOptimize?: boolean;
   /** Details drawer: formatted publish label when ISO date is unavailable. */
   dateLabelOverride?: string;
+  isSelected?: boolean;
+  onToggleSelect?: (shiftKey?: boolean) => void;
   onToggle: () => void;
   /** Details drawer: edit date and sync ACF on commit. */
   editableDate?: boolean;
@@ -43,6 +49,8 @@ export function MetaOptimizerPageRowCompact({
   embedded = false,
   stripeIndex = 0,
   isActiveOptimize = false,
+  isSelected = false,
+  onToggleSelect,
   onToggle,
   dateLabelOverride,
   editableDate = false,
@@ -59,7 +67,13 @@ export function MetaOptimizerPageRowCompact({
     : hasLiveUrl
       ? metaDisplayTitle(row, wpTitlesByUrl) || ""
       : "";
-  const keywordLabel = isDisplayRow ? (row.focusKeyword ?? "").trim() : "";
+  const keywordLabel = isDisplayRow
+    ? overviewGridFocusKeywordLabel({
+        storedKeyword: row.focusKeyword,
+        title: titleLabel || row.title || row.pageHeading,
+        postType: row.postType,
+      })
+    : "";
   const wikiSummary = row.blogWikiLinkSummary?.trim() ?? "";
   const middleLabel =
     row.status === "ai-wikipedia-link"
@@ -72,7 +86,7 @@ export function MetaOptimizerPageRowCompact({
 
   const handleRowClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (isEmptyShell) return;
-    if ((e.target as HTMLElement).closest("button, a, [role='combobox'], input, textarea")) return;
+    if ((e.target as HTMLElement).closest("button, a, [role='combobox'], [role='checkbox'], input, textarea")) return;
     onToggle();
   };
 
@@ -95,6 +109,7 @@ export function MetaOptimizerPageRowCompact({
       onClick={handleRowClick}
       onKeyDown={(e) => {
         if (isEmptyShell) return;
+        if ((e.target as HTMLElement).closest("[role='checkbox']")) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onToggle();
@@ -103,6 +118,22 @@ export function MetaOptimizerPageRowCompact({
     >
       {showTitleGrid ? (
         <>
+          <div className={CONTENT_OPTIMIZER_PAGE_ROW_SELECT_CELL}>
+            {!isEmptyShell && onToggleSelect ? (
+              <Checkbox
+                checked={isSelected}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onToggleSelect(e.shiftKey);
+                }}
+                aria-label={titleLabel ? `Select ${titleLabel}` : "Select row"}
+                className={DASHBOARD_LIST_CHECKBOX_CLASS}
+              />
+            ) : (
+              <span className="h-4 w-4 shrink-0" aria-hidden />
+            )}
+          </div>
           <div className={CONTENT_OPTIMIZER_PAGE_ROW_URL_CELL}>
             {hasLiveUrl ? (
               <a

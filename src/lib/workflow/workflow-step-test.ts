@@ -1,7 +1,11 @@
 import type { AgentRunResult } from "@/lib/agent-runs-types";
 import type { ContentGapCountResult } from "@/lib/content-gap/resolve-content-gap-count";
 import { enrichGoogleDriveContractFromSite, normalizeWorkflowDriveContract } from "@/lib/automation-google-drive-delivery";
-import { googleDriveClientFolderName, driveFolderDisplayName } from "@/lib/google-drive/google-drive-folder-hierarchy";
+import {
+  driveFolderDisplayName,
+  googleDriveClientFolderName,
+  googleDriveDeliveryFolderIsMonthLeaf,
+} from "@/lib/google-drive/google-drive-folder-hierarchy";
 import { parseGoogleDriveFolderId } from "@/lib/google-drive/google-drive-folder-presets";
 import { testDriveStepUpload } from "@/lib/google-drive/test-drive-step-upload";
 import type { WordPressSite } from "@/components/integrations/types";
@@ -146,7 +150,7 @@ export function resolveGoogleDriveStepTestLinkLabel(result?: WorkflowStepTestRes
 }
 
 function isGoogleDriveMonthLeafLabel(label: string): boolean {
-  return /\/ (Reporting|Audits|Grids) \/ \d{4} \/ /i.test(label.trim());
+  return googleDriveDeliveryFolderIsMonthLeaf(label);
 }
 
 function resolveWorkflowDriveExecutionKind(

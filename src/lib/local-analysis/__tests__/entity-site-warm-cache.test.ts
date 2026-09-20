@@ -45,6 +45,7 @@ import {
   bootstrapEntitySiteWarmOnAppLoad,
   clearEntitySiteWarmCache,
   ensureEntitySiteWarmCache,
+  ensureEntitySiteWarmInventory,
   getEntitySiteWarmCacheIfReady,
   gscQueriesFromWarmBundleForSapBudget,
   invalidateEntitySiteWarmCacheIfCredentialsChanged,
@@ -271,6 +272,13 @@ describe("entity-site-warm-cache", () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(fetchGscMock).toHaveBeenCalledTimes(1);
     expect(loadInventoryMock).not.toHaveBeenCalled();
+  });
+
+  it("ensureEntitySiteWarmInventory resolves while GSC is still pending", async () => {
+    bulkReadyMock.mockReturnValue(null);
+    fetchGscMock.mockImplementation(() => new Promise(() => {}));
+    await ensureEntitySiteWarmInventory(site);
+    expect(loadInventoryMock).toHaveBeenCalledTimes(1);
   });
 
   it("requireGsc waits for inflight when cache has inventory but no GSC yet", async () => {

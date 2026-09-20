@@ -1006,6 +1006,63 @@ const recipes = [
     ],
     kind: "workflow_template",
   },
+  {
+    keyword: "missing-template-aiseo",
+    name: "Missing template Full AISEO",
+    description:
+      "Download the posts audit CSV, then Full AISEO adjusts posts that do not fit the new template.",
+    notes: [
+      "Client is Posh. Posts only. No schedule. Page audit loads posts automatically.",
+      "CSV rows downloads the missing-template audit CSV into this run RAG.",
+      "Full AISEO only gets posts that still lack an H2 titled Answer.",
+    ],
+    category: "maintenance",
+    verticals: ["general", "local-seo", "editorial"],
+    tags: ["optimize", "aiseo", "posts", "template"],
+    prerequisites: ["wordpress"],
+    filters: {
+      executionKinds: ["csv_rows", "content_optimizer"],
+      targetBuckets: ["posts"],
+      actionCount: 2,
+    },
+    defaultTasks: [
+      calendarAction(
+        "csv-rows-posts",
+        "Page audit",
+        "csv_rows",
+        {
+          csvInputSource: "site",
+          targetBucket: "posts",
+          csvHeaders: ["url", "H2"],
+          csvColumnMap: { url: "url", research: "H2" },
+        },
+        "none",
+      ),
+      calendarAction(
+        "missing-template-posts",
+        "Full AISEO",
+        "content_optimizer",
+        {
+          targetBucket: "posts",
+          updateMode: "update",
+          optimizationOptions: {
+            optimizeTitle: true,
+            optimizeMeta: true,
+            optimizeExcerpt: true,
+            optimizeContent: true,
+            optimizeExtraText: false,
+            optimizeFeaturedImage: false,
+            useAcfKeyword: true,
+            forceNewResearch: true,
+          },
+          optionalPrompt:
+            "Adjust posts that do not fit the new live template. Published HTML must include an H2 titled Answer. Skip posts that already have that H2.",
+        },
+        "none",
+      ),
+    ],
+    kind: "workflow_template",
+  },
 ];
 
 function inferGscKeyword(config) {
@@ -1020,6 +1077,8 @@ function inferGscKeyword(config) {
 }
 
 function inferActionKeyword(kind, payload = {}) {
+  if (kind === "csv_rows") return "csv-rows";
+  if (kind === "chatgpt_website_audit") return "chatgpt-website-audit";
   if (kind === "content_optimizer_meta") return "content-optimizer-meta";
   if (kind === "content_optimizer") return "content-optimizer-full";
   if (kind === "post_creator") return "post-creator-monthly";
@@ -1070,7 +1129,7 @@ function taskToTriggerBlock(task) {
 
 function taskToActionBlock(task) {
   return {
-    keyword: inferActionKeyword(task.executionKind, task.executionPayload),
+    keyword: task.keyword === "csv-rows" ? "csv-rows" : inferActionKeyword(task.executionKind, task.executionPayload),
     executionKind: task.executionKind,
     executionPayload: task.executionPayload ?? {},
     title: task.title,

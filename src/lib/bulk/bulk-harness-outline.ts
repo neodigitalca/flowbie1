@@ -1,6 +1,5 @@
 import type { AgentConfig } from "@/types/agent-config";
 import { extractChecklistItemTitle } from "@/lib/post-creator/post-creator-checklist-post-process";
-import { resolveIllustrativeH2Title } from "@/lib/content-optimization/first-party-authority-prompt";
 
 /**
  * Canonical outline for bulk “middle-out” harness generation.
@@ -42,9 +41,7 @@ export function buildBulkHarnessOutlineFromAgents(agents: AgentConfig[]): BulkHa
   return agents.map((agent, index) => {
     const isFaq = agentHasFaqFeature(agent);
     const rawTitle = isFaq ? "FAQ" : extractChecklistItemTitle(agent.title?.trim() || "");
-    const resolvedTitle = agentHasIllustrativeFeature(agent)
-      ? resolveIllustrativeH2Title(rawTitle)
-      : rawTitle;
+    const resolvedTitle = rawTitle;
     return {
       index,
       title: resolvedTitle,

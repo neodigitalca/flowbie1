@@ -14,6 +14,7 @@ import {
 import { patchAgentRunInList } from "@/lib/agent-runs/agent-runs-local-patch";
 import { resolveAgentRunBatchKey } from "@/lib/agent-runs/agent-run-batch-key";
 import {
+  loadSitesForAgentRun,
   resolveAgentRunWordPressSite,
   resolveGscReportingSite,
 } from "@/lib/agent-runs/resolve-agent-run-site";
@@ -21,6 +22,8 @@ import { resolveAgentRunRecipeKey } from "@/lib/agent-runs/agent-run-navigation"
 import { getAgentRunOptimizationBridge } from "@/lib/agent-runs/agent-run-optimization-bridge";
 import { resolveGscReportingRunConfig } from "@/lib/gsc-reporting/resolve-gsc-reporting-run-config";
 import { runGscReportingClientHarness } from "@/lib/agent-runs/run-gsc-reporting-client-harness";
+import { runAdsReportingClientHarness } from "@/lib/agent-runs/run-ads-reporting-client-harness";
+import { resolveAdsReportingRunConfig } from "@/lib/ads-reporting/resolve-ads-reporting-run-config";
 import { runLocalDominatorExportClientHarness } from "@/lib/agent-runs/run-local-dominator-export-client-harness";
 import { runDfsArticleAuditClientHarness } from "@/lib/agent-runs/run-dfs-article-audit-client-harness";
 import { runChatGptAuditClientHarness } from "@/lib/agent-runs/run-chatgpt-audit-client-harness";
@@ -49,8 +52,16 @@ import { fetchAgentRun } from "@/lib/agent-runs-api";
 import type { AgentRun, AgentRunCheckpointUrlSummary, AgentRunResult } from "@/lib/agent-runs-types";
 import type { TaskExecutionClientRunContract, TaskExecutionPayload } from "@/lib/tasks-types";
 import type { PrefilledOverviewTarget } from "@/hooks/content-optimization/bulk-optimization-params";
-import { resolveTaskExecutionBucketInventory } from "@/lib/task-execution-resolve-bucket-urls";
-import { getEntitySiteWarmCacheIfReady } from "@/lib/local-analysis/entity-site-warm-cache";
+import {
+  resolveTaskExecutionBucketInventory,
+  workUrlsFromExplicitTargets,
+} from "@/lib/task-execution-resolve-bucket-urls";
+import {
+  auditUrlsMissingNewTemplate,
+  inventoryHtmlForUrl,
+  isMissingNewTemplateFilter,
+  type MissingTemplateAudit,
+} from "@/lib/content-optimization/missing-new-template";
 import { isTaskExecutionTargetAll } from "@/lib/task-execution-target";
 import {
   completeTaskExecution,
@@ -71,6 +82,7 @@ import {
 } from "@/lib/workflow/workflow-deliveries-skip";
 import { resolveDfsArticleAuditBlockForUrl } from "@/lib/dfs-article-audit/resolve-dfs-article-audit-block";
 import { fetchWorkflowStepOutputs } from "@/lib/workflow/workflow-api";
+import { mergeRunContractOptimizationOptions } from "@/lib/agent-runs/merge-run-contract-optimization-options";
 import type { OptimizationProgressState } from "@/hooks/content-optimization/use-optimization-state";
 import type { OptimizationFileManager } from "@/lib/optimization-file-manager";
 
@@ -100,11 +112,13 @@ async function optimizationOptionsWithDfsArticleAudit(
         workflowContextBlock,
       });
 
+  const optionalPrompt = String(contract.optionalPrompt ?? base.optionalPrompt ?? "").trim();
   return {
     ...base,
     ...(workflowContextBlock ? { workflowContextBlock } : {}),
     ...(workflowOutputs?.length ? { workflowAuditOutputs: workflowOutputs } : {}),
     ...(block.trim() ? { dfsArticleAuditBlock: block } : {}),
+    ...(optionalPrompt ? { optionalPrompt } : {}),
   };
 }
 
@@ -123,6 +137,10 @@ function resolveRunContract(run: AgentRun): TaskExecutionClientRunContract & obj
     ...payload,
     ...client,
     ...(siteId ? { siteId } : {}),
+    optimizationOptions: mergeRunContractOptimizationOptions(
+      payload as TaskExecutionPayload,
+      client as TaskExecutionClientRunContract,
+    ),
   } as TaskExecutionClientRunContract & object;
   if (
     run.recipeKey === "local_dominator_export"
@@ -222,6 +240,7 @@ function progressReporter(
   const executionId = run.plan?.taskExecutionId;
   const bridge = getAgentRunOptimizationBridge();
   const base = bridge?.setOptimizationProgress;
+  let stepChain = Promise.resolve();
 
   return (updater) => {
     let snapshot: Record<string, OptimizationProgressState> = {};
@@ -248,16 +267,20 @@ function progressReporter(
 
     if (entry?.message || entry?.stepId || entry?.step) {
       const message = entry.message || entry.step || entry.stepId || "Running";
-      void ctx.onStep?.(message, "running", {
+      const stepPayload = {
         currentUrl: entry.pageUrl,
         currentUrlProgress: typeof entry.progress === "number" ? entry.progress : undefined,
         totalCount: checkpointTotals?.totalCount,
         currentIndex: checkpointTotals?.completedCount,
         lastMessage: message,
-      });
+      };
+      stepChain = stepChain.then(() =>
+        Promise.resolve(ctx.onStep?.(message, "running", stepPayload)),
+      );
       if (executionId) {
+        const stepId = entry.stepId === "done" ? "publish" : entry.stepId;
         void patchTaskExecutionProgress(run.teamId, executionId, {
-          stepId: entry.stepId,
+          stepId,
           message: entry.message,
           progress: typeof entry.progress === "number" ? entry.progress : undefined,
         });
@@ -301,6 +324,26 @@ export async function runTaskExecutionClientHarness(
     return runBrowserAutomationDirectHarness(run, ctx);
   }
 
+  if (effectiveRecipe === "ads_reporting") {
+    const site = resolveGscReportingSite(run, sites);
+    const contract = resolveRunContract(run);
+    const adsConfig = resolveAdsReportingRunConfig(contract);
+    const reportingContract = {
+      ...contract,
+      comparePreset: adsConfig.comparePreset,
+      gscComparePresetId: adsConfig.presetId,
+      gscCompareRanges: adsConfig.compareRanges,
+    };
+    return runAdsReportingClientHarness(
+      run,
+      site,
+      reportingContract,
+      executionId,
+      ctx,
+      resolveAgentRunBatchKey(run, site.id),
+    );
+  }
+
   if (effectiveRecipe === "gsc_reporting") {
     const site = resolveGscReportingSite(run, sites);
     const contract = resolveRunContract(run);
@@ -321,9 +364,10 @@ export async function runTaskExecutionClientHarness(
     );
   }
 
+  const pool = await loadSitesForAgentRun(run, sites);
   const site = resolveAgentRunWordPressSite(
     run,
-    sites,
+    pool,
     "WordPress site not found for this task.",
   );
   const contract = resolveRunContract(run);
@@ -534,12 +578,9 @@ async function runTaskExecutionBulkClientHarness(
   const resumeCompletedUrls = resumeCompletedUrlsFromCheckpoint(checkpoint);
 
   await ctx.onStep?.("Inventory", "running");
-  if (!getEntitySiteWarmCacheIfReady(site.id)) {
-    throw new Error("Site cache is not ready. Use Refresh site data, then retry.");
-  }
   await patchTaskExecutionProgress(run.teamId, executionId, {
     stepId: "inventory",
-    message: "Using site cache…",
+    message: "Loading inventory…",
     progress: 0.05,
   });
 
@@ -552,6 +593,9 @@ async function runTaskExecutionBulkClientHarness(
     throw new Error("Task execution contract is missing target bucket.");
   }
 
+  const urlFilter = (contract as TaskExecutionClientRunContract).urlFilter;
+  const needTemplateAudit = isMissingNewTemplateFilter(urlFilter);
+  const explicitTargetUrls = Array.isArray(contract.targetUrls);
   const { urls, snapshot: prefetchedBulkInventorySnapshot } = await resolveTaskExecutionBucketInventory(
     site,
     bucket,
@@ -559,19 +603,125 @@ async function runTaskExecutionBulkClientHarness(
       void patchTaskExecutionProgress(run.teamId, executionId, { message });
       scheduleAgentRunCheckpointPatch(run.teamId, run.id, { lastMessage: message });
     },
+    needTemplateAudit || explicitTargetUrls ? { includeContent: true } : undefined,
   );
 
-  const filterUrls = contract.targetUrls?.length ? contract.targetUrls : null;
-  const workUrls = filterUrls ? urls.filter((u) => filterUrls.includes(u)) : urls;
-  if (filterUrls && workUrls.length === 0) {
-    throw new Error("No matched URLs found in inventory for this trigger run.");
+  if (explicitTargetUrls && contract.targetUrls.length === 0) {
+    const saveLocalArchive = effectiveSaveLocalArchive(
+      executionKindFromRun(run) || "content_optimizer",
+      contract,
+    );
+    const doneMessage = "No posts needed";
+    await ctx.onStep?.(doneMessage, "done");
+    await patchTaskExecutionProgress(run.teamId, executionId, {
+      stepId: "done",
+      message: doneMessage,
+      progress: 1,
+    });
+    scheduleAgentRunCheckpointPatch(run.teamId, run.id, {
+      lastMessage: doneMessage,
+      lastStepLabel: doneMessage,
+    });
+    const emailResult = await completeOptimizerWithOptionalEmail({
+      run,
+      site,
+      contract,
+      executionId,
+      saveLocalArchive,
+      ok: true,
+      result: { targetBucket: bucket, count: 0, optimized: 0 },
+      summaryText: doneMessage,
+      summary: doneMessage,
+      onStep: ctx.onStep,
+    });
+    return {
+      updated: 0,
+      message: doneMessage,
+      batchKey,
+      ...emailResult,
+    };
+  }
+
+  let workUrls = explicitTargetUrls
+    ? workUrlsFromExplicitTargets(
+        contract.targetUrls,
+        prefetchedBulkInventorySnapshot,
+        site.siteUrl,
+        bucket,
+      )
+    : urls;
+
+  let templateAudit: MissingTemplateAudit | null = null;
+  if (needTemplateAudit) {
+    templateAudit = auditUrlsMissingNewTemplate(workUrls, (url) =>
+      inventoryHtmlForUrl(prefetchedBulkInventorySnapshot, site.siteUrl, url, bucket),
+    );
+    workUrls = templateAudit.missing;
+    const auditMessage = `Audit ${bucket}: ${templateAudit.alreadyNew.length} already new, ${templateAudit.missing.length} to optimize`;
+    await patchTaskExecutionProgress(run.teamId, executionId, {
+      stepId: "audit",
+      message: auditMessage,
+      progress: 0.08,
+    });
+    await ctx.onStep?.(auditMessage, "running", {
+      phase: "template_audit",
+      targetBucket: bucket,
+      scanned: templateAudit.scanned,
+      missingCount: templateAudit.missing.length,
+      alreadyNewCount: templateAudit.alreadyNew.length,
+      missing: templateAudit.missing,
+      alreadyNew: templateAudit.alreadyNew,
+    });
+    if (templateAudit.missing.length === 0) {
+      const saveLocalArchive = effectiveSaveLocalArchive(
+        executionKindFromRun(run) || "content_optimizer",
+        contract,
+      );
+      const doneMessage = "No posts needed";
+      await ctx.onStep?.(doneMessage, "done");
+      await patchTaskExecutionProgress(run.teamId, executionId, {
+        stepId: "done",
+        message: doneMessage,
+        progress: 1,
+      });
+      scheduleAgentRunCheckpointPatch(run.teamId, run.id, {
+        lastMessage: doneMessage,
+        lastStepLabel: doneMessage,
+      });
+      const emailResult = await completeOptimizerWithOptionalEmail({
+        run,
+        site,
+        contract,
+        executionId,
+        saveLocalArchive,
+        ok: true,
+        result: {
+          targetBucket: bucket,
+          count: 0,
+          optimized: 0,
+          audit: templateAudit,
+        },
+        summaryText: doneMessage,
+        summary: doneMessage,
+        onStep: ctx.onStep,
+      });
+      return {
+        updated: 0,
+        message: doneMessage,
+        batchKey,
+        ...emailResult,
+      };
+    }
   }
 
   const resumeCount = resumeCompletedUrls.length;
+  const currentWorkUrl = workUrls[resumeCount] ?? workUrls[0] ?? "";
   const resumeMessage =
     resumeCount > 0
-      ? `Resuming ${resumeCount + 1}/${workUrls.length}…`
-      : `Optimizing ${workUrls.length} URLs…`;
+      ? `Resuming ${resumeCount + 1}/${workUrls.length} ${currentWorkUrl}`.trim()
+      : currentWorkUrl
+        ? `Working ${currentWorkUrl} (1/${workUrls.length})`
+        : `Optimizing ${workUrls.length} URLs…`;
   await patchTaskExecutionProgress(run.teamId, executionId, {
     stepId: "bulk",
     message: resumeMessage,
@@ -716,7 +866,12 @@ async function runTaskExecutionBulkClientHarness(
     executionId,
     saveLocalArchive,
     ok: true,
-    result: { targetBucket: bucket, count: workUrls.length, optimized: uploadedUrls.length },
+    result: {
+      targetBucket: bucket,
+      count: workUrls.length,
+      optimized: uploadedUrls.length,
+      ...(templateAudit ? { audit: templateAudit } : {}),
+    },
     summaryText: `${bulkMessage}\n${uploadedUrls.slice(0, 12).join("\n")}`,
     summary: bulkMessage,
     onStep: ctx.onStep,

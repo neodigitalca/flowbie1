@@ -5,22 +5,20 @@
 		return;
 	}
 
-	var editPostApi = wp.editPost || null;
-	var editorApi = wp.editor || null;
-	if (!editPostApi && !editorApi) {
-		return;
-	}
-
-	var registerPlugin = wp.plugins.registerPlugin;
-	var PluginSidebar = (editorApi && editorApi.PluginSidebar) || (editPostApi && editPostApi.PluginSidebar);
-	var PluginSidebarMoreMenuItem = (editorApi && editorApi.PluginSidebarMoreMenuItem) || (editPostApi && editPostApi.PluginSidebarMoreMenuItem);
-	var createElement = wp.element.createElement;
-	var useEffect = wp.element.useEffect;
-	var useRef = wp.element.useRef;
-	var Fragment = wp.element.Fragment;
-
-	if (!PluginSidebar || !PluginSidebarMoreMenuItem) {
-		return;
+	function resolveSidebarApi() {
+		var editPostApi = wp.editPost || null;
+		var editorApi = wp.editor || null;
+		return {
+			registerPlugin: wp.plugins.registerPlugin,
+			PluginSidebar:
+				(editorApi && editorApi.PluginSidebar) ||
+				(editPostApi && editPostApi.PluginSidebar) ||
+				(wp.plugins && wp.plugins.PluginSidebar),
+			PluginSidebarMoreMenuItem:
+				(editorApi && editorApi.PluginSidebarMoreMenuItem) ||
+				(editPostApi && editPostApi.PluginSidebarMoreMenuItem) ||
+				(wp.plugins && wp.plugins.PluginSidebarMoreMenuItem),
+		};
 	}
 
 	function cfg() {
@@ -31,6 +29,11 @@
 		var strings = cfg().strings || {};
 		return strings[key] || fallback;
 	}
+
+	var createElement = wp.element.createElement;
+	var useEffect = wp.element.useEffect;
+	var useRef = wp.element.useRef;
+	var Fragment = wp.element.Fragment;
 
 	function NeoPulseAiSidebar() {
 		var ref = useRef(null);
@@ -68,22 +71,37 @@
 		);
 	}
 
-	registerPlugin('neo-pulse-wp-ai-sidebar', {
-		render: function () {
-			return createElement(
-				Fragment,
-				null,
-				createElement(PluginSidebarMoreMenuItem, { target: 'neo-pulse-wp-ai-sidebar' }, str('title', 'NEO Pulse AI')),
-				createElement(
-					PluginSidebar,
-					{
-						name: 'neo-pulse-wp-ai-sidebar',
-						title: str('title', 'NEO Pulse AI'),
-						isPinnable: false,
-					},
-					createElement(NeoPulseAiSidebar)
-				)
-			);
-		},
-	});
+	function boot() {
+		var api = resolveSidebarApi();
+		if (!api.registerPlugin || !api.PluginSidebar) {
+			return;
+		}
+		api.registerPlugin('neo-pulse-wp-ai-sidebar', {
+			render: function () {
+				var items = [
+					createElement(
+						api.PluginSidebar,
+						{
+							name: 'neo-pulse-wp-ai-sidebar',
+							title: str('title', 'NEO Pulse AI'),
+							isPinnable: false,
+						},
+						createElement(NeoPulseAiSidebar)
+					),
+				];
+				if (api.PluginSidebarMoreMenuItem) {
+					items.unshift(
+						createElement(api.PluginSidebarMoreMenuItem, { target: 'neo-pulse-wp-ai-sidebar' }, str('title', 'NEO Pulse AI'))
+					);
+				}
+				return createElement(Fragment, null, items);
+			},
+		});
+	}
+
+	if (wp.domReady) {
+		wp.domReady(boot);
+	} else {
+		boot();
+	}
 })(window.wp);

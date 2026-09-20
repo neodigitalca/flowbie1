@@ -37,6 +37,7 @@ import {
 import { notify } from "@/lib/app-notifications";
 import { notifyLoadedCsvX, NOTIFY_OPENROUTER_API_KEY_IS_REQUIRED } from "@/lib/notify-messages";
 import { resolveOpenRouterApiKeyForHarness } from "@/lib/openrouter-api-key-resolve";
+import { GOOGLE_IMAGE_ENTITY_SAP_PIPELINE_TITLES } from "@/lib/overview/overview-content-optimize-pipeline";
 
 export interface BulkBlogGenerationTabProps {
   variant: "csv" | "prompt" | "blog-import" | "press-release";
@@ -345,6 +346,11 @@ export function BulkBlogGenerationTab({
     (isPrompt && !bulkBindings?.hasGeneratedChecklist) ||
     (isPressRelease && !pressReleaseBindings?.resultMarkdown);
 
+  const googleImagePipelineTitles =
+    bulkBindings?.featuredImageType === "google-maps"
+      ? [...GOOGLE_IMAGE_ENTITY_SAP_PIPELINE_TITLES]
+      : undefined;
+
   const baseDetailsProps = {
     workspaceBusy,
     headerProgress,
@@ -360,6 +366,8 @@ export function BulkBlogGenerationTab({
     postDestination,
     wpConfig,
     runKind: "content" as const,
+    pipelineSectionTitles: googleImagePipelineTitles,
+    entitySapRowDisplay: bulkBindings?.featuredImageType === "google-maps",
   };
 
   const canOpenDetails = isPressRelease

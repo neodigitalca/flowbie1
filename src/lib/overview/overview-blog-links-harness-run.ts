@@ -9,6 +9,7 @@ import {
 import { mergeOptimizationProgress } from "@/hooks/content-optimization/optimization-helpers";
 import { ensureMasterInstructionsInMemory } from "@/lib/master-instructions-storage";
 import { initOverviewBulkHarnessPagination, setOverviewBulkHarnessPageState } from "@/lib/overview/overview-bulk-page-state";
+import { mapOverviewAiCopyWithConcurrency } from "@/lib/overview/overview-ai-copy-concurrency";
 import { overviewBulkPageRanges } from "@/lib/overview/overview-bulk-page-size";
 import type { BlogLinksCatalogRow } from "@/lib/overview/overview-blog-links-catalog";
 import type { BlogLinksSiteLinkPool } from "@/lib/overview/overview-blog-links-inventory";
@@ -66,6 +67,12 @@ import {
   setLinksHarnessMessage,
   type LinksHarnessSetters,
 } from "@/lib/overview/overview-blog-links-harness-mutations";
+import type { AiseoCacheWriteAccumulator } from "@/lib/overview/overview-aiseo-cache-write";
+import type { AiseoAfterRowWriteFn } from "@/lib/overview/overview-aiseo-after-upload";
+import {
+  aiseoRowFilesForUpload,
+  buildAiseoElementJsonFile,
+} from "@/lib/overview/overview-aiseo-row-artifacts";
 
 type SetBulkState = Dispatch<SetStateAction<Record<string, BulkOptimizationState>>>;
 type SetOptProgress = Dispatch<SetStateAction<Record<string, unknown>>>;
@@ -206,15 +213,11 @@ export function initOverviewLinksHarnessBatchState(params: {
   const batchKey = `${site.id}-batch`;
   const urls = catalog.map((c) => c.url.trim()).filter(Boolean);
   const urlKeywords: Record<string, string> = {};
-  const urlHarnessSections: BulkOptimizationState["urlHarnessSections"] = {};
-  const initialUrlStatuses: BulkOptimizationState["urlStatuses"] = {};
 
   for (const entry of catalog) {
     const url = entry.url.trim();
     if (!url) continue;
     if (entry.focusKeyword) urlKeywords[url] = entry.focusKeyword;
-    initialUrlStatuses[url] = "pending";
-    urlHarnessSections[url] = buildLinksHarnessSectionsForRow(entry);
   }
 
   setOptimizingState(setIsOptimizingContent, batchKey, true);
@@ -232,12 +235,12 @@ export function initOverviewLinksHarnessBatchState(params: {
     [batchKey]: {
       urls,
       currentIndex: 0,
-      urlStatuses: initialUrlStatuses,
+      urlStatuses: {},
       currentStep: "Links",
       currentUrl: urls[0],
       urlKeywords,
       runKind: "aiLinks",
-      urlHarnessSections,
+      urlHarnessSections: {},
       urlGeneratedFiles: {},
       currentStepProgress: {
         step: "Links",
@@ -628,7 +631,6 @@ async function runOneBlogLinksRow(
   total: number,
   agentOptions: BlogLinksAgentOptions,
   setters: LinksHarnessSetters,
-  updateRow: (index: number, patch: Partial<OverviewRow>) => void,
 ): Promise<BlogLinksRowPatch | null> {
   const url = row.url.trim();
   const siteUrl = agentOptions.siteUrl?.trim();
@@ -643,7 +645,6 @@ async function runOneBlogLinksRow(
     adds: row.linksToAdd,
   });
 
-  updateRow(row.index, { status: "ai-links" });
   setters.setBulkOptimizationState((prev) => {
     const current = prev[setters.batchKey];
     if (!current) return prev;
@@ -739,6 +740,7 @@ async function runOneBlogLinksRow(
     blogLinksPlanJson: JSON.stringify(plan),
     postContentOptimized: finalHtml,
     blogLinksRanAtIso: new Date().toISOString(),
+    elementorSourceJson: row.elementorSourceJson,
   };
 }
 
@@ -747,13 +749,14 @@ export type RunOverviewLinksHarnessBatchParams = {
   linkPool: BlogLinksSiteLinkPool;
   agentOptions: BlogLinksAgentOptions;
   harnessSetters: LinksHarnessSetters;
-  updateRow: (index: number, patch: Partial<OverviewRow>) => void;
+  cacheWrite: AiseoCacheWriteAccumulator;
+  uploadAfterRowWrite?: AiseoAfterRowWriteFn;
 };
 
 export async function runOverviewLinksHarnessBatch(
   params: RunOverviewLinksHarnessBatchParams,
 ): Promise<{ ok: number; failed: number; skipped: number }> {
-  const { catalog, agentOptions, harnessSetters, updateRow } = params;
+  const { catalog, agentOptions, harnessSetters, cacheWrite, uploadAfterRowWrite } = params;
   if (!catalog.length) return { ok: 0, failed: 0, skipped: 0 };
 
   logBlogLinksActivity("batch_start", { catalogSize: catalog.length });
@@ -762,7 +765,6 @@ export async function runOverviewLinksHarnessBatch(
   const pageRanges = overviewBulkPageRanges(catalog.length);
   let ok = 0;
   let failed = 0;
-  let globalRowNum = 0;
 
   for (const { start, end, page, pageCount } of pageRanges) {
     const pageCatalog = catalog.slice(start, end);
@@ -779,8 +781,12 @@ export async function runOverviewLinksHarnessBatch(
       step: "Links",
     });
 
-    for (const row of pageCatalog) {
-      globalRowNum += 1;
+    await mapOverviewAiCopyWithConcurrency(
+      pageCatalog.map((row, localIndex) => ({
+        row,
+        globalRowNum: start + localIndex + 1,
+      })),
+      async ({ row, globalRowNum }) => {
       const url = row.url.trim();
       try {
         const patch = await runOneBlogLinksRow(
@@ -789,14 +795,34 @@ export async function runOverviewLinksHarnessBatch(
           catalog.length,
           agentOptions,
           harnessSetters,
-          updateRow,
         );
         if (!patch) {
           failed += 1;
-          markLinksRowError(url, row.index, harnessSetters, updateRow, "No link changes applied");
-          continue;
+          markLinksRowError(url, row.index, harnessSetters, "No link changes applied");
+          return;
         }
-        finishLinksRowHarness(url, row.index, patch, harnessSetters, updateRow);
+        finishLinksRowHarness(url, row.index, patch, harnessSetters, cacheWrite);
+        if (uploadAfterRowWrite && patch.postContentOptimized?.trim()) {
+          let planPayload: unknown = patch.blogLinksPlanJson;
+          try {
+            planPayload = JSON.parse(patch.blogLinksPlanJson);
+          } catch {
+            planPayload = patch.blogLinksPlanJson;
+          }
+          const elementFile = buildAiseoElementJsonFile("links-plan.json", planPayload);
+          const rowFiles = aiseoRowFilesForUpload({
+            runKind: "aiLinks",
+            url,
+            elementFiles: elementFile ? [elementFile] : [],
+            postHtml: patch.postContentOptimized.trim(),
+          });
+          await uploadAfterRowWrite({
+            index: row.index,
+            url,
+            html: patch.postContentOptimized.trim(),
+            rowFiles: rowFiles.length ? rowFiles : undefined,
+          });
+        }
         ok += 1;
       } catch (err) {
         failed += 1;
@@ -808,11 +834,11 @@ export async function runOverviewLinksHarnessBatch(
           url,
           row.index,
           harnessSetters,
-          updateRow,
           err instanceof Error ? err.message : "Links optimization failed",
         );
       }
-    }
+    },
+    );
   }
 
   logBlogLinksActivity("batch_done", { ok, failed });

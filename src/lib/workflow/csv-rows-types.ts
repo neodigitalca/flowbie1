@@ -2,7 +2,7 @@ import type { TaskExecutionKind, TaskExecutionPayload } from "@/lib/tasks-types"
 
 export const CSV_ROWS_ACTION_KEYWORD = "csv-rows";
 
-export type CsvRowsInputSource = "upload" | "workflow";
+export type CsvRowsInputSource = "upload" | "workflow" | "site";
 
 export type CsvRowsColumnField = "url" | "research" | "questions" | "keyword" | "title";
 
@@ -18,7 +18,7 @@ export const CSV_ROWS_COLUMN_FIELDS: CsvRowsColumnField[] = [
 
 export const CSV_ROWS_HEADER_ALIASES: Record<CsvRowsColumnField, string[]> = {
   url: ["url", "page", "link"],
-  research: ["response", "research", "seo_research", "seoresearch"],
+  research: ["response", "research", "h2", "answer", "seo_research", "seoresearch"],
   questions: ["questions", "proposed_questions", "proposedquestions", "faqs", "faq"],
   keyword: ["keyword", "keyword_focus", "keywordfocus", "focus_keyword", "focuskeyword"],
   title: ["title"],
@@ -31,6 +31,8 @@ export type WorkflowCsvRowsConfig = {
   csvHeaders?: string[];
   csvColumnMap?: CsvRowsColumnMap;
   ragVariableKey?: string;
+  targetBucket?: import("@/lib/tasks-types").TaskExecutionTargetBucket;
+  optionalPrompt?: string;
 };
 
 export const CSV_ROWS_BULK_KINDS = new Set<TaskExecutionKind>([
@@ -49,6 +51,12 @@ export const CSV_ROWS_SEQUENTIAL_KINDS = new Set<TaskExecutionKind>([
 
 export function isCsvRowsKind(kind: string): boolean {
   return kind === "csv_rows";
+}
+
+export function isCsvTextPreview(text: string): boolean {
+  const first = text.trim().split(/\r?\n/, 1)[0] ?? "";
+  const cells = first.split(",").map((cell) => cell.trim().toLowerCase().replace(/^"|"$/g, ""));
+  return cells.includes("url") && cells.length >= 2;
 }
 
 export function isCsvRowsActionKeyword(keyword: string | undefined): boolean {
@@ -71,23 +79,33 @@ export function defaultCsvRowsConfig(): WorkflowCsvRowsConfig {
   };
 }
 
+function csvInputSourceFromValue(value: string | undefined): CsvRowsInputSource {
+  if (value === "workflow") return "workflow";
+  if (value === "site") return "site";
+  return "upload";
+}
+
 export function csvRowsConfigFromPayload(payload: TaskExecutionPayload | undefined): WorkflowCsvRowsConfig {
   return {
-    csvInputSource: payload?.csvInputSource === "workflow" ? "workflow" : "upload",
+    csvInputSource: csvInputSourceFromValue(payload?.csvInputSource),
     csvBase64: payload?.csvBase64,
     csvFileName: payload?.csvFileName,
     csvHeaders: payload?.csvHeaders,
     csvColumnMap: payload?.csvColumnMap ?? {},
+    targetBucket: payload?.targetBucket,
+    optionalPrompt: payload?.optionalPrompt,
   };
 }
 
 export function csvRowsPayloadFromConfig(config: WorkflowCsvRowsConfig): TaskExecutionPayload {
   return {
-    csvInputSource: config.csvInputSource === "workflow" ? "workflow" : "upload",
+    csvInputSource: csvInputSourceFromValue(config.csvInputSource),
     csvBase64: config.csvBase64,
     csvFileName: config.csvFileName,
     csvHeaders: config.csvHeaders,
     csvColumnMap: config.csvColumnMap ?? {},
+    targetBucket: config.targetBucket,
+    optionalPrompt: config.optionalPrompt,
   };
 }
 

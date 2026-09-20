@@ -75,23 +75,6 @@ export function readStoredBlogGeneratorSection(): BlogGeneratorSectionId {
     ) {
       return v;
     }
-    if (v === "gsc-reporting") return "report";
-    if (v === "research-proposal" || v === "research-citation" || v === "research-backlinking") {
-      return "research";
-    }
-    /** Legacy Content Optimizer tab → Opt pill. */
-    if (v === "content-optimizer") return "opt";
-    /** Legacy Free Flow tab → Flow pill. */
-    if (v === "free-flow") return "flow";
-    if (v === "press-release") return "bulk-press-release";
-    /** Legacy: Keyword research tab removed - land on CSV upload. */
-    if (v === "keyword-research") return "bulk-csv";
-    /** Legacy single bulk tab → default to CSV upload. */
-    if (v === "bulk") return "bulk-csv";
-    /** Removed Auto generate tab → CSV upload. */
-    if (v === "auto") return "bulk-csv";
-    /** Legacy SAP generator tab → Entity section. */
-    if (v === "sap-generator" || v === "sap") return "entity";
   } catch {
     /* ignore */
   }
@@ -134,12 +117,5 @@ export function writeStoredBlogGeneratorSection(section: BlogGeneratorSectionId)
  */
 export function isNavItemSelected(managerTab: string, itemValue: string): boolean {
   if (managerTab === "generator" && itemValue === "generator") return true;
-  /** Legacy Content Optimizer tab → Generator mega menu. */
-  if (managerTab === "content-optimizer" && itemValue === "generator") return true;
-  /** Legacy tab ids */
-  if (managerTab === "blog-generator" && itemValue === "generator") return true;
-  if (managerTab === "sap-generator" && itemValue === "generator") return true;
-  if (managerTab === "research" && itemValue === "generator") return true;
-  if (managerTab === "gsc-reporting" && itemValue === "generator") return true;
   return managerTab === itemValue;
 }

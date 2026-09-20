@@ -123,7 +123,10 @@ async function main() {
   const folderLink = String(uploadRes.data.folderLink ?? "").trim();
   const folderLabel = String(uploadRes.data.folderLabel ?? "").trim();
   if (!folderLink) throw new Error("test-step-upload succeeded without folderLink");
-  if (!/\/ (Reporting|Audits|Grids) \/ \d{4} \/ /i.test(folderLabel)) {
+  const folderParts = folderLabel.split("/").map((part) => part.trim()).filter(Boolean);
+  const monthLeaf = folderParts[folderParts.length - 1] ?? "";
+  const yearLeaf = folderParts[folderParts.length - 2] ?? "";
+  if (folderParts.length < 3 || !/^\d{4}$/.test(yearLeaf) || !Date.parse(`${monthLeaf} 1, 2000`)) {
     throw new Error(`test-step-upload resolved client root instead of month folder: ${folderLabel || "(empty label)"}`);
   }
 

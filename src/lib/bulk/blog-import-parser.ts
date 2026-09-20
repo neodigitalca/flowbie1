@@ -15,6 +15,29 @@ export const BLOG_IMPORT_FILE_ACCEPT = ".docx,.md,.markdown,.html,.htm,.txt";
 export const SECTION_BODY_MAX_CHARS = 800;
 export const MIN_IMPORTED_H2_SECTIONS = 2;
 
+const HARNESS_MANAGED_IMPORT_H2 = /^(answer|overview|faq|frequently asked questions)$/i;
+
+/** Strip markdown bold/hashes from an imported heading. */
+export function stripImportedHeadingMarks(h2: string): string {
+  return h2.replace(/\*+/g, "").replace(/^#+\s*/, "").trim();
+}
+
+/** Body H2s from a blog import. Skips Answer, Overview, and FAQ (harness chrome). */
+export function importedBodyH2Outline(sections: ImportedBlogSection[] | undefined): string[] {
+  if (!sections?.length) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const section of sections) {
+    const h2 = stripImportedHeadingMarks(section.h2);
+    if (!h2 || HARNESS_MANAGED_IMPORT_H2.test(h2)) continue;
+    const key = h2.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(h2);
+  }
+  return out;
+}
+
 export type ImportedBlogSection = { h2: string; body: string };
 
 export type ImportedBlogDraft = {
@@ -395,7 +418,7 @@ export function findImportedSectionBody(
 ): string | undefined {
   const sections = parseImportedSectionsJson(row.imported_sections_json);
   if (!sections?.length) return undefined;
-  const norm = (s: string) => s.trim().toLowerCase();
+  const norm = (s: string) => stripImportedHeadingMarks(s).toLowerCase();
   const key = norm(sectionTitle);
   const hit = sections.find((s) => norm(s.h2) === key);
   return hit?.body?.trim() || undefined;

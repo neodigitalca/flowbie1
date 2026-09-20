@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import { flushSync } from "react-dom";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { OverviewBinding } from "@/hooks/overview/use-overview-wordpress-binding";
@@ -18,14 +17,15 @@ import {
   runOverviewLinksHarnessBatch,
 } from "@/lib/overview/overview-blog-links-harness-run";
 import { loadBlogLinksLinkInventory } from "@/lib/overview/overview-blog-links-inventory";
-import { buildOverviewHarnessCatalogWithHtml } from "@/lib/overview/overview-harness-page-catalog";
+import { cacheRowHtmlByIndex } from "@/lib/overview/overview-harness-page-catalog";
 import type { OverviewInventoryUrlMatch } from "@/lib/overview/overview-row-scrape";
 import { setOptimizingState } from "@/hooks/content-optimization/optimization-helpers-a";
-import { getWordPressPostContent } from "@/lib/wordpress-api/posts";
+import type { AiseoAfterRowWriteFn } from "@/lib/overview/overview-aiseo-after-upload";
+import { createAiseoCacheWriteAccumulator, finalizeAiseoCacheWriteForUpload } from "@/lib/overview/overview-aiseo-cache-write";
 
 type Args = Pick<
   OverviewTabBase,
-  "rows" | "bindings" | "resolveBindings" | "updateRow" | "opt"
+  "rows" | "bindings" | "resolveBindings" | "updateRow" | "opt" | "rowsRef"
 > & {
   site: WordPressSite | undefined;
   sitemapSource: OverviewSitemapSource;
@@ -36,69 +36,26 @@ type Args = Pick<
     site: WordPressSite | null,
     url: string,
   ) => OverviewInventoryUrlMatch | undefined;
+  uploadAfterRowWrite?: AiseoAfterRowWriteFn;
 };
 
-async function fetchRowHtmlByIndex(
+function fetchRowHtmlByIndex(
   site: WordPressSite,
   indices: number[],
   rows: OverviewRow[],
-  bindings: Record<string, OverviewBinding | undefined>,
   sitemapSource: OverviewSitemapSource,
-  bulkScopeUrlKeys: Set<string>,
   getInventoryMatchForUrl?: (
     site: WordPressSite | null,
     url: string,
   ) => OverviewInventoryUrlMatch | undefined,
-): Promise<Record<number, string>> {
-  if (sitemapSource === "sap") {
-    const { rowHtmlByIndex } = await buildOverviewHarnessCatalogWithHtml({
-      site,
-      rows,
-      indices,
-      sitemapSource,
-      bindings,
-      getInventoryMatchForUrl: getInventoryMatchForUrl ?? (() => undefined),
-      bulkScopeUrlKeys,
-    });
-    return rowHtmlByIndex;
-  }
-
-  const idToIndices = new Map<number, number[]>();
-
-  for (const index of indices) {
-    const row = rows[index];
-    const url = row?.url?.trim();
-    if (!url) continue;
-    if (row.postContentOptimized?.trim() || row.postContent?.trim()) continue;
-    let postId = bindings[url]?.postId;
-    if (!postId && getInventoryMatchForUrl) {
-      postId = getInventoryMatchForUrl(site, url)?.row?.id;
-    }
-    if (!postId) continue;
-    const list = idToIndices.get(postId) ?? [];
-    list.push(index);
-    idToIndices.set(postId, list);
-  }
-
-  const postIds = [...idToIndices.keys()];
-  if (!postIds.length) return {};
-
-  const result = await getWordPressPostContent(
-    site.siteUrl,
-    site.username!,
-    site.appPassword!,
-    postIds,
-  );
-
-  const out: Record<number, string> = {};
-  for (const post of result.posts ?? []) {
-    const content = post.content?.trim();
-    if (!content) continue;
-    for (const index of idToIndices.get(post.id) ?? []) {
-      out[index] = content;
-    }
-  }
-  return out;
+): Record<number, string> {
+  return cacheRowHtmlByIndex({
+    site,
+    rows,
+    indices,
+    sitemapSource,
+    getInventoryMatchForUrl: getInventoryMatchForUrl ?? (() => undefined),
+  });
 }
 
 export function useOverviewTabBlogLinks({
@@ -113,6 +70,8 @@ export function useOverviewTabBlogLinks({
   selectedModel,
   bulkScopeUrlKeys,
   getInventoryMatchForUrl,
+  rowsRef,
+  uploadAfterRowWrite,
 }: Args) {
   const makeHarnessSetters = useCallback(
     (batchKey: string): LinksHarnessSetters | null => {
@@ -139,12 +98,11 @@ export function useOverviewTabBlogLinks({
       const subset = indices.map((i) => rows[i]).filter(Boolean) as OverviewRow[];
       const urls = subset.map((r) => r.url);
 
-      flushSync(() => {
-        setOptimizingState(opt.setIsOptimizingContent, batchKey, true);
-        setLinksHarnessMessage(harnessSetters, "Downloading posts + pages inventory…", 3);
-      });
+      setOptimizingState(opt.setIsOptimizingContent, batchKey, true);
+      setLinksHarnessMessage(harnessSetters, "Downloading posts + pages inventory…", 3);
 
       try {
+        const cacheWrite = createAiseoCacheWriteAccumulator(site);
         const linkInventory = await loadBlogLinksLinkInventory(site, (msg) => {
           setLinksHarnessMessage(harnessSetters, msg, 6);
         });
@@ -157,18 +115,14 @@ export function useOverviewTabBlogLinks({
 
         setLinksHarnessMessage(harnessSetters, "Binding rows from inventory…", 8);
 
-        const [extraBindings, rowHtmlByIndex] = await Promise.all([
-          resolveBindings(urls, site, undefined, { inventoryOnly: true }),
-          fetchRowHtmlByIndex(
-            site,
-            indices,
-            rows,
-            bindings,
-            sitemapSource,
-            bulkScopeUrlKeys,
-            getInventoryMatchForUrl,
-          ),
-        ]);
+        const extraBindings = await resolveBindings(urls, site, undefined, { inventoryOnly: true });
+        const rowHtmlByIndex = fetchRowHtmlByIndex(
+          site,
+          indices,
+          rows,
+          sitemapSource,
+          getInventoryMatchForUrl,
+        );
         const mergedBindings: Record<string, OverviewBinding | undefined> = {
           ...bindings,
           ...extraBindings,
@@ -196,15 +150,13 @@ export function useOverviewTabBlogLinks({
           return;
         }
 
-        flushSync(() => {
-          initOverviewLinksHarnessBatchState({
-            site,
-            catalog: eligible,
-            setBulkOptimizationState: opt.setBulkOptimizationState,
-            setOptimizationProgress: opt.setOptimizationProgress,
-            setIsOptimizingContent: opt.setIsOptimizingContent,
-            prepMessage: `Links: 1 blog at a time (${eligible.length} rows)…`,
-          });
+        initOverviewLinksHarnessBatchState({
+          site,
+          catalog: eligible,
+          setBulkOptimizationState: opt.setBulkOptimizationState,
+          setOptimizationProgress: opt.setOptimizationProgress,
+          setIsOptimizingContent: opt.setIsOptimizingContent,
+          prepMessage: `Links: 1 blog at a time (${eligible.length} rows)…`,
         });
 
         await runOverviewLinksHarnessBatch({
@@ -217,8 +169,11 @@ export function useOverviewTabBlogLinks({
             siteUrl: site.siteUrl,
           },
           harnessSetters,
-          updateRow,
+          cacheWrite,
+          uploadAfterRowWrite,
         });
+
+        finalizeAiseoCacheWriteForUpload(cacheWrite, rowsRef);
 
         void skippedNoHtml;
         void skippedNoBinding;

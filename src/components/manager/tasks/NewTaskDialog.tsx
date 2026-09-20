@@ -20,6 +20,7 @@ import { TaskAssigneePicker } from "@/components/manager/tasks/TaskAssigneePicke
 import { TaskTagPicker } from "@/components/manager/tasks/TaskTagPicker";
 import { TaskTriggerFields } from "@/components/manager/tasks/TaskTriggerFields";
 import { GscReportingExecutionFields } from "@/components/manager/tasks/GscReportingExecutionFields";
+import { AdsReportingExecutionFields } from "@/components/manager/tasks/AdsReportingExecutionFields";
 import { LocalDominatorExportExecutionFields } from "@/components/manager/tasks/LocalDominatorExportExecutionFields";
 import { PostCreatorExecutionFields } from "@/components/manager/tasks/PostCreatorExecutionFields";
 import { ensurePostCreatorPayload } from "@/lib/post-creator/post-creator-defaults";
@@ -404,6 +405,14 @@ export function NewTaskDialog({
                     onChange={setExecutionPayload}
                   />
                 ) : null}
+                {uiExecutionKind === "ads_reporting" || executionKind === "ads_reporting" ? (
+                  <AdsReportingExecutionFields
+                    layout="stack"
+                    executionPayload={executionPayload}
+                    disabled={saving}
+                    onChange={setExecutionPayload}
+                  />
+                ) : null}
                 {uiExecutionKind === "local_dominator_export" || executionKind === "local_dominator_export" ? (
                   <LocalDominatorExportExecutionFields
                     layout="stack"
@@ -457,7 +466,7 @@ export function NewTaskDialog({
                     setScheduleMode("calendar");
                     setRecurrenceRule((prev) => (prev === "none" ? "monthly" : prev));
                     setExecutionPayload(ensurePostCreatorPayload(executionPayload));
-                  } else if (kind === "gsc_reporting") {
+                  } else if (kind === "gsc_reporting" || kind === "ads_reporting") {
                     setScheduleMode("calendar");
                     setRecurrenceRule((prev) => (prev === "none" ? "monthly" : prev));
                     setExecutionPayload({

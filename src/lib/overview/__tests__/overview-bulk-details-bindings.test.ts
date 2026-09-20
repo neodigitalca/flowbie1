@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildOverviewBulkGeneratorDetailsProps,
   buildOverviewMicroActionDetailsProps,
+  buildOverviewWarmInventoryDetailsProps,
   isOverviewBulkDetailsRun,
   resolveOverviewBulkPipelineTitles,
 } from "@/lib/overview/overview-bulk-details-bindings";
@@ -13,6 +14,7 @@ import {
 } from "@/lib/overview/overview-research-harness-sections";
 import { HEADERS_HARNESS_SECTION_TITLES } from "@/lib/overview/overview-blog-headers-harness-sections";
 import { CONTENT_OPTIMIZE_PIPELINE_TITLES, buildContentOptimizePipelineTitles, buildPredeterminedBlogBodyHarnessTitles } from "@/lib/overview/overview-content-optimize-pipeline";
+import { FEATURED_IMAGE_PIPELINE_TITLES } from "@/components/overview/overview-tab-constants";
 
 const INIT_OPTIMIZE_PIPELINE_TITLES = buildContentOptimizePipelineTitles(
   buildPredeterminedBlogBodyHarnessTitles(""),
@@ -59,6 +61,12 @@ describe("resolveOverviewBulkPipelineTitles", () => {
   it("maps headers run kind", () => {
     expect(resolveOverviewBulkPipelineTitles("aiHeaders")).toEqual([
       ...HEADERS_HARNESS_SECTION_TITLES,
+    ]);
+  });
+
+  it("maps featured image run kind to Google Image, OpenRouter Image, WordPress upload", () => {
+    expect(resolveOverviewBulkPipelineTitles("aiFeaturedImage")).toEqual([
+      ...FEATURED_IMAGE_PIPELINE_TITLES,
     ]);
   });
 
@@ -453,6 +461,175 @@ describe("buildOverviewMicroActionDetailsProps", () => {
     expect(props.harnessByRow?.get(0)?.[0]?.title).toBe("AI titles");
   });
 
+  it("shows wordpress.json from bulk state during aiTitle micro runs", () => {
+    const url = "https://example.com/a";
+    const overviewRows = [makeOverviewRow(url, "ai-title")];
+    const scopeKeys = overviewBulkScopeUrlKeysFromRows(overviewRows);
+    const slice = initBulkSliceBatchHarness({ total: 1, completed: 0 }, 1, "AI titles");
+
+    const props = buildOverviewMicroActionDetailsProps(
+      {
+        siteId: "site-1",
+        batchKey: "site-1-batch",
+        bulkState: {
+          urls: [],
+          currentIndex: 0,
+          urlStatuses: {},
+          currentStep: "",
+          runKind: "wpUpload",
+          urlGeneratedFiles: {
+            [url]: [
+              {
+                name: "wordpress.json",
+                content: '{"ok":true}',
+                mimeType: "application/json",
+              },
+            ],
+          },
+        },
+        overviewRows,
+        isOptimizingContent: {},
+        optimizationFileManagers: {},
+        bulkScopeUrlKeys: scopeKeys,
+      },
+      "aiTitle",
+      slice,
+    );
+
+    expect(props.runKind).toBe("wpUpload");
+    expect(props.filesByRow?.get(0)?.some((file) => file.fileName === "wordpress.json")).toBe(true);
+    expect(props.pipelineSectionTitles).toEqual([]);
+  });
+
+  it("shows Google Image, OpenRouter Image, and WordPress upload for featured image", () => {
+    const url = "https://example.com/a";
+    const overviewRows = [makeOverviewRow(url)];
+    const scopeKeys = overviewBulkScopeUrlKeysFromRows(overviewRows);
+    const slice = { total: 1, completed: 0, statusMessage: "Google Image" };
+
+    const props = buildOverviewMicroActionDetailsProps(
+      {
+        siteId: "site-1",
+        batchKey: "site-1-batch",
+        bulkState: {
+          urls: [url],
+          currentIndex: 0,
+          urlStatuses: {},
+          currentStep: "Featured image",
+          runKind: "aiFeaturedImage",
+          urlGeneratedFiles: {},
+        },
+        overviewRows,
+        isOptimizingContent: {},
+        optimizationFileManagers: {},
+        bulkScopeUrlKeys: scopeKeys,
+      },
+      "aiFeaturedImage",
+      slice,
+    );
+
+    expect(props.pipelineSectionTitles).toEqual([...FEATURED_IMAGE_PIPELINE_TITLES]);
+    expect(props.pipelineSectionTitles).not.toContain("Content");
+    expect(props.harnessByRow?.get(0)?.map((section) => section.title)).toEqual([
+      ...FEATURED_IMAGE_PIPELINE_TITLES,
+    ]);
+    expect(props.status).toBe("Google Image");
+  });
+
+  it("keeps featured image titles after wordpress.json exists", () => {
+    const url = "https://example.com/a";
+    const overviewRows = [makeOverviewRow(url)];
+    const scopeKeys = overviewBulkScopeUrlKeysFromRows(overviewRows);
+    const props = buildOverviewBulkGeneratorDetailsProps(
+      {
+        siteId: "site-1",
+        batchKey: "site-1-batch",
+        bulkState: {
+          urls: [url],
+          currentIndex: 0,
+          urlStatuses: { [url]: "completed" },
+          currentStep: "Featured image",
+          runKind: "aiFeaturedImage",
+          urlGeneratedFiles: {
+            [url]: [
+              { name: "google-image.png", content: "data:image/png;base64,aa", mimeType: "image/png" },
+              { name: "openrouter-image.png", content: "data:image/png;base64,bb", mimeType: "image/png" },
+              {
+                name: "wordpress.json",
+                content: JSON.stringify({ url: "https://cdn.example.com/maps.png", mediaId: 9 }),
+                mimeType: "application/json",
+              },
+            ],
+          },
+        },
+        overviewRows,
+        isOptimizingContent: {},
+        optimizationFileManagers: {},
+        bulkScopeUrlKeys: scopeKeys,
+        bulkActionProgress: {
+          optimizeAll: { total: 1, completed: 0, statusMessage: "Content" },
+          aiFeaturedImage: { total: 1, completed: 1, statusMessage: "Featured image" },
+        },
+      },
+      false,
+    );
+
+    expect(props?.pipelineSectionTitles).toEqual([...FEATURED_IMAGE_PIPELINE_TITLES]);
+    expect(props?.pipelineSectionTitles).not.toContain("Content");
+    expect(props?.filesByRow?.get(0)?.map((file) => file.fileName)).toEqual([
+      "google-image.png",
+      "openrouter-image.png",
+      "wordpress.json",
+    ]);
+  });
+
+  it("shows blog writing steps when Content is running, not a single Content dump", () => {
+    const url = "https://example.com/2026-cra-mail-policy";
+    const overviewRows = [makeOverviewRow(url, "optimizing")];
+    const scopeKeys = overviewBulkScopeUrlKeysFromRows(overviewRows);
+    const props = buildOverviewBulkGeneratorDetailsProps(
+      {
+        siteId: "site-1",
+        batchKey: "site-1-batch",
+        bulkState: {
+          urls: [url],
+          currentIndex: 0,
+          urlStatuses: { [url]: "optimizing" },
+          currentStep: "Keyword research",
+          urlGeneratedFiles: {
+            [url]: [
+              { name: "keyword-research-2026-cra-mail-policy.json", content: "{}", mimeType: "application/json" },
+              { name: "selected-keyword-2026-cra-mail-policy.json", content: "{}", mimeType: "application/json" },
+              { name: "serp-research-brief-2026-cra-mail-policy.json", content: "{}", mimeType: "application/json" },
+              { name: "checklist-2026-cra-mail-policy.txt", content: "x", mimeType: "text/plain" },
+            ],
+          },
+        },
+        overviewRows,
+        isOptimizingContent: { "site-1-batch": true },
+        optimizationFileManagers: {},
+        bulkScopeUrlKeys: scopeKeys,
+        bulkActionProgress: {
+          optimizeAll: { total: 1, completed: 0, statusMessage: "Content" },
+        },
+      },
+      true,
+    );
+
+    expect(props?.pipelineSectionTitles?.[0]).toBe("Keyword research");
+    expect(props?.pipelineSectionTitles).toEqual(expect.arrayContaining([
+      "Selected keyword",
+      "SERP research brief",
+      "Checklist",
+      "Post content",
+    ]));
+    expect(props?.pipelineSectionTitles).not.toEqual(["Content"]);
+    expect(props?.harnessByRow?.get(0)?.map((section) => section.title)).toEqual(
+      expect.arrayContaining(["Keyword research", "SERP research brief", "Checklist"]),
+    );
+    expect(props?.harnessByRow?.get(0)?.some((section) => section.title.startsWith("keyword-research-"))).toBe(false);
+  });
+
   it("routes active micro slice through buildOverviewBulkGeneratorDetailsProps", () => {
     const overviewRows = [makeOverviewRow("https://example.com/a", "ai-meta")];
     const scopeKeys = overviewBulkScopeUrlKeysFromRows(overviewRows);
@@ -476,5 +653,53 @@ describe("buildOverviewMicroActionDetailsProps", () => {
     expect(props?.displayRows).toHaveLength(1);
     expect(props?.harnessByRow?.size).toBe(1);
     expect(props?.harnessSections).toEqual([]);
+  });
+});
+
+describe("details rows follow the live grid after refresh", () => {
+  it("uses refreshed overview order when the completed batch list is stale", () => {
+    const staleFirst = "https://example.com/how-tariffs";
+    const freshFirst = "https://example.com/cra-mail-in-policy";
+    const props = buildOverviewBulkGeneratorDetailsProps(
+      {
+        siteId: "site-1",
+        batchKey: "site-1-batch",
+        bulkState: {
+          urls: [staleFirst],
+          currentIndex: 0,
+          urlStatuses: { [staleFirst]: "completed" },
+          currentStep: "Batch complete",
+          runKind: "research",
+        },
+        overviewRows: [makeOverviewRow(freshFirst), makeOverviewRow(staleFirst)],
+        gridPageIndex: 0,
+        isOptimizingContent: {},
+        optimizationFileManagers: {},
+      },
+      false,
+    );
+
+    expect(props?.displayRows[0]?.destination_url).toBe(freshFirst);
+    expect(props?.displayRows[1]?.destination_url).toBe(staleFirst);
+    expect(props?.totalRows).toBe(2);
+  });
+
+  it("slices warm inventory to the same grid page", () => {
+    const overviewRows = Array.from({ length: 120 }, (_, i) =>
+      makeOverviewRow(`https://example.com/post-${i}`),
+    );
+    const props = buildOverviewWarmInventoryDetailsProps({
+      overviewRows,
+      gridPageIndex: 1,
+      sitemapInventoryLinks: [],
+      siteKwHostedLink: null,
+      sitemapInventoryLoading: false,
+      sitemapSource: "posts",
+    });
+
+    expect(props.detailsPageStart).toBe(100);
+    expect(props.totalRows).toBe(120);
+    expect(props.displayRows).toHaveLength(20);
+    expect(props.displayRows[0]?.destination_url).toBe("https://example.com/post-100");
   });
 });

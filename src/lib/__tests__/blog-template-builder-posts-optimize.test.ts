@@ -4,6 +4,7 @@ import {
   generateBlueprintFromTemplate,
 } from "@/lib/blog-template-builder";
 import { INTERNAL_LINK_PLACEHOLDER_FEATURE_SUFFIX } from "@/lib/content-generation/internal-link-placeholders";
+import { deriveSerpH2Outline } from "@/lib/content-optimization/serp-h2-outline";
 
 const streamChatCompletion = vi.fn();
 const postOpenRouterAppChat = vi.fn();
@@ -108,6 +109,50 @@ describe("generateChecklistFromSelections posts optimize", () => {
     expect(combined).not.toContain("KEEP EXACT");
     expect(combined).toContain("Product | Best for | Budget | Reason");
     expect(combined).not.toContain("local market knowledge and how we serve businesses");
+  });
+
+  it("uses imported H2 outline and does not derive SERP titles", async () => {
+    vi.mocked(deriveSerpH2Outline).mockClear();
+    const imported = [
+      "CRA Online Mail for Individuals And Businesses",
+      "Activate And Manage Your CRA Online Mail Account",
+      "Key Documents And Notifications Online",
+      "Addressing Common Challenges With CRA Online Mail",
+      "Ensuring Secure And Timely Communication With The CRA",
+      "KWB's Expert Guidance On CRA Digital Correspondence",
+    ];
+    streamChatCompletion.mockImplementation(async ({ onContentChunk, onFinishReason }) => {
+      onContentChunk?.(
+        imported
+          .map((h2, i) => `${i + 1}. ${h2} [STRUCTURE]: 2 paragraphs. [LINK]: 3-5 internal links.`)
+          .join("\n"),
+      );
+      onFinishReason?.("stop");
+      return { finishReason: "stop" };
+    });
+
+    const result = await generateChecklistFromSelections(
+      ["cra mail policy"],
+      [],
+      "2026 CRA Mail Policy What To Know",
+      { ...keywordData, keyword: "cra mail policy" },
+      {
+        apiKey: "test-key",
+        importedH2Outline: imported,
+        connectedSite: { name: "KWB", siteUrl: "https://kwbllp.com" },
+        primaryKeyword: "cra mail policy",
+      } as Parameters<typeof generateChecklistFromSelections>[4],
+    );
+
+    expect(result.h2Outline).toEqual(imported);
+    expect(vi.mocked(deriveSerpH2Outline)).not.toHaveBeenCalled();
+    const call = streamChatCompletion.mock.calls[0]?.[0] as {
+      messages?: Array<{ role: string; content: string }>;
+    };
+    const combined = (call?.messages ?? []).map((m) => m.content).join("\n");
+    expect(combined).toContain("IMPORTED H2 OUTLINE OVERRIDES");
+    expect(combined).toContain("CRA Online Mail for Individuals And Businesses");
+    expect(combined).toContain("LLM Audit Authority Link");
   });
 
   it("omits live post HTML from checklist and blueprint prompts", async () => {
@@ -269,8 +314,10 @@ describe("generateChecklistFromSelections posts optimize", () => {
     const combined = (call?.messages ?? []).map((m) => m.content).join("\n");
     expect(combined).toContain("SAP PAGE TEMPLATE");
     expect(combined).toContain("Product | Best for | Budget | Reason");
-    expect(combined).toContain("What We Offer");
-    expect(combined).toContain("Our Recommendation for Homeowners in Ben Hill, Atlanta");
+    expect(combined).toContain("What this connected site offers");
+    expect(combined).toContain("Recommendation for this place");
+    expect(combined).not.toContain("Our Recommendation for Homeowners in Ben Hill, Atlanta");
+    expect(combined).not.toContain("Sunlight And Privacy Challenges");
     expect(combined).not.toContain("local market knowledge and how we serve businesses");
     expect(combined).not.toContain("How this topic works");
   });
@@ -322,26 +369,97 @@ describe("generateChecklistFromSelections posts optimize", () => {
     }
   });
 
-  it("returns blueprint from checklist rows when json_object response is invalid after retries", async () => {
-    vi.useFakeTimers();
+  it("keeps the model H2 when the checklist row is a job with no title", async () => {
     postOpenRouterAppChat.mockResolvedValue({
-      content: '{"title": "Broken", "purpose": "x", "agents": [{"id": "agent-1"',
+      content: JSON.stringify({
+        title: "Roman Shades Near Port Royal",
+        purpose: "Guide",
+        agents: [
+          {
+            id: "agent-1",
+            step: 1,
+            title: "Salt Air Fades Roman Shade Fabric Fast",
+            description: "Local problem",
+            features: [`[LINK]: ${INTERNAL_LINK_PLACEHOLDER_FEATURE_SUFFIX}`],
+            h2Count: 1,
+            h3Count: 0,
+            h3Enabled: false,
+            headingLevel: 1,
+            maxTokens: 1000,
+          },
+        ],
+      }),
       finishReason: "stop",
       raw: {},
     });
 
-    const checklist = ["1. Section A [STRUCTURE]: 2 paragraphs. [LINK]: links."];
-    const promise = generateBlueprintFromTemplate(
+    const result = await generateBlueprintFromTemplate(
+      ["1. [STRUCTURE]: 2-3 paragraphs. Local problem this writing keyword creates."],
+      { flowTitle: "Roman Shades", flowPurpose: "Guide", keywordData: keywordData as never },
+      { apiKey: "test-key" },
+    );
+
+    expect(result.agents[0]?.title).toBe("Salt Air Fades Roman Shade Fabric Fast");
+  });
+
+  it("uses the checklist row when json_object is invalid", async () => {
+    postOpenRouterAppChat.mockResolvedValue({
+      content: "not valid json",
+      finishReason: "stop",
+      raw: {},
+    });
+
+    const checklist = ["1. Salt Air And Roman Shades [STRUCTURE]: 2 paragraphs. [LINK]: links."];
+    const result = await generateBlueprintFromTemplate(
       checklist,
       { flowTitle: "Test", flowPurpose: "Guide", keywordData: keywordData as never },
       { apiKey: "test-key", currentPageUrl: "https://example.com/page/" },
     );
 
-    await vi.runAllTimersAsync();
-    const result = await promise;
-    expect(postOpenRouterAppChat).toHaveBeenCalledTimes(3);
     expect(result.agents.length).toBe(1);
-    expect(result.agents[0]?.title).toBe("A Local Homeowner Example");
-    vi.useRealTimers();
+    expect(result.agents[0]?.title).toBe("Salt Air And Roman Shades");
+    expect(postOpenRouterAppChat).toHaveBeenCalledTimes(1);
+  });
+
+  it("fills missing agents so the blueprint matches the checklist count", async () => {
+    const checklist = [
+      "1. Salt Air And Fabric [STRUCTURE]: 2 paragraphs.",
+      "2. Humidity And Lift Cords [STRUCTURE]: 2 paragraphs.",
+      "3. What Fits Port Royal Windows [STRUCTURE]: 2 paragraphs.",
+      "4. A Local Homeowner Example [STRUCTURE]: 2 paragraphs. [ILLUSTRATIVE].",
+      "5. What We Offer [STRUCTURE]: 2 paragraphs.",
+      "6. Recommendation For Port Royal [STRUCTURE]: 2 paragraphs.",
+      "7. Next Steps [STRUCTURE]: 2 paragraphs.",
+    ];
+    postOpenRouterAppChat.mockResolvedValue({
+      content: JSON.stringify({
+        title: "Blinds Near Port Royal",
+        purpose: "Guide",
+        agents: checklist.slice(0, 6).map((line, i) => ({
+          id: `agent-${i + 1}`,
+          step: i + 1,
+          title: line.split("[")[0]!.replace(/^\d+\.\s*/, "").trim(),
+          description: "Section body",
+          features: [`[LINK]: ${INTERNAL_LINK_PLACEHOLDER_FEATURE_SUFFIX}`],
+          h2Count: 1,
+          h3Count: 0,
+          h3Enabled: false,
+          headingLevel: 1,
+          maxTokens: 1000,
+        })),
+      }),
+      finishReason: "stop",
+      raw: {},
+    });
+
+    const result = await generateBlueprintFromTemplate(
+      checklist,
+      { flowTitle: "Blinds Near Port Royal", flowPurpose: "Guide", keywordData: keywordData as never },
+      { apiKey: "test-key" },
+    );
+
+    expect(result.agents.length).toBe(7);
+    expect(result.agents[6]?.title).toBe("Next Steps");
+    expect(postOpenRouterAppChat).toHaveBeenCalledTimes(1);
   });
 });

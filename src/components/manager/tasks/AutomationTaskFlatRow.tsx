@@ -9,6 +9,7 @@ import {
   TaskFormTimePicker,
 } from "@/components/manager/tasks/TaskFormLayout";
 import { GscReportingExecutionFields } from "@/components/manager/tasks/GscReportingExecutionFields";
+import { AdsReportingExecutionFields } from "@/components/manager/tasks/AdsReportingExecutionFields";
 import { LocalDominatorExportExecutionFields } from "@/components/manager/tasks/LocalDominatorExportExecutionFields";
 import { PostCreatorExecutionFields } from "@/components/manager/tasks/PostCreatorExecutionFields";
 import { TaskTriggerFields } from "@/components/manager/tasks/TaskTriggerFields";
@@ -58,7 +59,7 @@ function handleExecutionKindChange(
       executionPayload: ensurePostCreatorPayload(draft.executionPayload),
     };
   }
-  if (kind === "gsc_reporting") {
+  if (kind === "gsc_reporting" || kind === "ads_reporting") {
     return {
       executionKind: kind,
       scheduleMode: "calendar",
@@ -123,6 +124,7 @@ export function AutomationActionFlatRow({
   const showCalendar = !showTrigger;
   const isPostCreator = draft.executionKind === "post_creator";
   const isGscReporting = draft.executionKind === "gsc_reporting";
+  const isAdsReporting = draft.executionKind === "ads_reporting";
   const isLocalDominatorExport = draft.executionKind === "local_dominator_export";
 
   return (
@@ -190,6 +192,14 @@ export function AutomationActionFlatRow({
           ) : null}
           {isGscReporting ? (
             <GscReportingExecutionFields
+              layout="inline"
+              executionPayload={draft.executionPayload}
+              disabled={saving}
+              onChange={(executionPayload) => onChange({ executionPayload })}
+            />
+          ) : null}
+          {isAdsReporting ? (
+            <AdsReportingExecutionFields
               layout="inline"
               executionPayload={draft.executionPayload}
               disabled={saving}

@@ -26,7 +26,7 @@ export async function completeExecutionWithDeliveries(args: {
   onStep?: (label: string, status?: "running" | "done" | "error") => void | Promise<void>;
 }): Promise<AutomationRunDeliveryResult> {
   const contract = { ...(args.contract as TaskExecutionClientRunContract) };
-  if (args.tokenContext.executionKind === "gsc_reporting") {
+  if (args.tokenContext.executionKind === "gsc_reporting" || args.tokenContext.executionKind === "ads_reporting") {
     contract.automationEmailAiIntro = true;
   }
 

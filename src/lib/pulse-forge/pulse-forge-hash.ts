@@ -38,8 +38,7 @@ export function isPulseForgeWorkflowEditorOpen(route: PulseForgeRoute): boolean 
   return isPulseForgeWorkflowRailOpen(route);
 }
 
-function normalizeLegacySection(sectionRaw: string): PulseForgeNavMode {
-  if (sectionRaw === "automations") return "workflows";
+function parsePulseForgeSection(sectionRaw: string): PulseForgeNavMode {
   if (VALID_SECTIONS.has(sectionRaw as PulseForgeNavMode)) return sectionRaw as PulseForgeNavMode;
   return "forge";
 }
@@ -55,7 +54,7 @@ export function parsePulseForgeRouteFromHash(rawHash?: string): PulseForgeRoute 
     return { section: "forge" };
   }
 
-  const section = normalizeLegacySection(parts[1] ?? "forge");
+  const section = parsePulseForgeSection(parts[1] ?? "forge");
 
   if (section === "recipes") {
     if (!parts[2]) return { section: "recipes" };
@@ -125,10 +124,6 @@ export function usePulseForgeRoute(): PulseForgeRoute {
     const raw = normalizeHashBody();
     if (raw === "pulse-forge") {
       setPulseForgeHash({ section: "forge" });
-    }
-    if (raw.startsWith("pulse-forge/automations")) {
-      const migrated = raw.replace("pulse-forge/automations", "pulse-forge/workflows");
-      setPulseForgeHash(parsePulseForgeRouteFromHash(migrated));
     }
   }, []);
 

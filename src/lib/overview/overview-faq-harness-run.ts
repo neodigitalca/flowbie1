@@ -1,30 +1,38 @@
 import type { Dispatch, SetStateAction } from "react";
-import pLimit from "p-limit";
 import { notify } from "@/lib/app-notifications";
 import { NOTIFY_FAQS_NOT_GENERATED, NOTIFY_FAQ_OPTIMIZATION_FAILED_FOR_ALL_SELECTED, notifyAiFaqOptimizationFinishedForXPage } from "@/lib/notify-messages";
 import type { WordPressSite } from "@/components/integrations/types";
 import type { OverviewRow } from "@/components/overview/overview-meta-row-types";
+import type { OverviewInventoryUrlMatch } from "@/lib/overview/overview-row-scrape";
+import type { AiseoCacheWriteAccumulator } from "@/lib/overview/overview-aiseo-cache-write";
+import type { AiseoAfterRowWriteFn } from "@/lib/overview/overview-aiseo-after-upload";
 import type { FaqEntry } from "@/lib/faq-entries";
 import { parseFaqEntries, serializeFaqEntriesPlain } from "@/lib/faq-entries";
 import { clampBulkAiFaqSeed } from "@/lib/overview/overview-row-helpers";
 import {
-  buildWaitingFaqHarnessSections,
   makeFaqPairHarnessDonePayload,
   makeFaqPairHarnessStartPayload,
 } from "@/lib/overview/overview-faq-harness-sections";
 import {
   emitFaqHarnessPayload,
   finishFaqRowHarness,
+  markFaqRowActive,
   markFaqRowError,
   type FaqHarnessSetters,
 } from "@/lib/overview/overview-faq-harness-mutations";
+import { aiseoRowFilesForUpload } from "@/lib/overview/overview-aiseo-row-artifacts";
+import { buildFaqJsonGeneratedFile } from "@/lib/overview/overview-faq-harness-sections";
+import { appendFaqSectionToPostHtml } from "@/lib/overview/overview-blog-faq-append";
 import {
-  appendFaqSectionToPostHtml,
-  resolveFaqSourceHtml,
-} from "@/lib/overview/overview-blog-faq-append";
+  isTruncatedFaqSourceBody,
+  resolveFaqHarnessSourceHtml,
+  scoreFaqSourceBody,
+} from "@/lib/overview/overview-faq-source-html";
+import type { OverviewSitemapSource } from "@/lib/overview/overview-sitemap-source";
 import { generateFaqIntroParagraph } from "@/lib/overview/overview-blog-faq-intro-agent";
 import { loadApiKey } from "@/lib/api";
 import { getProductionModel } from "@/lib/optimization-settings-storage";
+import { mapOverviewAiCopyWithConcurrency } from "@/lib/overview/overview-ai-copy-concurrency";
 import { overviewBulkPageRanges } from "@/lib/overview/overview-bulk-page-size";
 import { initOverviewBulkHarnessPagination, setOverviewBulkHarnessPageState } from "@/lib/overview/overview-bulk-page-state";
 import {
@@ -108,17 +116,12 @@ export function initOverviewFaqHarnessBatchState(params: InitOverviewFaqHarnessP
   const batchKey = `${site.id}-batch`;
   const urls = rows.map((r) => r.url.trim()).filter(Boolean);
   const urlKeywords: Record<string, string> = {};
-  const urlHarnessSections: Record<string, HarnessSectionListItem[]> = {};
-  const initialUrlStatuses: Record<string, BulkOptimizationState["urlStatuses"][string]> = {};
 
   for (const row of rows) {
     const url = row.url?.trim();
     if (!url) continue;
     const kw = row.focusKeyword?.trim();
     if (kw) urlKeywords[url] = kw;
-    initialUrlStatuses[url] = "pending";
-    const pairCount = pairCountByUrl[url] ?? resolveFaqPairCountForRow(row, bulkAiFaqSeedCount);
-    urlHarnessSections[url] = buildWaitingFaqHarnessSections(pairCount);
   }
 
   setOptimizingState(setIsOptimizingContent, batchKey, true);
@@ -136,12 +139,12 @@ export function initOverviewFaqHarnessBatchState(params: InitOverviewFaqHarnessP
     [batchKey]: {
       urls,
       currentIndex: 0,
-      urlStatuses: initialUrlStatuses,
+      urlStatuses: {},
       currentStep: "AI FAQs",
       currentUrl: urls[0],
       urlKeywords,
       runKind: "aiFaq",
-      urlHarnessSections,
+      urlHarnessSections: {},
       urlGeneratedFiles: {},
       currentStepProgress: {
         step: "AI FAQs",
@@ -150,6 +153,7 @@ export function initOverviewFaqHarnessBatchState(params: InitOverviewFaqHarnessP
         harnessSections: [],
         harnessPlannedSectionCount: null,
       },
+      harnessStartedAt: Date.now(),
     },
   }));
   initOverviewBulkHarnessPagination(batchKey, urls.length, setBulkOptimizationState);
@@ -177,12 +181,20 @@ export function finalizeOverviewFaqHarnessBatch(
 }
 
 export type RunFaqPairsForRowParams = {
+  site: WordPressSite;
+  sitemapSource: OverviewSitemapSource;
+  getInventoryMatchForUrl: (
+    site: WordPressSite | null,
+    url: string,
+  ) => OverviewInventoryUrlMatch | undefined;
   row: OverviewRow;
   rowIndex: number;
   bulkAiFaqSeedCount: number;
   deps: FaqHarnessOptimizeDeps;
   harnessSetters: FaqHarnessSetters;
+  cacheWrite?: AiseoCacheWriteAccumulator;
   updateRow: (index: number, patch: Partial<OverviewRow>) => void;
+  uploadAfterRowWrite?: AiseoAfterRowWriteFn;
   sectionIndexOffset?: number;
   totalHarnessSections?: number;
   skipLoadingState?: boolean;
@@ -190,12 +202,17 @@ export type RunFaqPairsForRowParams = {
 
 export async function runFaqPairsForRow(params: RunFaqPairsForRowParams): Promise<boolean> {
   const {
+    site,
+    sitemapSource,
+    getInventoryMatchForUrl,
     row,
     rowIndex,
     bulkAiFaqSeedCount,
     deps,
     harnessSetters,
+    cacheWrite,
     updateRow,
+    uploadAfterRowWrite,
     sectionIndexOffset = 0,
     totalHarnessSections: totalHarnessSectionsIn,
     skipLoadingState = true,
@@ -203,6 +220,32 @@ export async function runFaqPairsForRow(params: RunFaqPairsForRowParams): Promis
 
   const url = row.url.trim();
   if (!url) return false;
+
+  const { html: sourceHtml, liveHtml, cachedHtml } = await resolveFaqHarnessSourceHtml({
+    row,
+    site,
+    sitemapSource,
+    getInventoryMatchForUrl,
+  });
+  if (!sourceHtml) {
+    markFaqRowError(url, rowIndex, harnessSetters, updateRow, "No post HTML in cache.");
+    return false;
+  }
+  if (isTruncatedFaqSourceBody(sourceHtml)) {
+    markFaqRowError(
+      url,
+      rowIndex,
+      harnessSetters,
+      updateRow,
+      "Post body is truncated (Answer only). Re-scrape this row from WordPress, then retry FAQs.",
+    );
+    return false;
+  }
+  if (liveHtml && liveHtml.length > cachedHtml.length) {
+    updateRow(rowIndex, { postContent: liveHtml });
+  } else if (liveHtml && scoreFaqSourceBody(liveHtml) > scoreFaqSourceBody(cachedHtml)) {
+    updateRow(rowIndex, { postContent: liveHtml });
+  }
 
   let workingEntries = parseFaqEntries(row.faq);
   const pairCount =
@@ -311,52 +354,79 @@ export async function runFaqPairsForRow(params: RunFaqPairsForRowParams): Promis
     return false;
   }
 
-  const sourceHtml = resolveFaqSourceHtml(row);
   let appended: ReturnType<typeof appendFaqSectionToPostHtml> = null;
-  let introError: string | null = null;
-  if (sourceHtml) {
-    try {
-      const apiKey = (loadApiKey() ?? "").trim();
-      if (!apiKey) {
-        throw new Error("OpenRouter API key required for FAQ intro");
-      }
-      const introParagraph = await generateFaqIntroParagraph({
-        apiKey,
-        model: getProductionModel(),
-        focusKeyword: row.focusKeyword,
-        pageTitle: row.title,
-        entries: merged,
-      });
-      appended = appendFaqSectionToPostHtml({
-        sourceHtml,
-        entries: merged,
-        introParagraph,
-      });
-    } catch (err) {
-      introError = err instanceof Error ? err.message : "FAQ intro generation failed";
+  try {
+    const apiKey = (loadApiKey() ?? "").trim();
+    if (!apiKey) {
+      throw new Error("OpenRouter API key required for FAQ intro");
     }
+    const introParagraph = await generateFaqIntroParagraph({
+      apiKey,
+      model: getProductionModel(),
+      focusKeyword: row.focusKeyword,
+      pageTitle: row.title,
+      entries: merged,
+    });
+    appended = appendFaqSectionToPostHtml({
+      sourceHtml,
+      entries: merged,
+      introParagraph,
+    });
+  } catch (err) {
+    markFaqRowError(
+      url,
+      rowIndex,
+      harnessSetters,
+      updateRow,
+      err instanceof Error ? err.message : "FAQ append failed",
+    );
+    return false;
   }
 
-  finishFaqRowHarness(url, rowIndex, merged, harnessSetters, updateRow, {
-    postHtml: appended?.html,
-    faqSectionHtml: appended?.faqSectionHtml,
+  if (!appended?.html?.trim()) {
+    markFaqRowError(url, rowIndex, harnessSetters, updateRow, "FAQ append failed");
+    return false;
+  }
+
+  finishFaqRowHarness(url, rowIndex, merged, harnessSetters, cacheWrite, updateRow, {
+    postHtml: appended.html,
+    faqSectionHtml: appended.faqSectionHtml,
   });
 
-  if (introError) {
-    markFaqRowError(url, rowIndex, harnessSetters, updateRow, introError);
-    return false;
+  const appendedHtml = appended.html.trim();
+  const faqFile = buildFaqJsonGeneratedFile(merged);
+  const rowFiles = aiseoRowFilesForUpload({
+    runKind: "aiFaq",
+    url,
+    elementFiles: faqFile ? [faqFile] : [],
+    postHtml: appendedHtml,
+  });
+  if (uploadAfterRowWrite) {
+    await uploadAfterRowWrite({
+      index: rowIndex,
+      url,
+      html: appendedHtml,
+      rowFiles: rowFiles.length ? rowFiles : undefined,
+    });
   }
   return true;
 }
 
 export type RunOverviewFaqHarnessBatchParams = {
   site: WordPressSite;
+  sitemapSource: OverviewSitemapSource;
+  rowsRef: { current: OverviewRow[] };
+  getInventoryMatchForUrl: (
+    site: WordPressSite | null,
+    url: string,
+  ) => OverviewInventoryUrlMatch | undefined;
   rows: OverviewRow[];
   bulkAiFaqSeedCount: number;
   deps: FaqHarnessOptimizeDeps;
   harnessSetters: FaqHarnessSetters;
+  cacheWrite: AiseoCacheWriteAccumulator;
   updateRow: (index: number, patch: Partial<OverviewRow>) => void;
-  concurrency?: number;
+  uploadAfterRowWrite?: AiseoAfterRowWriteFn;
   rowIndices?: number[];
 };
 
@@ -365,12 +435,16 @@ export async function runOverviewFaqHarnessBatch(
 ): Promise<{ ok: number; failed: number }> {
   const {
     site,
+    sitemapSource,
+    rowsRef,
+    getInventoryMatchForUrl,
     rows,
     bulkAiFaqSeedCount,
     deps,
     harnessSetters,
+    cacheWrite,
     updateRow,
-    concurrency = 4,
+    uploadAfterRowWrite,
     rowIndices,
   } = params;
 
@@ -403,51 +477,40 @@ export async function runOverviewFaqHarnessBatch(
       step: "AI FAQs",
     });
 
-    const limit = pLimit(Math.max(1, Math.min(concurrency, pageEligible.length)));
+    await mapOverviewAiCopyWithConcurrency(pageEligible, async ({ row, index }) => {
+      const url = row.url.trim();
+      const liveRow = rowsRef.current[index] ?? row;
+      try {
+        updateRow(index, { status: "ai-faq" });
+        markFaqRowActive(url, index, harnessSetters);
 
-    await Promise.all(
-      pageEligible.map(({ row, index }) =>
-        limit(async () => {
-          const url = row.url.trim();
-          try {
-            updateRow(index, { status: "ai-faq" });
-            harnessSetters.setBulkOptimizationState((prev) => {
-              const current = prev[harnessSetters.batchKey];
-              if (!current) return prev;
-              return {
-                ...prev,
-                [harnessSetters.batchKey]: {
-                  ...current,
-                  urlStatuses: { ...(current.urlStatuses || {}), [url]: "optimizing" },
-                  currentUrl: url,
-                },
-              };
-            });
-
-            const success = await runFaqPairsForRow({
-              row,
-              rowIndex: index,
-              bulkAiFaqSeedCount,
-              deps,
-              harnessSetters,
-              updateRow,
-              skipLoadingState: true,
-            });
-            if (success) ok += 1;
-            else failed += 1;
-          } catch (err) {
-            failed += 1;
-            markFaqRowError(
-              url,
-              index,
-              harnessSetters,
-              updateRow,
-              err instanceof Error ? err.message : "FAQ optimization failed",
-            );
-          }
-        }),
-      ),
-    );
+        const success = await runFaqPairsForRow({
+          site,
+          sitemapSource,
+          getInventoryMatchForUrl,
+          row: liveRow,
+          rowIndex: index,
+          bulkAiFaqSeedCount,
+          deps,
+          harnessSetters,
+          cacheWrite,
+          updateRow,
+          uploadAfterRowWrite,
+          skipLoadingState: true,
+        });
+        if (success) ok += 1;
+        else failed += 1;
+      } catch (err) {
+        failed += 1;
+        markFaqRowError(
+          url,
+          index,
+          harnessSetters,
+          updateRow,
+          err instanceof Error ? err.message : "FAQ optimization failed",
+        );
+      }
+    });
   }
 
   if (ok > 0) {

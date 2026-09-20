@@ -1,12 +1,14 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
   extractSerpDumpJsonFromMcpResponse,
+  fetchOptionalDataForSeoSerp,
   fetchSeoContentBriefWave,
   resolveSerpLocationName,
   serpDumpFilenameUrl,
   serpMcpJsonHasSerpTasks,
   storedFileFromSerpMcpResponse,
 } from "@/lib/llm-audit/fetch-seo-content-brief-wave";
+import { markDfsPaymentFailed, resetDfsPaymentLatch } from "@/lib/llm-audit/dataforseo-llm-responses-live";
 import {
   setPostCreatorWorkerApiBase,
 } from "@/lib/wordpress-api/connection";
@@ -24,6 +26,7 @@ import { fetchLlmAuditParallel } from "@/lib/llm-audit/llm-audit-dataforseo";
 
 describe("fetch-seo-content-brief-wave", () => {
   beforeEach(() => {
+    resetDfsPaymentLatch();
     vi.resetAllMocks();
     setPostCreatorWorkerApiBase("");
     vi.stubGlobal(
@@ -123,6 +126,29 @@ describe("fetch-seo-content-brief-wave", () => {
     expect(brief.llmAudit?.platforms).toHaveLength(1);
   });
 
+  it("fetchSeoContentBriefWave continues with LLM audit when SERP dump is empty", async () => {
+    vi.mocked(mcp_DataForSEO_serp_organic_live_advanced).mockResolvedValue({});
+    vi.mocked(fetchLlmAuditParallel).mockResolvedValue({
+      keyword: "luxury camping",
+      location: "",
+      platforms: [
+        { platform: "chat_gpt", label: "ChatGPT", status: "ok", responseText: "x" },
+        { platform: "gemini", label: "Gemini", status: "ok", responseText: "x" },
+        { platform: "perplexity", label: "Perplexity", status: "ok", responseText: "x" },
+      ],
+    });
+
+    const { brief, storedFile } = await fetchSeoContentBriefWave({
+      keyword: "luxury camping",
+      pageUrl: "https://posh-outdoors.com/blog/luxury-camping/",
+      requireSerpDump: true,
+    });
+
+    expect(storedFile).toBeNull();
+    expect(brief.focusKeyword).toBe("luxury camping");
+    expect(brief.llmAudit?.platforms).toHaveLength(3);
+  });
+
   it("resolveSerpLocationName prefers Sherwood Park for Alberta keywords", () => {
     expect(resolveSerpLocationName("", "alberta tax brackets sherwood park")).toBe(
       "Sherwood Park,Alberta,Canada",
@@ -144,6 +170,14 @@ describe("fetch-seo-content-brief-wave", () => {
       extractSerpDumpJsonFromMcpResponse({ details: { tasks: [{ result: [] }] } }),
     ).toEqual({ tasks: [{ result: [] }] });
     expect(extractSerpDumpJsonFromMcpResponse({})).toBeNull();
+  });
+
+  it("skips SERP MCP when DataForSEO payment is latched", async () => {
+    markDfsPaymentFailed();
+    const result = await fetchOptionalDataForSeoSerp({ keyword: "window blinds" });
+    expect(mcp_DataForSEO_serp_organic_live_advanced).not.toHaveBeenCalled();
+    expect(result.serpMcpJson).toBeNull();
+    expect(result.serpError).toBeNull();
   });
 
   it("serpMcpJsonHasSerpTasks detects inline MCP payload", () => {

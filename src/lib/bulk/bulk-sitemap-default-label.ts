@@ -1,4 +1,8 @@
-import type { BulkRowSitemapType, BulkSitemapMode } from "@/lib/bulk/bulk-sitemap-mode";
+import {
+  defaultBulkSitemapMode,
+  type BulkRowSitemapType,
+  type BulkSitemapMode,
+} from "@/lib/bulk/bulk-sitemap-mode";
 
 export function bulkSitemapDefaultLabel(sitemapType: BulkRowSitemapType): string {
   return sitemapType === "entity" ? "Entity" : "Posts";
@@ -16,6 +20,6 @@ export function resolveBulkSitemapDefaultLabel(args: {
 }): string {
   const siteId = Array.from(args.selectedWordPressSites)[0];
   const configured = siteId ? args.siteConfigs[siteId]?.sitemapType : undefined;
-  const type: BulkSitemapMode = configured ?? "post";
+  const type: BulkSitemapMode = configured ?? defaultBulkSitemapMode();
   return bulkSitemapModeLabel(type);
 }

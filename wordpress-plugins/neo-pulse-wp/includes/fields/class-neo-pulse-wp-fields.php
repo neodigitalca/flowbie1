@@ -16,9 +16,7 @@ class Neo_Pulse_Wp_Fields {
 		add_action( 'init', array( __CLASS__, 'register_storage' ), 5 );
 		Neo_Pulse_Wp_Fields_Registry::init();
 		add_action( 'plugins_loaded', array( 'Neo_Pulse_Wp_Fields_Api', 'register_functions' ), 99 );
-		if ( ! self::acf_is_active() ) {
-			Neo_Pulse_Wp_Fields_Meta_Box::init();
-		}
+		Neo_Pulse_Wp_Fields_Meta_Box::init();
 		Neo_Pulse_Wp_Fields_Post_Types::init();
 		Neo_Pulse_Wp_Fields_Post_Type_Caps::init();
 		Neo_Pulse_Wp_Fields_Taxonomies::init();
@@ -175,9 +173,6 @@ class Neo_Pulse_Wp_Fields {
 	}
 
 	public static function enqueue_post_edit_assets( string $hook ): void {
-		if ( self::acf_is_active() ) {
-			return;
-		}
 		if ( ! in_array( $hook, array( 'post.php', 'post-new.php' ), true ) ) {
 			return;
 		}

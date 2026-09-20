@@ -1,13 +1,13 @@
 import { loadApiKey } from "@/lib/api";
-import { backendApiUrl } from "@/lib/wordpress-api/connection";
 
 export type GoogleMapsImagePayload = {
   imageBase64: string;
   mimeType: string;
+  referenceImageBase64?: string;
 };
 
 const cacheByEntityKey = new Map<string, GoogleMapsImagePayload>();
-const inFlightByEntityKey = new Map<string, Promise<GoogleMapsImagePayload | null>>();
+const inFlightByEntityKey = new Map<string, Promise<GoogleMapsImagePayload>>();
 
 export function normalizeGoogleMapsEntityKey(entity: string): string {
   return entity.trim().toLowerCase();
@@ -29,9 +29,6 @@ export function clearGoogleMapsImageSessionCache(): void {
   cacheByEntityKey.clear();
   inFlightByEntityKey.clear();
 }
-
-const MAX_ENTITY_MAP_ATTEMPTS = 5;
-const ENTITY_MAP_RETRY_DELAY_MS = 2000;
 
 const POI_SUFFIXES = [
   "Community Centre",
@@ -98,22 +95,6 @@ export function cityLabelsForEntity(entity: string): string[] {
   return labels;
 }
 
-function isTransientEntityMapError(message: string): boolean {
-  const m = message.toLowerCase();
-  return (
-    m.includes("internal se server error") ||
-    m.includes("timeout") ||
-    m.includes("503") ||
-    m.includes("502") ||
-    m.includes("504")
-  );
-}
-
-function entityMapRetryDelayMs(message: string, attempt: number): number {
-  const base = isTransientEntityMapError(message) ? 4000 : ENTITY_MAP_RETRY_DELAY_MS;
-  return base * attempt;
-}
-
 async function parseEntityMapErrorResponse(response: Response): Promise<string> {
   const text = await response.text();
   if (!text.trim()) {
@@ -127,7 +108,7 @@ async function parseEntityMapErrorResponse(response: Response): Promise<string> 
   }
 }
 
-async function fetchGoogleMapsImageOnce(entity: string): Promise<GoogleMapsImagePayload> {
+async function generateGoogleMapsImageViaApi(entity: string): Promise<GoogleMapsImagePayload> {
   const trimmed = entity.trim();
   if (!trimmed || trimmed === "N/A") {
     throw new Error("Missing entity for Google Maps image");
@@ -139,84 +120,147 @@ async function fetchGoogleMapsImageOnce(entity: string): Promise<GoogleMapsImage
     headers["X-OpenRouter-Api-Key"] = openRouterApiKey;
   }
 
-  let lastError = "Failed to generate entity map image";
-  for (let attempt = 1; attempt <= MAX_ENTITY_MAP_ATTEMPTS; attempt += 1) {
-    const response = await fetch(backendApiUrl("/entity-maps-image/generate"), {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ entity: trimmed }),
-    });
+  const response = await fetch("/api/entity-maps-image/generate", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ entity: trimmed }),
+  });
 
-    if (!response.ok) {
-      lastError = await parseEntityMapErrorResponse(response);
-      if (attempt < MAX_ENTITY_MAP_ATTEMPTS) {
-        await new Promise((resolve) => setTimeout(resolve, entityMapRetryDelayMs(lastError, attempt)));
-        continue;
-      }
-      throw new Error(lastError);
-    }
-
-    const result = await response.json();
-    if (!result.success || !result.imageBase64) {
-      lastError = result.error || "No image data returned from entity map image API";
-      if (attempt < MAX_ENTITY_MAP_ATTEMPTS) {
-        await new Promise((resolve) => setTimeout(resolve, entityMapRetryDelayMs(lastError, attempt)));
-        continue;
-      }
-      throw new Error(lastError);
-    }
-
-    let imageBase64 = String(result.imageBase64);
-    const mimeType = String(result.mimeType || "image/jpeg");
-    if (imageBase64.includes(",")) {
-      imageBase64 = imageBase64.split(",")[1]!;
-    }
-
-    return { imageBase64, mimeType };
+  if (!response.ok) {
+    throw new Error(await parseEntityMapErrorResponse(response));
   }
 
-  throw new Error(lastError);
+  const result = await response.json();
+  if (!result.success || !result.imageBase64) {
+    throw new Error(result.error || "No image data returned from entity map image API");
+  }
+
+  let imageBase64 = String(result.imageBase64);
+  const mimeType = String(result.mimeType || "image/jpeg");
+  if (imageBase64.includes(",")) {
+    imageBase64 = imageBase64.split(",")[1]!;
+  }
+
+  let referenceImageBase64 = result.referencePngBase64
+    ? String(result.referencePngBase64)
+    : undefined;
+  if (referenceImageBase64?.includes(",")) {
+    referenceImageBase64 = referenceImageBase64.split(",")[1];
+  }
+
+  return { imageBase64, mimeType, referenceImageBase64 };
 }
 
-export async function fetchGoogleMapsImageForEntity(
+/** Fire the Google Image fetch now. Do not await. Later awaits share this in-flight promise. */
+export function startGoogleMapsImageForEntity(entity: string): void {
+  const trimmed = entity.trim();
+  if (!trimmed || trimmed === "N/A") return;
+  void fetchGoogleMapsImageForEntityWithFallback(trimmed);
+}
+
+export function startGoogleMapsImageForRow(
+  row: { entity?: string; featuredImage?: string },
+  featuredImageType?: string,
+): void {
+  const entity = row.entity?.trim();
+  if (!entity || entity === "N/A" || row.featuredImage === "n") return;
+  if (row.featuredImage === "google-maps" || featuredImageType === "google-maps") {
+    startGoogleMapsImageForEntity(entity);
+  }
+}
+
+export function startGoogleMapsImagesForRows(
+  rows: Array<{ entity?: string; featuredImage?: string }>,
+  featuredImageType?: string,
+): void {
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const entity = row.entity?.trim();
+    if (!entity || entity === "N/A" || row.featuredImage === "n") continue;
+    if (row.featuredImage !== "google-maps" && featuredImageType !== "google-maps") continue;
+    const key = normalizeGoogleMapsEntityKey(entity);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    startGoogleMapsImageForEntity(entity);
+  }
+}
+
+export function buildGoogleMapsImageLabelCandidates(
   entity: string,
+  serpLocation?: string,
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (label: string) => {
+    const value = label.trim();
+    if (!value || value === "N/A") return;
+    const key = normalizeGoogleMapsEntityKey(value);
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(value);
+  };
+
+  add(entity);
+  for (const city of cityLabelsForEntity(entity)) add(city);
+  if (serpLocation) add(serpLocation);
+
+  return out;
+}
+
+async function fetchGoogleMapsImageForLabelsInternal(
+  labels: string[],
+  cacheUnderEntity: string,
+): Promise<GoogleMapsImagePayload | null> {
+  const cached = peekGoogleMapsImageCache(cacheUnderEntity);
+  if (cached) return cached;
+
+  for (const label of labels) {
+    const labelCached = peekGoogleMapsImageCache(label);
+    if (labelCached) {
+      seedGoogleMapsImageCache(cacheUnderEntity, labelCached);
+      return labelCached;
+    }
+    try {
+      const payload = await generateGoogleMapsImageViaApi(label);
+      seedGoogleMapsImageCache(cacheUnderEntity, payload);
+      seedGoogleMapsImageCache(label, payload);
+      return payload;
+    } catch {
+      // try next label
+    }
+  }
+  return null;
+}
+
+/** Entity first, city / SERP location second — silent label retries. */
+export async function fetchGoogleMapsImageForEntityWithFallback(
+  entity: string,
+  serpLocation?: string,
 ): Promise<GoogleMapsImagePayload | null> {
   const trimmed = entity.trim();
   if (!trimmed || trimmed === "N/A") return null;
 
-  const cached = peekGoogleMapsImageCache(trimmed);
-  if (cached) return cached;
+  const labels = buildGoogleMapsImageLabelCandidates(trimmed, serpLocation);
+  if (!labels.length) return null;
 
   const key = normalizeGoogleMapsEntityKey(trimmed);
   const inflight = inFlightByEntityKey.get(key);
-  if (inflight) return inflight;
-
-  const run = (async (): Promise<GoogleMapsImagePayload | null> => {
-    const candidates = [
-      trimmed,
-      ...cityLabelsForEntity(trimmed).filter((label) => label !== trimmed),
-    ];
-
-    let lastError = "Failed to generate entity map image";
-    for (const candidate of candidates) {
-      try {
-        const payload = await fetchGoogleMapsImageOnce(candidate);
-        seedGoogleMapsImageCache(trimmed, payload);
-        if (candidate !== trimmed) {
-          seedGoogleMapsImageCache(candidate, payload);
-        }
-        return payload;
-      } catch (error) {
-        lastError = error instanceof Error ? error.message : String(error);
-      }
+  if (inflight) {
+    try {
+      return await inflight;
+    } catch {
+      return null;
     }
+  }
 
-    console.warn(`[Google Maps image] Failed for "${trimmed}": ${lastError}`);
-    return null;
-  })().finally(() => {
+  const run = fetchGoogleMapsImageForLabelsInternal(labels, trimmed).finally(() => {
     inFlightByEntityKey.delete(key);
   });
 
-  inFlightByEntityKey.set(key, run);
+  inFlightByEntityKey.set(key, run as Promise<GoogleMapsImagePayload>);
   return run;
+}
+
+export async function fetchGoogleMapsImageForEntity(entity: string): Promise<GoogleMapsImagePayload> {
+  return generateGoogleMapsImageViaApi(entity);
 }

@@ -37,6 +37,10 @@ if (apiBase) {
   process.env.VITE_BACKEND_API_BASE = apiBase;
   try {
     if (/\.local$/i.test(new URL(apiBase).hostname)) {
+      process.on("warning", (warning) => {
+        if (String(warning.message).includes("NODE_TLS_REJECT_UNAUTHORIZED")) return;
+        console.error(warning.stack || `${warning.name}: ${warning.message}`);
+      });
       process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
     }
   } catch {

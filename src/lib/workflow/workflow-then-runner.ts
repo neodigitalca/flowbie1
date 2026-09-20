@@ -192,10 +192,10 @@ function pickFinalEmailAttachment(
 ): TaskArchiveFileInput | null {
   if (archiveFiles.length === 0) return null;
 
-  if (executionKind === "gsc_reporting") {
+  if (executionKind === "gsc_reporting" || executionKind === "ads_reporting") {
     const gscReports = archiveFiles.filter((file) => {
       const lower = file.fileName.toLowerCase();
-      return lower.includes("gsc-report") && lower.endsWith(".md");
+      return (lower.includes("gsc-report") || lower.includes("ppc-report")) && lower.endsWith(".md");
     });
     if (gscReports.length > 0) {
       const slug = siteName?.trim() ? siteNameSlug(siteName) : "";
@@ -229,7 +229,7 @@ function buildThenEmailContract(
   resolved: ReturnType<typeof resolveEffectiveThenConfig>,
 ): TaskExecutionClientRunContract {
   const contract = buildThenContract(payload, "then_email");
-  if (executionKind === "gsc_reporting" && resolved.inputMode === "single") {
+  if ((executionKind === "gsc_reporting" || executionKind === "ads_reporting") && resolved.inputMode === "single") {
     contract.automationEmailAiIntro = true;
   }
   return contract;
@@ -279,7 +279,8 @@ function googleDriveThenFlightKey(
   outputs: WorkflowStepOutput[],
 ): string {
   const runId = (ctx.allOutputs ?? outputs)[0]?.runId ?? 0;
-  return `${ctx.workflow.teamId}:${ctx.workflow.id}:${runId}:${node.id}`;
+  const siteId = String(ctx.siteId ?? "").trim();
+  return `${ctx.workflow.teamId}:${ctx.workflow.id}:${runId}:${node.id}:${siteId}`;
 }
 
 export function resetGoogleDriveThenFlightsForTests(): void {
@@ -437,7 +438,7 @@ async function executeWorkflowThenStepOnce(
       return { ok: false, error: message };
     }
     if (!usingConfiguredFolder && !deliveryFolderIsMonthLeaf(folderMeta.label)) {
-      const message = `Google Drive folder must be a Reporting/Audits/Grids month folder, not the client root (${folderMeta.label}).`;
+      const message = `Google Drive folder must be a purpose/year/month folder, not the client root (${folderMeta.label}).`;
       await logWorkflowThenStepToAgentRun({
         teamId: ctx.workflow.teamId,
         agentRunId: tailAgentRunId,
@@ -523,7 +524,9 @@ async function executeWorkflowThenStepOnce(
     let lastDriveResult: GoogleDriveDeliveryResult | null = null;
 
     const targets =
-      ctx.executionKind === "gsc_reporting" || resolved.inputMode === "single"
+      ctx.executionKind === "gsc_reporting" ||
+      ctx.executionKind === "ads_reporting" ||
+      resolved.inputMode === "single"
         ? upstreamOutputs.slice(-1)
         : upstreamOutputs;
 
@@ -626,8 +629,8 @@ async function executeWorkflowThenStepOnce(
 
     if (!lastFileName) {
       const message =
-        ctx.executionKind === "gsc_reporting"
-          ? "Google Drive upload failed: no GSC report found from upstream agent."
+        ctx.executionKind === "gsc_reporting" || ctx.executionKind === "ads_reporting"
+          ? "Google Drive upload failed: no report found from upstream agent."
           : "Google Drive upload failed: no deliverable files loaded from upstream agent.";
       await logWorkflowThenStepToAgentRun({
         teamId: ctx.workflow.teamId,
@@ -742,7 +745,7 @@ async function executeWorkflowThenStepOnce(
     });
     const emailContract = buildThenEmailContract(payload, tokenContext.executionKind, resolved);
     const summaryForEmail =
-      tokenContext.executionKind === "gsc_reporting" &&
+      (tokenContext.executionKind === "gsc_reporting" || tokenContext.executionKind === "ads_reporting") &&
       resolved.inputMode === "single" &&
       emailAttachments[0]?.content.trim()
         ? emailAttachments[0].content.trim()

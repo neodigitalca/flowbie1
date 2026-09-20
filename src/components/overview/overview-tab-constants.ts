@@ -28,10 +28,17 @@ export type MetaBulkActionKey =
   | "aiOverview"
   | "aiScenario"
   | "aiInContentImage"
+  | "aiFeaturedImage"
   | "contentCleanup"
   | "research"
   | "optimizeAll"
   | "wpUpload";
+
+export const FEATURED_IMAGE_PIPELINE_TITLES = [
+  "Google Image",
+  "OpenRouter Image",
+  "WordPress upload",
+] as const;
 
 export type PipelineStepStatus = "waiting" | "running" | "done" | "error" | "skipped";
 
@@ -74,6 +81,7 @@ export const BULK_INLINE_STATUS: Partial<Record<MetaBulkActionKey, string>> = {
   aiOverview: "Overview",
   aiScenario: "Scenario",
   aiInContentImage: "In Content Image",
+  aiFeaturedImage: "Featured image",
   contentCleanup: "Clean Up",
   research: "Researching",
   optimizeAll: "Optimizing page content",
@@ -107,6 +115,7 @@ export const META_BULK_MICRO_ORDER: MetaBulkActionKey[] = [
   "aiOverview",
   "aiScenario",
   "aiInContentImage",
+  "aiFeaturedImage",
   "contentCleanup",
   "research",
   "optimizeAll",
@@ -132,8 +141,9 @@ export const META_BULK_MICRO_LABELS: Record<MetaBulkActionKey, string> = {
   aiOverview: "Overview (prepend)",
   aiScenario: "Scenario (illustrative H2)",
   aiInContentImage: "In Content Image",
+  aiFeaturedImage: "Featured image",
   contentCleanup: "Clean Up",
   research: "Research (SERP & data)",
-  optimizeAll: "Full-page batch optimize",
+  optimizeAll: "Content",
   wpUpload: "Upload to WordPress",
 };

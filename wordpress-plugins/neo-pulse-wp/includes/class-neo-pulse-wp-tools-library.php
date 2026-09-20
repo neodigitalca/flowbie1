@@ -291,6 +291,31 @@ class Neo_Pulse_Wp_Tools_Library {
 			'wp_seo_blocks_list' => array(
 				'summary' => __( 'List all Agent Hub SEO blocks from the registry table.', 'neo-pulse-wp' ),
 			),
+			'wp_seo_block_get' => array(
+				'summary' => __( 'Get one Agent Hub SEO block by id or exact title, including slots.', 'neo-pulse-wp' ),
+				'params'  => array(
+					'block_id' => __( 'Registry block ID.', 'neo-pulse-wp' ),
+					'title'    => __( 'Exact Agent Hub title if block_id omitted.', 'neo-pulse-wp' ),
+				),
+			),
+			'wp_seo_block_duplicate' => array(
+				'summary' => __( 'Duplicate an Agent Hub SEO block into a new row. Optional user_copy fills the copy. Source block is not edited.', 'neo-pulse-wp' ),
+				'params'  => array(
+					'block_id'  => __( 'Source registry block ID.', 'neo-pulse-wp' ),
+					'title'     => __( 'Exact source title if block_id omitted.', 'neo-pulse-wp' ),
+					'user_copy' => __( 'Verbatim text to map onto the copy slots.', 'neo-pulse-wp' ),
+				),
+			),
+			'wp_seo_block_apply_to_page' => array(
+				'summary' => __( 'Insert a persisted Agent Hub SEO block onto an Elementor page. Requires a real block_id with slots.', 'neo-pulse-wp' ),
+				'params'  => array(
+					'post_id'                 => __( 'Target page ID.', 'neo-pulse-wp' ),
+					'block_id'                => __( 'Agent Hub block ID from save or duplicate.', 'neo-pulse-wp' ),
+					'mode'                    => __( 'append or replace.', 'neo-pulse-wp' ),
+					'sync_library'            => __( 'Sync Elementor library section (default true).', 'neo-pulse-wp' ),
+					'include_dynamic_heading' => __( 'Insert dynamic H1 (default true).', 'neo-pulse-wp' ),
+				),
+			),
 			'wp_seo_block_save' => array(
 				'summary' => __( 'Create or update an Agent Hub SEO block and sync Elementor library template.', 'neo-pulse-wp' ),
 				'params'  => array(

@@ -4,9 +4,6 @@ import "./index.css";
 import "@/components/pulse-assist/pulse-assist-theme.css";
 import "@/components/agent-runs/agent-runs-theme.css";
 import "@/components/mobile-app/mobile-app-theme.css";
-import { migrateAllLegacyNeoPulseStorageKeys } from "@/lib/neo-pulse-storage-migrate";
-
-migrateAllLegacyNeoPulseStorageKeys();
 
 const rootElement = document.getElementById("root");
 

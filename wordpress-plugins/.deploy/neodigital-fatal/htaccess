@@ -1,0 +1,237 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# BEGIN NEO Pulse SPA
+<IfModule mod_rewrite.c>
+RewriteEngine On
+
+# Mobile latest-version entry redirect
+RewriteCond %{QUERY_STRING} !(^|&)v=20260816015625580(&|$)
+RewriteRule ^mobile/?(?:index\.html)?$ /mobile/?v=20260816015625580 [R=302,L]
+
+# App latest-version entry redirect
+RewriteCond %{QUERY_STRING} !(^|&)v=20260903162826678(&|$)
+RewriteRule ^app/?(?:index\.html)?$ /app/?v=20260903162826678 [R=302,L]
+
+# SPA static bypass (WordPress must not swallow asset requests)
+RewriteRule ^app/ - [L]
+RewriteRule ^mobile/ - [L]
+</IfModule>
+# END NEO Pulse SPA
+# BEGIN WordPress
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+RewriteRule ^index\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.php [L]
+</IfModule>
+# END WordPress

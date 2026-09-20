@@ -2,6 +2,7 @@ import type { BlogGeneratorSectionId } from "@/components/blog-generator/blog-ge
 import { taskExecutionKindToRecipe, type AgentRun, type AgentRunRecipeKey } from "@/lib/agent-runs-types";
 
 const GSC_TASK_KEYWORDS = new Set(["gsc-mom-report", "gsc-yoy-report"]);
+const ADS_TASK_KEYWORDS = new Set(["ads-mom-report", "ads-yoy-report"]);
 const POST_CREATOR_TASK_KEYWORDS = new Set(["monthly-post-creator-run", "monthly-3-posts-run"]);
 
 export function resolveAgentRunRecipeKey(
@@ -12,6 +13,7 @@ export function resolveAgentRunRecipeKey(
 
   const comparePreset = String(run.plan?.clientRunContract?.comparePreset ?? "").trim();
   if (comparePreset === "mom" || comparePreset === "yoy") {
+    if (executionKind === "ads_reporting" || key === "ads_reporting") return "ads_reporting";
     return "gsc_reporting";
   }
 
@@ -20,6 +22,7 @@ export function resolveAgentRunRecipeKey(
     key === "entity_generator" ||
     key === "sap_generator" ||
     key === "gsc_reporting" ||
+    key === "ads_reporting" ||
     key === "post_creator" ||
     key === "local_dominator_export" ||
     key === "chatgpt_website_audit" ||
@@ -45,19 +48,20 @@ export function resolveAgentRunRecipeKey(
 
   const taskKw = (run.context?.taskKeyword ?? "").trim();
   if (GSC_TASK_KEYWORDS.has(taskKw)) return "gsc_reporting";
+  if (ADS_TASK_KEYWORDS.has(taskKw)) return "ads_reporting";
   if (POST_CREATOR_TASK_KEYWORDS.has(taskKw)) return "post_creator";
 
   return key || "content_optimizer_bulk";
 }
 
 export function agentRunGeneratorSection(recipeKey: string): BlogGeneratorSectionId {
-  if (recipeKey === "gsc_reporting") return "report";
+  if (recipeKey === "gsc_reporting" || recipeKey === "ads_reporting") return "report";
   if (recipeKey === "post_creator") return "bulk-csv";
   return "opt";
 }
 
 export function agentRunProgressHeading(recipeKey: string): string {
-  if (recipeKey === "gsc_reporting") return "Report";
+  if (recipeKey === "gsc_reporting" || recipeKey === "ads_reporting") return "Report";
   if (recipeKey === "local_dominator_export") return "Grid export";
   if (recipeKey === "chatgpt_website_audit") return "ChatGPT audit";
   if (recipeKey === "dfs_llm_article_audit") return "DFS article audit";
@@ -83,6 +87,7 @@ export function agentRunShowsBrowserPreview(recipeKey: string): boolean {
 function isKnownNonOptimizerRecipe(recipeKey: string): recipeKey is AgentRunRecipeKey {
   return (
     recipeKey === "gsc_reporting" ||
+    recipeKey === "ads_reporting" ||
     recipeKey === "post_creator" ||
     recipeKey === "entity_page_creator" ||
     recipeKey === "entity_generator" ||

@@ -27,12 +27,6 @@ export function isTaskExecutionTargetBucket(value: string | undefined | null): v
   return TASK_EXECUTION_TARGET_BUCKETS.includes(String(value ?? "").trim() as TaskExecutionTargetBucket);
 }
 
-/** @deprecated Legacy single-URL tasks; new tasks are bucket-only. */
-export function taskExecutionHasSingleTargetUrl(payload?: TaskExecutionPayload | null): boolean {
-  const url = payload?.targetUrl?.trim() ?? "";
-  return url.length > 0 && !isTaskExecutionTargetAll(url);
-}
-
 export function taskExecutionTargetIsConfigured(payload?: TaskExecutionPayload | null): boolean {
   if (payload?.targetUrls?.length) return true;
   return isTaskExecutionTargetBucket(payload?.targetBucket);

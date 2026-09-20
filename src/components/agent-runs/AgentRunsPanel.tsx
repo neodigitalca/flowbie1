@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useAgentRunsContext } from "@/contexts/agent-runs-context";
 import { fetchAgentRun } from "@/lib/agent-runs-api";
 import {
+  downloadAgentRunsShareBundle,
   downloadWorkflowRunAgentLogs,
   workflowRunIdFromAgentRun,
 } from "@/lib/agent-runs/agent-run-log-download";
@@ -11,12 +12,14 @@ import { isAgentRunResumable } from "@/lib/agent-runs/agent-run-checkpoint";
 import {
   agentRunBucketKey,
   agentRunClientId,
+  flattenAgentRunClientRuns,
   AGENT_RUN_UNASSIGNED_CLIENT_ID,
   resolveAgentRunBucketTabSelections,
   type AgentRunBucketGroup,
   type AgentRunBucketKey,
   type AgentRunClientGroup,
 } from "@/lib/agent-runs/agent-run-grouping";
+import { isAgentsAllSitesFilter } from "@/lib/agent-runs/agent-runs-site-filter";
 import { isAgentRunTerminal } from "@/lib/agent-runs-types";
 import { useAgentRunsSiteFilterModel } from "@/hooks/use-agent-runs-site-filter-model";
 import { useTeam } from "@/contexts/TeamContext";
@@ -85,6 +88,7 @@ function renderSelectedClientContent(args: {
 
 export function AgentRunsPanel() {
   const {
+    agentsSiteFilter,
     cancelRun,
     resumeRun,
     refreshRuns,
@@ -97,6 +101,7 @@ export function AgentRunsPanel() {
   const {
     allSiteGroups,
     allSiteIds,
+    isAllClientsFilter,
     resolvedSiteFilter,
     selectedClient,
     siteFilterOptions,
@@ -124,13 +129,15 @@ export function AgentRunsPanel() {
     followedRunIdRef.current = selectedRunId;
     setExpandedRunId(selectedRunId);
     const siteId = agentRunClientId(run);
-    setAgentsSiteFilter(siteId);
+    if (!isAgentsAllSitesFilter(agentsSiteFilter)) {
+      setAgentsSiteFilter(siteId);
+    }
     setSelectedBucketByClient((prev) => {
       const bucketKey = agentRunBucketKey(run);
       if (prev[siteId] === bucketKey) return prev;
       return { ...prev, [siteId]: bucketKey };
     });
-  }, [runs, selectedRunId, setAgentsSiteFilter]);
+  }, [agentsSiteFilter, runs, selectedRunId, setAgentsSiteFilter]);
 
   useEffect(() => {
     if (!expandedRunId || !activeTeam?.id) return;
@@ -203,7 +210,11 @@ export function AgentRunsPanel() {
     ? selectedClient.buckets.find((b) => b.key === activeBucketKey)
     : undefined;
 
-  const showPickerBand = Boolean(selectedClient);
+  const showPickerBand = allSiteIds.length > 0;
+  const allClientRows = useMemo(
+    () => (isAllClientsFilter ? flattenAgentRunClientRuns(allSiteGroups) : []),
+    [allSiteGroups, isAllClientsFilter],
+  );
 
   const workflowBatch = useMemo(() => {
     const workflowRunIds = new Map<number, number>();
@@ -219,7 +230,10 @@ export function AgentRunsPanel() {
     return best;
   }, [runs]);
 
-  const showWorkflowLogDownload = Boolean(workflowBatch && workflowBatch.count > 1);
+  const showAllLogsDownload = isAllClientsFilter
+    ? allClientRows.length > 0
+    : Boolean(workflowBatch && workflowBatch.count > 1);
+  const allLogsCount = isAllClientsFilter ? allClientRows.length : (workflowBatch?.count ?? 0);
 
   const alternateClientHint = useMemo(() => {
     if (!selectedClient || selectedClient.runCount > 0) return null;
@@ -240,28 +254,44 @@ export function AgentRunsPanel() {
         {allSiteIds.length === 0 ? null : (
           <div className="agent-runs-list">
             <div className="agent-runs-site-picker">
-              {showPickerBand && selectedClient && activeBucketKey ? (
+              {showPickerBand ? (
                 <div className="agent-runs-site-picker-row">
                   <AgentRunsHeaderSiteFilter
                     value={resolvedSiteFilter}
                     options={siteFilterOptions}
                     onChange={handleSiteFilterChange}
                   />
-                  <span className="agent-runs-site-picker-row__divider" aria-hidden />
-                  <AgentRunsBucketTabs
-                    mode="iconRail"
-                    buckets={selectedClient.buckets}
-                    value={activeBucketKey}
-                    onChange={(key) => selectBucket(selectedClient.siteId, key)}
-                    className="agent-runs-site-picker-row__tabs"
-                  />
-                  {showWorkflowLogDownload && workflowBatch ? (
+                  {!isAllClientsFilter && selectedClient && activeBucketKey ? (
+                    <>
+                      <span className="agent-runs-site-picker-row__divider" aria-hidden />
+                      <AgentRunsBucketTabs
+                        mode="iconRail"
+                        buckets={selectedClient.buckets}
+                        value={activeBucketKey}
+                        onChange={(key) => selectBucket(selectedClient.siteId, key)}
+                        className="agent-runs-site-picker-row__tabs"
+                      />
+                    </>
+                  ) : null}
+                  {showAllLogsDownload ? (
                     <Button
                       type="button"
                       variant="ghost"
-                      className="agent-runs-site-picker-row__logs h-8 shrink-0 px-2 text-base text-white hover:bg-white/10 hover:text-white"
-                      title={`Download all logs (${workflowBatch.count})`}
+                      className="agent-runs-site-picker-row__logs h-8 shrink-0 gap-1.5 px-2 text-base text-white hover:bg-white/10 hover:text-white"
+                      title={`Download all client logs (${allLogsCount})`}
                       onClick={() => {
+                        if (isAllClientsFilter) {
+                          void downloadAgentRunsShareBundle(
+                            activeTeam?.id ?? null,
+                            allClientRows.map(({ client, run }) => ({
+                              run,
+                              clientName: client.label,
+                            })),
+                            { filenamePrefix: "agent-runs-all-clients" },
+                          );
+                          return;
+                        }
+                        if (!workflowBatch) return;
                         void downloadWorkflowRunAgentLogs(
                           activeTeam?.id ?? null,
                           workflowBatch.workflowRunId,
@@ -270,16 +300,48 @@ export function AgentRunsPanel() {
                       }}
                     >
                       <Download className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                      <span className="sr-only">All logs ({workflowBatch.count})</span>
+                      All logs ({allLogsCount})
                     </Button>
                   ) : null}
                 </div>
               ) : null}
             </div>
-            {selectedClient && selectedClient.runCount === 0 && alternateClientHint ? (
+            {!isAllClientsFilter && selectedClient && selectedClient.runCount === 0 && alternateClientHint ? (
               <p className="px-3 py-4 text-base text-muted-foreground">{alternateClientHint}</p>
             ) : null}
-            {selectedClient
+            {isAllClientsFilter ? (
+              allClientRows.length === 0 ? (
+                <p className="px-3 py-4 text-base text-muted-foreground">
+                  No agent runs in this category.
+                </p>
+              ) : (
+                <div className="agent-runs-client-group">
+                  <div className="agent-runs-bucket-group__runs">
+                    {allClientRows.map(({ client, run }) => {
+                      const index = stripeIndexRef.current;
+                      stripeIndexRef.current += 1;
+                      const resumable = isAgentRunResumable(run);
+                      return (
+                        <AgentRunCard
+                          key={run.id}
+                          run={run}
+                          clientLabel={client.label}
+                          showClientTag
+                          stripeIndex={index}
+                          expanded={expandedRunId === run.id}
+                          resumable={resumable}
+                          onToggle={() =>
+                            setExpandedRunId(expandedRunId === run.id ? null : run.id)
+                          }
+                          onCancel={() => void cancelRun(run.id)}
+                          onResume={resumable ? () => void resumeRun(run.id) : undefined}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              )
+            ) : selectedClient
               ? renderSelectedClientContent({
                   client: selectedClient,
                   activeBucket,

@@ -19,7 +19,11 @@ class Neo_Pulse_Wp_Speed {
 	 */
 	public static function init(): void {
 		add_action( 'plugins_loaded', array( __CLASS__, 'maybe_migrate_speed_settings' ), 15 );
+		add_action( 'init', array( __CLASS__, 'maybe_start_lcp_buffer' ), 1 );
 		add_action( 'template_redirect', array( __CLASS__, 'maybe_start_buffer' ), 0 );
+		add_filter( 'script_loader_src', array( 'Neo_Pulse_Wp_Speed_Assets', 'filter_script_loader_src' ), 20, 2 );
+		add_filter( 'style_loader_src', array( 'Neo_Pulse_Wp_Speed_Assets', 'filter_style_loader_src' ), 20, 2 );
+		add_filter( 'style_loader_tag', array( 'Neo_Pulse_Wp_Speed_Assets', 'filter_style_loader_tag' ), 20, 3 );
 		add_action( 'send_headers', array( __CLASS__, 'maybe_send_speed_cache_headers' ) );
 		add_action( 'wp_footer', array( 'Neo_Pulse_Wp_Speed_Diagnostics', 'maybe_print_footer_marker' ), 9999 );
 		add_action( 'save_post', array( __CLASS__, 'flush_cache_on_content_change' ), 20 );
@@ -42,6 +46,7 @@ class Neo_Pulse_Wp_Speed {
 		Neo_Pulse_Wp_Speed_Settings::maybe_repair_simple_enabled_config();
 		Neo_Pulse_Wp_Speed_Settings::maybe_repair_simple_enabled_config_v2();
 		Neo_Pulse_Wp_Speed_Settings::maybe_repair_simple_enabled_config_v3();
+		Neo_Pulse_Wp_Speed_Settings::maybe_repair_simple_enabled_config_v4();
 		Neo_Pulse_Wp_Speed_Settings::maybe_enable_speed_by_default();
 		if ( Neo_Pulse_Wp_Speed_Settings::is_enabled() ) {
 			Neo_Pulse_Wp_Speed_Warm::maybe_auto_warm();
@@ -50,6 +55,10 @@ class Neo_Pulse_Wp_Speed {
 
 	public static function maybe_start_buffer(): void {
 		Neo_Pulse_Wp_Speed_Buffer::maybe_start();
+	}
+
+	public static function maybe_start_lcp_buffer(): void {
+		Neo_Pulse_Wp_Speed_Buffer::maybe_start_lcp();
 	}
 
 	/**
@@ -91,6 +100,9 @@ class Neo_Pulse_Wp_Speed {
 			return;
 		}
 		self::flush_cache();
+		if ( class_exists( 'Neo_Pulse_Wp_Cache_Flush', false ) ) {
+			Neo_Pulse_Wp_Cache_Flush::purge_html_caches();
+		}
 	}
 
 	public static function register_routes(): void {

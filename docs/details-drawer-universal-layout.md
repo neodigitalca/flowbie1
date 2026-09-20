@@ -18,8 +18,6 @@ This document describes the **Details drawer** pattern used across Content Optim
 | Schedule control | Icon-only calendar in title band (`BulkGeneratorScheduleMenu`) |
 | Pill labels | **Opt**, **Import** (not Blog Import) |
 
-Legacy routes (`#content-optimizer`, `#overview`, `#elementor-optimizer`) redirect to `Generator` with section **opt**.
-
 ---
 
 ## Goal

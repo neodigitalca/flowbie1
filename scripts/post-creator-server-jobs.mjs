@@ -23,6 +23,18 @@ function appendProgress(progressPath, data) {
   fs.appendFileSync(progressPath, `${JSON.stringify(data)}\n`, "utf8");
 }
 
+/** Node process diagnostics are not job progress. */
+export function isWorkerProgressNoise(text) {
+  const trimmed = String(text ?? "").trim();
+  if (!trimmed) return true;
+  if (trimmed.includes("NODE_TLS_REJECT_UNAUTHORIZED")) return true;
+  if (trimmed.includes("node --trace-warnings")) return true;
+  return (
+    trimmed.startsWith("(node:") &&
+    (trimmed.includes("Warning:") || trimmed.includes("DeprecationWarning"))
+  );
+}
+
 function parseProgressFile(progressPath) {
   if (!fs.existsSync(progressPath)) {
     return { status: "running", label: "Starting" };
@@ -42,7 +54,9 @@ function parseProgressFile(progressPath) {
       continue;
     }
     if (!data?.type) continue;
-    if (data.type === "step" && data.label) label = data.label;
+    if (data.type === "step" && data.label && !isWorkerProgressNoise(data.label)) {
+      label = data.label;
+    }
     if (data.type === "done") {
       status = "done";
       result = data.result ?? null;
@@ -86,12 +100,16 @@ export function startJob(input) {
 
   child.stdout?.on("data", (chunk) => {
     const text = String(chunk).trim();
-    if (text) appendProgress(progressPath, { type: "step", label: text.slice(0, 200) });
+    if (text && !isWorkerProgressNoise(text)) {
+      appendProgress(progressPath, { type: "step", label: text.slice(0, 200) });
+    }
   });
 
   child.stderr?.on("data", (chunk) => {
     const text = String(chunk).trim();
-    if (text) appendProgress(progressPath, { type: "step", label: text.slice(0, 4000) });
+    if (text && !isWorkerProgressNoise(text)) {
+      appendProgress(progressPath, { type: "step", label: text.slice(0, 4000) });
+    }
   });
 
   child.on("exit", (code) => {

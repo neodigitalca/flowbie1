@@ -55,10 +55,6 @@ class Neo_Pulse_Wp_Speed_Gate {
 			return false;
 		}
 
-		if ( ! empty( $config['bypass_elementor'] ) && self::is_elementor_built_page() ) {
-			return false;
-		}
-
 		if ( self::is_woocommerce_sensitive() ) {
 			return false;
 		}

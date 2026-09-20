@@ -67,13 +67,14 @@ trait Neo_Pulse_Wp_Admin_Trait_Render_Ai_Widget_Design {
 		$design   = Neo_Pulse_Wp_Ai_Widget_Design::get_settings();
 		$scope    = $design['style_scope'];
 		$source   = $design['color_source'];
-		$tokens   = $source === 'custom'
-			? Neo_Pulse_Wp_Ai_Widget_Design::editable_tokens( $widget )
-			: Neo_Pulse_Wp_Ai_Widget_Design::resolve( $widget );
+		$tokens   = Neo_Pulse_Wp_Ai_Widget_Design::editable_tokens( $widget );
 		$swatches = Neo_Pulse_Wp_Ai_Widget_Design::elementor_color_swatches();
 		$ui_key   = $widget === 'search' ? 'search_ui' : 'chat_ui';
 		$ui       = $design[ $ui_key ];
 		$prefix   = 'neo-pulse_design';
+		$chat_sidebar = $widget === 'chat'
+			? Neo_Pulse_Wp_Ai_Widget_Design::resolve_sidebar_config( 'chat', $chat_settings )
+			: array();
 
 		$source_class = $source === 'custom' ? 'neo-pulse-design--custom' : 'neo-pulse-design--site-branding';
 		?>
@@ -136,6 +137,33 @@ trait Neo_Pulse_Wp_Admin_Trait_Render_Ai_Widget_Design {
 			</div>
 
 			<div class="neo-pulse-design-custom-colors">
+				<?php if ( $widget === 'chat' ) : ?>
+				<div class="neo-pulse-design-group neo-pulse-design-docker-colors">
+					<div class="neo-pulse-design-group__summary"><?php esc_html_e( 'Docker', 'neo-pulse-wp' ); ?></div>
+					<div class="neo-pulse-design-color-list">
+						<?php
+						self::render_design_color_field(
+							$prefix . '[tokens][launcher_bg]',
+							'launcher_bg',
+							__( 'Docker', 'neo-pulse-wp' ),
+							(string) ( $tokens['launcher_bg'] ?? '' )
+						);
+						self::render_design_color_field(
+							$prefix . '[tokens][launcher_glow]',
+							'launcher_glow',
+							__( 'Docker glow', 'neo-pulse-wp' ),
+							(string) ( $tokens['launcher_glow'] ?? '' )
+						);
+						self::render_design_color_field(
+							$prefix . '[tokens][launcher_text]',
+							'launcher_text',
+							__( 'Docker text', 'neo-pulse-wp' ),
+							(string) ( $tokens['launcher_text'] ?? '' )
+						);
+						?>
+					</div>
+				</div>
+				<?php endif; ?>
 				<?php
 				$group_index = 0;
 				foreach ( self::design_color_groups( $widget ) as $group_label => $keys ) :
@@ -181,6 +209,25 @@ trait Neo_Pulse_Wp_Admin_Trait_Render_Ai_Widget_Design {
 				' min="16" max="24"'
 			);
 			if ( $widget === 'chat' ) {
+				self::panel_form_field_select(
+					'neo-pulse-sidebar-launcher-style-chat',
+					$prefix . '[sidebar][launcher_style]',
+					__( 'Launcher style', 'neo-pulse-wp' ),
+					array(
+						'circle'   => __( 'Corner circle', 'neo-pulse-wp' ),
+						'edge_tab' => __( 'Edge tab', 'neo-pulse-wp' ),
+						'none'     => __( 'No CTA', 'neo-pulse-wp' ),
+					),
+					(string) ( $chat_sidebar['launcher_style'] ?? 'circle' ),
+					'half'
+				);
+				self::panel_form_field_input(
+					'neo-pulse-sidebar-launcher-label-chat',
+					$prefix . '[sidebar][launcher_label]',
+					__( 'Launcher label', 'neo-pulse-wp' ),
+					(string) ( $chat_sidebar['launcher_label'] ?? '' ),
+					'half'
+				);
 				self::panel_form_field_input(
 					'neo-pulse-design-launcher-size',
 					$prefix . '[tokens][launcher_size]',
@@ -204,6 +251,17 @@ trait Neo_Pulse_Wp_Admin_Trait_Render_Ai_Widget_Design {
 					' min="280" max="560"'
 				);
 				self::panel_form_field_input(
+					'neo-pulse-design-panel-height',
+					$prefix . '[tokens][panel_max_height]',
+					__( 'Panel height (px)', 'neo-pulse-wp' ),
+					(string) (int) ( $tokens['panel_max_height'] ?? 560 ),
+					'half',
+					'number',
+					false,
+					'',
+					' min="320" max="1200"'
+				);
+				self::panel_form_field_input(
 					'neo-pulse-design-offset-x',
 					$prefix . '[tokens][offset_x]',
 					__( 'Offset X (px)', 'neo-pulse-wp' ),
@@ -225,6 +283,13 @@ trait Neo_Pulse_Wp_Admin_Trait_Render_Ai_Widget_Design {
 					'',
 					' min="0" max="120"'
 				);
+				?>
+				<div class="neo-pulse-schema-cell neo-pulse-schema-cell--half">
+					<button type="button" class="button" id="neo-pulse-design-test-peek" data-neo-pulse-test-peek="1">
+						<?php esc_html_e( 'Test peek', 'neo-pulse-wp' ); ?>
+					</button>
+				</div>
+				<?php
 			}
 			self::panel_form_group_close();
 
@@ -297,13 +362,20 @@ trait Neo_Pulse_Wp_Admin_Trait_Render_Ai_Widget_Design {
 	 * @param array<string,mixed> $chat_settings
 	 */
 	protected static function render_chat_position_design_fields( array $chat_settings ): void {
+		$sidebar = Neo_Pulse_Wp_Ai_Widget_Design::resolve_sidebar_config( 'chat', $chat_settings );
 		self::panel_form_group_open();
 		?>
 		<div class="neo-pulse-schema-cell neo-pulse-schema-cell--full">
 			<h3 class="neo-pulse-design-section-title"><?php esc_html_e( 'Sidebar panel', 'neo-pulse-wp' ); ?></h3>
+			<div class="neo-pulse-design-visibility-grid">
+				<label class="neo-pulse-design-check">
+					<input type="checkbox" name="neo-pulse_design[sidebar][header_search_opens_sidebar]" value="1" <?php checked( ! empty( $sidebar['header_search_opens_sidebar'] ) ); ?> />
+					<span><?php esc_html_e( 'Header search icon opens chat', 'neo-pulse-wp' ); ?></span>
+				</label>
+			</div>
 		</div>
 		<?php
-		self::render_sidebar_design_fields( 'chat', 'neo-pulse_design[sidebar]', Neo_Pulse_Wp_Ai_Widget_Design::resolve_sidebar_config( 'chat', $chat_settings ) );
+		self::render_sidebar_design_fields( 'chat', 'neo-pulse_design[sidebar]', $sidebar );
 		self::panel_form_group_close();
 	}
 
@@ -632,7 +704,6 @@ trait Neo_Pulse_Wp_Admin_Trait_Render_Ai_Widget_Design {
 
 		if ( $widget === 'chat' ) {
 			$shared[ __( 'Chat parts', 'neo-pulse-wp' ) ] = array(
-				'launcher_bg'           => __( 'Launcher', 'neo-pulse-wp' ),
 				'user_bubble_bg'        => __( 'User bubble', 'neo-pulse-wp' ),
 				'user_bubble_text'      => __( 'User bubble text', 'neo-pulse-wp' ),
 				'assistant_bubble_bg'   => __( 'Assistant bubble', 'neo-pulse-wp' ),

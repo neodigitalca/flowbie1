@@ -22,10 +22,6 @@ export const AGENT_RUN_STEP_KEYS = {
   automationLocalComplete: "automation-local-complete",
   automationDelivery: "automation-delivery",
   dfsArticleAudit: "dfs-article-audit",
-  /** @deprecated Legacy workflow-bound keys */
-  workflowGoogleDrive: "workflow-google-drive",
-  /** @deprecated Legacy workflow-bound keys */
-  workflowEmail: "workflow-email",
 } as const;
 
 export function gscSectionStepKey(index: number): string {

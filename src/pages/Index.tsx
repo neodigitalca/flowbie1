@@ -36,20 +36,11 @@ import { DEFAULT_THEME_PRIMARY_HEX } from "../lib/theme-defaults";
 import { StoredFile } from "../components/KnowledgeBaseTab";
 import { useAutosave, loadDraft, clearDraft, hasDraft } from "../hooks/use-autosave";
 import { applyPrimaryHexToDocument, initPrimaryColorFromStorage } from "../hooks/use-persisted-color";
-import { CONTENT_OPTIMIZER_SECTION_STORAGE_KEY } from "@/components/content-optimizer/content-optimizer-sections";
 import {
-  BLOG_GENERATOR_SECTION_STORAGE_KEY,
   type BlogGeneratorSectionId,
   readStoredBlogGeneratorSection,
   writeStoredBlogGeneratorSection,
 } from "@/components/blog-generator/blog-generator-sections";
-import {
-  writeStoredResearchSection,
-  isLegacyResearchManagerTab,
-  normalizeLegacyResearchSection,
-  LEGACY_SITEMAP_RESEARCH_SECTION_ID,
-} from "@/components/research/research-workspace-sections";
-import { writeStoredSitemapOptimizerSection } from "@/components/research/sitemap-optimizer/sitemap-optimizer-sections";
 import { DraftRecoveryDialog } from "../components/DraftRecoveryDialog";
 import { useGenerationProgress } from "../hooks/use-generation-progress";
 import { GenerationProgress } from "../components/GenerationProgress";
@@ -65,7 +56,7 @@ import {
 } from "@/lib/manager-cloud-settings-snapshot";
 import { NEO_PULSE_OPEN_MASTER_RULES_EVENT } from "@/lib/open-master-rules-settings";
 import { isApiTabHash } from "@/lib/api-docs/api-docs-hash";
-import { isPulseForgeHash } from "@/lib/pulse-forge/pulse-forge-hash";
+import { isPulseForgeHash, parsePulseForgeRouteFromHash, setPulseForgeHash } from "@/lib/pulse-forge/pulse-forge-hash";
 
 const OPENROUTER_API_KEY_STORAGE_KEY = "openrouter-api-key";
 
@@ -84,7 +75,6 @@ const INITIAL_GENERATION_RESULT: GenerationResult = {
   planApproved: undefined,
 };
 
-const LEGACY_WORKSPACE_STORAGE_KEY = "neo-pulse-workspace";
 const MANAGER_TAB_STORAGE_KEY = "neo-pulse-manager-tab";
 
 const VALID_MANAGER_TABS = new Set([
@@ -92,14 +82,10 @@ const VALID_MANAGER_TABS = new Set([
   "knowledge",
   "generator",
   "dashboard",
-  "free-flow",
-  "content-optimizer",
   "chat",
   "tasks",
   "support",
   "users",
-  "research",
-  "gsc-reporting",
   "sitemap-optimizer",
   "gbp-post",
   "content-calendar",
@@ -109,78 +95,7 @@ const VALID_MANAGER_TABS = new Set([
   "ppc-meta",
   "api",
   "pulse-forge",
-  /** Legacy tab ids (hash / stored); normalized to `generator` at runtime */
-  "blog-generator",
-  "sap-generator",
 ]);
-
-function redirectContentOptimizerToGeneratorOpt(): "generator" {
-  try {
-    writeStoredBlogGeneratorSection("opt");
-    sessionStorage.setItem(CONTENT_OPTIMIZER_SECTION_STORAGE_KEY, "content");
-    localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "generator");
-  } catch {
-    /* ignore */
-  }
-  return "generator";
-}
-
-function redirectPressReleaseTabToGenerator(): "generator" {
-  try {
-    writeStoredBlogGeneratorSection("bulk-press-release");
-    localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "generator");
-  } catch {
-    /* ignore */
-  }
-  return "generator";
-}
-
-function normalizeLegacyGeneratorTab(tab: string): string {
-  if (tab === "content-optimizer") {
-    return redirectContentOptimizerToGeneratorOpt();
-  }
-  if (tab === "blog-generator" || tab === "keyword-research" || tab === "bulk-blog-generation" || tab === "auto-blog-generate") {
-    return "generator";
-  }
-  if (tab === "sap-generator") {
-    try {
-      writeStoredBlogGeneratorSection("entity");
-    } catch {
-      /* ignore */
-    }
-    return "generator";
-  }
-  if (tab === "free-flow") {
-    try {
-      writeStoredBlogGeneratorSection("flow");
-    } catch {
-      /* ignore */
-    }
-    return "generator";
-  }
-  if (tab === "api-docs") {
-    return "api";
-  }
-  if (tab === "research") {
-    try {
-      writeStoredBlogGeneratorSection("research");
-      localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "generator");
-    } catch {
-      /* ignore */
-    }
-    return "generator";
-  }
-  if (tab === "gsc-reporting") {
-    try {
-      writeStoredBlogGeneratorSection("report");
-      localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "generator");
-    } catch {
-      /* ignore */
-    }
-    return "generator";
-  }
-  return tab;
-}
 
 const Index = () => {
   const { teamId } = useTeam();
@@ -204,148 +119,12 @@ const Index = () => {
       if (hashTab === "settings") {
         return "dashboard";
       }
-      if (hashTab === "press-release-generator") {
-        return redirectPressReleaseTabToGenerator();
-      }
-      if (hashTab === "url-optimizer") {
-        try {
-          writeStoredSitemapOptimizerSection("url_optimizer");
-        } catch {
-          /* ignore */
-        }
-        return "sitemap-optimizer";
-      }
-      if (hashTab === "content-creator") {
-        return "content-calendar";
-      }
-      if (hashTab === "grid-local") {
-        return "generator";
-      }
       if (hashTab && VALID_MANAGER_TABS.has(hashTab)) {
-        return normalizeLegacyGeneratorTab(hashTab);
+        return hashTab;
       }
       const t = localStorage.getItem(MANAGER_TAB_STORAGE_KEY);
-      if (t === "keyword-research") return "generator";
-      if (t === "press-release" || t === "press-release-generator") {
-        return redirectPressReleaseTabToGenerator();
-      }
-      try {
-        const blogSection = sessionStorage.getItem(BLOG_GENERATOR_SECTION_STORAGE_KEY);
-        if (blogSection === "press-release") {
-          writeStoredBlogGeneratorSection("bulk-press-release");
-          try {
-            localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "generator");
-          } catch {
-            /* ignore */
-          }
-          return "generator";
-        }
-      } catch {
-        /* ignore */
-      }
-      if (t === "knowledge-graph") return "integrations";
-      if (t === "inspect-blueprint") {
-        try {
-          writeStoredBlogGeneratorSection("flow");
-        } catch {
-          /* ignore */
-        }
-        return "generator";
-      }
-      if (t === "elementor-optimizer" || t === "overview" || t === "content-optimizer") {
-        return redirectContentOptimizerToGeneratorOpt();
-      }
-      if (t === "bulk-blog-generation") {
-        try {
-          writeStoredBlogGeneratorSection("bulk-csv");
-          localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "generator");
-        } catch {
-          /* ignore */
-        }
-        return "generator";
-      }
-      if (t === "auto-blog-generate") {
-        try {
-          writeStoredBlogGeneratorSection("bulk-csv");
-          localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "generator");
-        } catch {
-          /* ignore */
-        }
-        return "generator";
-      }
-      if (t === "settings") {
-        try {
-          localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "dashboard");
-        } catch {
-          /* ignore */
-        }
-        return "dashboard";
-      }
-      if (t === "communication" || t === "communication-activity") {
-        try {
-          localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "dashboard");
-        } catch {
-          /* ignore */
-        }
-        return "dashboard";
-      }
-      if (t === LEGACY_SITEMAP_RESEARCH_SECTION_ID) {
-        try {
-          localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "sitemap-optimizer");
-        } catch {
-          /* ignore */
-        }
-        return "sitemap-optimizer";
-      }
-      if (t === "url-optimizer") {
-        try {
-          writeStoredSitemapOptimizerSection("url_optimizer");
-          localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "sitemap-optimizer");
-        } catch {
-          /* ignore */
-        }
-        return "sitemap-optimizer";
-      }
-      if (t && isLegacyResearchManagerTab(t)) {
-        try {
-          writeStoredResearchSection(normalizeLegacyResearchSection(t));
-          writeStoredBlogGeneratorSection("research");
-          localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "generator");
-        } catch {
-          /* ignore */
-        }
-        return "generator";
-      }
-      if (t === "gsc-reporting") {
-        try {
-          writeStoredBlogGeneratorSection("report");
-          localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "generator");
-        } catch {
-          /* ignore */
-        }
-        return "generator";
-      }
-      if (t === "research") {
-        try {
-          writeStoredBlogGeneratorSection("research");
-          localStorage.setItem(MANAGER_TAB_STORAGE_KEY, "generator");
-        } catch {
-          /* ignore */
-        }
-        return "generator";
-      }
-      if (t === "api-docs") return "api";
-      if (t === "grid-local") return "generator";
-      if (t && VALID_MANAGER_TABS.has(t)) return normalizeLegacyGeneratorTab(t);
-      const w = localStorage.getItem(LEGACY_WORKSPACE_STORAGE_KEY);
-      if (w === "freeflow") {
-        localStorage.removeItem(LEGACY_WORKSPACE_STORAGE_KEY);
-        try {
-          writeStoredBlogGeneratorSection("flow");
-        } catch {
-          /* ignore */
-        }
-        return "generator";
+      if (t && VALID_MANAGER_TABS.has(t)) {
+        return t;
       }
     } catch {
       /* ignore */
@@ -375,25 +154,24 @@ const Index = () => {
 
   const handleManagerTabChange = useCallback(
     (tab: string) => {
-      const normalized = normalizeLegacyGeneratorTab(tab);
-      if (normalized === "generator") {
+      if (tab === "generator") {
         setManagerTab("generator");
       } else {
         clearAgentRunOptimizerScope();
-        setManagerTab(normalized);
+        setManagerTab(tab);
       }
       try {
         let hash: string;
-        if (normalized === "dashboard") {
+        if (tab === "dashboard") {
           hash = "settings";
-        } else if (normalized === "api") {
+        } else if (tab === "api") {
           const current = window.location.hash.replace(/^#/, "").trim();
           hash = current.startsWith("api") ? current : "api";
-        } else if (normalized === "pulse-forge") {
+        } else if (tab === "pulse-forge") {
           const current = window.location.hash.replace(/^#/, "").trim();
           hash = isPulseForgeHash(current) ? current : "pulse-forge/forge";
         } else {
-          hash = normalized;
+          hash = tab;
         }
         if (window.location.hash.replace(/^#/, "") !== hash) {
           window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${hash}`);
@@ -510,6 +288,9 @@ const Index = () => {
           navigateToGeneratorSection(section as BlogGeneratorSectionId),
         onDashboardClusterChange: (cluster) =>
           handleManagerDashboardClusterChange(cluster as ManagerSettingsClusterId),
+        onPulseForgeHash: (hash) => {
+          setPulseForgeHash(parsePulseForgeRouteFromHash(hash.startsWith("#") ? hash : `#${hash}`));
+        },
       });
     },
     [handleManagerTabChange, navigateToGeneratorSection, handleManagerDashboardClusterChange],
@@ -612,7 +393,7 @@ const Index = () => {
     setFlowFreeformSections,
   });
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     initPrimaryColorFromStorage();
   }, []);
 

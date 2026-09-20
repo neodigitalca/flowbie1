@@ -171,6 +171,14 @@
 	padding: 0;
 }
 
+.neo-pulse-design-docker-colors .neo-pulse-design-group__summary {
+	cursor: default;
+}
+
+.neo-pulse-design-docker-colors .neo-pulse-design-group__summary::before {
+	content: none;
+}
+
 /* One row per token: label | swatch | hex */
 .neo-pulse-design-color-row {
 	display: grid;
